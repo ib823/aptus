@@ -20,12 +20,18 @@ import { GateStrip, type GateHop } from "./GateStrip";
  * support engineer hunting for a call that was never recorded under that name.
  * A lane with no recorded call now says so.
  *
- * IT SHOWS THE LANE'S OWN REASON, not only the case's general one. A6 writes a
- * single "Key" row covering missing, expired, revoked and retired — deliberate,
- * and right for a copy deck. But the derivation knows WHICH of the four this
- * lane is, and printing the list of four under a lane whose key was revoked
- * hands back the research project the trace exists to remove. `because` is that
- * sentence, and it replaces the general one wherever a caller has it.
+ * IT SHOWS THE LANE'S OWN REASON, not only the case's general one — AS THE
+ * HEADING, not under a heading that says something else. A6 writes a single
+ * "Key" row covering missing, expired, revoked and retired; the derivation knows
+ * WHICH of the four this lane is. The first attempt at this put the lane's
+ * sentence in the BODY and left `why.headline` above it, so a lane reading
+ * "Access is approved but no key has been collected" was introduced by "This key
+ * isn't valid." — a heading contradicting the paragraph beneath it and the chip
+ * beside it, with the real explanation then printed a second time by the page.
+ *
+ * So `because` replaces the headline AND the body: one explanation, once. The
+ * deck's pair still renders for a caller with no verdict — the design system,
+ * which demonstrates cases rather than lanes.
  *
  * A 401 and a 403 are never merged — different owners, different blast radii.
  * That distinction lives in `copy.ts` as separate Why cases; this component only
@@ -42,8 +48,9 @@ export interface WhyTraceProps {
    */
   readonly hops: readonly GateHop[];
   /**
-   * What the derivation established about THIS lane, in one sentence. Replaces
-   * the case's general body when given — see the header.
+   * What the derivation established about THIS lane, in one sentence. When
+   * given it IS the explanation — it replaces the case's headline and its body
+   * both, so the trace says one thing rather than three. See the header.
    */
   readonly because?: string;
   /**
@@ -80,9 +87,11 @@ export function WhyTrace({
       aria-labelledby={headingId}
     >
       <h2 id={headingId} className="text-base font-medium text-ink">
-        {why.headline}
+        {because ?? why.headline}
       </h2>
-      <p className="max-w-prose text-sm text-ink-soft">{because ?? why.body}</p>
+      {because === undefined ? (
+        <p className="max-w-prose text-sm text-ink-soft">{why.body}</p>
+      ) : null}
 
       <GateStrip hops={hops} />
 

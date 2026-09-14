@@ -25,7 +25,7 @@
 
 import { LANE_PROOF_TTL_MS } from "./freshness";
 
-import type { LaneHop, LaneStatus } from "./status-vocabulary";
+import { LANE_HOPS, type LaneHop, type LaneStatus } from "./status-vocabulary";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Environments
@@ -193,6 +193,73 @@ export interface LaneFacts {
   readonly now?: Date;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Which hop proved, which broke, and which was never reached
+ *
+ * THE STRIP CONTRADICTED THE CHIP, and the cause is two orders. `LANE_HOPS` is
+ * the order a CALL travels — Key → Access → Binding → SAP metadata → SAP data
+ * read → App — and it is the right order to draw. The derivation below asks in
+ * a different order, and says why: access is resolved BEFORE key, because a
+ * lane with no approved access has nothing to collect a key for.
+ *
+ * Deriving the strip from the broken hop's position in the DISPLAY order threw
+ * that away. A "No key" lane marked Key broken and then, reading left to right,
+ * Access "not reached" — on a lane whose chip says access is approved. Access
+ * had been proven; it was simply proven first.
+ *
+ * So the states are resolved here, against the order the derivation actually
+ * walks, and travel on the verdict. One object now answers both "what is the
+ * status" and "what did we establish", and they cannot disagree.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type LaneHopState = "ok" | "broken" | "unreached" | "unknown";
+
+export interface LaneHopVerdict {
+  readonly hop: LaneHop;
+  readonly state: LaneHopState;
+}
+
+/**
+ * The order the derivation asks in — NOT the order a strip draws in.
+ *
+ * Access first: see the "Hop 2 before hop 1, deliberately" note in
+ * `deriveHopVerdict`. Keeping the two orders as separate named constants is
+ * what stops the next edit from collapsing them again.
+ */
+const EVALUATION_ORDER: readonly LaneHop[] = [
+  "access",
+  "key",
+  "binding",
+  "sapMetadata",
+  "sapDataRead",
+  "app",
+];
+
+function hopVerdicts(facts: LaneFacts, brokenHop: LaneHop | null): readonly LaneHopVerdict[] {
+  /*
+   * A RETIRED APP SHORT-CIRCUITS BEFORE ANY HOP IS EXAMINED. Nothing was
+   * established about access, binding or SAP, so nothing claims to have been:
+   * `unknown`, not `ok` and not `unreached`. "We never asked" is its own answer.
+   */
+  if (facts.appRetired) {
+    return LANE_HOPS.map((hop) => ({
+      hop,
+      state: hop === "key" ? ("broken" as const) : ("unknown" as const),
+    }));
+  }
+  if (brokenHop === null) {
+    return LANE_HOPS.map((hop) => ({ hop, state: "ok" as const }));
+  }
+  const brokenAt = EVALUATION_ORDER.indexOf(brokenHop);
+  return LANE_HOPS.map((hop) => {
+    const at = EVALUATION_ORDER.indexOf(hop);
+    return {
+      hop,
+      state: at < brokenAt ? ("ok" as const) : at === brokenAt ? ("broken" as const) : ("unreached" as const),
+    };
+  });
+}
+
 export interface LaneVerdict {
   readonly status: LaneStatus;
   /** The hop that decided it, or null when nothing failed. */
@@ -210,10 +277,16 @@ export interface LaneVerdict {
    * "never checked" — it always has the reason to hand.
    */
   readonly unchecked: UncheckedReason | null;
+  /**
+   * The six hops as the derivation established them, in DISPLAY order, ready
+   * for a gate strip. Derived from the same walk as `status`, so a strip and a
+   * chip drawn from one verdict cannot contradict each other.
+   */
+  readonly hops: readonly LaneHopVerdict[];
 }
 
 /** The verdict before the reason is attached — see `deriveLaneStatus`. */
-type HopVerdict = Omit<LaneVerdict, "unchecked">;
+type HopVerdict = Omit<LaneVerdict, "unchecked" | "hops">;
 
 function isStale(at: Date | null, now: Date): boolean {
   return at === null || now.getTime() - at.getTime() > CHECK_TTL_MS;
@@ -471,6 +544,7 @@ export function deriveLaneStatus(facts: LaneFacts): LaneVerdict {
   return {
     ...verdict,
     unchecked: verdict.checkedAt === null ? whyUnchecked(facts) : null,
+    hops: hopVerdicts(facts, verdict.brokenHop),
   };
 }
 
@@ -486,5 +560,7 @@ export function notStartedVerdict(): LaneVerdict {
     because: "Nothing has been requested for this environment yet.",
     checkedAt: null,
     unchecked: "nothingRequested",
+    // Nothing requested is not a failure, so no hop is marked broken.
+    hops: LANE_HOPS.map((hop) => ({ hop, state: "ok" as const })),
   };
 }

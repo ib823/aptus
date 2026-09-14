@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
+import { GateStrip } from "@/components/coreedge/GateStrip";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { ProvenAt } from "@/components/coreedge/primitives/ProvenAt";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import {
-  laneCheckedAge,
+  laneAge,
   LANE_SWEEP_FLEET_NOTE,
   LANE_SWEEP_LABELS,
   LANE_SWEEP_LAST_FAILED,
@@ -201,7 +201,7 @@ export default async function OperationsBoard(): Promise<ReactNode> {
             key: "status",
             header: "Status",
             cell: (l) => (
-              <StatusChip status={l.verdict.status} age={laneCheckedAge(l.verdict, now)} />
+              <StatusChip status={l.verdict.status} {...laneAge(l.verdict, now)} />
             ),
           },
           {
@@ -209,14 +209,11 @@ export default async function OperationsBoard(): Promise<ReactNode> {
             header: "Hops",
             cell: (l) => (
               /*
-               * THE VERDICT'S BREAK, not the vocabulary's. A per-status answer
-               * and a per-lane one are not the same fact: a lane whose SAP
-               * system timed out at the metadata probe derives `sapUnavailable`,
-               * whose fixed vocabulary hop is `sapDataRead` — so the S in A·S·K·T
-               * read as passed on a lane where the system is exactly what did
-               * not answer, beside a chip saying SAP unavailable.
+               * THE VERDICT'S OWN HOPS. Not the vocabulary's per-status hop, and
+               * not the broken hop walked in display order either — both produced
+               * an A·S·K·T that disagreed with the chip beside it.
                */
-              <GateStrip hops={hopsFromBreak(l.verdict.brokenHop)} dense />
+              <GateStrip hops={l.verdict.hops} dense />
             ),
           },
           {
@@ -255,7 +252,7 @@ export default async function OperationsBoard(): Promise<ReactNode> {
             // the six it is decides whether an operator has anything to do.
             key: "checked",
             header: "Checked",
-            cell: (l) => laneCheckedAge(l.verdict, now),
+            cell: (l) => laneAge(l.verdict, now).age,
           },
           {
             key: "owner",

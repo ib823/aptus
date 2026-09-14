@@ -341,6 +341,32 @@ export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
 };
 
 /**
+ * The same six again, as a CLAUSE THAT ENDS THE ANNOUNCED SENTENCE.
+ *
+ * WHY THIS IS NOT `UNCHECKED_AGE`. The chip's phrase is built for a slot beside
+ * a label — "not checked · the app is not live" — and it is right there. Spliced
+ * into the spoken sentence it produced:
+ *
+ *   "No key. Access approved, no key collected — or it was revoked,
+ *    not checked · the app is not live."
+ *
+ * Grammatical, and not a sentence: the middot is a chip separator being read
+ * aloud, and the whole thing lands as a list. The eye and the ear want different
+ * strings, so they get different strings. Each of these completes the clause
+ * that `StatusChip` opens, and each ends where a sentence ends.
+ */
+export const UNCHECKED_ANNOUNCED: Readonly<Record<UncheckedReason, string>> = {
+  nothingRequested: "and nothing has been requested for this environment yet",
+  appNotLive: "and no check is scheduled because the app is not live",
+  feedHasNoDataset: "and no check is scheduled because this feed names no dataset",
+  noSapSystemHere:
+    "and no check is scheduled because no SAP system is connected for this environment",
+  secretWouldNotOpen:
+    "and no read was attempted because the SAP system's secret would not open",
+  notRunYet: "and the nightly check has not reached this lane yet",
+};
+
+/**
  * The same six, as a sentence that says whose move it is.
  *
  * The lane page and the app card have room for this; the board does not. Every
@@ -398,6 +424,31 @@ export function laneCheckedAge(verdict: LaneVerdict, now: Date = new Date()): st
   return verdict.unchecked === null
     ? proofAge(verdict.checkedAt, now)
     : UNCHECKED_AGE[verdict.unchecked];
+}
+
+/**
+ * What the eye reads and what the ear hears, from one call.
+ *
+ * Returned together, and named to match `StatusChip`'s props, so a caller
+ * spreads them and cannot supply one without the other — which is how the chip
+ * phrase ended up being read aloud in the first place.
+ */
+export interface LaneAgeStrings {
+  /** Beside the chip: "4 m ago", or "not checked · no dataset chosen". */
+  readonly age: string;
+  /** Inside the spoken sentence, ending it: "checked 4 m ago", or a clause. */
+  readonly announced: string;
+}
+
+export function laneAge(verdict: LaneVerdict, now: Date = new Date()): LaneAgeStrings {
+  if (verdict.unchecked === null) {
+    const age = proofAge(verdict.checkedAt, now);
+    return { age, announced: ageIsMeasured(age) ? `checked ${age}` : age };
+  }
+  return {
+    age: UNCHECKED_AGE[verdict.unchecked],
+    announced: UNCHECKED_ANNOUNCED[verdict.unchecked],
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

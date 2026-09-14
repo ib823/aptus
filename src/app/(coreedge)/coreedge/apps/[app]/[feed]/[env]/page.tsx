@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
+import { GateStrip } from "@/components/coreedge/GateStrip";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { WhyTrace } from "@/components/coreedge/WhyTrace";
 import {
   HOPS_AFTER_THE_BREAK,
-  laneCheckedAge,
+  laneAge,
   UNCHECKED_EXPLANATION,
   WHY_NO_RECORDED_CALL,
   type WhyCase,
@@ -93,15 +93,16 @@ export default async function LaneDetail({
   const whyCase = WHY_FOR_STATUS[lane.verdict.status];
 
   /*
-   * THE ONE SOURCE FOR WHERE THE CHAIN STOPPED. `LANE_STATUS_VOCABULARY` also
-   * carries a `brokenHop`, and it is a per-STATUS answer where this is a
-   * per-LANE one — which is a real difference, not a stylistic one. A lane whose
-   * SAP system timed out at the metadata probe derives `sapUnavailable`, and the
-   * vocabulary's fixed answer for that status is `sapDataRead`: the strip would
-   * mark SAP metadata as PASSED on a lane where metadata is exactly what did not
-   * answer. The verdict knows which; the vocabulary cannot.
+   * THE ONE SOURCE FOR WHERE THE CHAIN STOPPED, and it is the verdict itself.
+   *
+   * Two earlier answers were both wrong here. `LANE_STATUS_VOCABULARY.brokenHop`
+   * is a per-STATUS answer where this needs a per-LANE one. And
+   * `hopsFromBreak(verdict.brokenHop)` walked the DISPLAY order, so a "No key"
+   * lane drew Key broken and Access "not reached" — beside a chip saying access
+   * is approved. Access had been proven; the derivation just proves it first.
+   * `verdict.hops` comes off the same walk that produced the status.
    */
-  const hops = hopsFromBreak(lane.verdict.brokenHop);
+  const hops = lane.verdict.hops;
 
   const lastCall = await lastLaneCall(user.organizationId, lane.appId, lane.feedId, environment);
 
@@ -111,9 +112,14 @@ export default async function LaneDetail({
       title={`${lane.feedName} · ${ENVIRONMENT_LABELS[environment]}`}
       subtitle={lane.appName}
     >
+      {/*
+        THE CHIP ALONE. `lane.verdict.because` used to sit beside it and again
+        inside the trace below, so the page said the same sentence twice with a
+        contradicting heading between them. The explanation belongs in the trace,
+        once — see WhyTrace's header.
+      */}
       <div className="flex flex-wrap items-center gap-4">
-        <StatusChip status={lane.verdict.status} age={laneCheckedAge(lane.verdict, now)} />
-        <span className="text-sm text-ink-soft">{lane.verdict.because}</span>
+        <StatusChip status={lane.verdict.status} {...laneAge(lane.verdict, now)} />
       </div>
 
       {/*
@@ -137,14 +143,16 @@ export default async function LaneDetail({
          * from a different failure.
          */
         <section className="flex flex-col gap-4 rounded-[var(--radius-card-warm)] border border-[color:var(--border-default)] bg-paper p-5">
-          <h2 className="text-base font-medium text-ink">{def.means}</h2>
+          {/* The lane's own sentence, not the status's definition — the same
+              rule the trace follows, so both branches say one thing. */}
+          <h2 className="text-base font-medium text-ink">{lane.verdict.because}</h2>
           <GateStrip
             hops={hops}
             {...(lane.verdict.checkedAt === null
               ? {}
               : {
                   checkedAt: lane.verdict.checkedAt.toISOString(),
-                  checkedAge: laneCheckedAge(lane.verdict, now),
+                  checkedAge: laneAge(lane.verdict, now).age,
                 })}
           />
           <p className="max-w-prose text-xs text-ink-muted">{HOPS_AFTER_THE_BREAK}</p>

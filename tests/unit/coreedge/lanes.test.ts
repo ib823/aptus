@@ -525,3 +525,69 @@ describe("the gate strip and the chip cannot disagree", () => {
     }
   });
 });
+
+/**
+ * The strip's hops come off the same walk as the status.
+ *
+ * THE CONTRADICTION THIS PINS reached production. A "No key" lane drew
+ * "Key — failed here → Access — not reached" beside a chip meaning access IS
+ * approved. Both halves were right on their own: the derivation resolves access
+ * BEFORE key (a lane with no approved access has nothing to collect a key for),
+ * while the strip draws in the order a CALL travels, key first. Deriving one
+ * from the other's position threw the distinction away.
+ */
+describe("the hops the strip draws", () => {
+  const stateOf = (v: ReturnType<typeof deriveLaneStatus>, hop: string) =>
+    v.hops.find((h) => h.hop === hop)?.state;
+
+  it("marks access proven on a lane that has no key", () => {
+    const v = deriveLaneStatus(
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+    );
+    expect(v.status).toBe("noKey");
+    expect(stateOf(v, "access")).toBe("ok");
+    expect(stateOf(v, "key")).toBe("broken");
+    // Everything the derivation never reached says so.
+    expect(stateOf(v, "binding")).toBe("unreached");
+  });
+
+  it("marks key unreached on a lane with no access, which is the other order", () => {
+    // The mirror image: access fails first, so the key was never asked about.
+    const v = deriveLaneStatus(
+      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
+    );
+    expect(v.status).toBe("noAccess");
+    expect(stateOf(v, "access")).toBe("broken");
+    expect(stateOf(v, "key")).toBe("unreached");
+  });
+
+  it("claims nothing at all about a retired app", () => {
+    // A retired app short-circuits before any hop is examined, so the hops say
+    // "we never asked" rather than inventing a pass or a failure.
+    const v = deriveLaneStatus(withFacts({ appRetired: true }));
+    expect(stateOf(v, "key")).toBe("broken");
+    for (const hop of ["access", "binding", "sapMetadata", "sapDataRead", "app"]) {
+      expect(stateOf(v, hop), hop).toBe("unknown");
+    }
+  });
+
+  it("never marks a hop broken that the status does not blame", () => {
+    // One broken hop at most, and it is the verdict's own brokenHop.
+    for (const facts of [
+      healthy(),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
+      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
+      withFacts({ probe: { status: "TIMEOUT", at: RECENT } }),
+      withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
+    ]) {
+      const v = deriveLaneStatus(facts);
+      const broken = v.hops.filter((h) => h.state === "broken");
+      expect(broken.length, v.status).toBeLessThanOrEqual(1);
+      expect(broken[0]?.hop ?? null, v.status).toBe(v.brokenHop);
+      // And every hop is accounted for, in the order a strip draws them.
+      expect(v.hops.map((h) => h.hop)).toEqual([...LANE_HOPS]);
+    }
+  });
+});

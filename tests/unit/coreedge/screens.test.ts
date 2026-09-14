@@ -331,12 +331,16 @@ describe("the lane page does not contradict itself", () => {
   });
 
   it("draws the strip from the verdict, the same object the chip comes from", () => {
+    /*
+     * ITEM 11, EXTENDED TO THIS PAGE. Three answers have been wrong here in
+     * turn: the vocabulary's per-status hop, then the verdict's broken hop
+     * walked in DISPLAY order — which drew "Key failed → Access not reached" on
+     * a lane whose chip says access is approved. `verdict.hops` is resolved
+     * against the order the derivation actually walks.
+     */
     const src = lane();
-    expect(src).toContain("hopsFromBreak(lane.verdict.brokenHop)");
-    // The vocabulary's fixed per-status hop is not a per-lane fact — see the
-    // contradiction pinned in lanes.test.ts.
-    expect(src).not.toMatch(/hopsFromBreak\(\s*def\.brokenHop/);
-    expect(src).not.toMatch(/hopsFromBreak\(\s*WHY_CASE_HOP/);
+    expect(src).toContain("lane.verdict.hops");
+    expect(src).not.toMatch(/hopsFromBreak\(/);
   });
 
   it("never builds a correlation id out of the lane's own slugs", () => {
@@ -363,8 +367,8 @@ describe("the lane page does not contradict itself", () => {
 describe("the boards draw their hops from the verdict too", () => {
   it("the operations strip uses the lane's break, not the status's", () => {
     const ops = code(path.join(COREEDGE_APP, "coreedge/operations/page.tsx"));
-    expect(ops).toContain("hopsFromBreak(l.verdict.brokenHop)");
-    expect(ops).not.toMatch(/hopsFromBreak\(LANE_STATUS_VOCABULARY/);
+    expect(ops).toContain("l.verdict.hops");
+    expect(ops).not.toMatch(/hopsFromBreak\(/);
   });
 });
 
@@ -374,7 +378,8 @@ describe("the app card's A·S·K·T comes from the lane, not the status", () => 
     // lane whose SAP system timed out at the metadata probe shows S passed
     // beside a chip reading "SAP unavailable".
     const app = code(path.join(COREEDGE_APP, "coreedge/apps/[app]/page.tsx"));
-    expect(app).toContain("brokenHop={lane.verdict.brokenHop}");
+    expect(app).toContain("hops={lane.verdict.hops}");
+    expect(app).not.toMatch(/brokenHop=\{/);
   });
 });
 

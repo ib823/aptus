@@ -60,16 +60,24 @@ function Glyph({ glyph }: { glyph: string }): ReactNode {
 }
 
 /**
- * The announced sentence: the meaning, then the evidence, as one phrase.
+ * The announced sentence: the meaning, then the evidence, as one sentence.
  *
- * Two things it has to get right, both of which it used to get wrong. The
- * meaning's own full stop is trimmed before a clause is joined to it. And the
- * evidence is only introduced with "checked" when it IS an age — a lane that
- * says why it has none ("no dataset chosen") is its own clause, not something
- * that was checked.
+ * THE EAR IS NOT THE EYE. `announced` carries a clause written to END this
+ * sentence; `age` carries the phrase written to sit beside a label. Feeding the
+ * second into the first produced "…or it was revoked, not checked · the app is
+ * not live." — grammatical, and a list rather than a sentence, with a chip's
+ * middot read aloud as punctuation.
+ *
+ * The meaning's own full stop is trimmed before a clause is joined to it, or
+ * the sentence reads "…in this environment., checked 4 m ago."
+ *
+ * The `age`-only path stays for callers that have one string and no verdict —
+ * the design system, and a LaneCard given only `facts.checkedAgo`. There the
+ * old rule still applies: introduce it with "checked" only when it IS an age.
  */
-function announce(means: string, age: string | undefined): string {
+function announce(means: string, age: string | undefined, announced: string | undefined): string {
   const meaning = means.endsWith(".") ? means.slice(0, -1) : means;
+  if (announced !== undefined) return `${meaning}, ${announced}.`;
   if (age === undefined) return `${meaning}.`;
   return ageIsMeasured(age) ? `${meaning}, checked ${age}.` : `${meaning}, ${age}.`;
 }
@@ -85,13 +93,19 @@ export interface StatusChipProps {
    */
   readonly age?: string;
   /**
+   * The same evidence as a clause that finishes the announced sentence —
+   * "checked 4 m ago", "and no check is scheduled because the app is not live".
+   * `laneAge` in copy.ts returns this alongside `age`; spread both together.
+   */
+  readonly announced?: string;
+  /**
    * Only pass this when the chip really navigates somewhere. A chip that looks
    * clickable and is not is worse than a plain one.
    */
   readonly onClick?: () => void;
 }
 
-export function StatusChip({ status, age, onClick }: StatusChipProps): ReactNode {
+export function StatusChip({ status, age, announced, onClick }: StatusChipProps): ReactNode {
   const def = LANE_STATUS_VOCABULARY[status];
   const glyph = GATE_GLYPHS[def.token];
   const chip = (
@@ -134,7 +148,7 @@ export function StatusChip({ status, age, onClick }: StatusChipProps): ReactNode
         * the product makes.
         */}
       <span className="sr-only">
-        {glyph === "✓" ? "Live" : def.label}. {announce(def.means, age)}
+        {glyph === "✓" ? "Live" : def.label}. {announce(def.means, age, announced)}
       </span>
       <span aria-hidden="true" className="inline-flex items-baseline gap-2">
         {body}
