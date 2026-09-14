@@ -3,9 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { CheckList, type Check } from "@/components/coreedge/CheckList";
-import { DecisionBar } from "@/components/coreedge/DecisionBar";
+import { ReviewDecision } from "@/components/coreedge/actions/ReviewDecision";
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { ACTIONS, DISABLED_REASONS } from "@/lib/coreedge/copy";
+import { refuseDecision } from "@/lib/coreedge/authz";
+import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { getRequest, listSapSystems } from "@/lib/coreedge/queries";
@@ -101,13 +102,28 @@ export default async function RequestReview({
     },
   ];
 
-  const blockingReason = isOwnRequest
-    ? DISABLED_REASONS.ownRequest
-    : !hasExpiry
-      ? DISABLED_REASONS.missingExpiry
+  /*
+   * THE SCREEN'S OWN LADDER, and the last rung is gone. It used to end in
+   * "Deciding a request is a backend capability that does not exist yet." — the
+   * sentence a VALID, approvable request showed, because the only thing
+   * blocking it was the missing caller. There is a caller now.
+   *
+   * The role check comes from `refuseDecision`, the same function the route
+   * runs, so the reason rendered before the click and the reason returned after
+   * it are the same sentence from the same source.
+   */
+  const refusal = refuseDecision({
+    role: user.role,
+    userId: user.id,
+    requestedById: request.requestedById,
+    expiresAt: request.expiresAt,
+  });
+  const blockingReason =
+    refusal !== null
+      ? DISABLED_REASONS[refusal]
       : targetEnvironment === "PROD" && !hasSystemForEnvironment
         ? DISABLED_REASONS.noProdSystem
-        : "Deciding a request is a backend capability that does not exist yet.";
+        : null;
 
   return (
     <CoreEdgeShell
@@ -142,27 +158,15 @@ export default async function RequestReview({
 
       <CheckList caption="Review checks" checks={checks} />
 
-      <DecisionBar
-        idPrefix="review"
-        primary={{ label: ACTIONS.approve.button, disabledReason: blockingReason }}
-        narrower={[
-          {
-            label: ACTIONS.approveReadOnly.button,
-            disabledReason: blockingReason,
-          },
-          {
-            label: ACTIONS.requestChanges.button,
-            disabledReason: isOwnRequest
-              ? DISABLED_REASONS.ownRequest
-              : "Requesting changes is a backend capability that does not exist yet.",
-          },
-        ]}
-        destructive={{
-          label: ACTIONS.reject.button,
-          disabledReason: isOwnRequest
-            ? DISABLED_REASONS.ownRequest
-            : "Declining a request is a backend capability that does not exist yet.",
-        }}
+      {/*
+        A CLIENT ISLAND, AND ONLY THE BAR. This page stays a server component —
+        it loads the grant, builds the checks and decides what is blocked. The
+        island owns one thing: pressing.
+      */}
+      <ReviewDecision
+        requestId={request.id}
+        blockedBecause={blockingReason}
+        narrowerBlockedBecause={isOwnRequest ? DISABLED_REASONS.ownRequest : null}
       />
 
       {/*

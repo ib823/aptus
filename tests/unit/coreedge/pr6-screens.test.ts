@@ -69,25 +69,57 @@ describe("PR-6 · role gating never redirects", () => {
 
 describe("PR-6 · D4 — operators flag, they never revoke", () => {
   const body = code(SCREENS.keys);
+  const control = code("src/components/coreedge/actions/RevokeKey.tsx");
 
-  it("the revoke control renders rather than disappearing", () => {
-    expect(body).toContain("Revoke");
+  /*
+   * THIS BLOCK USED TO ASSERT THE OPPOSITE, and the change is deliberate rather
+   * than a test bent to fit code. It required the revoke control to render for
+   * an operator, disabled, carrying `DISABLED_REASONS.revokeNotOperator` —
+   * which is the console's general rule for a refused control and the wrong
+   * rule for this one. That rule exists so a reader can tell "you may not do
+   * this" from "this product cannot do this", and it applies to actions that
+   * are theirs under SOME condition. Revocation is never an operator's under
+   * any condition; a greyed destructive button invites them to go and ask.
+   *
+   * What the tests below keep is the part that was always load-bearing: the
+   * ROUTE refuses them, in those words. A screen that hides a button is not a
+   * gate, so hiding one is only acceptable while the door still says no —
+   * asserted in tests/unit/api/coreedge-verbs-routes.test.ts.
+   */
+  it("does not render the destructive control for an operator at all", () => {
+    expect(control).toContain("if (!mayRevoke) return null");
   });
 
-  it("it is disabled with the operator reason, and the reason is a sibling string", () => {
-    expect(body).toContain("DISABLED_REASONS.revokeNotOperator");
-    expect(body).toContain('aria-disabled="true"');
-    expect(body).toContain("aria-describedby");
+  it("decides that from the same function the route runs", () => {
+    expect(body).toContain("refuseRevokeKey(user.role)");
+    expect(body).toContain("mayRevoke={mayRevoke}");
+  });
+
+  it("keeps the reason and the tab stop for a key that is merely already done", () => {
+    // The opposite case and the opposite rule: the action IS this person's, it
+    // has simply already happened — so the control stays, disabled, with its
+    // reason as a sibling string.
+    expect(control).toContain("DISABLED_REASONS.alreadyRevoked");
+    expect(control).toContain('aria-disabled="true"');
+    expect(control).toContain("aria-describedby");
     // Never a `title` attribute ON A DOM ELEMENT: a reason only a mouse can
     // discover is a broken control. Scoped to lowercase tags on purpose —
     // CoreEdgeShell takes a `title` prop that is the page heading, and an
     // assertion that cannot tell those apart would fail on correct code.
     expect(body).not.toMatch(/<[a-z][^>]*\stitle=/);
+    expect(control).not.toMatch(/<[a-z][^>]*\stitle=/);
   });
 
   it("the reason names both roles that may revoke", () => {
     expect(DISABLED_REASONS.revokeNotOperator).toMatch(/platform admin/i);
     expect(DISABLED_REASONS.revokeNotOperator).toMatch(/reviewer/i);
+  });
+
+  it("asks before it destroys, through the dialog that states the impact", () => {
+    // ConfirmDialog has had no real caller since PR-2. This is it.
+    expect(control).toContain("ConfirmDialog");
+    expect(control).toContain("CONFIRMATIONS.revokeKey");
+    expect(CONFIRMATIONS.revokeKey.reasonRequired).toBe(true);
   });
 });
 

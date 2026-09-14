@@ -27,6 +27,7 @@ import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { recheckOneLane } from "@/lib/ops/lane-check-sweep";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { writeConfigAudit } from "@/lib/studio/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -75,6 +76,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const outcome = await recheckOneLane(user.organizationId, solutionId, interfaceId, environment);
+
+  /*
+   * AUDITED LIKE THE OTHER THREE, and for a reason this verb makes easy to
+   * miss: it changes no governance state, so it looks like a read. It is not.
+   * It sends a request to a CLIENT'S SAP system on demand, and when someone
+   * asks why their estate saw traffic at 14:07 the answer has to name a person.
+   * `TEST_CONNECT` is the existing action for "someone asked us to go and look".
+   *
+   * A SKIP IS AUDITED TOO. "We did not call SAP, and here is which of the three
+   * reasons" is exactly as much a fact about the press as a successful read —
+   * and recording only the successes would make the log agree with itself by
+   * leaving out the presses that did nothing.
+   */
+  await writeConfigAudit({
+    organizationId: user.organizationId,
+    actorId: user.id,
+    entityType: "Interface",
+    entityId: interfaceId,
+    action: "TEST_CONNECT",
+    after: {
+      event: "lane_rechecked",
+      solutionId,
+      environment,
+      ...(outcome.ok ? { readStatus: outcome.readStatus } : { skipped: outcome.skipped }),
+    },
+  });
+
   /*
    * A SKIP IS NOT AN ERROR, and it is not a 500. The lane has a reason it
    * cannot be checked — no dataset, no system, a secret that will not open —

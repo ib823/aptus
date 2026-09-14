@@ -104,8 +104,14 @@ export async function POST(
   }
 
   const updated = await prisma.apiAccessGrant.update({
-    // Organization restated: an admin carries none, so the row's own is used.
-    where: { id: grant.id },
+    /*
+     * THE TENANT IS RE-ASSERTED IN THE WRITE, not merely in the read above.
+     * `tests/unit/studio/tenant-scope-coverage.test.ts` enforces this repo-wide
+     * and caught this line: a write keyed on id alone trusts the lookup that
+     * preceded it, and one refactor that moves or loosens that lookup turns a
+     * scoped update into an unscoped one with nothing failing.
+     */
+    where: { id: grant.id, organizationId: user.organizationId },
     data: {
       decision: parsed.data.decision,
       decidedById: user.id,

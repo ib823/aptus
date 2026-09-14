@@ -26,7 +26,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { refuseSendClaimLink } from "@/lib/coreedge/authz";
-import { DISABLED_REASONS } from "@/lib/coreedge/copy";
+import { CLAIM_LINK_COPY, DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { createClaimLink } from "@/lib/northbound/claim-link";
@@ -64,8 +64,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (solution === null) return refused("No such app.", 404);
   if (solution.status === "RETIRED") {
     // A retired app's keys are refused by northbound anyway; sending a link
-    // would deliver a key that cannot work.
-    return refused("This app is retired, so a key for it would not work.", 409);
+    // would deliver a key that cannot work. The same sentence the lane page
+    // renders before the press, so the refusal reads identically either way.
+    return refused(CLAIM_LINK_COPY.appRetired, 409);
   }
 
   const link = await createClaimLink({
