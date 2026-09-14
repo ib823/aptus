@@ -51,6 +51,7 @@ const RATE_LIMIT_EXEMPT = [
   "/api/auth/csrf",        // CSRF token fetch
   "/api/auth/providers",   // Provider list
   "/api/health",           // Monitoring / load balancer probes
+  "/api/build",            // Build stamp — the deploy check, called during incidents
   "/api/cron/",            // Cron jobs (protected by CRON_SECRET)
 ];
 
