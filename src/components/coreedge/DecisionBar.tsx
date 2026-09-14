@@ -1,3 +1,24 @@
+"use client";
+
+/*
+ * THIS DIRECTIVE IS LOAD-BEARING. Without it this component returned HTTP 500
+ * on every server-rendered page that used it.
+ *
+ * `blockedControlProps()` returns an `onClick` — the refusal handler that makes
+ * `aria-disabled` mean something — and it is spread onto a host <button> for
+ * EVERY disabled action. React cannot serialize a function onto a host element
+ * from a Server Component, so it threw:
+ *
+ *   Error: Event handlers cannot be passed to Client Component props.
+ *     {type: "button", aria-disabled: "true", onClick: function onClick, ...}
+ *
+ * Five server-rendered pages render a DecisionBar whose every action is
+ * disabled — sap-systems, sap-systems/:id, requests/:id, apps/:app/settings and
+ * apps/:app/add-feed — so all five were dead in production. No caller passes an
+ * `onClick`; every action carries only a `disabledReason`, so nothing crosses
+ * the boundary as a function and this directive is sufficient on its own.
+ */
+
 import type { ReactNode } from "react";
 
 import { blockedControlProps, reasonIdFor } from "@/lib/coreedge/disabled";
