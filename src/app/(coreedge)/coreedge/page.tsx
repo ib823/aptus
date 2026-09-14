@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { NeedsYouRow } from "@/components/coreedge/NeedsYouRow";
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { EMPTY_STATES, laneCheckedAge } from "@/lib/coreedge/copy";
+import { EMPTY_STATES, HOME_SECTIONS, homeShowingOf, laneCheckedAge } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { LANE_STATUS_VOCABULARY, OWNER_LABELS } from "@/lib/coreedge/status-vocabulary";
 import { listLanes, listOpenRequests } from "@/lib/coreedge/queries";
@@ -36,6 +36,9 @@ export const metadata: Metadata = {
  * the chip beside it: a hard stop outranks a wait, and a wait outranks a lane
  * that is fine.
  */
+/** Home shows the top of the list; the Operations board shows all of it. */
+const HOME_LANE_LIMIT = 8;
+
 const URGENCY: Readonly<Record<string, number>> = {
   "gate-bad": 0,
   "gate-wait": 1,
@@ -54,8 +57,8 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
     return (
       <CoreEdgeShell current="/coreedge" title="CoreEdge">
         <p className="max-w-prose text-sm text-ink-soft">
-          Your account is not attached to an organization yet, so there are no apps, data feeds or
-          SAP systems to show. Ask your platform admin to add you to one.
+          Your account is not attached to an organization yet, so there are no apps, data feeds or SAP systems to show.
+          Ask your platform admin to add you to one.
         </p>
       </CoreEdgeShell>
     );
@@ -65,19 +68,23 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
   // disagree about what "4 minutes ago" means.
   const now = new Date();
 
-  const [lanes, requests] = await Promise.all([
-    listLanes(user.organizationId),
-    listOpenRequests(user.organizationId),
-  ]);
+  const [lanes, requests] = await Promise.all([listLanes(user.organizationId), listOpenRequests(user.organizationId)]);
 
-  const needsAttention = lanes
+  /*
+   * THE COUNT IS THE WHOLE LIST; THE PAGE SHOWS THE FIRST EIGHT. Kept as two
+   * values rather than one truncated array, because the section heading states
+   * a number and this screen's own rule is that every number comes from rows
+   * that exist. A heading reading "8" over a list of 8 when 23 lanes are broken
+   * is precisely the page-length-as-a-total failure the audit found.
+   */
+  const attention = lanes
     .filter((l) => l.verdict.status !== "live" && l.verdict.status !== "notStarted")
     .sort((a, b) => {
       const ua = URGENCY[LANE_STATUS_VOCABULARY[a.verdict.status].token] ?? 9;
       const ub = URGENCY[LANE_STATUS_VOCABULARY[b.verdict.status].token] ?? 9;
       return ua - ub;
-    })
-    .slice(0, 8);
+    });
+  const needsAttention = attention.slice(0, HOME_LANE_LIMIT);
 
   const nothingYet = lanes.length === 0 && requests.length === 0;
 
@@ -93,94 +100,125 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
       {...(nothingYet
         ? {}
         : {
-            subtitle: `${needsAttention.length + requests.length} ${
-              needsAttention.length + requests.length === 1 ? "thing" : "things"
+            subtitle: `${attention.length + requests.length} ${
+              attention.length + requests.length === 1 ? "thing" : "things"
             }, most urgent first`,
           })}
       badges={requests.length === 0 ? {} : { "/coreedge/requests": requests.length }}
     >
-      {nothingYet ? (
-        <p className="max-w-prose text-sm text-ink-soft">{EMPTY_STATES.homeFirstVisit.message}</p>
-      ) : null}
+      {nothingYet ? <p className="max-w-prose text-sm text-ink-soft">{EMPTY_STATES.homeFirstVisit.message}</p> : null}
 
-      <div className="flex flex-col gap-2">
-        {requests.map((r) => (
-          <NeedsYouRow
-            key={r.id}
-            /*
-             * A request YOU raised is blocked, not actionable: you cannot
-             * approve your own. Colouring it as action would put it at the top
-             * of a list where the one thing you cannot do sits first.
-             */
-            accent={r.requestedById === user.id ? "blocked" : "action"}
-            title={`Review access · ${r.appName} → ${
-              r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment]
-            }`}
-            detail={
-              r.requestedById === user.id
-                ? "You raised this, so a colleague has to approve it."
-                : `Requested by ${r.requestedByName ?? "a colleague"} · ${r.feedLabel}`
-            }
-            chips={<StatusChip status="inReview" />}
-            action={
-              <a
-                href={`/coreedge/requests/${r.id}`}
-                className="rounded-[var(--radius-input)] border border-[color:var(--border-default)] px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
-              >
-                Open
-              </a>
-            }
-          />
-        ))}
-
-        {needsAttention.map((lane) => {
-          const def = LANE_STATUS_VOCABULARY[lane.verdict.status];
-          return (
+      {/*
+        TWO SECTIONS, EACH WITH ITS OWN HEADING AND ITS OWN COUNT. These were one
+        unheaded list, so a review waiting on a colleague and a lane that has
+        broken sat in the same pile — different work, different next action, and
+        no way to see how much of either there was without counting rows by eye.
+        A section with nothing in it is not rendered: an empty heading over an
+        empty list is a row of furniture, not information.
+      */}
+      {requests.length === 0 ? null : (
+        <section aria-labelledby="home-reviews" className="flex flex-col gap-2">
+          <h2 id="home-reviews" className="text-sm font-medium text-ink">
+            {HOME_SECTIONS.reviews.heading}{" "}
+            <span className="font-normal text-ink-muted">
+              {requests.length} {requests.length === 1 ? HOME_SECTIONS.reviews.one : HOME_SECTIONS.reviews.many}
+            </span>
+          </h2>
+          {requests.map((r) => (
             <NeedsYouRow
-              key={`${lane.feedId}-${lane.environment}`}
+              key={r.id}
               /*
-               * Whose problem it is decides how the row reads. A lane waiting on
-               * the client's Basis team is not this person's to fix, and saying
-               * so is more useful than an alarming colour.
+               * A request YOU raised is blocked, not actionable: you cannot
+               * approve your own. Colouring it as action would put it at the top
+               * of a list where the one thing you cannot do sits first.
                */
-              accent={
-                def.token === "gate-bad"
-                  ? def.owner === "appOwner" || def.owner === "reviewer"
-                    ? "action"
-                    : "blocked"
-                  : def.token === "gate-info"
-                    ? "info"
-                    : "blocked"
-              }
-              title={`${lane.feedName} · ${ENVIRONMENT_LABELS[lane.environment]} — ${lane.appName}`}
+              accent={r.requestedById === user.id ? "blocked" : "action"}
+              title={`Review access · ${r.appName} → ${
+                r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment]
+              }`}
               detail={
-                def.owner === null
-                  ? lane.verdict.because
-                  : `${lane.verdict.because} ${OWNER_LABELS[def.owner]} fixes this.`
+                r.requestedById === user.id
+                  ? "You raised this, so a colleague has to approve it."
+                  : `Requested by ${r.requestedByName ?? "a colleague"} · ${r.feedLabel}`
               }
-              /*
-               * THE AGE OF PROOF, which the verdict has carried since PR-4 and
-               * nothing rendered. A status without it is a claim with no
-               * evidence: "Live" means proven as of the age shown, and a lane
-               * whose check has never run says WHY it has not — `laneCheckedAge`
-               * keeps the six reasons apart where `proofAge` alone collapsed
-               * them into "never checked".
-               */
-              chips={
-                <StatusChip status={lane.verdict.status} age={laneCheckedAge(lane.verdict, now)} />
-              }
+              chips={<StatusChip status="inReview" />}
               action={
                 <a
-                  href={`/coreedge/apps/${lane.appSlug}/${lane.feedId}/${lane.environment}`}
+                  href={`/coreedge/requests/${r.id}`}
                   className="rounded-[var(--radius-input)] border border-[color:var(--border-default)] px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
                 >
-                  Why?
+                  Open
                 </a>
               }
             />
-          );
-        })}
-      </div>
+          ))}
+        </section>
+      )}
+
+      {attention.length === 0 ? null : (
+        <section aria-labelledby="home-lanes" className="flex flex-col gap-2">
+          <h2 id="home-lanes" className="text-sm font-medium text-ink">
+            {HOME_SECTIONS.lanes.heading}{" "}
+            <span className="font-normal text-ink-muted">
+              {attention.length} {attention.length === 1 ? HOME_SECTIONS.lanes.one : HOME_SECTIONS.lanes.many}
+            </span>
+          </h2>
+          {needsAttention.map((lane) => {
+            const def = LANE_STATUS_VOCABULARY[lane.verdict.status];
+            return (
+              <NeedsYouRow
+                key={`${lane.feedId}-${lane.environment}`}
+                /*
+                 * Whose problem it is decides how the row reads. A lane waiting on
+                 * the client's Basis team is not this person's to fix, and saying
+                 * so is more useful than an alarming colour.
+                 */
+                accent={
+                  def.token === "gate-bad"
+                    ? def.owner === "appOwner" || def.owner === "reviewer"
+                      ? "action"
+                      : "blocked"
+                    : def.token === "gate-info"
+                      ? "info"
+                      : "blocked"
+                }
+                /*
+                 * APP NAME FIRST. A reader scanning this list is looking for
+                 * their app, and the app was at the far end of the line behind a
+                 * feed name and an environment — the one word that would let them
+                 * skip a row was the last one they reached.
+                 */
+                title={`${lane.appName} · ${lane.feedName} · ${ENVIRONMENT_LABELS[lane.environment]}`}
+                detail={
+                  def.owner === null
+                    ? lane.verdict.because
+                    : `${lane.verdict.because} ${OWNER_LABELS[def.owner]} fixes this.`
+                }
+                /*
+                 * THE AGE OF PROOF, which the verdict has carried since PR-4 and
+                 * nothing rendered. A status without it is a claim with no
+                 * evidence: "Live" means proven as of the age shown, and a lane
+                 * whose check has never run says WHY it has not — `laneCheckedAge`
+                 * keeps the six reasons apart where `proofAge` alone collapsed
+                 * them into "never checked".
+                 */
+                chips={<StatusChip status={lane.verdict.status} age={laneCheckedAge(lane.verdict, now)} />}
+                action={
+                  <a
+                    href={`/coreedge/apps/${lane.appSlug}/${lane.feedId}/${lane.environment}`}
+                    className="rounded-[var(--radius-input)] border border-[color:var(--border-default)] px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
+                  >
+                    Why?
+                  </a>
+                }
+              />
+            );
+          })}
+          {attention.length > needsAttention.length ? (
+            <p className="text-xs text-ink-muted">{homeShowingOf(needsAttention.length, attention.length)}</p>
+          ) : null}
+        </section>
+      )}
     </CoreEdgeShell>
   );
 }

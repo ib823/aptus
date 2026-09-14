@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ageIsMeasured } from "@/lib/coreedge/copy";
 import {
   APP_CHIP_GLYPHS,
   APP_STATUS_VOCABULARY,
@@ -58,9 +59,30 @@ function Glyph({ glyph }: { glyph: string }): ReactNode {
   );
 }
 
+/**
+ * The announced sentence: the meaning, then the evidence, as one phrase.
+ *
+ * Two things it has to get right, both of which it used to get wrong. The
+ * meaning's own full stop is trimmed before a clause is joined to it. And the
+ * evidence is only introduced with "checked" when it IS an age — a lane that
+ * says why it has none ("no dataset chosen") is its own clause, not something
+ * that was checked.
+ */
+function announce(means: string, age: string | undefined): string {
+  const meaning = means.endsWith(".") ? means.slice(0, -1) : means;
+  if (age === undefined) return `${meaning}.`;
+  return ageIsMeasured(age) ? `${meaning}, checked ${age}.` : `${meaning}, ${age}.`;
+}
+
 export interface StatusChipProps {
   readonly status: LaneStatus;
-  /** "2 m ago". Rendered beside the chip; a Live chip without one is unproven. */
+  /**
+   * The evidence, beside the chip: "2 m ago", or — for a lane with no check
+   * behind it — why there is none ("not checked · no dataset chosen"). Both
+   * shapes go in this one slot because both answer the same question, and
+   * `announce` above tells them apart when it builds the spoken sentence. A
+   * Live chip without one is a claim with no evidence.
+   */
   readonly age?: string;
   /**
    * Only pass this when the chip really navigates somewhere. A chip that looks
@@ -95,8 +117,14 @@ export function StatusChip({ status, age, onClick }: StatusChipProps): ReactNode
   return (
     <span className="inline-flex items-baseline gap-2">
       {/*
-        * Read aloud as one phrase: "✕ No access. No approved access for…,
-        * checked 4 minutes ago."
+        * Read aloud as one phrase: "✕ No access. No approved access for this
+        * feed in this environment, checked 4 m ago."
+        *
+        * ASSEMBLED BY `announce`, not by interpolation. Every `means` ends in a
+        * full stop and the clause was appended straight after it, so this
+        * actually said "…in this environment., checked 4 m ago." — and once a
+        * lane could report WHY it had no age, it went on to say "…, checked not
+        * checked · no dataset chosen."
         *
         * THE AGE IS ANNOUNCED. It used to sit only inside the aria-hidden
         * wrapper below, so a screen reader heard the status and its meaning
@@ -106,8 +134,7 @@ export function StatusChip({ status, age, onClick }: StatusChipProps): ReactNode
         * the product makes.
         */}
       <span className="sr-only">
-        {glyph === "✓" ? "Live" : def.label}. {def.means}
-        {age === undefined ? "" : `, checked ${age}.`}
+        {glyph === "✓" ? "Live" : def.label}. {announce(def.means, age)}
       </span>
       <span aria-hidden="true" className="inline-flex items-baseline gap-2">
         {body}

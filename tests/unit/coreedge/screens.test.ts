@@ -269,3 +269,46 @@ describe("counted sentences count real rows", () => {
     expect(ops).not.toMatch(/total\s*[:=]\s*\d+/);
   });
 });
+
+describe("Home groups its work and counts all of it", () => {
+  const home = () => code(path.join(COREEDGE_APP, "coreedge/page.tsx"));
+
+  it("gives each kind of work its own heading", () => {
+    // One unheaded list ran reviews and broken lanes together: different work,
+    // different next action, and no way to see how much of either there was.
+    const src = home();
+    expect(src).toContain('aria-labelledby="home-reviews"');
+    expect(src).toContain('aria-labelledby="home-lanes"');
+    expect(src).toMatch(/<h2 id="home-reviews"/);
+    expect(src).toMatch(/<h2 id="home-lanes"/);
+  });
+
+  it("counts the whole list, not the eight rows it shows", () => {
+    /*
+     * THE FAILURE THIS PINS is the audit's own: a page length presented as a
+     * total. `needsAttention` is the truncated page and `attention` is every
+     * lane that qualifies, so a heading built from the former would read "8"
+     * over twenty-three broken lanes and look exactly like a correct number.
+     */
+    const src = home();
+    expect(src).toMatch(/\{attention\.length\}/);
+    expect(src).not.toMatch(/\{needsAttention\.length\}\s*\{/);
+    // And where the page IS truncated it says both numbers.
+    expect(src).toContain("homeShowingOf(needsAttention.length, attention.length)");
+    expect(src).toContain("attention.length > needsAttention.length");
+  });
+
+  it("renders no heading over an empty section", () => {
+    // An empty heading above an empty list is furniture, not information.
+    const src = home();
+    expect(src).toMatch(/requests\.length === 0 \? null :/);
+    expect(src).toMatch(/attention\.length === 0 \? null :/);
+  });
+
+  it("puts the app name first in a lane row", () => {
+    // The one word that lets a reader skip a row was the last one they reached.
+    expect(home()).toContain(
+      "title={`${lane.appName} · ${lane.feedName} · ${ENVIRONMENT_LABELS[lane.environment]}`}",
+    );
+  });
+});
