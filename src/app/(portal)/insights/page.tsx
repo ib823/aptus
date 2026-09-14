@@ -11,10 +11,10 @@ import Link from "next/link";
 
 const SECTIONS = [
   { key: "activity",      label: "Activity",       description: "Cross-assessment activity feed (filterable per assessment)." },
-  { key: "benchmarks",    label: "Benchmarks",     description: "Industry benchmarking dashboard with cohort selection." },
+  { key: "benchmarks",    label: "Benchmarks",     description: "Comparison against other ABeam engagements, with cohort selection." },
   { key: "triggers",      label: "Triggers",       description: "Lifecycle triggers across all assessments — SAP updates, regulatory changes, scope drift." },
   { key: "phase-bridge",  label: "Phase Bridge",   description: "Track phase transitions across assessments (replaces the misplaced /assessment/[id]/cross-phase)." },
-  { key: "patterns",      label: "Patterns",       description: "Cross-assessment pattern library — \"in your industry, scope item X is C 80% of the time\"." },
+  { key: "patterns",      label: "Patterns",       description: "Cross-assessment pattern library — \"across comparable ABeam engagements, scope item X is C 80% of the time\"." },
 ];
 
 export default function InsightsHomePage() {

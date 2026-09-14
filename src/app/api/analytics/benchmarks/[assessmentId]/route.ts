@@ -6,6 +6,7 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { BENCHMARK_SOURCE_LABEL, MINIMUM_BENCHMARK_SAMPLE_SIZE } from "@/types/analytics";
 import { computeFitRate, computeBenchmarkComparison, generateInsights } from "@/lib/analytics/benchmark-engine";
 export async function GET(
   _request: NextRequest,
@@ -59,7 +60,7 @@ export async function GET(
     );
   }
 
-  // Find benchmark for this industry
+  // Cohort of ABeam engagements in the same industry. Not an external panel.
   const benchmark = await prisma.benchmarkSnapshot.findFirst({
     where: { industry: assessment.industry },
     orderBy: { computedAt: "desc" },
@@ -73,7 +74,33 @@ export async function GET(
         assessmentFitRate,
         benchmark: null,
         comparison: null,
-        insights: ["No benchmark data available for this industry yet."],
+        source: BENCHMARK_SOURCE_LABEL,
+        insights: ["No comparable ABeam engagements recorded for this industry yet."],
+        assessmentGaps: assessment.gapResolutions,
+      },
+    });
+  }
+
+  /**
+   * Suppress at the boundary, not just in the UI. nightly-job.ts writes a
+   * snapshot for a cohort of any size, so a two-engagement cohort reaches here
+   * looking exactly like a fifty-engagement one. Withholding the figures
+   * server-side means no client, export or future consumer can render a
+   * position the sample does not support.
+   */
+  if (benchmark.sampleSize < MINIMUM_BENCHMARK_SAMPLE_SIZE) {
+    return NextResponse.json({
+      data: {
+        assessmentFitRate,
+        benchmark: null,
+        comparison: null,
+        source: BENCHMARK_SOURCE_LABEL,
+        insights: generateInsights(assessmentFitRate, {
+          avgFitRate: benchmark.avgFitRate,
+          p25FitRate: benchmark.p25FitRate,
+          p75FitRate: benchmark.p75FitRate,
+          sampleSize: benchmark.sampleSize,
+        }),
         assessmentGaps: assessment.gapResolutions,
       },
     });
@@ -100,6 +127,7 @@ export async function GET(
   return NextResponse.json({
     data: {
       assessmentFitRate,
+      source: BENCHMARK_SOURCE_LABEL,
       benchmark: {
         industry: benchmark.industry,
         sampleSize: benchmark.sampleSize,
