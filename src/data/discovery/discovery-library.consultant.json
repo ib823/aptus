@@ -14,9 +14,10 @@
    "outline": 145
   },
   "tiers": {
-   "core": 584,
+   "core": 672,
    "generalized": 70,
-   "parked": 18
+   "parked": 18,
+   "note": "core + generalized = 742 processes. `parked` is not a tier (TierSchema is core|generalized and no parked entry carries one) — it counts the separate top-level `parked` array. Do not sum all three."
   },
   "apqc_coverage": {
    "framework": "APQC PCF Cross-Industry v7.4",

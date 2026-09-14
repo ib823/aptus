@@ -48,14 +48,16 @@ const HASH_ALGO_DECLARED = "sha256 truncated to 16 hex chars";
  * sentinel flows (see D6).
  *
  * Re-pinned again 2026-09-14 (consultant only, 31feb5416252f702 →
- * 02c112c98c062e5c) for the D14 meta repair: `meta.apqc_coverage` was
- * regenerated from the live processes. No process, flow or parked entry moved —
- * every count below is unchanged, and the "MANIFEST counts vs actual data"
- * suite is what proves that rather than this comment.
+ * 02c112c98c062e5c → e2c7c3bb67965536) for the two meta repairs:
+ * `meta.apqc_coverage` (D14) and then `meta.tiers` were each regenerated from
+ * the live processes, both having carried the same pre-overlay snapshot. No
+ * process, flow or parked entry moved — every count below is unchanged, and the
+ * "MANIFEST counts vs actual data" suite is what proves that rather than this
+ * comment.
  */
 const PINNED_HASHES: Record<string, string> = {
   "discovery-library.client.json": "35f9efe4e8ce7bfd",
-  "discovery-library.consultant.json": "02c112c98c062e5c",
+  "discovery-library.consultant.json": "e2c7c3bb67965536",
   "vendor-term-guard.json": "13c982041670dae7",
 };
 
@@ -173,5 +175,34 @@ describe("D1 — dataset meta is never trusted for counts", () => {
     const actualWithFlow = allClientProcesses().filter((p) => (p.flow?.length ?? 0) > 0).length;
     expect(raw.meta.with_flow).toBe(actualWithFlow);
     expect(actualWithFlow).toBe(545);
+  });
+
+  /**
+   * `meta.tiers.core` said 584 until 2026-09-14 — the pre-overlay sap-base core
+   * count, the same snapshot that made meta.apqc_coverage wrong (D14). The
+   * overlay's 88 processes are all core, so the real figure is 672.
+   *
+   * `parked` sits inside this block but is NOT a tier: TierSchema is
+   * core|generalized, no parked entry carries a tier field, and the 18 parked
+   * enablers are not among the 742. Asserted here so nobody "fixes" the block
+   * later by making all three sum to something.
+   */
+  it("consultant meta.tiers agrees with the actual data, and parked is not a tier", () => {
+    const raw = JSON.parse(
+      readFileSync(join(DATA_DIR, "discovery-library.consultant.json"), "utf8"),
+    ) as { meta: { tiers: { core: number; generalized: number; parked: number } } };
+
+    const consultant = allConsultantProcesses();
+    const core = consultant.filter((p) => p.tier === "core").length;
+    const generalized = consultant.filter((p) => p.tier === "generalized").length;
+
+    expect(raw.meta.tiers.core).toBe(core);
+    expect(raw.meta.tiers.generalized).toBe(generalized);
+    expect(core).toBe(672);
+    expect(core + generalized).toBe(742);
+
+    // parked counts the separate array, not a tier value.
+    expect(raw.meta.tiers.parked).toBe(loadManifest().counts.parked_sap_enablers);
+    expect(consultant.some((p) => (p.tier as string) === "parked")).toBe(false);
   });
 });
