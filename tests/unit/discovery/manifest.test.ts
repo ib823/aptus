@@ -46,10 +46,16 @@ const HASH_ALGO_DECLARED = "sha256 truncated to 16 hex chars";
  * The pinned, canonical pipeline output. See BUILD-LOG.md "Data is FROZEN".
  * Re-pinned 2026-07-17 for the data-only re-emission that removed the 181
  * sentinel flows (see D6).
+ *
+ * Re-pinned again 2026-09-14 (consultant only, 31feb5416252f702 →
+ * 02c112c98c062e5c) for the D14 meta repair: `meta.apqc_coverage` was
+ * regenerated from the live processes. No process, flow or parked entry moved —
+ * every count below is unchanged, and the "MANIFEST counts vs actual data"
+ * suite is what proves that rather than this comment.
  */
 const PINNED_HASHES: Record<string, string> = {
   "discovery-library.client.json": "35f9efe4e8ce7bfd",
-  "discovery-library.consultant.json": "31feb5416252f702",
+  "discovery-library.consultant.json": "02c112c98c062e5c",
   "vendor-term-guard.json": "13c982041670dae7",
 };
 

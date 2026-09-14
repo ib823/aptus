@@ -159,31 +159,80 @@ describe("APQC coverage (C4)", () => {
 });
 
 /**
- * D14 — the stale-meta trap, pinned.
+ * D14 — the stale-meta trap, now repaired and held shut.
  *
- * `meta.apqc_coverage` still describes a 654-process snapshot and names seven
- * gap categories the 88-process overlay has since filled. If a future
- * re-emission fixes it, these tests fail and tell us — which is the point. They
- * are not asserting the staleness is GOOD; they are asserting we know about it
- * and do not read it.
+ * `meta.apqc_coverage` used to describe a 654-process snapshot: its counts
+ * summed to 654, category 1.0 was absent, and its `gaps` array named seven
+ * categories the 88-process overlay had already filled while missing the two
+ * that are genuinely thin. It was regenerated from the live processes on
+ * 2026-09-14 (see BUILD-LOG D14).
+ *
+ * The repair does NOT retire the stance. Two things are asserted separately:
+ *
+ *   1. The block now agrees with the derived truth — so a future re-emission
+ *      that reintroduces a pre-overlay snapshot fails HERE, loudly, instead of
+ *      sitting in the file waiting to be believed.
+ *   2. Nothing reads it anyway. Correct is not the same as authoritative; the
+ *      coverage matrix and gap register still compute their own numbers.
+ *
+ * (1) without (2) would be exactly the D1/D6/D14 failure mode again — a
+ * declared field trusted because it happens to be right today.
  */
-describe("D14 — the gap register is derived, never meta.gaps", () => {
-  const META_GAPS = ["6.0", "5.0", "10.0", "7.0", "12.0", "8.0", "1.0"];
+describe("D14 — meta.apqc_coverage agrees with the derived truth, and is still never read", () => {
+  /** The block, read deliberately. Schema types `meta` as unknown for this reason. */
+  const metaCoverage = (
+    JSON.parse(
+      readFileSync(
+        join(process.cwd(), "src/data/discovery/discovery-library.consultant.json"),
+        "utf8",
+      ),
+    ) as {
+      meta: {
+        apqc_coverage: {
+          counts: Record<string, number>;
+          counts_total: number;
+          gaps: string[];
+        };
+      };
+    }
+  ).meta.apqc_coverage;
 
-  it("every category meta calls a gap is in fact well covered", () => {
+  it("meta counts match the live per-category totals, category for category", () => {
+    const derived = Object.fromEntries(apqcCoverage().map((c) => [c.code, c.total]));
+    expect(metaCoverage.counts).toEqual(derived);
+  });
+
+  it("meta counts sum to 742 — not the 654 pre-overlay snapshot", () => {
+    const sum = Object.values(metaCoverage.counts).reduce((n, v) => n + v, 0);
+    expect(sum).toBe(742);
+    expect(metaCoverage.counts_total).toBe(sum);
+  });
+
+  it("meta names all 13 categories, 1.0 included", () => {
+    expect(Object.keys(metaCoverage.counts).sort()).toEqual(
+      apqcCoverage()
+        .map((c) => c.code)
+        .sort(),
+    );
+    expect(metaCoverage.counts["1.0"]).toBe(11);
+  });
+
+  it("meta.gaps matches the derived register exactly, worst first", () => {
+    expect(metaCoverage.gaps).toEqual(derivedGapCategories().map((g) => g.code));
+  });
+
+  it("no category meta calls a gap is in fact well covered", () => {
     const cov = new Map(apqcCoverage().map((c) => [c.code, c]));
-    for (const code of META_GAPS) {
+    for (const code of metaCoverage.gaps) {
       const c = cov.get(code)!;
       expect(isGapLevel(c.level), `${code} (${c.category}) is ${c.level} — meta calls it a gap`).toBe(
-        false,
+        true,
       );
     }
   });
 
-  it("the derived register finds the two categories meta misses", () => {
-    const gaps = derivedGapCategories();
-    expect(gaps.map((g) => g.code).sort()).toEqual(["11.0", "13.0"]);
-    for (const g of gaps) expect(META_GAPS).not.toContain(g.code);
+  it("the two genuinely thin categories are the ones named", () => {
+    expect(derivedGapCategories().map((g) => g.code).sort()).toEqual(["11.0", "13.0"]);
   });
 
   it("the register is ordered worst-first", () => {
@@ -209,7 +258,8 @@ describe("D14 — the gap register is derived, never meta.gaps", () => {
       .map((f) => relative(process.cwd(), f).replace(/\\/g, "/"));
     expect(
       offenders,
-      `These read the stale meta.apqc_coverage block:\n${offenders.join("\n")}`,
+      `These read meta.apqc_coverage. It is informational even now that it is correct — ` +
+        `compute from apqcCoverage() instead:\n${offenders.join("\n")}`,
     ).toEqual([]);
   }, 30_000);
 
@@ -220,8 +270,8 @@ describe("D14 — the gap register is derived, never meta.gaps", () => {
     // guard). Strip first, then match — rather than reword the prose again.
     expect(stripComments('const x = meta.apqc_coverage;')).toContain("apqc_coverage");
     expect(stripComments('// never read meta.apqc_coverage')).not.toContain("apqc_coverage");
-    expect(stripComments('/* meta.apqc_coverage is stale */')).not.toContain("apqc_coverage");
-    expect(stripComments(' * D14 — `meta.apqc_coverage` is stale')).not.toContain("apqc_coverage");
+    expect(stripComments('/* meta.apqc_coverage is informational */')).not.toContain("apqc_coverage");
+    expect(stripComments(' * D14 — `meta.apqc_coverage` is not read')).not.toContain("apqc_coverage");
   });
 });
 

@@ -7,7 +7,11 @@
  * (external) module may import it, directly or transitively; the
  * dependency-boundary test proves that from every (external) entry point.
  *
- * Data is frozen and hash-pinned (626f605fc732f494). See BUILD-LOG.md.
+ * Data is frozen and hash-pinned. The hash lives in MANIFEST.json and is pinned
+ * a second time in tests/unit/discovery/manifest.test.ts — not here, because the
+ * copy that used to sit in this sentence named the first freeze (626f605f…) and
+ * went stale across two re-emissions without anything catching it. See
+ * BUILD-LOG.md.
  */
 
 import raw from "@/data/discovery/discovery-library.consultant.json";

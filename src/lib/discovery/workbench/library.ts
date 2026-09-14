@@ -324,9 +324,13 @@ export interface ApqcCategoryCoverage {
  * sentinel-inflated 726.
  *
  * D14 — this is also why the register is COMPUTED and `meta.apqc_coverage` is
- * never read. That block still claims seven gap categories from a 654-process
- * snapshot; the 88-process overlay filled every one of them. Trusting it would
- * print seven false gaps and hide the two real ones.
+ * never read. That block once claimed seven gap categories from a 654-process
+ * snapshot; the 88-process overlay had filled every one of them. Trusting it
+ * would have printed seven false gaps and hidden the two real ones. It was
+ * regenerated on 2026-09-14 and now agrees with what this function computes —
+ * which changes nothing here. The block stays informational, and a test asserts
+ * both that it agrees and that nothing reads it, because a declared field being
+ * right today is precisely how the last one earned its trust.
  */
 function levelFor(withFlow: number, total: number): CoverageLevel {
   if (total === 0) return "none";
@@ -378,9 +382,11 @@ export function apqcCoverage(): ApqcCategoryCoverage[] {
  * The gap register's derived population: every category whose coverage is thin,
  * minimal or none, worst first.
  *
- * D14 — DERIVED, never `meta.gaps`. Today this returns 11.0 and 13.0. It will
- * return something different after the next re-emission, and that is the point:
- * a hardcoded list would still be claiming the overlay never happened.
+ * D14 — DERIVED, never `meta.gaps`. Today this returns 11.0 and 13.0, and the
+ * regenerated `meta.gaps` happens to say the same. It will return something
+ * different after the next re-emission, and that is the point: a hardcoded list
+ * — or a copy read out of the file — would still be claiming whatever was true
+ * the day it was written.
  */
 export function derivedGapCategories(): ApqcCategoryCoverage[] {
   return apqcCoverage()
