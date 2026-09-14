@@ -19,10 +19,11 @@ export default async function BenchmarkPage({ params }: BenchmarkPageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Benchmark Comparison
+          Engagement Comparison
         </h1>
         <p className="text-muted-foreground">
-          Compare this assessment against industry benchmarks.
+          Compare this assessment against other ABeam engagements recorded in
+          Aptus, in the same industry and company size.
         </p>
       </div>
       <BenchmarkComparison assessmentId={assessmentId} />

@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { BenchmarkDeltaCard } from "@/components/analytics/BenchmarkDeltaCard";
-import type { BenchmarkPosition } from "@/types/analytics";
+import { BENCHMARK_SOURCE_LABEL, type BenchmarkPosition } from "@/types/analytics";
 
 interface BenchmarkData {
   assessmentFitRate: number;
+  /** Where the comparison set comes from. Rendered next to every figure. */
+  source?: string;
   benchmark: {
     industry: string;
     sampleSize: number;
@@ -99,43 +101,62 @@ export function BenchmarkComparison({ assessmentId }: BenchmarkComparisonProps) 
     return "secondary" as const;
   };
 
+  const { benchmark, comparison } = data;
+
   return (
     <div className="space-y-6">
-      {/* Delta Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <BenchmarkDeltaCard
-          label="FIT Rate"
-          yourValue={data.assessmentFitRate}
-          benchmarkValue={data.benchmark?.avgFitRate ?? 0}
-        />
-        {data.benchmark && (
-          <>
-            <BenchmarkDeltaCard
-              label="GAP Rate"
-              yourValue={100 - data.assessmentFitRate - (data.benchmark.avgConfigRate ?? 0)}
-              benchmarkValue={data.benchmark.avgGapRate}
-              higherIsBetter={false}
-            />
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Position
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.comparison && (
-                  <Badge variant={positionVariant(data.comparison.fitRatePercentile)}>
-                    {positionLabel[data.comparison.fitRatePercentile]}
-                  </Badge>
-                )}
-                <p className="text-xs text-muted-foreground mt-2">
-                  Based on {data.benchmark.sampleSize} assessments
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+      {/*
+        No cohort, or a cohort below the minimum: the API withholds the figures
+        and sends only the reason. Rendering a delta card here against a zeroed
+        benchmark, as this component used to, printed "Benchmark: 0.0%" and
+        invited the reader to treat it as a real comparison.
+      */}
+      {benchmark ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <BenchmarkDeltaCard
+            label="FIT Rate"
+            yourValue={data.assessmentFitRate}
+            benchmarkValue={benchmark.avgFitRate}
+          />
+          <BenchmarkDeltaCard
+            label="GAP Rate"
+            yourValue={100 - data.assessmentFitRate - (benchmark.avgConfigRate ?? 0)}
+            benchmarkValue={benchmark.avgGapRate}
+            higherIsBetter={false}
+          />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Position
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {comparison ? (
+                <Badge variant={positionVariant(comparison.fitRatePercentile)}>
+                  {positionLabel[comparison.fitRatePercentile]}
+                </Badge>
+              ) : (
+                <Badge variant="secondary">Not enough data</Badge>
+              )}
+              <p className="text-xs text-muted-foreground mt-2">
+                Across {benchmark.sampleSize} comparable ABeam engagements
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Comparison unavailable
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            No figures are shown because the comparison set is too small to
+            support one.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Insights */}
       <Card>
@@ -158,7 +179,7 @@ export function BenchmarkComparison({ assessmentId }: BenchmarkComparisonProps) 
       {data.commonGaps && data.commonGaps.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Industry Common Gaps</CardTitle>
+            <CardTitle>Recurring gaps across comparable engagements</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -194,6 +215,15 @@ export function BenchmarkComparison({ assessmentId }: BenchmarkComparisonProps) 
           </CardContent>
         </Card>
       )}
+
+      {/*
+        Provenance travels with the figures. A percentile with no source beside
+        it is what ends up in a client proposal as an "industry benchmark".
+      */}
+      <p className="text-xs text-muted-foreground">
+        Source: {data.source ?? BENCHMARK_SOURCE_LABEL}. This is ABeam&apos;s own
+        engagement history, not an external benchmarking panel.
+      </p>
     </div>
   );
 }

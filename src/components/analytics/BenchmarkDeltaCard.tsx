@@ -34,7 +34,7 @@ export function BenchmarkDeltaCard({
         </div>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-xs text-muted-foreground">
-            Benchmark: {benchmarkValue.toFixed(1)}{unit}
+            Peer engagements: {benchmarkValue.toFixed(1)}{unit}
           </span>
           {!isNeutral && (
             <span

@@ -1,6 +1,10 @@
 /** Phase 26: Benchmark computation engine */
 
-import type { BenchmarkPosition } from "@/types/analytics";
+import {
+  BENCHMARK_SOURCE_LABEL,
+  MINIMUM_BENCHMARK_SAMPLE_SIZE,
+  type BenchmarkPosition,
+} from "@/types/analytics";
 
 /**
  * Compute the arithmetic mean of an array of numbers.
@@ -63,8 +67,21 @@ export function computeFitRate(
 }
 
 /**
- * Compare an assessment's FIT rate against a benchmark.
- * Returns the delta and position relative to the benchmark distribution.
+ * Compare an assessment's FIT rate against a cohort of ABeam engagements.
+ *
+ * Returns null rather than a position when the comparison cannot be made
+ * honestly. Two cases, both of which used to return a confident answer:
+ *
+ *   1. The cohort is smaller than MINIMUM_BENCHMARK_SAMPLE_SIZE. nightly-job.ts
+ *      writes a snapshot for a cohort of any size and defers suppression to the
+ *      consumer; this is that suppression.
+ *   2. The cohort has no p25/p75. Without a distribution there is no position to
+ *      report. This previously fell back to "average plus or minus 5 points",
+ *      a threshold with no basis in the data, which manufactured
+ *      above_average/below_average verdicts out of an arithmetic mean.
+ *
+ * A caller that gets null must say the comparison is unavailable. It must not
+ * substitute a delta, a direction or a hedge.
  */
 export function computeBenchmarkComparison(
   assessmentFitRate: number,
@@ -72,26 +89,22 @@ export function computeBenchmarkComparison(
     avgFitRate: number;
     p25FitRate?: number | null | undefined;
     p75FitRate?: number | null | undefined;
+    sampleSize: number;
   },
-): { fitRateDelta: number; fitRatePercentile: BenchmarkPosition } {
-  const fitRateDelta = assessmentFitRate - benchmark.avgFitRate;
-
-  let fitRatePercentile: BenchmarkPosition = "average";
+): { fitRateDelta: number; fitRatePercentile: BenchmarkPosition } | null {
+  if (benchmark.sampleSize < MINIMUM_BENCHMARK_SAMPLE_SIZE) return null;
 
   const p75 = benchmark.p75FitRate ?? null;
   const p25 = benchmark.p25FitRate ?? null;
+  if (p25 == null || p75 == null) return null;
 
-  if (p75 != null && assessmentFitRate > p75) {
+  const fitRateDelta = assessmentFitRate - benchmark.avgFitRate;
+
+  let fitRatePercentile: BenchmarkPosition = "average";
+  if (assessmentFitRate > p75) {
     fitRatePercentile = "above_average";
-  } else if (p25 != null && assessmentFitRate < p25) {
+  } else if (assessmentFitRate < p25) {
     fitRatePercentile = "below_average";
-  } else if (p75 == null && p25 == null) {
-    // Fallback: use avg +/- 5% threshold when percentiles are not available
-    if (fitRateDelta > 5) {
-      fitRatePercentile = "above_average";
-    } else if (fitRateDelta < -5) {
-      fitRatePercentile = "below_average";
-    }
   }
 
   return {
@@ -101,7 +114,18 @@ export function computeBenchmarkComparison(
 }
 
 /**
- * Generate human-readable insight strings comparing an assessment to a benchmark.
+ * Human-readable insight strings for a comparison.
+ *
+ * Every line that carries a number also carries where the number came from.
+ * The comparison set is ABeam's own engagement records, so these lines say so:
+ * "comparable ABeam engagements", never "the industry average". The old wording
+ * described a peer panel this product has never had, and it was one
+ * copy-and-paste away from a client proposal citing an industry benchmark that
+ * does not exist.
+ *
+ * When the comparison is suppressed the return is a single line saying so.
+ * There is no partial answer: a reader who sees a number here is entitled to
+ * assume the cohort met the threshold.
  */
 export function generateInsights(
   assessmentFitRate: number,
@@ -112,39 +136,44 @@ export function generateInsights(
     sampleSize: number;
   },
 ): string[] {
+  const comparison = computeBenchmarkComparison(assessmentFitRate, benchmark);
+
+  if (!comparison) {
+    return [
+      `Not enough comparable engagements to place this assessment. ` +
+        `${benchmark.sampleSize} recorded; at least ${MINIMUM_BENCHMARK_SAMPLE_SIZE} are needed before a position is shown.`,
+    ];
+  }
+
+  const { fitRateDelta, fitRatePercentile } = comparison;
+  const cohort = `${benchmark.sampleSize} comparable ABeam engagements`;
   const insights: string[] = [];
-  const { fitRateDelta, fitRatePercentile } = computeBenchmarkComparison(
-    assessmentFitRate,
-    benchmark,
-  );
 
   if (fitRatePercentile === "above_average") {
     insights.push(
-      `Your FIT rate of ${assessmentFitRate.toFixed(1)}% is above average (benchmark: ${benchmark.avgFitRate.toFixed(1)}%).`,
+      `This assessment's FIT rate of ${assessmentFitRate.toFixed(1)}% sits above the upper quartile of ${cohort} (their mean: ${benchmark.avgFitRate.toFixed(1)}%).`,
     );
   } else if (fitRatePercentile === "below_average") {
     insights.push(
-      `Your FIT rate of ${assessmentFitRate.toFixed(1)}% is below average (benchmark: ${benchmark.avgFitRate.toFixed(1)}%). Consider reviewing gap resolutions.`,
+      `This assessment's FIT rate of ${assessmentFitRate.toFixed(1)}% sits below the lower quartile of ${cohort} (their mean: ${benchmark.avgFitRate.toFixed(1)}%). Consider reviewing gap resolutions.`,
     );
   } else {
     insights.push(
-      `Your FIT rate of ${assessmentFitRate.toFixed(1)}% is in line with the industry average of ${benchmark.avgFitRate.toFixed(1)}%.`,
+      `This assessment's FIT rate of ${assessmentFitRate.toFixed(1)}% sits within the middle two quartiles of ${cohort} (their mean: ${benchmark.avgFitRate.toFixed(1)}%).`,
     );
   }
-
-  insights.push(
-    `Based on ${benchmark.sampleSize} assessments in this industry.`,
-  );
 
   if (fitRateDelta > 0) {
     insights.push(
-      `${fitRateDelta.toFixed(1)} percentage points above the industry average.`,
+      `${fitRateDelta.toFixed(1)} percentage points above the mean of ${cohort}.`,
     );
   } else if (fitRateDelta < 0) {
     insights.push(
-      `${Math.abs(fitRateDelta).toFixed(1)} percentage points below the industry average.`,
+      `${Math.abs(fitRateDelta).toFixed(1)} percentage points below the mean of ${cohort}.`,
     );
   }
+
+  insights.push(`Comparison set: ${BENCHMARK_SOURCE_LABEL}.`);
 
   return insights;
 }

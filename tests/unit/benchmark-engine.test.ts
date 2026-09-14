@@ -121,15 +121,23 @@ describe("computeFitRate", () => {
   });
 });
 
+/**
+ * Every case here now passes a sampleSize. The comparison is suppressed below
+ * MINIMUM_BENCHMARK_SAMPLE_SIZE and when the cohort has no quartiles; the
+ * suppression itself is covered in benchmark-provenance.test.ts.
+ */
 describe("computeBenchmarkComparison", () => {
+  const SUFFICIENT = 20;
+
   it("should return above_average when above p75", () => {
     const result = computeBenchmarkComparison(90, {
       avgFitRate: 70,
       p25FitRate: 60,
       p75FitRate: 80,
+      sampleSize: SUFFICIENT,
     });
-    expect(result.fitRatePercentile).toBe("above_average");
-    expect(result.fitRateDelta).toBe(20);
+    expect(result?.fitRatePercentile).toBe("above_average");
+    expect(result?.fitRateDelta).toBe(20);
   });
 
   it("should return below_average when below p25", () => {
@@ -137,9 +145,10 @@ describe("computeBenchmarkComparison", () => {
       avgFitRate: 70,
       p25FitRate: 60,
       p75FitRate: 80,
+      sampleSize: SUFFICIENT,
     });
-    expect(result.fitRatePercentile).toBe("below_average");
-    expect(result.fitRateDelta).toBe(-20);
+    expect(result?.fitRatePercentile).toBe("below_average");
+    expect(result?.fitRateDelta).toBe(-20);
   });
 
   it("should return average when between p25 and p75", () => {
@@ -147,85 +156,63 @@ describe("computeBenchmarkComparison", () => {
       avgFitRate: 70,
       p25FitRate: 60,
       p75FitRate: 80,
+      sampleSize: SUFFICIENT,
     });
-    expect(result.fitRatePercentile).toBe("average");
+    expect(result?.fitRatePercentile).toBe("average");
   });
 
-  it("should use fallback logic when percentiles are null", () => {
-    const aboveResult = computeBenchmarkComparison(80, {
-      avgFitRate: 70,
-      p25FitRate: null,
-      p75FitRate: null,
-    });
-    expect(aboveResult.fitRatePercentile).toBe("above_average");
+  it("returns null rather than inventing a position when percentiles are null", () => {
+    // Was: an "average plus or minus 5 points" fallback that reported
+    // above_average / below_average from a mean alone.
+    expect(
+      computeBenchmarkComparison(80, {
+        avgFitRate: 70,
+        p25FitRate: null,
+        p75FitRate: null,
+        sampleSize: SUFFICIENT,
+      }),
+    ).toBeNull();
 
-    const belowResult = computeBenchmarkComparison(60, {
-      avgFitRate: 70,
-      p25FitRate: null,
-      p75FitRate: null,
-    });
-    expect(belowResult.fitRatePercentile).toBe("below_average");
-  });
-
-  it("should return average when delta is within 5% and no percentiles", () => {
-    const result = computeBenchmarkComparison(72, {
-      avgFitRate: 70,
-      p25FitRate: null,
-      p75FitRate: null,
-    });
-    expect(result.fitRatePercentile).toBe("average");
+    expect(
+      computeBenchmarkComparison(60, {
+        avgFitRate: 70,
+        p25FitRate: null,
+        p75FitRate: null,
+        sampleSize: SUFFICIENT,
+      }),
+    ).toBeNull();
   });
 });
 
 describe("generateInsights", () => {
-  it("should generate above-average insight", () => {
-    const insights = generateInsights(85, {
-      avgFitRate: 70,
-      p25FitRate: 60,
-      p75FitRate: 80,
-      sampleSize: 10,
-    });
-    expect(insights.some((i) => i.includes("above average"))).toBe(true);
+  const DIST = { avgFitRate: 70, p25FitRate: 60, p75FitRate: 80 };
+
+  it("places an assessment above the upper quartile", () => {
+    const insights = generateInsights(85, { ...DIST, sampleSize: 10 });
+    expect(insights.some((i) => i.includes("above the upper quartile"))).toBe(true);
   });
 
-  it("should generate below-average insight with review suggestion", () => {
-    const insights = generateInsights(50, {
-      avgFitRate: 70,
-      p25FitRate: 60,
-      p75FitRate: 80,
-      sampleSize: 10,
-    });
-    expect(insights.some((i) => i.includes("below average"))).toBe(true);
+  it("places an assessment below the lower quartile, with a review suggestion", () => {
+    const insights = generateInsights(50, { ...DIST, sampleSize: 10 });
+    expect(insights.some((i) => i.includes("below the lower quartile"))).toBe(true);
     expect(insights.some((i) => i.includes("gap resolutions"))).toBe(true);
   });
 
-  it("should include sample size", () => {
-    const insights = generateInsights(70, {
-      avgFitRate: 70,
-      p25FitRate: 60,
-      p75FitRate: 80,
-      sampleSize: 25,
-    });
-    expect(insights.some((i) => i.includes("25 assessments"))).toBe(true);
+  it("names the cohort size", () => {
+    const insights = generateInsights(70, { ...DIST, sampleSize: 25 });
+    expect(insights.some((i) => i.includes("25 comparable ABeam engagements"))).toBe(true);
   });
 
-  it("should include delta information", () => {
-    const insights = generateInsights(80, {
-      avgFitRate: 70,
-      p25FitRate: 60,
-      p75FitRate: 80,
-      sampleSize: 10,
-    });
-    expect(insights.some((i) => i.includes("above the industry average"))).toBe(true);
+  it("attributes the delta to the cohort mean, never to an industry average", () => {
+    const insights = generateInsights(80, { ...DIST, sampleSize: 10 });
+    expect(insights.some((i) => i.includes("above the mean of"))).toBe(true);
+    // "same industry and company size" describes the cohort filter and is fine.
+    // "the industry average" claims a panel that does not exist and is not.
+    expect(insights.join(" ")).not.toMatch(/industry (average|benchmark)/i);
   });
 
-  it("should handle exact match with average", () => {
-    const insights = generateInsights(70, {
-      avgFitRate: 70,
-      p25FitRate: 60,
-      p75FitRate: 80,
-      sampleSize: 10,
-    });
-    expect(insights.some((i) => i.includes("in line with"))).toBe(true);
+  it("places an assessment sitting on the mean inside the middle quartiles", () => {
+    const insights = generateInsights(70, { ...DIST, sampleSize: 10 });
+    expect(insights.some((i) => i.includes("middle two quartiles"))).toBe(true);
   });
 });
