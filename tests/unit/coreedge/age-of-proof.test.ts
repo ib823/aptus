@@ -47,24 +47,26 @@ describe("proofAge is always a phrase", () => {
 describe("every status renders with its age", () => {
   it("Home passes the age to its lane chips", () => {
     const body = code("src/app/(coreedge)/coreedge/page.tsx");
-    expect(body).toContain("laneCheckedAge(lane.verdict");
+    expect(body).toContain("laneAge(lane.verdict");
   });
 
   it("the app board passes facts to LaneCard, which it did not", () => {
     const body = code("src/app/(coreedge)/coreedge/apps/[app]/page.tsx");
-    expect(body).toContain("checkedAgo: laneCheckedAge(");
+    expect(body).toContain("checkedAgo: laneAge(");
   });
 
   it("the lane detail passes the age to the chip and the strip", () => {
     const body = code("src/app/(coreedge)/coreedge/apps/[app]/[feed]/[env]/page.tsx");
-    expect(body).toContain("age={laneCheckedAge(");
-    expect(body).toContain("checkedAge: laneCheckedAge(");
+    // Spread, because the chip now takes the visible phrase AND the clause
+    // that is read aloud, and a caller must not be able to pass one alone.
+    expect(body).toContain("{...laneAge(lane.verdict, now)}");
+    expect(body).toContain("checkedAge: laneAge(");
   });
 
   it("the operations board shows it as a column and in the chip", () => {
     const body = code("src/app/(coreedge)/coreedge/operations/page.tsx");
     expect(body).toContain('header: "Checked"');
-    expect(body).toContain("age={laneCheckedAge(");
+    expect(body).toContain("{...laneAge(l.verdict, now)}");
   });
 
   it("no screen renders a verdict's age with the bare helper", () => {
@@ -78,6 +80,8 @@ describe("every status renders with its age", () => {
       "src/app/(coreedge)/coreedge/apps/[app]/[feed]/[env]/page.tsx",
     ]) {
       expect(code(rel), rel).not.toMatch(/proofAge\(\s*\w+\.verdict\.checkedAt/);
+      // And never the chip phrase where the announced clause belongs.
+      expect(code(rel), rel).not.toMatch(/age=\{laneCheckedAge\(/);
     }
   });
 

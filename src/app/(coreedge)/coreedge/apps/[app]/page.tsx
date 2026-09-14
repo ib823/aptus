@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { LaneCard } from "@/components/coreedge/LaneCard";
 import { AppStatusChip } from "@/components/coreedge/StatusChip";
-import { laneCheckedAge } from "@/lib/coreedge/copy";
+import { laneAge } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS, LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -90,8 +90,10 @@ export default async function AppLaneBoard({
                     env={ENVIRONMENT_LABELS[env]}
                     system={lane.system}
                     status={lane.verdict.status}
-                    // The lane's own break, not the status's — see LaneCard.
-                    brokenHop={lane.verdict.brokenHop}
+                    // The lane's own hops and its own announced clause — see
+                    // LaneCard. Neither is derivable from the status alone.
+                    hops={lane.verdict.hops}
+                    announced={laneAge(lane.verdict, now).announced}
                     /*
                      * LaneCard has rendered facts.checkedAgo since PR-2 and this
                      * board passed no facts at all, so every card on it showed a
@@ -100,7 +102,7 @@ export default async function AppLaneBoard({
                      * is a claim someone can check.
                      */
                     facts={{
-                      checkedAgo: laneCheckedAge(lane.verdict, now),
+                      checkedAgo: laneAge(lane.verdict, now).age,
                       ...(lane.rows === null ? {} : { rows: lane.rows }),
                     }}
                     action={

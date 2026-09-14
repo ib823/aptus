@@ -20,9 +20,17 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { laneCheckedAge, UNCHECKED_AGE } from "@/lib/coreedge/copy";
-import { notStartedVerdict, type LaneVerdict } from "@/lib/coreedge/lanes";
-import { LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
+import {
+  laneAge,
+  UNCHECKED_AGE,
+  UNCHECKED_ANNOUNCED,
+} from "@/lib/coreedge/copy";
+import {
+  notStartedVerdict,
+  UNCHECKED_REASONS,
+  type LaneVerdict,
+} from "@/lib/coreedge/lanes";
+import { LANE_HOPS, LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
 
 const NOW = new Date("2026-09-14T12:00:00Z");
 
@@ -66,13 +74,13 @@ describe("a lane with no check does not claim one", () => {
   it("drops the word 'checked' when the age slot holds a reason instead", () => {
     // The exact regression: a null checkedAt used to be announced as
     // "…, checked never checked." and then "…, checked not checked · …".
-    const text = announced(
-      <StatusChip status="notStarted" age={laneCheckedAge(notStartedVerdict(), NOW)} />,
-    );
+    const text = announced(<StatusChip status="notStarted" {...laneAge(notStartedVerdict(), NOW)} />);
     expect(text).toBe(
-      `Not started. Nothing requested for this environment yet, ${UNCHECKED_AGE.nothingRequested}.`,
+      `Not started. Nothing requested for this environment yet, ${UNCHECKED_ANNOUNCED.nothingRequested}.`,
     );
     expect(text).not.toContain("checked nothing requested");
+    // The chip's own phrase must not be what is read aloud — see below.
+    expect(text).not.toContain(UNCHECKED_AGE.nothingRequested);
   });
 
   it("does the same for every reason a lane can give", () => {
@@ -92,8 +100,9 @@ describe("a lane with no check does not claim one", () => {
       because: "Every hop proved, most recently at the time shown.",
       checkedAt: new Date(NOW.getTime() - 4 * 60_000),
       unchecked: null,
+      hops: LANE_HOPS.map((hop) => ({ hop, state: "ok" as const })),
     };
-    expect(announced(<StatusChip status="live" age={laneCheckedAge(proven, NOW)} />)).toContain(
+    expect(announced(<StatusChip status="live" {...laneAge(proven, NOW)} />)).toContain(
       "checked 4 m ago.",
     );
   });
@@ -103,5 +112,64 @@ describe("a lane with no check does not claim one", () => {
     // hear is not a claim the product makes.
     render(<StatusChip status="noSapSystem" age="not checked · no system connected here" />);
     expect(screen.getByText(/no system connected here\.$/)).toBeTruthy();
+  });
+});
+
+/**
+ * The chip's phrase and the announced clause are different strings.
+ *
+ * THE DEFECT THIS PINS reached production. `UNCHECKED_AGE` is built for the slot
+ * beside a label, and splicing it into the spoken sentence produced:
+ *
+ *   "No key. Access approved, no key collected — or it was revoked,
+ *    not checked · the app is not live."
+ *
+ * Grammatical, and not a sentence: a chip's middot read aloud as punctuation,
+ * and the whole thing landing as a list. The eye and the ear want different
+ * strings, so `laneAge` returns both and these assert the ear's.
+ */
+describe("what is read aloud ends the sentence", () => {
+  it("uses the announced clause, never the chip phrase", () => {
+    for (const reason of UNCHECKED_REASONS) {
+      const verdict: LaneVerdict = {
+        status: "noKey",
+        brokenHop: "key",
+        because: "Access is approved but no key has been collected for this environment.",
+        checkedAt: null,
+        unchecked: reason,
+        hops: LANE_HOPS.map((hop) => ({ hop, state: "ok" as const })),
+      };
+      const text = announced(<StatusChip status="noKey" {...laneAge(verdict, NOW)} />);
+
+      expect(text, reason).toBe(
+        `No key. ${LANE_STATUS_VOCABULARY.noKey.means.replace(/\.$/, "")}, ${UNCHECKED_ANNOUNCED[reason]}.`,
+      );
+      // The chip keeps its own phrase; the ear must not hear it.
+      expect(text, reason).not.toContain(UNCHECKED_AGE[reason]);
+      expect(laneAge(verdict, NOW).age, reason).toBe(UNCHECKED_AGE[reason]);
+    }
+  });
+
+  it("never reads a glyph separator aloud", () => {
+    // "·" is chip furniture. Hearing it is how the sentence became a list.
+    for (const reason of UNCHECKED_REASONS) {
+      expect(UNCHECKED_ANNOUNCED[reason], reason).not.toContain("·");
+      expect(UNCHECKED_ANNOUNCED[reason], reason).not.toMatch(/[.,;]$/);
+      expect(UNCHECKED_ANNOUNCED[reason].length, reason).toBeGreaterThan(20);
+    }
+    // And the six stay six distinct clauses.
+    expect(new Set(Object.values(UNCHECKED_ANNOUNCED)).size).toBe(UNCHECKED_REASONS.length);
+  });
+
+  it("still says 'checked' for a lane that was", () => {
+    const proven: LaneVerdict = {
+      status: "live",
+      brokenHop: null,
+      because: "Every hop proved, most recently at the time shown.",
+      checkedAt: new Date(NOW.getTime() - 4 * 60_000),
+      unchecked: null,
+      hops: LANE_HOPS.map((hop) => ({ hop, state: "ok" as const })),
+    };
+    expect(laneAge(proven, NOW)).toEqual({ age: "4 m ago", announced: "checked 4 m ago" });
   });
 });

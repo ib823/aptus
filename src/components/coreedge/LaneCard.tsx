@@ -1,13 +1,9 @@
 import type { ReactNode } from "react";
 
 import { LANE_DETAIL, type LaneDetailFacts } from "@/lib/coreedge/copy";
-import {
-  LANE_STATUS_VOCABULARY,
-  type LaneHop,
-  type LaneStatus,
-} from "@/lib/coreedge/status-vocabulary";
+import { LANE_STATUS_VOCABULARY, type LaneStatus } from "@/lib/coreedge/status-vocabulary";
 
-import { GateStrip, hopsFromBreak } from "./GateStrip";
+import { GateStrip, hopsFromBreak, type GateHop } from "./GateStrip";
 import { StatusChip } from "./StatusChip";
 
 /**
@@ -29,17 +25,17 @@ export interface LaneCardProps {
   readonly system: string | null;
   readonly status: LaneStatus;
   /**
-   * Where this lane's chain actually stopped, from its own verdict.
+   * The six hops as this lane's own verdict established them.
    *
-   * NOT THE SAME FACT AS THE STATUS'S. `LANE_STATUS_VOCABULARY` carries one
-   * hop per status, which is right for a status and wrong for a lane: a SAP
-   * system that stops answering at the metadata probe derives `sapUnavailable`,
-   * whose vocabulary hop is `sapDataRead` — so the S in A·S·K·T read as passed
-   * on a card whose chip said SAP unavailable. A caller holding a verdict
-   * passes it; the vocabulary's answer is the fallback for a caller
-   * demonstrating a status rather than showing a lane.
+   * NOT DERIVABLE FROM THE STATUS. `LANE_STATUS_VOCABULARY` carries one hop per
+   * status, and even that hop walked in display order says a "No key" lane never
+   * reached Access — which its own chip denies. `verdict.hops` comes off the
+   * same walk as the status. The vocabulary's answer is the fallback for a
+   * caller demonstrating a status rather than showing a lane.
    */
-  readonly brokenHop?: LaneHop | null;
+  readonly hops?: readonly GateHop[];
+  /** The evidence clause for the chip's announced sentence — see `laneAge`. */
+  readonly announced?: string;
   readonly facts?: LaneDetailFacts;
   /** The one action. Rendered by the caller so this stays a presentational card. */
   readonly action?: ReactNode;
@@ -51,7 +47,8 @@ export function LaneCard({
   env,
   system,
   status,
-  brokenHop,
+  hops,
+  announced,
   facts = {},
   action,
   selected = false,
@@ -75,11 +72,15 @@ export function LaneCard({
         <span className="text-xs text-ink-muted">{system ?? "No SAP system"}</span>
       </div>
 
-      <StatusChip status={status} {...(facts.checkedAgo === undefined ? {} : { age: facts.checkedAgo })} />
+      <StatusChip
+        status={status}
+        {...(facts.checkedAgo === undefined ? {} : { age: facts.checkedAgo })}
+        {...(announced === undefined ? {} : { announced })}
+      />
 
       {detail === null ? null : <p className="text-xs text-ink-soft">{detail}</p>}
 
-      <GateStrip hops={hopsFromBreak(brokenHop === undefined ? def.brokenHop : brokenHop)} dense />
+      <GateStrip hops={hops ?? hopsFromBreak(def.brokenHop)} dense />
 
       {action === undefined ? null : <div className="pt-1">{action}</div>}
     </>
