@@ -2,10 +2,12 @@
  * C4 · Coverage & gaps — /discovery/coverage.
  *
  * The matrix and the register are BOTH computed from live data (D14). The .dc
- * hardcodes a 7-code gap set drawn from meta.apqc_coverage, a 654-process
- * snapshot; the 88-process overlay has since filled every one of those seven.
- * Shipping it would caption "The 7 thin/minimal/none categories" over data
- * proving all seven are well covered, while hiding the two that are thin.
+ * hardcodes a 7-code gap set drawn from meta.apqc_coverage, which at the time
+ * was a 654-process snapshot; the 88-process overlay had since filled every one
+ * of those seven. Shipping it would caption "The 7 thin/minimal/none categories"
+ * over data proving all seven are well covered, while hiding the two that are
+ * thin. That block has since been regenerated, and this page still does not read
+ * it — the numbers below are computed on every request.
  *
  * Coverage is FLOW SHARE, not process count, and the caption says so — a
  * category with 253 processes and no flows is a list, not coverage.

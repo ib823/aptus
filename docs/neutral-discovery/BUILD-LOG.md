@@ -87,7 +87,7 @@ preview pass — intentionally NOT run during this dark landing.
 | D11 | The .dc's V2 search has no empty state; added one. |
 | D12 | `P` is claimed twice (mode vs park); resolved by context. |
 | D13 | The Export register lists decided processes only. |
-| **D14** | **`meta.apqc_coverage` is stale.** All 7 "known gaps" are filled; the 2 real ones aren't in it. Register derived live. |
+| **D14** | **`meta.apqc_coverage` was stale.** All 7 "known gaps" were filled; the 2 real ones weren't in it. Register derived live — and the block itself regenerated 2026-09-14 (see below). |
 | D15 | The context chip's default lies on the fence; C6 says "Consultant only — not shared". |
 | D16 | C10 ships with no audit trail — the .dc's is invented and attributed to a real person. |
 | D17 | C1's "Import the base library" state is unreachable; not built. |
@@ -369,8 +369,19 @@ not reached. Each item now carries its result.
 
 ### Known upstream data debt (fix in the post-pilot re-emission, not mid-build)
 
-- `meta.apqc_coverage` is stale (D14): counts sum to 654, 7 of 13 categories
-  disagree, category 1.0 absent. Ignored in code; pinned by test.
+- ~~`meta.apqc_coverage` is stale (D14): counts sum to 654, 7 of 13 categories
+  disagree, category 1.0 absent.~~ **Fixed 2026-09-14** — regenerated in place
+  rather than deferred to the re-emission, because a wrong block in the file is
+  a trap for whoever reads the JSON without reading the code. Still ignored in
+  code; now pinned by test *both* ways (agrees with derived · still unread).
+- ~~`meta.tiers.core` is stale in the same way: it says **584**, the pre-overlay
+  count. Actual is **672** (584 + 88 overlay).~~ **Fixed 2026-09-14**, right
+  after the D14 block, for the same reason. `parked: 18` stays where it is but
+  is now labelled: it is not a tier (TierSchema is `core|generalized`, no parked
+  entry carries one) and the three numbers must not be summed — with `core`
+  corrected they add to 760, and before the fix they added to 672, which is the
+  correct core count. That coincidence is exactly the kind of thing that gets
+  copied into a slide. Pinned by test.
 - Promoted entries live in the DB and compose at read time (D20). Folding them
   into the JSON is the re-emission's job.
 
@@ -501,13 +512,13 @@ was wrong. Only reading the actual content caught it.
 | completeness | 223 / 177 / 326 | **223 detailed / 177 detailed+variants / 145 outline** (+197 none) |
 | with_substeps | 400 | 400 (unchanged) |
 
-### Data is FROZEN (re-pinned 2026-07-17)
+### Data is FROZEN (re-pinned 2026-09-14)
 
 The committed bytes are the pinned source of truth for this build:
 
 ```
 discovery-library.client.json      35f9efe4e8ce7bfd
-discovery-library.consultant.json  31feb5416252f702
+discovery-library.consultant.json  e2c7c3bb67965536
 vendor-term-guard.json             13c982041670dae7
 ```
 
@@ -515,7 +526,33 @@ Superseded pins (kept for provenance):
 ```
 pre-flight   501559ae0d27a2a9 / dea4591d7e4a5a63 / 57749b0be400c9e2
 first freeze 71d5a13aa7ca59de / 626f605fc732f494 / 57749b0be400c9e2
+de-sentinel  35f9efe4e8ce7bfd / 31feb5416252f702 / 13c982041670dae7
+D14 meta fix 35f9efe4e8ce7bfd / 02c112c98c062e5c / 13c982041670dae7
 ```
+
+**2026-09-14 — the D14 meta repair (consultant only).** `meta.apqc_coverage` was
+regenerated from the 742 live processes: counts now sum to 742 not 654, all 13
+categories are named (1.0 was absent), and `gaps` is the derived `["13.0","11.0"]`
+instead of the seven the overlay had already filled. Two keys were added —
+`mapping_depth`, recording that the APQC mapping is PCF **level 1 only** (no
+level 2-5 element is held anywhere in this dataset), and `derived`, saying where
+the authority actually lives. **No process, flow, workflow, value stream or
+parked entry moved**; every MANIFEST count is unchanged, which the
+"MANIFEST counts vs actual data" suite proves independently of this note.
+`MANIFEST.generated` deliberately stays **2026-07-16** — the process content is
+still that emission's, and bumping it would reset the C10 staleness signal on a
+metadata edit.
+
+**2026-09-14 — `meta.tiers`, the same defect one block up.** `core` said **584**:
+the pre-overlay sap-base core count, exactly as `apqc_coverage` summed to 654.
+The overlay's 88 processes are all `core`, so the real figure is **672**
+(672 core + 70 generalized = 742). A `note` key was added because `parked: 18`
+lives in this block and is *not* a tier — `TierSchema` is `core|generalized` and
+no parked entry carries a tier field — so the three values must not be summed.
+Worth stating: before the fix they summed to 672, which is the corrected `core`
+value, and a coincidence like that is how a wrong number ends up on a slide.
+Both blocks are now pinned by `manifest.test.ts` / `workbench-library.test.ts`,
+so a re-emission that reintroduces either snapshot fails rather than ships.
 
 The next legitimate data change is a **post-pilot refresh, arriving as its own
 data-only PR with a new MANIFEST** — never a silent swap. **If these bytes ever
