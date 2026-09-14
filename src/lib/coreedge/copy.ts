@@ -281,6 +281,29 @@ export function whyExplanation(whyCase: WhyCase, facts: WhyFacts = {}): WhyExpla
   }
 }
 
+/**
+ * The sentence under a gate strip. One place, because the strip renders on more
+ * than one screen and two copies of this rule are one edit away from disagreeing
+ * about what an unreached hop means.
+ */
+export const HOPS_AFTER_THE_BREAK =
+  'A hop after the break was never attempted, so it reads "not reached" rather than passed or failed.';
+
+/** Introduces A6's one action where the trace can name it but not perform it. */
+export const WHY_NEXT_STEP = "Next step:";
+
+/**
+ * What a trace says instead of a reference, when there is no call to reference.
+ *
+ * The lane page used to construct an id from the lane's own slugs. It looked
+ * like a correlation id, it was accepted as one, and it matched nothing in the
+ * audit trail — so quoting it to support would have started a hunt for a call
+ * that was never recorded under that name. A lane that has never been called
+ * says that instead, which is both true and the more useful fact.
+ */
+export const WHY_NO_RECORDED_CALL =
+  "No call has been recorded for this lane, so there is no reference to quote.";
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * Empty states
  * ────────────────────────────────────────────────────────────────────────── */

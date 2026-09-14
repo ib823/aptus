@@ -208,7 +208,15 @@ export default async function OperationsBoard(): Promise<ReactNode> {
             key: "hops",
             header: "Hops",
             cell: (l) => (
-              <GateStrip hops={hopsFromBreak(LANE_STATUS_VOCABULARY[l.verdict.status].brokenHop)} dense />
+              /*
+               * THE VERDICT'S BREAK, not the vocabulary's. A per-status answer
+               * and a per-lane one are not the same fact: a lane whose SAP
+               * system timed out at the metadata probe derives `sapUnavailable`,
+               * whose fixed vocabulary hop is `sapDataRead` — so the S in A·S·K·T
+               * read as passed on a lane where the system is exactly what did
+               * not answer, beside a chip saying SAP unavailable.
+               */
+              <GateStrip hops={hopsFromBreak(l.verdict.brokenHop)} dense />
             ),
           },
           {

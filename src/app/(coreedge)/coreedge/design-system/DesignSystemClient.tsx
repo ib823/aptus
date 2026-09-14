@@ -182,7 +182,7 @@ export function DesignSystemClient(): ReactNode {
       >
         <div className="flex flex-col gap-4">
           <Specimen label="hopsFromBreak(null) — nothing broken">
-            <GateStrip hops={hopsFromBreak(null)} checkedAt="2 m ago" />
+            <GateStrip hops={hopsFromBreak(null)} checkedAt="2026-09-14T09:58:00.000Z" checkedAge="2 m ago" />
           </Specimen>
           {LANE_HOPS.map((hop) => (
             <Specimen key={hop} label={`hopsFromBreak("${hop}")`}>
@@ -190,7 +190,7 @@ export function DesignSystemClient(): ReactNode {
             </Specimen>
           ))}
           <Specimen label="dense — the A S K T summary used in table rows">
-            <GateStrip hops={hopsFromBreak("binding")} checkedAt="9 m ago" dense />
+            <GateStrip hops={hopsFromBreak("binding")} checkedAt="2026-09-14T09:51:00.000Z" checkedAge="9 m ago" dense />
           </Specimen>
         </div>
       </Section>
@@ -236,7 +236,6 @@ export function DesignSystemClient(): ReactNode {
                 whyCase={c}
                 facts={{ env: "Test", date: "9 Mar 2027", dataset: "Purchase orders", system: "S4H-TST-01", seconds: 42 }}
                 hops={hopsFromBreak(WHY_CASE_HOP[c])}
-                brokenAt={WHY_CASE_HOP[c]}
                 correlationId={`ce-demo-${c}`}
               />
             </Specimen>

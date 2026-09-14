@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { whyExplanation, type WhyCase, type WhyFacts } from "@/lib/coreedge/copy";
-import { OWNER_LABELS, type LaneHop } from "@/lib/coreedge/status-vocabulary";
+import { whyExplanation, WHY_NEXT_STEP, WHY_NO_RECORDED_CALL, type WhyCase, type WhyFacts } from "@/lib/coreedge/copy";
+import { OWNER_LABELS } from "@/lib/coreedge/status-vocabulary";
 
 import { GateStrip, type GateHop } from "./GateStrip";
 
@@ -12,9 +12,20 @@ import { GateStrip, type GateHop } from "./GateStrip";
  * principle is "every refusal routes to its fix". A refusal that shows a code
  * and stops has handed the user a research project.
  *
- * THE CORRELATION ID IS NOT DECORATION. It is what lets a person quote this
- * exact failure to support, and what lets support find it in 30 days of audit
- * without asking for a screenshot. It renders in mono, selectable, always.
+ * THE CORRELATION ID IS NOT DECORATION — and for that reason it is now OPTIONAL
+ * and never invented. Its whole purpose is that someone can quote it to support
+ * and support can find that call in 30 days of audit. The lane page used to
+ * build one out of the lane's own slugs, which looks exactly like a real id,
+ * matches nothing in `NorthboundAuditEvent`, and would send a person and a
+ * support engineer hunting for a call that was never recorded under that name.
+ * A lane with no recorded call now says so.
+ *
+ * IT SHOWS THE LANE'S OWN REASON, not only the case's general one. A6 writes a
+ * single "Key" row covering missing, expired, revoked and retired — deliberate,
+ * and right for a copy deck. But the derivation knows WHICH of the four this
+ * lane is, and printing the list of four under a lane whose key was revoked
+ * hands back the research project the trace exists to remove. `because` is that
+ * sentence, and it replaces the general one wherever a caller has it.
  *
  * A 401 and a 403 are never merged — different owners, different blast radii.
  * That distinction lives in `copy.ts` as separate Why cases; this component only
@@ -24,10 +35,27 @@ import { GateStrip, type GateHop } from "./GateStrip";
 export interface WhyTraceProps {
   readonly whyCase: WhyCase;
   readonly facts?: WhyFacts;
+  /**
+   * The six hops with the break already resolved. It carries which hop broke,
+   * which is why there is no separate `brokenAt`: that prop existed, was never
+   * read, and claimed this component positioned a marker it does not position.
+   */
   readonly hops: readonly GateHop[];
-  readonly brokenAt: LaneHop;
-  readonly correlationId: string;
-  /** The one action, rendered by the caller. A6 gives exactly one per case. */
+  /**
+   * What the derivation established about THIS lane, in one sentence. Replaces
+   * the case's general body when given — see the header.
+   */
+  readonly because?: string;
+  /**
+   * A real id from the audit trail, or omitted. Never a constructed one: see
+   * the header.
+   */
+  readonly correlationId?: string;
+  /**
+   * The one action as a control, where the caller has somewhere for it to go.
+   * Where it does not, A6's action still renders — as the named next step
+   * below, not as a button that does nothing.
+   */
   readonly action?: ReactNode;
 }
 
@@ -35,10 +63,12 @@ export function WhyTrace({
   whyCase,
   facts = {},
   hops,
+  because,
   correlationId,
   action,
 }: WhyTraceProps): ReactNode {
   const why = whyExplanation(whyCase, facts);
+  const headingId = `why-${whyCase}`;
 
   return (
     <section
@@ -47,23 +77,44 @@ export function WhyTrace({
       // while the person is still reading it, and this is the explanation they
       // came for.
       tabIndex={-1}
-      aria-labelledby={`why-${correlationId}`}
+      aria-labelledby={headingId}
     >
-      <h2 id={`why-${correlationId}`} className="text-base font-medium text-ink">
+      <h2 id={headingId} className="text-base font-medium text-ink">
         {why.headline}
       </h2>
-      <p className="max-w-prose text-sm text-ink-soft">{why.body}</p>
+      <p className="max-w-prose text-sm text-ink-soft">{because ?? why.body}</p>
 
       <GateStrip hops={hops} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
         <span className="text-xs text-ink-muted">{OWNER_LABELS[why.owner]} fixes this</span>
-        {action === undefined ? null : <span>{action}</span>}
+        {action !== undefined ? (
+          <span>{action}</span>
+        ) : why.action === null ? null : (
+          /*
+           * A6 GIVES EXACTLY ONE ACTION PER CASE AND THIS RENDERED NONE OF THEM
+           * unless a caller passed a control. The lane page passes none, so the
+           * one thing to do next was written down, typed, tested — and invisible
+           * on the screen whose entire purpose is to name it.
+           *
+           * Text, not a button. A control here would have nowhere to go, and a
+           * button that does nothing is worse than a sentence that says what to
+           * do: the sentence can be acted on, the button can only be clicked.
+           */
+          <span className="text-xs text-ink-soft">
+            {WHY_NEXT_STEP} <span className="font-medium text-ink">{why.action}</span>
+          </span>
+        )}
       </div>
 
       <p className="text-xs text-ink-muted">
-        Reference{" "}
-        <span className="font-mono select-all text-ink-soft">{correlationId}</span>
+        {correlationId === undefined ? (
+          WHY_NO_RECORDED_CALL
+        ) : (
+          <>
+            Reference <span className="font-mono select-all text-ink-soft">{correlationId}</span>
+          </>
+        )}
       </p>
     </section>
   );

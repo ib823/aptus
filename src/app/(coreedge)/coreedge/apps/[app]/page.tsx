@@ -90,6 +90,8 @@ export default async function AppLaneBoard({
                     env={ENVIRONMENT_LABELS[env]}
                     system={lane.system}
                     status={lane.verdict.status}
+                    // The lane's own break, not the status's — see LaneCard.
+                    brokenHop={lane.verdict.brokenHop}
                     /*
                      * LaneCard has rendered facts.checkedAgo since PR-2 and this
                      * board passed no facts at all, so every card on it showed a

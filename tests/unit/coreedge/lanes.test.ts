@@ -30,7 +30,7 @@ import {
   parseLaneEnvironment,
   type LaneFacts,
 } from "@/lib/coreedge/lanes";
-import { LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
+import { LANE_HOPS, LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
 const RECENT = new Date(NOW.getTime() - 60_000);
@@ -460,5 +460,68 @@ describe("a lane with no age says why it has none", () => {
   it("renders a real age when there is one", () => {
     // The reason must never displace a measurement.
     expect(laneCheckedAge(deriveLaneStatus(healthy()), NOW)).toBe("1 m ago");
+  });
+});
+
+/**
+ * One source for where the chain stopped.
+ *
+ * THE CONTRADICTION THIS PINS is real and was on the screen. Two objects carry
+ * a `brokenHop`: the verdict, derived from this lane's own facts, and
+ * `LANE_STATUS_VOCABULARY`, which has one fixed answer per status. Every screen
+ * drew its gate strip from the second while drawing its chip from the first, so
+ * the strip and the chip beside it were free to disagree — and for a SAP system
+ * that stops answering at the metadata probe, they did.
+ */
+describe("the gate strip and the chip cannot disagree", () => {
+  it("proves the vocabulary's fixed hop is not always this lane's", () => {
+    /*
+     * A probe TIMEOUT derives `sapUnavailable` breaking at `sapMetadata`. The
+     * vocabulary's answer for `sapUnavailable` is `sapDataRead`, because that is
+     * where the status USUALLY breaks — so a strip built from the vocabulary
+     * marked SAP metadata as PASSED on a lane where metadata is exactly what did
+     * not answer, under a chip reading "SAP unavailable".
+     */
+    const v = deriveLaneStatus(withFacts({ probe: { status: "TIMEOUT", at: RECENT } }));
+    expect(v.status).toBe("sapUnavailable");
+    expect(v.brokenHop).toBe("sapMetadata");
+    expect(LANE_STATUS_VOCABULARY[v.status].brokenHop).toBe("sapDataRead");
+    // The two disagree. That is the bug; the fix is that screens read the first.
+    expect(v.brokenHop).not.toBe(LANE_STATUS_VOCABULARY[v.status].brokenHop);
+  });
+
+  it("keeps the strip on the hop the derivation actually reached", () => {
+    // Both routes to sapUnavailable, each reporting its own hop rather than one
+    // averaged answer that is wrong for the other.
+    const atMetadata = deriveLaneStatus(withFacts({ probe: { status: "ERROR", at: RECENT } }));
+    const atRead = deriveLaneStatus(
+      withFacts({ read: { outcome: "TIMEOUT", at: RECENT, rows: null } }),
+    );
+    expect(atMetadata.status).toBe(atRead.status);
+    expect(atMetadata.brokenHop).toBe("sapMetadata");
+    expect(atRead.brokenHop).toBe("sapDataRead");
+  });
+
+  it("names a hop the strip can render, for every verdict that names one", () => {
+    // A hop the strip does not know renders as a missing segment, silently.
+    const cases: LaneFacts[] = [
+      healthy(),
+      withFacts({ appRetired: true }),
+      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
+      withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ binding: { matchingConnections: 2, secretUnreadable: false } }),
+      withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
+      withFacts({ probe: { status: "TIMEOUT", at: RECENT } }),
+      withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
+      withFacts({ read: { outcome: "TIMEOUT", at: RECENT, rows: null } }),
+    ];
+    for (const facts of cases) {
+      const v = deriveLaneStatus(facts);
+      if (v.brokenHop === null) continue;
+      expect(LANE_HOPS, v.status).toContain(v.brokenHop);
+    }
   });
 });
