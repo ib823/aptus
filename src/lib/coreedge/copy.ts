@@ -340,6 +340,29 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
 };
 
 /**
+ * Whether an age-slot phrase is a MEASUREMENT or a statement standing in for one.
+ *
+ * The distinction exists because a sentence is assembled around it. "Live,
+ * checked 4 m ago" is right; "No access, checked not checked · no dataset
+ * chosen" is what a screen reader actually said before this. Set membership,
+ * not a regular expression sniffing for digits: every phrase that is not an age
+ * is written down here, so a new one cannot slip through by looking unusual.
+ */
+const NOT_AN_AGE: ReadonlySet<string> = new Set<string>([
+  ...Object.values(UNCHECKED_AGE),
+  // `proofAge`'s own answer for a null instant, for callers outside the lane
+  // model that still pass it here.
+  "never checked",
+  // `describeAge`'s answer to a clock disagreement. Also not an age.
+  "clock skew",
+]);
+
+/** True for "4 m ago", false for "not checked · no dataset chosen". */
+export function ageIsMeasured(age: string): boolean {
+  return !NOT_AN_AGE.has(age);
+}
+
+/**
  * The age of the proof behind a lane, always a phrase, never "never checked".
  *
  * ONE FUNCTION RATHER THAN FIVE CONDITIONALS. The board, the home grid, the app
@@ -389,6 +412,33 @@ export const LANE_SWEEP_LAST_FAILED =
  */
 export const LANE_SWEEP_FLEET_NOTE =
   "Counts are for the whole fleet, not only this organization.";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Home's two sections
+ *
+ * The screen ran both kinds of work into one unheaded list: a review waiting on
+ * a person and a lane that has broken are different jobs with different next
+ * actions, and running them together makes the list longer without making it
+ * clearer. Each section now carries its own heading and its own count.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const HOME_SECTIONS = {
+  reviews: { heading: "Reviews waiting", one: "review", many: "reviews" },
+  lanes: { heading: "Lanes that need attention", one: "lane", many: "lanes" },
+} as const;
+
+/**
+ * "Showing 8 of 23" — never a page length presented as a total.
+ *
+ * The screen's own header says it refuses to invent a count, and the audit
+ * found exactly that failure on the old console's home: a page length read as
+ * a total, which an operator cannot tell apart by looking. Home shows the first
+ * eight lanes, so when there are more it says both numbers and where the rest
+ * are.
+ */
+export function homeShowingOf(shown: number, total: number): string {
+  return `Showing ${shown} of ${total}. The Operations board has every lane.`;
+}
 
 export const EMPTY_STATES = {
   homeFirstVisit: {
