@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 
 import { LaneCard } from "@/components/coreedge/LaneCard";
 import { AppStatusChip } from "@/components/coreedge/StatusChip";
+import { laneCheckedAge } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS, LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
-import { proofAge } from "@/lib/coreedge/freshness";
 
 import { CoreEdgeShell } from "../../CoreEdgeShell";
 
@@ -98,7 +98,7 @@ export default async function AppLaneBoard({
                      * is a claim someone can check.
                      */
                     facts={{
-                      checkedAgo: proofAge(lane.verdict.checkedAt, now),
+                      checkedAgo: laneCheckedAge(lane.verdict, now),
                       ...(lane.rows === null ? {} : { rows: lane.rows }),
                     }}
                     action={

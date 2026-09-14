@@ -130,6 +130,58 @@ export interface ReadFacts {
   readonly rows: number | null;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Why no check stands behind a lane
+ *
+ * "Never checked" was one phrase doing six jobs. A lane nobody has requested, a
+ * lane whose app is still a draft, a lane whose feed has no dataset chosen, a
+ * lane with no SAP system in that environment, a lane whose system's secret
+ * would not open, and a lane the nightly sweep simply has not reached yet all
+ * rendered the identical words — so a board of twenty lanes reading "never
+ * checked" told an operator nothing about which of the six they were looking at,
+ * and nothing about whether anyone was ever going to check.
+ *
+ * FIVE OF THE SIX ARE NOT THE SWEEP'S FAULT AND NOT ITS JOB. `laneTargets()`
+ * selects ACTIVE apps with a feed that names an entity set, in an environment
+ * where an active connection exists. Every exclusion there is deliberate: there
+ * is no read to attempt for a feed with no dataset, nothing to ask when no
+ * system is connected, and a draft app's unfinished work does not belong in a
+ * fleet-wide nightly read of a client's SAP system. The fix is to SAY WHICH,
+ * not to widen the target set until the board looks greener.
+ *
+ * THE SIXTH IS A REAL GAP AND IS NAMED AS ONE. `secretWouldNotOpen` is a lane
+ * the sweep reached, failed on, and recorded only as a fleet-wide count — see
+ * the `unreadable` tally in lane-check-sweep.ts. It is reported here where a
+ * screen knows it, and the count is on the Operations board; there is still no
+ * per-lane ledger row behind it, which is stated rather than papered over.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const UNCHECKED_REASONS = [
+  "nothingRequested",
+  "appNotLive",
+  "feedHasNoDataset",
+  "noSapSystemHere",
+  "secretWouldNotOpen",
+  "notRunYet",
+] as const;
+
+export type UncheckedReason = (typeof UNCHECKED_REASONS)[number];
+
+/**
+ * What the nightly sweep would do with this lane, as the screens know it.
+ *
+ * Two facts, both already on the row a screen has loaded, and both mirroring a
+ * filter in `laneTargets()` exactly. They are separate from the hop facts
+ * because they decide nothing about the STATUS — a draft app's lane is still
+ * "No key" if it has no key. They decide only whether a check was ever coming.
+ */
+export interface SweepFacts {
+  /** False for a draft, restricted or retired app: `laneTargets` takes ACTIVE only. */
+  readonly appIsActive: boolean;
+  /** False when the feed names no entity set, so there is no read to attempt. */
+  readonly feedHasDataset: boolean;
+}
+
 export interface LaneFacts {
   readonly appRetired: boolean;
   readonly key: KeyFacts;
@@ -137,6 +189,7 @@ export interface LaneFacts {
   readonly binding: BindingFacts;
   readonly probe: ProbeFacts;
   readonly read: ReadFacts;
+  readonly sweep: SweepFacts;
   readonly now?: Date;
 }
 
@@ -151,20 +204,32 @@ export interface LaneVerdict {
   readonly because: string;
   /** When the evidence behind this verdict was gathered. */
   readonly checkedAt: Date | null;
+  /**
+   * Why there is no evidence, when there is none. Non-null exactly when
+   * `checkedAt` is null, so a screen can never render an absence as a bare
+   * "never checked" — it always has the reason to hand.
+   */
+  readonly unchecked: UncheckedReason | null;
 }
+
+/** The verdict before the reason is attached — see `deriveLaneStatus`. */
+type HopVerdict = Omit<LaneVerdict, "unchecked">;
 
 function isStale(at: Date | null, now: Date): boolean {
   return at === null || now.getTime() - at.getTime() > CHECK_TTL_MS;
 }
 
 /**
- * Resolve a lane to exactly one of the eighteen statuses.
+ * Walk the hops and return the first failure — the status half of the verdict.
  *
  * Read top to bottom: the order of the checks IS the order of the hops, and the
  * first failure returns. Nothing below a failed hop is consulted, because
  * nothing below it was attempted.
+ *
+ * Not exported: `deriveLaneStatus` is the entry point, and it attaches the
+ * unchecked reason so no caller can obtain a verdict missing one.
  */
-export function deriveLaneStatus(facts: LaneFacts): LaneVerdict {
+function deriveHopVerdict(facts: LaneFacts): HopVerdict {
   const now = facts.now ?? new Date();
 
   /* ── Hop 0: the app itself ────────────────────────────────────────────── */
@@ -374,6 +439,42 @@ export function deriveLaneStatus(facts: LaneFacts): LaneVerdict {
 }
 
 /**
+ * The first reason a check is not standing behind this lane, in the sweep's own
+ * order.
+ *
+ * ORDERED AS `laneTargets()` FILTERS, deliberately. A draft app whose
+ * environment also has no SAP system fails the app filter first, so that is
+ * what a person has to change first; reporting the missing system would send
+ * them to connect one for an app that still would not be checked.
+ * `secretWouldNotOpen` comes first of all because it is the only one of the six
+ * where the sweep did reach the lane — an answer, not an exclusion.
+ */
+function whyUnchecked(facts: LaneFacts): UncheckedReason {
+  if (facts.binding.secretUnreadable) return "secretWouldNotOpen";
+  if (!facts.sweep.appIsActive) return "appNotLive";
+  if (!facts.sweep.feedHasDataset) return "feedHasNoDataset";
+  if (facts.binding.matchingConnections === 0) return "noSapSystemHere";
+  return "notRunYet";
+}
+
+/**
+ * Resolve a lane to exactly one of the eighteen statuses, and — where no check
+ * stands behind it — to why not.
+ *
+ * The two are computed separately on purpose. The status answers "what is true
+ * of this lane"; the reason answers "why do we not know", and the second must
+ * never be allowed to change the first. A draft app with no key reads "No key",
+ * exactly as an ACTIVE one would; it just also says that no check was coming.
+ */
+export function deriveLaneStatus(facts: LaneFacts): LaneVerdict {
+  const verdict = deriveHopVerdict(facts);
+  return {
+    ...verdict,
+    unchecked: verdict.checkedAt === null ? whyUnchecked(facts) : null,
+  };
+}
+
+/**
  * A lane that has never been started at all — no grant, no key, nothing
  * requested. Distinct from `noAccess`, which means someone asked and the answer
  * was no or has not come.
@@ -384,5 +485,6 @@ export function notStartedVerdict(): LaneVerdict {
     brokenHop: null,
     because: "Nothing has been requested for this environment yet.",
     checkedAt: null,
+    unchecked: "nothingRequested",
   };
 }

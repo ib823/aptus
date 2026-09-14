@@ -21,6 +21,9 @@
  * "undefined" on a screen someone is trying to act on.
  */
 
+import { proofAge } from "./freshness";
+
+import type { LaneVerdict, UncheckedReason } from "./lanes";
 import type { LaneHop, LaneStatus, StatusOwner } from "./status-vocabulary";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -287,6 +290,105 @@ export interface EmptyStateCopy {
   /** The one button A6 puts on the empty state, if any. */
   readonly action: string | null;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Why a lane has no age
+ *
+ * Every status in this product renders with the age of the check behind it, and
+ * a lane with no check rendered "never checked" — six different situations in
+ * three words. The words below are what each of the six actually is. See
+ * `UncheckedReason` in lanes.ts for why five of them are outside the nightly
+ * sweep on purpose and the sixth is a named gap.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The age slot, where a checked lane would read "4 h ago".
+ *
+ * Written to sit inside the parentheses a StatusChip puts around it and to fit
+ * a table cell, so each is a phrase and not a sentence. The long forms are
+ * below, for the screens that have room to say what to do about it.
+ */
+export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
+  nothingRequested: "nothing requested yet",
+  appNotLive: "not checked · the app is not live",
+  feedHasNoDataset: "not checked · no dataset chosen",
+  noSapSystemHere: "not checked · no system connected here",
+  secretWouldNotOpen: "not checked · the secret would not open",
+  notRunYet: "not checked yet",
+};
+
+/**
+ * The same six, as a sentence that says whose move it is.
+ *
+ * The lane page and the app card have room for this; the board does not. Every
+ * one of them names the next thing a person can do, or says plainly that there
+ * is nothing to do — which is itself an answer an operator can act on.
+ */
+export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = {
+  nothingRequested:
+    "Nothing has been requested for this environment, so there is nothing to check yet.",
+  appNotLive:
+    "The nightly check covers live apps only, so none is scheduled for this lane. Nothing is wrong with it — nobody has looked.",
+  feedHasNoDataset:
+    "This data feed names no dataset, so there is no read to attempt. Choose one and the nightly check will cover this lane.",
+  noSapSystemHere:
+    "No SAP system is connected for this environment, so there is nothing to ask. Connect one and the nightly check will cover this lane.",
+  secretWouldNotOpen:
+    "The nightly check reached this SAP system and could not open its stored secret, so no read was attempted. That is ours to fix, not SAP's.",
+  notRunYet:
+    "This lane is covered by the nightly check and no run has reached it yet.",
+};
+
+/**
+ * The age of the proof behind a lane, always a phrase, never "never checked".
+ *
+ * ONE FUNCTION RATHER THAN FIVE CONDITIONALS. The board, the home grid, the app
+ * card, the lane page and the Checked column each render this, and each one that
+ * wrote its own `checkedAt === null ? … : …` would be a place the six reasons
+ * could quietly collapse back into one. `unchecked` is non-null exactly when
+ * `checkedAt` is null, so there is no third case to get wrong.
+ */
+export function laneCheckedAge(verdict: LaneVerdict, now: Date = new Date()): string {
+  return verdict.unchecked === null
+    ? proofAge(verdict.checkedAt, now)
+    : UNCHECKED_AGE[verdict.unchecked];
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The nightly lane check, as the Operations board reports it
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The four figures `sweepLaneChecks` returns, labelled for a reader.
+ *
+ * Three of them are skips, and each label says WHICH skip, for the same reason
+ * the six unchecked reasons above exist: a run that checked 2 of 20 lanes is a
+ * healthy run when eighteen of them have no system connected, and a broken one
+ * if it should have checked all twenty.
+ */
+export const LANE_SWEEP_LABELS = {
+  checked: "Checked",
+  skippedNoConnection: "Skipped · no system connected",
+  skippedNoEntitySet: "Skipped · feed names no dataset",
+  unreadable: "Reached · the secret would not open",
+} as const;
+
+/** A figure the recorded run does not carry. Not zero — zero is a measurement. */
+export const LANE_SWEEP_NOT_RECORDED = "Not recorded";
+
+export const LANE_SWEEP_NEVER_RAN =
+  "The nightly check has never run. Lanes below that show no age have not failed — nothing has looked at them yet.";
+
+export const LANE_SWEEP_LAST_FAILED =
+  "The last nightly check did not finish, so the ages below are from an earlier run.";
+
+/**
+ * Whose lanes these counts are. Said out loud because the sweep is fleet-wide
+ * and the table under it is not: an operator reading "Checked 2" beside their
+ * own twenty lanes would otherwise take it for a count of theirs.
+ */
+export const LANE_SWEEP_FLEET_NOTE =
+  "Counts are for the whole fleet, not only this organization.";
 
 export const EMPTY_STATES = {
   homeFirstVisit: {

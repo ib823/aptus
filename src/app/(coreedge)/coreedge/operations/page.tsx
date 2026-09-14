@@ -4,8 +4,18 @@ import type { ReactNode } from "react";
 
 import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
 import { OpsTable } from "@/components/coreedge/OpsTable";
+import { ProvenAt } from "@/components/coreedge/primitives/ProvenAt";
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { operationsAllHealthy } from "@/lib/coreedge/copy";
+import {
+  laneCheckedAge,
+  LANE_SWEEP_FLEET_NOTE,
+  LANE_SWEEP_LABELS,
+  LANE_SWEEP_LAST_FAILED,
+  LANE_SWEEP_NEVER_RAN,
+  LANE_SWEEP_NOT_RECORDED,
+  operationsAllHealthy,
+} from "@/lib/coreedge/copy";
+import { proofAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import {
   GATE_GLYPHS,
@@ -13,8 +23,7 @@ import {
   LANE_STATUS_VOCABULARY,
   OWNER_LABELS,
 } from "@/lib/coreedge/status-vocabulary";
-import { proofAge } from "@/lib/coreedge/freshness";
-import { listLaneTraffic, listLanes } from "@/lib/coreedge/queries";
+import { lastLaneSweep, listLaneTraffic, listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
 import { CoreEdgeShell } from "../CoreEdgeShell";
@@ -61,9 +70,10 @@ export default async function OperationsBoard(): Promise<ReactNode> {
   }
 
   const now = new Date();
-  const [allLanes, traffic] = await Promise.all([
+  const [allLanes, traffic, sweep] = await Promise.all([
     listLanes(user.organizationId),
     listLaneTraffic(user.organizationId, now),
+    lastLaneSweep(),
   ]);
 
   const lanes = allLanes.sort((a, b) => {
@@ -109,6 +119,57 @@ export default async function OperationsBoard(): Promise<ReactNode> {
         </p>
       ) : null}
 
+      {/*
+        WHAT THE NIGHTLY CHECK ACTUALLY DID, above the statuses it produced.
+        Every chip below is a claim about the last check, and this board showed
+        those claims for a release in which it never said whether a check had
+        run at all — so a column of Unknowns looked the same whether the sweep
+        skipped those lanes at 04:30 or has never executed once. The figures are
+        the sweep's own, read back from the CronRunLog row its cron route wrote.
+      */}
+      <section
+        aria-labelledby="lane-sweep-heading"
+        className="flex flex-col gap-2 rounded-[var(--radius-card-warm)] border border-[color:var(--border-default)] bg-paper p-4"
+      >
+        <h2 id="lane-sweep-heading" className="text-sm font-medium text-ink">
+          The nightly lane check
+        </h2>
+        {sweep === null ? (
+          <p className="max-w-prose text-sm text-ink-soft">{LANE_SWEEP_NEVER_RAN}</p>
+        ) : (
+          <>
+            <p className="text-sm text-ink-soft">
+              Last run <ProvenAt iso={sweep.startedAt.toISOString()} age={proofAge(sweep.startedAt, now)} />
+            </p>
+            {sweep.ok ? null : (
+              <p className="max-w-prose text-sm text-gate-bad-fg">{LANE_SWEEP_LAST_FAILED}</p>
+            )}
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              {(
+                [
+                  ["checked", sweep.checked],
+                  ["skippedNoConnection", sweep.skippedNoConnection],
+                  ["skippedNoEntitySet", sweep.skippedNoEntitySet],
+                  ["unreadable", sweep.unreadable],
+                ] as const
+              ).map(([key, value]) => (
+                <div key={key} className="flex items-baseline justify-between gap-2">
+                  <dt className="text-ink-soft">{LANE_SWEEP_LABELS[key]}</dt>
+                  <dd className="font-medium text-ink">
+                    {value === null ? (
+                      <span className="font-normal text-ink-muted">{LANE_SWEEP_NOT_RECORDED}</span>
+                    ) : (
+                      value
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="text-xs text-ink-muted">{LANE_SWEEP_FLEET_NOTE}</p>
+          </>
+        )}
+      </section>
+
       <OpsTable
         caption="Every lane, sorted by what needs a human"
         legend={
@@ -140,7 +201,7 @@ export default async function OperationsBoard(): Promise<ReactNode> {
             key: "status",
             header: "Status",
             cell: (l) => (
-              <StatusChip status={l.verdict.status} age={proofAge(l.verdict.checkedAt, now)} />
+              <StatusChip status={l.verdict.status} age={laneCheckedAge(l.verdict, now)} />
             ),
           },
           {
@@ -182,9 +243,11 @@ export default async function OperationsBoard(): Promise<ReactNode> {
           {
             // The age of proof, as its own column, because the board is where
             // an operator decides what to believe before deciding what to do.
+            // A lane with no proof reads why not, not "never checked": which of
+            // the six it is decides whether an operator has anything to do.
             key: "checked",
             header: "Checked",
-            cell: (l) => proofAge(l.verdict.checkedAt, now),
+            cell: (l) => laneCheckedAge(l.verdict, now),
           },
           {
             key: "owner",

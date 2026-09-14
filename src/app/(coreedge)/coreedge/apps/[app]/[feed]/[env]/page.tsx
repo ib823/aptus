@@ -5,8 +5,12 @@ import type { ReactNode } from "react";
 import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { WhyTrace } from "@/components/coreedge/WhyTrace";
-import { WHY_CASE_HOP, type WhyCase } from "@/lib/coreedge/copy";
-import { proofAge } from "@/lib/coreedge/freshness";
+import {
+  laneCheckedAge,
+  UNCHECKED_EXPLANATION,
+  WHY_CASE_HOP,
+  type WhyCase,
+} from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS, parseLaneEnvironment } from "@/lib/coreedge/lanes";
 import {
   LANE_STATUS_VOCABULARY,
@@ -88,9 +92,22 @@ export default async function LaneDetail({
       subtitle={lane.appName}
     >
       <div className="flex flex-wrap items-center gap-4">
-        <StatusChip status={lane.verdict.status} age={proofAge(lane.verdict.checkedAt, now)} />
+        <StatusChip status={lane.verdict.status} age={laneCheckedAge(lane.verdict, now)} />
         <span className="text-sm text-ink-soft">{lane.verdict.because}</span>
       </div>
+
+      {/*
+        WHY THERE IS NO AGE, on the one screen with room to say it in full. The
+        chip's phrase fits a table cell; this says whose move it is, and for the
+        five reasons that are outside the nightly sweep on purpose, says that
+        plainly rather than leaving a person waiting for a check that is not
+        coming.
+      */}
+      {lane.verdict.unchecked === null ? null : (
+        <p className="max-w-prose text-sm text-ink-soft">
+          {UNCHECKED_EXPLANATION[lane.verdict.unchecked]}
+        </p>
+      )}
 
       {whyCase === undefined ? (
         /*
@@ -107,7 +124,7 @@ export default async function LaneDetail({
               ? {}
               : {
                   checkedAt: lane.verdict.checkedAt.toISOString(),
-                  checkedAge: proofAge(lane.verdict.checkedAt, now),
+                  checkedAge: laneCheckedAge(lane.verdict, now),
                 })}
           />
           {def.owner === null ? null : (

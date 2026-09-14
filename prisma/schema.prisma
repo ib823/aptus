@@ -964,6 +964,7 @@ model SapServiceHealth {
 model CronRunLog {
   id  String @id @default(cuid())
   /// northbound-reap | northbound-retention | connection-probes | analytics | trials
+  /// | coreedge-usage | lane-checks
   job String
 
   startedAt   DateTime

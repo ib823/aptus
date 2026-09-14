@@ -16,9 +16,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  laneCheckedAge,
+  UNCHECKED_AGE,
+  UNCHECKED_EXPLANATION,
+} from "@/lib/coreedge/copy";
+import {
   CHECK_TTL_MS,
   ENVIRONMENT_LABELS,
   LANE_ENVIRONMENTS,
+  UNCHECKED_REASONS,
   deriveLaneStatus,
   notStartedVerdict,
   parseLaneEnvironment,
@@ -39,6 +45,7 @@ function healthy(): LaneFacts {
     binding: { matchingConnections: 1, secretUnreadable: false },
     probe: { status: "OK", at: RECENT },
     read: { outcome: "OK", at: RECENT, rows: 5 },
+    sweep: { appIsActive: true, feedHasDataset: true },
     now: NOW,
   };
 }
@@ -346,5 +353,112 @@ describe("statuses this file deliberately cannot produce", () => {
     for (const impossible of ["rateLimited", "circuitOpen", "systemOff"] as const) {
       expect(produced.has(impossible), `${impossible} should need PR-5`).toBe(false);
     }
+  });
+});
+
+/**
+ * "Never checked" was one phrase doing six jobs.
+ *
+ * THE BUG THIS PINS. Eighteen of twenty lanes in production read "never
+ * checked" after the sweep started running nightly, and the phrase could not
+ * tell an operator whether that meant "the sweep skipped you on purpose and
+ * always will" or "the sweep is broken". Both looked identical, so the board
+ * proved almost nothing.
+ *
+ * THE INVARIANT IS THE POINT, not the wording: a verdict has a reason exactly
+ * when it has no age. There is no third state for a screen to get wrong, which
+ * is what lets one `laneCheckedAge` replace five conditionals.
+ */
+describe("a lane with no age says why it has none", () => {
+  it("carries a reason exactly when it carries no checkedAt", () => {
+    const cases: LaneFacts[] = [
+      healthy(),
+      withFacts({ appRetired: true }),
+      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
+      withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
+      withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
+      withFacts({ read: { outcome: null, at: null, rows: null } }),
+      withFacts({ sweep: { appIsActive: false, feedHasDataset: true } }),
+      withFacts({ sweep: { appIsActive: true, feedHasDataset: false } }),
+    ];
+    for (const facts of cases) {
+      const v = deriveLaneStatus(facts);
+      expect(
+        v.unchecked === null,
+        `${v.status}: unchecked=${String(v.unchecked)} with checkedAt=${String(v.checkedAt)}`,
+      ).toBe(v.checkedAt !== null);
+    }
+  });
+
+  it("separates the four skips the board used to render identically", () => {
+    // Each of these rendered "never checked" and nothing else. They are four
+    // different situations with four different next actions — or, for three of
+    // them, no next action at all, which an operator still needs to be told.
+    const noRead = { outcome: null, at: null, rows: null } as const;
+
+    const draftApp = deriveLaneStatus(
+      withFacts({ read: noRead, sweep: { appIsActive: false, feedHasDataset: true } }),
+    );
+    const noDataset = deriveLaneStatus(
+      withFacts({ read: noRead, sweep: { appIsActive: true, feedHasDataset: false } }),
+    );
+    const noSystem = deriveLaneStatus(
+      withFacts({ read: noRead, binding: { matchingConnections: 0, secretUnreadable: false } }),
+    );
+    const badSecret = deriveLaneStatus(
+      withFacts({ read: noRead, binding: { matchingConnections: 1, secretUnreadable: true } }),
+    );
+    const waiting = deriveLaneStatus(withFacts({ read: noRead }));
+
+    expect(draftApp.unchecked).toBe("appNotLive");
+    expect(noDataset.unchecked).toBe("feedHasNoDataset");
+    expect(noSystem.unchecked).toBe("noSapSystemHere");
+    expect(badSecret.unchecked).toBe("secretWouldNotOpen");
+    expect(waiting.unchecked).toBe("notRunYet");
+
+    // Five reasons, five distinct phrases — the whole point.
+    expect(
+      new Set([draftApp, noDataset, noSystem, badSecret, waiting].map((v) => laneCheckedAge(v, NOW)))
+        .size,
+    ).toBe(5);
+  });
+
+  it("does not let the sweep facts change a status", () => {
+    // A draft app's lane is still whatever its hops say it is. The reason
+    // answers "why do we not know", never "what is true" — if it leaked into
+    // the status, a board could be made greener by marking apps as drafts.
+    const live = deriveLaneStatus(healthy());
+    const draft = deriveLaneStatus(withFacts({ sweep: { appIsActive: false, feedHasDataset: false } }));
+    expect(draft.status).toBe(live.status);
+    expect(draft.because).toBe(live.because);
+  });
+
+  it("says nothing requested, not never checked, for a lane nobody started", () => {
+    // The cartesian product means most cells on a new board are this one, so
+    // it was the single largest contributor to a page full of "never checked".
+    const v = notStartedVerdict();
+    expect(v.unchecked).toBe("nothingRequested");
+    expect(laneCheckedAge(v, NOW)).toBe(UNCHECKED_AGE.nothingRequested);
+  });
+
+  it("gives every reason both a phrase and a sentence", () => {
+    for (const reason of UNCHECKED_REASONS) {
+      expect(UNCHECKED_AGE[reason].length, reason).toBeGreaterThan(8);
+      // The long form has room to say whose move it is, so it is a sentence.
+      expect(UNCHECKED_EXPLANATION[reason].endsWith("."), reason).toBe(true);
+      expect(UNCHECKED_EXPLANATION[reason].length, reason).toBeGreaterThan(40);
+    }
+    // No two reasons may share words, or the collapse comes straight back.
+    expect(new Set(Object.values(UNCHECKED_AGE)).size).toBe(UNCHECKED_REASONS.length);
+    expect(new Set(Object.values(UNCHECKED_EXPLANATION)).size).toBe(UNCHECKED_REASONS.length);
+  });
+
+  it("renders a real age when there is one", () => {
+    // The reason must never displace a measurement.
+    expect(laneCheckedAge(deriveLaneStatus(healthy()), NOW)).toBe("1 m ago");
   });
 });
