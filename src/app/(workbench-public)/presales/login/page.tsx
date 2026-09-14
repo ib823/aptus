@@ -3,9 +3,11 @@
  *
  * Lives under the (workbench) route group but does NOT require auth —
  * it's the entry point. Triggers the same NextAuth email magic-link
- * flow the Aptus portal uses, but with /presales as the callbackUrl
- * so successful sign-in lands the consultant on the bundles index
- * (not the Aptus dashboard).
+ * flow the Aptus portal uses, and like the portal it sends the link
+ * through /api/auth/bridge — the only route that mints the
+ * `abeam-session` cookie the auth-gated surfaces actually read. The
+ * bridge then forwards to /presales, so the consultant lands on the
+ * bundles index (not the Aptus dashboard).
  *
  * Reuses the existing Brevo SMTP transport via NextAuth's email
  * provider; no separate email plumbing needed.

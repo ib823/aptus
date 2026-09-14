@@ -2,17 +2,40 @@
 
 /**
  * Workbench sign-in form. Posts email to NextAuth email provider with
- * callbackUrl=/presales so the magic-link redirect lands the user on
- * the bundles index.
+ * callbackUrl=/api/auth/bridge?callbackUrl=/presales, so the magic-link
+ * redirect lands on the BRIDGE and the bridge lands the user on the
+ * bundles index.
+ *
+ * THE BRIDGE IS NOT OPTIONAL. This app runs two session systems:
+ * NextAuth mints a JWT and is used only for the magic-link flow and user
+ * creation (see the adapter note in auth-options.ts), while every
+ * auth-gated surface reads the custom `abeam-session` cookie — and the
+ * only thing that mints that cookie is GET /api/auth/bridge.
+ *
+ * This form used to send callbackUrl=/presales, which skipped the bridge
+ * entirely: the magic link verified, NextAuth redirected to /presales,
+ * nothing held an abeam-session, and the user was bounced straight back
+ * to this page. A correct sign-in was indistinguishable from a rejected
+ * one. The Aptus portal form (src/app/(auth)/login/page.tsx) has always
+ * routed through the bridge; this is the same shape.
  *
  * On submit:
- *   - signIn('email', { email, callbackUrl: '/presales', redirect: false })
+ *   - signIn('email', { email, callbackUrl: BRIDGED_CALLBACK, redirect: false })
  *   - On success: show "Check your inbox" confirmation
  *   - On failure: inline error message, retry-able
  */
 
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
+
+/**
+ * Where the magic link lands. The bridge exchanges the NextAuth JWT for an
+ * `abeam-session` cookie and then forwards to its own callbackUrl.
+ *
+ * Named rather than inlined so the value the comment above describes and the
+ * value actually sent are the same string.
+ */
+const BRIDGED_CALLBACK = '/api/auth/bridge?callbackUrl=/presales';
 
 export function WorkbenchLoginForm({ initialError = null }: { initialError?: string | null }) {
   const [email, setEmail] = useState('');
@@ -28,7 +51,7 @@ export function WorkbenchLoginForm({ initialError = null }: { initialError?: str
     try {
       const res = await signIn('email', {
         email,
-        callbackUrl: '/presales',
+        callbackUrl: BRIDGED_CALLBACK,
         redirect: false,
       });
       if (res?.error) {
