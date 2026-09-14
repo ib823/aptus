@@ -27,6 +27,17 @@ import { useEffect, useState, type ReactNode } from "react";
  * `next-themes` writes `.dark` on `<html>`. This is the app's one theme
  * mechanism; a second, console-scoped one would be a second source of truth
  * about what the person asked for.
+ *
+ * PAGE TOKENS, NOT RAIL TOKENS — and the first version of this file got that
+ * backwards. `--rail-active` is `rgba(255,255,255,0.12)`, an alpha fill whose
+ * own comment says it composites "over --surface-rail"; on the paper ground of
+ * a page header it composites to #FBFAF6, and the white `--ink-on-navy` on top
+ * of it measured **1.04:1**. Rail.tsx's header warns about the mirror image of
+ * this mistake — page inks on the navy rail — and axe caught both. The selected
+ * option now uses `--brand-navy-soft` with `--ink-primary`, a pair that INVERTS
+ * with the theme: 14.5:1 in light (#1A1A1A on #E6EBF1) and 12.0:1 in dark
+ * (#ECEAE3 on #1B2A40). Nothing here reaches for a rail fill or a status
+ * colour; a theme choice is neither a rail nor a status.
  */
 
 const OPTIONS = [
@@ -66,7 +77,7 @@ export function ThemeToggle(): ReactNode {
             className={
               "rounded-full px-2.5 py-1 text-xs focus-visible:outline focus-visible:outline-2 " +
               "focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy " +
-              (current ? "bg-rail-active text-[color:var(--ink-on-navy)]" : "text-ink-soft")
+              (current ? "bg-navy-soft text-ink" : "text-ink-soft")
             }
           >
             {option.label}

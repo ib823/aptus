@@ -396,3 +396,64 @@ describe("the shipped scope does not drift from the design", () => {
     }
   });
 });
+
+/**
+ * The theme toggle's own pair, and why a rail fill is not available to it.
+ *
+ * THE BUG THIS PINS shipped and CI caught it. The toggle's selected option was
+ * `bg-rail-active` with `--ink-on-navy` — white on a fill whose own comment says
+ * it is "alpha over --surface-rail". Off the rail there is no navy underneath:
+ * on the page's paper ground the fill composites to #FBFAF6, and axe measured
+ * the white label on it at **1.04:1** on four screens.
+ *
+ * Rail.tsx's header documents the mirror image — page inks on the navy rail,
+ * also caught by axe, also in light only. Both directions are the same mistake,
+ * so the rule is written down here as a test rather than as a third comment:
+ * the rail fills are alpha, they mean nothing without the rail behind them, and
+ * a control on a page surface uses page tokens.
+ */
+describe("the theme toggle uses page tokens, in both themes", () => {
+  it("clears the text floor selected and unselected", () => {
+    // Selected: brand-navy-soft carries ink-primary. Both invert with the
+    // theme, which is the property a rail fill does not have.
+    expect(ratio(light("ink-primary"), light("brand-navy-soft"))).toBeGreaterThanOrEqual(
+      TEXT_FLOOR,
+    );
+    expect(ratio(dark("ink-primary"), dark("brand-navy-soft"))).toBeGreaterThanOrEqual(
+      TEXT_FLOOR,
+    );
+    // Unselected: ink-secondary on the page ground it actually sits on.
+    expect(ratio(light("ink-secondary"), light("surface-paper"))).toBeGreaterThanOrEqual(
+      TEXT_FLOOR,
+    );
+    expect(ratio(dark("ink-secondary"), dark("surface-paper"))).toBeGreaterThanOrEqual(
+      TEXT_FLOOR,
+    );
+  });
+
+  it("keeps the rail fills alpha, so they cannot be read as a page colour", () => {
+    /*
+     * The fills are defined once, in the light block, precisely because one
+     * alpha value serves both themes over --surface-rail. If either ever became
+     * an opaque hex it would start looking usable anywhere, and the next person
+     * to put one on a page header would get 1.04:1 again with nothing to warn
+     * them.
+     */
+    for (const name of ["rail-hover", "rail-active"]) {
+      expect(light(name), name).toMatch(/^rgba\(/);
+    }
+  });
+
+  it("is not reaching for a rail fill or a status colour", () => {
+    // A theme choice is neither a rail nor a lane status; borrowing either
+    // colour would make it read as one.
+    const src = readFileSync(
+      path.resolve(ROOT, "src/components/coreedge/primitives/ThemeToggle.tsx"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(src).not.toMatch(/\brail-(active|hover)\b/);
+    expect(src).not.toMatch(/\bink-on-navy\b/);
+    expect(src).not.toMatch(/\bgate-(ok|wait|bad|info|off)-/);
+    expect(src).toContain("bg-navy-soft text-ink");
+  });
+});
