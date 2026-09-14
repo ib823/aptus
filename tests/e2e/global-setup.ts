@@ -158,6 +158,99 @@ async function warmUpApp(baseUrl: string): Promise<void> {
   }
 }
 
+/**
+ * CoreEdge fixtures — the rows the console's dynamic routes need to exist.
+ *
+ * DETERMINISTIC IDS, so the spec can address /coreedge/sap-systems/:id and
+ * /coreedge/requests/:id without scraping them out of a list first. A test that
+ * discovers its own ids passes vacuously when the list is empty; these cannot.
+ *
+ * The Solution is ACTIVE and its Interface carries an entitySet, so this is a
+ * lane the sweep would target rather than skip — the shape a real lane has.
+ */
+const COREEDGE = {
+  solutionId: "e2e-coreedge-solution",
+  solutionSlug: "e2e-coreedge-app",
+  interfaceId: "e2e-coreedge-interface",
+  connectionId: "e2e-coreedge-connection",
+  grantId: "e2e-coreedge-grant",
+} as const;
+
+async function seedCoreEdgeFixture(
+  prisma: PrismaClient,
+  opts: { organizationId: string; creatorUserId: string },
+): Promise<void> {
+  await prisma.solution.upsert({
+    where: { id: COREEDGE.solutionId },
+    update: { status: "ACTIVE" },
+    create: {
+      id: COREEDGE.solutionId,
+      organizationId: opts.organizationId,
+      name: "E2E Delivery Tracker",
+      slug: COREEDGE.solutionSlug,
+      classification: "CLIENT_APP",
+      businessProblem: "Exercises every CoreEdge route end to end.",
+      dataClass: "internal",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.interface.upsert({
+    where: { id: COREEDGE.interfaceId },
+    update: {},
+    create: {
+      id: COREEDGE.interfaceId,
+      solutionId: COREEDGE.solutionId,
+      organizationId: opts.organizationId,
+      name: "Business partners",
+      sapProduct: "s4hana",
+      externalId: "API_BUSINESS_PARTNER",
+      operation: "read",
+      mode: "live",
+      entitySet: "A_BusinessPartner",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.sapConnection.upsert({
+    where: { id: COREEDGE.connectionId },
+    update: { isActive: true },
+    create: {
+      id: COREEDGE.connectionId,
+      organizationId: opts.organizationId,
+      product: "s4hana",
+      key: "e2e-dev",
+      label: "E2E Dev system",
+      baseUrl: "https://sap.invalid",
+      authType: "basic",
+      // Never decrypted by any route this fixture exercises — the console reads
+      // connection METADATA. A sweep would fail to open it, which is the honest
+      // outcome for a fixture with no real SAP behind it.
+      secretsCiphertext: "e2e-not-a-real-ciphertext",
+      environment: "DEV",
+      isActive: true,
+    },
+  });
+
+  // A request left REQUESTED on purpose: /coreedge/requests needs a pending row,
+  // and /coreedge/requests/:id is the review screen that was dead in production.
+  await prisma.apiAccessGrant.upsert({
+    where: { id: COREEDGE.grantId },
+    update: { decision: "REQUESTED" },
+    create: {
+      id: COREEDGE.grantId,
+      solutionId: COREEDGE.solutionId,
+      organizationId: opts.organizationId,
+      externalId: "API_BUSINESS_PARTNER",
+      operation: "read",
+      environment: "DEV",
+      justification: "Seeded so the review screen has something to review.",
+      decision: "REQUESTED",
+      requestedById: opts.creatorUserId,
+    },
+  });
+}
+
 async function seedPresalesFixture(prisma: PrismaClient, opts: {
   organizationId: string;
   creatorUserId: string;
@@ -303,6 +396,23 @@ async function globalSetup(): Promise<void> {
       create: { id: "e2e-test-org", name: "E2E Test Org", type: "partner" },
     });
 
+    /*
+     * EVERY SEEDED USER BELONGS TO THE ORG. Without this they carry
+     * organizationId = NULL, and every /coreedge page takes its "not attached
+     * to an organization" early return — a different page from the one a real
+     * user gets, with a matching heading.
+     *
+     * That is not hypothetical. The authenticated smoke suite has been visiting
+     * /coreedge/sap-systems and asserting its heading while that page returned
+     * HTTP 500 for every real user, because the early return never reached the
+     * DecisionBar that was throwing. The coverage was hollow for the life of
+     * the bug. Seed the organization, and the tests see what users see.
+     */
+    await prisma.user.updateMany({
+      where: { id: { in: [...userIds.values()] } },
+      data: { organizationId: org.id },
+    });
+
     // Create a test assessment if none exists
     const existing = await prisma.assessment.findFirst({
       where: { companyName: "E2E Test Corp", deletedAt: null },
@@ -359,6 +469,11 @@ async function globalSetup(): Promise<void> {
         assessmentId: assessment.id,
       });
     }
+
+    await seedCoreEdgeFixture(prisma, {
+      organizationId: org.id,
+      creatorUserId: adminId,
+    });
   } finally {
     await prisma.$disconnect();
   }
