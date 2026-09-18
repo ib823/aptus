@@ -549,6 +549,14 @@ export function SapCapabilityCatalogue({
               totalItems={totalItems}
               aiApis={aiApis}
               lastProbedAt={lastProbedAt}
+              /*
+               * THE SAME FLAG THAT DECIDES THE BUTTON. The admin controls above
+               * live inside `{data?.isAdmin && …}`, so a consultant never sees
+               * Probe all — while this card told them to run it. Reading the
+               * one flag in both places is what stops the instruction and the
+               * control drifting apart again.
+               */
+              canProbe={data?.isAdmin === true}
             />
           </div>
           {/* Compact visual two-axis legend: COVERAGE (tiles) vs TENANT STATUS (badges). */}
