@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireAdmin: vi.fn(),
+  requireAuthenticated: vi.fn(),
+  checkRateLimit: vi.fn(),
+  connectionFindMany: vi.fn(),
   findMany: vi.fn(),
   update: vi.fn(),
   getSapProduct: vi.fn(),
@@ -11,11 +13,34 @@ const mocks = vi.hoisted(() => ({
   logDecision: vi.fn(),
 }));
 
+/*
+ * The route now AUTHENTICATES first and decides the role rule once it knows
+ * which kind of tenant was asked for — a builder may probe their own
+ * organization's connection, only an admin may probe a deployment-wide tenant.
+ * So the guard it calls is `requireAuthenticated`, and the role check that used
+ * to live in `requireAdmin` lives in the route.
+ *
+ * EVERY TENANT IN THIS FILE IS A DEPLOYMENT TENANT: `getSapTenant` is mocked to
+ * return one, so `resolveReadTenant` reports source "deployment". That is why
+ * the admin-only expectations below are still the right ones here — they pin
+ * the half of the rule that did NOT change.
+ */
 vi.mock("@/lib/auth/admin-guard", () => ({
-  requireAdmin: mocks.requireAdmin,
+  requireAuthenticated: mocks.requireAuthenticated,
   isAdminError: (r: unknown) => typeof r === "object" && r !== null && "status" in (r as Record<string, unknown>),
 }));
-vi.mock("@/lib/db/prisma", () => ({ prisma: { sapHubContent: { findMany: mocks.findMany, update: mocks.update } } }));
+/*
+ * `sapConnection` is here because the mocked user now carries an organization:
+ * when `getSapTenant` finds no DEPLOYMENT tenant, `resolveReadTenant` falls
+ * through to that organization's connections, and an absent model is a crash
+ * rather than the "no such tenant" the case is about.
+ */
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    sapHubContent: { findMany: mocks.findMany, update: mocks.update },
+    sapConnection: { findMany: mocks.connectionFindMany },
+  },
+}));
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getSapProduct: mocks.getSapProduct,
   getConfiguredSapTenants: mocks.getConfiguredSapTenants,
@@ -27,6 +52,15 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
 }));
 vi.mock("@/lib/sap-public/capability-probe", () => ({ probeService: mocks.probeService }));
 vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: mocks.logDecision }));
+/*
+ * MOCKED, and its absence is what broke this file: the route limits a fleet
+ * probe to one per tenant per ten minutes, these cases all probe the SAME
+ * tenant, and the limiter keeps state across a process — so the third test
+ * onwards got a 429 and never reached findMany. The limit's own behaviour is
+ * asserted in tests/unit/sap/probe-all-gate.test.ts; here it must not couple
+ * one case to the next.
+ */
+vi.mock("@/lib/security/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
 
 const { POST } = await import("@/app/api/sap/tdd/hub-content/probe-all/route");
 
@@ -43,7 +77,11 @@ const PROBEABLE_ROWS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireAdmin.mockResolvedValue({ user: { id: "a", email: "a@b.co", role: "platform_admin" } });
+  mocks.checkRateLimit.mockResolvedValue({ allowed: true, remaining: 0, resetMs: 0 });
+  mocks.connectionFindMany.mockResolvedValue([]); // no connections — deployment tenants only
+  mocks.requireAuthenticated.mockResolvedValue({
+    user: { id: "a", email: "a@b.co", role: "platform_admin", organizationId: "org-a" },
+  });
   mocks.getSapProduct.mockReturnValue(PRODUCT);
   mocks.getConfiguredSapTenants.mockReturnValue([TENANT]);
   mocks.getSapTenant.mockReturnValue(TENANT);
@@ -59,10 +97,34 @@ beforeEach(() => {
 });
 
 describe("POST /api/sap/tdd/hub-content/probe-all", () => {
-  it("refuses a non-admin", async () => {
-    mocks.requireAdmin.mockResolvedValue({ status: 401 });
+  it("passes an unauthenticated caller's refusal through", async () => {
+    mocks.requireAuthenticated.mockResolvedValue({ status: 401 });
     const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
     expect(res.status).toBe(401);
+    expect(mocks.probeService).not.toHaveBeenCalled();
+  });
+
+  it("refuses a BUILDER on a deployment-wide tenant", async () => {
+    /*
+     * The half of the old rule that stands. A consultant may now probe their
+     * own organization's connection — but a deployment tenant is shared by
+     * every organization here and its results are filed under a bare key they
+     * all read, so a builder writing there would rewrite everyone's view.
+     */
+    mocks.requireAuthenticated.mockResolvedValue({
+      user: { id: "c", email: "c@b.co", role: "consultant", organizationId: "org-a" },
+    });
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(res.status).toBe(403);
+    expect(mocks.probeService).not.toHaveBeenCalled();
+  });
+
+  it("refuses a role that authors nothing, on any tenant", async () => {
+    mocks.requireAuthenticated.mockResolvedValue({
+      user: { id: "v", email: "v@b.co", role: "viewer", organizationId: "org-a" },
+    });
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(res.status).toBe(403);
     expect(mocks.probeService).not.toHaveBeenCalled();
   });
 

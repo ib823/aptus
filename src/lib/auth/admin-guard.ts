@@ -11,11 +11,22 @@ interface AdminAuthResult {
 }
 
 /**
- * Authenticate user and verify admin role.
- * Supports both legacy "admin" and new "platform_admin" role.
- * Returns error NextResponse if validation fails, or the user on success.
+ * Authenticate, and nothing more — signed in, and past MFA if the organization
+ * demands it.
+ *
+ * SPLIT OUT OF `requireAdmin` rather than copied, so there is one definition of
+ * "this caller is who they say they are" and its two answers (401 not signed
+ * in, 403 MFA required) cannot drift between callers.
+ *
+ * It exists for a route whose gate DEPENDS ON THE REQUEST: probe-all may be run
+ * by a builder against their own organization's SAP connection, but only by a
+ * platform admin against a deployment-wide tenant — and which of those it is
+ * cannot be known until the body has been parsed and the tenant resolved.
+ * Authenticating first and deciding the role rule afterwards is the only honest
+ * order; `requireAdmin` still exists unchanged for every route whose answer is
+ * the same before the body is read.
  */
-export async function requireAdmin(): Promise<AdminAuthResult | NextResponse> {
+export async function requireAuthenticated(): Promise<AdminAuthResult | NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(
@@ -30,6 +41,19 @@ export async function requireAdmin(): Promise<AdminAuthResult | NextResponse> {
       { status: 403 },
     );
   }
+
+  return { user };
+}
+
+/**
+ * Authenticate user and verify admin role.
+ * Supports both legacy "admin" and new "platform_admin" role.
+ * Returns error NextResponse if validation fails, or the user on success.
+ */
+export async function requireAdmin(): Promise<AdminAuthResult | NextResponse> {
+  const authenticated = await requireAuthenticated();
+  if (isAdminError(authenticated)) return authenticated;
+  const { user } = authenticated;
 
   if (!isAdminRole(user.role)) {
     return NextResponse.json(
