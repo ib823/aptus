@@ -16,6 +16,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
+import { isStudioBuilder } from "@/lib/studio/rbac";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -43,6 +44,7 @@ import {
   HUB_STATUSES,
 } from "@/lib/sap-public/hub-content";
 import { successorFor } from "@/lib/sap-public/hub-successors";
+import { probeStorageKey } from "@/lib/sap-public/hub-content";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -188,9 +190,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const configuredTenants = getConfiguredSapTenants(product.envPrefix);
   const defaultTenantKey = configuredTenants[0]?.key;
   const tenantKey = user ? params.get("tenant") ?? defaultTenantKey : null;
-  const tenant = tenantKey
-    ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
+  const resolvedTenant = tenantKey
+    ? await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey)
     : null;
+  const tenant = resolvedTenant?.tenant ?? null;
+  /*
+   * WHERE THIS VIEWER'S PROBES ARE FILED, derived from the same resolution the
+   * live read uses and by the same function the writer uses. Reading the bare
+   * tenant key here is what let one organization see another's probe verdicts
+   * when both had named a connection the same — see probeStorageKey.
+   *
+   * Null when the key resolves to nothing: no tenant, no stored probe, rather
+   * than a guess at a slot that may belong to someone else.
+   */
+  const probeKey =
+    resolvedTenant && tenantKey
+      ? probeStorageKey({
+          source: resolvedTenant.source,
+          organizationId: user?.organizationId ?? null,
+          product: product.key,
+          tenantKey,
+        })
+      : null;
 
   const scope = hubCatalogueScope(product);
   if (scope.kind === "none") {
@@ -308,7 +329,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let stale = 0;
   const now = new Date();
   for (const r of allRows) {
-    const p = tenantKey ? readStoredProbe(r.rawMetadataJson, tenantKey, defaultTenantKey) : null;
+    const p = probeKey ? readStoredProbe(r.rawMetadataJson, probeKey, defaultTenantKey) : null;
     if (!p) continue;
     if (p.at) probedAt.set(r.externalId, p.at);
     const staleProbe = isProbeStale(p.at, now);
@@ -528,6 +549,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
       isAdmin,
+      /*
+       * WHETHER THIS VIEWER MAY PROBE THIS TENANT — not whether they are an
+       * admin, which is a different question and was the one the screen asked.
+       *
+       * The rule mirrors probe-all's gate exactly: a deployment tenant is
+       * shared by every organization here and stays admin-only; a
+       * connection-backed tenant is the caller's own (resolveReadTenant looks
+       * it up within their organization) and a builder may probe it. Sending
+       * the ANSWER rather than the ingredients is what keeps the button, the
+       * sentence beside it and the door from drifting apart — the screen used
+       * to tell everyone to "run Probe all" while rendering the button for
+       * admins only.
+       */
+      mayProbe:
+        resolvedTenant !== null &&
+        (isAdmin || (resolvedTenant.source === "connection" && isStudioBuilder(user?.role))),
       typeMeta: HUB_CONTENT_TYPE_META,
     },
   }, { headers: NO_STORE });

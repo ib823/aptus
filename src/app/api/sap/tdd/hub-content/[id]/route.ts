@@ -25,6 +25,7 @@ import {
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import { probeStorageKey } from "@/lib/sap-public/hub-content";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -69,9 +70,24 @@ export async function GET(
    * through to the stored probe below, which is what the list renders from.
    */
   const mayProbe = (await refuseUnlessMayProbeTenant()) === null;
-  const tenant =
-    mayProbe && tenantKey
-      ? (await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey))?.tenant ?? null
+  /*
+   * RESOLVED WHETHER OR NOT A LIVE PROBE IS ALLOWED, because the STORED read
+   * below runs either way and has to be filed under the right owner. This is a
+   * lookup of the viewer's own connection row — no SAP call — so it grants
+   * nothing that `mayProbe` withholds; the live probe below still waits on it.
+   */
+  const resolvedTenant = tenantKey
+    ? await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey)
+    : null;
+  const tenant = mayProbe ? (resolvedTenant?.tenant ?? null) : null;
+  const probeKey =
+    resolvedTenant && tenantKey
+      ? probeStorageKey({
+          source: resolvedTenant.source,
+          organizationId: viewer?.organizationId ?? null,
+          product: product.key,
+          tenantKey,
+        })
       : null;
   const service = hubApiToService({
     contentType,
@@ -104,14 +120,17 @@ export async function GET(
    * FALL BACK TO THE STORED PROBE the list itself renders from. With ?probe=0
    * (or a live probe that failed) this route reported "status unknown" for a
    * row whose Probe-all result sat in rawMetadataJson — so the detail said
-   * "not probed" under a list badge that said ACTIVATED. Same tenant scoping
-   * as the list read: this tenant's entry, or the legacy singular slot for
-   * the default tenant only, never another tenant's data.
+   * "not probed" under a list badge that said ACTIVATED.
+   *
+   * SAME SCOPING AS THE LIST, and that claim is now true. This comment used to
+   * end "never another tenant's data" while the key was the bare tenant name —
+   * which two organizations may share, since SapConnection is unique per
+   * organization and these rows are global. `probeStorageKey` carries the owner.
    */
-  if (probeStatus == null && tenantKey) {
+  if (probeStatus == null && probeKey) {
     const stored = readStoredProbe(
       item.rawMetadataJson,
-      tenantKey,
+      probeKey,
       getConfiguredSapTenants(product.envPrefix)[0]?.key,
     );
     if (stored && typeof stored.http === "number") {

@@ -77,6 +77,12 @@ interface HubData {
    */
   tenantKey?: string | null;
   isAdmin?: boolean;
+  /**
+   * Whether THIS viewer may probe THIS tenant — the server's answer, not an
+   * ingredient. A builder may probe their own organization's connection; a
+   * deployment tenant, shared by everyone here, stays admin-only.
+   */
+  mayProbe?: boolean;
 }
 
 type StatusFilter = "ALL" | HubStatus;
@@ -467,7 +473,17 @@ export function SapCapabilityCatalogue({
             Every SAP Business Accelerator Hub content type for {productDisplayName(product)} on {data?.tenant ?? "no tenant"}. Two independent axes: <strong>coverage</strong> — whether we&apos;ve imported SAP&apos;s published list for a type (the tiles) — and <strong>tenant status</strong> — whether a specific item is live on this tenant (the row badges). A badge only asserts what a probe established; nothing is inferred.
           </p>
         </div>
-        {/* Always-available admin controls (server still enforces the guard). */}
+        {/*
+          TWO DIFFERENT PERMISSIONS, and they used to be one.
+          "Rebuild from API reference" and "Import harvested artifacts" rewrite
+          the GLOBAL catalogue rows every organization reads, so they are
+          genuinely admin-only. Probing asks one tenant what it exposes and
+          files the answer under that tenant's owner — a builder's own job on
+          their own client's system. Gating both on `isAdmin` is what produced
+          the deadlock: the only role that can author anything could never
+          establish what its tenant exposes.
+          The server still enforces both; this mirrors it.
+        */}
         {data?.isAdmin && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
@@ -492,11 +508,15 @@ export function SapCapabilityCatalogue({
               {harvesting && <RefreshCw className="size-3.5 animate-spin" />}
               {harvestProgress ?? "Import harvested artifacts"}
             </button>
+          </div>
+        )}
+        {data?.mayProbe && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void probeAll()}
               disabled={seeding || probing || harvesting}
-              title="Probe every OData service and store the result (admin only). Read-only $metadata."
+              title="Probe every OData service on this tenant and store the result. Read-only $metadata."
               className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
               style={{ border: "1px solid var(--brand-navy)", color: "var(--ink-on-navy)", background: "var(--brand-navy)" }}
             >
@@ -550,13 +570,15 @@ export function SapCapabilityCatalogue({
               aiApis={aiApis}
               lastProbedAt={lastProbedAt}
               /*
-               * THE SAME FLAG THAT DECIDES THE BUTTON. The admin controls above
-               * live inside `{data?.isAdmin && …}`, so a consultant never sees
-               * Probe all — while this card told them to run it. Reading the
-               * one flag in both places is what stops the instruction and the
-               * control drifting apart again.
+               * THE SAME FLAG THAT DECIDES THE BUTTON. Reading one answer in
+               * both places is what stops the instruction and the control
+               * drifting apart — which they had: the card told everyone to run
+               * Probe all while the button rendered for admins only. It is
+               * `mayProbe` and not `isAdmin` because those are different
+               * questions, and asking the wrong one is what produced both that
+               * dangling instruction and the role deadlock behind it.
                */
-              canProbe={data?.isAdmin === true}
+              canProbe={data?.mayProbe === true}
             />
           </div>
           {/* Compact visual two-axis legend: COVERAGE (tiles) vs TENANT STATUS (badges). */}

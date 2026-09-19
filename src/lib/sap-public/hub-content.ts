@@ -348,6 +348,53 @@ export function readStoredProbe(raw: unknown, tenantKey: string, defaultTenantKe
 }
 
 /**
+ * WHOSE PROBE THIS IS — the key a stored result is filed under.
+ *
+ * THE BUG THIS CLOSES IS A CROSS-TENANT LEAK, and it is worth stating exactly,
+ * because the shape of the data hides it. `SapHubContent` has NO
+ * `organizationId`: it is `@@unique([contentType, externalId])`, one global row
+ * per SAP content item, shared by every organization on the deployment. Probe
+ * results are merged into `rawMetadataJson.probes[…]` on those shared rows.
+ *
+ * The key used to be the bare tenant key. But `SapConnection` is
+ * `@@unique([organizationId, product, key])` — a tenant key is unique WITHIN an
+ * organization, not across them. Two clients may both call a connection
+ * "x5m-100", and nothing prevents it. When they did, they shared one slot on a
+ * shared row: the second probe overwrote the first, and the first client's
+ * Discover then showed the SECOND client's verdicts about the SECOND client's
+ * SAP system, labelled as its own tenant. Which services are live on a named
+ * client's estate is that client's information, and the page it appears on
+ * argues that "a badge only asserts what a probe established".
+ *
+ * `requireAdmin` on the probe route never prevented this — it only made the
+ * collision rarer by limiting who could trigger one.
+ *
+ * SO THE OWNER IS PART OF THE KEY. A connection-backed tenant is filed under
+ * its organization and product as well as its name; a DEPLOYMENT tenant keeps
+ * its bare key, because that one genuinely is deployment-wide and every
+ * organization reading it is reading the same true thing. Conflating those two
+ * kinds of tenant is what caused this.
+ *
+ * ONE FUNCTION, THREE CALL SITES: the write in probe-all and the two reads.
+ * A storage key derived independently in each place is a key that drifts, and
+ * a drifted key here reads as "Not checked" at best and as someone else's
+ * tenant at worst.
+ */
+export function probeStorageKey(input: {
+  /** Which registry the tenant came from — `resolveReadTenant` reports it. */
+  readonly source: "deployment" | "connection";
+  readonly organizationId: string | null;
+  readonly product: string;
+  readonly tenantKey: string;
+}): string {
+  if (input.source === "deployment") return input.tenantKey;
+  // A connection with no organization cannot exist; if one is ever passed,
+  // file it somewhere unreadable rather than in the shared bare-key slot.
+  const owner = input.organizationId ?? "unknown-org";
+  return `org:${owner}:${input.product}:${input.tenantKey}`;
+}
+
+/**
  * Merge a tenant's probe into rawMetadataJson.probes[tenantKey], preserving every
  * sibling key (source/apiId/steps), every OTHER tenant's entry, and the legacy
  * `probe` slot. This is the ONLY sanctioned write path for a stored probe.
