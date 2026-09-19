@@ -17,6 +17,9 @@
  * system is exactly the builder's job.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -197,5 +200,35 @@ describe("the fleet probe is rate limited, per tenant", () => {
     const key = String(mocks.checkRateLimit.mock.calls[0]?.[0]);
     expect(key).toContain("org-a");
     expect(key).toContain("x5m-100");
+  });
+});
+
+describe("the screen does not tell a builder that probing is an admin's job", () => {
+  /** The catalogue's source, comments stripped — claims in code, not in prose. */
+  function catalogueCode(): string {
+    const file = path.resolve(process.cwd(), "src/components/sap/SapCapabilityCatalogue.tsx");
+    return readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+  }
+
+  it("no longer says Probe-all is admin only", () => {
+    /*
+     * The fallback error read "Probe-all failed (admin only)" — true when it
+     * was written, false the moment a builder could probe their own tenant.
+     * It fires only when the server sends no message, so it must not guess at
+     * a reason it cannot know: naming the wrong one sends the reader off to
+     * ask for a permission they may already hold.
+     */
+    const probeAll = catalogueCode().split("const probeAll")[1]?.slice(0, 2000) ?? "";
+    expect(probeAll).not.toMatch(/admin only/i);
+  });
+
+  it("still says so for the two controls that ARE admin only", () => {
+    // Rebuild and Import rewrite the GLOBAL catalogue rows every organization
+    // reads. Widening this assertion to the whole file would have deleted a
+    // true claim alongside the false one.
+    const code = catalogueCode();
+    expect(code).toMatch(/Rebuild failed \(admin only\)/);
   });
 });

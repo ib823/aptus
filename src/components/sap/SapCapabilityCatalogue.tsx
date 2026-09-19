@@ -418,7 +418,15 @@ export function SapCapabilityCatalogue({
         body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES", product, ...(tenant ? { tenant } : {}) }),
       });
       const json = (await res.json()) as { data?: { probed: number }; error?: { message?: string } };
-      if (!res.ok) throw new Error(json.error?.message ?? "Probe-all failed (admin only)");
+      /*
+       * NO LONGER "(admin only)". A builder may probe their own organization's
+       * connection; only a DEPLOYMENT tenant is admin-only, and the route says
+       * so in its own words. This fallback fires only when the server sent no
+       * message at all, so it must not guess at a reason it cannot know —
+       * naming the wrong one sends the reader to ask for a permission they may
+       * already have.
+       */
+      if (!res.ok) throw new Error(json.error?.message ?? "Probe-all failed.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Probe-all failed");
