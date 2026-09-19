@@ -11,17 +11,56 @@
 import { formatDateTime } from "@/lib/format/date";
 import { HUB_CONTENT_TYPES } from "@/lib/sap-public/hub-content";
 
+/**
+ * WHAT A NON-ADMIN IS TOLD INSTEAD, and why this string exists at all.
+ *
+ * This line used to read "(not probed yet — run “Probe all”)" for EVERYONE.
+ * But the Probe all button lives inside `{data?.isAdmin && …}` in
+ * SapCapabilityCatalogue — a consultant never sees it. So the one sentence on
+ * the screen that explained a readiness of zero instructed the reader to press
+ * a control that was not on their page, and the natural conclusion is that the
+ * product is broken rather than that the action is somebody else's.
+ *
+ * It is not a permission ERROR either: nothing was refused, because nothing was
+ * attempted. It is a statement of whose action this is, which is the same thing
+ * the CoreEdge console says about every control it will not give you.
+ */
+const PROBE_IS_ADMIN_ONLY = "(not probed yet — a platform admin runs “Probe all”)";
+
 /** activated / probed as a 0–100 integer (0 when nothing was probed). */
 export function readinessPercent(activated: number, probed: number): number {
   if (probed <= 0) return 0;
   return Math.round((activated / probed) * 100);
 }
 
+/**
+ * ONE PILL: a label and the number it counts.
+ *
+ * `justify-between` ALONE IS NOT SPACING. It separates two children only while
+ * there is slack between them; the moment label plus number fill the box, the
+ * space it was providing is zero and they touch. In a nine-column row on a wide
+ * screen each pill is ~140px, so the longest labels beside the largest numbers
+ * rendered as "Available147" and "Reference2,527" while "Authorized 0" — which
+ * still had slack — looked perfectly fine.
+ *
+ * That is the worst possible failure mode for this component: it degrades
+ * exactly on the biggest numbers, on a scorecard whose entire argument is that
+ * every number traces to a probe. `gap-2` is a floor rather than a remainder,
+ * so the two can never collide at any width.
+ *
+ * `whitespace-nowrap` keeps two-word labels on one line — "Needs setup", "Not
+ * checked" and "Not probeable" wrapped where the others did not, which made the
+ * row of pills different heights — and `shrink-0` on the value means a squeeze
+ * is taken out of the label, never out of the number.
+ */
 function CountPill({ label, value, bg, fg }: { label: string; value: number; bg: string; fg: string }) {
   return (
-    <div className="flex items-center justify-between rounded-[var(--radius-pill)] px-3 py-1.5" style={{ background: bg, color: fg }}>
-      <span className="text-xs font-medium">{label}</span>
-      <span className="text-sm font-semibold tabular-nums">{value.toLocaleString()}</span>
+    <div
+      className="flex items-center justify-between gap-2 rounded-[var(--radius-pill)] px-3 py-1.5"
+      style={{ background: bg, color: fg }}
+    >
+      <span className="truncate text-xs font-medium whitespace-nowrap">{label}</span>
+      <span className="shrink-0 text-sm font-semibold tabular-nums">{value.toLocaleString()}</span>
     </div>
   );
 }
@@ -44,6 +83,7 @@ export function ReadinessScorecard({
   totalItems,
   aiApis,
   lastProbedAt,
+  canProbe = true,
 }: {
   activated: number;
   dataConfirmed: number;
@@ -58,6 +98,15 @@ export function ReadinessScorecard({
    * a caller that does not yet supply it has no failed probes to report.
    */
   probeFailed?: number;
+  /**
+   * Whether the reader can actually run the probe this card tells them to run.
+   *
+   * DEFAULTS TO TRUE so every existing caller keeps its current sentence — the
+   * SAP Operations explorer is the other one, and changing what it says was not
+   * asked for. The Studio caller passes the SAME flag that decides whether the
+   * button renders, so the instruction and the control cannot disagree.
+   */
+  canProbe?: boolean;
   notProbeable: number;
   /** Published for this edition but not yet probed on this tenant. */
   available: number;
@@ -99,7 +148,9 @@ export function ReadinessScorecard({
               ? lastProbedAt
                 ? `(stored · last probed ${formatDateTime(lastProbedAt)})`
                 : "(stored probe)"
-              : "(not probed yet — run “Probe all”)"}
+              : canProbe
+                ? "(not probed yet — run “Probe all”)"
+                : PROBE_IS_ADMIN_ONLY}
           </span>
         </div>
       </div>
@@ -168,7 +219,14 @@ export function ReadinessScorecard({
         "nothing is inferred, every number traces to a probe", a silently
         missing bucket is the worst kind of error.
       */}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
+      {/*
+        NOT NINE ACROSS. `lg:grid-cols-9` gave every pill ~140px on a 1900px
+        screen, which is narrower than "Not probeable" plus a four-digit count
+        needs — so labels wrapped and the row came out ragged. Five columns let
+        each pill hold its label on one line, and the ninth wraps to a second
+        row rather than squeezing the other eight.
+      */}
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
         <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
         <CountPill label="Available" value={available} bg="var(--status-sent-bg)" fg="var(--status-sent-fg)" />
