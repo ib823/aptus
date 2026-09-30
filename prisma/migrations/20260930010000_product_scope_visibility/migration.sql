@@ -1,0 +1,2 @@
+ALTER TABLE "ProductScopeItem"
+ADD COLUMN "visibility" TEXT NOT NULL DEFAULT 'PUBLIC';

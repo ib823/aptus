@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getScopeDetail } from "@/lib/product-scope/detail";
 import { renderScopeDiagram } from "@/lib/product-scope/diagram";
+import { canViewRestrictedScope } from "@/lib/product-scope/access";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ origin: string; id: string }> }) {
-  if (!(await getCurrentUser())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { origin, id } = await params;
-  const detail = await getScopeDetail(origin, id);
+  const detail = await getScopeDetail(origin, id, canViewRestrictedScope(user));
   if (!detail || detail.steps.length === 0) return NextResponse.json({ error: "Diagram unavailable" }, { status: 404 });
   const svg = renderScopeDiagram(detail);
   return new Response(svg, {

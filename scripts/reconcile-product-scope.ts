@@ -1,9 +1,9 @@
 /** Verify that a reviewed manifest is present in Aptus with matching content. */
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { parseProductScopeManifest } from "../src/lib/product-scope/manifest";
+import { productScopeSourceHash } from "../src/lib/product-scope/write";
 
 async function main() {
   const [input, ...flags] = process.argv.slice(2);
@@ -33,7 +33,7 @@ async function main() {
         select: { sourceHash: true },
       });
       if (!landed) { missing++; continue; }
-      const expectedHash = createHash("sha256").update(JSON.stringify(record)).digest("hex");
+      const expectedHash = productScopeSourceHash(record);
       if (landed.sourceHash !== expectedHash) drift++;
     }
     const all = await prisma.productScopeItem.findMany({

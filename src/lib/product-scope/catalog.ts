@@ -4,6 +4,7 @@ import { resolveSapContentRelease } from "@/lib/sap-content/release";
 export interface CatalogRow {
   id: string;
   origin: "S4" | "PRODUCT";
+  visibility: string;
   product: string;
   solution: string;
   release: string;
@@ -20,7 +21,7 @@ function arrayLength(value: unknown): number {
 }
 
 /** One Aptus view over the established S/4 catalogue and new product content. */
-export async function getProductScopeCatalog(): Promise<CatalogRow[]> {
+export async function getProductScopeCatalog(includeRestricted = false): Promise<CatalogRow[]> {
   const { release } = resolveSapContentRelease();
   const [s4, other, bdc, masterSteps] = await Promise.all([
     prisma.scopeItem.findMany({
@@ -28,7 +29,10 @@ export async function getProductScopeCatalog(): Promise<CatalogRow[]> {
       select: { id: true, scopeCode: true, nameClean: true, functionalArea: true, totalSteps: true },
       orderBy: { scopeCode: "asc" },
     }),
-    prisma.productScopeItem.findMany({ orderBy: [{ productKey: "asc" }, { solutionKey: "asc" }, { scopeCode: "asc" }] }),
+    prisma.productScopeItem.findMany({
+      where: includeRestricted ? {} : { visibility: "PUBLIC" },
+      orderBy: [{ productKey: "asc" }, { solutionKey: "asc" }, { scopeCode: "asc" }],
+    }),
     prisma.affirmScopeItem.findMany({ where: { hasBdcCoverage: true }, select: { id: true } }),
     prisma.sapProcessStep.groupBy({
       by: ["scopeItemCode"], where: { contentRelease: { release } }, _count: { _all: true },
@@ -38,18 +42,18 @@ export async function getProductScopeCatalog(): Promise<CatalogRow[]> {
   const masterCodes = new Set(masterSteps.map((item) => item.scopeItemCode));
   return [
     ...s4.map((item): CatalogRow => ({
-      id: item.id, origin: "S4", product: "S/4HANA Cloud Public Edition",
+      id: item.id, origin: "S4", visibility: "PUBLIC", product: "S/4HANA Cloud Public Edition",
       solution: item.functionalArea, release, code: item.scopeCode, kind: "SCOPE_ITEM",
       title: item.nameClean, hasSteps: masterCodes.has(item.scopeCode) || item.totalSteps > 0,
       hasQuestions: bdcCodes.has(item.scopeCode), hasDiagram: masterCodes.has(item.scopeCode) || item.totalSteps > 0,
     })),
     ...other.map((item): CatalogRow => ({
-      id: item.id, origin: "PRODUCT", product: item.productKey,
+      id: item.id, origin: "PRODUCT", visibility: item.visibility, product: item.productKey,
       solution: item.solutionKey, release: item.release, code: item.scopeCode,
       kind: item.scopeKind === "PROCESS" ? "PROCESS" : "SCOPE_ITEM",
       title: item.title, hasSteps: arrayLength(item.processSteps) > 0,
       hasQuestions: arrayLength(item.configQuestions) > 0,
-      hasDiagram: arrayLength(item.processSteps) > 0 || Boolean(item.processSourceUrl),
+      hasDiagram: arrayLength(item.processSteps) > 0,
     })),
   ];
 }

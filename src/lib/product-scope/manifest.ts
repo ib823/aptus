@@ -27,6 +27,7 @@ export const productScopeRecord = z.object({
   description: z.string().trim().optional(),
   sourceUrl: httpsUrl,
   sourceKind: z.enum(["SAP_HELP", "PROCESS_NAVIGATOR", "PARTNER_EXPORT"]),
+  visibility: z.enum(["PUBLIC", "ABEAM_ADMIN"]),
   processSteps: z.array(productScopeStep),
   configQuestions: z.array(productScopeQuestion),
   processSourceUrl: httpsUrl.optional(),
@@ -39,6 +40,9 @@ export function parseProductScopeManifest(raw: unknown): ProductScopeRecord[] {
   const records = z.array(productScopeRecord).parse(raw);
   const identities = new Set<string>();
   for (const record of records) {
+    if (record.sourceKind !== "SAP_HELP" && record.visibility !== "ABEAM_ADMIN") {
+      throw new Error("SAP for Me and partner source records must be visible only to ABeam admins");
+    }
     const identity = [record.productKey, record.solutionKey, record.release,
       record.country, record.language, record.scopeCode].join("/");
     if (identities.has(identity)) throw new Error(`Duplicate product scope identity: ${identity}`);

@@ -9,6 +9,7 @@
     "description": "Employees and managers maintain profile information used across talent processes.",
     "sourceUrl": "https://help.sap.com/docs/successfactors-recruiting/sap-best-practices-for-sap-successfactors-recruiting/people-profile-maintenance-in-sap-successfactors?version=2405",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [],
     "configQuestions": []
   },
@@ -22,6 +23,7 @@
     "description": "Recruiting from requisition and posting through candidate selection and requisition close.",
     "sourceUrl": "https://help.sap.com/docs/SAP_Best_Practices/1753cec7ca614f179b4092993858de65/460756f7552241c3a22bc67532a499f5.html",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [],
     "configQuestions": []
   },
@@ -35,6 +37,7 @@
     "description": "Recruiting variant launched from a position with Employee Central hiring integration.",
     "sourceUrl": "https://help.sap.com/docs/SAP_Best_Practices/1753cec7ca614f179b4092993858de65/460756f7552241c3a22bc67532a499f5.html",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [],
     "configQuestions": []
   },
@@ -48,6 +51,7 @@
     "description": "Recruiting variant integrated with position management and Onboarding.",
     "sourceUrl": "https://help.sap.com/docs/SAP_Best_Practices/1753cec7ca614f179b4092993858de65/460756f7552241c3a22bc67532a499f5.html",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [],
     "configQuestions": []
   },
@@ -61,6 +65,7 @@
     "description": "General invoice approval, reconciliation, and payment workflow. Actual paths depend on site configuration.",
     "sourceUrl": "https://help.sap.com/docs/buying-invoicing/invoicing-and-payment-process-guide/invoicing-and-payment-workflow-in-sap-ariba-solutions",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [
       { "sequence": 1, "title": "Create and submit invoice" },
       { "sequence": 2, "title": "Approve invoice and create reconciliation and payment request" },
@@ -81,6 +86,7 @@
     "description": "General service order, service sheet approval, and invoicing workflow, with ERP approval variants.",
     "sourceUrl": "https://help.sap.com/docs/ARIBA_PROCUREMENT/aa7701cfe9cb4157806cc0e1c515a337/b56fab0c7bed49128c0f2d01cca6a363.html",
     "sourceKind": "SAP_HELP",
+    "visibility": "PUBLIC",
     "processSteps": [
       { "sequence": 1, "title": "Create and send service purchase order" },
       { "sequence": 2, "title": "Supplier creates service sheet" },

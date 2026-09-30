@@ -53,6 +53,7 @@ export function ProductScopeCatalog({ rows }: { rows: CatalogRow[] }) {
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-secondary)]">
               <span className="font-semibold text-[var(--brand-navy)]">{row.code}</span>
               <ProductLabel product={scopeProductLabelKey(row.product)} size={14} /><span>·</span><span>{row.solution}</span><span>·</span><span>{row.release === "SOURCE_UNDATED" ? "Version unverified" : row.release}</span>
+              {row.visibility === "ABEAM_ADMIN" && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-900">ABeam only</span>}
             </div>
             <h2 className="mt-2 font-medium text-[var(--ink-primary)]">{row.title}</h2>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">

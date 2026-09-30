@@ -9,6 +9,10 @@ Each record is identified by product, solution, source release, country,
 language, and code. A process without an SAP scope ID receives an explicit
 `PROCESS` kind and a stable Aptus code; it must not be presented as an SAP
 scope item. Source URL, source type, hash, and import date remain with it.
+Every record also declares `visibility`. Reviewed public SAP Help examples use
+`PUBLIC`; SAP for Me partner exports use `ABEAM_ADMIN`. The catalog list,
+detail page, and generated diagram endpoint all enforce that audience. ABeam
+admin access also requires any applicable MFA policy to be satisfied.
 
 The detail page shows imported steps and questions. Its SVG is generated only
 from ordered imported steps, with a label saying it is an Aptus rendering. An
@@ -28,7 +32,11 @@ converted into fictional implementation steps or BDC questions.
    verbatim. For Ariba workflows without a scope ID, use `scopeKind: "PROCESS"`
    and a stable process key. Ordered `processSteps` require a published test
    script or numbered workflow. Each configuration question needs its own
-   source URL. Leave unavailable arrays empty.
+   source URL. Leave unavailable arrays empty. Set `visibility` explicitly on
+   every row; `PROCESS_NAVIGATOR` and `PARTNER_EXPORT` rows must be
+   `ABEAM_ADMIN`. Keep partner files
+   under the ignored `sap-references/product-scope/partner/` directory, since
+   this repository is public.
 3. Run `pnpm sap:product-scope:import <manifest.json>`. The importer validates
    URLs, identity uniqueness, ordered steps, and question keys. It upserts only
    the records in that manifest; other products and older releases remain.
@@ -45,6 +53,16 @@ converted into fictional implementation steps or BDC questions.
 5. Review the Aptus catalog's coverage counters and sample detail pages.
    Check at least one source link, one generated diagram, and one missing-step
    item before treating a release as ready for assessment use.
+
+For the production database, an ABeam admin can open
+`/sap-explorer/scope-catalog/import` and select a reviewed JSON manifest from
+their own computer. The browser import accepts only `ABEAM_ADMIN` records,
+sends at most 50 per request, and verifies the stored source hash for each
+batch. It does not upload the original source archive or commit the manifest
+to Git. The admin must enter the item count shown by the selected SAP source.
+This count validates the file size; use the strict reconciliation command
+against the production database to check for missing, changed, or unexpected
+identities before calling that source group complete.
 
 ## Source mapping
 

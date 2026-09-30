@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 import { ProductScopeCatalog } from "@/components/sap/ProductScopeCatalog";
 import { getProductScopeCatalog } from "@/lib/product-scope/catalog";
+import { getCurrentUser } from "@/lib/auth/session";
+import { canViewRestrictedScope } from "@/lib/product-scope/access";
 
 export const metadata: Metadata = { title: "SAP Scope Catalog" };
 export const dynamic = "force-dynamic";
 
 export default async function SapScopeCatalogPage() {
-  const rows = await getProductScopeCatalog();
+  const canImport = canViewRestrictedScope(await getCurrentUser());
+  const rows = await getProductScopeCatalog(canImport);
   return <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
     <a href="/sap-explorer" className="text-sm text-[var(--brand-navy)]">← SAP Operations</a>
     <div>
       <h1 className="font-serif text-3xl text-[var(--brand-navy)]">SAP Scope Catalog</h1>
       <p className="mt-2 text-sm text-[var(--ink-secondary)]">One Aptus inventory across S/4HANA, SuccessFactors, Ariba, and future SAP product imports.</p>
+      {canImport && <a href="/sap-explorer/scope-catalog/import" className="mt-3 inline-block text-sm font-medium text-[var(--brand-navy)] underline">Import reviewed SAP source content</a>}
     </div>
     <ProductScopeCatalog rows={rows} />
     <section className="rounded-xl border border-[var(--border-default)] bg-white p-5">
