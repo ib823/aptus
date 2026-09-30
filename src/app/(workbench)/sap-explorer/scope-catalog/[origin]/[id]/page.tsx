@@ -3,19 +3,22 @@ import { notFound } from "next/navigation";
 import { getScopeDetail } from "@/lib/product-scope/detail";
 import { scopeProductLabelKey } from "@/lib/product-scope/presentation";
 import { ProductLabel } from "@/components/sap/ProductLabel";
+import { getCurrentUser } from "@/lib/auth/session";
+import { canViewRestrictedScope } from "@/lib/product-scope/access";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "SAP Scope Detail" };
 
 export default async function ScopeCatalogDetailPage({ params }: { params: Promise<{ origin: string; id: string }> }) {
   const { origin, id } = await params;
-  const item = await getScopeDetail(origin, id);
+  const item = await getScopeDetail(origin, id, canViewRestrictedScope(await getCurrentUser()));
   if (!item) notFound();
   const diagramUrl = `/api/product-scope/diagram/${origin}/${encodeURIComponent(id)}`;
   return <main className="mx-auto max-w-5xl space-y-7 px-4 py-8 sm:px-6">
     <a href="/sap-explorer/scope-catalog" className="text-sm text-[var(--brand-navy)]">← SAP Scope Catalog</a>
     <header>
       <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--ink-secondary)]"><ProductLabel product={scopeProductLabelKey(item.product)} size={16} /><span>·</span><span>{item.solution}</span><span>·</span><span>{item.release === "SOURCE_UNDATED" ? "Version unverified" : item.release}</span></div>
+      {item.visibility === "ABEAM_ADMIN" && <span className="mt-2 inline-block rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">ABeam only</span>}
       <h1 className="mt-2 font-serif text-3xl text-[var(--brand-navy)]">{item.code} · {item.title}</h1>
       <p className="mt-2 text-sm text-[var(--ink-secondary)]">{item.kind === "PROCESS" ? "SAP documented process" : "SAP scope item"} · {item.sourceKind}</p>
       {item.description && <p className="mt-3 max-w-3xl">{item.description}</p>}

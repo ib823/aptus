@@ -153,6 +153,7 @@ model ProductScopeItem {
   description      String?  @db.Text
   sourceUrl        String
   sourceKind       String   // SAP_HELP | PROCESS_NAVIGATOR | PARTNER_EXPORT
+  visibility       String   @default("PUBLIC") // PUBLIC | ABEAM_ADMIN
   sourceHash       String?  // SHA-256 of the imported source record
   processSteps     Json     // ordered, sourced steps; [] when not yet imported
   configQuestions  Json     // sourced questions; [] when not yet imported

@@ -4,6 +4,7 @@ import { productScopeQuestion, productScopeStep } from "./manifest";
 
 export interface ScopeDetail {
   id: string;
+  visibility: string;
   product: string;
   solution: string;
   release: string;
@@ -19,14 +20,14 @@ export interface ScopeDetail {
   questions: { key: string; question: string; sourceUrl?: string }[];
 }
 
-export async function getScopeDetail(origin: string, id: string): Promise<ScopeDetail | null> {
+export async function getScopeDetail(origin: string, id: string, includeRestricted = false): Promise<ScopeDetail | null> {
   if (origin === "product") {
     const item = await prisma.productScopeItem.findUnique({ where: { id } });
-    if (!item) return null;
+    if (!item || (item.visibility !== "PUBLIC" && !includeRestricted)) return null;
     const steps = productScopeStep.array().safeParse(item.processSteps);
     const questions = productScopeQuestion.array().safeParse(item.configQuestions);
     return {
-      id: item.id, product: item.productKey, solution: item.solutionKey,
+      id: item.id, visibility: item.visibility, product: item.productKey, solution: item.solutionKey,
       release: item.release, code: item.scopeCode, title: item.title,
       kind: item.scopeKind === "PROCESS" ? "PROCESS" : "SCOPE_ITEM",
       description: item.description, sourceUrl: item.sourceUrl, sourceKind: item.sourceKind,
@@ -54,7 +55,7 @@ export async function getScopeDetail(origin: string, id: string): Promise<ScopeD
     }),
   ]);
   return {
-    id: item.id, product: "S/4HANA Cloud Public Edition", solution: item.functionalArea,
+    id: item.id, visibility: "PUBLIC", product: "S/4HANA Cloud Public Edition", solution: item.functionalArea,
     release, code: item.scopeCode, title: item.nameClean, kind: "SCOPE_ITEM",
     description: null, sourceUrl: item.catalogVersion.sourceArchiveUrl,
     sourceKind: "SAP Best Practices import", processSourceUrl: null, configSourceUrl: null,
