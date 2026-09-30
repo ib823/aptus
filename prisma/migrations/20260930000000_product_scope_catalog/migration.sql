@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS "ProductScopeItem" (
     CONSTRAINT "ProductScopeItem_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "ProductScopeItem_productKey_solutionKey_release_country_language_scopeCode_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "ProductScopeItem_productKey_solutionKey_release_country_lan_key"
     ON "ProductScopeItem"("productKey", "solutionKey", "release", "country", "language", "scopeCode");
 CREATE INDEX IF NOT EXISTS "ProductScopeItem_productKey_solutionKey_release_idx"
     ON "ProductScopeItem"("productKey", "solutionKey", "release");
