@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import type { CatalogRow } from "@/lib/product-scope/catalog";
+import { scopeProductLabelKey } from "@/lib/product-scope/presentation";
+import { productName } from "@/lib/studio/product-marks";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 
 export function ProductScopeCatalog({ rows }: { rows: CatalogRow[] }) {
   const [product, setProduct] = useState("ALL");
@@ -32,7 +35,7 @@ export function ProductScopeCatalog({ rows }: { rows: CatalogRow[] }) {
           <span>Product</span>
           <select value={product} onChange={(event) => setProduct(event.target.value)} className="rounded-lg border border-[var(--border-default)] bg-white px-3 py-2">
             <option value="ALL">All products</option>
-            {products.map((value) => <option key={value} value={value}>{value}</option>)}
+            {products.map((value) => <option key={value} value={value}>{productName(scopeProductLabelKey(value))}</option>)}
           </select>
         </label>
         <label className="flex min-w-64 flex-1 flex-col gap-1 text-sm">
@@ -49,7 +52,7 @@ export function ProductScopeCatalog({ rows }: { rows: CatalogRow[] }) {
             className="rounded-xl border border-[var(--border-default)] bg-white p-4 transition hover:border-[var(--brand-navy)]">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-secondary)]">
               <span className="font-semibold text-[var(--brand-navy)]">{row.code}</span>
-              <span>{row.product}</span><span>·</span><span>{row.solution}</span><span>·</span><span>{row.release === "SOURCE_UNDATED" ? "Version unverified" : row.release}</span>
+              <ProductLabel product={scopeProductLabelKey(row.product)} size={14} /><span>·</span><span>{row.solution}</span><span>·</span><span>{row.release === "SOURCE_UNDATED" ? "Version unverified" : row.release}</span>
             </div>
             <h2 className="mt-2 font-medium text-[var(--ink-primary)]">{row.title}</h2>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
