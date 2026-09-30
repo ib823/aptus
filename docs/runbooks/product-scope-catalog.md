@@ -34,7 +34,12 @@ converted into fictional implementation steps or BDC questions.
    the records in that manifest; other products and older releases remain.
 4. Run `pnpm sap:product-scope:recon <manifest.json>`. This checks that every
    record landed with the expected content hash and reports coverage by
-   product, solution, and release. The public sample is imported by the Vercel
+   product, solution, and release. For a source export known to contain the
+   full selected product/solution/release/country/language set, run
+   `pnpm sap:product-scope:recon <manifest.json> --complete --expected-count N`,
+   where `N` is the count from SAP's source index. This also rejects unexpected
+   stored identities in the covered groups. A partial manifest must not use
+   this flag or be called complete. The public sample is imported by the Vercel
    build after database migration, so public starter records are present after
    deployment. Partner manifests should use this same import and recon path.
 5. Review the Aptus catalog's coverage counters and sample detail pages.
