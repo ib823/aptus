@@ -26,6 +26,9 @@ export default function SapExplorerPage() {
         <p className="mt-1 text-sm" style={{ color: "var(--ink-secondary)" }}>
           Live TDD explorer across your connected SAP Cloud products.
         </p>
+        <a href="/sap-explorer/scope-catalog" className="mt-3 inline-block rounded-lg border border-[var(--brand-navy)] px-4 py-2 text-sm font-medium text-[var(--brand-navy)] hover:bg-white">
+          Browse SAP scope and process catalog →
+        </a>
       </div>
       {/* Plain-language screen guide (first-run + one tap away). */}
       <ScreenGuide />

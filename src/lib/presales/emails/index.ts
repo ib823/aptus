@@ -23,7 +23,7 @@
  * otp_sent).
  */
 
-import nodemailer from 'nodemailer';
+import nodemailer, { type SendMailOptions, type Transporter } from 'nodemailer';
 
 export interface EmailMessage {
   to: string;
@@ -50,7 +50,7 @@ function smtpAvailable(): boolean {
   return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
-function getTransport(): nodemailer.Transporter {
+function getTransport(): Transporter {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
     port: Number(process.env.SMTP_PORT ?? 587),
@@ -100,7 +100,7 @@ export async function dispatchEmail(
 
   try {
     const transport = getTransport();
-    const sendPayload: nodemailer.SendMailOptions = {
+    const sendPayload: SendMailOptions = {
       from: fromAddress(),
       to: message.to,
       subject: message.subject,

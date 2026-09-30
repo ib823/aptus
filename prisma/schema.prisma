@@ -137,6 +137,35 @@ model SapProcessStep {
   @@index([businessRoleId])
 }
 
+/// Product-neutral SAP business content. S/4HANA scope items retain their
+/// established ScopeItem/ProcessStep tables; this stores content whose identity
+/// and deliverables do not follow the S/4HANA Public Edition model.
+model ProductScopeItem {
+  id               String   @id @default(cuid())
+  productKey       String   // SUCCESSFACTORS | ARIBA | ...
+  solutionKey      String   // e.g. RECRUITING or BUYING_INVOICING
+  release          String   // source's own release, never inferred from S/4
+  country          String   @default("XX")
+  language         String   @default("EN")
+  scopeCode        String   // SAP ID, or stable Aptus process key when SAP has none
+  scopeKind        String   // SCOPE_ITEM | PROCESS
+  title            String
+  description      String?  @db.Text
+  sourceUrl        String
+  sourceKind       String   // SAP_HELP | PROCESS_NAVIGATOR | PARTNER_EXPORT
+  sourceHash       String?  // SHA-256 of the imported source record
+  processSteps     Json     // ordered, sourced steps; [] when not yet imported
+  configQuestions  Json     // sourced questions; [] when not yet imported
+  processSourceUrl String?  // SAP process diagram or test-script URL
+  configSourceUrl  String?  // SAP configuration workbook/guide URL
+  importedAt       DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([productKey, solutionKey, release, country, language, scopeCode])
+  @@index([productKey, solutionKey, release])
+  @@index([scopeCode])
+}
+
 // Phase 2 — AD-4: SAP best-practice classification protocol as DB config.
 // Single source of truth for the protocol text used by both the AI
 // classifier (src/lib/analyzer/classifier.ts) and the orchestrator
