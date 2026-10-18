@@ -542,6 +542,27 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     expect(xml).toContain(`<saml2:AttributeValue xsi:type="xs:string">${BASE.clientId}</saml2:AttributeValue>`);
   });
 
+  it.each([
+    ["an invisible character in the host", "https://api4.success\u200Bfactors.com/oauth/token"],
+    ["an upper-case host", "https://API4.SuccessFactors.com/oauth/token"],
+    ["a default port", "https://api4.successfactors.com:443/oauth/token"],
+    ["a dot segment", "https://api4.successfactors.com/oauth/./token"],
+    ["a fragment, which is never sent", "https://api4.successfactors.com/oauth/token#x"],
+    ["a tab, which fetch deletes", "https://api4.successfactors.com/oauth/\ttoken"],
+  ])("signs the Recipient as the URL actually posted to, given %s", async (_, tokenUrl) => {
+    const fetchImpl = ok();
+    await exchangeSamlBearerAssertion(
+      { ...BASE, tokenUrl, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    );
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(BASE.tokenUrl);
+    const xml = Buffer.from(new URLSearchParams(String((init as RequestInit).body)).get("assertion")!, "base64").toString("utf8");
+    expect(xml).toContain(`Recipient="${BASE.tokenUrl}"`);
+    expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
+  });
+
   it("names a missing field in the Test result, without the label or any value", async () => {
     const fetchImpl = ok();
     const error = await exchangeSamlBearerAssertion(
@@ -634,12 +655,23 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
      * button, every northbound call and the fleet-wide sweep. The text is cut to
      * a window first; only 300 characters are ever shown.
      */
-    for (const unit of ["a.", "A.", "a-", "+", "a:"]) {
+    // Whitespace-dense too: the collapse is linear, but a gzip reply of 61 KB
+    // inflates to 64 MB, and at a tenth of a second per megabyte that stalled
+    // the event loop for seconds before the raw text was cut first.
+    for (const unit of ["a.", "A.", "a-", "+", "a:", "a ", " a", "a\t\n", "1.1.", "<>"]) {
       const started = performance.now();
       const said = sanitizeSuccessFactorsError(unit.repeat(1_000_000 / unit.length), { clientId: BASE.clientId, companyId: "acmeT1", samlUserId: "sfadmin" });
       expect(performance.now() - started, `${JSON.stringify(unit)} took too long`).toBeLessThan(250);
-      expect(said!.length).toBeLessThanOrEqual(300);
+      // Null when nothing is left to show — "<>" alone normalises to nothing.
+      expect(said?.length ?? 0).toBeLessThanOrEqual(300);
     }
+  });
+
+  it("does not even read past its limit: 64 MB of whitespace-dense text costs milliseconds", () => {
+    const huge = "a ".repeat(32 * 1024 * 1024);
+    const started = performance.now();
+    sanitizeSuccessFactorsError(huge, { companyId: "acmeT1" });
+    expect(performance.now() - started).toBeLessThan(250);
   });
 
   it("still shows the start of a long refusal, cut at a word", () => {
@@ -671,10 +703,34 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     "Re-authenticate at evil。example",
     "Write to MAILTO:PHISH@EVIL.EXAMPLE",
     "Write to phish@evil.example",
+    // Split so no pattern sees it whole, then rejoined by the markup strip.
+    "Sign in again at https:<>//evil<>.example<>.com/login",
+    "Sign in again at evil<>.example<>.com",
+    "Write to mai<>lto:phish@evil",
+    "Access denied for 10<>.0.0.1",
+    // Shapes the patterns used to miss.
+    "Access denied for IP address 10.0.0.1.",
+    "Access denied for 2001:db8:85a3::8a2e:370:7334",
+    "Sign in again at .evil.example.com/reset",
+    "Sign in again at _evil.example.com/reset",
+    "See...evil.example.com",
+    "Sign in at evil.भारत",
+    "Sign in at evil\u00AD.com",
+    "Sign in at evil\u200B.com",
   ])("removes the host or link in %j", (message) => {
     const said = sanitizeSuccessFactorsError(message)!;
-    expect(said).not.toMatch(/evil|EVIL|Evil|10\.0\.0\.1|аррӏе/);
+    expect(said).not.toMatch(/evil|EVIL|Evil|10\.0\.0\.1|аррӏе|2001:db8|https?:|mailto/i);
     expect(said).toMatch(/\[(host|link)\]/);
+  });
+
+  it.each([
+    "Unable to map user at 12:30:45 UTC",
+    "Unable to validate BizX.User in SAML2.0",
+    "Use X.509 certificates, e.g. version v1.2.3",
+    'Unable to validate "Conditions.NotBefore"',
+    "Unable to verify the SAML assertion.Please retry",
+  ])("keeps %j, which is SuccessFactors' words, not a host", (message) => {
+    expect(sanitizeSuccessFactorsError(message)).toBe(message);
   });
 
   it("replaces the sealed API key, company id and user id SuccessFactors echoes back", () => {
@@ -703,6 +759,18 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     }
     expect(sanitizeSuccessFactorsError('Login failed - invalid user "SAM"', sealed)).toBe(
       'Login failed - invalid user "[user id]"',
+    );
+  });
+
+  it("replaces a sealed value with whitespace inside, as SuccessFactors echoes it", () => {
+    // The refusal is collapsed before it is matched, so the value must be too.
+    for (const companyId of ["acme\tT1", "acme  T1", "acme\u00A0T1", "ACME\u3000CORP"]) {
+      expect(
+        sanitizeSuccessFactorsError(`API key "k" does not exist in company "${companyId}"`, { companyId }),
+      ).toBe('API key "k" does not exist in company "[company id]"');
+    }
+    expect(sanitizeSuccessFactorsError("Unable to map Jane  Doe to a valid BizX User ID", { samlUserId: "Jane Doe" })).toBe(
+      "Unable to map [user id] to a valid BizX User ID",
     );
   });
 

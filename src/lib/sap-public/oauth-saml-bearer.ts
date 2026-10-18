@@ -175,12 +175,15 @@ const MIN_REDACTED_LENGTH = 3;
 
 /**
  * How much of a refusal is examined. Only the first 300 characters are ever
- * shown, and the token endpoint's answer is unbounded: the patterns below
- * backtrack, so run over a megabyte from a hostile endpoint they blocked the
- * event loop for minutes — on the Test button, on every northbound call and in
- * the fleet-wide probe sweep. Bounded first, every pass is a few milliseconds.
+ * shown, and the token endpoint's answer is unbounded — a gzip reply of 61 KB
+ * inflates to 64 MB. The patterns below backtrack, and even the linear passes
+ * cost a tenth of a second per megabyte, so run over the whole answer a hostile
+ * endpoint blocked the event loop for seconds to minutes: on the Test button,
+ * every northbound call and the fleet-wide probe sweep. The raw text is cut to
+ * READ_LIMIT before anything runs, then to SANITIZE_WINDOW once normalised.
  */
 const SANITIZE_WINDOW = 1000;
+const READ_LIMIT = SANITIZE_WINDOW * 8;
 
 /** A letter, digit or underscore — what a sealed value must not touch to count as a whole word. */
 const WORD_CHAR = String.raw`[\p{L}\p{N}_]`;
@@ -188,35 +191,58 @@ const WORD_CHAR = String.raw`[\p{L}\p{N}_]`;
 /** Regex-escape for a `u`-flag pattern, where only syntax characters may be escaped. */
 const escapeRegExp = (v: string) => v.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
+/** Characters that render as nothing, and could split a link or a host so no pattern sees it. */
+const INVISIBLE = /[\u00AD\u200B-\u200D\u2060\uFEFF]/g;
+
 /**
- * A dotted name, in any script: labels of letters, digits and hyphens joined by
- * a full stop (or an ideographic or full-width one), ending in a label of two
- * or more letters.
+ * What the refusal AND each sealed value go through, so an echo still matches
+ * its value: invisible characters and `<` `>` removed — before the link and
+ * host passes, so "https:<>//evil<>.example" cannot be rejoined after them —
+ * and whitespace collapsed.
  */
-const DOTTED_NAME = /(?<![\p{L}\p{N}_.-])((?:[\p{L}\p{N}-]+[.\u3002\uFF0E\uFF61])+)(\p{L}{2,})(?![\p{L}\p{N}_-])/gu;
+const normalise = (v: string) => v.replace(INVISIBLE, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * A dotted name, in any script: labels of letters, marks, digits and hyphens
+ * joined by a full stop (or an ideographic or full-width one), ending in a
+ * label of two or more letters. It may start after a "." or "_" that does not
+ * itself follow a label (".evil.example", "See...evil.example"), never inside
+ * a name or an identifier.
+ */
+const DOTTED_NAME =
+  /(?<![\p{L}\p{M}\p{N}-])(?<![\p{L}\p{M}\p{N}][._])((?:[\p{L}\p{M}\p{N}-]+[.\u3002\uFF0E\uFF61])+)(\p{L}[\p{L}\p{M}]+)(?![\p{L}\p{M}\p{N}_-])/gu;
+
+/** IPv4, including one that ends a sentence ("from 10.0.0.1."). */
+const IPV4 = /(?<!\p{N}|\p{N}\.)\p{N}{1,3}(?:\.\p{N}{1,3}){3}(?!\p{N}|\.\p{N})/gu;
+
+/** An IPv6 candidate; `isIpv6` decides, so a time such as 12:30:45 is kept. */
+const IPV6_CANDIDATE = /(?<![\p{L}\p{N}:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\p{L}\p{N}:])/giu;
+const isIpv6 = (m: string) =>
+  (m.includes("::") || (m.match(/:/g) ?? []).length === 7) && (m.match(/[0-9a-f]/gi) ?? []).length >= 2;
 
 /**
  * Bound SuccessFactors' errorMessage before it goes anywhere a person reads.
  *
  * In order:
- *   1. Whitespace collapses and the text is cut to SANITIZE_WINDOW, at a word
- *      boundary, before any other pattern runs.
+ *   1. The raw text is cut to READ_LIMIT, normalised (see `normalise`), and
+ *      cut again to SANITIZE_WINDOW at a word boundary, before any other
+ *      pattern runs.
  *   2. The sealed API key, company id and user id become placeholders —
- *      matched as whole words, case-insensitively, from the values as stored,
- *      in one pass with the longest first. Whole words, because a user id of
- *      "sam" must not turn SAML into "[user id]L"; from the stored values,
- *      because lower-casing İ or ẞ first produces a pattern that no longer
- *      matches the echo.
+ *      matched as whole words, case-insensitively, from the values as stored
+ *      and normalised the same way, in one pass with the longest first. Whole
+ *      words, because a user id of "sam" must not turn SAML into
+ *      "[user id]L"; from the stored values, because lower-casing İ or ẞ first
+ *      produces a pattern that no longer matches the echo.
  *   3. Links go: anything with `://`, and `mailto:`.
- *   4. Host names and IP addresses go, since the detail reaches people who are
- *      not shown where a connection points. A dotted name counts as a host
- *      when its last label is all one case, or when it has three labels or
- *      more — so "assertion.Please", a sentence missing its space, is kept.
- *      A two-label, mixed-case name ("Example-Host.Com") is indistinguishable
- *      from that and is kept too; the alert email is escaped at the sink, so it
- *      is never a live link there.
- *   5. `<` and `>` go, so it cannot carry markup.
- *   6. Any base64-looking run over 40 characters is replaced — except an
+ *   4. Host names and IP addresses (v4 and v6) go, since the detail reaches
+ *      people who are not shown where a connection points. A dotted name
+ *      counts as a host when its last label is all one case (or has no case),
+ *      or when it has three labels or more — so "assertion.Please", a
+ *      sentence missing its space, is kept. A two-label, mixed-case name
+ *      ("Example-Host.Com") is indistinguishable from that and is kept too;
+ *      the alert email is escaped at the sink, so it is never a live link
+ *      there.
+ *   5. Any base64-looking run over 40 characters is replaced — except an
  *      upper-case, underscore-separated identifier such as
  *      OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION, which is SuccessFactors
  *      naming the failure, not a secret.
@@ -224,11 +250,11 @@ const DOTTED_NAME = /(?<![\p{L}\p{N}_.-])((?:[\p{L}\p{N}-]+[.\u3002\uFF0E\uFF61]
  */
 export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifiers = {}): string | null {
   if (typeof raw !== "string") return null;
-  const collapsed = raw.replace(/\s+/g, " ");
-  let text = collapsed;
-  if (collapsed.length > SANITIZE_WINDOW) {
-    const cut = collapsed.lastIndexOf(" ", SANITIZE_WINDOW);
-    text = collapsed.slice(0, cut > 0 ? cut : SANITIZE_WINDOW);
+  const normalised = normalise(raw.slice(0, READ_LIMIT));
+  let text = normalised;
+  if (normalised.length > SANITIZE_WINDOW) {
+    const cut = normalised.lastIndexOf(" ", SANITIZE_WINDOW);
+    text = normalised.slice(0, cut > 0 ? cut : SANITIZE_WINDOW);
   }
 
   const values: { value: string; label: string }[] = [];
@@ -237,7 +263,7 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
     [sealed.companyId, "[company id]"],
     [sealed.samlUserId, "[user id]"],
   ] as const) {
-    const v = typeof value === "string" ? value.trim() : "";
+    const v = typeof value === "string" ? normalise(value) : "";
     if (v.length >= MIN_REDACTED_LENGTH) values.push({ value: v, label });
   }
   if (values.length > 0) {
@@ -255,17 +281,38 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
   const cleaned = text
     .replace(/\S*:\/\/\S*/g, "[link]")
     .replace(/(?<![\p{L}\p{N}_])mailto:\S*/giu, "[link]")
-    .replace(/(?<![\p{N}.])\p{N}{1,3}(?:\.\p{N}{1,3}){3}(?![\p{N}.])/gu, "[host]")
+    .replace(IPV4, "[host]")
+    .replace(IPV6_CANDIDATE, (m: string) => (isIpv6(m) ? "[host]" : m))
     .replace(DOTTED_NAME, (name: string, labels: string, last: string) => {
       const oneCase = last === last.toLowerCase() || last === last.toUpperCase();
       const threeOrMore = (labels.match(/[.\u3002\uFF0E\uFF61]/gu) ?? []).length >= 2;
       return oneCase || threeOrMore ? "[host]" : name;
     })
-    .replace(/[<>]/g, "")
     .replace(/[A-Za-z0-9+/=_-]{41,}/g, (run) => (/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(run) ? run : "[…]"))
     .trim();
   if (!cleaned) return null;
   return cleaned.length > 300 ? `${cleaned.slice(0, 299)}…` : cleaned;
+}
+
+/**
+ * The token URL exactly as fetch will send it: parsed, without a fragment
+ * (never sent), and serialised — host lower-cased, a default port, dot
+ * segments, backslashes, tabs, line breaks and invisible characters in the
+ * host all resolved the way the request resolves them. It is also the
+ * Recipient, which SuccessFactors compares with its own URL, so the two can
+ * no longer differ. A value that does not parse is returned trimmed; the
+ * request then fails on its own terms.
+ */
+function canonicalTokenUrl(v: string | null | undefined): string | null | undefined {
+  if (typeof v !== "string") return v;
+  const trimmed = v.trim();
+  try {
+    const url = new URL(trimmed);
+    url.hash = "";
+    return url.href;
+  } catch {
+    return trimmed;
+  }
 }
 
 /**
@@ -282,16 +329,17 @@ export async function exchangeSamlBearerAssertion(
   opts: { fetchImpl?: typeof fetch; timeoutMs: number },
 ): Promise<SamlBearerToken> {
   /*
-   * TRIMMED ONCE, USED EVERYWHERE. A trailing newline from a hosting
+   * NORMALISED ONCE, USED EVERYWHERE. A trailing newline from a hosting
    * dashboard is invisible, and fetch drops it from the URL while the signer
    * would have put it in the Recipient — a refusal that reads as a wrong token
-   * URL when the URL looks right. Each value is trimmed here, so the signed
-   * assertion and the request carry the same one.
+   * URL when the URL looks right. Each value is trimmed here, and the token
+   * URL is the one fetch will send (see canonicalTokenUrl), so the signed
+   * assertion and the request carry the same values.
    */
   const trim = (v: string | null | undefined) => (typeof v === "string" ? v.trim() : v);
   const c: SamlBearerCredentials = {
     ...given,
-    tokenUrl: trim(given.tokenUrl),
+    tokenUrl: canonicalTokenUrl(given.tokenUrl),
     clientId: trim(given.clientId),
     companyId: trim(given.companyId),
     samlUserId: trim(given.samlUserId),
