@@ -572,10 +572,14 @@ export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection)
  * UNVERIFIED AGAINST A LIVE TENANT. The request shape is from SAP's published
  * documentation, not from observation — no SuccessFactors system was available.
  * The parts that can be checked without one are: the cache, the timeout, the
- * expiry margin, and that a misconfiguration fails with a message naming the
- * missing field rather than a generic 400 from SAP. The end-to-end exchange
- * needs a real tenant before anyone relies on it, and the connection test is the
- * cheapest way to find out.
+ * expiry margin, that a misconfiguration fails with a message naming the
+ * missing field rather than a generic 400 from SAP, and — when the connection
+ * holds the signing key — that the assertion CoreEdge signs verifies under
+ * xmlsec1. The end-to-end exchange needs a real tenant before anyone relies on
+ * it, and the connection test is the cheapest way to find out.
+ *
+ * The token is cached, not the assertion: a signed assertion is used once and
+ * thrown away, and the next exchange signs another.
  */
 async function fetchSamlBearerToken(
   conn: ResolvedSapConnection,
@@ -585,7 +589,7 @@ async function fetchSamlBearerToken(
   const cached = oauthTokenCache.get(conn.id);
   if (cached && cached.expiresAt > now) return cached.token;
 
-  const { clientId, samlAssertion, companyId } = conn.secrets;
+  const { clientId, samlAssertion, companyId, samlPrivateKey, samlUserId } = conn.secrets;
 
   // THE EXCHANGE ITSELF LIVES IN oauth-saml-bearer.ts, shared with the env
   // tenant path in tdd-connector. Validation (each missing field named), the
@@ -593,7 +597,7 @@ async function fetchSamlBearerToken(
   // function owns only the cache, which is the one thing that differs between
   // a stored connection (keyed by row id) and an env tenant (keyed by prefix).
   const { accessToken, ttlMs } = await exchangeSamlBearerAssertion(
-    { tokenUrl: conn.oauthTokenUrl, clientId, companyId, samlAssertion },
+    { tokenUrl: conn.oauthTokenUrl, clientId, companyId, samlAssertion, samlPrivateKey, samlUserId },
     `Connection ${conn.key}`,
     { fetchImpl, timeoutMs: TOKEN_REQUEST_TIMEOUT_MS },
   );

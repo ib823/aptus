@@ -35,16 +35,31 @@ export interface SapConnectionSecrets {
    * `clientId` above doubles as the SF API key. `companyId` is the SF company
    * identifier, which the token endpoint requires alongside the assertion.
    *
-   * THE ASSERTION IS TAKEN, NOT GENERATED. Producing one means signing XML with
-   * an X.509 key (XMLDSig: canonicalisation, digest, signature), and a subtly
-   * wrong signature fails only at runtime against a real tenant. There is no
-   * SuccessFactors system available to verify an implementation against, so
-   * generating one here would be shipping unverifiable cryptography into an auth
-   * path. SAP publishes an assertion generator and every trusted IdP emits them;
-   * this accepts the result and seals it like any other credential.
+   * TWO WAYS TO SUPPLY THE ASSERTION, and the second is the one to use.
+   *
+   * `samlAssertion` is a PRE-SIGNED assertion pasted in from SAP's offline
+   * generator or an IdP. It was the only option while signing here would have
+   * been unverifiable cryptography in an auth path — and it has a lifetime:
+   * SAP's generator defaults to ten minutes (`expireInMinutes`), after which
+   * every token exchange fails until someone pastes a new one.
+   *
+   * `samlPrivateKey` + `samlUserId` let CoreEdge sign a FRESH assertion for each
+   * token request (saml-assertion.ts), with the key from the OAuth client
+   * registration. The signer is verified independently: its output is checked
+   * by xmlsec1, the reference XML-DSig implementation, and pinned by a
+   * deterministic test vector. When both are present, the key wins — a stored
+   * assertion is the fallback, never a second credential sent alongside.
    */
   samlAssertion?: string;
   companyId?: string;
+  /**
+   * The RSA private key of the X.509 certificate registered for this API key
+   * under Admin Center → Manage OAuth2 Client Applications. PEM (PKCS#8 or
+   * PKCS#1) or headerless base64 PKCS#8, as SAP's offline tool takes it.
+   */
+  samlPrivateKey?: string;
+  /** The SuccessFactors user the assertion is issued for — its NameID. */
+  samlUserId?: string;
   /**
    * API-key header auth (AD-12). SAP's Business Accelerator Hub sandbox — the
    * first thing a developer prototyping against SAP reaches for — requires an
@@ -221,6 +236,8 @@ export function openSecrets(blob: string | null | undefined, aad?: string): SapC
     "writeSecret",
     "samlAssertion",
     "companyId",
+    "samlPrivateKey",
+    "samlUserId",
     "apiKey",
     "apiKeyHeader",
   ] as const satisfies readonly (keyof SapConnectionSecrets)[];

@@ -49,7 +49,7 @@ describe("secrets are write-only", () => {
   it("the audit records that secrets changed, never what they became", () => {
     // An audit trail quoting a password undoes the point of sealing it.
     expect(route).toContain("secretsRotated");
-    for (const secret of ["password", "clientSecret", "bearerToken", "writeSecret"]) {
+    for (const secret of ["password", "clientSecret", "bearerToken", "writeSecret", "samlAssertion", "samlPrivateKey"]) {
       const auditBlocks = route.match(/after: \{[\s\S]*?\}/g) ?? [];
       for (const block of auditBlocks) {
         expect(block, `audit payload must not carry ${secret}`).not.toMatch(

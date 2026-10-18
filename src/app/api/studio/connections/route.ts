@@ -42,6 +42,7 @@ import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
 } from "@/lib/sap-public/environment";
+import { parseSamlPrivateKey, SamlKeyError } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -153,6 +154,14 @@ const upsertSchema = z
      * real one.
      */
     samlAssertion: z.string().max(20000).optional(),
+    /**
+     * The OAuth client registration's RSA private key, so CoreEdge signs a
+     * fresh assertion per exchange instead of storing one that expires. PEM or
+     * headerless base64; a 4096-bit PEM key is about 3.3 kB.
+     */
+    samlPrivateKey: z.string().max(10000).optional(),
+    /** The SuccessFactors user a signed assertion is issued for. */
+    samlUserId: z.string().max(255).optional(),
     clientId: z.string().max(200).optional(),
     clientSecret: z.string().max(500).optional(),
     /** API-key header auth (AD-12): the key, and the header it travels in (default `apikey`). */
@@ -188,8 +197,34 @@ const upsertSchema = z
       // credential, so there is no clientSecret in this flow.
       need("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
       need("companyId", "companyId is required for SAML bearer auth");
-      need("samlAssertion", "samlAssertion is required for SAML bearer auth");
       need("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      /*
+       * EITHER COREEDGE SIGNS, OR AN ASSERTION IS PASTED. The key is the
+       * durable choice — a pasted assertion expires, by SAP's default within
+       * ten minutes — so it is the one this asks for first.
+       */
+      if (v.samlPrivateKey) {
+        need("samlUserId", "samlUserId (the SuccessFactors user the assertion is issued for) is required with a signing key");
+        /*
+         * PROVEN USABLE BEFORE IT IS SEALED. A key that cannot sign would be
+         * stored, and then fail every token exchange as an opaque 401. The
+         * refusal is SamlKeyError's own sentence, which never echoes the key.
+         */
+        try {
+          parseSamlPrivateKey(v.samlPrivateKey);
+        } catch (error) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["samlPrivateKey"],
+            message: error instanceof SamlKeyError ? error.message : "The signing key could not be read.",
+          });
+        }
+      } else {
+        need(
+          "samlAssertion",
+          "a signing key (samlPrivateKey + samlUserId) or a pre-signed samlAssertion is required for SAML bearer auth",
+        );
+      }
     }
     if (v.authType === "oauth-client-credentials") {
       need("clientId", "clientId is required for OAuth");
@@ -421,6 +456,8 @@ export async function POST(request: NextRequest) {
         ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
         ...(input.companyId ? { companyId: input.companyId } : {}),
         ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+        ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
+        ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
         ...(input.apiKey ? { apiKey: input.apiKey } : {}),
         ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
         ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),

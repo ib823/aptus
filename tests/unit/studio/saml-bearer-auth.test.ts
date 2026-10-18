@@ -19,11 +19,13 @@
  * cheapest way to find out, and until someone runs it this flow is unproven —
  * which is stated in the connector rather than left for a reader to discover.
  *
- * THE ASSERTION IS TAKEN, NOT GENERATED, and that is a deliberate limit. Signing
- * one means XMLDSig — canonicalisation, digest, signature — and a subtly wrong
- * signature fails only against a live tenant. Shipping unverifiable cryptography
- * into an auth path is worse than accepting a credential the customer already
- * has from their IdP or SAP's own generator.
+ * THE ASSERTION WAS TAKEN, NOT GENERATED — until signing could be verified. A
+ * pasted assertion expires (SAP's generator defaults to ten minutes), so a
+ * connection holding one fails every exchange after that. The connection may now
+ * hold the registration's private key instead, and CoreEdge signs a fresh
+ * assertion per exchange; tests/unit/sap-public/saml-assertion.test.ts is where
+ * that signature is checked by xmlsec1 rather than by this code reading itself.
+ * The pasted assertion remains as the fallback, and the key wins when both exist.
  */
 
 import { readFileSync } from "node:fs";
@@ -119,7 +121,8 @@ describe("SAML bearer is wired as its own flow, not a variant of client-credenti
      * send the same bytes.
      */
     expect(SAML_FLOW.slice(0, 900)).toContain("exchangeSamlBearerAssertion(");
-    expect(ENV_SAML_FLOW.slice(0, 900)).toContain("exchangeSamlBearerAssertion(");
+    // Wider here: the env path now explains its key-or-assertion choice first.
+    expect(ENV_SAML_FLOW.slice(0, 1800)).toContain("exchangeSamlBearerAssertion(");
   });
 
   it("shares the token cache, so a call does not exchange twice per request", () => {
@@ -131,12 +134,23 @@ describe("SAML bearer is wired as its own flow, not a variant of client-credenti
 describe("the env tenant can be configured for it", () => {
   it("reads COMPANY_ID and SAML_ASSERTION from the prefix, by their own names", () => {
     for (const v of ["OAUTH_TOKEN_URL", "CLIENT_ID", "COMPANY_ID", "SAML_ASSERTION"]) {
-      expect(ENV_SAML_FLOW.slice(0, 1200)).toContain(`requiredEnv(prefix, "${v}")`);
+      expect(ENV_SAML_FLOW.slice(0, 1800)).toContain(`requiredEnv(prefix, "${v}")`);
     }
   });
 
+  it("signs when SAML_PRIVATE_KEY is set, and then requires SAML_USER_ID by name", () => {
+    expect(ENV_SAML_FLOW.slice(0, 1800)).toContain('env(prefix, "SAML_PRIVATE_KEY")');
+    expect(ENV_SAML_FLOW.slice(0, 1800)).toContain('requiredEnv(prefix, "SAML_USER_ID")');
+  });
+
   it(".env.example documents the SuccessFactors variables and the removal date", () => {
-    for (const v of ["SF_TDD_COMPANY_ID", "SF_TDD_SAML_ASSERTION", "SF_TDD_OAUTH_TOKEN_URL"]) {
+    for (const v of [
+      "SF_TDD_COMPANY_ID",
+      "SF_TDD_SAML_ASSERTION",
+      "SF_TDD_SAML_PRIVATE_KEY",
+      "SF_TDD_SAML_USER_ID",
+      "SF_TDD_OAUTH_TOKEN_URL",
+    ]) {
       expect(ENV_EXAMPLE).toContain(v);
     }
     expect(ENV_EXAMPLE).toContain("20 NOVEMBER 2026");
@@ -168,6 +182,7 @@ describe("it fails legibly, and never leaks the assertion", () => {
     expect(errors.length).toBeGreaterThan(0);
     for (const e of errors) {
       expect(e, "an error interpolates the assertion").not.toMatch(/\$\{[^}]*[sS]amlAssertion/);
+      expect(e, "an error interpolates the signing key").not.toMatch(/\$\{[^}]*[sS]amlPrivateKey/);
       expect(e, "an error interpolates the secrets bundle").not.toMatch(/\$\{[^}]*secrets\b/);
     }
   });
@@ -175,14 +190,23 @@ describe("it fails legibly, and never leaks the assertion", () => {
 
 describe("the assertion is sealed like any other credential", () => {
   it("lives in the encrypted secrets bundle, not on the row", () => {
-    expect(CRYPTO).toContain("samlAssertion");
-    expect(CRYPTO).toContain("companyId");
+    for (const field of ["samlAssertion", "companyId", "samlPrivateKey", "samlUserId"]) {
+      expect(CRYPTO).toContain(field);
+    }
   });
 
   it("is not in the connections projection, which must never return a secret", () => {
     const select = ROUTE.slice(ROUTE.indexOf("select: {"), ROUTE.indexOf("orderBy"));
     expect(select).not.toContain("samlAssertion");
+    expect(select).not.toContain("samlPrivateKey");
     expect(select).not.toContain("secretsCiphertext");
+  });
+
+  it("refuses an unusable signing key at save time, with the parser's own sentence", () => {
+    // A key that cannot sign would be sealed, then fail every exchange as an
+    // opaque 401 from SuccessFactors. Refused while the form is still open.
+    expect(ROUTE).toContain("parseSamlPrivateKey(v.samlPrivateKey)");
+    expect(ROUTE).toContain("SamlKeyError");
   });
 
   it("accepts a realistically long assertion", () => {

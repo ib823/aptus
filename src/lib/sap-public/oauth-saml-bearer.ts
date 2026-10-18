@@ -18,16 +18,33 @@
  * NO Prisma import, deliberately: tdd-connector is reachable from client
  * bundles through the product registry, and this module must stay inert there.
  */
+import { buildSignedSamlAssertion } from "@/lib/sap-public/saml-assertion";
 
 export interface SamlBearerCredentials {
   /** The SF API key registered under Admin Center → Manage OAuth2 Client Applications. */
   clientId: string | null | undefined;
   /** The SuccessFactors company identifier the token endpoint requires. */
   companyId: string | null | undefined;
-  /** A signed SAML assertion — taken from the IdP or SAP's generator, never signed here. */
-  samlAssertion: string | null | undefined;
+  /**
+   * A PRE-SIGNED assertion from an IdP or SAP's offline generator. The
+   * fallback: it expires (ten minutes by SAP's default) and then every exchange
+   * fails until someone pastes another. Ignored when `samlPrivateKey` is set.
+   */
+  samlAssertion?: string | null | undefined;
+  /**
+   * The registration's RSA private key. When set, every exchange signs a fresh
+   * assertion (saml-assertion.ts) — the durable configuration.
+   */
+  samlPrivateKey?: string | null | undefined;
+  /** The SuccessFactors user a signed assertion is issued for. Required with the key. */
+  samlUserId?: string | null | undefined;
   /** e.g. https://apiNN.successfactors.com/oauth/token */
   tokenUrl: string | null | undefined;
+}
+
+/** True when this configuration has CoreEdge sign each assertion. */
+export function signsOwnAssertion(c: Pick<SamlBearerCredentials, "samlPrivateKey">): boolean {
+  return Boolean(c.samlPrivateKey && c.samlPrivateKey.trim());
 }
 
 export interface SamlBearerToken {
@@ -43,11 +60,16 @@ export interface SamlBearerToken {
  * guessing game, and this one is being set up against a deadline.
  */
 export function missingSamlBearerFields(c: SamlBearerCredentials): string[] {
+  const signing = signsOwnAssertion(c);
   return [
     !c.tokenUrl && "oauthTokenUrl",
     !c.clientId && "clientId (the SuccessFactors API key)",
     !c.companyId && "companyId",
-    !c.samlAssertion && "samlAssertion",
+    // Either CoreEdge signs (key + the user it signs for) or a pre-signed
+    // assertion is supplied. Naming the pair when neither is present says
+    // which one to reach for.
+    signing && !c.samlUserId && "samlUserId (the SuccessFactors user the assertion is issued for)",
+    !signing && !c.samlAssertion && "samlPrivateKey + samlUserId (or a pre-signed samlAssertion)",
   ].filter((f): f is string => Boolean(f));
 }
 
@@ -75,6 +97,20 @@ export async function exchangeSamlBearerAssertion(
     throw new Error(`${label} is SAML bearer auth but missing ${missing.join(", ")}.`);
   }
 
+  /*
+   * A FRESH ASSERTION PER EXCHANGE when the key is held. Built before the
+   * request so a key that cannot sign fails here, with SamlKeyError's own
+   * sentence, rather than as an opaque 401 from SuccessFactors.
+   */
+  const assertion = signsOwnAssertion(c)
+    ? buildSignedSamlAssertion({
+        clientId: c.clientId!,
+        userId: c.samlUserId!,
+        tokenUrl: c.tokenUrl!,
+        privateKey: c.samlPrivateKey!,
+      })
+    : c.samlAssertion!;
+
   const fetchImpl = opts.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -92,7 +128,7 @@ export async function exchangeSamlBearerAssertion(
         grant_type: "urn:ietf:params:oauth:grant-type:saml2-bearer",
         client_id: c.clientId!,
         company_id: c.companyId!,
-        assertion: c.samlAssertion!,
+        assertion,
       }),
       signal: controller.signal,
     });
@@ -100,7 +136,10 @@ export async function exchangeSamlBearerAssertion(
     if (!res.ok || typeof json.access_token !== "string") {
       throw new Error(
         `SAML bearer token request failed for ${label}: HTTP ${res.status}. ` +
-          "An expired or unregistered assertion is the usual cause.",
+          (signsOwnAssertion(c)
+            ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
+              "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."
+            : "An expired or unregistered assertion is the usual cause."),
       );
     }
     const ttlMs =

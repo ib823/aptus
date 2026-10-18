@@ -823,12 +823,21 @@ async function fetchSamlBearerTokenFromEnv(prefix: string): Promise<string> {
   // Each variable is required by its OWN name, so a half-configured tenant
   // fails as "Missing required env var: SF_TDD_COMPANY_ID" rather than as a
   // generic 400 from SAP's token endpoint.
+  //
+  // SAML_PRIVATE_KEY, when set, has CoreEdge sign a fresh assertion per
+  // exchange and makes SAML_USER_ID required; otherwise SAML_ASSERTION — a
+  // pre-signed assertion, which expires — is. A key pasted into a hosting
+  // dashboard often arrives with its newlines as the two characters `\n`, so
+  // those are decoded here, on the env path only.
+  const privateKey = env(prefix, "SAML_PRIVATE_KEY")?.replace(/\\n/g, "\n");
   const { accessToken, ttlMs } = await exchangeSamlBearerAssertion(
     {
       tokenUrl: requiredEnv(prefix, "OAUTH_TOKEN_URL"),
       clientId: requiredEnv(prefix, "CLIENT_ID"),
       companyId: requiredEnv(prefix, "COMPANY_ID"),
-      samlAssertion: requiredEnv(prefix, "SAML_ASSERTION"),
+      ...(privateKey
+        ? { samlPrivateKey: privateKey, samlUserId: requiredEnv(prefix, "SAML_USER_ID") }
+        : { samlAssertion: requiredEnv(prefix, "SAML_ASSERTION") }),
     },
     `${prefix} tenant`,
     { timeoutMs: getRequestTimeoutMs(prefix) },
