@@ -42,7 +42,7 @@ import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
 } from "@/lib/sap-public/environment";
-import { parseSamlPrivateKey, SamlKeyError } from "@/lib/sap-public/saml-assertion";
+import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -161,7 +161,7 @@ const upsertSchema = z
      */
     samlPrivateKey: z.string().max(10000).optional(),
     /** The SuccessFactors user a signed assertion is issued for. */
-    samlUserId: z.string().max(255).optional(),
+    samlUserId: z.string().trim().max(255).optional(),
     clientId: z.string().max(200).optional(),
     clientSecret: z.string().max(500).optional(),
     /** API-key header auth (AD-12): the key, and the header it travels in (default `apikey`). */
@@ -198,6 +198,21 @@ const upsertSchema = z
       need("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
       need("companyId", "companyId is required for SAML bearer auth");
       need("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      /*
+       * WHAT THE ASSERTION CARRIES MUST BE XML. A control character in any of
+       * these makes every assertion a document no parser accepts, and the
+       * refusal would come back looking like a key or user problem. Refused
+       * here, where it was typed.
+       */
+      for (const field of ["clientId", "samlUserId", "oauthTokenUrl"] as const) {
+        if (v[field] && XML_ILLEGAL_CHARACTER.test(v[field])) {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: `${field} contains a control character, which a SAML assertion cannot carry. Type it again rather than pasting it.`,
+          });
+        }
+      }
       /*
        * EITHER COREEDGE SIGNS, OR AN ASSERTION IS PASTED. The key is the
        * durable choice — a pasted assertion expires, by SAP's default within

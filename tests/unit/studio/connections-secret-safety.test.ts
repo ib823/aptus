@@ -18,7 +18,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { publicSamlFailure, SamlBearerExchangeError } from "@/lib/sap-public/oauth-saml-bearer";
-import { SamlKeyError } from "@/lib/sap-public/saml-assertion";
+import { SamlAssertionInputError, SamlKeyError } from "@/lib/sap-public/saml-assertion";
 
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(path.resolve(ROOT, p), "utf8");
@@ -101,13 +101,14 @@ describe("the probe keeps secrets and hosts out of its result", () => {
     expect(catchBlock).not.toMatch(/detail:\s*err\b/);
   });
 
-  it("repeats a caught error only through publicSamlFailure, and only the two built to be shown", () => {
+  it("repeats a caught error only through publicSamlFailure, and only the three built to be shown", () => {
     /*
      * The one exception to the rule above, made explicit rather than slipped
-     * past the regex: a SuccessFactors refusal and an unusable signing key are
-     * the only diagnostics a first SuccessFactors test gets, and each is
-     * constructed to be safe. Every other error — including one whose message
-     * carries a host, the case the rule exists for — must come back null.
+     * past the regex: a SuccessFactors refusal, an unusable signing key and a
+     * value the assertion cannot carry are the only diagnostics a first
+     * SuccessFactors test gets, and each is constructed to be safe. Every
+     * other error — including one whose message carries a host, the case the
+     * rule exists for — must come back null.
      */
     const src = code(read(HEALTH));
     expect(src.slice(src.indexOf("} catch (err) {"))).toContain("publicSamlFailure(err)");
@@ -123,6 +124,7 @@ describe("the probe keeps secrets and hosts out of its result", () => {
       detail: "SuccessFactors refused the token request (HTTP 401).",
     });
     expect(publicSamlFailure(new SamlKeyError("it is 1024-bit RSA."))?.detail).toMatch(/1024-bit RSA/);
+    expect(publicSamlFailure(new SamlAssertionInputError("the user id is missing."))?.detail).toMatch(/user id is missing/);
   });
 });
 

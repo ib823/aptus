@@ -118,6 +118,33 @@ describe("T3 · the OAuth token is cached across calls", () => {
     expect(f).toHaveBeenCalledTimes(2);
   });
 
+  it("a RE-SAVE is never answered from the cache — same id, new credentials, new exchange", async () => {
+    /*
+     * Saving under an existing key updates the row in place, so the id does not
+     * change. Keyed by id alone, the old token went on being served for its
+     * whole life (about a day on SuccessFactors), and a Test after a rotation
+     * passed without the new credentials ever being used.
+     */
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce(tokenRes("tok-old", 3600))
+      .mockResolvedValueOnce(tokenRes("tok-new-secret", 3600))
+      .mockResolvedValueOnce(tokenRes("tok-new-host", 3600));
+    const fetchImpl = f as unknown as typeof fetch;
+    const before = oauthConn("same-id");
+    expect(await __fetchOAuthTokenForTest(before, fetchImpl, 0)).toBe("tok-old");
+    // Same row, read again unchanged: still cached.
+    expect(await __fetchOAuthTokenForTest(oauthConn("same-id"), fetchImpl, 0)).toBe("tok-old");
+
+    const rotated = { ...before, secrets: { ...before.secrets, clientSecret: "rotated" } };
+    expect(await __fetchOAuthTokenForTest(rotated, fetchImpl, 0)).toBe("tok-new-secret");
+
+    // The old token must not travel to a new host, either.
+    const moved = { ...rotated, baseUrl: "https://elsewhere.example" };
+    expect(await __fetchOAuthTokenForTest(moved, fetchImpl, 0)).toBe("tok-new-host");
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
   it("bounds the token request — a hung endpoint aborts", async () => {
     const f = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       expect(init.signal).toBeInstanceOf(AbortSignal);

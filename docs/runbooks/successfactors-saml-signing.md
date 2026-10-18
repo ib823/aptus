@@ -87,21 +87,37 @@ Notes on the private key:
 - A key that really is passphrase-protected is refused, with a sentence
   saying so.
 
+- A key copied out of a `.env` file, with its line breaks written as `\n`, is
+  read as it is.
+- When the file holds several certificates, for example a chain that lists the
+  issuing CA first, the key must belong to one of them.
+
+The user id is saved trimmed. A value with a control character in it (a
+vertical tab pasted from a spreadsheet, for instance) is refused when you save.
+
 The key is sealed (AES-256-GCM, bound to this connection) and is never shown
 again. To rotate it, save the connection again with the new key.
 
-Then press **Test**.
+Then press **Test**. A re-save never reuses a token minted from the old
+values: changing the key, user id, API key, company id, token URL or base URL
+makes the next call sign and exchange afresh. So the Test after a rotation
+really uses the new key.
 
 ## 3 · Reading the Test result
 
-When SuccessFactors refuses, the Test result quotes its own message, with long
-tokens removed. These messages are confirmed in SAP's documentation:
+When SuccessFactors refuses, the Test result quotes its own message. Before it
+is shown, the API key, company id and user id become `[API key]`,
+`[company id]` and `[user id]`, links and host names are removed, and long
+base64-looking runs are replaced. Error codes such as
+`OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION` are kept. These messages are
+confirmed in SAP's documentation:
 
 | SuccessFactors says | Usually means |
 |---|---|
 | `Unable to verify the signature of the SAML assertion` | The key does not belong to the certificate registered for this API key. |
 | `Unable to validate "Recipient"` | The token URL is not the API host's `/oauth/token`. |
 | `Unable to validate "api_key"` | The API key field does not match the registered application. |
+| `API key "[API key]" does not exist in company "[company id]"` | The API key or the company id is wrong. |
 | `Login failed - invalid user` | The user ID is unknown, inactive or not allowed. Check that you used the user ID, not the username. |
 | `OAUTH2_ERROR_SAML_ASSERTION_EXPIRED` | Clock trouble. CoreEdge backdates NotBefore by ten minutes, as SAP's tool does. |
 | Company does not exist / is inactive | The company id is wrong. |
@@ -125,7 +141,7 @@ The deployment's own SuccessFactors tenant (`SF_TDD_*`, used by
 ```
 SF_TDD_AUTH_TYPE="oauth-saml-bearer"
 SF_TDD_SAML_PRIVATE_KEY="<Certificate.pem or private.pem>"   # "\n" escapes are decoded
-SF_TDD_SAML_USER_ID="<user id>"
+SF_TDD_SAML_USER_ID="<user id>"                              # trimmed
 ```
 
 ## How the signer is verified

@@ -775,6 +775,10 @@ function ConnectionForm() {
                 value={samlAssertion}
                 onChange={(e) => setSamlAssertion(e.target.value)}
                 rows={4}
+                // A bearer credential until it expires: no autofill, and no
+                // enhanced spellcheck sending it to a vendor's servers.
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="Paste the signed assertion"
                 style={{ ...input, fontFamily: "var(--font-mono, monospace)", fontSize: 11 }}
               />

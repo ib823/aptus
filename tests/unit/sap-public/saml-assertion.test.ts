@@ -34,6 +34,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   exchangeSamlBearerAssertion,
   missingSamlBearerFields,
+  publicSamlFailure,
   sanitizeSuccessFactorsError,
   SamlBearerExchangeError,
 } from "@/lib/sap-public/oauth-saml-bearer";
@@ -42,6 +43,7 @@ import {
   buildSignedSamlAssertionXml,
   canonicalUnsignedAssertionForTest,
   parseSamlPrivateKey,
+  SamlAssertionInputError,
   SamlKeyError,
 } from "@/lib/sap-public/saml-assertion";
 
@@ -197,6 +199,17 @@ describe("the key SuccessFactors itself issues", () => {
     expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
   });
 
+  it("reads a key whose line breaks arrive as the two characters \\n — on every path, not only env", () => {
+    // What a key looks like copied out of a .env file or a hosting dashboard.
+    const escaped = (t: string) => t.replace(/\r?\n/g, "\\n");
+    for (const file of [PKCS8_PEM, PKCS1_PEM, pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER))]) {
+      expect(escaped(file)).not.toContain("\n");
+      expect(createPublicKey(parseSamlPrivateKey(escaped(file))).export({ type: "spki", format: "pem" })).toBe(
+        publicKey.export({ type: "spki", format: "pem" }),
+      );
+    }
+  });
+
   it("still refuses a key that genuinely needs a passphrase — legacy PEM included", () => {
     const legacy = privateKey.export({ type: "pkcs1", format: "pem", cipher: "aes-256-cbc", passphrase: "x" }) as string;
     expect(() => parseSamlPrivateKey(legacy)).toThrow(/passphrase-encrypted/);
@@ -216,6 +229,21 @@ describe.skipIf(!openssl)("the pair is checked when the file carries the certifi
   it("refuses a key that does not belong to the certificate beside it — the 401 said before it happens", () => {
     const file = pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER)) + pem("CERTIFICATE", otherCert.toString("base64"));
     expect(() => parseSamlPrivateKey(file)).toThrow(/does not belong to the certificate/);
+  });
+
+  it("accepts a chain that lists the issuing CA before the key's own certificate", () => {
+    // A PFX export or CA bundle: comparing with the first certificate alone
+    // refused a correct key with no way round it.
+    const ca = pem("CERTIFICATE", otherCert.toString("base64"));
+    const leaf = pem("CERTIFICATE", ownCert.toString("base64"));
+    expect(parseSamlPrivateKey(ca + PKCS8_PEM + leaf).asymmetricKeyType).toBe("rsa");
+    expect(parseSamlPrivateKey(PKCS8_PEM + leaf + ca).asymmetricKeyType).toBe("rsa");
+    // None of several readable certificates matching is still a refusal.
+    expect(() => parseSamlPrivateKey(ca + PKCS8_PEM + ca)).toThrow(/does not belong to the certificate/);
+  });
+
+  it("does not refuse over a certificate block it cannot read", () => {
+    expect(parseSamlPrivateKey(PKCS8_PEM + pem("CERTIFICATE", "bm90IGEgY2VydGlmaWNhdGU=")).asymmetricKeyType).toBe("rsa");
   });
 });
 
@@ -264,9 +292,50 @@ describe("the assertion's contents", () => {
   });
 
   it("refuses to build one without a user, an API key or a token URL", () => {
-    for (const field of ["clientId", "userId", "tokenUrl"] as const) {
-      expect(() => buildSignedSamlAssertionXml({ ...BASE, [field]: " ", privateKey: PKCS8_PEM })).toThrow(field);
+    for (const [field, named] of [
+      ["clientId", "the API key"],
+      ["userId", "the user id"],
+      ["tokenUrl", "the token URL"],
+    ] as const) {
+      expect(() => buildSignedSamlAssertionXml({ ...BASE, [field]: " ", privateKey: PKCS8_PEM })).toThrow(
+        new SamlAssertionInputError(`${named} is missing.`),
+      );
     }
+  });
+
+  it("trims the user id: whitespace in NameID is a user SuccessFactors does not have", () => {
+    const padded = buildSignedSamlAssertionXml({ ...BASE, userId: " sfadmin\n", privateKey: PKCS8_PEM, now: NOW });
+    expect(padded).toMatch(/">sfadmin<\/saml2:NameID>/);
+    expect(verifyLikeAVerifier(padded, publicKey)).toEqual({ digestOk: true, signatureOk: true });
+  });
+
+  it.each(["\u0000", "\u0001", "\u000b", "\u000c", "\u001f", "\ufffe", "\uffff"])(
+    "refuses a character XML 1.0 cannot carry (%j), naming the field and never the value",
+    (bad) => {
+      for (const [field, named] of [
+        ["clientId", "the API key"],
+        ["userId", "the user id"],
+        ["tokenUrl", "the token URL"],
+      ] as const) {
+        const value = `${BASE[field]}${bad}secretish`;
+        let caught: unknown;
+        try {
+          buildSignedSamlAssertionXml({ ...BASE, [field]: value, privateKey: PKCS8_PEM });
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(SamlAssertionInputError);
+        expect((caught as Error).message).toContain(`${named} contains a control character`);
+        expect((caught as Error).message).not.toContain("secretish");
+        // The Test result says it, rather than "could not be established".
+        expect(publicSamlFailure(caught)?.detail).toBe((caught as Error).message);
+      }
+    },
+  );
+
+  it("still accepts tab, line feed and carriage return, which XML can carry", () => {
+    const xml = buildSignedSamlAssertionXml({ ...BASE, clientId: "a\tb\rc\nd", privateKey: PKCS8_PEM, now: NOW });
+    expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
   });
 });
 
@@ -361,6 +430,8 @@ describe.skipIf(!xmlsec1)("xmlsec1, the reference XML-DSig implementation, accep
       verify(buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid", sessionIndex: "_fixedsession" })),
     ).toBe(true);
     expect(verify(buildSignedSamlAssertionXml({ ...BASE, userId: 'ops&"<qa>', privateKey: PKCS8_PEM }))).toBe(true);
+    expect(verify(buildSignedSamlAssertionXml({ ...BASE, userId: " sfadmin\n", privateKey: PKCS8_PEM }))).toBe(true);
+    expect(verify(buildSignedSamlAssertionXml({ ...BASE, clientId: "a\tb\rc\nd", privateKey: PKCS8_PEM }))).toBe(true);
   });
 
   it("rejects a tampered copy — the control that it can say no", () => {
@@ -415,6 +486,11 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     ]);
     expect(missingSamlBearerFields({ ...BASE, companyId: "c" })).toEqual([
       "samlPrivateKey + samlUserId (or a pre-signed samlAssertion)",
+    ]);
+    // Whitespace is absent, not present: " " passes a truthiness check and
+    // is then refused by SuccessFactors as an unknown user.
+    expect(missingSamlBearerFields({ ...BASE, companyId: "c", samlPrivateKey: PKCS8_PEM, samlUserId: "  " })).toEqual([
+      "samlUserId (the SuccessFactors user the assertion is issued for)",
     ]);
   });
 
@@ -472,7 +548,66 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     expect(sanitizeSuccessFactorsError("  \n ")).toBeNull();
     expect(sanitizeSuccessFactorsError("a\n\n b")).toBe("a b");
     expect(sanitizeSuccessFactorsError(`x ${"Q".repeat(50)} y`)).toBe("x […] y");
+    expect(sanitizeSuccessFactorsError(`x ${"aB3+/9zQ".repeat(7)} y`)).toBe("x […] y");
+    expect(sanitizeSuccessFactorsError(`x ${"aB3_-9zQ".repeat(7)} y`)).toBe("x […] y");
     expect(sanitizeSuccessFactorsError("z".repeat(10) + " " + "w ".repeat(400))!.length).toBeLessThanOrEqual(300);
+  });
+
+  it("keeps SuccessFactors' own error codes, which name the failure class", () => {
+    expect(sanitizeSuccessFactorsError("OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION")).toBe(
+      "OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION",
+    );
+    expect(
+      sanitizeSuccessFactorsError("OAUTH2_ERROR_UNABLE_TO_COLLECT_SAML_ASSERTION: The SAML assertion is not Base64 encoded"),
+    ).toBe("OAUTH2_ERROR_UNABLE_TO_COLLECT_SAML_ASSERTION: The SAML assertion is not Base64 encoded");
+  });
+
+  it("carries no link, host or markup — the detail reaches an email and people not shown where it points", () => {
+    const said = sanitizeSuccessFactorsError(
+      'Re-authenticate <a href="https://evil.example/login">here</a>, or see help.sap.com/docs or http://x.ondemand.com/a?b=c',
+    )!;
+    expect(said).not.toMatch(/https?:|evil\.example|help\.sap\.com|ondemand\.com|[<>]/);
+    expect(said).toContain("[link]");
+    expect(said).toContain("[host]");
+    // A sentence missing its space is not a host name.
+    expect(sanitizeSuccessFactorsError("Unable to verify the SAML assertion.Please retry")).toBe(
+      "Unable to verify the SAML assertion.Please retry",
+    );
+  });
+
+  it("replaces the sealed API key, company id and user id SuccessFactors echoes back", () => {
+    const sealed = { clientId: BASE.clientId, companyId: "acmeT1", samlUserId: "sfadmin" };
+    expect(
+      sanitizeSuccessFactorsError(`API key "${BASE.clientId}" does not exist in company "ACMET1". User SFAdmin unmapped.`, sealed),
+    ).toBe('API key "[API key]" does not exist in company "[company id]". User [user id] unmapped.');
+    // A company id inside the API key cannot leave half of the key behind.
+    expect(
+      sanitizeSuccessFactorsError("key abcdefgh0123 refused", { clientId: "abcdefgh0123", companyId: "defgh" }),
+    ).toBe("key [API key] refused");
+    // Too short to replace without mangling ordinary words.
+    expect(sanitizeSuccessFactorsError("company c is inactive", { companyId: "c" })).toBe("company c is inactive");
+  });
+
+  it("never repeats the sealed identifiers through SuccessFactors' refusal — in the detail or the message", async () => {
+    const creds = { ...BASE, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" };
+    for (const errorMessage of [
+      `API key "${BASE.clientId}" does not exist in company "acmeT1"`,
+      `API key "${BASE.clientId}" has been disabled in company "acmeT1"`,
+      "Unable to map sfadmin to a valid BizX User ID",
+    ]) {
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ errorMessage }) });
+      const error = await exchangeSamlBearerAssertion(creds, "Connection zvcsf", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        timeoutMs: 5000,
+      }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(SamlBearerExchangeError);
+      const e = error as SamlBearerExchangeError;
+      for (const sealed of [BASE.clientId, "acmeT1", "sfadmin"]) {
+        expect(e.publicDetail).not.toContain(sealed);
+        expect(e.message).not.toContain(sealed);
+      }
+      expect(e.publicDetail).toMatch(/\[(API key|company id|user id)\]/);
+    }
   });
 
   it("the base64 form is the XML form, encoded", () => {
@@ -530,5 +665,50 @@ describe("the connection test shows SuccessFactors' words, not a generic failure
     expect(result.detail).toContain('Unable to validate "Recipient" in the SAML assertion');
     expect(result.detail).not.toContain(BASE.tokenUrl);
     expect(metadataFetch).not.toHaveBeenCalled();
+  });
+
+  it("after a re-save under the same key, Test signs with the NEW key — not the cached token", async () => {
+    /*
+     * The runbook's rotation step is "save the connection again with the new
+     * key, then press Test". A re-save keeps the row id, and the cache keyed by
+     * id alone answered that Test with the old credentials' token for about a
+     * day, so a key that did not match the certificate still showed OK.
+     */
+    const { probeConnection } = await import("@/lib/studio/connection-health");
+    const { clearOAuthTokenCache } = await import("@/lib/sap-public/connection-resolver");
+    clearOAuthTokenCache();
+    const tokenFetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, json: async () => ({ access_token: "tok", expires_in: 86399 }) });
+    vi.stubGlobal("fetch", tokenFetch);
+    const metadataFetch = vi.fn().mockResolvedValue({ status: 200 });
+    const conn = {
+      source: "db" as const,
+      id: "conn_zvcsf",
+      organizationId: "org_a",
+      product: "successfactors",
+      key: "zvcsf",
+      label: "SuccessFactors",
+      baseUrl: "https://api4.successfactors.com",
+      authType: "oauth-saml-bearer" as const,
+      secrets: { clientId: BASE.clientId, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      oauthTokenUrl: BASE.tokenUrl,
+      writeEnabled: false,
+      apiPath: null,
+      timeoutMs: null,
+      environment: "DEV" as const,
+      client: null,
+    };
+    await probeConnection(conn, metadataFetch as unknown as typeof fetch);
+    await probeConnection(conn, metadataFetch as unknown as typeof fetch);
+    expect(tokenFetch).toHaveBeenCalledTimes(1);
+
+    const newKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+    const rotated = { ...conn, secrets: { ...conn.secrets, samlPrivateKey: newKey.export({ type: "pkcs8", format: "pem" }) as string } };
+    await probeConnection(rotated, metadataFetch as unknown as typeof fetch);
+    expect(tokenFetch).toHaveBeenCalledTimes(2);
+    const sent = new URLSearchParams(String((tokenFetch.mock.calls[1]![1] as RequestInit).body)).get("assertion")!;
+    const xml = Buffer.from(sent, "base64").toString("utf8");
+    expect(verifyLikeAVerifier(xml, createPublicKey(newKey))).toEqual({ digestOk: true, signatureOk: true });
   });
 });

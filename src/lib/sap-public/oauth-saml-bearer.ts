@@ -18,7 +18,11 @@
  * NO Prisma import, deliberately: tdd-connector is reachable from client
  * bundles through the product registry, and this module must stay inert there.
  */
-import { buildSignedSamlAssertion, SamlKeyError } from "@/lib/sap-public/saml-assertion";
+import {
+  buildSignedSamlAssertion,
+  SamlAssertionInputError,
+  SamlKeyError,
+} from "@/lib/sap-public/saml-assertion";
 
 export interface SamlBearerCredentials {
   /** The SF API key registered under Admin Center → Manage OAuth2 Client Applications. */
@@ -61,15 +65,18 @@ export interface SamlBearerToken {
  */
 export function missingSamlBearerFields(c: SamlBearerCredentials): string[] {
   const signing = signsOwnAssertion(c);
+  // Whitespace is absent: a user id of " " passes a truthiness check and is
+  // then refused by SuccessFactors as an unknown user.
+  const blank = (v: string | null | undefined) => !v || !v.trim();
   return [
-    !c.tokenUrl && "oauthTokenUrl",
-    !c.clientId && "clientId (the SuccessFactors API key)",
-    !c.companyId && "companyId",
+    blank(c.tokenUrl) && "oauthTokenUrl",
+    blank(c.clientId) && "clientId (the SuccessFactors API key)",
+    blank(c.companyId) && "companyId",
     // Either CoreEdge signs (key + the user it signs for) or a pre-signed
     // assertion is supplied. Naming the pair when neither is present says
     // which one to reach for.
-    signing && !c.samlUserId && "samlUserId (the SuccessFactors user the assertion is issued for)",
-    !signing && !c.samlAssertion && "samlPrivateKey + samlUserId (or a pre-signed samlAssertion)",
+    signing && blank(c.samlUserId) && "samlUserId (the SuccessFactors user the assertion is issued for)",
+    !signing && blank(c.samlAssertion) && "samlPrivateKey + samlUserId (or a pre-signed samlAssertion)",
   ].filter((f): f is string => Boolean(f));
 }
 
@@ -90,11 +97,12 @@ interface OAuthTokenResponse {
  * tenant that sentence is the only diagnostic there is. A generic "it failed"
  * would turn one configuration fix into a support ticket.
  *
- * WHY IT IS SAFE. It never contains the assertion or the key; it can contain
- * the API key and company id, which are identifiers the administrator typed,
- * not secrets. It is still bounded: whitespace collapsed, any base64-looking
- * run over 40 characters replaced, and 300 characters at most. `publicDetail`
- * is the sentence a screen may show; it never carries a URL or a host.
+ * WHY IT IS SAFE. It never contains the assertion or the key. SuccessFactors
+ * does echo request values back (`API key "…" does not exist in company "…"`),
+ * and the API key, company id and user id are sealed like every other
+ * credential here, so each is replaced by a placeholder before the sentence is
+ * kept. The rest is bounded by `sanitizeSuccessFactorsError`. `publicDetail`
+ * is the sentence a screen may show; it never carries a URL, a host or markup.
  */
 export class SamlBearerExchangeError extends Error {
   readonly code = "SAML_BEARER_REJECTED";
@@ -112,12 +120,13 @@ export class SamlBearerExchangeError extends Error {
  * The ONLY caught errors whose words may reach a client-visible detail.
  *
  * A caught error in general must never be repeated to a client: a fetch error
- * stringifies with the host, and on an OAuth path with the request. These two
- * are the exceptions because each is constructed to be shown —
+ * stringifies with the host, and on an OAuth path with the request. These
+ * three are the exceptions because each is constructed to be shown —
  * SamlBearerExchangeError's `publicDetail` (SuccessFactors' sanitised refusal,
- * no URL) and SamlKeyError's message (fixed sentences, never key material) —
- * and each is the only diagnostic a first SuccessFactors test gets. Anything
- * else returns null, and the caller keeps its generic sentence.
+ * no URL), and the messages of SamlKeyError and SamlAssertionInputError (fixed
+ * sentences, never key material or a field's value) — and each is the only
+ * diagnostic a first SuccessFactors test gets. Anything else returns null, and
+ * the caller keeps its generic sentence.
  */
 export function publicSamlFailure(
   err: unknown,
@@ -129,16 +138,58 @@ export function publicSamlFailure(
       detail: err.publicDetail,
     };
   }
-  if (err instanceof SamlKeyError) return { status: "ERROR", httpStatus: null, detail: err.message };
+  if (err instanceof SamlKeyError || err instanceof SamlAssertionInputError) {
+    return { status: "ERROR", httpStatus: null, detail: err.message };
+  }
   return null;
 }
 
-/** Bound SuccessFactors' errorMessage before it goes anywhere a person reads. */
-export function sanitizeSuccessFactorsError(raw: unknown): string | null {
+/** The sealed identifiers SuccessFactors may echo, and what replaces each. */
+export type SealedIdentifiers = Partial<Pick<SamlBearerCredentials, "clientId" | "companyId" | "samlUserId">>;
+
+/** Shorter than this, a value is replaced only at the cost of mangling ordinary words. */
+const MIN_REDACTED_LENGTH = 3;
+
+/**
+ * Bound SuccessFactors' errorMessage before it goes anywhere a person reads.
+ *
+ * In order: the sealed identifiers SuccessFactors echoes become placeholders
+ * (longest first, so one inside another cannot leave half of it); whitespace
+ * collapses; URLs and host names go, since the detail reaches people who are
+ * not shown where a connection points; `<` and `>` go, so it cannot carry
+ * markup into the alert email; and any base64-looking run over 40 characters
+ * is replaced — except an upper-case, underscore-separated identifier such as
+ * OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION, which is SuccessFactors naming
+ * the failure, not a secret. 300 characters at most.
+ */
+export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifiers = {}): string | null {
   if (typeof raw !== "string") return null;
-  const cleaned = raw
+  const placeholders = new Map<string, string>();
+  for (const [value, label] of [
+    [sealed.clientId, "[API key]"],
+    [sealed.companyId, "[company id]"],
+    [sealed.samlUserId, "[user id]"],
+  ] as const) {
+    const v = value?.trim().toLowerCase() ?? "";
+    if (v.length >= MIN_REDACTED_LENGTH && !placeholders.has(v)) placeholders.set(v, label);
+  }
+  // One pass, longest alternative first: a placeholder already written is
+  // never searched again, and a value inside a longer one cannot split it.
+  const alternatives = [...placeholders.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const text =
+    alternatives.length > 0
+      ? raw.replace(new RegExp(alternatives.join("|"), "gi"), (m) => placeholders.get(m.toLowerCase()) ?? "[…]")
+      : raw;
+  const cleaned = text
     .replace(/\s+/g, " ")
-    .replace(/[A-Za-z0-9+/=_-]{41,}/g, "[…]")
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, "[link]")
+    // Lower case only, as host names are written: "assertion.Please" — a
+    // sentence missing its space — is SuccessFactors' words, not a host.
+    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/g, "[host]")
+    .replace(/[<>]/g, "")
+    .replace(/[A-Za-z0-9+/=_-]{41,}/g, (run) => (/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(run) ? run : "[…]"))
     .trim();
   if (!cleaned) return null;
   return cleaned.length > 300 ? `${cleaned.slice(0, 299)}…` : cleaned;
@@ -199,7 +250,7 @@ export async function exchangeSamlBearerAssertion(
     });
     const json = (await res.json().catch(() => ({}))) as OAuthTokenResponse;
     if (!res.ok || typeof json.access_token !== "string") {
-      const said = sanitizeSuccessFactorsError(json.errorMessage);
+      const said = sanitizeSuccessFactorsError(json.errorMessage, c);
       const hint = signsOwnAssertion(c)
         ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
           "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."

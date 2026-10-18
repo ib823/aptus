@@ -269,26 +269,35 @@ function loadKeyDer(der: Buffer): KeyObject {
 }
 
 /**
- * Refuse a key that does not belong to the certificate in the same file.
+ * Refuse a key that belongs to none of the certificates in the same file.
  *
  * SuccessFactors verifies every assertion against the certificate registered
  * for the API key — KeyInfo is ignored — so a mismatched pair fails as a 401
  * "unable to verify the signature" on the first exchange: the most common
  * production failure of this flow. When the pasted file carries the
- * certificate, that 401 can be said now instead. An unreadable certificate
- * block is not treated as a refusal: the check is a courtesy, and the key may
- * still be the right one.
+ * certificate, that 401 can be said now instead.
+ *
+ * ANY certificate may be the key's: a chain or a PFX export can list the
+ * issuing CA before the leaf, and comparing with the first block alone refused
+ * a correct key with no way round it. An unreadable certificate block is not
+ * treated as a refusal either: the check is a courtesy, and the key may still
+ * be the right one. So it refuses only when at least one certificate was read
+ * and none of them matched.
  */
-function assertKeyMatchesCertificate(key: KeyObject, certDer: Buffer): void {
-  let cert: X509Certificate;
-  try {
-    cert = new X509Certificate(certDer);
-  } catch {
-    return;
-  }
+function assertKeyMatchesACertificate(key: KeyObject, certDers: Buffer[]): void {
   const fromKey = createPublicKey(key).export({ type: "spki", format: "der" });
-  const fromCert = cert.publicKey.export({ type: "spki", format: "der" });
-  if (!fromKey.equals(fromCert)) {
+  let readable = 0;
+  for (const der of certDers) {
+    let cert: X509Certificate;
+    try {
+      cert = new X509Certificate(der);
+    } catch {
+      continue;
+    }
+    readable++;
+    if (fromKey.equals(cert.publicKey.export({ type: "spki", format: "der" }))) return;
+  }
+  if (readable > 0) {
     throw new SamlKeyError(
       "it does not belong to the certificate in the same file, so SuccessFactors would refuse every assertion it signs.",
     );
@@ -300,18 +309,23 @@ function assertKeyMatchesCertificate(key: KeyObject, certDer: Buffer): void {
  *
  * - SuccessFactors' Certificate.pem, as downloaded — its misleadingly
  *   labelled ENCRYPTED PRIVATE KEY block and its certificate, which is used to
- *   check the pair (see `unwrapDer`, `assertKeyMatchesCertificate`);
+ *   check the pair (see `unwrapDer`, `assertKeyMatchesACertificate`);
  * - the one-line blob from that block, which is what SAP's offline tool's
  *   `privateKey` property takes;
  * - PEM PKCS#8 (`BEGIN PRIVATE KEY`) or PKCS#1 (`BEGIN RSA PRIVATE KEY`), for a
  *   key pair the customer generated and registered themselves — the path SAP
- *   recommends — and headerless base64 of either.
+ *   recommends — and headerless base64 of either;
+ * - any of these with its line breaks written as the two characters `\n`.
  *
  * Refused: a key that genuinely needs a passphrase, and any key that is not
  * RSA of at least 2048 bits, which is what RSA-SHA256 signing requires.
  */
 export function parseSamlPrivateKey(raw: string): KeyObject {
-  const text = raw.trim();
+  // A key copied out of a .env file or a hosting dashboard often carries its
+  // line breaks as the two characters `\n`. Base64 and PEM never contain a
+  // backslash, so decoding them is safe — and it is done here, for every
+  // caller, so the Studio form accepts what the env path accepts.
+  const text = raw.replace(/\\r\\n|\\n|\\r/g, "\n").trim();
   if (!text) throw new SamlKeyError("no key was supplied.");
 
   let key: KeyObject;
@@ -328,8 +342,10 @@ export function parseSamlPrivateKey(raw: string): KeyObject {
       );
     }
     key = loadKeyDer(unwrapDer(keyBlock.body));
-    const certBlock = blocks.find((b) => b.label === "CERTIFICATE");
-    if (certBlock) assertKeyMatchesCertificate(key, unwrapDer(certBlock.body));
+    assertKeyMatchesACertificate(
+      key,
+      blocks.filter((b) => b.label === "CERTIFICATE").map((b) => unwrapDer(b.body)),
+    );
   } else if (text.includes("-----BEGIN")) {
     throw new SamlKeyError("the PEM text is incomplete — a BEGIN line without its matching END line.");
   } else {
@@ -347,6 +363,29 @@ export function parseSamlPrivateKey(raw: string): KeyObject {
 /* ─────────────────────────────────────────────────────────────────────────────
  * The assertion
  * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * A value the assertion cannot carry, said without repeating it.
+ *
+ * A field problem is a configuration fix, so it is named — publicSamlFailure
+ * lets this sentence through to the Test result — and the value is not echoed.
+ */
+export class SamlAssertionInputError extends Error {
+  readonly code = "SAML_ASSERTION_INPUT_INVALID";
+  constructor(reason: string) {
+    super(`The SuccessFactors assertion cannot be built: ${reason}`);
+    this.name = "SamlAssertionInputError";
+  }
+}
+
+/**
+ * Characters XML 1.0 forbids outright: C0 controls other than tab, line feed
+ * and carriage return, and U+FFFE / U+FFFF. Escaping cannot carry them — a
+ * character reference such as `&#x1;` is just as illegal — so a value holding
+ * one would make every assertion a document no parser accepts. A vertical tab
+ * pasted from a spreadsheet cell is the realistic way one arrives.
+ */
+export const XML_ILLEGAL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/;
 
 export interface SamlAssertionInput {
   /** The SuccessFactors API key — the OAuth client id. */
@@ -449,12 +488,20 @@ function signedInfoTree(id: string, digest: string): El {
  * step; callers that send it want `buildSignedSamlAssertion`.
  */
 export function buildSignedSamlAssertionXml(input: SamlAssertionInput): string {
+  // The user id is trimmed — surrounding whitespace in NameID is a user no
+  // SuccessFactors tenant has, refused as "invalid user" — and checked as sent.
+  const userId = input.userId.trim();
   for (const [field, value] of [
-    ["clientId", input.clientId],
-    ["userId", input.userId],
-    ["tokenUrl", input.tokenUrl],
+    ["the API key", input.clientId],
+    ["the user id", userId],
+    ["the token URL", input.tokenUrl],
   ] as const) {
-    if (!value || !value.trim()) throw new Error(`A SuccessFactors assertion needs ${field}.`);
+    if (!value || !value.trim()) throw new SamlAssertionInputError(`${field} is missing.`);
+    if (XML_ILLEGAL_CHARACTER.test(value)) {
+      throw new SamlAssertionInputError(
+        `${field} contains a control character, which XML cannot carry. Type it again rather than pasting it.`,
+      );
+    }
   }
   const key = typeof input.privateKey === "string" ? parseSamlPrivateKey(input.privateKey) : input.privateKey;
   const id = input.id ?? newSamlId();
@@ -466,7 +513,7 @@ export function buildSignedSamlAssertionXml(input: SamlAssertionInput): string {
    * a second. With milliseconds they never agree. xmlsec1 caught it as "data
    * and digest do not match"; the digest must describe the bytes sent.
    */
-  const at: SamlAssertionInput = { ...input, now: input.now ?? new Date() };
+  const at: SamlAssertionInput = { ...input, userId, now: input.now ?? new Date() };
 
   // 1 · Digest the assertion WITHOUT its signature: the enveloped-signature
   //     transform removes it before the verifier canonicalises.

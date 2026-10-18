@@ -162,8 +162,9 @@ describe("the env tenant can be configured for it", () => {
 describe("it fails legibly, and never leaks the assertion", () => {
   it("names each missing field rather than saying 'oauth is misconfigured'", () => {
     const validator = EXCHANGE.slice(EXCHANGE.indexOf("export function missingSamlBearerFields"));
+    // Wider than it was: the validator now explains why whitespace is absent.
     for (const field of ["oauthTokenUrl", "clientId", "companyId", "samlAssertion"]) {
-      expect(validator.slice(0, 600), `${field} must be named when missing`).toContain(field);
+      expect(validator.slice(0, 1200), `${field} must be named when missing`).toContain(field);
     }
   });
 

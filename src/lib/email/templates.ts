@@ -11,7 +11,7 @@ const BRAND_NAME = "ABeam Workbench";
  * arbitrary content (phishing links, spoofed buttons) into the recipient's
  * inbox. System-generated URLs are exempt (they are not user-authored).
  */
-function esc(value: string): string {
+export function esc(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
