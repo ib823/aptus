@@ -745,19 +745,21 @@ function ConnectionForm() {
               <Label text="SuccessFactors user id">
                 <input value={samlUserId} onChange={(e) => setSamlUserId(e.target.value)} autoComplete="off" style={input} />
               </Label>
-              <Label text="Private key">
-                {/* The key from registering this API key under Admin Center →
-                    Manage OAuth2 Client Applications (Generate X.509
-                    Certificate). PEM or headerless base64. Sealed like every
-                    other secret and never shown again; the route refuses one
-                    that cannot sign before it is stored. */}
+              <Label text="Private key — paste the whole Certificate.pem">
+                {/* What Admin Center → Manage OAuth2 Client Applications →
+                    Generate X.509 Certificate downloads: its key block (labelled
+                    ENCRYPTED, though it is not) and its certificate, which is
+                    used to check the pair before saving. A PEM key the customer
+                    generated and registered themselves works too. Sealed like
+                    every other secret and never shown again; the route refuses
+                    one that cannot sign before it is stored. */}
                 <textarea
                   value={samlPrivateKey}
                   onChange={(e) => setSamlPrivateKey(e.target.value)}
                   rows={4}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="-----BEGIN PRIVATE KEY----- …"
+                  placeholder="-----BEGIN ENCRYPTED PRIVATE KEY----- … -----BEGIN CERTIFICATE----- …"
                   style={{ ...input, fontFamily: "var(--font-mono, monospace)", fontSize: 11 }}
                 />
               </Label>

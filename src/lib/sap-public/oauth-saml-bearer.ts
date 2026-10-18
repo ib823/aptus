@@ -18,7 +18,7 @@
  * NO Prisma import, deliberately: tdd-connector is reachable from client
  * bundles through the product registry, and this module must stay inert there.
  */
-import { buildSignedSamlAssertion } from "@/lib/sap-public/saml-assertion";
+import { buildSignedSamlAssertion, SamlKeyError } from "@/lib/sap-public/saml-assertion";
 
 export interface SamlBearerCredentials {
   /** The SF API key registered under Admin Center → Manage OAuth2 Client Applications. */
@@ -77,6 +77,71 @@ interface OAuthTokenResponse {
   access_token?: string;
   /** Seconds until expiry, per RFC 6749. Absent on some SAP token endpoints. */
   expires_in?: number;
+  /** SuccessFactors' refusal: e.g. `Unable to validate "Recipient" in the SAML assertion`. */
+  errorMessage?: unknown;
+}
+
+/**
+ * SuccessFactors refused the exchange — with what it said, made safe to show.
+ *
+ * WHY SUCCESSFACTORS' OWN WORDS ARE KEPT. Its errorMessage names the failing
+ * field — "Unable to verify the signature", `Unable to validate "Recipient"`,
+ * "Login failed - invalid user" — and on the first exchange against a real
+ * tenant that sentence is the only diagnostic there is. A generic "it failed"
+ * would turn one configuration fix into a support ticket.
+ *
+ * WHY IT IS SAFE. It never contains the assertion or the key; it can contain
+ * the API key and company id, which are identifiers the administrator typed,
+ * not secrets. It is still bounded: whitespace collapsed, any base64-looking
+ * run over 40 characters replaced, and 300 characters at most. `publicDetail`
+ * is the sentence a screen may show; it never carries a URL or a host.
+ */
+export class SamlBearerExchangeError extends Error {
+  readonly code = "SAML_BEARER_REJECTED";
+  constructor(
+    message: string,
+    readonly httpStatus: number,
+    readonly publicDetail: string,
+  ) {
+    super(message);
+    this.name = "SamlBearerExchangeError";
+  }
+}
+
+/**
+ * The ONLY caught errors whose words may reach a client-visible detail.
+ *
+ * A caught error in general must never be repeated to a client: a fetch error
+ * stringifies with the host, and on an OAuth path with the request. These two
+ * are the exceptions because each is constructed to be shown —
+ * SamlBearerExchangeError's `publicDetail` (SuccessFactors' sanitised refusal,
+ * no URL) and SamlKeyError's message (fixed sentences, never key material) —
+ * and each is the only diagnostic a first SuccessFactors test gets. Anything
+ * else returns null, and the caller keeps its generic sentence.
+ */
+export function publicSamlFailure(
+  err: unknown,
+): { status: "UNAUTHORIZED" | "ERROR"; httpStatus: number | null; detail: string } | null {
+  if (err instanceof SamlBearerExchangeError) {
+    return {
+      status: err.httpStatus === 401 || err.httpStatus === 403 ? "UNAUTHORIZED" : "ERROR",
+      httpStatus: err.httpStatus,
+      detail: err.publicDetail,
+    };
+  }
+  if (err instanceof SamlKeyError) return { status: "ERROR", httpStatus: null, detail: err.message };
+  return null;
+}
+
+/** Bound SuccessFactors' errorMessage before it goes anywhere a person reads. */
+export function sanitizeSuccessFactorsError(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw
+    .replace(/\s+/g, " ")
+    .replace(/[A-Za-z0-9+/=_-]{41,}/g, "[…]")
+    .trim();
+  if (!cleaned) return null;
+  return cleaned.length > 300 ? `${cleaned.slice(0, 299)}…` : cleaned;
 }
 
 /**
@@ -134,12 +199,16 @@ export async function exchangeSamlBearerAssertion(
     });
     const json = (await res.json().catch(() => ({}))) as OAuthTokenResponse;
     if (!res.ok || typeof json.access_token !== "string") {
-      throw new Error(
-        `SAML bearer token request failed for ${label}: HTTP ${res.status}. ` +
-          (signsOwnAssertion(c)
-            ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
-              "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."
-            : "An expired or unregistered assertion is the usual cause."),
+      const said = sanitizeSuccessFactorsError(json.errorMessage);
+      const hint = signsOwnAssertion(c)
+        ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
+          "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."
+        : "An expired or unregistered assertion is the usual cause.";
+      const publicDetail = `SuccessFactors refused the token request (HTTP ${res.status})${said ? `: ${said}` : "."} ${hint}`;
+      throw new SamlBearerExchangeError(
+        `SAML bearer token request failed for ${label}: ${publicDetail}`,
+        res.status,
+        publicDetail,
       );
     }
     const ttlMs =

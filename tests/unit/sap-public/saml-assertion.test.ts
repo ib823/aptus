@@ -25,13 +25,18 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash, createPublicKey, createVerify, generateKeyPairSync, type KeyObject } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { exchangeSamlBearerAssertion, missingSamlBearerFields } from "@/lib/sap-public/oauth-saml-bearer";
+import {
+  exchangeSamlBearerAssertion,
+  missingSamlBearerFields,
+  sanitizeSuccessFactorsError,
+  SamlBearerExchangeError,
+} from "@/lib/sap-public/oauth-saml-bearer";
 import {
   buildSignedSamlAssertion,
   buildSignedSamlAssertionXml,
@@ -54,6 +59,8 @@ const BASE = {
 const NOW = new Date("2026-10-18T05:00:00.000Z");
 
 const DS = "http://www.w3.org/2000/09/xmldsig#";
+const XS = "http://www.w3.org/2001/XMLSchema";
+const XSI = "http://www.w3.org/2001/XMLSchema-instance";
 
 /** Pull one element's text out of our own serialisation (no attributes on these). */
 function text(xml: string, tag: string): string {
@@ -66,8 +73,15 @@ function text(xml: string, tag: string): string {
 function verifyLikeAVerifier(xml: string, pub: KeyObject): { digestOk: boolean; signatureOk: boolean } {
   const signature = /<ds:Signature xmlns:ds="[^"]+">[\s\S]*<\/ds:Signature>/.exec(xml)?.[0];
   if (!signature) throw new Error("no Signature");
-  // Enveloped-signature transform: the assertion without its Signature.
-  const enveloped = xml.replace(signature, "");
+  // Enveloped-signature transform: the assertion without its Signature, then
+  // exclusive c14n — which, for this tree, does exactly two things (as
+  // xmlsec1's pre-digest buffer shows): drops xs and xsi from the root, where
+  // neither is visibly used, and renders xsi on the AttributeValue whose
+  // xsi:type uses it. xs vanishes entirely: it appears only inside a value.
+  const enveloped = xml
+    .replace(signature, "")
+    .replace(` xmlns:xs="${XS}" xmlns:xsi="${XSI}"`, "")
+    .replace("<saml2:AttributeValue xsi:type=", `<saml2:AttributeValue xmlns:xsi="${XSI}" xsi:type=`);
   const digest = createHash("sha256").update(enveloped, "utf8").digest("base64");
   // SignedInfo canonicalised in context: ds is rendered on it, saml2 is not.
   const signedInfo = /<ds:SignedInfo>[\s\S]*<\/ds:SignedInfo>/.exec(signature)?.[0] ?? "";
@@ -126,34 +140,121 @@ describe("the private key, in the shapes an administrator will have", () => {
   });
 });
 
+/**
+ * SuccessFactors' own key format, as the research found it in SAP's generator
+ * and in clients proven against SuccessFactors: Certificate.pem labels the key
+ * block ENCRYPTED PRIVATE KEY and the body is
+ * base64( base64(PKCS#8 DER) + "###" + suffix ). Synthetic here, from a key
+ * generated per run — the same construction, no real key committed.
+ */
+const sfWrap = (der: Buffer, suffix = "SFCPART000000") =>
+  Buffer.from(`${der.toString("base64")}###${suffix}`, "latin1").toString("base64");
+const PKCS8_DER = privateKey.export({ type: "pkcs8", format: "der" }) as Buffer;
+const pem = (label: string, body: string) =>
+  `-----BEGIN ${label}-----\n${body.replace(/(.{64})/g, "$1\n")}\n-----END ${label}-----\n`;
+
+const openssl = (() => {
+  try {
+    execFileSync("openssl", ["version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/** A real self-signed certificate for `key`, as DER — so the pairing check has something true to check. */
+function certificateDerFor(key: KeyObject): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), "saml-cert-"));
+  try {
+    writeFileSync(join(dir, "k.pem"), key.export({ type: "pkcs8", format: "pem" }));
+    execFileSync("openssl", ["req", "-x509", "-new", "-key", join(dir, "k.pem"), "-subj", "/CN=coreedge-test", "-days", "1", "-outform", "DER", "-out", join(dir, "c.der")], { stdio: "ignore" });
+    return readFileSync(join(dir, "c.der"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("the key SuccessFactors itself issues", () => {
+  it("reads Certificate.pem's key block, which is labelled ENCRYPTED and is not", () => {
+    const key = parseSamlPrivateKey(pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER)));
+    expect(createPublicKey(key).export({ type: "spki", format: "pem" })).toBe(
+      publicKey.export({ type: "spki", format: "pem" }),
+    );
+  });
+
+  it("reads the one-line blob SAP's offline tool takes, with either suffix", () => {
+    for (const suffix of ["SFCPART000027", "false"]) {
+      expect(parseSamlPrivateKey(sfWrap(PKCS8_DER, suffix)).asymmetricKeyType).toBe("rsa");
+    }
+  });
+
+  it("reads the blob after one decode, as an administrator might paste it", () => {
+    expect(parseSamlPrivateKey(`${PKCS8_DER.toString("base64")}###SFCPART000000`).asymmetricKeyType).toBe("rsa");
+  });
+
+  it("signs with it, and the signature verifies against the original key", () => {
+    const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER)) });
+    expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
+  });
+
+  it("still refuses a key that genuinely needs a passphrase — legacy PEM included", () => {
+    const legacy = privateKey.export({ type: "pkcs1", format: "pem", cipher: "aes-256-cbc", passphrase: "x" }) as string;
+    expect(() => parseSamlPrivateKey(legacy)).toThrow(/passphrase-encrypted/);
+  });
+});
+
+describe.skipIf(!openssl)("the pair is checked when the file carries the certificate", () => {
+  const ownCert = certificateDerFor(privateKey);
+  const otherCert = certificateDerFor(generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey);
+
+  it("accepts Certificate.pem whose certificate belongs to the key — plain or SuccessFactors-wrapped", () => {
+    const keyBlock = pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER));
+    expect(parseSamlPrivateKey(keyBlock + pem("CERTIFICATE", ownCert.toString("base64"))).asymmetricKeyType).toBe("rsa");
+    expect(parseSamlPrivateKey(keyBlock + pem("CERTIFICATE", sfWrap(ownCert, "false"))).asymmetricKeyType).toBe("rsa");
+  });
+
+  it("refuses a key that does not belong to the certificate beside it — the 401 said before it happens", () => {
+    const file = pem("ENCRYPTED PRIVATE KEY", sfWrap(PKCS8_DER)) + pem("CERTIFICATE", otherCert.toString("base64"));
+    expect(() => parseSamlPrivateKey(file)).toThrow(/does not belong to the certificate/);
+  });
+});
+
 describe("the assertion's contents", () => {
-  const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid" });
+  const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid", sessionIndex: "_fixedsession" });
 
   it("names the user, the API key, the token endpoint and SuccessFactors as audience", () => {
     expect(xml).toContain(`<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">sfadmin</saml2:NameID>`);
     expect(xml).toContain(`Recipient="${BASE.tokenUrl}"`);
     expect(xml).toContain("<saml2:Audience>www.successfactors.com</saml2:Audience>");
     expect(xml).toContain("<saml2:Issuer>www.successfactors.com</saml2:Issuer>");
-    expect(xml).toContain(`<saml2:Attribute Name="api_key"><saml2:AttributeValue>${BASE.clientId}</saml2:AttributeValue></saml2:Attribute>`);
+    expect(xml).toContain(
+      `<saml2:Attribute Name="api_key"><saml2:AttributeValue xsi:type="xs:string">${BASE.clientId}</saml2:AttributeValue></saml2:Attribute>`,
+    );
+    expect(xml).toMatch(/^<saml2:Assertion xmlns:saml2="[^"]+" xmlns:xs="[^"]+" xmlns:xsi="[^"]+" ID="_fixedid"/);
+    expect(xml).toContain('SessionIndex="_fixedsession"');
     expect(xml).toContain('Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"');
   });
 
-  it("is short-lived, with a minute of allowance for a SuccessFactors clock behind ours", () => {
-    expect(xml).toContain('IssueInstant="2026-10-18T05:00:00Z"');
-    expect(xml).toContain('<saml2:Conditions NotBefore="2026-10-18T04:59:00Z" NotOnOrAfter="2026-10-18T05:10:00Z">');
-    expect(xml).toContain('<saml2:SubjectConfirmationData NotOnOrAfter="2026-10-18T05:10:00Z"');
+  it("is short-lived, and backdated ten minutes as SAP's generator does", () => {
+    // A NotBefore in the future comes back from SuccessFactors as "expired".
+    expect(xml).toContain('IssueInstant="2026-10-18T05:00:00.000Z"');
+    expect(xml).toContain('<saml2:Conditions NotBefore="2026-10-18T04:50:00.000Z" NotOnOrAfter="2026-10-18T05:10:00.000Z">');
+    expect(xml).toContain('<saml2:SubjectConfirmationData NotOnOrAfter="2026-10-18T05:10:00.000Z"');
   });
 
   it("puts the Signature immediately after Issuer, as the SAML schema requires", () => {
     expect(xml).toMatch(/<\/saml2:Issuer><ds:Signature /);
   });
 
-  it("signs a fresh, unique assertion each time", () => {
+  it("signs a fresh, unique assertion each time, with a session index of its own", () => {
     const one = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM });
     const two = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM });
     const id = (x: string) => /ID="([^"]+)"/.exec(x)?.[1];
+    const session = (x: string) => /SessionIndex="([^"]+)"/.exec(x)?.[1];
     expect(id(one)).toMatch(/^_[0-9a-f]{32}$/);
     expect(id(one)).not.toBe(id(two));
+    expect(session(one)).toMatch(/^_[0-9a-f]{32}$/);
+    expect(session(one)).not.toBe(id(one));
   });
 
   it("escapes a user id that XML would otherwise misread", () => {
@@ -170,6 +271,18 @@ describe("the assertion's contents", () => {
 });
 
 describe("the signature, checked the way a verifier checks it", () => {
+  it("reads the clock ONCE, so the digest describes the bytes sent", () => {
+    /*
+     * The regression xmlsec1 caught: the digested tree and the sent tree each
+     * read the clock, so with millisecond timestamps they differed and every
+     * signature failed. Twenty-five runs on the real clock, none pinned.
+     */
+    for (let i = 0; i < 25; i++) {
+      const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM });
+      expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
+    }
+  });
+
   it("digests exactly the bytes the enveloped transform leaves, and the signature verifies", () => {
     for (const key of [PKCS8_PEM, PKCS1_PEM, PKCS8_B64]) {
       const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: key });
@@ -190,17 +303,22 @@ describe("the signature, checked the way a verifier checks it", () => {
      * re-run the xmlsec1 block below on a machine that has it before updating
      * the vector — a vector updated to match new output proves nothing.
      */
-    const canonical = canonicalUnsignedAssertionForTest({ ...BASE, privateKey: PKCS8_PEM, now: NOW }, "_fixedid");
+    const canonical = canonicalUnsignedAssertionForTest(
+      { ...BASE, privateKey: PKCS8_PEM, now: NOW },
+      "_fixedid",
+      "_fixedsession",
+    );
     expect(createHash("sha256").update(canonical, "utf8").digest("hex")).toBe(PINNED_CANONICAL_SHA256);
   });
 });
 
 /**
- * The canonical unsigned assertion for BASE at NOW with ID "_fixedid".
- * Established 2026-10-18; the xmlsec1 block below verified assertions built
- * from exactly this canonical form.
+ * The canonical unsigned assertion for BASE at NOW, ID "_fixedid", session "_fixedsession".
+ * Established 2026-10-18 with xmlsec1 1.2.39: the assertion built from these
+ * inputs verified, and xmlsec1's own pre-digest buffer (--store-references
+ * --print-debug) was byte-identical to this canonical form.
  */
-const PINNED_CANONICAL_SHA256 = "34d6423e6cedf1938ea5bd467c03b7fe7491da3357ead9988c3f44bb7a0d50ca";
+const PINNED_CANONICAL_SHA256 = "60a0665dc677d4b0d1f6350ff082826eab910a13c4eee04259ce6064b26d90d1";
 
 const xmlsec1 = (() => {
   try {
@@ -239,7 +357,9 @@ describe.skipIf(!xmlsec1)("xmlsec1, the reference XML-DSig implementation, accep
   });
 
   it("verifies the pinned-input assertion and one with characters that need escaping", () => {
-    expect(verify(buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid" }))).toBe(true);
+    expect(
+      verify(buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid", sessionIndex: "_fixedsession" })),
+    ).toBe(true);
     expect(verify(buildSignedSamlAssertionXml({ ...BASE, userId: 'ops&"<qa>', privateKey: PKCS8_PEM }))).toBe(true);
   });
 
@@ -321,9 +441,94 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     ).rejects.toThrow(/does not match the certificate registered for this API key/);
   });
 
+  it("carries SuccessFactors' own words, bounded, when it refuses", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        errorHttpCode: "401",
+        errorMessage: `Unable to verify the signature of the SAML assertion. Echo: ${"A".repeat(60)}`,
+      }),
+    });
+    try {
+      await exchangeSamlBearerAssertion(
+        { ...BASE, companyId: "c", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+        "Connection zvcsf",
+        { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+      );
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(SamlBearerExchangeError);
+      const e = error as SamlBearerExchangeError;
+      expect(e.httpStatus).toBe(401);
+      expect(e.publicDetail).toContain("Unable to verify the signature of the SAML assertion");
+      expect(e.publicDetail).not.toContain("A".repeat(41));
+      expect(e.publicDetail).not.toContain(BASE.tokenUrl);
+    }
+  });
+
+  it("bounds what it will repeat: whitespace, long base64-looking runs, length", () => {
+    expect(sanitizeSuccessFactorsError(42)).toBeNull();
+    expect(sanitizeSuccessFactorsError("  \n ")).toBeNull();
+    expect(sanitizeSuccessFactorsError("a\n\n b")).toBe("a b");
+    expect(sanitizeSuccessFactorsError(`x ${"Q".repeat(50)} y`)).toBe("x […] y");
+    expect(sanitizeSuccessFactorsError("z".repeat(10) + " " + "w ".repeat(400))!.length).toBeLessThanOrEqual(300);
+  });
+
   it("the base64 form is the XML form, encoded", () => {
-    const b64 = buildSignedSamlAssertion({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid" });
-    const xml = buildSignedSamlAssertionXml({ ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid" });
+    const fixed = { ...BASE, privateKey: PKCS8_PEM, now: NOW, id: "_fixedid", sessionIndex: "_fixedsession" };
+    const b64 = buildSignedSamlAssertion(fixed);
+    const xml = buildSignedSamlAssertionXml(fixed);
     expect(Buffer.from(b64, "base64").toString("utf8")).toBe(xml);
+  });
+});
+
+describe("the connection test shows SuccessFactors' words, not a generic failure", () => {
+  /*
+   * The Test button is how the first SuccessFactors exchange is attempted, and
+   * it used to answer every auth failure with "The connection could not be
+   * established." — a dead end for exactly the configuration errors this flow
+   * produces. Driven here through the real probe, with only fetch stubbed.
+   */
+  afterAll(() => vi.unstubAllGlobals());
+
+  it("reports a SuccessFactors refusal as UNAUTHORIZED with its sanitised message, and never probes", async () => {
+    const { probeConnection } = await import("@/lib/studio/connection-health");
+    const { clearOAuthTokenCache } = await import("@/lib/sap-public/connection-resolver");
+    clearOAuthTokenCache();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ errorHttpCode: "401", errorMessage: 'Unable to validate "Recipient" in the SAML assertion' }),
+      }),
+    );
+    const metadataFetch = vi.fn();
+    const result = await probeConnection(
+      {
+        source: "db",
+        id: "conn_zvcsf",
+        organizationId: "org_a",
+        product: "successfactors",
+        key: "zvcsf",
+        label: "SuccessFactors",
+        baseUrl: "https://api4.successfactors.com",
+        authType: "oauth-saml-bearer",
+        secrets: { clientId: BASE.clientId, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+        oauthTokenUrl: BASE.tokenUrl,
+        writeEnabled: false,
+        apiPath: null,
+        timeoutMs: null,
+        environment: "DEV",
+        client: null,
+      },
+      metadataFetch as unknown as typeof fetch,
+    );
+    expect(result.status).toBe("UNAUTHORIZED");
+    expect(result.httpStatus).toBe(401);
+    expect(result.detail).toContain('Unable to validate "Recipient" in the SAML assertion');
+    expect(result.detail).not.toContain(BASE.tokenUrl);
+    expect(metadataFetch).not.toHaveBeenCalled();
   });
 });

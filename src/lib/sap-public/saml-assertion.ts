@@ -27,13 +27,23 @@
  *
  * Node's crypto only. No XML dependency, so nothing new for the audit gate.
  */
-import { createHash, createPrivateKey, createSign, randomBytes, type KeyObject } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  createSign,
+  randomBytes,
+  X509Certificate,
+  type KeyObject,
+} from "node:crypto";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * What SuccessFactors matches
  * ────────────────────────────────────────────────────────────────────────── */
 
 const SAML_NS = "urn:oasis:names:tc:SAML:2.0:assertion";
+const XS_NS = "http://www.w3.org/2001/XMLSchema";
+const XSI_NS = "http://www.w3.org/2001/XMLSchema-instance";
 const DSIG_NS = "http://www.w3.org/2000/09/xmldsig#";
 const EXC_C14N = "http://www.w3.org/2001/10/xml-exc-c14n#";
 const ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature";
@@ -51,8 +61,14 @@ const API_KEY_ATTRIBUTE = "api_key";
 
 /** SAP's offline generator defaults to ten minutes; an assertion here is used within seconds. */
 export const DEFAULT_ASSERTION_LIFETIME_MS = 10 * 60 * 1000;
-/** NotBefore is set this far in the past so a SuccessFactors clock slightly behind ours still accepts it. */
-const CLOCK_SKEW_MS = 60 * 1000;
+/**
+ * NotBefore is backdated by this much — SAP's own generator's value.
+ * SuccessFactors reports a NotBefore still in the future as an EXPIRED
+ * assertion (400 OAUTH2_ERROR_SAML_ASSERTION_EXPIRED), so a clock slightly
+ * ahead of SuccessFactors' would otherwise fail every exchange with a message
+ * pointing the wrong way.
+ */
+const CLOCK_SKEW_MS = 10 * 60 * 1000;
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * A tree small enough to canonicalise without a parser
@@ -200,52 +216,124 @@ export class SamlKeyError extends Error {
   }
 }
 
-const PEM_KEY_BLOCK =
-  /-----BEGIN (RSA |ENCRYPTED )?PRIVATE KEY-----[\s\S]+?-----END (RSA |ENCRYPTED )?PRIVATE KEY-----/;
+const PEM_BLOCK = /-----BEGIN ([A-Z0-9 ]+)-----([\s\S]+?)-----END \1-----/g;
+
+/** Every PEM block in the text, by label, with its body's whitespace removed. */
+function pemBlocks(text: string): { label: string; body: string }[] {
+  return [...text.matchAll(PEM_BLOCK)].map((m) => ({ label: m[1]!, body: m[2]!.replace(/\s+/g, "") }));
+}
+
+/**
+ * The DER a base64 body ultimately encodes — UNWRAPPING SUCCESSFACTORS' OWN
+ * ENCODING when it is present.
+ *
+ * What "Generate X.509 Certificate" downloads (Certificate.pem) labels its key
+ * block ENCRYPTED PRIVATE KEY, and the key is NOT encrypted: the body is
+ *
+ *     base64( base64(PKCS#8 DER) + "###" + suffix )      suffix: company id, or "false"
+ *
+ * SAP's own offline generator and the open-source clients proven against
+ * SuccessFactors (NAV, Nango, SAP's Insomnia plugin) all decode it that way;
+ * the certificate block carries the same wrapping. Three shapes therefore
+ * reach here, and all three resolve to the same DER:
+ *
+ *   - the wrapped body itself (decodes to ASCII "MII…###…");
+ *   - that ASCII pasted directly, already decoded once ("MII…###SFCPART…");
+ *   - ordinary base64 DER, which decodes to bytes beginning 0x30 — never to
+ *     text beginning "M", so the two cannot be confused.
+ */
+function unwrapDer(base64Body: string): Buffer {
+  const outer = Buffer.from(base64Body.split("###")[0]!.replace(/\s+/g, ""), "base64");
+  const asText = outer.toString("latin1");
+  if (/^MII[A-Za-z0-9+/=\s]+(###[\s\S]*)?$/.test(asText)) {
+    return Buffer.from(asText.split("###")[0]!.replace(/\s+/g, ""), "base64");
+  }
+  return outer;
+}
+
+/** Load DER as PKCS#8, then PKCS#1; say "encrypted" only for a key that genuinely is. */
+function loadKeyDer(der: Buffer): KeyObject {
+  let encrypted = false;
+  for (const type of ["pkcs8", "pkcs1"] as const) {
+    try {
+      return createPrivateKey({ key: der, format: "der", type });
+    } catch (error) {
+      if ((error as { code?: string }).code === "ERR_MISSING_PASSPHRASE") encrypted = true;
+    }
+  }
+  throw new SamlKeyError(
+    encrypted
+      ? "it is passphrase-encrypted. Export it without a passphrase — it is sealed at rest like every other secret here."
+      : "it is neither SuccessFactors' Certificate.pem key, PEM, nor base64-encoded PKCS#8 / PKCS#1.",
+  );
+}
+
+/**
+ * Refuse a key that does not belong to the certificate in the same file.
+ *
+ * SuccessFactors verifies every assertion against the certificate registered
+ * for the API key — KeyInfo is ignored — so a mismatched pair fails as a 401
+ * "unable to verify the signature" on the first exchange: the most common
+ * production failure of this flow. When the pasted file carries the
+ * certificate, that 401 can be said now instead. An unreadable certificate
+ * block is not treated as a refusal: the check is a courtesy, and the key may
+ * still be the right one.
+ */
+function assertKeyMatchesCertificate(key: KeyObject, certDer: Buffer): void {
+  let cert: X509Certificate;
+  try {
+    cert = new X509Certificate(certDer);
+  } catch {
+    return;
+  }
+  const fromKey = createPublicKey(key).export({ type: "spki", format: "der" });
+  const fromCert = cert.publicKey.export({ type: "spki", format: "der" });
+  if (!fromKey.equals(fromCert)) {
+    throw new SamlKeyError(
+      "it does not belong to the certificate in the same file, so SuccessFactors would refuse every assertion it signs.",
+    );
+  }
+}
 
 /**
  * Accept the key in the shapes an administrator will actually have.
  *
- * - PEM, PKCS#8 (`BEGIN PRIVATE KEY`) or PKCS#1 (`BEGIN RSA PRIVATE KEY`) —
- *   including a file that also carries the certificate, from which the key
- *   block is taken;
- * - headerless base64 PKCS#8, which is what SAP's offline tool's `privateKey`
- *   property takes, with PKCS#1 tried second.
+ * - SuccessFactors' Certificate.pem, as downloaded — its misleadingly
+ *   labelled ENCRYPTED PRIVATE KEY block and its certificate, which is used to
+ *   check the pair (see `unwrapDer`, `assertKeyMatchesCertificate`);
+ * - the one-line blob from that block, which is what SAP's offline tool's
+ *   `privateKey` property takes;
+ * - PEM PKCS#8 (`BEGIN PRIVATE KEY`) or PKCS#1 (`BEGIN RSA PRIVATE KEY`), for a
+ *   key pair the customer generated and registered themselves — the path SAP
+ *   recommends — and headerless base64 of either.
  *
- * Refused: an encrypted key (there is nowhere to keep its passphrase that is
- * better than keeping the key unencrypted under the connection seal), and any
- * key that is not RSA of at least 2048 bits — SuccessFactors' registration
- * issues RSA, and RSA-SHA256 is what this signs with.
+ * Refused: a key that genuinely needs a passphrase, and any key that is not
+ * RSA of at least 2048 bits, which is what RSA-SHA256 signing requires.
  */
 export function parseSamlPrivateKey(raw: string): KeyObject {
   const text = raw.trim();
   if (!text) throw new SamlKeyError("no key was supplied.");
 
   let key: KeyObject;
-  const pem = PEM_KEY_BLOCK.exec(text);
-  if (pem) {
-    if (pem[1] === "ENCRYPTED ") {
-      throw new SamlKeyError("it is passphrase-encrypted. Supply the unencrypted private key.");
+  const blocks = pemBlocks(text);
+  if (blocks.length > 0) {
+    const keyBlock = blocks.find((b) => b.label.endsWith("PRIVATE KEY"));
+    if (!keyBlock) {
+      throw new SamlKeyError("the PEM text contains no private key block (a certificate alone is not enough).");
     }
-    try {
-      key = createPrivateKey({ key: pem[0], format: "pem" });
-    } catch {
-      throw new SamlKeyError("the PEM block is not a readable private key.");
+    // Legacy OpenSSL encryption puts its marker in a header inside the block.
+    if (keyBlock.body.includes("Proc-Type:")) {
+      throw new SamlKeyError(
+        "it is passphrase-encrypted. Export it without a passphrase — it is sealed at rest like every other secret here.",
+      );
     }
+    key = loadKeyDer(unwrapDer(keyBlock.body));
+    const certBlock = blocks.find((b) => b.label === "CERTIFICATE");
+    if (certBlock) assertKeyMatchesCertificate(key, unwrapDer(certBlock.body));
   } else if (text.includes("-----BEGIN")) {
-    throw new SamlKeyError("the PEM text contains no private key block (a certificate alone is not enough).");
+    throw new SamlKeyError("the PEM text is incomplete — a BEGIN line without its matching END line.");
   } else {
-    const der = Buffer.from(text.replace(/\s+/g, ""), "base64");
-    const attempt = (type: "pkcs8" | "pkcs1"): KeyObject | null => {
-      try {
-        return createPrivateKey({ key: der, format: "der", type });
-      } catch {
-        return null;
-      }
-    };
-    const parsed = der.length > 0 ? (attempt("pkcs8") ?? attempt("pkcs1")) : null;
-    if (!parsed) throw new SamlKeyError("it is neither PEM nor base64-encoded PKCS#8 / PKCS#1.");
-    key = parsed;
+    key = loadKeyDer(unwrapDer(text));
   }
 
   if (key.asymmetricKeyType !== "rsa") {
@@ -269,23 +357,32 @@ export interface SamlAssertionInput {
   readonly tokenUrl: string;
   /** A KeyObject from `parseSamlPrivateKey`, or the raw key text. */
   readonly privateKey: KeyObject | string;
-  /** Overrides for tests: the clock, the lifetime and the assertion ID. */
+  /** Overrides for tests: the clock, the lifetime, the assertion ID and the session index. */
   readonly now?: Date;
   readonly lifetimeMs?: number;
   readonly id?: string;
+  readonly sessionIndex?: string;
 }
 
-/** xs:dateTime in UTC, to the second — the form SAML assertions conventionally carry. */
+/**
+ * xs:dateTime in UTC with milliseconds — the form SAP's documentation example,
+ * SAP's generator and the proven open-source signers all emit.
+ */
 function samlTime(ms: number): string {
-  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+  return new Date(ms).toISOString();
 }
 
-/** An NCName: SAML IDs may not start with a digit. */
-function newAssertionId(): string {
+/** An NCName: SAML IDs may not start with a digit. Used for the ID and, separately, the SessionIndex. */
+function newSamlId(): string {
   return `_${randomBytes(16).toString("hex")}`;
 }
 
-function assertionTree(input: SamlAssertionInput, id: string, signature: El | null): El {
+function assertionTree(
+  input: SamlAssertionInput,
+  id: string,
+  sessionIndex: string,
+  signature: El | null,
+): El {
   const now = (input.now ?? new Date()).getTime();
   const issueInstant = samlTime(now);
   const notBefore = samlTime(now - CLOCK_SKEW_MS);
@@ -312,16 +409,23 @@ function assertionTree(input: SamlAssertionInput, id: string, signature: El | nu
       el("saml2", "Conditions", [a("NotBefore", notBefore), a("NotOnOrAfter", notOnOrAfter)], [
         el("saml2", "AudienceRestriction", [], [el("saml2", "Audience", [], [SF_AUDIENCE])]),
       ]),
-      el("saml2", "AuthnStatement", [a("AuthnInstant", issueInstant), a("SessionIndex", id)], [
+      el("saml2", "AuthnStatement", [a("AuthnInstant", issueInstant), a("SessionIndex", sessionIndex)], [
         el("saml2", "AuthnContext", [], [el("saml2", "AuthnContextClassRef", [], [PASSWORD_PROTECTED])]),
       ]),
       el("saml2", "AttributeStatement", [], [
         el("saml2", "Attribute", [a("Name", API_KEY_ATTRIBUTE)], [
-          el("saml2", "AttributeValue", [], [input.clientId]),
+          /*
+           * TYPED, as SAP's documentation and generator type it. Under
+           * exclusive c14n this is what moves the xsi declaration onto this
+           * element and drops xs entirely (it appears only inside an
+           * attribute VALUE, which is not "visible utilisation") — so the
+           * document and its canonical form differ here, and only here.
+           */
+          el("saml2", "AttributeValue", [{ prefix: "xsi", name: "type", value: "xs:string" }], [input.clientId]),
         ]),
       ]),
     ],
-    { saml2: SAML_NS },
+    { saml2: SAML_NS, xs: XS_NS, xsi: XSI_NS },
   );
 }
 
@@ -353,18 +457,27 @@ export function buildSignedSamlAssertionXml(input: SamlAssertionInput): string {
     if (!value || !value.trim()) throw new Error(`A SuccessFactors assertion needs ${field}.`);
   }
   const key = typeof input.privateKey === "string" ? parseSamlPrivateKey(input.privateKey) : input.privateKey;
-  const id = input.id ?? newAssertionId();
+  const id = input.id ?? newSamlId();
+  const sessionIndex = input.sessionIndex ?? newSamlId();
+  /*
+   * ONE INSTANT FOR BOTH TREES. The digested tree and the sent tree are built
+   * separately, and each used to read the clock: with second precision they
+   * almost always agreed, so it passed — and failed whenever signing straddled
+   * a second. With milliseconds they never agree. xmlsec1 caught it as "data
+   * and digest do not match"; the digest must describe the bytes sent.
+   */
+  const at: SamlAssertionInput = { ...input, now: input.now ?? new Date() };
 
   // 1 · Digest the assertion WITHOUT its signature: the enveloped-signature
   //     transform removes it before the verifier canonicalises.
-  const unsigned = assertionTree(input, id, null);
+  const unsigned = assertionTree(at, id, sessionIndex, null);
   const digest = createHash("sha256").update(canonical(unsigned), "utf8").digest("base64");
 
   // 2 · Sign SignedInfo in its document context: inside Signature, which
   //     declares ds, inside Assertion, which declares saml2 (not rendered —
   //     SignedInfo does not use it).
   const signedInfo = signedInfoTree(id, digest);
-  const signedInfoC14n = canonical(signedInfo, { saml2: SAML_NS, ds: DSIG_NS });
+  const signedInfoC14n = canonical(signedInfo, { saml2: SAML_NS, xs: XS_NS, xsi: XSI_NS, ds: DSIG_NS });
   const signatureValue = createSign("RSA-SHA256").update(signedInfoC14n, "utf8").sign(key, "base64");
 
   const signature = el(
@@ -374,7 +487,7 @@ export function buildSignedSamlAssertionXml(input: SamlAssertionInput): string {
     [signedInfo, el("ds", "SignatureValue", [], [signatureValue])],
     { ds: DSIG_NS },
   );
-  return serialize(assertionTree(input, id, signature));
+  return serialize(assertionTree(at, id, sessionIndex, signature));
 }
 
 /** The base64 assertion the token endpoint's `assertion` parameter takes. */
@@ -383,6 +496,6 @@ export function buildSignedSamlAssertion(input: SamlAssertionInput): string {
 }
 
 /** Exposed for tests: the exclusive canonical form of the unsigned assertion. */
-export function canonicalUnsignedAssertionForTest(input: SamlAssertionInput, id: string): string {
-  return canonical(assertionTree(input, id, null));
+export function canonicalUnsignedAssertionForTest(input: SamlAssertionInput, id: string, sessionIndex: string): string {
+  return canonical(assertionTree(input, id, sessionIndex, null));
 }
