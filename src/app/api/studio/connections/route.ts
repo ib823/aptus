@@ -87,6 +87,19 @@ const httpsUrl = z
   .url()
   .max(500)
   .refine((u) => u.startsWith("https://"), { message: "must be https" })
+  // A user name or password in the URL would travel with every request, and
+  // fetch refuses such a URL with an error that repeats it.
+  .refine(
+    (u) => {
+      try {
+        const url = new URL(u);
+        return !url.username && !url.password;
+      } catch {
+        return true;
+      }
+    },
+    { message: "must not contain a user name or password" },
+  )
   .refine((u) => !isForbiddenBaseUrlHost(u), {
     message:
       "must be a public hostname — IP literals, localhost and internal names are refused (the broker calls this URL with credentials attached)",

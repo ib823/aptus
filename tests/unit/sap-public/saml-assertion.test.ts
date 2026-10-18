@@ -563,6 +563,83 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     expect(verifyLikeAVerifier(xml, publicKey)).toEqual({ digestOk: true, signatureOk: true });
   });
 
+  it.each([
+    ["a user name and password", "https://svc:Secr3t@api4.successfactors.com/oauth/token"],
+    ["no scheme separator", "https//api4.successfactors.com/oauth/token"],
+    ["plain http", "http://api4.successfactors.com/oauth/token"],
+  ])("refuses a token URL fetch could never send (%s), without repeating it", async (_, tokenUrl) => {
+    const fetchImpl = ok();
+    const error = await exchangeSamlBearerAssertion(
+      { ...BASE, tokenUrl, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SamlBearerConfigError);
+    expect((error as Error).message).not.toContain("api4");
+    expect(publicSamlFailure(error)?.detail).toMatch(/valid https oauthTokenUrl/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps the URL out of a fetch failure's message", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new TypeError(`fetch failed: ${BASE.tokenUrl}`));
+    const error = await exchangeSamlBearerAssertion(
+      { ...BASE, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    ).catch((e: unknown) => e);
+    expect((error as Error).message).toBe("SAML bearer token request for Connection zvcsf could not be sent.");
+  });
+
+  it("reads no more than 64 KB of the token response, however much is sent", async () => {
+    // fetch inflates gzip without a limit; read whole, a 255 KB reply reached
+    // 1.1 GB. An endless body must settle at once, as a refusal that said nothing.
+    let pulled = 0;
+    let cancelled = false;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new TextEncoder().encode('{"errorMessage":"' + "a".repeat(16 * 1024)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(endless, { status: 401 }));
+    const error = await exchangeSamlBearerAssertion(
+      { ...BASE, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SamlBearerExchangeError);
+    expect((error as SamlBearerExchangeError).publicDetail).toMatch(/^SuccessFactors refused the token request \(HTTP 401\)\. /);
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(10);
+
+    // A declared length over the limit is not read at all.
+    const declared = vi.fn().mockResolvedValue(
+      new Response("{}", { status: 401, headers: { "content-length": String(10 * 1024 * 1024) } }),
+    );
+    await expect(
+      exchangeSamlBearerAssertion(
+        { ...BASE, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+        "Connection zvcsf",
+        { fetchImpl: declared as unknown as typeof fetch, timeoutMs: 5000 },
+      ),
+    ).rejects.toThrow(SamlBearerExchangeError);
+  });
+
+  it("still reads a real, small token response from a stream", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ access_token: "tok", expires_in: 60 }), { status: 200 }));
+    const result = await exchangeSamlBearerAssertion(
+      { ...BASE, companyId: "acmeT1", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    );
+    expect(result).toEqual({ accessToken: "tok", ttlMs: 60_000 });
+  });
+
   it("names a missing field in the Test result, without the label or any value", async () => {
     const fetchImpl = ok();
     const error = await exchangeSamlBearerAssertion(
@@ -717,6 +794,8 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     "Sign in at evil.भारत",
     "Sign in at evil\u00AD.com",
     "Sign in at evil\u200B.com",
+    "Sign in at evil\u200E.example\u200E.com",
+    "Access denied for 10\u2063.0.0.1",
   ])("removes the host or link in %j", (message) => {
     const said = sanitizeSuccessFactorsError(message)!;
     expect(said).not.toMatch(/evil|EVIL|Evil|10\.0\.0\.1|аррӏе|2001:db8|https?:|mailto/i);
@@ -760,6 +839,16 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     expect(sanitizeSuccessFactorsError('Login failed - invalid user "SAM"', sealed)).toBe(
       'Login failed - invalid user "[user id]"',
     );
+  });
+
+  it("replaces a sealed value echoed inside markup — the bracket stays a word boundary until it is redacted", () => {
+    const sealed = { companyId: "acmeT1", samlUserId: "sfadmin" };
+    expect(
+      sanitizeSuccessFactorsError("Unable to map <saml2:NameID>sfadmin</saml2:NameID> to a valid BizX User ID", sealed),
+    ).not.toContain("sfadmin");
+    expect(sanitizeSuccessFactorsError("Company <CompanyId>acmeT1</CompanyId> does not exist.", sealed)).not.toContain("acmeT1");
+    expect(sanitizeSuccessFactorsError("company<acmeT1>", sealed)).not.toContain("acmeT1");
+    expect(sanitizeSuccessFactorsError('Invalid company "a<b>c1"', { companyId: "a<b>c1" })).toBe('Invalid company "[company id]"');
   });
 
   it("replaces a sealed value with whitespace inside, as SuccessFactors echoes it", () => {

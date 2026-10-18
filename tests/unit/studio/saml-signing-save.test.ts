@@ -114,6 +114,14 @@ describe("the token URL is the Recipient, so it must be the URL posted to", () =
   );
 });
 
+describe("a URL carrying a user name or password is refused", () => {
+  it.each(["oauthTokenUrl", "baseUrl"] as const)("in %s", async (field) => {
+    const url = field === "baseUrl" ? "https://svc:pw@api4.successfactors.com" : "https://svc:pw@api4.successfactors.com/oauth/token";
+    expect(await refusal(await POST(request(body({ [field]: url }))))).toContain("user name or password");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe("a character XML cannot carry is refused where it was typed", () => {
   it.each(["clientId", "samlUserId"] as const)("in %s", async (field) => {
     // Inside the value: a trailing vertical tab is whitespace, and trimmed.

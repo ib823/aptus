@@ -192,15 +192,23 @@ const WORD_CHAR = String.raw`[\p{L}\p{N}_]`;
 const escapeRegExp = (v: string) => v.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 /** Characters that render as nothing, and could split a link or a host so no pattern sees it. */
-const INVISIBLE = /[\u00AD\u200B-\u200D\u2060\uFEFF]/g;
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
+
+/**
+ * Where `<` and `>` stood, until the sealed values are redacted. Not a word
+ * character, so "<NameID>sfadmin</NameID>" still has a boundary each side of
+ * the value; removed before the link and host passes, so
+ * "https:<>//evil<>.example" cannot be rejoined after them.
+ */
+const BRACKET = "\uE000";
 
 /**
  * What the refusal AND each sealed value go through, so an echo still matches
- * its value: invisible characters and `<` `>` removed — before the link and
- * host passes, so "https:<>//evil<>.example" cannot be rejoined after them —
- * and whitespace collapsed.
+ * its value: invisible characters removed, `<` `>` marked (see BRACKET), and
+ * whitespace collapsed.
  */
-const normalise = (v: string) => v.replace(INVISIBLE, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+const normalise = (v: string) =>
+  v.replace(INVISIBLE, "").replace(/[<>\uE000]/g, BRACKET).replace(/\s+/g, " ").trim();
 
 /**
  * A dotted name, in any script: labels of letters, marks, digits and hyphens
@@ -226,7 +234,7 @@ const isIpv6 = (m: string) =>
  * In order:
  *   1. The raw text is cut to READ_LIMIT, normalised (see `normalise`), and
  *      cut again to SANITIZE_WINDOW at a word boundary, before any other
- *      pattern runs.
+ *      pattern runs. Markup is removed after step 2 and before step 3.
  *   2. The sealed API key, company id and user id become placeholders —
  *      matched as whole words, case-insensitively, from the values as stored
  *      and normalised the same way, in one pass with the longest first. Whole
@@ -279,6 +287,7 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
   }
 
   const cleaned = text
+    .replaceAll(BRACKET, "")
     .replace(/\S*:\/\/\S*/g, "[link]")
     .replace(/(?<![\p{L}\p{N}_])mailto:\S*/giu, "[link]")
     .replace(IPV4, "[host]")
@@ -295,6 +304,48 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
 }
 
 /**
+ * The most of a token response that is read. SuccessFactors' answers, success
+ * or refusal, are well under a kilobyte; the body is otherwise unbounded, and
+ * fetch inflates gzip without a limit — a 255 KB reply reached 1.1 GB of
+ * memory when it was read whole. Past this, the stream is cancelled and the
+ * response treated as one that said nothing.
+ */
+const TOKEN_RESPONSE_LIMIT = 64 * 1024;
+
+/** The response's JSON, read no further than TOKEN_RESPONSE_LIMIT; `{}` when it is longer or not JSON. */
+async function readTokenResponse(res: Response): Promise<OAuthTokenResponse> {
+  const declared = Number(res.headers?.get?.("content-length"));
+  if (Number.isFinite(declared) && declared > TOKEN_RESPONSE_LIMIT) {
+    await res.body?.cancel().catch(() => undefined);
+    return {};
+  }
+  if (!res.body || typeof res.body.getReader !== "function") {
+    // Not a stream (a test double, or an environment without one): its json().
+    return ((await res.json().catch(() => ({}))) ?? {}) as OAuthTokenResponse;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > TOKEN_RESPONSE_LIMIT) {
+      await reader.cancel().catch(() => undefined);
+      return {};
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  try {
+    const parsed: unknown = JSON.parse(text + decoder.decode());
+    return parsed && typeof parsed === "object" ? (parsed as OAuthTokenResponse) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * The token URL exactly as fetch will send it: parsed, without a fragment
  * (never sent), and serialised — host lower-cased, a default port, dot
  * segments, backslashes, tabs, line breaks and invisible characters in the
@@ -303,6 +354,15 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
  * no longer differ. A value that does not parse is returned trimmed; the
  * request then fails on its own terms.
  */
+function isSendableTokenUrl(v: string): boolean {
+  try {
+    const url = new URL(v);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function canonicalTokenUrl(v: string | null | undefined): string | null | undefined {
   if (typeof v !== "string") return v;
   const trimmed = v.trim();
@@ -346,6 +406,15 @@ export async function exchangeSamlBearerAssertion(
   };
   const missing = missingSamlBearerFields(c);
   if (missing.length > 0) throw new SamlBearerConfigError(label, missing);
+  /*
+   * A token URL fetch can never send — one that does not parse, or carries a
+   * user name or password — is refused here, by a sentence without it: fetch's
+   * own TypeError repeats the URL, credentials included, and routes that show
+   * an error's message would put it on screen.
+   */
+  if (!isSendableTokenUrl(c.tokenUrl!)) {
+    throw new SamlBearerConfigError(label, ["a valid https oauthTokenUrl, without a user name or password"]);
+  }
 
   /*
    * A FRESH ASSERTION PER EXCHANGE when the key is held. Built before the
@@ -382,7 +451,7 @@ export async function exchangeSamlBearerAssertion(
       }),
       signal: controller.signal,
     });
-    const json = (await res.json().catch(() => ({}))) as OAuthTokenResponse;
+    const json = await readTokenResponse(res);
     if (!res.ok || typeof json.access_token !== "string") {
       const said = sanitizeSuccessFactorsError(json.errorMessage, c);
       const hint = signsOwnAssertion(c)
@@ -402,6 +471,11 @@ export async function exchangeSamlBearerAssertion(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`SAML bearer token request for ${label} timed out after ${opts.timeoutMs}ms`);
+    }
+    // fetch's TypeError carries the URL; the cause keeps it for a log, the
+    // message does not.
+    if (error instanceof TypeError) {
+      throw new Error(`SAML bearer token request for ${label} could not be sent.`, { cause: error });
     }
     throw error;
   } finally {
