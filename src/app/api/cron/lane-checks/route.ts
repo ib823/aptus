@@ -45,6 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       checked: result.checked,
       skippedNoConnection: result.skippedNoConnection,
       skippedNoEntitySet: result.skippedNoEntitySet,
+      skippedNoService: result.skippedNoService,
       unreadable: result.unreadable,
       byReadStatus: result.byReadStatus,
     });

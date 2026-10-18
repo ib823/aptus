@@ -129,6 +129,19 @@ describe("failure reason", () => {
  * sentence, so a wrong communication-user password read exactly like a missing
  * communication arrangement.
  */
+describe("a path that would leave the connection's host", () => {
+  it("is refused before anything is sent, so no credential travels", async () => {
+    const fetchImpl = vi.fn();
+    const r = await readEntitySet(
+      { connection: conn(), servicePath: "API_TEST", entitySet: "A_Thing", limit: 1 },
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(r.status).toBe("ERROR");
+    expect(r.failureReason).toBe("SAP_URL_ORIGIN_MISMATCH");
+  });
+});
+
 describe("401 is told apart from 403", () => {
   it("both remain NEEDS_SETUP — the capability is not at fault either way", async () => {
     for (const status of [401, 403]) {

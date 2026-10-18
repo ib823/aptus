@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildSapUrl, isValidSapClient } from "@/lib/sap-public/sap-url";
+import { buildSapUrl, isValidSapClient, SapUrlOriginError } from "@/lib/sap-public/sap-url";
 import { SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { stripSource } from "../../helpers/source";
 
@@ -93,6 +93,50 @@ describe("a connection with a client carries it on every call", () => {
     const url = buildSapUrl({ baseUrl: BASE, path: "/sap/opu/odata", client: "100" });
     expect(url.indexOf("/sap/opu/odata")).toBeLessThan(url.indexOf("sap-client"));
     expect(url).not.toMatch(/\?[^/]*\//);
+  });
+});
+
+describe("the host is the connection's, whatever the path says", () => {
+  /*
+   * The join is verbatim, so a path with no leading slash lands on the
+   * HOSTNAME — and every caller attaches the connection's credentials to the
+   * URL that comes back. The lane sweep shipped exactly this, passing the
+   * catalogue id `API_BUSINESS_PARTNER` where a path belonged.
+   */
+  it("refuses a path that would extend the hostname", () => {
+    expect(() => buildSapUrl({ baseUrl: BASE, path: "API_BUSINESS_PARTNER/A_Item" })).toThrow(
+      SapUrlOriginError,
+    );
+    expect(() => buildSapUrl({ baseUrl: BASE, path: ".example.com/A_Item" })).toThrow(
+      SapUrlOriginError,
+    );
+  });
+
+  it("refuses a path that would move the port or carry userinfo", () => {
+    expect(() => buildSapUrl({ baseUrl: BASE, path: ":8443/sap/opu/odata" })).toThrow(
+      SapUrlOriginError,
+    );
+    expect(() => buildSapUrl({ baseUrl: BASE, path: "@example.com/sap/opu/odata" })).toThrow(
+      SapUrlOriginError,
+    );
+  });
+
+  it("carries a bounded code, so the audit row names the refusal", () => {
+    try {
+      buildSapUrl({ baseUrl: BASE, path: "API_X" });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as SapUrlOriginError).code).toBe("SAP_URL_ORIGIN_MISMATCH");
+    }
+  });
+
+  it("still accepts every path shape the call sites use today", () => {
+    // Absolute path, empty path (a root probe), and a path carrying a query.
+    expect(buildSapUrl({ baseUrl: BASE, path: "/sap/opu/odata4/sap/x/srvd_a2x/sap/x/0001/" })).toBe(
+      `${BASE}/sap/opu/odata4/sap/x/srvd_a2x/sap/x/0001/`,
+    );
+    expect(buildSapUrl({ baseUrl: BASE, path: "" })).toBe(BASE);
+    expect(buildSapUrl({ baseUrl: BASE, path: "/p?$expand=To_Item" })).toBe(`${BASE}/p?$expand=To_Item`);
   });
 });
 

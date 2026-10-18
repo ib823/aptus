@@ -84,8 +84,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    * asks why their estate saw traffic at 14:07 the answer has to name a person.
    * `TEST_CONNECT` is the existing action for "someone asked us to go and look".
    *
-   * A SKIP IS AUDITED TOO. "We did not call SAP, and here is which of the three
-   * reasons" is exactly as much a fact about the press as a successful read —
+   * A SKIP IS AUDITED TOO. "We did not call SAP, and here is which reason" is
+   * exactly as much a fact about the press as a successful read —
    * and recording only the successes would make the log agree with itself by
    * leaving out the presses that did nothing.
    */

@@ -161,6 +161,15 @@ export const UNCHECKED_REASONS = [
   "appNotLive",
   "feedHasNoDataset",
   "noSapSystemHere",
+  /*
+   * A SEVENTH, added with the sweep's service resolution. The sweep reads the
+   * path the broker would call; a feed whose service the broker cannot resolve
+   * (an unsupported product, a catalogue id with no OData path) is refused by
+   * the broker on every call and skipped by the sweep. Without its own words it
+   * fell through to `notRunYet` — "the check has not reached this lane", which
+   * is false: it reached it and had nothing it could honestly ask.
+   */
+  "feedServiceUnresolved",
   "secretWouldNotOpen",
   "notRunYet",
 ] as const;
@@ -180,6 +189,11 @@ export interface SweepFacts {
   readonly appIsActive: boolean;
   /** False when the feed names no entity set, so there is no read to attempt. */
   readonly feedHasDataset: boolean;
+  /**
+   * False when the broker cannot resolve the feed's service for its product —
+   * `resolveLaneServicePath`, the same call the sweep makes before it reads.
+   */
+  readonly feedServiceResolves: boolean;
 }
 
 export interface LaneFacts {
@@ -519,14 +533,17 @@ function deriveHopVerdict(facts: LaneFacts): HopVerdict {
  * environment also has no SAP system fails the app filter first, so that is
  * what a person has to change first; reporting the missing system would send
  * them to connect one for an app that still would not be checked.
- * `secretWouldNotOpen` comes first of all because it is the only one of the six
- * where the sweep did reach the lane — an answer, not an exclusion.
+ * `secretWouldNotOpen` comes first of all because it is the one where the sweep
+ * reached the SAP system and failed there — an answer, not an exclusion.
  */
 function whyUnchecked(facts: LaneFacts): UncheckedReason {
   if (facts.binding.secretUnreadable) return "secretWouldNotOpen";
   if (!facts.sweep.appIsActive) return "appNotLive";
   if (!facts.sweep.feedHasDataset) return "feedHasNoDataset";
   if (facts.binding.matchingConnections === 0) return "noSapSystemHere";
+  // After the system, as the sweep asks it: a connection is found first, then
+  // the service it would be asked for.
+  if (!facts.sweep.feedServiceResolves) return "feedServiceUnresolved";
   return "notRunYet";
 }
 

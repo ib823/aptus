@@ -52,8 +52,37 @@ export interface SapUrlParts {
   query?: Record<string, string | number | undefined>;
 }
 
+/**
+ * Thrown when a path would move the call to a different host.
+ *
+ * Carries a bounded `code` so failureReasonFromError records it by name in the
+ * audit row rather than as a generic FETCH_FAILED.
+ */
+export class SapUrlOriginError extends Error {
+  readonly code = "SAP_URL_ORIGIN_MISMATCH";
+  constructor() {
+    super("Refused to build an SAP URL whose origin differs from the connection's base URL.");
+    this.name = "SapUrlOriginError";
+  }
+}
+
 export function buildSapUrl({ baseUrl, path, client, query }: SapUrlParts): string {
   let url = `${baseUrl}${path}`;
+
+  /*
+   * THE HOST IS THE CONNECTION'S, WHATEVER THE PATH SAYS. The join is verbatim,
+   * so a path that does not start with `/` is spliced onto the HOSTNAME:
+   * `https://x.s4hana.cloud.sap` + `API_X/A_Item` is a request to the host
+   * `x.s4hana.cloud.sapapi_x`, and `.example.com/...` is a request to a host
+   * somebody else owns — carrying the connection's credentials, because every
+   * caller attaches them to whatever URL comes back. The lane sweep did exactly
+   * that with an interface's catalogue id from PR-6a (#279) until this guard.
+   *
+   * Checked here rather than at each call site for the reason this module
+   * exists: five places build SAP URLs, and a guard in five places is a guard
+   * waiting for a sixth that forgets it.
+   */
+  if (new URL(url).origin !== new URL(baseUrl).origin) throw new SapUrlOriginError();
 
   const parts: string[] = [];
   for (const [key, value] of Object.entries(query ?? {})) {

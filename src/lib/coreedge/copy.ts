@@ -344,6 +344,7 @@ export const RECHECK_COPY = {
   skipped: {
     noEntitySet: "Nothing to check: this feed names no dataset.",
     noConnection: "Nothing to check: no SAP system is connected for this environment.",
+    noService: "Nothing to check: CoreEdge cannot resolve the SAP service this feed names, so it would refuse every call on it too.",
     unreadable: "Could not check: the SAP system's secret would not open.",
   },
 } as const;
@@ -363,9 +364,9 @@ export interface EmptyStateCopy {
  *
  * Every status in this product renders with the age of the check behind it, and
  * a lane with no check rendered "never checked" — six different situations in
- * three words. The words below are what each of the six actually is. See
- * `UncheckedReason` in lanes.ts for why five of them are outside the nightly
- * sweep on purpose and the sixth is a named gap.
+ * three words. The words below are what each reason actually is. See
+ * `UncheckedReason` in lanes.ts for which are outside the nightly sweep on
+ * purpose and which are named gaps.
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -380,12 +381,13 @@ export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
   appNotLive: "not checked · the app is not live",
   feedHasNoDataset: "not checked · no dataset chosen",
   noSapSystemHere: "not checked · no system connected here",
+  feedServiceUnresolved: "not checked · service cannot be resolved",
   secretWouldNotOpen: "not checked · the secret would not open",
   notRunYet: "not checked yet",
 };
 
 /**
- * The same six again, as a CLAUSE THAT ENDS THE ANNOUNCED SENTENCE.
+ * The same reasons again, as a CLAUSE THAT ENDS THE ANNOUNCED SENTENCE.
  *
  * WHY THIS IS NOT `UNCHECKED_AGE`. The chip's phrase is built for a slot beside
  * a label — "not checked · the app is not live" — and it is right there. Spliced
@@ -405,13 +407,15 @@ export const UNCHECKED_ANNOUNCED: Readonly<Record<UncheckedReason, string>> = {
   feedHasNoDataset: "and no check is scheduled because this feed names no dataset",
   noSapSystemHere:
     "and no check is scheduled because no SAP system is connected for this environment",
+  feedServiceUnresolved:
+    "and no check is scheduled because CoreEdge cannot resolve the SAP service this feed names",
   secretWouldNotOpen:
     "and no read was attempted because the SAP system's secret would not open",
   notRunYet: "and the nightly check has not reached this lane yet",
 };
 
 /**
- * The same six, as a sentence that says whose move it is.
+ * The same reasons, as a sentence that says whose move it is.
  *
  * The lane page and the app card have room for this; the board does not. Every
  * one of them names the next thing a person can do, or says plainly that there
@@ -426,6 +430,8 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
     "This data feed names no dataset, so there is no read to attempt. Choose one and the nightly check will cover this lane.",
   noSapSystemHere:
     "No SAP system is connected for this environment, so there is nothing to ask. Connect one and the nightly check will cover this lane.",
+  feedServiceUnresolved:
+    "CoreEdge cannot resolve the SAP service this feed names for its product, so the broker refuses every call on it and the nightly check has nothing it could honestly ask. Define the feed against a service from the catalogue.",
   secretWouldNotOpen:
     "The nightly check reached this SAP system and could not open its stored secret, so no read was attempted. That is ours to fix, not SAP's.",
   notRunYet:
@@ -460,7 +466,7 @@ export function ageIsMeasured(age: string): boolean {
  *
  * ONE FUNCTION RATHER THAN FIVE CONDITIONALS. The board, the home grid, the app
  * card, the lane page and the Checked column each render this, and each one that
- * wrote its own `checkedAt === null ? … : …` would be a place the six reasons
+ * wrote its own `checkedAt === null ? … : …` would be a place the reasons
  * could quietly collapse back into one. `unchecked` is non-null exactly when
  * `checkedAt` is null, so there is no third case to get wrong.
  */
@@ -500,10 +506,10 @@ export function laneAge(verdict: LaneVerdict, now: Date = new Date()): LaneAgeSt
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The four figures `sweepLaneChecks` returns, labelled for a reader.
+ * The figures `sweepLaneChecks` returns, labelled for a reader.
  *
- * Three of them are skips, and each label says WHICH skip, for the same reason
- * the six unchecked reasons above exist: a run that checked 2 of 20 lanes is a
+ * Most of them are skips, and each label says WHICH skip, for the same reason
+ * the unchecked reasons above exist: a run that checked 2 of 20 lanes is a
  * healthy run when eighteen of them have no system connected, and a broken one
  * if it should have checked all twenty.
  */
@@ -511,6 +517,7 @@ export const LANE_SWEEP_LABELS = {
   checked: "Checked",
   skippedNoConnection: "Skipped · no system connected",
   skippedNoEntitySet: "Skipped · feed names no dataset",
+  skippedNoService: "Skipped · feed's service cannot be resolved",
   unreadable: "Reached · the secret would not open",
 } as const;
 
