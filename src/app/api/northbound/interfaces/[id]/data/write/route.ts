@@ -181,11 +181,21 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // approved WRITE grant for this environment.
   const access = await resolveWritableInterface(client.scope, client.solutionId, id, client.environment);
   if (!access.ok) {
+    /*
+     * An unsupported operation is a 400, not a 403: nothing about access is
+     * wrong, and a 403 tells the caller to go and fix access. It is a gap in
+     * the interface's definition — the same class, and the same answer, as a
+     * feed that names no dataset further down.
+     */
     const status =
-      access.reason === "INTERFACE_NOT_FOUND" || access.reason === "NOT_THIS_SOLUTION" ? 404 : 403;
+      access.reason === "INTERFACE_NOT_FOUND" || access.reason === "NOT_THIS_SOLUTION"
+        ? 404
+        : access.reason === "OPERATION_NOT_SUPPORTED"
+          ? 400
+          : 403;
     await audit(status, id, "-");
     return northboundError(
-      status === 404 ? "NOT_FOUND" : "FORBIDDEN",
+      status === 404 ? "NOT_FOUND" : status === 400 ? "VALIDATION_ERROR" : "FORBIDDEN",
       access.message,
       status,
       correlationId,

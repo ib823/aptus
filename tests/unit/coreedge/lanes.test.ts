@@ -45,7 +45,7 @@ function healthy(): LaneFacts {
     binding: { matchingConnections: 1, secretUnreadable: false },
     probe: { status: "OK", at: RECENT },
     read: { outcome: "OK", at: RECENT, rows: 5 },
-    sweep: { appIsActive: true, feedHasDataset: true },
+    sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: true },
     now: NOW,
   };
 }
@@ -382,8 +382,8 @@ describe("a lane with no age says why it has none", () => {
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
       withFacts({ read: { outcome: null, at: null, rows: null } }),
-      withFacts({ sweep: { appIsActive: false, feedHasDataset: true } }),
-      withFacts({ sweep: { appIsActive: true, feedHasDataset: false } }),
+      withFacts({ sweep: { appIsActive: false, feedHasDataset: true, feedServiceResolves: true } }),
+      withFacts({ sweep: { appIsActive: true, feedHasDataset: false, feedServiceResolves: true } }),
     ];
     for (const facts of cases) {
       const v = deriveLaneStatus(facts);
@@ -401,10 +401,10 @@ describe("a lane with no age says why it has none", () => {
     const noRead = { outcome: null, at: null, rows: null } as const;
 
     const draftApp = deriveLaneStatus(
-      withFacts({ read: noRead, sweep: { appIsActive: false, feedHasDataset: true } }),
+      withFacts({ read: noRead, sweep: { appIsActive: false, feedHasDataset: true, feedServiceResolves: true } }),
     );
     const noDataset = deriveLaneStatus(
-      withFacts({ read: noRead, sweep: { appIsActive: true, feedHasDataset: false } }),
+      withFacts({ read: noRead, sweep: { appIsActive: true, feedHasDataset: false, feedServiceResolves: true } }),
     );
     const noSystem = deriveLaneStatus(
       withFacts({ read: noRead, binding: { matchingConnections: 0, secretUnreadable: false } }),
@@ -412,19 +412,38 @@ describe("a lane with no age says why it has none", () => {
     const badSecret = deriveLaneStatus(
       withFacts({ read: noRead, binding: { matchingConnections: 1, secretUnreadable: true } }),
     );
+    // The sweep reached it and had no path to ask — not "has not reached it".
+    const noService = deriveLaneStatus(
+      withFacts({ read: noRead, sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: false } }),
+    );
     const waiting = deriveLaneStatus(withFacts({ read: noRead }));
 
     expect(draftApp.unchecked).toBe("appNotLive");
     expect(noDataset.unchecked).toBe("feedHasNoDataset");
     expect(noSystem.unchecked).toBe("noSapSystemHere");
     expect(badSecret.unchecked).toBe("secretWouldNotOpen");
+    expect(noService.unchecked).toBe("feedServiceUnresolved");
     expect(waiting.unchecked).toBe("notRunYet");
 
-    // Five reasons, five distinct phrases — the whole point.
+    // Six reasons, six distinct phrases — the whole point.
     expect(
-      new Set([draftApp, noDataset, noSystem, badSecret, waiting].map((v) => laneCheckedAge(v, NOW)))
-        .size,
-    ).toBe(5);
+      new Set(
+        [draftApp, noDataset, noSystem, badSecret, noService, waiting].map((v) => laneCheckedAge(v, NOW)),
+      ).size,
+    ).toBe(6);
+  });
+
+  it("asks about the service after the system, in the sweep's own order", () => {
+    // No connection AND no resolvable service: the sweep stops at the missing
+    // connection first, so that is what a person has to fix first.
+    const both = deriveLaneStatus(
+      withFacts({
+        read: { outcome: null, at: null, rows: null },
+        binding: { matchingConnections: 0, secretUnreadable: false },
+        sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: false },
+      }),
+    );
+    expect(both.unchecked).toBe("noSapSystemHere");
   });
 
   it("does not let the sweep facts change a status", () => {
@@ -432,7 +451,7 @@ describe("a lane with no age says why it has none", () => {
     // answers "why do we not know", never "what is true" — if it leaked into
     // the status, a board could be made greener by marking apps as drafts.
     const live = deriveLaneStatus(healthy());
-    const draft = deriveLaneStatus(withFacts({ sweep: { appIsActive: false, feedHasDataset: false } }));
+    const draft = deriveLaneStatus(withFacts({ sweep: { appIsActive: false, feedHasDataset: false, feedServiceResolves: true } }));
     expect(draft.status).toBe(live.status);
     expect(draft.because).toBe(live.because);
   });

@@ -35,12 +35,16 @@ const mocks = vi.hoisted(() => ({
   resolveSapConnections: vi.fn(),
   probeConnection: vi.fn(),
   readEntitySet: vi.fn(),
+  findHubContent: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     solution: { findMany: mocks.findSolutions },
     sapConnection: { findMany: mocks.findConnections },
+    // The catalogue row the broker's resolver reads — the sweep now resolves
+    // through it rather than treating the catalogue id as a path.
+    sapHubContent: { findFirst: mocks.findHubContent },
     laneCheck: { upsert: mocks.upsertLaneCheck },
     sapServiceHealth: { upsert: mocks.upsertServiceHealth },
     cronRunLog: { create: mocks.createCronRunLog },
@@ -93,6 +97,14 @@ beforeEach(() => {
   mocks.resolveSapConnections.mockResolvedValue([RESOLVED]);
   mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "", durationMs: 9 });
   mocks.readEntitySet.mockResolvedValue({ status: "OK", httpStatus: 200, records: [{ id: 1 }] });
+  mocks.findHubContent.mockResolvedValue({
+    contentType: "API",
+    apiType: "ODATAV2",
+    externalId: "API_BUSINESS_PARTNER",
+    title: "Business Partner",
+    packageId: null,
+    communicationScenarios: ["SAP_COM_0008"],
+  });
   mocks.upsertLaneCheck.mockResolvedValue({});
   mocks.upsertServiceHealth.mockResolvedValue({});
   mocks.createCronRunLog.mockResolvedValue({});
@@ -160,12 +172,61 @@ describe("a successful sweep writes the ledger AND the run log", () => {
     // because no lane had a connection reads differently from a broken one.
     expect(data.summaryJson).toHaveProperty("skippedNoConnection");
     expect(data.summaryJson).toHaveProperty("skippedNoEntitySet");
+    expect(data.summaryJson).toHaveProperty("skippedNoService");
     expect(data.summaryJson.byReadStatus).toEqual({ OK: 1 });
   });
 
   it("writes the per-service matrix too, so the SAP systems screen has rows", async () => {
     await call({ authorization: `Bearer ${SECRET}` });
     expect(mocks.upsertServiceHealth).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a lane is read at the path the broker would call", () => {
+  /*
+   * THE ASSERTION THAT WAS MISSING. `readEntitySet` is mocked above, so the
+   * sweep handing it the catalogue id `API_BUSINESS_PARTNER` as a servicePath
+   * passed every test here while every real read went to a nonexistent host.
+   * What the mock receives is the claim, so the claim is checked.
+   */
+  it("passes the resolved service path, never the catalogue id", async () => {
+    await call({ authorization: `Bearer ${SECRET}` });
+    expect(mocks.readEntitySet).toHaveBeenCalledTimes(1);
+    expect(mocks.readEntitySet.mock.calls[0]?.[0]).toMatchObject({
+      servicePath: "/sap/opu/odata/sap/API_BUSINESS_PARTNER",
+      entitySet: "A_BusinessPartner",
+    });
+  });
+
+  it("skips a feed whose service cannot be resolved, without calling SAP", async () => {
+    // The broker 400s every call on such a feed. Reading anyway would record a
+    // failure against the client's system for a gap in our own config.
+    mocks.findHubContent.mockResolvedValue(null);
+
+    const res = await call({ authorization: `Bearer ${SECRET}` });
+    expect(res.status).toBe(200);
+    expect(mocks.probeConnection).not.toHaveBeenCalled();
+    expect(mocks.readEntitySet).not.toHaveBeenCalled();
+    expect(mocks.upsertLaneCheck).not.toHaveBeenCalled();
+
+    const { data } = mocks.createCronRunLog.mock.calls[0]?.[0] ?? {};
+    expect(data.summaryJson.checked).toBe(0);
+    expect(data.summaryJson.skippedNoService).toBe(1);
+  });
+
+  it("resolves a feed once per run however many environments it is checked in", async () => {
+    mocks.findConnections.mockResolvedValue([
+      CONNECTION_ROW,
+      { id: "conn_2", organizationId: "org_a", environment: "TEST" },
+    ]);
+    mocks.resolveSapConnections.mockResolvedValue([
+      RESOLVED,
+      { ...RESOLVED, id: "conn_2", key: "acme-test", environment: "TEST" },
+    ]);
+
+    await call({ authorization: `Bearer ${SECRET}` });
+    expect(mocks.readEntitySet).toHaveBeenCalledTimes(2);
+    expect(mocks.findHubContent).toHaveBeenCalledTimes(1);
   });
 });
 

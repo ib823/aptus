@@ -82,20 +82,23 @@ three.
 no deploy step, and it should not pretend otherwise. CDS views, RAP behaviour
 definitions, function modules, transports — all unchanged, all in Eclipse.
 
-Where CoreEdge helps is the far side of that work:
+The intended far side of that work is that the OData service your ABAP exposes
+(RAP, or a published CDS view) is governed like any standard SAP API: you define
+an **Interface** against it, request access, and your consuming application calls
+it through the northbound API.
 
-1. You expose an OData service from your ABAP (RAP, or a published CDS view).
-2. It appears in the capability catalogue like any other service, with honest
-   status from a live probe against the client's tenant.
-3. You define an **Interface** against it, request access, and it is governed
-   exactly like a standard SAP API.
-4. Your consuming application — Node, Python, Java, anything — calls it through
-   the northbound API with a client credential.
+**That is not yet true for services you build yourself.** The broker resolves an
+interface's service from two sources only: the curated list, and SAP's published
+Business Accelerator Hub catalogue. A customer service — a `Z*` RAP service, a
+key-user `YY1_*_CDS` view — is in neither, so an interface defined against one is
+refused at call time with *"The catalogue service could not be resolved"*, and the
+nightly lane check skips it for the same reason. Reaching your own services is
+planned work, not a configuration step you have missed.
 
-So the rule is: **CoreEdge governs the OData your ABAP exposes; it does not build
-your ABAP.** If your service is not probeable (no OData endpoint — SOAP, async,
-RFC-only), it will show as *Not probeable* rather than being silently marked
-available. That is accurate, not a limitation of the probe.
+So the rule stands — **CoreEdge governs the OData your ABAP exposes; it does not
+build your ABAP** — with the caveat above on which OData it can reach today. If a
+service is not probeable (no OData endpoint — SOAP, async, RFC-only), it shows as
+*Not probeable* rather than being silently marked available.
 
 ---
 
@@ -105,7 +108,8 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 
 - **No in-browser editing.** The scaffold produces downloads; there is no
   workspace, no terminal, no deploy button.
-- **No field-level mapping or transformation** — see below.
+- **No updates to existing records.** Writes create; see *Writing to SAP*.
+- **No services outside SAP's published catalogue.** See *If you write ABAP*.
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -149,8 +153,15 @@ Reads check the interface's status too, asymmetrically and on purpose:
 
 ## Writing to SAP
 
-Writes are supported, and deliberately harder to reach than reads. Five things
-must all be true, and every one of them can refuse you:
+Writes are supported, and deliberately harder to reach than reads. **Today a write
+means creating a record.** The broker POSTs to the interface's entity set, which
+OData treats as a create, so an interface whose operation is `UPDATE` cannot be
+activated and is refused on every call with `400 VALIDATION_ERROR` — rather than
+sending your change as a create, which would add a new record instead of changing
+the one you meant. Updating existing records is planned work.
+
+For a `CREATE` interface, five things must all be true, and every one of them can
+refuse you:
 
 1. The interface is **`mode: WRITE`** and **`status: ACTIVE`** — a draft has not
    been reviewed, and a write from an unreviewed interface changes a client's

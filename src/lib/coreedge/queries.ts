@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
 
 import {
   deriveLaneStatus,
@@ -135,6 +136,7 @@ export async function listLanes(
           id: true,
           name: true,
           externalId: true,
+          sapProduct: true,
           operation: true,
           status: true,
           entitySet: true,
@@ -145,6 +147,22 @@ export async function listLanes(
     orderBy: { name: "asc" },
   });
   if (solutions.length === 0) return [];
+
+  /*
+   * Whether the sweep could ask about each feed's service at all — the same
+   * `resolveLaneServicePath` call the sweep makes, once per distinct service,
+   * so a lane it skips says why instead of claiming it was never reached.
+   */
+  const serviceKeys = new Set(
+    solutions.flatMap((s) => s.interfaces.map((f) => `${f.sapProduct}::${f.externalId}`)),
+  );
+  const resolvableServices = new Set<string>();
+  await Promise.all(
+    [...serviceKeys].map(async (key) => {
+      const [product, externalId] = key.split("::") as [string, string];
+      if ((await resolveLaneServicePath(product, externalId)) !== null) resolvableServices.add(key);
+    }),
+  );
 
   const solutionIds = solutions.map((s) => s.id);
 
@@ -313,6 +331,7 @@ export async function listLanes(
           sweep: {
             appIsActive: solution.status === "ACTIVE",
             feedHasDataset: feed.entitySet !== null && feed.entitySet !== "",
+            feedServiceResolves: resolvableServices.has(`${feed.sapProduct}::${feed.externalId}`),
           },
           now,
         });
@@ -345,7 +364,7 @@ export interface LaneSweepRun {
   readonly finishedAt: Date;
   readonly ok: boolean;
   /**
-   * The four counts `sweepLaneChecks` returns, as the cron route recorded them.
+   * The counts `sweepLaneChecks` returns, as the cron route recorded them.
    * Null where the row does not carry the figure — a failed run records an error
    * and no counts, and "not recorded" is the honest rendering of that rather
    * than a zero, which would read as "it checked nothing" instead of "we do not
@@ -354,6 +373,8 @@ export interface LaneSweepRun {
   readonly checked: number | null;
   readonly skippedNoConnection: number | null;
   readonly skippedNoEntitySet: number | null;
+  /** Null on every run recorded before the sweep resolved services — not zero. */
+  readonly skippedNoService: number | null;
   readonly unreadable: number | null;
 }
 
@@ -391,6 +412,7 @@ export async function lastLaneSweep(): Promise<LaneSweepRun | null> {
     checked: summaryCount(row.summaryJson, "checked"),
     skippedNoConnection: summaryCount(row.summaryJson, "skippedNoConnection"),
     skippedNoEntitySet: summaryCount(row.summaryJson, "skippedNoEntitySet"),
+    skippedNoService: summaryCount(row.summaryJson, "skippedNoService"),
     unreadable: summaryCount(row.summaryJson, "unreadable"),
   };
 }

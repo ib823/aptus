@@ -40,6 +40,8 @@ import {
   resolveSapConnections,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
 
 const SWEEP_CONCURRENCY = 4;
@@ -57,9 +59,35 @@ export interface LaneSweepResult {
    * written as a failure that would blame SAP for a feed nobody finished.
    */
   readonly skippedNoEntitySet: number;
+  /**
+   * Feeds whose service the broker cannot resolve for their product. The broker
+   * refuses every call on such a feed, so there is nothing a read could prove —
+   * and a failure recorded against SAP would blame the client for our config.
+   */
+  readonly skippedNoService: number;
   /** Connections whose stored secret would not open. */
   readonly unreadable: number;
   readonly byReadStatus: Readonly<Record<string, number>>;
+}
+
+/**
+ * The service path a lane's feed resolves to — THE BROKER'S RESOLUTION, not a
+ * second one.
+ *
+ * `externalId` is a catalogue id (`API_BUSINESS_PARTNER`), not a path. This
+ * sweep passed it to `readEntitySet` as `servicePath` directly, so every lane
+ * check requested `https://<host>API_BUSINESS_PARTNER/...` — a different
+ * hostname — and no lane could ever be proven by the sweep. Resolving through
+ * `resolveHubService` means a lane is checked against exactly the path the
+ * broker would call, and a feed the broker would refuse is skipped as one.
+ *
+ * Exported so the lane board asks the same question when it explains a skip
+ * (`SweepFacts.feedServiceResolves`): one function, so the two cannot disagree.
+ */
+export async function resolveLaneServicePath(product: string, externalId: string): Promise<string | null> {
+  const sapProduct = getSapProduct(product);
+  if (sapProduct === null) return null;
+  return (await resolveHubService(sapProduct, externalId))?.path ?? null;
 }
 
 /**
@@ -185,8 +213,22 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     checked: 0,
     skippedNoConnection,
     skippedNoEntitySet,
+    skippedNoService: 0,
     unreadable: 0,
     byReadStatus: {} as Record<string, number>,
+  };
+
+  // One lookup per (product, catalogue id) per run: a feed is checked in up to
+  // four environments, and the service it names is the same in all of them.
+  const servicePaths = new Map<string, Promise<string | null>>();
+  const servicePathFor = (t: LaneTarget): Promise<string | null> => {
+    const key = `${t.product}::${t.externalId}`;
+    let path = servicePaths.get(key);
+    if (path === undefined) {
+      path = resolveLaneServicePath(t.product, t.externalId);
+      servicePaths.set(key, path);
+    }
+    return path;
   };
 
   // Grouped by (org, product) so secrets open through the same resolver every
@@ -225,7 +267,12 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
           result.skippedNoConnection++;
           continue;
         }
-        await checkOneLane(target, connection, now, result);
+        const servicePath = await servicePathFor(target);
+        if (servicePath === null) {
+          result.skippedNoService++;
+          continue;
+        }
+        await checkOneLane(target, servicePath, connection, now, result);
       }
     }
     await Promise.all(
@@ -253,7 +300,10 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
  */
 export type LaneRecheckOutcome =
   | { readonly ok: true; readonly readStatus: string; readonly checkedAt: Date }
-  | { readonly ok: false; readonly skipped: "noEntitySet" | "noConnection" | "unreadable" };
+  | {
+      readonly ok: false;
+      readonly skipped: "noEntitySet" | "noConnection" | "noService" | "unreadable";
+    };
 
 export async function recheckOneLane(
   organizationId: string,
@@ -292,8 +342,11 @@ export async function recheckOneLane(
   const connection = resolved.find((c) => parseLaneEnvironment(c.environment ?? null) === environment);
   if (connection === undefined) return { ok: false, skipped: "noConnection" };
 
+  const servicePath = await resolveLaneServicePath(target.product, target.externalId);
+  if (servicePath === null) return { ok: false, skipped: "noService" };
+
   const tally = { checked: 0, byReadStatus: {} as Record<string, number> };
-  await checkOneLane(target, connection, now, tally);
+  await checkOneLane(target, servicePath, connection, now, tally);
 
   // `checkOneLane` records exactly one read status; naming it back to the
   // caller is what lets the screen say what changed without a second query.
@@ -303,6 +356,8 @@ export async function recheckOneLane(
 
 async function checkOneLane(
   target: LaneTarget,
+  /** Resolved by `resolveLaneServicePath` — never the raw catalogue id. */
+  servicePath: string,
   connection: ResolvedSapConnection,
   now: Date,
   result: { checked: number; byReadStatus: Record<string, number> },
@@ -318,7 +373,7 @@ async function checkOneLane(
   // of them would be the merge this sweep exists to avoid.
   const read = await readEntitySet({
     connection,
-    servicePath: target.externalId,
+    servicePath,
     entitySet: target.entitySet,
     limit: PROOF_ROW_LIMIT,
   });

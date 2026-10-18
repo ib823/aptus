@@ -60,6 +60,13 @@ export type AccessRefusal =
   | "READ_ONLY_INTERFACE"
   | "INTERFACE_NOT_ACTIVE"
   /**
+   * A write interface whose operation the executor cannot perform. Today that
+   * is UPDATE: `writeEntitySet` only POSTs to the entity set, which in OData is
+   * a CREATE. Serving an UPDATE interface through it would add a new record to
+   * the client's system and report it as success.
+   */
+  | "OPERATION_NOT_SUPPORTED"
+  /**
    * A read against a DEPRECATED interface. The read path never selected
    * `status`, so a deprecated — or draft — interface served live customer
    * data exactly like an ACTIVE one, while the write path checked. The
@@ -132,6 +139,23 @@ export async function resolveWritableInterface(
       ok: false,
       reason: "INTERFACE_NOT_ACTIVE",
       message: `This interface is ${iface.status}. Only an ACTIVE interface may write.`,
+    };
+  }
+  /*
+   * CREATE IS THE ONLY WRITE THE EXECUTOR PERFORMS. An UPDATE passed every gate
+   * above and below — mode WRITE, status ACTIVE, and the grant filter accepts
+   * CREATE and UPDATE alike — and then `writeEntitySet` POSTed it to the entity
+   * set. The application asked to change a record; SAP created a new one; the
+   * broker answered 201. Refused here, before the grant query and before an
+   * idempotency key is reserved, so nothing reaches SAP and the refusal says why.
+   */
+  if (iface.operation !== "CREATE") {
+    return {
+      ok: false,
+      reason: "OPERATION_NOT_SUPPORTED",
+      message:
+        `This interface is configured to ${iface.operation} records, and CoreEdge can only create them today. ` +
+        "It refuses rather than sending the change as a create, which would add a new record instead of changing the one you meant.",
     };
   }
 

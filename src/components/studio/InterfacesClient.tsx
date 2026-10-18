@@ -25,7 +25,12 @@ import { useCallback, useState } from "react";
 
 import { ProductLabel } from "@/components/sap/ProductLabel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
-import { describeWriteReadiness, readyEnvironments, type WriteReadinessRow } from "@/lib/studio/write-readiness";
+import {
+  describeWriteReadiness,
+  readyEnvironments,
+  UPDATE_NOT_EXECUTABLE,
+  type WriteReadinessRow,
+} from "@/lib/studio/write-readiness";
 
 export interface StudioInterface {
   id: string;
@@ -206,6 +211,9 @@ export function InterfacesClient({
                   ⚠ write — stronger review
                 </span>
               )}
+              {selected.operation === "UPDATE" && (
+                <span style={{ ...muted, display: "block", marginTop: 4 }}>{UPDATE_NOT_EXECUTABLE}</span>
+              )}
             </Row>
             {selected.mode === "WRITE" && (
               <Row label="Write chain">
@@ -283,12 +291,15 @@ export function InterfacesClient({
                   disabled={
                     busy ||
                     selected.entitySet === null ||
+                    selected.operation === "UPDATE" ||
                     (selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0)
                   }
                   title={
                     selected.entitySet === null
                       ? "Set the entity set first — an ACTIVE interface with none would refuse every read."
-                      : selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0
+                      : selected.operation === "UPDATE"
+                        ? UPDATE_NOT_EXECUTABLE
+                        : selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0
                         ? "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
                         : undefined
                   }
