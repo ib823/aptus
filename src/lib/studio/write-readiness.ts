@@ -125,3 +125,17 @@ export function writeReadinessRefusal(operation: string, rows: readonly WriteRea
     "Get the write grant approved for an environment, issue the write credential for that environment under API Access, then activate."
   );
 }
+
+/**
+ * Why an UPDATE interface cannot be activated — one sentence, for the route's
+ * refusal and the button's reason alike.
+ *
+ * The broker's executor only POSTs to the entity set, which OData treats as a
+ * create, so it refuses UPDATE outright (OPERATION_NOT_SUPPORTED in
+ * northbound/access.ts). An ACTIVE UPDATE interface would therefore be refused
+ * on every call — the same "building toward a wall" the write-chain gate above
+ * exists to stop, so it is stopped at the same point.
+ */
+export const UPDATE_NOT_EXECUTABLE =
+  "An UPDATE interface cannot be activated yet: the broker can only create records, and it refuses an update " +
+  "rather than sending it as a create, which would add a new record instead of changing the one you meant.";

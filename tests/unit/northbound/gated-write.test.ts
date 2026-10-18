@@ -8,6 +8,8 @@
  */
 
 import { randomBytes } from "crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -191,6 +193,24 @@ describe("only an ACTIVE write interface may write", () => {
     expect((await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW)).ok).toBe(false);
   });
 
+  it("refuses an UPDATE interface rather than sending it as a create", async () => {
+    /*
+     * The executor only POSTs to the entity set — an OData CREATE. An UPDATE
+     * interface with an approved UPDATE grant passed every gate here and then
+     * created a new record in the client's system, reported as 201. It must
+     * stop before the grant is even looked up: no grant fixes it.
+     */
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE_IFACE, operation: "UPDATE" });
+    mocks.findManyGrants.mockResolvedValue([{ decision: "APPROVED", expiresAt: null, operation: "UPDATE" }]);
+    const r = await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("OPERATION_NOT_SUPPORTED");
+      expect(r.message).toContain("would add a new record");
+    }
+    expect(mocks.findManyGrants).not.toHaveBeenCalled();
+  });
+
   it("refuses a sibling solution's interface with the same message as absent", async () => {
     mocks.findFirstInterface.mockResolvedValue({ ...WRITE_IFACE, solutionId: "sol_other" });
     const r = await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
@@ -241,5 +261,25 @@ describe("the grant must actually authorise a WRITE", () => {
       { decision: "APPROVED", expiresAt: FUTURE, operation: "UPDATE" },
     ]);
     expect((await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW)).ok).toBe(true);
+  });
+});
+
+describe("the write route answers an unsupported operation as a definition gap", () => {
+  /*
+   * Source-level, like governed-entity-set.test.ts: the property is the order
+   * and the mapping in the route, and the route's own harness mocks access.
+   */
+  const src = readFileSync(
+    path.resolve(process.cwd(), "src/app/api/northbound/interfaces/[id]/data/write/route.ts"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, " ");
+
+  it("maps OPERATION_NOT_SUPPORTED to 400, not to the 403 that says 'fix access'", () => {
+    expect(src).toMatch(/access\.reason === "OPERATION_NOT_SUPPORTED"\s*\?\s*400/);
+  });
+
+  it("decides access before any idempotency key is reserved, so a refused UPDATE leaves none", () => {
+    expect(src.indexOf("resolveWritableInterface(")).toBeGreaterThan(-1);
+    expect(src.indexOf("resolveWritableInterface(")).toBeLessThan(src.indexOf("reserveIdempotencyKey("));
   });
 });

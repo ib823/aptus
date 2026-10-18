@@ -33,7 +33,12 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { readyEnvironments, writeReadinessByEnvironment, writeReadinessRefusal } from "@/lib/studio/write-readiness";
+import {
+  readyEnvironments,
+  UPDATE_NOT_EXECUTABLE,
+  writeReadinessByEnvironment,
+  writeReadinessRefusal,
+} from "@/lib/studio/write-readiness";
 
 const bodySchema = z.object({
   solutionId: z.string().min(1),
@@ -246,7 +251,17 @@ export async function PATCH(request: NextRequest) {
   }
 
   /*
-   *   3. A WRITE interface needs the FULL write chain in SOME environment
+   *   3. UPDATE cannot be activated at all yet. The broker refuses it on every
+   *      call (OPERATION_NOT_SUPPORTED): its executor only creates, and sending
+   *      an update as a create would add a record instead of changing one.
+   *      Checked before the write chain, because no grant or key fixes it.
+   */
+  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation === "UPDATE") {
+    return studioError("VALIDATION_ERROR", UPDATE_NOT_EXECUTABLE);
+  }
+
+  /*
+   *   4. A WRITE interface needs the FULL write chain in SOME environment
    *      before it is ACTIVE. A write reaches SAP only when, in one
    *      environment, a live credential carries a write key AND a live
    *      approved write grant covers this capability (the broker checks both

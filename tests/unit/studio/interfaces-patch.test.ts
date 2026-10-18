@@ -34,6 +34,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { PATCH } from "@/app/api/studio/interfaces/route";
+import { UPDATE_NOT_EXECUTABLE } from "@/lib/studio/write-readiness";
 
 const BUILDER = { id: "u1", email: "dev@abeam.com", role: "consultant", organizationId: "org_a" };
 
@@ -164,6 +165,20 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     const res = await PATCH(req({ id: "if_1", status: "ACTIVE", operation: "UPDATE" }));
     expect(res.status).toBe(400);
     expect(mocks.updateInterface).not.toHaveBeenCalled();
+  });
+
+  it("refuses to activate an UPDATE interface even with the full write chain in place", async () => {
+    // Before this gate, this exact setup activated — and every call it then
+    // made created a new record. No grant or key fixes that, so neither is
+    // consulted: the refusal is about the operation, and says so.
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "UPDATE", mode: "WRITE" });
+    credentials([TEST_CREDENTIAL], ["TEST"]);
+    mocks.findManyGrants.mockResolvedValue([APPROVED_TEST_GRANT]);
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toBe(UPDATE_NOT_EXECUTABLE);
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+    expect(mocks.findManyGrants).not.toHaveBeenCalled();
   });
 
   it("activates a WRITE interface once one environment holds credential-with-key AND approved grant", async () => {
