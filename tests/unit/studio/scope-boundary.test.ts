@@ -61,6 +61,21 @@ describe("the guide is straight about what is NOT built", () => {
     expect(GUIDE.toLowerCase()).toContain("no in-browser editing");
   });
 
+  it("says a write creates, and that UPDATE is refused rather than sent as a create", () => {
+    // The broker refuses OPERATION_NOT_SUPPORTED; a guide implying updates work
+    // would send a developer to build against a call that always 400s.
+    expect(GUIDE).toContain("Today a write\nmeans creating a record.");
+    expect(GUIDE).toContain("No updates to existing records.");
+  });
+
+  it("does not promise that a developer's own ABAP service is reachable", () => {
+    // It said the service "appears in the capability catalogue like any other
+    // service". The resolver reads the curated list and SAP's Hub catalogue
+    // only, so a Z*/YY1_* service is refused at call time.
+    expect(GUIDE).not.toContain("appears in the capability catalogue like any other service");
+    expect(GUIDE).toContain("**That is not yet true for services you build yourself.**");
+  });
+
   it("documents the write path's gates rather than leaving them to be discovered", () => {
     // Writes are now supported (PR-D6). A developer must know the rules BEFORE
     // calling, because four of the five gates return a 403 that looks identical
