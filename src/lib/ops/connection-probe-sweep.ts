@@ -24,6 +24,7 @@ import * as Sentry from "@sentry/nextjs";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { sendEmail } from "@/lib/email/brevo";
+import { esc } from "@/lib/email/templates";
 import { isDriftTransition } from "@/lib/ops/incidents";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
 import {
@@ -60,7 +61,9 @@ async function alertDrift(
   }
 
   // Email the organization's admins. Metadata only — the label the org chose,
-  // never a host or credential.
+  // never a host or credential. Every value is escaped: the label is typed by
+  // a builder, and the detail can quote a SuccessFactors refusal, which can
+  // echo what was typed into the connection.
   try {
     const admins = await prisma.user.findMany({
       where: { organizationId: conn.organizationId, role: "platform_admin", isActive: true },
@@ -71,10 +74,10 @@ async function alertDrift(
       to: admins.map((a) => ({ email: a.email })),
       subject: `SAP connection "${conn.label}" started failing (${to})`,
       htmlContent:
-        `<p>The scheduled probe found <strong>${conn.label}</strong>` +
-        `${conn.environment ? ` (${conn.environment})` : ""} failing: <strong>${to}</strong>.</p>` +
-        `<p>${detail}</p>` +
-        `<p>Its previous probe was ${from ?? "unrecorded"}. See Operations → Connections.</p>`,
+        `<p>The scheduled probe found <strong>${esc(conn.label)}</strong>` +
+        `${conn.environment ? ` (${esc(conn.environment)})` : ""} failing: <strong>${esc(to)}</strong>.</p>` +
+        `<p>${esc(detail)}</p>` +
+        `<p>Its previous probe was ${esc(from ?? "unrecorded")}. See Operations → Connections.</p>`,
     });
     return true;
   } catch (err) {

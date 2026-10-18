@@ -25,6 +25,7 @@ import {
   buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { publicSamlFailure } from "@/lib/sap-public/oauth-saml-bearer";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
@@ -120,6 +121,16 @@ export async function probeConnection(
     const { status, detail } = classify(res.status);
     return { status, httpStatus: res.status, detail, durationMs: Date.now() - started };
   } catch (err) {
+    /*
+     * THREE ERRORS ARE SAID OUT LOUD — SuccessFactors' own sanitised refusal of
+     * the token request, a signing key that cannot be used, and a value the
+     * assertion cannot carry — because each is built to be shown and each is
+     * the only diagnostic a first SuccessFactors test gets. publicSamlFailure
+     * is the single place that decides it, and returns null for every other
+     * error, which stays generic.
+     */
+    const said = publicSamlFailure(err);
+    if (said) return { ...said, durationMs: Date.now() - started };
     const aborted = err instanceof Error && err.name === "AbortError";
     return {
       status: aborted ? "TIMEOUT" : "ERROR",

@@ -42,6 +42,7 @@ import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
 } from "@/lib/sap-public/environment";
+import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -86,6 +87,19 @@ const httpsUrl = z
   .url()
   .max(500)
   .refine((u) => u.startsWith("https://"), { message: "must be https" })
+  // A user name or password in the URL would travel with every request, and
+  // fetch refuses such a URL with an error that repeats it.
+  .refine(
+    (u) => {
+      try {
+        const url = new URL(u);
+        return !url.username && !url.password;
+      } catch {
+        return true;
+      }
+    },
+    { message: "must not contain a user name or password" },
+  )
   .refine((u) => !isForbiddenBaseUrlHost(u), {
     message:
       "must be a public hostname — IP literals, localhost and internal names are refused (the broker calls this URL with credentials attached)",
@@ -153,6 +167,14 @@ const upsertSchema = z
      * real one.
      */
     samlAssertion: z.string().max(20000).optional(),
+    /**
+     * The OAuth client registration's RSA private key, so CoreEdge signs a
+     * fresh assertion per exchange instead of storing one that expires. PEM or
+     * headerless base64; a 4096-bit PEM key is about 3.3 kB.
+     */
+    samlPrivateKey: z.string().max(10000).optional(),
+    /** The SuccessFactors user a signed assertion is issued for. */
+    samlUserId: z.string().trim().max(255).optional(),
     clientId: z.string().max(200).optional(),
     clientSecret: z.string().max(500).optional(),
     /** API-key header auth (AD-12): the key, and the header it travels in (default `apikey`). */
@@ -186,10 +208,66 @@ const upsertSchema = z
     if (v.authType === "oauth-saml-bearer") {
       // SuccessFactors. `clientId` is the SF API key; the assertion is the
       // credential, so there is no clientSecret in this flow.
-      need("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
-      need("companyId", "companyId is required for SAML bearer auth");
-      need("samlAssertion", "samlAssertion is required for SAML bearer auth");
-      need("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      //
+      // Whitespace is missing here, as it is to the exchange: a company id of
+      // "   " saved cleanly and then failed every token request.
+      const needText = (field: "clientId" | "companyId" | "oauthTokenUrl" | "samlAssertion", why: string) => {
+        if (!v[field]?.trim()) ctx.addIssue({ code: "custom", path: [field], message: why });
+      };
+      needText("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
+      needText("companyId", "companyId is required for SAML bearer auth");
+      needText("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      // A URL never holds these, and fetch deletes them: the signed Recipient
+      // would differ from the URL posted to.
+      if (v.oauthTokenUrl && /[\t\r\n]/.test(v.oauthTokenUrl)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["oauthTokenUrl"],
+          message: "oauthTokenUrl contains a tab or line break. Type it again rather than pasting it.",
+        });
+      }
+      /*
+       * WHAT THE ASSERTION CARRIES MUST BE XML. A control character in any of
+       * these makes every assertion a document no parser accepts, and the
+       * refusal would come back looking like a key or user problem. Refused
+       * here, where it was typed.
+       */
+      for (const field of ["clientId", "samlUserId", "oauthTokenUrl"] as const) {
+        if (v[field] && XML_ILLEGAL_CHARACTER.test(v[field])) {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: `${field} contains a control character, which a SAML assertion cannot carry. Type it again rather than pasting it.`,
+          });
+        }
+      }
+      /*
+       * EITHER COREEDGE SIGNS, OR AN ASSERTION IS PASTED. The key is the
+       * durable choice — a pasted assertion expires, by SAP's default within
+       * ten minutes — so it is the one this asks for first.
+       */
+      if (v.samlPrivateKey) {
+        need("samlUserId", "samlUserId (the SuccessFactors user the assertion is issued for) is required with a signing key");
+        /*
+         * PROVEN USABLE BEFORE IT IS SEALED. A key that cannot sign would be
+         * stored, and then fail every token exchange as an opaque 401. The
+         * refusal is SamlKeyError's own sentence, which never echoes the key.
+         */
+        try {
+          parseSamlPrivateKey(v.samlPrivateKey);
+        } catch (error) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["samlPrivateKey"],
+            message: error instanceof SamlKeyError ? error.message : "The signing key could not be read.",
+          });
+        }
+      } else {
+        needText(
+          "samlAssertion",
+          "a signing key (samlPrivateKey + samlUserId) or a pre-signed samlAssertion is required for SAML bearer auth",
+        );
+      }
     }
     if (v.authType === "oauth-client-credentials") {
       need("clientId", "clientId is required for OAuth");
@@ -421,6 +499,8 @@ export async function POST(request: NextRequest) {
         ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
         ...(input.companyId ? { companyId: input.companyId } : {}),
         ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+        ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
+        ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
         ...(input.apiKey ? { apiKey: input.apiKey } : {}),
         ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
         ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),

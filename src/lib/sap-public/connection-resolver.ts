@@ -17,6 +17,8 @@
  * Secrets live only in memory on the resolved object — never logged, never
  * returned to a client (use `redactConnection` for anything client-facing).
  */
+import { createHash } from "crypto";
+
 import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_API_KEY_HEADER,
@@ -572,20 +574,25 @@ export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection)
  * UNVERIFIED AGAINST A LIVE TENANT. The request shape is from SAP's published
  * documentation, not from observation — no SuccessFactors system was available.
  * The parts that can be checked without one are: the cache, the timeout, the
- * expiry margin, and that a misconfiguration fails with a message naming the
- * missing field rather than a generic 400 from SAP. The end-to-end exchange
- * needs a real tenant before anyone relies on it, and the connection test is the
- * cheapest way to find out.
+ * expiry margin, that a misconfiguration fails with a message naming the
+ * missing field rather than a generic 400 from SAP, and — when the connection
+ * holds the signing key — that the assertion CoreEdge signs verifies under
+ * xmlsec1. The end-to-end exchange needs a real tenant before anyone relies on
+ * it, and the connection test is the cheapest way to find out.
+ *
+ * The token is cached, not the assertion: a signed assertion is used once and
+ * thrown away, and the next exchange signs another.
  */
 async function fetchSamlBearerToken(
   conn: ResolvedSapConnection,
   fetchImpl: typeof fetch = fetch,
   now: number = Date.now(),
 ): Promise<string> {
+  const fingerprint = tokenFingerprint(conn);
   const cached = oauthTokenCache.get(conn.id);
-  if (cached && cached.expiresAt > now) return cached.token;
+  if (cached && cached.fingerprint === fingerprint && cached.expiresAt > now) return cached.token;
 
-  const { clientId, samlAssertion, companyId } = conn.secrets;
+  const { clientId, samlAssertion, companyId, samlPrivateKey, samlUserId } = conn.secrets;
 
   // THE EXCHANGE ITSELF LIVES IN oauth-saml-bearer.ts, shared with the env
   // tenant path in tdd-connector. Validation (each missing field named), the
@@ -593,12 +600,13 @@ async function fetchSamlBearerToken(
   // function owns only the cache, which is the one thing that differs between
   // a stored connection (keyed by row id) and an env tenant (keyed by prefix).
   const { accessToken, ttlMs } = await exchangeSamlBearerAssertion(
-    { tokenUrl: conn.oauthTokenUrl, clientId, companyId, samlAssertion },
+    { tokenUrl: conn.oauthTokenUrl, clientId, companyId, samlAssertion, samlPrivateKey, samlUserId },
     `Connection ${conn.key}`,
     { fetchImpl, timeoutMs: TOKEN_REQUEST_TIMEOUT_MS },
   );
 
   oauthTokenCache.set(conn.id, {
+    fingerprint,
     token: accessToken,
     expiresAt: now + Math.max((ttlMs ?? DEFAULT_TOKEN_TTL_MS) - TOKEN_EXPIRY_MARGIN_MS, 0),
   });
@@ -612,7 +620,8 @@ interface OAuthTokenResponse {
 }
 
 /**
- * Cached OAuth access tokens, keyed by connection id.
+ * Cached OAuth access tokens, keyed by connection id and checked against
+ * `tokenFingerprint`.
  *
  * Without this, EVERY northbound call performs a full client-credentials
  * exchange before the request it actually wants to make: two round trips per
@@ -624,14 +633,34 @@ interface OAuthTokenResponse {
  * customers' SAP systems sitting in Redis, which is a materially worse thing to
  * leak than the cost of a cold start per instance.
  */
-const oauthTokenCache = new Map<string, { token: string; expiresAt: number }>();
+const oauthTokenCache = new Map<string, { fingerprint: string; token: string; expiresAt: number }>();
+
+/**
+ * What a cached token was minted FROM, so a re-save cannot be answered by it.
+ *
+ * Saving a connection under its existing key updates the row in place, so the
+ * id stays the same. Keyed by id alone, the cache went on serving the old
+ * credentials' token for that token's whole life — about a day for
+ * SuccessFactors — and a Test pressed after a key rotation reported OK without
+ * the new key, user or host ever being used. Any change to the auth type, the
+ * host the token is sent to, the token endpoint or a secret changes this, and
+ * the next call exchanges afresh. It is computed from the row as read, so it
+ * holds across instances, and the entry is replaced rather than added to, so
+ * the cache stays one entry per connection.
+ */
+function tokenFingerprint(conn: ResolvedSapConnection): string {
+  const secrets = Object.entries(conn.secrets).sort(([a], [b]) => a.localeCompare(b));
+  return createHash("sha256")
+    .update(JSON.stringify([conn.authType, conn.baseUrl, conn.oauthTokenUrl, secrets]))
+    .digest("hex");
+}
 
 /** Refresh early, so a token cannot expire mid-flight on a slow request. */
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 10 * 60 * 1000;
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
-/** Exposed for tests and for a future re-seal/rotation path. */
+/** Exposed for tests. A re-save needs no call: the fingerprint misses. */
 export function clearOAuthTokenCache(): void {
   oauthTokenCache.clear();
 }
@@ -641,8 +670,9 @@ async function fetchOAuthTokenFromConnection(
   fetchImpl: typeof fetch = fetch,
   now: number = Date.now(),
 ): Promise<string> {
+  const fingerprint = tokenFingerprint(conn);
   const cached = oauthTokenCache.get(conn.id);
-  if (cached && cached.expiresAt > now) return cached.token;
+  if (cached && cached.fingerprint === fingerprint && cached.expiresAt > now) return cached.token;
 
   const { clientId, clientSecret } = conn.secrets;
   // OAuth token URL is a NON-secret field stored plaintext on the row, not in
@@ -680,6 +710,7 @@ async function fetchOAuthTokenFromConnection(
         ? json.expires_in * 1000
         : DEFAULT_TOKEN_TTL_MS;
     oauthTokenCache.set(conn.id, {
+      fingerprint,
       token: json.access_token,
       expiresAt: now + Math.max(ttlMs - TOKEN_EXPIRY_MARGIN_MS, 0),
     });

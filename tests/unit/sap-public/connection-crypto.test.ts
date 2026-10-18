@@ -44,6 +44,32 @@ describe("connection-crypto", () => {
     expect("bearerToken" in opened).toBe(false); // empty string dropped
   });
 
+  it("round-trips EVERY field the secrets type declares", () => {
+    /*
+     * openSecrets reads back through an allow-list, and an allow-list that
+     * tracks a type by hand drifts: it once dropped samlAssertion and
+     * companyId, so a SuccessFactors connection sealed fine and then failed
+     * every exchange. `Required<>` makes this a compile error the moment a
+     * field is added to the type without being added here — and the
+     * assertion below fails if it is added here but not to the allow-list.
+     */
+    const all: Required<SapConnectionSecrets> = {
+      username: "u",
+      password: "p",
+      bearerToken: "b",
+      clientId: "ci",
+      clientSecret: "cs",
+      samlAssertion: "PHNhbWw+",
+      companyId: "acmeT1",
+      samlPrivateKey: "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----",
+      samlUserId: "sfadmin",
+      apiKey: "k",
+      apiKeyHeader: "apikey",
+      writeSecret: "w",
+    };
+    expect(openSecrets(sealSecrets(all))).toEqual(all);
+  });
+
   it("never leaks plaintext into the ciphertext", () => {
     const blob = sealSecrets({ password: "TopSecretValue" });
     expect(blob).not.toContain("TopSecretValue");
