@@ -92,8 +92,13 @@ Notes on the private key:
 - When the file holds several certificates, for example a chain that lists the
   issuing CA first, the key must belong to one of them.
 
-The user id is saved trimmed. A value with a control character in it (a
-vertical tab pasted from a spreadsheet, for instance) is refused when you save.
+The user id is saved trimmed, and the API key, company id and token URL are
+trimmed before every token request. These are refused when you save:
+
+- a field that is only whitespace;
+- a control character inside a value, such as a vertical tab pasted from a
+  spreadsheet;
+- a tab or line break inside the token URL.
 
 The key is sealed (AES-256-GCM, bound to this connection) and is never shown
 again. To rotate it, save the connection again with the new key.
@@ -106,11 +111,19 @@ really uses the new key.
 ## 3 · Reading the Test result
 
 When SuccessFactors refuses, the Test result quotes its own message. Before it
-is shown, the API key, company id and user id become `[API key]`,
-`[company id]` and `[user id]`, links and host names are removed, and long
-base64-looking runs are replaced. Error codes such as
-`OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION` are kept. These messages are
-confirmed in SAP's documentation:
+is shown:
+
+- the API key, company id and user id become `[API key]`, `[company id]` and
+  `[user id]`;
+- links, IP addresses and host names are removed;
+- long base64-looking runs are replaced.
+
+Error codes such as `OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION` are kept.
+Only the first 300 characters are shown.
+
+If a required field is missing, the Test result names it.
+
+These messages are confirmed in SAP's documentation:
 
 | SuccessFactors says | Usually means |
 |---|---|

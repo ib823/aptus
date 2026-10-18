@@ -93,6 +93,27 @@ describe("the user id", () => {
   });
 });
 
+describe("whitespace is missing, as it is to the exchange", () => {
+  it.each([
+    [{ clientId: "   " }, "clientId"],
+    [{ companyId: " \n " }, "companyId"],
+    [{ samlPrivateKey: undefined, samlUserId: undefined, samlAssertion: "   " }, "samlAssertion"],
+  ] as const)("refuses %j", async (over, field) => {
+    expect(await refusal(await POST(request(body(over))))).toContain(field);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("the token URL is the Recipient, so it must be the URL posted to", () => {
+  it.each(["https://api4.successfactors.com/oauth/\ttoken", "https://api4.successfactors.com/oauth/\ntoken"])(
+    "refuses %j, which fetch would post to without the whitespace the assertion signs",
+    async (oauthTokenUrl) => {
+      expect(await refusal(await POST(request(body({ oauthTokenUrl }))))).toContain("tab or line break");
+      expect(mocks.upsert).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe("a character XML cannot carry is refused where it was typed", () => {
   it.each(["clientId", "samlUserId"] as const)("in %s", async (field) => {
     // Inside the value: a trailing vertical tab is whitespace, and trimmed.

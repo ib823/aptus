@@ -288,14 +288,18 @@ function assertKeyMatchesACertificate(key: KeyObject, certDers: Buffer[]): void 
   const fromKey = createPublicKey(key).export({ type: "spki", format: "der" });
   let readable = 0;
   for (const der of certDers) {
-    let cert: X509Certificate;
+    // The public key is read inside the try as well: X509Certificate parses it
+    // lazily, so a certificate with an algorithm this runtime cannot decode
+    // constructs, then throws on `.publicKey` — and must be skipped like any
+    // other unreadable block, not abort the search before the key's own.
+    let fromCert: Buffer;
     try {
-      cert = new X509Certificate(der);
+      fromCert = new X509Certificate(der).publicKey.export({ type: "spki", format: "der" });
     } catch {
       continue;
     }
     readable++;
-    if (fromKey.equals(cert.publicKey.export({ type: "spki", format: "der" }))) return;
+    if (fromKey.equals(fromCert)) return;
   }
   if (readable > 0) {
     throw new SamlKeyError(
@@ -502,6 +506,12 @@ export function buildSignedSamlAssertionXml(input: SamlAssertionInput): string {
         `${field} contains a control character, which XML cannot carry. Type it again rather than pasting it.`,
       );
     }
+  }
+  // A URL never holds a tab or line break, and fetch silently deletes them, so
+  // one here would sign a Recipient that differs from the URL actually posted
+  // to — refused by SuccessFactors as a wrong token URL that looks right.
+  if (/[\t\r\n]/.test(input.tokenUrl)) {
+    throw new SamlAssertionInputError("the token URL contains a tab or line break. Type it again rather than pasting it.");
   }
   const key = typeof input.privateKey === "string" ? parseSamlPrivateKey(input.privateKey) : input.privateKey;
   const id = input.id ?? newSamlId();

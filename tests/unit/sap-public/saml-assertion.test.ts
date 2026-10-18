@@ -36,6 +36,7 @@ import {
   missingSamlBearerFields,
   publicSamlFailure,
   sanitizeSuccessFactorsError,
+  SamlBearerConfigError,
   SamlBearerExchangeError,
 } from "@/lib/sap-public/oauth-saml-bearer";
 import {
@@ -242,6 +243,23 @@ describe.skipIf(!openssl)("the pair is checked when the file carries the certifi
     expect(() => parseSamlPrivateKey(ca + PKCS8_PEM + ca)).toThrow(/does not belong to the certificate/);
   });
 
+  it("skips a certificate whose public key this runtime cannot decode, rather than aborting the search", () => {
+    // X509Certificate parses the key lazily: a certificate with an algorithm
+    // OpenSSL does not know constructs, then throws on .publicKey. One placed
+    // before the key's own certificate used to refuse a correct key.
+    const rsaEncryption = Buffer.from("06092a864886f70d010101", "hex");
+    const at = otherCert.indexOf(rsaEncryption);
+    expect(at).toBeGreaterThan(0);
+    const undecodable = Buffer.from(otherCert);
+    undecodable[at + rsaEncryption.length - 1] = 0x7f;
+    const odd = pem("CERTIFICATE", undecodable.toString("base64"));
+    const leaf = pem("CERTIFICATE", ownCert.toString("base64"));
+    expect(parseSamlPrivateKey(odd + PKCS8_PEM + leaf).asymmetricKeyType).toBe("rsa");
+    expect(() => parseSamlPrivateKey(odd + PKCS8_PEM + pem("CERTIFICATE", otherCert.toString("base64")))).toThrow(
+      /does not belong to the certificate/,
+    );
+  });
+
   it("does not refuse over a certificate block it cannot read", () => {
     expect(parseSamlPrivateKey(PKCS8_PEM + pem("CERTIFICATE", "bm90IGEgY2VydGlmaWNhdGU=")).asymmetricKeyType).toBe("rsa");
   });
@@ -332,6 +350,12 @@ describe("the assertion's contents", () => {
       }
     },
   );
+
+  it.each(["\t", "\n", "\r"])("refuses a token URL holding %j, which fetch would delete from the URL it posts to", (ws) => {
+    expect(() =>
+      buildSignedSamlAssertionXml({ ...BASE, tokenUrl: `https://api4.successfactors.com/oauth/${ws}token`, privateKey: PKCS8_PEM }),
+    ).toThrow(new SamlAssertionInputError("the token URL contains a tab or line break. Type it again rather than pasting it."));
+  });
 
   it("still accepts tab, line feed and carriage return, which XML can carry", () => {
     const xml = buildSignedSamlAssertionXml({ ...BASE, clientId: "a\tb\rc\nd", privateKey: PKCS8_PEM, now: NOW });
@@ -494,6 +518,47 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     ]);
   });
 
+  it("signs and posts to the SAME token URL, trimmed — a trailing newline cannot split them", async () => {
+    const fetchImpl = ok();
+    await exchangeSamlBearerAssertion(
+      {
+        ...BASE,
+        tokenUrl: `${BASE.tokenUrl}\n`,
+        clientId: ` ${BASE.clientId}\n`,
+        companyId: "acmeT1\n",
+        samlPrivateKey: PKCS8_PEM,
+        samlUserId: "sfadmin",
+      },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    );
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(BASE.tokenUrl);
+    const body = new URLSearchParams(String((init as RequestInit).body));
+    expect(body.get("client_id")).toBe(BASE.clientId);
+    expect(body.get("company_id")).toBe("acmeT1");
+    const xml = Buffer.from(body.get("assertion")!, "base64").toString("utf8");
+    expect(xml).toContain(`Recipient="${BASE.tokenUrl}"`);
+    expect(xml).toContain(`<saml2:AttributeValue xsi:type="xs:string">${BASE.clientId}</saml2:AttributeValue>`);
+  });
+
+  it("names a missing field in the Test result, without the label or any value", async () => {
+    const fetchImpl = ok();
+    const error = await exchangeSamlBearerAssertion(
+      { ...BASE, companyId: "   ", samlPrivateKey: PKCS8_PEM, samlUserId: "sfadmin" },
+      "Connection zvcsf",
+      { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5000 },
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SamlBearerConfigError);
+    expect((error as Error).message).toBe("Connection zvcsf is SAML bearer auth but missing companyId.");
+    expect(publicSamlFailure(error)).toEqual({
+      status: "ERROR",
+      httpStatus: null,
+      detail: "This connection is missing companyId. Save it again with that filled in.",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("refuses an unusable key before any request, without echoing it", async () => {
     const fetchImpl = ok();
     await expect(
@@ -562,6 +627,26 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     ).toBe("OAUTH2_ERROR_UNABLE_TO_COLLECT_SAML_ASSERTION: The SAML assertion is not Base64 encoded");
   });
 
+  it("is linear in practice: a megabyte from a hostile token endpoint costs milliseconds, not minutes", () => {
+    /*
+     * The link and host patterns backtrack. Run over the whole answer they took
+     * minutes on a megabyte of "a.", with the event loop blocked — on the Test
+     * button, every northbound call and the fleet-wide sweep. The text is cut to
+     * a window first; only 300 characters are ever shown.
+     */
+    for (const unit of ["a.", "A.", "a-", "+", "a:"]) {
+      const started = performance.now();
+      const said = sanitizeSuccessFactorsError(unit.repeat(1_000_000 / unit.length), { clientId: BASE.clientId, companyId: "acmeT1", samlUserId: "sfadmin" });
+      expect(performance.now() - started, `${JSON.stringify(unit)} took too long`).toBeLessThan(250);
+      expect(said!.length).toBeLessThanOrEqual(300);
+    }
+  });
+
+  it("still shows the start of a long refusal, cut at a word", () => {
+    const said = sanitizeSuccessFactorsError(`Unable to validate "Recipient" ${"word ".repeat(5000)}`)!;
+    expect(said.startsWith('Unable to validate "Recipient" word word')).toBe(true);
+  });
+
   it("carries no link, host or markup — the detail reaches an email and people not shown where it points", () => {
     const said = sanitizeSuccessFactorsError(
       'Re-authenticate <a href="https://evil.example/login">here</a>, or see help.sap.com/docs or http://x.ondemand.com/a?b=c',
@@ -575,6 +660,23 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     );
   });
 
+  it.each([
+    "Re-authenticate at 1HTTPS://EVIL.EXAMPLE/sf-login",
+    "Re-authenticate at _https://evil.example/login",
+    "Re-authenticate at WWW.EVIL-LOGIN.COM",
+    "Re-authenticate at evil.COM",
+    "Re-authenticate at Www.Evil-Login.Com",
+    "Re-authenticate at 10.0.0.1/login",
+    "Re-authenticate at аррӏе.com/login",
+    "Re-authenticate at evil。example",
+    "Write to MAILTO:PHISH@EVIL.EXAMPLE",
+    "Write to phish@evil.example",
+  ])("removes the host or link in %j", (message) => {
+    const said = sanitizeSuccessFactorsError(message)!;
+    expect(said).not.toMatch(/evil|EVIL|Evil|10\.0\.0\.1|аррӏе/);
+    expect(said).toMatch(/\[(host|link)\]/);
+  });
+
   it("replaces the sealed API key, company id and user id SuccessFactors echoes back", () => {
     const sealed = { clientId: BASE.clientId, companyId: "acmeT1", samlUserId: "sfadmin" };
     expect(
@@ -584,8 +686,36 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     expect(
       sanitizeSuccessFactorsError("key abcdefgh0123 refused", { clientId: "abcdefgh0123", companyId: "defgh" }),
     ).toBe("key [API key] refused");
-    // Too short to replace without mangling ordinary words.
+    // Too short to replace without hiding ordinary words.
     expect(sanitizeSuccessFactorsError("company c is inactive", { companyId: "c" })).toBe("company c is inactive");
+  });
+
+  it("replaces a sealed value as a whole word only, so a short user id cannot rewrite SuccessFactors' message", () => {
+    // "sam" inside SAML used to come out as "[user id]L" — which both broke the
+    // documented message and told the reader the value.
+    const sealed = { samlUserId: "sam", companyId: "api" };
+    for (const documented of [
+      "Unable to verify the signature of the SAML assertion",
+      "OAUTH2_ERROR_SAML_ASSERTION_EXPIRED",
+      'Unable to validate "api_key" in the SAML assertion',
+    ]) {
+      expect(sanitizeSuccessFactorsError(documented, sealed)).toBe(documented);
+    }
+    expect(sanitizeSuccessFactorsError('Login failed - invalid user "SAM"', sealed)).toBe(
+      'Login failed - invalid user "[user id]"',
+    );
+  });
+
+  it("replaces a sealed value whose lower-case form is not its own (İ, ẞ), and one with pattern characters", () => {
+    expect(
+      sanitizeSuccessFactorsError("Unable to map İPEK.YILMAZ to a valid BizX User ID", { samlUserId: "İPEK.YILMAZ" }),
+    ).toBe("Unable to map [user id] to a valid BizX User ID");
+    expect(sanitizeSuccessFactorsError('Invalid company "GROẞHANDEL01"', { companyId: "GROẞHANDEL01" })).toBe(
+      'Invalid company "[company id]"',
+    );
+    expect(sanitizeSuccessFactorsError('Invalid company "ACME(Corp)*/1"', { companyId: "ACME(Corp)*/1" })).toBe(
+      'Invalid company "[company id]"',
+    );
   });
 
   it("never repeats the sealed identifiers through SuccessFactors' refusal — in the detail or the message", async () => {

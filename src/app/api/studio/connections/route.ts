@@ -195,9 +195,24 @@ const upsertSchema = z
     if (v.authType === "oauth-saml-bearer") {
       // SuccessFactors. `clientId` is the SF API key; the assertion is the
       // credential, so there is no clientSecret in this flow.
-      need("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
-      need("companyId", "companyId is required for SAML bearer auth");
-      need("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      //
+      // Whitespace is missing here, as it is to the exchange: a company id of
+      // "   " saved cleanly and then failed every token request.
+      const needText = (field: "clientId" | "companyId" | "oauthTokenUrl" | "samlAssertion", why: string) => {
+        if (!v[field]?.trim()) ctx.addIssue({ code: "custom", path: [field], message: why });
+      };
+      needText("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
+      needText("companyId", "companyId is required for SAML bearer auth");
+      needText("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+      // A URL never holds these, and fetch deletes them: the signed Recipient
+      // would differ from the URL posted to.
+      if (v.oauthTokenUrl && /[\t\r\n]/.test(v.oauthTokenUrl)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["oauthTokenUrl"],
+          message: "oauthTokenUrl contains a tab or line break. Type it again rather than pasting it.",
+        });
+      }
       /*
        * WHAT THE ASSERTION CARRIES MUST BE XML. A control character in any of
        * these makes every assertion a document no parser accepts, and the
@@ -235,7 +250,7 @@ const upsertSchema = z
           });
         }
       } else {
-        need(
+        needText(
           "samlAssertion",
           "a signing key (samlPrivateKey + samlUserId) or a pre-signed samlAssertion is required for SAML bearer auth",
         );

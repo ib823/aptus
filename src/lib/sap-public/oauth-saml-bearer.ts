@@ -102,7 +102,8 @@ interface OAuthTokenResponse {
  * and the API key, company id and user id are sealed like every other
  * credential here, so each is replaced by a placeholder before the sentence is
  * kept. The rest is bounded by `sanitizeSuccessFactorsError`. `publicDetail`
- * is the sentence a screen may show; it never carries a URL, a host or markup.
+ * is the sentence a screen may show: no markup, and no link or host name that a
+ * pattern can tell from a word (that function names the one it cannot).
  */
 export class SamlBearerExchangeError extends Error {
   readonly code = "SAML_BEARER_REJECTED";
@@ -117,16 +118,37 @@ export class SamlBearerExchangeError extends Error {
 }
 
 /**
+ * The connection lacks a field the exchange cannot proceed without.
+ *
+ * Its own class so the Test result can name the field: a plain Error is (rightly)
+ * never repeated to a client, and "could not be established" for a blank
+ * company id sends the administrator looking at the network. `publicDetail`
+ * carries only field names, never a value or the caller's label.
+ */
+export class SamlBearerConfigError extends Error {
+  readonly code = "SAML_BEARER_MISCONFIGURED";
+  readonly publicDetail: string;
+  constructor(label: string, readonly missing: string[]) {
+    super(`${label} is SAML bearer auth but missing ${missing.join(", ")}.`);
+    this.name = "SamlBearerConfigError";
+    this.publicDetail = `This connection is missing ${missing.join(", ")}. Save it again with ${
+      missing.length === 1 ? "that" : "those"
+    } filled in.`;
+  }
+}
+
+/**
  * The ONLY caught errors whose words may reach a client-visible detail.
  *
  * A caught error in general must never be repeated to a client: a fetch error
  * stringifies with the host, and on an OAuth path with the request. These
- * three are the exceptions because each is constructed to be shown —
+ * four are the exceptions because each is constructed to be shown —
  * SamlBearerExchangeError's `publicDetail` (SuccessFactors' sanitised refusal,
- * no URL), and the messages of SamlKeyError and SamlAssertionInputError (fixed
- * sentences, never key material or a field's value) — and each is the only
- * diagnostic a first SuccessFactors test gets. Anything else returns null, and
- * the caller keeps its generic sentence.
+ * no URL), SamlBearerConfigError's `publicDetail` (field names only), and the
+ * messages of SamlKeyError and SamlAssertionInputError (fixed sentences, never
+ * key material or a field's value) — and each is the only diagnostic a first
+ * SuccessFactors test gets. Anything else returns null, and the caller keeps
+ * its generic sentence.
  */
 export function publicSamlFailure(
   err: unknown,
@@ -138,6 +160,7 @@ export function publicSamlFailure(
       detail: err.publicDetail,
     };
   }
+  if (err instanceof SamlBearerConfigError) return { status: "ERROR", httpStatus: null, detail: err.publicDetail };
   if (err instanceof SamlKeyError || err instanceof SamlAssertionInputError) {
     return { status: "ERROR", httpStatus: null, detail: err.message };
   }
@@ -147,47 +170,97 @@ export function publicSamlFailure(
 /** The sealed identifiers SuccessFactors may echo, and what replaces each. */
 export type SealedIdentifiers = Partial<Pick<SamlBearerCredentials, "clientId" | "companyId" | "samlUserId">>;
 
-/** Shorter than this, a value is replaced only at the cost of mangling ordinary words. */
+/** Shorter than this, a value is replaced only at the cost of hiding ordinary words. */
 const MIN_REDACTED_LENGTH = 3;
+
+/**
+ * How much of a refusal is examined. Only the first 300 characters are ever
+ * shown, and the token endpoint's answer is unbounded: the patterns below
+ * backtrack, so run over a megabyte from a hostile endpoint they blocked the
+ * event loop for minutes — on the Test button, on every northbound call and in
+ * the fleet-wide probe sweep. Bounded first, every pass is a few milliseconds.
+ */
+const SANITIZE_WINDOW = 1000;
+
+/** A letter, digit or underscore — what a sealed value must not touch to count as a whole word. */
+const WORD_CHAR = String.raw`[\p{L}\p{N}_]`;
+
+/** Regex-escape for a `u`-flag pattern, where only syntax characters may be escaped. */
+const escapeRegExp = (v: string) => v.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/**
+ * A dotted name, in any script: labels of letters, digits and hyphens joined by
+ * a full stop (or an ideographic or full-width one), ending in a label of two
+ * or more letters.
+ */
+const DOTTED_NAME = /(?<![\p{L}\p{N}_.-])((?:[\p{L}\p{N}-]+[.\u3002\uFF0E\uFF61])+)(\p{L}{2,})(?![\p{L}\p{N}_-])/gu;
 
 /**
  * Bound SuccessFactors' errorMessage before it goes anywhere a person reads.
  *
- * In order: the sealed identifiers SuccessFactors echoes become placeholders
- * (longest first, so one inside another cannot leave half of it); whitespace
- * collapses; URLs and host names go, since the detail reaches people who are
- * not shown where a connection points; `<` and `>` go, so it cannot carry
- * markup into the alert email; and any base64-looking run over 40 characters
- * is replaced — except an upper-case, underscore-separated identifier such as
- * OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION, which is SuccessFactors naming
- * the failure, not a secret. 300 characters at most.
+ * In order:
+ *   1. Whitespace collapses and the text is cut to SANITIZE_WINDOW, at a word
+ *      boundary, before any other pattern runs.
+ *   2. The sealed API key, company id and user id become placeholders —
+ *      matched as whole words, case-insensitively, from the values as stored,
+ *      in one pass with the longest first. Whole words, because a user id of
+ *      "sam" must not turn SAML into "[user id]L"; from the stored values,
+ *      because lower-casing İ or ẞ first produces a pattern that no longer
+ *      matches the echo.
+ *   3. Links go: anything with `://`, and `mailto:`.
+ *   4. Host names and IP addresses go, since the detail reaches people who are
+ *      not shown where a connection points. A dotted name counts as a host
+ *      when its last label is all one case, or when it has three labels or
+ *      more — so "assertion.Please", a sentence missing its space, is kept.
+ *      A two-label, mixed-case name ("Example-Host.Com") is indistinguishable
+ *      from that and is kept too; the alert email is escaped at the sink, so it
+ *      is never a live link there.
+ *   5. `<` and `>` go, so it cannot carry markup.
+ *   6. Any base64-looking run over 40 characters is replaced — except an
+ *      upper-case, underscore-separated identifier such as
+ *      OAUTH2_ERROR_UNABLE_TO_VERIFY_SAML_ASSERTION, which is SuccessFactors
+ *      naming the failure, not a secret.
+ * 300 characters at most.
  */
 export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifiers = {}): string | null {
   if (typeof raw !== "string") return null;
-  const placeholders = new Map<string, string>();
+  const collapsed = raw.replace(/\s+/g, " ");
+  let text = collapsed;
+  if (collapsed.length > SANITIZE_WINDOW) {
+    const cut = collapsed.lastIndexOf(" ", SANITIZE_WINDOW);
+    text = collapsed.slice(0, cut > 0 ? cut : SANITIZE_WINDOW);
+  }
+
+  const values: { value: string; label: string }[] = [];
   for (const [value, label] of [
     [sealed.clientId, "[API key]"],
     [sealed.companyId, "[company id]"],
     [sealed.samlUserId, "[user id]"],
   ] as const) {
-    const v = value?.trim().toLowerCase() ?? "";
-    if (v.length >= MIN_REDACTED_LENGTH && !placeholders.has(v)) placeholders.set(v, label);
+    const v = typeof value === "string" ? value.trim() : "";
+    if (v.length >= MIN_REDACTED_LENGTH) values.push({ value: v, label });
   }
-  // One pass, longest alternative first: a placeholder already written is
-  // never searched again, and a value inside a longer one cannot split it.
-  const alternatives = [...placeholders.keys()]
-    .sort((a, b) => b.length - a.length)
-    .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const text =
-    alternatives.length > 0
-      ? raw.replace(new RegExp(alternatives.join("|"), "gi"), (m) => placeholders.get(m.toLowerCase()) ?? "[…]")
-      : raw;
+  if (values.length > 0) {
+    values.sort((a, b) => b.value.length - a.value.length);
+    // One capture group per value, so the replacement knows which it matched
+    // without a case-mapping lookup that İ and ẞ defeat.
+    const alternatives = values.map((x) => `(${escapeRegExp(x.value)})`).join("|");
+    const pattern = new RegExp(`(?<!${WORD_CHAR})(?:${alternatives})(?!${WORD_CHAR})`, "giu");
+    text = text.replace(pattern, (...groups: unknown[]) => {
+      const hit = groups.slice(1, values.length + 1).findIndex((g) => typeof g === "string");
+      return values[hit]?.label ?? "[…]";
+    });
+  }
+
   const cleaned = text
-    .replace(/\s+/g, " ")
-    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, "[link]")
-    // Lower case only, as host names are written: "assertion.Please" — a
-    // sentence missing its space — is SuccessFactors' words, not a host.
-    .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/g, "[host]")
+    .replace(/\S*:\/\/\S*/g, "[link]")
+    .replace(/(?<![\p{L}\p{N}_])mailto:\S*/giu, "[link]")
+    .replace(/(?<![\p{N}.])\p{N}{1,3}(?:\.\p{N}{1,3}){3}(?![\p{N}.])/gu, "[host]")
+    .replace(DOTTED_NAME, (name: string, labels: string, last: string) => {
+      const oneCase = last === last.toLowerCase() || last === last.toUpperCase();
+      const threeOrMore = (labels.match(/[.\u3002\uFF0E\uFF61]/gu) ?? []).length >= 2;
+      return oneCase || threeOrMore ? "[host]" : name;
+    })
     .replace(/[<>]/g, "")
     .replace(/[A-Za-z0-9+/=_-]{41,}/g, (run) => (/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(run) ? run : "[…]"))
     .trim();
@@ -204,14 +277,27 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
  * into a ticket.
  */
 export async function exchangeSamlBearerAssertion(
-  c: SamlBearerCredentials,
+  given: SamlBearerCredentials,
   label: string,
   opts: { fetchImpl?: typeof fetch; timeoutMs: number },
 ): Promise<SamlBearerToken> {
+  /*
+   * TRIMMED ONCE, USED EVERYWHERE. A trailing newline from a hosting
+   * dashboard is invisible, and fetch drops it from the URL while the signer
+   * would have put it in the Recipient — a refusal that reads as a wrong token
+   * URL when the URL looks right. Each value is trimmed here, so the signed
+   * assertion and the request carry the same one.
+   */
+  const trim = (v: string | null | undefined) => (typeof v === "string" ? v.trim() : v);
+  const c: SamlBearerCredentials = {
+    ...given,
+    tokenUrl: trim(given.tokenUrl),
+    clientId: trim(given.clientId),
+    companyId: trim(given.companyId),
+    samlUserId: trim(given.samlUserId),
+  };
   const missing = missingSamlBearerFields(c);
-  if (missing.length > 0) {
-    throw new Error(`${label} is SAML bearer auth but missing ${missing.join(", ")}.`);
-  }
+  if (missing.length > 0) throw new SamlBearerConfigError(label, missing);
 
   /*
    * A FRESH ASSERTION PER EXCHANGE when the key is held. Built before the
