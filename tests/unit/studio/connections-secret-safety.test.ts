@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 
 import { publicSamlFailure, SamlBearerExchangeError } from "@/lib/sap-public/oauth-saml-bearer";
 import { SamlAssertionInputError, SamlKeyError } from "@/lib/sap-public/saml-assertion";
+import { publicCredentialFailure } from "@/lib/sap-public/upstream-failure";
 
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(path.resolve(ROOT, p), "utf8");
@@ -101,7 +102,7 @@ describe("the probe keeps secrets and hosts out of its result", () => {
     expect(catchBlock).not.toMatch(/detail:\s*err\b/);
   });
 
-  it("repeats a caught error only through publicSamlFailure, and only the three built to be shown", () => {
+  it("repeats a caught error only through publicCredentialFailure, and only those built to be shown", () => {
     /*
      * The one exception to the rule above, made explicit rather than slipped
      * past the regex: a SuccessFactors refusal, an unusable signing key and a
@@ -109,13 +110,22 @@ describe("the probe keeps secrets and hosts out of its result", () => {
      * SuccessFactors test gets, and each is constructed to be safe. Every
      * other error — including one whose message carries a host, the case the
      * rule exists for — must come back null.
+     *
+     * publicCredentialFailure, not publicSamlFailure (audit A20): it is
+     * publicSamlFailure widened to the stored connection's own credential
+     * errors — a missing field, a reserved header, the token endpoint's
+     * refusal — so those reach the Test result as UNAUTHORIZED instead of
+     * "could not be established". It must refuse the leaky error just the same.
      */
     const src = code(read(HEALTH));
-    expect(src.slice(src.indexOf("} catch (err) {"))).toContain("publicSamlFailure(err)");
+    expect(src.slice(src.indexOf("} catch (err) {"))).toContain("publicCredentialFailure(err)");
 
     const leaky = new TypeError("fetch failed: connect ECONNREFUSED https://my123-api.s4hana.cloud.sap/oauth/token");
     expect(publicSamlFailure(leaky)).toBeNull();
     expect(publicSamlFailure("a string")).toBeNull();
+    expect(publicCredentialFailure(leaky)).toBeNull();
+    expect(publicCredentialFailure("a string")).toBeNull();
+    expect(publicCredentialFailure(new Error("OAuth token request failed for prod: HTTP 401"))).toBeNull();
 
     const refused = new SamlBearerExchangeError("internal, with label", 401, "SuccessFactors refused the token request (HTTP 401).");
     expect(publicSamlFailure(refused)).toEqual({

@@ -28,6 +28,8 @@ interface CapabilityRow {
   entitySetCount?: number;
   protocol?: string;
   note?: string;
+  /** Set when the tenant was never asked: its credential could not be obtained. */
+  credentialError?: "refused" | "unavailable";
   error?: string;
 }
 
@@ -78,6 +80,10 @@ function statusMeaning(status: string): string {
   if (status === "403") return "not activated (forbidden)";
   if (status === "404") return "not activated (not found)";
   if (status === "0") return "no response (timeout/network)";
+  // A row whose credential could not be obtained — summarize's key for it.
+  // Nothing was asked of the service, so it is neither "not activated" nor
+  // "no response".
+  if (status === "auth") return "could not authenticate to tenant";
   return `HTTP ${status}`;
 }
 
@@ -191,7 +197,7 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
                   <span
                     key={status}
                     className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5"
-                    title={`HTTP ${status}`}
+                    title={status === "auth" ? "no request was sent" : `HTTP ${status}`}
                   >
                     <span className="font-medium">{count}×</span>
                     <span className="text-muted-foreground">{statusMeaning(status)}</span>
@@ -210,7 +216,8 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
           {summary.exposed === 0 && summary.published > 0 && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
               0 exposed across {summary.published} probed. If the rows are mostly{" "}
-              <strong>401</strong> this is an auth/credentials issue; if <strong>403/404</strong>,
+              <strong>401</strong> or <strong>could not authenticate</strong> this is an
+              auth/credentials issue — fix the connection, not the tenant; if <strong>403/404</strong>,
               those services simply aren&apos;t activated in this tenant (request the listed{" "}
               <code className="rounded bg-muted px-1 py-0.5">SAP_COM_xxxx</code> scenario).
             </div>
@@ -249,6 +256,10 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
                         <Badge variant="default">
                           <CheckCircle2 className="size-3.5" /> exposed
                         </Badge>
+                      ) : row.credentialError ? (
+                        <Badge variant="secondary">
+                          <AlertTriangle className="size-3.5" /> could not authenticate
+                        </Badge>
                       ) : (
                         <Badge variant="secondary">
                           <Circle className="size-3.5" /> not activated
@@ -258,7 +269,9 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
                     <td className="px-3 py-2 text-muted-foreground">
                       {row.exposed
                         ? `${row.entitySetCount ?? 0} entity sets`
-                        : `HTTP ${row.status || "err"}`}
+                        : row.credentialError
+                          ? (row.error ?? "Could not authenticate to tenant; no request was sent.")
+                          : `HTTP ${row.status || "err"}`}
                     </td>
                     <td className="px-3 py-2">
                       {row.scenario ? (

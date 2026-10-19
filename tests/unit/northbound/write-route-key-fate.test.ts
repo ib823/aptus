@@ -176,7 +176,7 @@ describe("a credential that fails before anything is sent (A25)", () => {
     expect(mocks.release).toHaveBeenCalledWith({ organizationId: "org_a" }, "idem_1");
     expect(mocks.complete).not.toHaveBeenCalled();
     // Audited as a setup failure, not as the tenant's 5xx.
-    expect(lastAudit()).toMatchObject({ status: 403, failureReason: "CREDENTIAL_SETUP", replayed: false });
+    expect(lastAudit()).toMatchObject({ status: 403, failureReason: "OAUTH_TOKEN_REJECTED", replayed: false });
   });
 
   it("a connection missing its password is the same, with no fetch at all", async () => {
@@ -227,7 +227,7 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
     const f = sap({
       token: async () => new Response("<html>Service Unavailable</html>", { status: 503, headers: { "content-type": "text/html" } }),
     });
-    await expectRetryable(502, "UPSTREAM_ERROR", "TOKEN_HTTP_503");
+    await expectRetryable(502, "UPSTREAM_ERROR", "OAUTH_TOKEN_HTTP_503");
     expect(methods(f)).toEqual(["TOKEN"]);
   });
 
@@ -258,7 +258,7 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
   it("a SAML token endpoint answering 503 is a 502 UPSTREAM_ERROR", async () => {
     state.connection = SAML;
     sap({ token: async () => new Response("", { status: 503 }) });
-    await expectRetryable(502, "UPSTREAM_ERROR", "TOKEN_HTTP_503");
+    await expectRetryable(502, "UPSTREAM_ERROR", "SAML_BEARER_HTTP_503");
   });
 
   it("a SAML exchange SuccessFactors refuses is still a 403 FORBIDDEN", async () => {

@@ -89,7 +89,21 @@ interface OAuthTokenResponse {
 }
 
 /**
- * SuccessFactors refused the exchange — with what it said, made safe to show.
+ * True when a token endpoint's status REFUSES the request as it was sent — any
+ * 4xx but 408 (it timed out) and 429 (it is throttling). That is a setup
+ * problem, fixed in the connection: the client id, the secret, the assertion,
+ * the company id or the token URL. A 5xx, a 408 or a 429 is the endpoint
+ * failing, and nothing was refused. Shared by the SAML and client-credentials
+ * exchanges so the two cannot draw the line in different places.
+ */
+export function isTokenRefusal(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/**
+ * The token endpoint answered without a token — with what SuccessFactors said,
+ * made safe to show. Despite the name, not always a refusal: `httpStatus`
+ * decides, through isTokenRefusal, and `publicDetail` says which it was.
  *
  * WHY SUCCESSFACTORS' OWN WORDS ARE KEPT. Its errorMessage names the failing
  * field — "Unable to verify the signature", `Unable to validate "Recipient"`,
@@ -106,7 +120,12 @@ interface OAuthTokenResponse {
  * pattern can tell from a word (that function names the one it cannot).
  */
 export class SamlBearerExchangeError extends Error {
-  readonly code = "SAML_BEARER_REJECTED";
+  /**
+   * The failure reason an audit row carries. A refusal and an outage were one
+   * code, so a SuccessFactors maintenance window was audited as a credential
+   * rejection; they are now told apart by the status.
+   */
+  readonly code: string;
   constructor(
     message: string,
     readonly httpStatus: number,
@@ -114,6 +133,11 @@ export class SamlBearerExchangeError extends Error {
   ) {
     super(message);
     this.name = "SamlBearerExchangeError";
+    this.code = isTokenRefusal(httpStatus)
+      ? "SAML_BEARER_REJECTED"
+      : httpStatus >= 200 && httpStatus < 300
+        ? "SAML_BEARER_NO_TOKEN"
+        : `SAML_BEARER_HTTP_${httpStatus}`;
   }
 }
 
@@ -149,20 +173,29 @@ export class SamlBearerConfigError extends Error {
  * key material or a field's value) — and each is the only diagnostic a first
  * SuccessFactors test gets. Anything else returns null, and the caller keeps
  * its generic sentence.
+ *
+ * THE STATUS SAYS WHOSE PROBLEM IT IS (audit A20). A field the connection
+ * lacks, a key that cannot sign, a value the assertion cannot carry and a
+ * token request SuccessFactors refused are all a sign-in that could not
+ * happen, fixed in the connection: UNAUTHORIZED, the platform admin's lane.
+ * They were ERROR — "SAP unavailable", the client Basis team's — except a
+ * 401/403 refusal, so a blank company id or an expired assertion sent the
+ * ticket to people who could not fix it. Only an endpoint that failed (5xx,
+ * 429, no token) is ERROR now.
  */
 export function publicSamlFailure(
   err: unknown,
 ): { status: "UNAUTHORIZED" | "ERROR"; httpStatus: number | null; detail: string } | null {
   if (err instanceof SamlBearerExchangeError) {
     return {
-      status: err.httpStatus === 401 || err.httpStatus === 403 ? "UNAUTHORIZED" : "ERROR",
+      status: isTokenRefusal(err.httpStatus) ? "UNAUTHORIZED" : "ERROR",
       httpStatus: err.httpStatus,
       detail: err.publicDetail,
     };
   }
-  if (err instanceof SamlBearerConfigError) return { status: "ERROR", httpStatus: null, detail: err.publicDetail };
+  if (err instanceof SamlBearerConfigError) return { status: "UNAUTHORIZED", httpStatus: null, detail: err.publicDetail };
   if (err instanceof SamlKeyError || err instanceof SamlAssertionInputError) {
-    return { status: "ERROR", httpStatus: null, detail: err.message };
+    return { status: "UNAUTHORIZED", httpStatus: null, detail: err.message };
   }
   return null;
 }
@@ -454,11 +487,29 @@ export async function exchangeSamlBearerAssertion(
     const json = await readTokenResponse(res);
     if (!res.ok || typeof json.access_token !== "string") {
       const said = sanitizeSuccessFactorsError(json.errorMessage, c);
-      const hint = signsOwnAssertion(c)
-        ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
-          "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."
-        : "An expired or unregistered assertion is the usual cause.";
-      const publicDetail = `SuccessFactors refused the token request (HTTP ${res.status})${said ? `: ${said}` : "."} ${hint}`;
+      const words = said ? `: ${said}` : ".";
+      /*
+       * ONLY A REFUSAL GETS THE CONFIGURATION HINT (audit A54). Every answer
+       * without a token took this one sentence, so an SF maintenance 503, a
+       * gateway 502, a 429 and a 200 whose body was over the limit or HTML were
+       * all "refused", blamed on the key, the user id or the company id — and
+       * the nightly sweep emailed that to every platform admin, who were sent
+       * to rotate a key pair that was correct.
+       */
+      let publicDetail: string;
+      if (isTokenRefusal(res.status)) {
+        const hint = signsOwnAssertion(c)
+          ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
+            "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."
+          : "An expired or unregistered assertion is the usual cause.";
+        publicDetail = `SuccessFactors refused the token request (HTTP ${res.status})${words} ${hint}`;
+      } else if (res.status === 429) {
+        publicDetail = `SuccessFactors is rate-limiting the token endpoint (HTTP 429)${words} Retry later.`;
+      } else if (res.status >= 200 && res.status < 300) {
+        publicDetail = `SuccessFactors returned no access token (HTTP ${res.status})${words}`;
+      } else {
+        publicDetail = `The SuccessFactors token endpoint is unavailable (HTTP ${res.status})${words} This is not a configuration problem.`;
+      }
       throw new SamlBearerExchangeError(
         `SAML bearer token request failed for ${label}: ${publicDetail}`,
         res.status,
@@ -470,19 +521,23 @@ export async function exchangeSamlBearerAssertion(
     return { accessToken: json.access_token, ttlMs };
   } catch (error) {
     /*
-     * STILL AN AbortError, with a message that names no URL. Rethrown as a
-     * plain Error, a SuccessFactors token endpoint that hung was a timeout to
+     * STILL AN AbortError (audit A55), with a message that names no URL.
+     * Every caller tells a timeout apart by `name === "AbortError"` — the
+     * probe, the broker's read and write, and failureReasonFromError — and a
+     * plain Error here made a hung SuccessFactors token endpoint a timeout to
      * nobody: the write path took it for credentials that "could not be used"
      * and answered 403 "fix the connection", and the read path and the
-     * connection Test called it a generic failure — while a client-credentials
-     * timeout, which nothing catches on the way, reached all three as the
-     * timeout it is.
+     * connection Test called it ERROR / FETCH_FAILED — while the same hang on a
+     * client-credentials connection, which nothing catches on the way, reached
+     * all three as the TIMEOUT it is. The sentence is kept; the name says what
+     * it is.
      */
     if (error instanceof Error && error.name === "AbortError") {
-      throw Object.assign(
-        new Error(`SAML bearer token request for ${label} timed out after ${opts.timeoutMs}ms`),
-        { name: "AbortError" },
-      );
+      const timedOut = new Error(`SAML bearer token request for ${label} timed out after ${opts.timeoutMs}ms`, {
+        cause: error,
+      });
+      timedOut.name = "AbortError";
+      throw timedOut;
     }
     // fetch's TypeError carries the URL; the cause keeps it for a log, the
     // message does not.

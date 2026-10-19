@@ -22,6 +22,9 @@
  * The client-facing `detail` stays generic. This is additive, alongside it.
  */
 
+import { TOKEN_REQUEST_TIMEOUT_MS } from "@/lib/sap-public/connection-resolver";
+import { credentialFailureKind } from "@/lib/sap-public/upstream-failure";
+
 const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
 
 /** The upstream never answered: why, as a bounded code. */
@@ -38,30 +41,52 @@ export function failureReasonFromHttp(status: number): string | null {
 /** A 2xx whose body could not be read as the shape the contract requires. */
 export const FAILURE_REASON_INVALID_BODY = "INVALID_UPSTREAM_BODY";
 
-/** The connection's credential could not be turned into request headers. */
-export const FAILURE_REASON_CREDENTIAL_SETUP = "CREDENTIAL_SETUP";
-
 /**
- * Why the connection's credential could not be used, before any request was
- * sent to the tenant. The error's own code where it has one — TIMEOUT for a
- * token endpoint that did not answer, SAML_BEARER_REJECTED, ENOTFOUND — and
- * CREDENTIAL_SETUP, not FETCH_FAILED, where it has none: a missing password or
- * a refused token exchange did not fail to fetch anything from the tenant, and
- * the shapeless code sent triage to the tenant's operators.
+ * The broker's outcome when the CREDENTIAL STEP failed — before any request
+ * reached the tenant (audit A08, A55). Shared by the read and the write so the
+ * two cannot draw the line differently.
+ *
+ *   NEEDS_SETUP — the connection cannot produce a credential, or the token
+ *                 endpoint refused it: fixed in Studio, so not worth a retry.
+ *   TIMEOUT     — the token endpoint did not answer within ITS limit, which is
+ *                 the one named; the tenant's read timeout never started.
+ *   ERROR       — the token endpoint failed or could not be reached.
+ *
+ * `detail` is generic on purpose, like every broker detail: SuccessFactors'
+ * own words are for the connection's administrators on the Test result, not
+ * for the app calling the broker. `failureReason` keeps the typed error's code;
+ * FETCH_FAILED — "the upstream never answered" — becomes its own code, so the
+ * audit row says it was the token step that did not answer, not the tenant.
  */
-export function failureReasonFromCredentialError(err: unknown): string {
+export function credentialStepOutcome(err: unknown): {
+  status: "NEEDS_SETUP" | "TIMEOUT" | "ERROR";
+  detail: string;
+  failureReason: string;
+} {
   const reason = failureReasonFromError(err);
-  return reason === "FETCH_FAILED" ? FAILURE_REASON_CREDENTIAL_SETUP : reason;
-}
-
-/**
- * The connection's token endpoint answered with neither a token nor a refusal
- * of the credential — typically a 429 or a 5xx. TOKEN_HTTP_<status>, not
- * HTTP_<status>: the tenant was never contacted, and on a broker row HTTP_503
- * reads as the tenant's own answer.
- */
-export function failureReasonFromTokenEndpoint(status: number): string {
-  return `TOKEN_HTTP_${status}`;
+  const failureReason = reason === "FETCH_FAILED" ? "CREDENTIAL_UNAVAILABLE" : reason;
+  switch (credentialFailureKind(err)) {
+    case "refused":
+      return {
+        status: "NEEDS_SETUP",
+        detail:
+          "The connection's credentials could not be used (a credential is missing, or the token endpoint refused it), so the tenant was not called. Fix the connection in Studio.",
+        failureReason,
+      };
+    case "timeout":
+      return {
+        status: "TIMEOUT",
+        detail: `The connection's token endpoint did not respond within ${TOKEN_REQUEST_TIMEOUT_MS}ms, so the tenant was not called.`,
+        failureReason,
+      };
+    case "unavailable":
+      return {
+        status: "ERROR",
+        detail:
+          "The connection's token endpoint could not issue a token (it failed or could not be reached), so the tenant was not called.",
+        failureReason,
+      };
+  }
 }
 
 function causeOf(err: unknown): unknown {

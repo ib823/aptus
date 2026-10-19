@@ -175,7 +175,7 @@ describe("a credential that fails before anything is sent (A25)", () => {
     expect(writeHttpStatusFor(r.status)).toBe(403);
     expect(r.attempted).toBe(false);
     // Nothing was fetched, so not FETCH_FAILED — that code sent triage to SAP.
-    expect(r.failureReason).toBe("CREDENTIAL_SETUP");
+    expect(r.failureReason).toBe("CONNECTION_MISCONFIGURED");
     expect(r.detail).toContain("nothing was sent to the tenant");
     expect(f).not.toHaveBeenCalled();
   });
@@ -187,7 +187,7 @@ describe("a credential that fails before anything is sent (A25)", () => {
     const r = await writeEntitySet({ ...input, connection: oauth }, f);
     expect(r.status).toBe("NEEDS_SETUP");
     expect(r.attempted).toBe(false);
-    expect(r.failureReason).toBe("CREDENTIAL_SETUP");
+    expect(r.failureReason).toBe("OAUTH_TOKEN_REJECTED");
     // Only the token endpoint was contacted; no CSRF GET, no POST.
     expect(token).toHaveBeenCalledTimes(1);
     expect(f).not.toHaveBeenCalled();
@@ -250,11 +250,11 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
   });
 
   it.each([
-    ["client-credentials", 503, oauth],
-    ["client-credentials", 429, oauth],
-    ["SAML bearer", 503, saml],
-    ["SAML bearer", 429, saml],
-  ])("a %s token endpoint answering %i is a 502 to retry, not a 403", async (_label, code, conn) => {
+    ["client-credentials", 503, "OAUTH_TOKEN_HTTP_503", oauth],
+    ["client-credentials", 429, "OAUTH_TOKEN_HTTP_429", oauth],
+    ["SAML bearer", 503, "SAML_BEARER_HTTP_503", saml],
+    ["SAML bearer", 429, "SAML_BEARER_HTTP_429", saml],
+  ])("a %s token endpoint answering %i is a 502 to retry, not a 403", async (_label, code, reason, conn) => {
     const token = vi.fn(async () => page(code));
     vi.stubGlobal("fetch", token);
     const f = vi.fn();
@@ -264,7 +264,7 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     expect(r.attempted).toBe(false);
     // The token endpoint's status, named as the token endpoint's — not HTTP_503,
     // which on a write row reads as SAP's own answer.
-    expect(r.failureReason).toBe(`TOKEN_HTTP_${code}`);
+    expect(r.failureReason).toBe(reason);
     expect(r.detail).toContain("token endpoint");
     expect(r.detail).toContain("Retry");
     expect(r.detail).not.toContain("Fix the connection");
@@ -276,7 +276,7 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     ["client-credentials", "ECONNRESET", oauth],
     // The SAML exchange wraps fetch's TypeError to keep the URL out of the
     // message, so the socket's own code is one level further down.
-    ["SAML bearer", "FETCH_FAILED", saml],
+    ["SAML bearer", "CREDENTIAL_UNAVAILABLE", saml],
   ])("a %s token endpoint that resets the connection is a 502 to retry (%s)", async (_label, reason, conn) => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(reset())));
     const f = vi.fn();
@@ -301,14 +301,14 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     expect(writeHttpStatusFor(r.status)).toBe(504);
     expect(r.attempted).toBe(false);
     expect(r.failureReason).toBe("TIMEOUT");
-    expect(r.detail).toContain("token endpoint did not answer in time");
+    expect(r.detail).toContain("token endpoint did not respond within 10000ms");
     expect(f).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["client-credentials", 400, "CREDENTIAL_SETUP", oauth],
-    ["client-credentials", 401, "CREDENTIAL_SETUP", oauth],
-    ["client-credentials", 403, "CREDENTIAL_SETUP", oauth],
+    ["client-credentials", 400, "OAUTH_TOKEN_REJECTED", oauth],
+    ["client-credentials", 401, "OAUTH_TOKEN_REJECTED", oauth],
+    ["client-credentials", 403, "OAUTH_TOKEN_REJECTED", oauth],
     ["SAML bearer", 400, "SAML_BEARER_REJECTED", saml],
     ["SAML bearer", 401, "SAML_BEARER_REJECTED", saml],
     ["SAML bearer", 403, "SAML_BEARER_REJECTED", saml],

@@ -84,11 +84,20 @@ export async function GET(request: NextRequest) {
       prisma.sapConnection.count({
         where: opsWhere(guard.actor, { isActive: true, lastValidationStatus: { in: UNHEALTHY } }),
       }),
-      // Replays excluded from both: a same-key retry re-serves a stored outcome
-      // without calling SAP, so it is not the tenant answering again. Counted,
-      // five retries of one stored 504 fired this rule after a single SAP call.
+      /*
+       * LIVE TRAFFIC ONLY (audit A26). Console reads are audited here too, as
+       * `dryRun: true`, and a builder exploring a DEV tenant is not "sustained
+       * failure of live traffic", which is what this rule says it measures.
+       * The console's rows now record SAP's own refusals as such, and this
+       * keeps explorer traffic from raising the incident either way.
+       *
+       * Replays excluded from this count and the next: a same-key retry
+       * re-serves a stored outcome without calling SAP, so it is not the tenant
+       * answering again. Counted, five retries of one stored 504 fired this
+       * rule after a single SAP call.
+       */
       prisma.northboundAuditEvent.count({
-        where: opsWhere(guard.actor, { at: { gte: since }, status: { gte: 500 }, replayed: false }),
+        where: opsWhere(guard.actor, { at: { gte: since }, status: { gte: 500 }, dryRun: false, replayed: false }),
       }),
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, { at: { gte: since }, status: 429, replayed: false }),

@@ -33,6 +33,7 @@ import {
   type SapConnectionSecrets,
 } from "@/lib/sap-public/connection-crypto";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+import { ConnectionConfigError, OAuthTokenRequestError } from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
 export type SapAuthType =
@@ -564,15 +565,27 @@ export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
 export async function buildAuthHeadersFromConnection(
   conn: ResolvedSapConnection,
 ): Promise<Record<string, string>> {
+  /*
+   * EVERY REFUSAL BELOW IS A ConnectionConfigError, not a plain Error (audit
+   * A08, A20): each is a setup problem raised before anything is sent, and a
+   * plain Error was read by every caller as "the upstream never answered" —
+   * SAP unavailable — when SAP was never asked. See upstream-failure.ts.
+   */
   if (conn.authType === "api-key") {
     const s = conn.secrets;
-    if (!s.apiKey) throw new Error(`Connection ${conn.key} is api-key auth but missing apiKey`);
+    if (!s.apiKey) {
+      throw new ConnectionConfigError(
+        `Connection ${conn.key} is api-key auth but missing apiKey`,
+        "This connection is api-key auth but has no API key. Save it again with the key filled in.",
+      );
+    }
     const header = s.apiKeyHeader?.trim() || DEFAULT_API_KEY_HEADER;
     // A stored row can name a header the current validator would refuse. Fail
     // the call rather than send the key in a header that means something else.
     if (!isAllowedApiKeyHeader(header)) {
-      throw new Error(
+      throw new ConnectionConfigError(
         `Connection ${conn.key} names "${header}" as its API-key header, which is reserved for the transport. Re-save the connection with a header of its own.`,
+        "This connection names a reserved header as its API-key header. Save it again with a header of its own.",
       );
     }
     return { [header]: s.apiKey };
@@ -599,11 +612,21 @@ export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection)
     // deletion tentative 2027-11-12), refuse only once it is actually deleted —
     // with instructions, rather than let SAP answer 401 without any.
     assertSuccessFactorsBasicAuthAllowed(conn.product, conn.authType, `connection ${conn.key}`);
-    if (!s.username || !s.password) throw new Error(`Connection ${conn.key} is basic auth but missing username/password`);
+    if (!s.username || !s.password) {
+      throw new ConnectionConfigError(
+        `Connection ${conn.key} is basic auth but missing username/password`,
+        "This connection is basic auth but is missing its username or password. Save it again with both filled in.",
+      );
+    }
     return `Basic ${Buffer.from(`${s.username}:${s.password}`).toString("base64")}`;
   }
   if (conn.authType === "bearer") {
-    if (!s.bearerToken) throw new Error(`Connection ${conn.key} is bearer auth but missing bearerToken`);
+    if (!s.bearerToken) {
+      throw new ConnectionConfigError(
+        `Connection ${conn.key} is bearer auth but missing bearerToken`,
+        "This connection is bearer auth but has no token. Save it again with the token filled in.",
+      );
+    }
     return `Bearer ${s.bearerToken}`;
   }
   if (conn.authType === "oauth-saml-bearer") {
@@ -707,29 +730,12 @@ function tokenFingerprint(conn: ResolvedSapConnection): string {
 /** Refresh early, so a token cannot expire mid-flight on a slow request. */
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 10 * 60 * 1000;
-const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
-
 /**
- * The client-credentials token endpoint answered, and the answer held no token.
- *
- * Its own class, carrying the status, because the status is the whole
- * difference between two failures a caller must tell apart: a refused secret
- * (400, 401, 403) is fixed in the connection, while an identity provider
- * answering 429 or 5xx is briefly unwell and the same call will work later. A
- * plain Error said neither, and the write path answered both "fix the
- * connection". SamlBearerExchangeError is the same thing for the SAML bearer
- * exchange. The message names the connection key and the status, never the
- * token URL.
+ * How long a token exchange may take — client-credentials and SAML bearer
+ * alike. Exported so a caller whose credential step timed out can name THIS
+ * limit and the token endpoint, not the tenant's read timeout.
  */
-export class OAuthTokenRequestError extends Error {
-  constructor(
-    message: string,
-    readonly httpStatus: number,
-  ) {
-    super(message);
-    this.name = "OAuthTokenRequestError";
-  }
-}
+export const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
 /** Exposed for tests. A re-save needs no call: the fingerprint misses. */
 export function clearOAuthTokenCache(): void {
@@ -750,7 +756,10 @@ async function fetchOAuthTokenFromConnection(
   // the sealed bundle — so a UI can display/edit it without decrypting secrets.
   const url = conn.oauthTokenUrl;
   if (!url || !clientId || !clientSecret) {
-    throw new Error(`Connection ${conn.key} is oauth but missing oauthTokenUrl/clientId/clientSecret`);
+    throw new ConnectionConfigError(
+      `Connection ${conn.key} is oauth but missing oauthTokenUrl/clientId/clientSecret`,
+      "This connection is OAuth client-credentials but is missing its token URL, client id or client secret. Save it again with all three filled in.",
+    );
   }
 
   // Bounded: a hung token endpoint must fail the request rather than holding it
@@ -777,6 +786,8 @@ async function fetchOAuthTokenFromConnection(
       throw err;
     })) ?? {}) as OAuthTokenResponse;
     if (!res.ok || typeof json.access_token !== "string") {
+      // The STATUS travels as a field: a 401 here is a wrong client secret, a
+      // 503 is the endpoint down, and only the status tells them apart.
       throw new OAuthTokenRequestError(`OAuth token request failed for ${conn.key}: HTTP ${res.status}`, res.status);
     }
 

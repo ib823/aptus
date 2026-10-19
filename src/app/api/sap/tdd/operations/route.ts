@@ -18,6 +18,7 @@ import {
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
 import { getCurrentUser } from "@/lib/auth/session";
+import { consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -48,6 +49,12 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
   return Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).slice(0, 8);
 }
 
+/**
+ * One dashboard section, and the status its read is RECORDED as — kept beside
+ * the section rather than in it, so the response shape is unchanged. SAP's own
+ * status when it answered; consoleReadFailure's when the read threw (audit
+ * A26): a refused section is a 401/403/404, not a tenant 5xx.
+ */
 async function loadOperationSection(
   product: SapOdataProduct,
   tenant: SapTenant,
@@ -68,39 +75,45 @@ async function loadOperationSection(
     );
     const fields = chooseFields(preview.rows, config.fields);
     return {
-      key: config.key,
-      title: config.title,
-      serviceLabel: service.label,
-      scenario: service.scenario,
-      entitySet: config.entitySet,
-      ok: preview.ok,
-      // Reachable-but-empty is NOT a healthy "read available" — flag it so the UI
-      // shows amber ("reachable, no data"), not a false-green heartbeat.
-      empty: preview.ok && preview.rows.length === 0,
-      status: preview.status,
-      durationMs: preview.durationMs,
-      rowCount: preview.rows.length,
-      fields,
-      rows: preview.rows.map((row) =>
-        Object.fromEntries(fields.map((field) => [field, displayValue(row[field])])),
-      ),
-      error: null,
+      auditStatus: preview.ok ? 200 : preview.status,
+      section: {
+        key: config.key,
+        title: config.title,
+        serviceLabel: service.label,
+        scenario: service.scenario,
+        entitySet: config.entitySet,
+        ok: preview.ok,
+        // Reachable-but-empty is NOT a healthy "read available" — flag it so the UI
+        // shows amber ("reachable, no data"), not a false-green heartbeat.
+        empty: preview.ok && preview.rows.length === 0,
+        status: preview.status,
+        durationMs: preview.durationMs,
+        rowCount: preview.rows.length,
+        fields,
+        rows: preview.rows.map((row) =>
+          Object.fromEntries(fields.map((field) => [field, displayValue(row[field])])),
+        ),
+        error: null,
+      },
     };
   } catch (error) {
     return {
-      key: config.key,
-      title: config.title,
-      serviceLabel: service.label,
-      scenario: service.scenario,
-      entitySet: config.entitySet,
-      ok: false,
-      empty: false,
-      status: 0,
-      durationMs: 0,
-      rowCount: 0,
-      fields: config.fields.slice(0, 8),
-      rows: [],
-      error: error instanceof Error ? error.message : "SAP section load failed",
+      auditStatus: consoleReadFailure(error, "SAP section load failed").auditStatus,
+      section: {
+        key: config.key,
+        title: config.title,
+        serviceLabel: service.label,
+        scenario: service.scenario,
+        entitySet: config.entitySet,
+        ok: false,
+        empty: false,
+        status: 0,
+        durationMs: 0,
+        rowCount: 0,
+        fields: config.fields.slice(0, 8),
+        rows: [],
+        error: error instanceof Error ? error.message : "SAP section load failed",
+      },
     };
   }
 }
@@ -234,16 +247,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const startedAt = Date.now();
-  const sections = await Promise.all(
+  const loaded = await Promise.all(
     getSapOperations(product).map((config) => loadOperationSection(product, tenant, config)),
   );
+  const sections = loaded.map((l) => l.section);
   const generatedAt = new Date().toISOString();
   setLiveCache(resolved, cacheKey, { sections, generatedAt });
 
   // Every section that answered at all counts as load on the tenant, whether it
   // returned rows or an error: the request left and was served.
+  //
+  // THE STATUS IS THE SECTIONS' OWN (audit A26), not a flat 502 whenever none
+  // was ok: every section refused 403 is SAP saying "not set up", and was
+  // counted by the upstream-errors incident as the tenant failing. A 5xx (or
+  // no answer) from any section still makes the row a 502.
   await audit(
-    sections.some((section) => section.ok) ? 200 : 502,
+    loaded.some((l) => l.auditStatus === 200)
+      ? 200
+      : loaded.some((l) => l.auditStatus >= 500) || loaded.length === 0
+        ? 502
+        : loaded[0]!.auditStatus,
     sections.length,
     Date.now() - startedAt,
   );

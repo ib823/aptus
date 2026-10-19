@@ -164,15 +164,25 @@ export async function GET(
         const result = await probeService(product.envPrefix, tenant, service);
         // Like /entities: the status SAP gave ($metadata read), how many entity
         // sets it declared, and 502 when it never answered (probeService's 0).
-        await audit(result.status === 0 ? 502 : result.status, result.exposed ? (result.entitySetCount ?? 0) : null, {
+        // A credential CoreEdge could not obtain is not SAP's answer at all: a
+        // setup problem is recorded as the refusal it is, 403, and only a
+        // token endpoint that failed as a 502 (audit A26, A28).
+        const auditStatus = result.credentialError
+          ? result.credentialError === "refused" ? 403 : 502
+          : result.status === 0 ? 502 : result.status;
+        await audit(auditStatus, result.exposed ? (result.entitySetCount ?? 0) : null, {
           durationMs: Date.now() - startedAt,
         });
-        probeStatus = result.status;
-        ladder = result.ladder ?? null;
-        entities = result.entities ?? null;
-        metadataFlavor = result.metadataFlavor ?? null;
-        // Same shared derivation as the list — the collapsed chip must match this.
-        if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+        // Never shown as this service's status: the tenant was not asked, so
+        // the stored probe below stands instead, as for a probe that threw.
+        if (!result.credentialError) {
+          probeStatus = result.status;
+          ladder = result.ladder ?? null;
+          entities = result.entities ?? null;
+          metadataFlavor = result.metadataFlavor ?? null;
+          // Same shared derivation as the list — the collapsed chip must match this.
+          if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+        }
       } catch {
         probeStatus = null;
       }

@@ -17,6 +17,12 @@ import {
   type SapServiceDefinition,
   type SapTenant,
 } from "@/lib/sap-public/tdd-connector";
+import {
+  credentialFailureKind,
+  publicCredentialFailure,
+  SapCredentialError,
+  SapHttpError,
+} from "@/lib/sap-public/upstream-failure";
 
 /** Capability ladder derived from a live $metadata probe. */
 export type CapabilityLadder = "unreachable" | "reachable" | "readable" | "writable";
@@ -49,6 +55,13 @@ export interface CapabilityResult {
   protocol?: "ODATAV2" | "ODATAV4";
   /** 2608 WS4 — SAP authorisation change to read a 403 by (API_CV_ATTACHMENT_SRV). */
   note?: string;
+  /**
+   * Set when the TENANT WAS NEVER ASKED: its credential could not be obtained
+   * ("refused" — a setup problem; "unavailable" — the token endpoint failed or
+   * timed out). `status` is then 0 and says nothing about this service, so a
+   * row carrying this is neither "not activated" nor evidence to store.
+   */
+  credentialError?: "refused" | "unavailable";
   error?: string;
 }
 
@@ -126,8 +139,28 @@ export async function probeService(
     }
     return result;
   } catch (err) {
+    /*
+     * "COULD NOT AUTHENTICATE" IS KEPT APART FROM WHAT THE SERVICE ANSWERED
+     * (audit A28). The status was read out of the message with /HTTP (\d{3})/,
+     * and the message is often the CREDENTIAL step's: a token endpoint's
+     * "HTTP 404" became this service's "not activated (not found)", and a
+     * missing {PREFIX}_PASSWORD a "no response (timeout/network)" — for every
+     * service at once, while no request reached SAP. Probe all then stored
+     * that over proven evidence. Only the tenant's own answer, a SapHttpError,
+     * carries a status now.
+     */
+    if (err instanceof SapCredentialError) {
+      return {
+        ...base,
+        exposed: false,
+        status: 0,
+        ladder: "unreachable",
+        credentialError: credentialFailureKind(err) === "refused" ? "refused" : "unavailable",
+        error: publicCredentialFailure(err.cause)?.detail ?? err.message,
+      };
+    }
     const message = err instanceof Error ? err.message : "probe failed";
-    const status = Number(message.match(/HTTP (\d{3})/)?.[1] ?? 0);
+    const status = err instanceof SapHttpError ? err.status : 0;
     return { ...base, exposed: false, status, ladder: "unreachable", error: message };
   }
 }
@@ -156,12 +189,19 @@ export async function probeTenantCapabilities(
   return results;
 }
 
+/**
+ * `byStatus` keys a row that never reached the tenant as `auth`, not `0`: a
+ * `0` reads "no response (timeout/network)", and a credential that could not
+ * be obtained is neither. Such a row is not counted as not activated either —
+ * nothing was asked of the service.
+ */
 export function summarize(tenant: string, rows: CapabilityResult[]): CapabilitySummary {
   const exposed = rows.filter((r) => r.exposed).length;
+  const unasked = rows.filter((r) => r.credentialError).length;
   const byStatus: Record<string, number> = {};
   for (const r of rows) {
-    const key = String(r.status);
+    const key = r.credentialError ? "auth" : String(r.status);
     byStatus[key] = (byStatus[key] ?? 0) + 1;
   }
-  return { tenant, published: rows.length, exposed, notActivated: rows.length - exposed, byStatus, rows };
+  return { tenant, published: rows.length, exposed, notActivated: rows.length - exposed - unasked, byStatus, rows };
 }

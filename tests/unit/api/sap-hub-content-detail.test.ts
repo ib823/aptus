@@ -195,6 +195,22 @@ describe("the detail's live probe takes the console ceiling and leaves a row (A2
     ]);
   });
 
+  it("a credential CoreEdge could not obtain is not SAP's answer: the stored verdict stands, the row is a 403 (A26, A28)", async () => {
+    /*
+     * The probe's status 0 meant "never answered" and was audited 502 and
+     * shown as this service's live status — for a request that was never
+     * sent, because the connection's credential could not be built.
+     */
+    mocks.resolveSapConnection.mockResolvedValue(connection("DEV"));
+    mocks.probeService.mockResolvedValue({
+      service: "API_PO", exposed: false, status: 0, ladder: "unreachable", credentialError: "refused", error: "x",
+    });
+    const body = await (await GET(req("product=s4hana&tenant=x5m-prod"), ctx("1"))).json();
+    expect(body.data.probeStatus).toBe(200); // the stored proof, not a live 0
+    expect(body.data.status).toBe("ACTIVATED");
+    expect(auditRows()).toEqual([expect.objectContaining({ externalId: "API_PO", status: 403, rowCount: null })]);
+  });
+
   it("records a deployment-tenant probe, a refusal SAP gave, and nothing for probe=0", async () => {
     mocks.getSapTenant.mockReturnValue(TENANT);
     await GET(req(), ctx("1")); // the default 404 mock
