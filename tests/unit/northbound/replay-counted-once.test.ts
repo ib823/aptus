@@ -22,7 +22,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type Row = Record<string, unknown>;
 
 const { db, mocks } = vi.hoisted(() => ({
-  db: { audit: [] as Record<string, unknown>[] },
+  db: {
+    audit: [] as Record<string, unknown>[],
+    interfaces: [] as Record<string, unknown>[],
+    connections: [] as Record<string, unknown>[],
+  },
   mocks: { getCurrentUser: vi.fn(), rollupUpsert: vi.fn() },
 }));
 
@@ -65,18 +69,22 @@ vi.mock("@/lib/db/prisma", () => ({
       },
     },
     northboundIdempotencyKey: { findMany: async () => [], count: async () => 0 },
-    sapConnection: { count: async () => 0 },
-    solutionClient: { count: async () => 0 },
-    apiAccessGrant: { count: async () => 0 },
+    sapConnection: { count: async () => 0, findMany: async () => db.connections },
+    solutionClient: { count: async () => 0, findMany: async () => [] },
+    apiAccessGrant: { count: async () => 0, findMany: async () => [] },
+    solution: { findMany: async () => [] },
+    interface: { findMany: async () => db.interfaces },
     sapConnectionProbeEvent: { findMany: async () => [] },
     coreEdgeUsageRollup: { upsert: mocks.rollupUpsert, findMany: async () => [] },
   },
 }));
 
+import { GET as topology } from "@/app/api/console/topology/route";
 import { GET as brokerTraffic } from "@/app/api/ops/broker-traffic/route";
 import { GET as incidents } from "@/app/api/ops/incidents/route";
 import { GET as writeLedger } from "@/app/api/ops/write-ledger/route";
 import { rollupDay } from "@/lib/commercial/coreedge-usage";
+import { listLaneTraffic } from "@/lib/coreedge/queries";
 
 const SUPPORT = { id: "u_s", email: "support@abeam.test", role: "support", organizationId: "org_a" };
 
@@ -110,6 +118,8 @@ const times = (n: number, make: () => Row) => Array.from({ length: n }, make);
 
 beforeEach(() => {
   db.audit = [];
+  db.interfaces = [];
+  db.connections = [];
   mocks.getCurrentUser.mockResolvedValue(SUPPORT);
   mocks.rollupUpsert.mockReset().mockResolvedValue({});
 });
@@ -169,5 +179,86 @@ describe("the write ledger does not count a replayed failure as another refusal"
     expect(body.data.fromAudit).toEqual({ blocked: 1, conflicts: 0, replayed: 3 });
     expect(body.data.auditRows).toHaveLength(1);
     expect(body.data.provenance.why.join(" ")).not.toContain("nothing counts it");
+  });
+
+  /*
+   * A FRESH SUCCESS IS NOT A REFUSAL. `blocked` spread the failed-write filter
+   * and then set `status` again, which REPLACED its `gte: 400` — so it counted
+   * every fresh write in the window that was not a 409, successes included,
+   * and disagreed with the rows listed under it. The fixture above held only a
+   * replayed 201, which the replay filter already excludes, so it could not
+   * see this.
+   */
+  it("does not count a fresh 201 as blocked", async () => {
+    db.audit = [write(201, false), write(504, false), write(504, false), write(409, false)];
+    const body = await (await writeLedger(new NextRequest("https://x.test/api/ops/write-ledger"))).json();
+    expect(body.data.fromAudit).toEqual({ blocked: 2, conflicts: 1, replayed: 0 });
+    // The counts and the page they summarise are drawn from the same rows.
+    expect(body.data.auditRows).toHaveLength(3);
+    expect(body.data.provenance.rowsAreAPage.auditRows).toMatchObject({ returned: 3, of: 3 });
+    expect(body.data.truncated).toBe(false);
+  });
+});
+
+/*
+ * A REPLAY NAMES ITS BOUND CONNECTION (so it is not read as a refusal before
+ * one), and the topology attributed every row with a connection to the
+ * connection → SAP edge: one 201, one 504 and five same-key retries of the 504
+ * drew seven calls and six failures through a connection SAP saw twice.
+ */
+describe("the topology does not route a replay through the connection", () => {
+  it("counts SAP's two answers on the connection, not the five re-served ones", async () => {
+    db.interfaces = [
+      {
+        id: "if_1",
+        solutionId: "sol_1",
+        name: "Create BP",
+        externalId: "API_BUSINESS_PARTNER",
+        operation: "CREATE",
+        entitySet: "A_BusinessPartner",
+        mode: "LIVE",
+      },
+    ];
+    db.connections = [
+      {
+        id: "conn_1",
+        label: "Sandbox",
+        product: "s4hana",
+        environment: "SANDBOX",
+        isActive: true,
+        lastValidatedAt: null,
+        lastValidationStatus: null,
+      },
+    ];
+    db.audit = [write(201, false), write(504, false), ...times(5, () => write(504, true))];
+
+    const res = await topology(new NextRequest("https://x.test/api/console/topology?lens=operations-center"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: {
+        nodes: { id: string; provenance: { derived: string } }[];
+        edges: { from: string; to: string; calls: number; failures: number }[];
+      };
+    };
+    const edge = (from: string, to: string) => body.data.edges.find((e) => e.from === from && e.to === to);
+    expect(edge("conn:conn_1", "sap:s4hana")).toMatchObject({ calls: 2, failures: 1 });
+    expect(edge("iface:if_1", "conn:conn_1")).toMatchObject({ calls: 2, failures: 1 });
+    expect(body.data.nodes.find((n) => n.id === "conn:conn_1")?.provenance.derived).toContain(
+      "2 call(s) recorded through it",
+    );
+  });
+});
+
+describe("the lane board counts a write once", () => {
+  it("one SAP 504 retried five times is one call and one error", async () => {
+    db.audit = [write(504, false), ...times(5, () => write(504, true))];
+    const traffic = await listLaneTraffic("org_a");
+    expect(traffic.get("sol_1::if_1::SANDBOX")).toEqual({ calls: 1, errors: 1 });
+  });
+
+  it("a 201 retried three times is one call and no error", async () => {
+    db.audit = [write(201, false), ...times(3, () => write(201, true))];
+    const traffic = await listLaneTraffic("org_a");
+    expect(traffic.get("sol_1::if_1::SANDBOX")).toEqual({ calls: 1, errors: 0 });
   });
 });

@@ -131,8 +131,11 @@ export async function GET(request: NextRequest) {
       prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { gte: 400 } } }),
 
       prisma.northboundAuditEvent.count({ where: { ...failedWriteWhere, status: 409 } }),
+      // The `gte: 400` is restated, not inherited: a second `status` key
+      // REPLACES the spread one, and `{ not: 409 }` alone counted every fresh
+      // success in the window as blocked.
       prisma.northboundAuditEvent.count({
-        where: { ...failedWriteWhere, status: { not: 409 } },
+        where: { ...failedWriteWhere, status: { gte: 400, not: 409 } },
       }),
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, { operation: "WRITE", at: { gte: since }, replayed: true }),

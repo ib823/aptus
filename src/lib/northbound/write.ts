@@ -15,8 +15,10 @@
 
 import {
   buildAuthHeadersFromConnection,
+  OAuthTokenRequestError,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { SamlBearerExchangeError } from "@/lib/sap-public/oauth-saml-bearer";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
@@ -25,6 +27,7 @@ import {
   failureReasonFromCredentialError,
   failureReasonFromError,
   failureReasonFromHttp,
+  failureReasonFromTokenEndpoint,
 } from "@/lib/northbound/failure-reason";
 
 export type NorthboundWriteStatus =
@@ -391,23 +394,89 @@ export async function writeEntitySet(
  * A token endpoint that does not answer in time stays a TIMEOUT, but says whose
  * timeout it was. The old text blamed the tenant, and quoted the WRITE timeout
  * for an exchange that has its own.
+ *
+ * AN OUTAGE IS NOT A REFUSAL. NEEDS_SETUP is for what only a fix to the
+ * connection cures: a field it lacks, a key that cannot sign, a header the
+ * validator rejects, the Basic-auth sunset, or a token endpoint that refused
+ * the credential itself (CREDENTIAL_REFUSED). An identity provider answering 429 or
+ * 5xx, or not reachable at all, is briefly unwell — and called NEEDS_SETUP it
+ * went out as 403 FORBIDDEN "fix the connection", the code the developer
+ * fixtures teach as "not set up", so a client branching on it dropped or
+ * escalated the write mid-outage while the read path called the same outage a
+ * 502. It is ERROR again, as on the read path. Every branch is still
+ * attempted=false: the key is released, and the retry each one asks for really
+ * does write.
  */
 function credentialFailure(err: unknown, started: number): NorthboundWriteResult {
-  const aborted = err instanceof Error && err.name === "AbortError";
+  const unsent = { httpStatus: null, record: null, location: null, attempted: false } as const;
+  const durationMs = Date.now() - started;
+  // Every detail below is generic for the same reason as the catch above: the
+  // error names the connection, and on the OAuth path can carry the token
+  // endpoint. The status a token endpoint answered is a number, and is safe.
+  if (err instanceof Error && err.name === "AbortError") {
+    return {
+      ...unsent,
+      status: "TIMEOUT",
+      detail:
+        "The connection's token endpoint did not answer in time, so nothing was sent to the tenant and no record was created. Retry with the same Idempotency-Key.",
+      durationMs,
+      failureReason: failureReasonFromError(err),
+    };
+  }
+  const answered = tokenEndpointStatus(err);
+  if (answered !== null && !CREDENTIAL_REFUSED.has(answered)) {
+    return {
+      ...unsent,
+      status: "ERROR",
+      detail: `The connection's token endpoint answered HTTP ${answered} without issuing a token, so nothing was sent to the tenant and no record was created. Retry later with the same Idempotency-Key.`,
+      durationMs,
+      failureReason: failureReasonFromTokenEndpoint(answered),
+    };
+  }
+  if (answered === null && tokenEndpointUnreachable(err)) {
+    return {
+      ...unsent,
+      status: "ERROR",
+      detail:
+        "The connection's token endpoint could not be reached, so nothing was sent to the tenant and no record was created. Retry later with the same Idempotency-Key.",
+      durationMs,
+      failureReason: failureReasonFromError(err),
+    };
+  }
   return {
-    status: aborted ? "TIMEOUT" : "NEEDS_SETUP",
-    httpStatus: null,
-    record: null,
-    location: null,
-    // Generic for the same reason as the catch above: the error names the
-    // connection, and on the OAuth path can carry the token endpoint.
-    detail: aborted
-      ? "The connection's token endpoint did not answer in time, so nothing was sent to the tenant and no record was created. Retry with the same Idempotency-Key."
-      : "The connection's credentials could not be used (the token exchange was refused, or the connection is incomplete), so nothing was sent to the tenant. Fix the connection in Studio, then retry with the same Idempotency-Key.",
-    durationMs: Date.now() - started,
+    ...unsent,
+    status: "NEEDS_SETUP",
+    detail:
+      "The connection's credentials could not be used (the token exchange was refused, or the connection is incomplete), so nothing was sent to the tenant. Fix the connection in Studio, then retry with the same Idempotency-Key.",
+    durationMs,
     failureReason: failureReasonFromCredentialError(err),
-    attempted: false,
   };
+}
+
+/**
+ * Token-endpoint answers that refuse the credential itself: RFC 6749's 400
+ * (invalid_grant, an assertion SuccessFactors will not take) and 401
+ * (invalid_client, a rotated secret), and a gateway's 403. Anything else it
+ * answers without a token — 429, 5xx — is the endpoint, not the connection.
+ */
+const CREDENTIAL_REFUSED = new Set([400, 401, 403]);
+
+/** What the token endpoint answered, when it answered and issued no token. */
+function tokenEndpointStatus(err: unknown): number | null {
+  return err instanceof OAuthTokenRequestError || err instanceof SamlBearerExchangeError
+    ? err.httpStatus
+    : null;
+}
+
+/**
+ * fetch rejects with a TypeError for every network failure — the Fetch
+ * standard's "network error": a reset socket, a refused connection, a DNS
+ * failure. The SAML exchange rethrows it wrapped, to keep the URL out of the
+ * message, so the cause is checked too. Nothing on the way to a token throws
+ * one for a configuration fault; those are plain Errors or the SAML classes.
+ */
+function tokenEndpointUnreachable(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof Error && err.cause instanceof TypeError);
 }
 
 /** The HTTP status the BROKER returns for each write outcome. */

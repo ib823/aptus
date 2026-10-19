@@ -172,6 +172,9 @@ export async function GET(request: NextRequest) {
         "operation",
         "environment",
         "status",
+        // Apart, so a replay can be kept off the connection: SAP was not
+        // called. See AuditSlice.replayed.
+        "replayed",
       ],
       where: opsWhere(actor, { at: { gte: since } }),
       _count: { _all: true },
@@ -206,6 +209,7 @@ export async function GET(request: NextRequest) {
       environment: row.environment,
       status: row.status,
       count: row._count._all,
+      replayed: row.replayed,
     })),
   );
 

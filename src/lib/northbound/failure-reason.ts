@@ -54,6 +54,16 @@ export function failureReasonFromCredentialError(err: unknown): string {
   return reason === "FETCH_FAILED" ? FAILURE_REASON_CREDENTIAL_SETUP : reason;
 }
 
+/**
+ * The connection's token endpoint answered with neither a token nor a refusal
+ * of the credential — typically a 429 or a 5xx. TOKEN_HTTP_<status>, not
+ * HTTP_<status>: the tenant was never contacted, and on a broker row HTTP_503
+ * reads as the tenant's own answer.
+ */
+export function failureReasonFromTokenEndpoint(status: number): string {
+  return `TOKEN_HTTP_${status}`;
+}
+
 function causeOf(err: unknown): unknown {
   return err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
 }

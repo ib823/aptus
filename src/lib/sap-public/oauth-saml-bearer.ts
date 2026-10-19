@@ -469,8 +469,20 @@ export async function exchangeSamlBearerAssertion(
       typeof json.expires_in === "number" && json.expires_in > 0 ? json.expires_in * 1000 : null;
     return { accessToken: json.access_token, ttlMs };
   } catch (error) {
+    /*
+     * STILL AN AbortError, with a message that names no URL. Rethrown as a
+     * plain Error, a SuccessFactors token endpoint that hung was a timeout to
+     * nobody: the write path took it for credentials that "could not be used"
+     * and answered 403 "fix the connection", and the read path and the
+     * connection Test called it a generic failure — while a client-credentials
+     * timeout, which nothing catches on the way, reached all three as the
+     * timeout it is.
+     */
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`SAML bearer token request for ${label} timed out after ${opts.timeoutMs}ms`);
+      throw Object.assign(
+        new Error(`SAML bearer token request for ${label} timed out after ${opts.timeoutMs}ms`),
+        { name: "AbortError" },
+      );
     }
     // fetch's TypeError carries the URL; the cause keeps it for a log, the
     // message does not.

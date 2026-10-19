@@ -189,6 +189,89 @@ describe("a credential that fails before anything is sent (A25)", () => {
   });
 });
 
+/*
+ * A TOKEN ENDPOINT THAT IS DOWN IS NOT A CONNECTION TO FIX. Every credential
+ * failure became 403 FORBIDDEN "fix the connection in Studio", the code the
+ * developer fixtures teach as "not set up" — so an IdP answering 503, a reset
+ * socket and a SuccessFactors exchange that timed out each told a client to
+ * stop retrying a write during an outage the read route calls a 502. The key
+ * is still released for each: nothing reached the tenant.
+ */
+describe("a token endpoint that is down is retryable, not a setup problem", () => {
+  const SAML: ResolvedSapConnection = {
+    ...BASIC,
+    product: "successfactors",
+    authType: "oauth-saml-bearer",
+    oauthTokenUrl: TOKEN_URL,
+    secrets: { clientId: "sf-api-key", companyId: "acmeT1", samlAssertion: "PHNhbWw+" },
+  };
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function expectRetryable(status: number, code: string, failureReason: string) {
+    const res = await post();
+    expect(res.status).toBe(status);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe(code);
+    expect(body.error.message).not.toContain("Fix the connection");
+    expect(body.error.message).toContain("nothing was sent to the tenant");
+    // Released: the retry the message asks for really does write.
+    expect(mocks.release).toHaveBeenCalledWith({ organizationId: "org_a" }, "idem_1");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(lastAudit()).toMatchObject({ status, failureReason, replayed: false });
+  }
+
+  it("an OAuth token endpoint answering 503 is a 502 UPSTREAM_ERROR", async () => {
+    state.connection = OAUTH;
+    const f = sap({
+      token: async () => new Response("<html>Service Unavailable</html>", { status: 503, headers: { "content-type": "text/html" } }),
+    });
+    await expectRetryable(502, "UPSTREAM_ERROR", "TOKEN_HTTP_503");
+    expect(methods(f)).toEqual(["TOKEN"]);
+  });
+
+  it("an OAuth token endpoint that resets the connection is a 502 UPSTREAM_ERROR", async () => {
+    state.connection = OAUTH;
+    const f = sap({
+      token: async () => {
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+        });
+      },
+    });
+    await expectRetryable(502, "UPSTREAM_ERROR", "ECONNRESET");
+    expect(methods(f)).toEqual(["TOKEN"]);
+  });
+
+  it("a SAML token endpoint that hangs past its timeout is a 504 UPSTREAM_TIMEOUT", async () => {
+    state.connection = SAML;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const f = sap({ token: hang });
+    const pending = expectRetryable(504, "UPSTREAM_TIMEOUT", "TIMEOUT");
+    // The exchange's own bound, TOKEN_REQUEST_TIMEOUT_MS.
+    await vi.advanceTimersByTimeAsync(10_000);
+    await pending;
+    expect(methods(f)).toEqual(["TOKEN"]);
+  });
+
+  it("a SAML token endpoint answering 503 is a 502 UPSTREAM_ERROR", async () => {
+    state.connection = SAML;
+    sap({ token: async () => new Response("", { status: 503 }) });
+    await expectRetryable(502, "UPSTREAM_ERROR", "TOKEN_HTTP_503");
+  });
+
+  it("a SAML exchange SuccessFactors refuses is still a 403 FORBIDDEN", async () => {
+    state.connection = SAML;
+    sap({ token: async () => Response.json({ errorMessage: "Unable to verify the signature" }, { status: 401 }) });
+    const res = await post();
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("FORBIDDEN");
+    expect(mocks.release).toHaveBeenCalledTimes(1);
+    expect(lastAudit()).toMatchObject({ status: 403, failureReason: "SAML_BEARER_REJECTED" });
+  });
+});
+
 describe("a timeout is stored only when the write was sent (A04)", () => {
   it("a hung CSRF handshake releases the key, and the same-key retry really writes", async () => {
     const f = sap({ GET: hang });

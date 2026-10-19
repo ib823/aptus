@@ -1261,6 +1261,11 @@ export const TRAFFIC_WINDOW_MS = 24 * 60 * 60 * 1000;
  * Lanes with no traffic are absent from the map rather than present with zero.
  * "No calls" and "calls that all failed" are different facts and the board
  * renders them differently.
+ *
+ * A REPLAY IS NOT ANOTHER CALL ON THE LANE. A same-key retry re-serves the
+ * stored outcome without calling SAP; counted, one SAP 504 retried five times
+ * read as six calls and six errors, and one created record as one call per
+ * retry. Excluded from both, so the two columns still describe the same calls.
  */
 export async function listLaneTraffic(
   organizationId: string,
@@ -1268,7 +1273,7 @@ export async function listLaneTraffic(
 ): Promise<Map<string, LaneTraffic>> {
   const since = new Date(now.getTime() - TRAFFIC_WINDOW_MS);
   const events = await prisma.northboundAuditEvent.findMany({
-    where: { organizationId, at: { gte: since }, dryRun: false },
+    where: { organizationId, at: { gte: since }, dryRun: false, replayed: false },
     select: { solutionId: true, interfaceId: true, environment: true, status: true },
   });
 

@@ -709,6 +709,28 @@ const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 10 * 60 * 1000;
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * The client-credentials token endpoint answered, and the answer held no token.
+ *
+ * Its own class, carrying the status, because the status is the whole
+ * difference between two failures a caller must tell apart: a refused secret
+ * (400, 401, 403) is fixed in the connection, while an identity provider
+ * answering 429 or 5xx is briefly unwell and the same call will work later. A
+ * plain Error said neither, and the write path answered both "fix the
+ * connection". SamlBearerExchangeError is the same thing for the SAML bearer
+ * exchange. The message names the connection key and the status, never the
+ * token URL.
+ */
+export class OAuthTokenRequestError extends Error {
+  constructor(
+    message: string,
+    readonly httpStatus: number,
+  ) {
+    super(message);
+    this.name = "OAuthTokenRequestError";
+  }
+}
+
 /** Exposed for tests. A re-save needs no call: the fingerprint misses. */
 export function clearOAuthTokenCache(): void {
   oauthTokenCache.clear();
@@ -747,9 +769,15 @@ async function fetchOAuthTokenFromConnection(
       body: new URLSearchParams({ grant_type: "client_credentials" }),
       signal: controller.signal,
     });
-    const json = (await res.json()) as OAuthTokenResponse;
+    // An error page is HTML as often as JSON. Parsed strictly, a 503 from a
+    // load balancer threw a SyntaxError that said nothing about the status.
+    // Only the parse is forgiven: a body cut off by the timeout is still one.
+    const json = ((await res.json().catch((err: unknown) => {
+      if (err instanceof SyntaxError) return null;
+      throw err;
+    })) ?? {}) as OAuthTokenResponse;
     if (!res.ok || typeof json.access_token !== "string") {
-      throw new Error(`OAuth token request failed for ${conn.key}: HTTP ${res.status}`);
+      throw new OAuthTokenRequestError(`OAuth token request failed for ${conn.key}: HTTP ${res.status}`, res.status);
     }
 
     // Honour the server's expires_in when it gives one; never cache a token

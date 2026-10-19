@@ -208,6 +208,121 @@ describe("a credential that fails before anything is sent (A25)", () => {
   });
 });
 
+/*
+ * AN IDENTITY PROVIDER THAT IS BRIEFLY DOWN IS NOT A CONNECTION TO FIX. A25
+ * made every credential failure NEEDS_SETUP, and with it a token endpoint
+ * answering 503 or 429, one that reset the connection, and a SuccessFactors
+ * exchange that timed out all went out as 403 FORBIDDEN "fix the connection in
+ * Studio" — the code a client is taught means "not set up", so it dropped or
+ * escalated a write mid-outage that the read path, for the same outage, calls a
+ * 502. Only a refusal of the credential itself is NEEDS_SETUP; nothing here is
+ * sent to the tenant, so every one of them is still unattempted.
+ */
+describe("a token endpoint that is down is an outage, not a setup problem", () => {
+  const TOKEN_URL = "https://auth.example/oauth/token";
+  const oauth: ResolvedSapConnection = {
+    ...connection,
+    id: "c_oauth_down",
+    authType: "oauth-client-credentials",
+    oauthTokenUrl: TOKEN_URL,
+    secrets: { clientId: "client", clientSecret: "still-valid" },
+  };
+  const saml: ResolvedSapConnection = {
+    ...connection,
+    id: "c_saml_down",
+    product: "successfactors",
+    authType: "oauth-saml-bearer",
+    oauthTokenUrl: TOKEN_URL,
+    secrets: { clientId: "sf-api-key", companyId: "acmeT1", samlAssertion: "PHNhbWw+" },
+  };
+  const page = (status: number) =>
+    new Response("<html><body>Service Unavailable</body></html>", {
+      status,
+      headers: { "content-type": "text/html" },
+    });
+  const reset = () =>
+    new TypeError("fetch failed", { cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }) });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    clearOAuthTokenCache();
+  });
+
+  it.each([
+    ["client-credentials", 503, oauth],
+    ["client-credentials", 429, oauth],
+    ["SAML bearer", 503, saml],
+    ["SAML bearer", 429, saml],
+  ])("a %s token endpoint answering %i is a 502 to retry, not a 403", async (_label, code, conn) => {
+    const token = vi.fn(async () => page(code));
+    vi.stubGlobal("fetch", token);
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: conn }, f);
+    expect(r.status).toBe("ERROR");
+    expect(writeHttpStatusFor(r.status)).toBe(502);
+    expect(r.attempted).toBe(false);
+    // The token endpoint's status, named as the token endpoint's — not HTTP_503,
+    // which on a write row reads as SAP's own answer.
+    expect(r.failureReason).toBe(`TOKEN_HTTP_${code}`);
+    expect(r.detail).toContain("token endpoint");
+    expect(r.detail).toContain("Retry");
+    expect(r.detail).not.toContain("Fix the connection");
+    expect(token).toHaveBeenCalledTimes(1);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["client-credentials", "ECONNRESET", oauth],
+    // The SAML exchange wraps fetch's TypeError to keep the URL out of the
+    // message, so the socket's own code is one level further down.
+    ["SAML bearer", "FETCH_FAILED", saml],
+  ])("a %s token endpoint that resets the connection is a 502 to retry (%s)", async (_label, reason, conn) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(reset())));
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: conn }, f);
+    expect(r.status).toBe("ERROR");
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe(reason);
+    expect(r.detail).toContain("could not be reached");
+    expect(r.detail).not.toContain("Fix the connection");
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("a SAML token endpoint that hangs past its own timeout is a 504, not a 403", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("fetch", vi.fn(hang));
+    const f = vi.fn();
+    const pending = writeEntitySet({ ...input, connection: saml }, f);
+    // The exchange's own bound (TOKEN_REQUEST_TIMEOUT_MS), well inside the write's.
+    await vi.advanceTimersByTimeAsync(10_000);
+    const r = await pending;
+    expect(r.status).toBe("TIMEOUT");
+    expect(writeHttpStatusFor(r.status)).toBe(504);
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.detail).toContain("token endpoint did not answer in time");
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["client-credentials", 400, "CREDENTIAL_SETUP", oauth],
+    ["client-credentials", 401, "CREDENTIAL_SETUP", oauth],
+    ["client-credentials", 403, "CREDENTIAL_SETUP", oauth],
+    ["SAML bearer", 400, "SAML_BEARER_REJECTED", saml],
+    ["SAML bearer", 401, "SAML_BEARER_REJECTED", saml],
+    ["SAML bearer", 403, "SAML_BEARER_REJECTED", saml],
+  ])("a %s token endpoint refusing the credential (%i) is still NEEDS_SETUP", async (_label, code, reason, conn) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "invalid_client" }, { status: code })));
+    const r = await writeEntitySet({ ...input, connection: conn }, vi.fn());
+    expect(r.status).toBe("NEEDS_SETUP");
+    expect(writeHttpStatusFor(r.status)).toBe(403);
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe(reason);
+    expect(r.detail).toContain("Fix the connection");
+  });
+});
+
 describe("a timeout says which side of the POST it fell on (A04)", () => {
   it("a CSRF handshake that hangs never sends the write, and says so", async () => {
     const f = vi.fn(hang);

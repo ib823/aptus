@@ -392,6 +392,28 @@ describe("call attribution pairs both ends, and never repeats one end's total", 
     expect(observeEdge(100, 10)).toBe("mixed");
   });
 
+  /*
+   * A REPLAY CALLED NOTHING BEYOND THE BROKER. Its row names the connection the
+   * request was bound to, so as not to read as a refusal before any binding —
+   * and attributed like a fresh call, one 201, one 504 and five same-key
+   * retries of the 504 drew seven calls and six failures through a connection
+   * SAP answered twice.
+   */
+  it("routes a replay to the broker's side of the graph, never through the connection", () => {
+    const write = { operation: "WRITE" };
+    const a = attributeCalls([
+      slice({ ...write, status: 201, count: 1 }),
+      slice({ ...write, status: 504, count: 1 }),
+      slice({ ...write, status: 504, count: 5, replayed: true }),
+    ]);
+
+    expect(a.byConnection.get("conn1")).toEqual({ calls: 2, failures: 1 });
+    expect(tallyOf(a.byInterfaceConnection, pairKey("if1", "conn1"))).toEqual({ calls: 2, failures: 1 });
+    // The broker did answer every retry, along the credential's and the grant's edges.
+    expect(a.byInterface.get("if1")).toEqual({ calls: 7, failures: 6 });
+    expect(tallyOf(a.byCredentialSolution, pairKey("tok1", "sol1"))).toEqual({ calls: 7, failures: 6 });
+  });
+
   it("treats 5xx as a failure and 3xx as not one", () => {
     const a = attributeCalls([
       slice({ status: 500, count: 2 }),

@@ -551,6 +551,14 @@ export interface AuditSlice {
   environment: string;
   status: number;
   count: number;
+  /**
+   * An idempotent replay: the broker re-served a stored write outcome and
+   * called nothing upstream. The row names the connection the request was
+   * bound to — it got past the binding, and without one it read as a refusal
+   * before any — so this is what keeps it off the connection's tally. Absent
+   * means a fresh call.
+   */
+  replayed?: boolean;
 }
 
 export interface Tally {
@@ -666,7 +674,15 @@ export function attributeCalls(rows: readonly AuditSlice[]): Attribution {
       add(a.byInterface, row.interfaceId, calls, failures);
       add(a.byGrantInterface, pairKey(gk, row.interfaceId), calls, failures);
     }
-    if (row.connectionId) {
+    /*
+     * A REPLAY STOPS AT THE BROKER. It reached the credential, the grant and
+     * the interface like any call, and is counted there; it did not go through
+     * the connection to SAP. Counted on it, one 201, one 504 and five same-key
+     * retries of the 504 read as seven calls and six failures through a
+     * connection SAP answered twice — the over-count the replay marker exists
+     * to end.
+     */
+    if (row.connectionId && !row.replayed) {
       add(a.byConnection, row.connectionId, calls, failures);
       // Only a row that names BOTH ends is evidence that these two were wired
       // together on a real call. There is no schema link between an interface
