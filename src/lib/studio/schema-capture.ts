@@ -24,6 +24,8 @@
  * useful thing than a description of what SAP documents.
  */
 
+import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
+
 export interface CapturedSchema {
   type: "object";
   properties: Record<string, { type?: string; format?: string; nullable?: boolean }>;
@@ -58,9 +60,6 @@ export interface CapturedSchema {
  */
 export const MIN_SAMPLE_FOR_REQUIRED = 20;
 
-/** OData v2 wraps metadata in `__metadata`; it describes the envelope, not the entity. */
-const ODATA_NOISE = new Set(["__metadata", "__deferred", "@odata.etag", "@odata.context"]);
-
 function jsonTypeOf(value: unknown): { type?: string; format?: string } | null {
   if (value === null) return null; // null tells us nothing about the type
   if (typeof value === "string") {
@@ -93,8 +92,15 @@ export function inferResponseSchema(
   const sawNull = new Set<string>();
 
   for (const row of rows) {
-    for (const [key, value] of Object.entries(row)) {
-      if (ODATA_NOISE.has(key)) continue;
+    /*
+     * OData v2 wraps metadata in `__metadata`; it describes the envelope, not
+     * the entity. Removed with the broker's own rule rather than a list kept
+     * here: the rows the broker serves carry neither it, nor V2's unexpanded
+     * `__deferred` navigations, nor any `@odata.*` key, and a contract that
+     * described fields the served rows do not have would make a consumer's
+     * validator reject every row. See odata-envelope.ts.
+     */
+    for (const [key, value] of Object.entries(stripODataEnvelope(row))) {
       seenIn.set(key, (seenIn.get(key) ?? 0) + 1);
       if (value === null) {
         sawNull.add(key);

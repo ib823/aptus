@@ -19,6 +19,7 @@ import {
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
+import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
   FAILURE_REASON_INVALID_BODY,
   failureReasonFromError,
@@ -36,9 +37,14 @@ export type NorthboundWriteStatus =
 export interface NorthboundWriteResult {
   status: NorthboundWriteStatus;
   httpStatus: number | null;
-  /** The created record, when SAP returned one. */
+  /** The created record, when SAP returned one — without SAP's envelope. */
   record: Record<string, unknown> | null;
-  /** SAP's Location header — the identity of what was created. */
+  /**
+   * The identity of what was created: SAP's Location header reduced to the
+   * part after the service root, e.g. `/A_BusinessPartner('1000123')`. Never a
+   * host — see entityPathFromLocation. Null when SAP sent none, or sent one
+   * that is not under this connection's service root.
+   */
   location: string | null;
   /** Safe for a client: never a URL, header, credential, or raw upstream body. */
   detail: string;
@@ -88,14 +94,62 @@ function classify(httpStatus: number): { status: NorthboundWriteStatus; detail: 
   return { status: "ERROR", detail: `The tenant responded with HTTP ${httpStatus}.` };
 }
 
+/*
+ * The record leaves without SAP's envelope, for the same reason as on the read
+ * path: V2's `__metadata.uri` and `__deferred.uri`, and V4's `@odata.*` links,
+ * are absolute URLs on the connection's host. A write is worse than a read
+ * here, because the route stores the envelope and replays it to every retry
+ * under the same Idempotency-Key for a day. See odata-envelope.ts.
+ */
 function extractRecord(json: unknown): Record<string, unknown> | null {
   if (!json || typeof json !== "object" || Array.isArray(json) || "error" in json) return null;
   const d = (json as { d?: unknown }).d;
   if ("d" in json) {
     return d && typeof d === "object" && !Array.isArray(d) && !("error" in d)
-      ? d as Record<string, unknown> : null;
+      ? stripODataEnvelope(d as Record<string, unknown>) : null;
   }
-  return json as Record<string, unknown>;
+  return stripODataEnvelope(json as Record<string, unknown>);
+}
+
+/**
+ * SAP's Location header, reduced to what identifies the record and nothing
+ * that addresses SAP.
+ *
+ * SAP Gateway sends Location as an ABSOLUTE URL on the tenant's own host —
+ * `https://<tenant>:443/sap/opu/odata/sap/<SERVICE>/<Set>('<key>')`, often with
+ * `sap-client` echoed into the query. Passed through, every successful create
+ * handed the caller the hostname, the service path and the client, even on a
+ * 201 that carried no body at all. Through the broker that URL is useless; its
+ * only use is to call SAP directly.
+ *
+ * What remains is the path after the service root. A Location that is not on
+ * the connection's origin, or not under this service, cannot be shown to name
+ * what this call created, so it yields null rather than a guess.
+ */
+function entityPathFromLocation(
+  raw: string | null,
+  connection: ResolvedSapConnection,
+  servicePath: string,
+): string | null {
+  if (!raw) return null;
+  let root: URL;
+  let url: URL;
+  try {
+    // No client: the root is only resolved against, and the query is dropped.
+    root = new URL(
+      buildSapUrl({ baseUrl: connection.baseUrl, path: `${servicePath.replace(/\/+$/, "")}/` }),
+    );
+    url = new URL(raw, root);
+  } catch {
+    return null;
+  }
+  if (url.origin !== root.origin) return null;
+  // SAP Gateway resolves service names case-insensitively and echoes them as it
+  // pleases, so the prefix is matched the same way. Only what follows it is
+  // kept, so a lenient comparison cannot let a host or a query through.
+  if (!url.pathname.toLowerCase().startsWith(root.pathname.toLowerCase())) return null;
+  const rest = url.pathname.slice(root.pathname.length);
+  return rest === "" ? null : `/${rest}`;
 }
 
 export interface WriteEntitySetInput {
@@ -212,7 +266,7 @@ export async function writeEntitySet(
       status,
       httpStatus: res.status,
       record,
-      location: res.headers.get("location"),
+      location: entityPathFromLocation(res.headers.get("location"), connection, input.servicePath),
       detail,
       durationMs: Date.now() - started,
       failureReason: failureReasonFromHttp(res.status),

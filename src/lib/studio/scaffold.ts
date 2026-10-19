@@ -16,6 +16,7 @@
  */
 
 import { isCapturedSchema } from "@/lib/studio/schema-capture";
+import { stripFixtureEnvelope } from "@/lib/studio/fixtures";
 
 export interface ScaffoldInterface {
   id: string;
@@ -630,7 +631,10 @@ function buildFixturesJson(
         ...(f.sourceStatus === null || f.sourceStatus === undefined
           ? { unverified: "Captured before CoreEdge recorded provenance; origin unknown." }
           : {}),
-        body: f.body,
+        // Cleaned on the way out as well as at capture: fixtures stored before
+        // capture stripped SAP's envelope still carry the tenant's host in
+        // every row's __metadata / __deferred URIs. See stripFixtureEnvelope.
+        body: stripFixtureEnvelope(f.body),
       })),
     },
     null,

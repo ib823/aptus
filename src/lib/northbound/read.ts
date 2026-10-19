@@ -20,6 +20,7 @@ import {
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
+import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
   FAILURE_REASON_INVALID_BODY,
   failureReasonFromError,
@@ -58,7 +59,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/*
+ * The rows leave here without SAP's envelope. Every V2 row carries
+ * `__metadata.uri` and a `__deferred.uri` per navigation, every V4 row its
+ * `@odata.*` links, and all of them are absolute URLs on the connection's host —
+ * the host the broker exists to keep from the caller. See odata-envelope.ts.
+ */
 function extractRecords(json: unknown): Record<string, unknown>[] | null {
+  const rows = extractRawRecords(json);
+  return rows === null ? null : rows.map(stripODataEnvelope);
+}
+
+function extractRawRecords(json: unknown): Record<string, unknown>[] | null {
   if (!isRecord(json) || "error" in json) return null;
   const v4 = (json as { value?: unknown }).value;
   if ("value" in json) return Array.isArray(v4) && v4.every(isRecord) ? v4 : null;

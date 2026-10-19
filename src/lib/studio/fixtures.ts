@@ -14,6 +14,8 @@
  * the generated mock serves them on demand.
  */
 
+import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
+
 export const FIXTURE_SCENARIOS = ["data", "empty", "needs_setup", "error"] as const;
 export type FixtureScenario = (typeof FIXTURE_SCENARIOS)[number];
 
@@ -80,9 +82,10 @@ export function buildFixtureBody(
 ): FixtureBody {
   switch (scenario) {
     case "data": {
-      const kept = records.slice(0, MAX_FIXTURE_ROWS);
+      // Stripped as well as truncated: see stripFixtureEnvelope.
+      const kept = records.slice(0, MAX_FIXTURE_ROWS).map(stripODataEnvelope);
       return {
-        records: kept as Record<string, unknown>[],
+        records: kept,
         count: kept.length,
         empty: false,
         note: `${kept.length} record${kept.length === 1 ? "" : "s"}.`,
@@ -113,4 +116,34 @@ export function buildFixtureBody(
         },
       };
   }
+}
+
+/**
+ * A stored fixture body with SAP's OData envelope removed from its records.
+ *
+ * A fixture is the one sink of tenant rows that leaves the product: it is
+ * written into the starter kit's fixtures.json and served by its mock. Rows
+ * captured from a V2 service carried `__metadata.uri` and a `__deferred.uri`
+ * per navigation — absolute URLs on the tenant's host — so every kit handed
+ * the developer the hostname the broker exists to keep from them, and the mock
+ * taught their code that records come with direct SAP addresses. Schema
+ * capture, fed the same rows, had always dropped them.
+ *
+ * Applied at capture AND when the kit is built, because fixtures recorded
+ * before capture stripped them are still stored; cleaning them on the way out
+ * means the next download is clean without anyone re-recording. Anything that
+ * is not a records-bearing body is returned as it is.
+ */
+export function stripFixtureEnvelope(body: unknown): unknown {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return body;
+  const { records } = body as { records?: unknown };
+  if (!Array.isArray(records)) return body;
+  return {
+    ...body,
+    records: records.map((row: unknown) =>
+      row !== null && typeof row === "object" && !Array.isArray(row)
+        ? stripODataEnvelope(row as Record<string, unknown>)
+        : row,
+    ),
+  };
 }

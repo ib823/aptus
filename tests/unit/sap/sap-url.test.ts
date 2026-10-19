@@ -162,9 +162,22 @@ describe("the client is never applied twice", () => {
     );
   });
 
-  it("uses an absolute Location verbatim, without re-addressing it", () => {
+  it("routes an absolute Location through the builder too, on the tenant's origin", () => {
+    /*
+     * This asserted the opposite — that an absolute Location was used VERBATIM —
+     * and so pinned the one URL the origin guard above never saw. The tenant's
+     * credentials went to whatever host the header named, http included. The
+     * client SAP addressed still survives: it rides in the Location's query,
+     * which the builder keeps and will not add to. The behaviour is tested in
+     * tests/unit/lib/sap-public/delete-by-location.test.ts; this pins that no
+     * verbatim branch comes back.
+     */
     const src = read("src/lib/sap-public/tdd-connector.ts");
-    expect(src).toContain('location.startsWith("http")');
+    expect(src).not.toContain('location.startsWith("http")');
+    const fn = src.slice(src.indexOf("export async function deleteSapEntityByLocation"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toContain("throw new SapUrlOriginError()");
+    expect((body.match(/buildSapUrl\(/g) ?? []).length).toBe(2);
   });
 });
 
