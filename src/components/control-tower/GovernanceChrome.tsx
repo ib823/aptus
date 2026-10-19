@@ -139,9 +139,16 @@ export function ExpiryRunway({
  * neither the write that was asked for nor any read. Showing the decision alone
  * would leave a reviewer to know those rules from somewhere else — which is how
  * the label and the runtime drifted apart in the first place.
+ *
+ * THE LABEL IS BUILT FROM BOTH FLAGS. It keyed on `write` alone and said
+ * "read + write", which was true while a write grant also counted as a read.
+ * The endpoint now reports a CREATE or UPDATE grant as {read:false,
+ * write:true} — the broker matches on operation, so it serves no read — and
+ * the chip went on claiming one beside its own API field.
  */
 export function Authorises({ read, write }: { read: boolean; write: boolean }) {
-  if (write) return <OpsChip tone="attention" label="read + write" meaning="writes into the client's SAP system" />;
+  if (write && read) return <OpsChip tone="attention" label="read + write" meaning="writes into the client's SAP system" />;
+  if (write) return <OpsChip tone="attention" label="write" meaning="writes into the client's SAP system, may not read" />;
   if (read) return <OpsChip tone="info" label="read" meaning="may read, may not write" />;
   return <AbsencePill label="nothing" meaning="this decision authorises no call at all" />;
 }

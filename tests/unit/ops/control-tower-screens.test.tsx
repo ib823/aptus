@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { AuditClient } from "@/components/control-tower/AuditClient";
-import { decisionTone } from "@/components/control-tower/GovernanceChrome";
+import { Authorises, decisionTone } from "@/components/control-tower/GovernanceChrome";
 import { GrantsClient } from "@/components/control-tower/GrantsClient";
 import { PortfolioClient } from "@/components/control-tower/PortfolioClient";
 import {
@@ -124,6 +124,46 @@ describe("grants — a decision label is not a permission", () => {
     await screen.findByText("sandbox only");
     // The decision is displayed AND its real effect is displayed beside it.
     expect(screen.getAllByLabelText(/authorises no call at all/).length).toBeGreaterThan(0);
+  });
+
+  it("labels a write grant 'write', not 'read + write', when the endpoint says it serves no read", async () => {
+    /*
+     * The endpoint reports an APPROVED CREATE or UPDATE grant as {read:false,
+     * write:true}: the broker matches a grant on its operation, so a write
+     * grant serves no read. The chip keyed on `write` alone and said
+     * "read + write" beside that very field.
+     */
+    serve({
+      ...GRANTS,
+      grants: [
+        {
+          ...GRANTS.grants[2],
+          id: "g_write",
+          operation: "CREATE",
+          expiresAt: inDays(40),
+          lifecycle: "live",
+          authorises: { read: false, write: true },
+        },
+      ],
+    });
+    render(<GrantsClient canDecide={false} />);
+
+    const chip = await screen.findByLabelText(/^write — /);
+    expect(chip.textContent).toBe("write");
+    expect(screen.queryByText("read + write")).toBeNull();
+  });
+
+  it("derives the authorises label from both flags", () => {
+    const label = (read: boolean, write: boolean) => {
+      const { container, unmount } = render(<Authorises read={read} write={write} />);
+      const text = container.textContent;
+      unmount();
+      return text;
+    };
+    expect(label(true, true)).toBe("read + write");
+    expect(label(false, true)).toBe("write");
+    expect(label(true, false)).toBe("read");
+    expect(label(false, false)).toBe("nothing");
   });
 
   it("renders time remaining as a runway with the remedy, not a date", async () => {

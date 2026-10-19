@@ -94,7 +94,10 @@ export type OwnerField = (typeof OWNER_FIELDS)[number];
  *     and accountability lands on a person who accepted it. Clearing is safe
  *     because it never makes anyone accountable — it makes the solution
  *     visibly unowned, which auto-drops an ACTIVE solution to RESTRICTED and is
- *     written to the config audit.
+ *     written to the config audit. (Not while an access request awaits a
+ *     decision — see OWNER_RELEASE_WHILE_PENDING — and claiming has its own
+ *     limit, OWNER_CLAIM_BY_DECIDER. Both are about who decides, not who is
+ *     named, so they are applied by the route beside this rule.)
  *
  * So the rule is exactly: an owner id may be your own, or null. Nothing else.
  */
@@ -123,6 +126,49 @@ export function ownerAssignmentRefusal(fields: readonly OwnerField[]): string {
     "ask them to claim the slot themselves. You can clear a slot that is no longer correct."
   );
 }
+
+/**
+ * The slots this save takes away from the person holding them — cleared, or
+ * claimed over them. An empty slot that stays empty, or is claimed, releases
+ * nobody.
+ */
+export function releasedOwnerSlots(current: Ownership, next: Ownership): OwnerField[] {
+  return OWNER_FIELDS.filter((field) => current[field] !== null && next[field] !== current[field]);
+}
+
+/** The slots this save gives the caller that they did not already hold. */
+export function claimedOwnerSlots(current: Ownership, next: Ownership, callerId: string): OwnerField[] {
+  return OWNER_FIELDS.filter((field) => next[field] === callerId && current[field] !== callerId);
+}
+
+/**
+ * OWN_APP MUST HOLD ACROSS OWNERSHIP CHANGES, not only at the instant of a
+ * decision. `evaluateDecision` compares the decider with the owners the row
+ * holds when the decision is made, and both halves of a slot change are
+ * self-service — so an owner could release their slots, approve their own
+ * app's PROD write as a "non-owner", and claim the slots straight back, ending
+ * as both the decider and the owner of the grant. The two refusals below close
+ * one half each, on the save that would open it.
+ *
+ * While a request awaits a decision, no slot may be taken from its holder:
+ * whoever owned the app when access was asked for still owns it when the
+ * access is decided, so OWN_APP sees them. Claiming an empty slot stays open —
+ * it adds an owner, and OWN_APP then refuses that person's decision.
+ */
+export const OWNER_RELEASE_WHILE_PENDING =
+  "This app has an access request waiting for a decision, so its owners can't change until it is decided — " +
+  "otherwise an owner could step down, decide their own app's access, and step back. " +
+  "Ask a colleague who doesn't own the app to decide the request first.";
+
+/**
+ * Nobody may claim a slot on an app whose live access they decided. An approval
+ * given as a non-owner stays a non-owner's approval for as long as it
+ * authorises anything; once it has lapsed or been revoked it authorises
+ * nothing, and the slot can be claimed.
+ */
+export const OWNER_CLAIM_BY_DECIDER =
+  "You decided access for this app that is still live, so you can't become one of its owners — " +
+  "an app's owner may not approve its access. Ask a colleague to claim the slot, or claim it once that access has ended.";
 
 export type StatusResolution =
   | { status: SolutionStatus; autoDropped: false }

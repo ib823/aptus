@@ -20,11 +20,16 @@ import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { DATA_CLASS_VALUES } from "@/lib/studio/data-class";
+import { effectiveDecision, isGranting } from "@/lib/studio/grants";
 import {
+  OWNER_CLAIM_BY_DECIDER,
+  OWNER_RELEASE_WHILE_PENDING,
+  claimedOwnerSlots,
   evaluatePromotion,
   isOrphaningAnActiveSolution,
   ownerAssignmentRefusal,
   rejectedOwnerAssignments,
+  releasedOwnerSlots,
   resolveStatusOnSave,
   slugify,
   type SolutionStatus,
@@ -240,6 +245,35 @@ export async function PATCH(request: NextRequest) {
     supportOwnerId:
       input.supportOwnerId === undefined ? current.supportOwnerId : (input.supportOwnerId ?? null),
   };
+
+  /*
+   * OWN_APP HOLDS ACROSS OWNER-SLOT CHANGES. Both refusals are explained at
+   * OWNER_RELEASE_WHILE_PENDING and OWNER_CLAIM_BY_DECIDER: without them an
+   * owner could release every slot, approve their own app's PROD write, and
+   * reclaim the slots — three self-service calls, each one allowed. Checked
+   * before anything is written, so a refused save changes nothing.
+   */
+  if (releasedOwnerSlots(current, nextOwnership).length > 0) {
+    const awaitingDecision = await prisma.apiAccessGrant.findFirst({
+      where: { organizationId, solutionId: current.id, decision: "REQUESTED" },
+      select: { id: true },
+    });
+    if (awaitingDecision) return studioError("CONFLICT", OWNER_RELEASE_WHILE_PENDING);
+  }
+  if (claimedOwnerSlots(current, nextOwnership, user.id).length > 0) {
+    const now = new Date();
+    const decidedByCaller = await prisma.apiAccessGrant.findMany({
+      where: { organizationId, solutionId: current.id, decidedById: user.id },
+      select: { decision: true, expiresAt: true, revokedAt: true },
+    });
+    // "Live" through the one resolver every surface uses, so a lapsed or
+    // revoked grant — which authorises nothing — never blocks a claim.
+    const stillAuthorises = decidedByCaller.some((g) => {
+      const effective = effectiveDecision(g, now);
+      return effective !== "REVOKED" && isGranting(effective);
+    });
+    if (stillAuthorises) return studioError("FORBIDDEN", OWNER_CLAIM_BY_DECIDER);
+  }
 
   const requestedStatus = (input.status ?? current.status) as SolutionStatus;
   const currentStatus = current.status as SolutionStatus;
