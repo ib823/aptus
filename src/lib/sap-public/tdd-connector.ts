@@ -808,7 +808,13 @@ async function fetchOAuthToken(prefix: string): Promise<string> {
   // Read defensively, and keep the status as a field — the resolver's reason.
   const json = ((await response.json().catch(() => null)) ?? {}) as OAuthTokenResponse;
   if (!response.ok || typeof json.access_token !== "string") {
-    throw new OAuthTokenRequestError(`OAuth token request failed: HTTP ${response.status}`, response.status);
+    // A refusal names the VARIABLES: this tenant has no stored connection to
+    // save again, and "check the client id" sent the admin looking for one.
+    throw new OAuthTokenRequestError(
+      `OAuth token request failed: HTTP ${response.status}`,
+      response.status,
+      `The token endpoint rejected the deployment's client credentials (HTTP ${response.status}). Check ${prefix}_CLIENT_ID, ${prefix}_CLIENT_SECRET and ${prefix}_OAUTH_TOKEN_URL in the deployment's environment.`,
+    );
   }
   return json.access_token;
 }

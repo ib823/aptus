@@ -126,22 +126,28 @@ async function bodyPrefix(res: Response): Promise<string> {
  * failed as invalid OData. The read path already refuses a 200 that is not
  * OData; the probe now holds the same line, because it never claims health it
  * did not observe:
- *   - a redirect is not followed, and is a sign-in that did not happen
- *     (Node answers the 3xx itself; a browser, an opaqueredirect);
+ *   - a redirect to another origin is not followed, and is a sign-in that did
+ *     not happen (Node answers the 3xx itself; a browser, an opaqueredirect) —
+ *     a same-origin one is followed first, see followSameOrigin;
  *   - a 200 is OK only when its body is an EDMX document and is not HTML.
+ *
+ * `redirected` says a same-origin redirect was followed to get here. What it
+ * landed on, when not metadata, is the login page the redirect was for.
  */
-async function classifyResponse(res: Response): Promise<{ status: ConnectionHealthStatus; detail: string }> {
-  if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
-    return {
-      status: "UNAUTHORIZED",
-      detail:
-        "The tenant redirected to a login page; check that the base URL is the API host and the credentials.",
-    };
-  }
+async function classifyResponse(
+  res: Response,
+  redirected: boolean,
+): Promise<{ status: ConnectionHealthStatus; detail: string }> {
+  const loginRedirect = {
+    status: "UNAUTHORIZED",
+    detail: "The tenant redirected to a login page; check that the base URL is the API host and the credentials.",
+  } as const;
+  if (isRedirect(res)) return loginRedirect;
   if (res.status === 200) {
     const contentType = res.headers?.get?.("content-type") ?? "";
     const metadata = !/html/i.test(contentType) && EDMX_ROOT.test(await bodyPrefix(res));
     if (!metadata) {
+      if (redirected) return loginRedirect;
       return {
         status: "ERROR",
         detail: "The tenant answered 200 but not with an OData metadata document (often a login page).",
@@ -149,6 +155,59 @@ async function classifyResponse(res: Response): Promise<{ status: ConnectionHeal
     }
   }
   return classify(res.status);
+}
+
+function isRedirect(res: Response): boolean {
+  return res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400);
+}
+
+/** Same-origin redirects followed before the probe stops and calls it a login redirect. */
+const MAX_SAME_ORIGIN_REDIRECTS = 3;
+
+/**
+ * THE SAME HOST MOVING THE PATH IS NOT A LOGIN PAGE. Every 3xx used to be
+ * "redirected to a login page", so a reverse proxy or web dispatcher that
+ * answers `$metadata` with a 3xx to the real path ON ITS OWN ORIGIN — a tenant
+ * the read and write paths serve, since they follow redirects — was probed
+ * UNAUTHORIZED: lastValidatedAt stopped moving, the lane said SAP rejected
+ * CoreEdge's sign-in, and the drift alert emailed every platform admin.
+ *
+ * A Location on the request's own origin is followed, a bounded number of
+ * times, with the same headers, and what it lands on is classified like any
+ * answer — so it is OK only as an EDMX document. A Location on another origin
+ * (the IdP, the UI host), one that does not parse, or none at all, stops here
+ * and is never sent the credentials.
+ */
+async function followSameOrigin(
+  first: Response,
+  url: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+): Promise<{ res: Response; redirected: boolean }> {
+  const origin = new URL(url).origin;
+  let res = first;
+  let current = url;
+  let redirected = false;
+  for (let hop = 0; hop < MAX_SAME_ORIGIN_REDIRECTS && isRedirect(res); hop++) {
+    const next = resolveLocation(res, current);
+    if (!next || next.origin !== origin) break;
+    await res.body?.cancel().catch(() => undefined);
+    current = next.href;
+    res = await fetchImpl(current, init);
+    redirected = true;
+  }
+  return { res, redirected };
+}
+
+/** A redirect's Location against the URL it answered, or null when it has none that parses. */
+function resolveLocation(res: Response, base: string): URL | null {
+  const location = res.headers?.get?.("location");
+  if (!location) return null;
+  try {
+    return new URL(location, base);
+  } catch {
+    return null;
+  }
 }
 
 export async function probeConnection(
@@ -179,17 +238,16 @@ export async function probeConnection(
     // credential problem should surface as UNAUTHORIZED rather than a crash.
     const authHeaders = await buildAuthHeadersFromConnection(conn);
     signedIn = true;
-    const res = await fetchImpl(
-      buildSapUrl({ baseUrl: conn.baseUrl, path: `${path}/$metadata`, client: conn.client }),
-      {
-        method: "GET",
-        headers: { ...authHeaders, Accept: "application/xml" },
-        signal: controller.signal,
-        cache: "no-store",
-        redirect: "manual",
-      },
-    );
-    const { status, detail } = await classifyResponse(res);
+    const url = buildSapUrl({ baseUrl: conn.baseUrl, path: `${path}/$metadata`, client: conn.client });
+    const init: RequestInit = {
+      method: "GET",
+      headers: { ...authHeaders, Accept: "application/xml" },
+      signal: controller.signal,
+      cache: "no-store",
+      redirect: "manual",
+    };
+    const { res, redirected } = await followSameOrigin(await fetchImpl(url, init), url, init, fetchImpl);
+    const { status, detail } = await classifyResponse(res, redirected);
     return { status, httpStatus: res.status, detail, durationMs: Date.now() - started };
   } catch (err) {
     /*

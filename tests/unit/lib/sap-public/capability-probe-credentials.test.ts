@@ -106,6 +106,48 @@ describe("a deployment tenant missing its password", () => {
   });
 });
 
+/*
+ * A DEPLOYMENT TENANT HAS NO CONNECTION TO SAVE AGAIN. The refusal sentence
+ * every OAuthTokenRequestError took ended "then save the connection again",
+ * and the capability panel and Probe all's stop message showed it for an
+ * S4_TDD_* tenant, whose fix is the S4_TDD_* variables.
+ */
+describe("a deployment tenant whose token URL 404s", () => {
+  const ENV_TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://my999999-api.s4hana.cloud.sap" };
+
+  beforeEach(() => {
+    vi.stubEnv("S4_TDD_AUTH_TYPE", "oauth-client-credentials");
+    vi.stubEnv("S4_TDD_OAUTH_TOKEN_URL", TOKEN_URL);
+    vi.stubEnv("S4_TDD_CLIENT_ID", "sb-client");
+    vi.stubEnv("S4_TDD_CLIENT_SECRET", "s");
+  });
+
+  it("names the S4_TDD_* variables, not a stored connection, and SAP is never called", async () => {
+    const sap = network(() => new Response("Not Found", { status: 404 }));
+    const r = await probeService("S4_TDD", ENV_TENANT, SERVICE);
+    expect(r).toMatchObject({ status: 0, credentialError: "refused" });
+    expect(r.error).toBe(
+      "The token endpoint rejected the deployment's client credentials (HTTP 404). Check S4_TDD_CLIENT_ID, S4_TDD_CLIENT_SECRET and S4_TDD_OAUTH_TOKEN_URL in the deployment's environment.",
+    );
+    expect(r.error).not.toMatch(/save the connection/i);
+    expect(r.error).not.toContain("hana.ondemand.com");
+    expect(sap).toEqual([]);
+  });
+
+  it("a stored connection's refusal still says to save the connection again", async () => {
+    network(() => new Response("Not Found", { status: 404 }));
+    const r = await probeService("S4_TDD", toSapTenant(connection()), SERVICE);
+    expect(r.error).toMatch(/then save the connection again/);
+  });
+
+  it("a token endpoint that failed (503) is not a refusal on either", async () => {
+    network(() => new Response("", { status: 503 }));
+    const r = await probeService("S4_TDD", ENV_TENANT, SERVICE);
+    expect(r.credentialError).toBe("unavailable");
+    expect(r.error).toMatch(/endpoint failing, not a credentials problem/);
+  });
+});
+
 describe("the tenant's own answer still carries its status", () => {
   it("SAP's 403 on $metadata is a SapHttpError of 403", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));

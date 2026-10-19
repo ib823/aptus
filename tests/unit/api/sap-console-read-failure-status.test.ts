@@ -106,6 +106,21 @@ describe("/preview", () => {
     expect(audited()).toEqual([expect.objectContaining({ status: 403, failureReason: "CONNECTION_MISCONFIGURED" })]);
   });
 
+  /*
+   * SAP'S 429 IS NOT COREEDGE THROTTLING. Recorded as 429, ten Preview clicks
+   * on a tenant that rate-limits OData raised the 'throttled' incident — "a
+   * credential is being rate limited" — for a console read no CoreEdge bucket
+   * refused. Only the three refusals are recorded as themselves; the status
+   * survives as the failureReason and on screen.
+   */
+  it.each([429, 500, 400])("SAP's own JSON %i is recorded as 502 with HTTP_<n>, and shown as itself", async (status) => {
+    mocks.previewSapEntitySet.mockResolvedValue({ ok: false, status, durationMs: 1, rows: [], fields: [], nextLink: null });
+    const res = await preview.GET(get(PREVIEW));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toMatchObject({ ok: false, status });
+    expect(audited()).toEqual([expect.objectContaining({ status: 502, failureReason: `HTTP_${status}` })]);
+  });
+
   it("a timeout is still a 502, with the generic sentence", async () => {
     mocks.previewSapEntitySet.mockRejectedValue(new Error("SAP request timed out after 30000ms"));
     const res = await preview.GET(get(PREVIEW));
@@ -167,6 +182,14 @@ describe("/operations", () => {
     );
     await operations.GET(get(OPERATIONS));
     expect(audited()).toEqual([expect.objectContaining({ status: 403 })]);
+  });
+
+  it("every section rate-limited by SAP (429) is a 502, not CoreEdge throttling", async () => {
+    mocks.previewSapEntitySet.mockResolvedValue(answered(429));
+    const res = await operations.GET(get(OPERATIONS));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.sections.every((s: { status: number }) => s.status === 429)).toBe(true);
+    expect(audited()).toEqual([expect.objectContaining({ status: 502 })]);
   });
 
   it("any section the tenant failed makes the row a 502", async () => {

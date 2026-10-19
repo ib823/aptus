@@ -18,7 +18,7 @@ import {
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
 import { getCurrentUser } from "@/lib/auth/session";
-import { consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -52,8 +52,9 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
 /**
  * One dashboard section, and the status its read is RECORDED as — kept beside
  * the section rather than in it, so the response shape is unchanged. SAP's own
- * status when it answered; consoleReadFailure's when the read threw (audit
- * A26): a refused section is a 401/403/404, not a tenant 5xx.
+ * refusal when it answered (answeredReadAuditStatus — a 429 is a 502, not
+ * CoreEdge throttling); consoleReadFailure's when the read threw (audit A26):
+ * a refused section is a 401/403/404, not a tenant 5xx.
  */
 async function loadOperationSection(
   product: SapOdataProduct,
@@ -75,7 +76,7 @@ async function loadOperationSection(
     );
     const fields = chooseFields(preview.rows, config.fields);
     return {
-      auditStatus: preview.ok ? 200 : preview.status,
+      auditStatus: answeredReadAuditStatus(preview.ok, preview.status),
       section: {
         key: config.key,
         title: config.title,

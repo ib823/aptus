@@ -53,12 +53,19 @@ export class ConnectionConfigError extends Error {
  * status decides what that means (isTokenRefusal): a 4xx refuses the client
  * id, the secret or the token URL — fixed in the connection — while a 5xx or a
  * 429 is the endpoint failing, and nothing was refused.
+ *
+ * `refusalDetail` is the refusal's sentence for a tenant whose fix is NOT the
+ * stored connection: a deployment's `{PREFIX}_*` tenant has none to "save
+ * again", and its client id, secret and token URL are variables. Absent, the
+ * stored connection's sentence is used. Like every publicDetail, it names
+ * fields and variables, never a value.
  */
 export class OAuthTokenRequestError extends Error {
   readonly code: string;
   constructor(
     message: string,
     readonly httpStatus: number,
+    readonly refusalDetail?: string,
   ) {
     super(message);
     this.name = "OAuthTokenRequestError";
@@ -128,7 +135,9 @@ export function publicCredentialFailure(
       return {
         status: "UNAUTHORIZED",
         httpStatus: status,
-        detail: `The token endpoint rejected the connection's client credentials (HTTP ${status}). Check the client id, the client secret and the token URL, then save the connection again.`,
+        detail:
+          err.refusalDetail ??
+          `The token endpoint rejected the connection's client credentials (HTTP ${status}). Check the client id, the client secret and the token URL, then save the connection again.`,
       };
     }
     return {

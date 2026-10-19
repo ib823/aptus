@@ -83,6 +83,24 @@ export function consoleReadFailure(err: unknown, fallbackMessage: string): Conso
   };
 }
 
+/**
+ * The audit status for a console read SAP ANSWERED in OData — the response
+ * that did not throw. The same line as the thrown path above: success, and
+ * the three refusals refusalFor keeps, are recorded as themselves; anything
+ * else is 502, the tenant failing.
+ *
+ * A 429 INCLUDED. Recorded as itself, SAP's own rate limit read on the ops
+ * screens as CoreEdge throttling a credential: ten Preview clicks on a tenant
+ * that rate-limits OData raised the 'throttled' incident, whose remediation
+ * points at a throttle view that drops credential-less rows, and the live
+ * broker calls the same answer ERROR. SAP's status still reaches the row, as
+ * its failureReason (HTTP_<n>), and the screen, as the preview's own status.
+ */
+export function answeredReadAuditStatus(ok: boolean, status: number): number {
+  if (ok) return 200;
+  return refusalFor(status) ? status : 502;
+}
+
 /** SAP's refusals, as the console says them. 401 and 403 have different fixes. */
 function refusalFor(status: number): Pick<ConsoleReadFailure, "status" | "code" | "message"> | null {
   if (status === 401) {

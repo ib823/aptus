@@ -35,7 +35,7 @@ import {
 } from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
-import { consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { ERROR_CODES } from "@/types/api";
 
@@ -176,7 +176,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // The status SAP actually gave (audit A26). A 403 for an entity set the
     // arrangement does not release is SAP answering correctly, and recording
     // it as 502 raised the tenant-errors incident against a healthy tenant.
-    await audit(preview.ok ? 200 : preview.status, preview.rows.length, {
+    // Only its refusals, though: SAP's 429 recorded as 429 raised the
+    // 'throttled' incident instead — see answeredReadAuditStatus.
+    await audit(answeredReadAuditStatus(preview.ok, preview.status), preview.rows.length, {
       durationMs: Date.now() - startedAt,
       failureReason: failureReasonFromHttp(preview.status),
     });

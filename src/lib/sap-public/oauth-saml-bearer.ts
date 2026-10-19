@@ -486,8 +486,12 @@ export async function exchangeSamlBearerAssertion(
     });
     const json = await readTokenResponse(res);
     if (!res.ok || typeof json.access_token !== "string") {
-      const said = sanitizeSuccessFactorsError(json.errorMessage, c);
-      const words = said ? `: ${said}` : ".";
+      // SuccessFactors' words END WITH A FULL STOP of their own, because a
+      // sentence follows them: "(HTTP 429): slow down Retry later." ran its
+      // text into ours. Any trailing stop it brought is dropped first, so
+      // there is never two; a ! or ?, or the … of a cut message, ends it already.
+      const said = sanitizeSuccessFactorsError(json.errorMessage, c)?.replace(/[.\s]+$/, "");
+      const words = said ? `: ${said}${/[!?…]$/.test(said) ? "" : "."}` : ".";
       /*
        * ONLY A REFUSAL GETS THE CONFIGURATION HINT (audit A54). Every answer
        * without a token took this one sentence, so an SF maintenance 503, a

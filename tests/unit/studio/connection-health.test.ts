@@ -136,6 +136,102 @@ describe("a 200 is OK only when it is a metadata document (A21)", () => {
     expect(((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as RequestInit).redirect).toBe("manual");
   });
 
+  /*
+   * THE SAME HOST MOVING THE PATH IS NOT A LOGIN PAGE. Every 3xx was a login
+   * redirect, so a web dispatcher answering $metadata with a 307 to the real
+   * path on its own origin probed UNAUTHORIZED — lane "SAP rejected CoreEdge's
+   * sign-in", a drift email — while readEntitySet, which follows redirects,
+   * read the same connection OK.
+   */
+  describe("a same-origin redirect is followed, and what it lands on decides", () => {
+    const sequence = (...responses: Response[]) => {
+      const f = vi.fn();
+      for (const r of responses) f.mockResolvedValueOnce(r);
+      return f;
+    };
+    const xml = { status: 200, headers: { "content-type": "application/xml" } };
+    const to = (location: string, status = 307) => new Response("", { status, headers: { location } });
+
+    it("a 307 to the real path on the same origin reaching EDMX is OK", async () => {
+      const f = sequence(to("https://my123456-api.s4hana.cloud.sap/gw/sap/opu/odata/sap/API_TEST_SRV/$metadata"), new Response(EDMX, xml));
+      const r = await probeConnection(conn(), f as unknown as typeof fetch);
+      expect(r.status).toBe("OK");
+      expect(r.httpStatus).toBe(200);
+      expect(f).toHaveBeenCalledTimes(2);
+      expect(f.mock.calls[1]![0]).toBe("https://my123456-api.s4hana.cloud.sap/gw/sap/opu/odata/sap/API_TEST_SRV/$metadata");
+      // The same request, credentials included, and still not auto-followed.
+      expect(f.mock.calls[1]![1]).toBe(f.mock.calls[0]![1]);
+      expect((f.mock.calls[1]![1] as RequestInit).redirect).toBe("manual");
+    });
+
+    it("a relative Location resolves against the request and is followed", async () => {
+      const f = sequence(to("/gw/sap/opu/odata/sap/API_TEST_SRV/$metadata", 302), new Response(EDMX, xml));
+      expect((await probeConnection(conn(), f as unknown as typeof fetch)).status).toBe("OK");
+      expect(f.mock.calls[1]![0]).toBe("https://my123456-api.s4hana.cloud.sap/gw/sap/opu/odata/sap/API_TEST_SRV/$metadata");
+    });
+
+    it("a same-origin redirect landing on a login page is still a sign-in that did not happen", async () => {
+      const page = new Response("<!DOCTYPE html><html><title>Logon</title></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+      const f = sequence(to("/sap/public/bc/icf/logon.html", 302), page);
+      const r = await probeConnection(conn(), f as unknown as typeof fetch);
+      expect(r.status).toBe("UNAUTHORIZED");
+      expect(r.detail).toMatch(/redirected to a login page/);
+    });
+
+    it("a same-origin redirect landing on a refusal is that refusal", async () => {
+      const f = sequence(to("/gw/x"), new Response("", { status: 403 }));
+      const r = await probeConnection(conn(), f as unknown as typeof fetch);
+      expect(r.status).toBe("UNAUTHORIZED");
+      expect(r.httpStatus).toBe(403);
+      expect(r.detail).not.toMatch(/redirected/);
+    });
+
+    it("a same-origin loop is followed a bounded number of times, then is a login redirect", async () => {
+      const f = vi.fn().mockImplementation(async () => to("/again"));
+      const r = await probeConnection(conn(), f as unknown as typeof fetch);
+      expect(r.status).toBe("UNAUTHORIZED");
+      expect(f).toHaveBeenCalledTimes(4);
+    });
+
+    it("another origin, or a redirect with no Location, is not followed", async () => {
+      for (const res of [to("https://idp.example.com/saml2/sso"), to("//my123456.s4hana.cloud.sap/ui"), new Response("", { status: 302 })]) {
+        const f = sequence(res);
+        const r = await probeConnection(conn(), f as unknown as typeof fetch);
+        expect(r.status).toBe("UNAUTHORIZED");
+        expect(f).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it("against a real HTTP server, the probe agrees with the read path", async () => {
+      const { createServer } = await import("node:http");
+      const server = createServer((req, res) => {
+        if (req.url?.startsWith("/sap/")) {
+          res.writeHead(307, { location: `/gw${req.url}` });
+          res.end();
+          return;
+        }
+        if (req.url?.startsWith("/gw/sap/") && req.headers.authorization) {
+          res.writeHead(200, { "content-type": "application/xml" });
+          res.end(EDMX);
+          return;
+        }
+        res.writeHead(401);
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      try {
+        const { port } = server.address() as { port: number };
+        const r = await probeConnection(conn({ baseUrl: `http://127.0.0.1:${port}` }));
+        expect(r).toMatchObject({ status: "OK", httpStatus: 200 });
+      } finally {
+        await new Promise((resolve) => server.close(resolve));
+      }
+    });
+  });
+
   it("a browser's opaque redirect is the same", async () => {
     const f = vi.fn().mockResolvedValue({ status: 0, type: "opaqueredirect", ok: false }) as unknown as typeof fetch;
     expect((await probeConnection(conn(), f)).status).toBe("UNAUTHORIZED");
@@ -284,6 +380,37 @@ describe("SuccessFactors' token endpoint failing is not blamed on the key (A54)"
     expect(r.detail).toMatch(says);
     expect(r.detail).not.toMatch(/refused/i);
     expect(r.detail).not.toMatch(/private key|user id|company id|assertion/i);
+  });
+
+  /*
+   * SUCCESSFACTORS' WORDS ARE A SENTENCE OF THEIR OWN. Quoted without a stop,
+   * "(HTTP 429): slow down Retry later." ran them into ours — on the Test
+   * result, Probe now and the drift-alert email.
+   */
+  it.each([
+    [429, "slow down", "SuccessFactors is rate-limiting the token endpoint (HTTP 429): slow down. Retry later."],
+    [429, "slow down. ", "SuccessFactors is rate-limiting the token endpoint (HTTP 429): slow down. Retry later."],
+    [
+      503,
+      "Service in maintenance",
+      "The SuccessFactors token endpoint is unavailable (HTTP 503): Service in maintenance. This is not a configuration problem.",
+    ],
+    [503, "Try again later!", "The SuccessFactors token endpoint is unavailable (HTTP 503): Try again later! This is not a configuration problem."],
+  ])("HTTP %i saying %j ends SuccessFactors' words with one full stop", async (status, errorMessage, detail) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errorMessage }), { status })));
+    const r = await probeConnection(sf(), vi.fn() as unknown as typeof fetch);
+    expect(r.detail).toBe(detail);
+  });
+
+  it("a refusal quoting SuccessFactors ends its words before the hint", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ errorMessage: "Invalid SAML assertion" }), { status: 401 })),
+    );
+    const r = await probeConnection(sf(), vi.fn() as unknown as typeof fetch);
+    expect(r.detail).toBe(
+      "SuccessFactors refused the token request (HTTP 401): Invalid SAML assertion. An expired or unregistered assertion is the usual cause.",
+    );
   });
 
   it("a refusal (401) still gets the configuration hint", async () => {
