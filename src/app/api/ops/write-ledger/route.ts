@@ -116,8 +116,10 @@ export async function GET(request: NextRequest) {
       prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { gte: 400 } } }),
 
       prisma.northboundAuditEvent.count({ where: { ...failedWriteWhere, status: 409 } }),
+      // Both conditions, restated: the spread REPLACES `failedWriteWhere.status`,
+      // so `{ not: 409 }` alone counted every successful write as blocked.
       prisma.northboundAuditEvent.count({
-        where: { ...failedWriteWhere, status: { not: 409 } },
+        where: { ...failedWriteWhere, status: { gte: 400, not: 409 } },
       }),
     ]);
 
