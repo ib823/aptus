@@ -64,12 +64,15 @@ export const FAILURE_REASON_INVALID_BODY = "INVALID_UPSTREAM_BODY";
  * lookup, broker traffic and the server log all sent triage there.
  *
  * ONLY AN OUTAGE IS WORTH A RETRY. A token endpoint that answered 408, 429 or
- * a 5xx is briefly unwell; any other answer without a token — a 404 or 405
- * from a wrong path, a 2xx or 3xx login page — is the token URL pointing at the
- * wrong thing, and no retry cures it. A 2xx or 3xx was ERROR "retry later", so
- * a client following the message retried forever against a misconfiguration
- * and the upstream-errors incident counted it as an outage; a 404 was blamed on
- * the credentials. Each is NEEDS_SETUP, and says to check the token URL.
+ * a 5xx is briefly unwell, and so is one that answered 2xx without a token —
+ * SuccessFactors serves its maintenance page as a 200, and the Studio Test
+ * (publicSamlFailure) calls that the endpoint failing, so the broker must not
+ * call it a configuration fault. Any other answer without a token — a 404 or
+ * 405 from a wrong path, a 3xx to a login page — is the token URL pointing at
+ * the wrong thing, and no retry cures it: NEEDS_SETUP, saying to check the
+ * token URL, and recorded as TOKEN_URL_HTTP_<n> so the audit row carries the
+ * diagnosis the detail gives. A token timeout is TOKEN_TIMEOUT, never the bare
+ * TIMEOUT a tenant that did not answer leaves.
  */
 export function credentialStepOutcome(err: unknown): {
   status: "NEEDS_SETUP" | "TIMEOUT" | "ERROR";
@@ -80,15 +83,19 @@ export function credentialStepOutcome(err: unknown): {
   const answered = tokenEndpointAnswer(err);
   const kind =
     answered === null ? credentialFailureKind(err) : isTokenEndpointOutage(answered) ? "unavailable" : "refused";
+  const wrongUrl = wrongTokenUrlAnswer(err);
   const failureReason =
-    reason === "FETCH_FAILED"
-      ? "CREDENTIAL_UNAVAILABLE"
-      : kind === "unavailable" && answered === null
-        ? `TOKEN_${reason}`
-        : reason;
+    wrongUrl !== null
+      ? `TOKEN_URL_HTTP_${wrongUrl}`
+      : kind === "timeout"
+        ? "TOKEN_TIMEOUT"
+        : reason === "FETCH_FAILED"
+          ? "CREDENTIAL_UNAVAILABLE"
+          : kind === "unavailable" && answered === null
+            ? `TOKEN_${reason}`
+            : reason;
   switch (kind) {
     case "refused": {
-      const wrongUrl = wrongTokenUrlAnswer(err);
       return {
         status: "NEEDS_SETUP",
         detail:
@@ -121,7 +128,7 @@ export function tokenEndpointAnswer(err: unknown): number | null {
 
 /** The token endpoint is briefly unwell, and the same request may work later. */
 function isTokenEndpointOutage(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
+  return status === 408 || status === 429 || status >= 500 || (status >= 200 && status < 300);
 }
 
 /**
@@ -134,7 +141,7 @@ const CREDENTIAL_REFUSED = new Set([400, 401, 403]);
 /**
  * The status, when the token endpoint answered without a token in a way that
  * says its URL is wrong rather than that the credential was refused or that it
- * is briefly unwell: a 404 or 405, a 2xx or 3xx login page. Null otherwise.
+ * is briefly unwell: a 404 or 405, a 3xx to a login page. Null otherwise.
  */
 export function wrongTokenUrlAnswer(err: unknown): number | null {
   const status = tokenEndpointAnswer(err);

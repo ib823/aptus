@@ -200,7 +200,7 @@ describe("a credential that fails before anything is sent (A25)", () => {
     const r = await writeEntitySet({ ...input, connection: oauth }, f);
     expect(r.status).toBe("TIMEOUT");
     expect(r.attempted).toBe(false);
-    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.failureReason).toBe("TOKEN_TIMEOUT");
     expect(r.detail).toContain("token endpoint");
     expect(r.detail).not.toContain("The tenant did not respond");
     expect(r.detail).not.toContain("may or may not");
@@ -302,7 +302,7 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     expect(r.status).toBe("TIMEOUT");
     expect(writeHttpStatusFor(r.status)).toBe(504);
     expect(r.attempted).toBe(false);
-    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.failureReason).toBe("TOKEN_TIMEOUT");
     expect(r.detail).toContain("token endpoint did not respond within 10000ms");
     expect(f).not.toHaveBeenCalled();
   });
@@ -376,11 +376,9 @@ describe("a token URL that answers without a token is a setup problem, not an ou
   });
 
   it.each([
-    ["client-credentials", 404, "OAUTH_TOKEN_REJECTED", oauth],
-    ["client-credentials", 405, "OAUTH_TOKEN_REJECTED", oauth],
-    ["client-credentials", 200, "OAUTH_TOKEN_MISSING", oauth],
-    ["SAML bearer", 404, "SAML_BEARER_REJECTED", saml],
-    ["SAML bearer", 200, "SAML_BEARER_NO_TOKEN", saml],
+    ["client-credentials", 404, "TOKEN_URL_HTTP_404", oauth],
+    ["client-credentials", 405, "TOKEN_URL_HTTP_405", oauth],
+    ["SAML bearer", 404, "TOKEN_URL_HTTP_404", saml],
   ])("a %s token URL answering %i is NEEDS_SETUP: check the token URL", async (_label, code, reason, conn) => {
     vi.stubGlobal("fetch", vi.fn(async () => html(code)));
     const f = vi.fn();
@@ -393,6 +391,46 @@ describe("a token URL that answers without a token is a setup problem, not an ou
     expect(r.detail).toContain("Check the connection's token URL");
     expect(r.detail).not.toContain("Retry later");
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("a token endpoint answering 200 without a token is failing, not misconfigured", () => {
+  it.each([
+    ["client-credentials", "OAUTH_TOKEN_MISSING"],
+    ["SAML bearer", "SAML_BEARER_NO_TOKEN"],
+  ] as const)("a %s maintenance page (HTTP 200) is ERROR 502, retryable, key released", async (label, reason) => {
+    // SuccessFactors serves maintenance as a 200; the Studio Test calls that the
+    // endpoint failing, and the broker draws the same line.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html><body>maintenance</body></html>", { status: 200, headers: { "content-type": "text/html" } })),
+    );
+    const f = vi.fn();
+    const conn: ResolvedSapConnection = {
+      ...connection,
+      id: `c_${label}_maint`,
+      ...(label === "SAML bearer"
+        ? {
+            product: "successfactors",
+            authType: "oauth-saml-bearer" as const,
+            oauthTokenUrl: "https://idp.example.test/oauth/token",
+            secrets: { clientId: "sf-api-key", companyId: "acmeT1", samlAssertion: "PHNhbWw+" },
+          }
+        : {
+            authType: "oauth-client-credentials" as const,
+            oauthTokenUrl: "https://idp.example.test/oauth/token",
+            secrets: { clientId: "client", clientSecret: "still-valid" },
+          }),
+    };
+    const r = await writeEntitySet({ ...input, connection: conn }, f);
+    expect(r.status).toBe("ERROR");
+    expect(writeHttpStatusFor(r.status)).toBe(502);
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe(reason);
+    expect(r.detail).not.toContain("Check the connection's token URL");
+    expect(f).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    clearOAuthTokenCache();
   });
 });
 

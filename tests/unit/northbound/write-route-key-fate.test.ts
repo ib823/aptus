@@ -249,7 +249,7 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
     state.connection = SAML;
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const f = sap({ token: hang });
-    const pending = expectRetryable(504, "UPSTREAM_TIMEOUT", "TIMEOUT");
+    const pending = expectRetryable(504, "UPSTREAM_TIMEOUT", "TOKEN_TIMEOUT");
     // The exchange's own bound, TOKEN_REQUEST_TIMEOUT_MS.
     await vi.advanceTimersByTimeAsync(10_000);
     await pending;
@@ -268,10 +268,9 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
    * "retry later" sent the client round a loop that never ends.
    */
   it.each([
-    ["an OAuth token URL answering 404", "OAUTH", 404, "OAUTH_TOKEN_REJECTED"],
-    ["an OAuth token URL answering a 200 login page", "OAUTH", 200, "OAUTH_TOKEN_MISSING"],
-    ["a SAML token URL answering 404", "SAML", 404, "SAML_BEARER_REJECTED"],
-    ["a SAML token URL answering a 200 login page", "SAML", 200, "SAML_BEARER_NO_TOKEN"],
+    ["an OAuth token URL answering 404", "OAUTH", 404, "TOKEN_URL_HTTP_404"],
+    ["an OAuth token URL answering 405", "OAUTH", 405, "TOKEN_URL_HTTP_405"],
+    ["a SAML token URL answering 404", "SAML", 404, "TOKEN_URL_HTTP_404"],
   ] as const)("%s is a 403 FORBIDDEN to check the token URL", async (_label, kind, code, reason) => {
     state.connection = kind === "OAUTH" ? OAUTH : SAML;
     const f = sap({
@@ -288,6 +287,15 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
     expect(mocks.release).toHaveBeenCalledWith({ organizationId: "org_a" }, "idem_1");
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(lastAudit()).toMatchObject({ status: 403, failureReason: reason, replayed: false });
+  });
+
+  it("a SAML token endpoint answering a 200 maintenance page is a retryable 502, as the Studio Test says", async () => {
+    state.connection = SAML;
+    sap({
+      token: async () =>
+        new Response("<html><body>maintenance</body></html>", { status: 200, headers: { "content-type": "text/html" } }),
+    });
+    await expectRetryable(502, "UPSTREAM_ERROR", "SAML_BEARER_NO_TOKEN");
   });
 
   it("a SAML exchange SuccessFactors refuses is still a 403 FORBIDDEN", async () => {

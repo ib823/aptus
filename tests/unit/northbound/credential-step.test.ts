@@ -145,8 +145,8 @@ describe("the token endpoint FAILING stays an upstream error — nothing was ref
 
 describe("a token URL that answers without a token is NEEDS_SETUP — no retry cures it", () => {
   it.each([
-    ["a 404 from a wrong path", 404, "OAUTH_TOKEN_REJECTED"],
-    ["a 200 login page", 200, "OAUTH_TOKEN_MISSING"],
+    ["a 404 from a wrong path", 404, "TOKEN_URL_HTTP_404"],
+    ["a 405 from a wrong path", 405, "TOKEN_URL_HTTP_405"],
   ])("%s", async (_label, status, reason) => {
     token(new Response("<html><body>Sign in</body></html>", { status, headers: { "content-type": "text/html" } }));
     const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
@@ -156,6 +156,18 @@ describe("a token URL that answers without a token is NEEDS_SETUP — no retry c
     expect(r.detail).toBe(
       `The connection's token endpoint answered HTTP ${status} without issuing a token, so the tenant was not called. Check the connection's token URL in Studio.`,
     );
+    expect(tenant).not.toHaveBeenCalled();
+  });
+});
+
+describe("a 200 with no token is the endpoint failing, as the Studio Test says — not a setup fault", () => {
+  it("SuccessFactors' maintenance page (HTTP 200) is ERROR, retryable", async () => {
+    // publicSamlFailure calls this the token endpoint failing; the broker must
+    // not tell the app to check a token URL that is right.
+    token(new Response("<html><body>maintenance</body></html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
+    expect(r.status).toBe("ERROR");
+    expect(r.detail).not.toContain("Check the connection's token URL");
     expect(tenant).not.toHaveBeenCalled();
   });
 });
@@ -184,7 +196,7 @@ describe("a hung token endpoint is TIMEOUT (504), naming the token endpoint's ow
     const r = await pending;
     expect(r.status).toBe("TIMEOUT");
     expect(httpStatusFor(r.status)).toBe(504);
-    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.failureReason).toBe("TOKEN_TIMEOUT");
     // Not "The tenant did not respond within 25000ms": wrong host, wrong limit.
     expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms, so the tenant was not called.");
     expect(tenant).not.toHaveBeenCalled();
@@ -199,7 +211,7 @@ describe("a hung token endpoint is TIMEOUT (504), naming the token endpoint's ow
     const pending = readEntitySet({ connection: { ...sfPreSigned(), timeoutMs: 5_000 }, ...READ }, tenant as unknown as typeof fetch);
     await vi.advanceTimersByTimeAsync(10_000);
     const r = await pending;
-    expect(r).toMatchObject({ status: "TIMEOUT", failureReason: "TIMEOUT" });
+    expect(r).toMatchObject({ status: "TIMEOUT", failureReason: "TOKEN_TIMEOUT" });
     expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms, so the tenant was not called.");
     expect(tenant).not.toHaveBeenCalled();
   });
@@ -232,7 +244,7 @@ describe("the write path draws the same line", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     const r = await pending;
     expect(r.status).toBe("TIMEOUT");
-    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.failureReason).toBe("TOKEN_TIMEOUT");
     expect(r.detail).not.toMatch(/may or may not/);
     expect(r.detail).toMatch(/token endpoint did not respond within 10000ms.*The write was not applied/);
     expect(tenant).not.toHaveBeenCalled();
