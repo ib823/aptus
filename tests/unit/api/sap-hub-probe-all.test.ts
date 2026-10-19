@@ -60,6 +60,8 @@ vi.mock("@/lib/db/prisma", () => ({
  */
 vi.mock("@/lib/sap-public/connection-resolver", () => ({
   resolveSapConnection: mocks.resolveSapConnection,
+  // No org connection shadows a deployment tenant key in these cases (A41).
+  hasActiveSapConnection: async () => false,
   toSapTenant: (c: { key: string; label: string; baseUrl: string; environment: string | null }) => ({
     key: c.key,
     label: c.label,

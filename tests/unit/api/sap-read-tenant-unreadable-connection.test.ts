@@ -93,6 +93,8 @@ vi.mock("@/lib/db/prisma", () => ({
       update: mocks.hubUpdate,
       findFirst: async () => null,
     },
+    // Probe-all writes each probe into its row in one statement (A23).
+    $executeRaw: async () => 1,
   },
 }));
 
