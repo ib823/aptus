@@ -135,10 +135,10 @@ export function ExpiryRunway({
  * predicates, rendered here without interpretation.
  *
  * A DECISION LABEL IS NOT A PERMISSION. `SANDBOX_ONLY` on a PROD grant
- * authorises nothing; `READ_ONLY` on a CREATE request authorises a read and not
- * the write that was asked for. Showing the decision alone would leave a
- * reviewer to know those rules from somewhere else — which is how the label and
- * the runtime drifted apart in the first place.
+ * authorises nothing; nor does `READ_ONLY` on a CREATE request, which permits
+ * neither the write that was asked for nor any read. Showing the decision alone
+ * would leave a reviewer to know those rules from somewhere else — which is how
+ * the label and the runtime drifted apart in the first place.
  */
 export function Authorises({ read, write }: { read: boolean; write: boolean }) {
   if (write) return <OpsChip tone="attention" label="read + write" meaning="writes into the client's SAP system" />;

@@ -264,6 +264,21 @@ describe("grants report what a decision actually authorises", () => {
     expect(body.data.grants[0].authorises).toEqual({ read: false, write: false });
   });
 
+  it("reports READ_ONLY on a CREATE grant as authorising nothing, not a read", async () => {
+    /*
+     * The broker matches a grant on its operation, and a read is served only
+     * for a READ interface — so a CREATE row decided READ_ONLY serves no read
+     * and no write. This said `read: true` because it asked `grantsRead` alone,
+     * while claiming to use "the same predicates the broker uses".
+     */
+    mocks.grantFindMany.mockResolvedValue([
+      grantRow({ operation: "CREATE", decision: "READ_ONLY", expiresAt: new Date("2027-06-01") }),
+    ]);
+    mocks.grantCount.mockResolvedValue(1);
+    const body = await (await grants(req("grants"))).json();
+    expect(body.data.grants[0].authorises).toEqual({ read: false, write: false });
+  });
+
   it("marks a settled grant with no expiry as unbounded", async () => {
     // Still reported even now that revocation exists: nothing ENDS this grant
     // on its own, and a manual withdrawal depends on somebody noticing. The

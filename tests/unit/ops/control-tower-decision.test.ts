@@ -25,7 +25,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   grantFindFirst: vi.fn(),
-  grantUpdate: vi.fn(),
+  grantUpdateMany: vi.fn(),
   auditCreate: vi.fn(),
   // GET-side, unused here but the module imports them.
   grantFindMany: vi.fn(),
@@ -39,7 +39,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     apiAccessGrant: {
       findFirst: mocks.grantFindFirst,
-      update: mocks.grantUpdate,
+      updateMany: mocks.grantUpdateMany,
       findMany: mocks.grantFindMany,
       count: mocks.grantCount,
       groupBy: mocks.grantGroupBy,
@@ -73,6 +73,8 @@ function pendingGrant(over: Record<string, unknown> = {}) {
     // make every test that is not about expiry fail for a reason it never meant
     // to assert. Tests probing the unbounded path pass null explicitly.
     expiresAt: FUTURE,
+    // Owned by the requester and a colleague — never by the deciding admin.
+    solution: { technicalOwnerId: "u_requester", businessOwnerId: "u_lead", supportOwnerId: null },
     ...over,
   };
 }
@@ -90,17 +92,9 @@ function decide(body: Record<string, unknown>) {
 beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
   mocks.grantFindFirst.mockResolvedValue(pendingGrant());
-  mocks.grantUpdate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-    id: "g1",
-    decision: data.decision,
-    decidedById: data.decidedById,
-    decidedAt: data.decidedAt,
-    operation: "READ",
-    environment: "PROD",
-    externalId: "API_BP",
-    solutionId: "sol_1",
-    expiresAt: null,
-  }));
+  // A compare-and-set reports how many rows matched its guard; one means this
+  // decision is the one that landed.
+  mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
   mocks.auditCreate.mockResolvedValue({});
 });
 
@@ -108,7 +102,7 @@ describe("the gate — reading this workspace is not deciding in it", () => {
   it("refuses an unauthenticated caller", async () => {
     mocks.getCurrentUser.mockResolvedValue(null);
     expect((await decide({ grantId: "g1", decision: "APPROVED" })).status).toBe(401);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses a partner lead, who may READ every grant on this screen", async () => {
@@ -117,7 +111,7 @@ describe("the gate — reading this workspace is not deciding in it", () => {
     mocks.getCurrentUser.mockResolvedValue(PARTNER_LEAD);
     const res = await decide({ grantId: "g1", decision: "APPROVED" });
     expect(res.status).toBe(403);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses the support persona outright", async () => {
@@ -156,14 +150,14 @@ describe("the governance controls are the same controls, not a second copy", () 
     const res = await decide({ grantId: "g1", decision: "APPROVED" });
     expect(res.status).toBe(403);
     expect((await res.json()).error.message).toMatch(/cannot decide your own request/i);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("409s a re-decision of a settled grant rather than rewriting history", async () => {
     mocks.grantFindFirst.mockResolvedValue(pendingGrant({ decision: "APPROVED" }));
     const res = await decide({ grantId: "g1", decision: "REJECTED" });
     expect(res.status).toBe(409);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("demands the write checklist before a write is approved", async () => {
@@ -207,7 +201,7 @@ describe("the governance controls are the same controls, not a second copy", () 
       expiresAt: FUTURE.toISOString(),
     });
     expect(res.status).toBe(403);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses a decision that cannot be set by hand", async () => {
@@ -219,12 +213,26 @@ describe("the governance controls are the same controls, not a second copy", () 
 describe("the write is tenant-anchored and audited", () => {
   beforeEach(() => mocks.getCurrentUser.mockResolvedValue(ADMIN));
 
-  it("carries the organization in the update itself", async () => {
+  it("carries the organization — and the pending state — in the update itself", async () => {
+    // UPDATED with the compare-and-set: this asserted the WHERE was exactly
+    // { id, organizationId }, which is the shape that let a second concurrent
+    // decision overwrite the first. The tenant is still asserted here; the
+    // `decision: "REQUESTED"` guard is now part of the same WHERE.
     await decide({ grantId: "g1", decision: "READ_ONLY" });
-    expect(mocks.grantUpdate.mock.calls[0]?.[0]?.where).toEqual({
+    expect(mocks.grantUpdateMany.mock.calls[0]?.[0]?.where).toEqual({
       id: "g1",
       organizationId: "org_a",
+      decision: "REQUESTED",
     });
+  });
+
+  it("409s the second of two concurrent decisions, and audits nothing for it", async () => {
+    // Both read REQUESTED and passed NOT_PENDING; the other decision landed
+    // first, so this guarded write matched no row.
+    mocks.grantUpdateMany.mockResolvedValue({ count: 0 });
+    const res = await decide({ grantId: "g1", decision: "APPROVED" });
+    expect(res.status).toBe(409);
+    expect(mocks.auditCreate).not.toHaveBeenCalled();
   });
 
   it("anchors on the ROW's organization, not the actor's, for a global admin", async () => {
@@ -234,7 +242,7 @@ describe("the write is tenant-anchored and audited", () => {
     mocks.getCurrentUser.mockResolvedValue(ADMIN_NO_ORG);
     mocks.grantFindFirst.mockResolvedValue(pendingGrant({ organizationId: "org_other" }));
     await decide({ grantId: "g1", decision: "READ_ONLY" });
-    expect(mocks.grantUpdate.mock.calls[0]?.[0]?.where?.organizationId).toBe("org_other");
+    expect(mocks.grantUpdateMany.mock.calls[0]?.[0]?.where?.organizationId).toBe("org_other");
     expect(mocks.auditCreate.mock.calls[0]?.[0]?.data?.organizationId).toBe("org_other");
   });
 
@@ -272,5 +280,38 @@ describe("the response says what the decision now authorises", () => {
   it("reports a rejection as authorising nothing", async () => {
     const body = await (await decide({ grantId: "g1", decision: "REJECTED" })).json();
     expect(body.data.authorises).toEqual({ read: false, write: false });
+  });
+
+  it("never reports a read on a write grant — the broker matches on operation", async () => {
+    mocks.grantFindFirst.mockResolvedValue(pendingGrant({ operation: "CREATE" }));
+    const body = await (
+      await decide({ grantId: "g1", decision: "APPROVED", writeChecklistAcknowledged: true })
+    ).json();
+    expect(body.data.authorises).toEqual({ read: false, write: true });
+  });
+});
+
+describe("the owner rule and read-only on writes hold at this door too", () => {
+  beforeEach(() => mocks.getCurrentUser.mockResolvedValue(ADMIN));
+
+  it("refuses an admin who owns the app, on a request someone else raised", async () => {
+    // Seniority is no more an exemption here than it is for self-approval.
+    mocks.grantFindFirst.mockResolvedValue(
+      pendingGrant({
+        operation: "CREATE",
+        solution: { technicalOwnerId: null, businessOwnerId: null, supportOwnerId: ADMIN.id },
+      }),
+    );
+    const res = await decide({ grantId: "g1", decision: "APPROVED", writeChecklistAcknowledged: true });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.message).toMatch(/You own this app/);
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses READ_ONLY on a CREATE request rather than storing a grant that permits nothing", async () => {
+    mocks.grantFindFirst.mockResolvedValue(pendingGrant({ operation: "CREATE" }));
+    const res = await decide({ grantId: "g1", decision: "READ_ONLY", writeChecklistAcknowledged: true });
+    expect(res.status).toBe(403);
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 });

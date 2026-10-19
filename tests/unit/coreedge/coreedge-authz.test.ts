@@ -44,14 +44,21 @@ describe("the personas, translated", () => {
   it("says nothing about an absent role except that it may not act", () => {
     for (const role of [null, undefined, ""]) {
       expect(isPlatformAdmin(role)).toBe(false);
-      expect(refuseDecision({ role, userId: "u", requestedById: "other", expiresAt: FUTURE }))
-        .toBe("noPermission");
+      expect(
+        refuseDecision({ role, userId: "u", requestedById: "other", ownerIds: [], expiresAt: FUTURE }),
+      ).toBe("noPermission");
     }
   });
 });
 
 describe("deciding a request", () => {
-  const base = { userId: "reviewer", requestedById: "raiser", expiresAt: FUTURE } as const;
+  const base = {
+    userId: "reviewer",
+    requestedById: "raiser",
+    // The app belongs to someone other than the reviewer; one slot unclaimed.
+    ownerIds: ["raiser", "lead", null],
+    expiresAt: FUTURE,
+  } as const;
 
   it("admits a platform admin and a builder", () => {
     expect(refuseDecision({ ...base, role: "platform_admin" })).toBeNull();
@@ -91,6 +98,37 @@ describe("deciding a request", () => {
     expect(
       refuseDecision({ ...base, role: "consultant", requestedById: "reviewer", expiresAt: null }),
     ).toBe("ownRequest");
+  });
+
+  /*
+   * `ownApp` had its copy written and its place in the union, and nothing
+   * returned it — so an app's owner saw an enabled Approve on a request a
+   * colleague raised for their own app.
+   */
+  it("refuses an app's owner a request someone else raised, from every owner slot", () => {
+    for (const ownerIds of [
+      ["reviewer", null, null],
+      [null, "reviewer", null],
+      [null, null, "reviewer"],
+    ] as const) {
+      for (const role of ["platform_admin", "consultant"]) {
+        expect(refuseDecision({ ...base, role, ownerIds }), `${role} ${JSON.stringify(ownerIds)}`)
+          .toBe("ownApp");
+      }
+    }
+  });
+
+  it("reports ownership after the role and self-approval, and before the end date", () => {
+    const owner = { ...base, ownerIds: ["reviewer", null, null] } as const;
+    expect(refuseDecision({ ...owner, role: "viewer" })).toBe("noPermission");
+    expect(refuseDecision({ ...owner, role: "consultant", requestedById: "reviewer" })).toBe(
+      "ownRequest",
+    );
+    expect(refuseDecision({ ...owner, role: "consultant", expiresAt: null })).toBe("ownApp");
+  });
+
+  it("treats an unclaimed owner slot as nobody", () => {
+    expect(refuseDecision({ ...base, role: "consultant", ownerIds: [null, null, null] })).toBeNull();
   });
 });
 

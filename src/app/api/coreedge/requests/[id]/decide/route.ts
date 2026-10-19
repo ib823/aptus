@@ -75,15 +75,26 @@ export async function POST(
       environment: true,
       requestedById: true,
       expiresAt: true,
+      // The app's owners, for OWN_APP: an owner may not approve their own app.
+      solution: {
+        select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+      },
     },
   });
   if (grant === null) return refused("No such request.", 404);
+
+  const ownerIds = [
+    grant.solution.technicalOwnerId,
+    grant.solution.businessOwnerId,
+    grant.solution.supportOwnerId,
+  ];
 
   // The console's own gate, rendering the same sentence the screen shows.
   const consoleRefusal = refuseDecision({
     role: user.role,
     userId: user.id,
     requestedById: grant.requestedById,
+    ownerIds,
     expiresAt: grant.expiresAt,
   });
   if (consoleRefusal !== null) return refused(DISABLED_REASONS[consoleRefusal], 403);
@@ -95,6 +106,7 @@ export async function POST(
     environment: grant.environment as "SANDBOX" | "DEV" | "TEST" | "PROD",
     requestedById: grant.requestedById,
     deciderId: user.id,
+    ownerIds,
     next: parsed.data.decision,
     writeChecklistAcknowledged: parsed.data.writeChecklistAcknowledged,
     expiresAt: grant.expiresAt,
@@ -103,22 +115,48 @@ export async function POST(
     return refused(outcome.message, outcome.reason === "NOT_PENDING" ? 409 : 403);
   }
 
-  const updated = await prisma.apiAccessGrant.update({
+  const decidedAt = new Date();
+  const settled = await prisma.apiAccessGrant.updateMany({
     /*
      * THE TENANT IS RE-ASSERTED IN THE WRITE, not merely in the read above.
      * `tests/unit/studio/tenant-scope-coverage.test.ts` enforces this repo-wide
      * and caught this line: a write keyed on id alone trusts the lookup that
      * preceded it, and one refactor that moves or loosens that lookup turns a
      * scoped update into an unscoped one with nothing failing.
+     *
+     * AND SO IS THE PENDING STATE — a compare-and-set. The NOT_PENDING check
+     * above read the row a moment ago, and two reviewers deciding together both
+     * pass it; a plain update then let the later one silently overwrite a
+     * decision already recorded and audited. With the guard in the WHERE only
+     * the first write matches a REQUESTED row. The second matches nothing and is
+     * refused below — the idiom claim-link uses for the same race.
      */
-    where: { id: grant.id, organizationId: user.organizationId },
+    where: { id: grant.id, organizationId: user.organizationId, decision: "REQUESTED" },
     data: {
       decision: parsed.data.decision,
       decidedById: user.id,
-      decidedAt: new Date(),
+      decidedAt,
     },
-    select: { id: true, decision: true, decidedById: true, decidedAt: true, expiresAt: true },
   });
+  if (settled.count === 0) {
+    // Nothing was written, so nothing is audited: the trail records only the
+    // decision that actually landed.
+    return refused(
+      "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+      409,
+    );
+  }
+
+  // The row exactly as written. The guard above makes this write the only one
+  // that can settle the grant, so these values cannot have been superseded and
+  // a re-read would return the same thing.
+  const updated = {
+    id: grant.id,
+    decision: parsed.data.decision,
+    decidedById: user.id,
+    decidedAt,
+    expiresAt: grant.expiresAt,
+  };
 
   await writeConfigAudit({
     organizationId: grant.organizationId,

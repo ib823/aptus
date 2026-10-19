@@ -4,10 +4,11 @@
  * Access governance — what was asked for, what was decided, and when it stops.
  *
  * THE DECISION AND WHAT IT AUTHORISES ARE TWO COLUMNS, deliberately. A label is
- * not a permission: `SANDBOX_ONLY` on a PROD grant authorises nothing, and
- * `READ_ONLY` on a CREATE request authorises a read and not the write that was
- * asked for. The endpoint computes `authorises` with the same predicates the
- * broker enforces with, so the two cannot drift — which is the failure #168
+ * not a permission: `SANDBOX_ONLY` on a PROD grant authorises nothing, and nor
+ * does `READ_ONLY` on a CREATE request — a grant is matched on its operation, so
+ * it serves no read either (it can no longer be decided, but history keeps it).
+ * The endpoint computes `authorises` with the same predicates the broker
+ * enforces with, so the two cannot drift — which is the failure #168
  * fixed from the runtime side and this screen closes from the reading side.
  *
  * DECIDING IS ADMIN-ONLY, READING IS NOT. Partner leads, executive sponsors and

@@ -168,9 +168,15 @@ export async function GET(request: NextRequest) {
        * Rendering the decision label alone would repeat the defect #168 fixed
        * from the other direction: a viewer would read "SANDBOX_ONLY" on a PROD
        * grant and have to know, from elsewhere, that it authorises nothing.
+       *
+       * `read` is false for a write grant, whatever its decision. The broker
+       * matches a grant on its operation, and a read is only ever served for a
+       * READ interface — so a CREATE or UPDATE row never authorises a read.
+       * Asking `grantsRead` alone reported a READ_ONLY decision on a CREATE
+       * request as a live read that every call was refused.
        */
       authorises: {
-        read: !revoked && !expired && grantsRead(decision, environment),
+        read: !revoked && !expired && !isWrite && grantsRead(decision, environment),
         write: !revoked && !expired && isWrite && grantsWrite(decision, environment),
       },
       lifecycle: revoked
@@ -288,6 +294,11 @@ export async function PATCH(request: NextRequest) {
       externalId: true,
       solutionId: true,
       expiresAt: true,
+      // The app's owners, for OWN_APP: an owner may not approve their own app,
+      // and being a platform admin is no more an exemption than for SELF_APPROVAL.
+      solution: {
+        select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+      },
     },
   });
   if (!grant) return studioError("NOT_FOUND", "Request not found.");
@@ -298,6 +309,11 @@ export async function PATCH(request: NextRequest) {
     environment: grant.environment as GrantEnvironment,
     requestedById: grant.requestedById,
     deciderId: user.id,
+    ownerIds: [
+      grant.solution.technicalOwnerId,
+      grant.solution.businessOwnerId,
+      grant.solution.supportOwnerId,
+    ],
     next: input.decision as GrantDecision,
     writeChecklistAcknowledged: input.writeChecklistAcknowledged,
     // Taken from the REQUEST, not from this decision — an approver may not
@@ -316,27 +332,43 @@ export async function PATCH(request: NextRequest) {
 
   const before = { decision: grant.decision, decidedById: null, decidedAt: null };
 
-  const updated = await prisma.apiAccessGrant.update({
+  const decidedAt = new Date();
+  const settled = await prisma.apiAccessGrant.updateMany({
     // Tenant-anchored in the write itself, from the row's own organization —
     // never from the actor, who may be a global admin with none.
-    where: { id: grant.id, organizationId: grant.organizationId },
+    //
+    // And a compare-and-set on the pending state. Two decisions arriving
+    // together (this door and Studio's, say) both pass NOT_PENDING above; a
+    // plain update let the later one silently overwrite the earlier, audited
+    // decision. Only the first write matches a REQUESTED row now.
+    where: { id: grant.id, organizationId: grant.organizationId, decision: "REQUESTED" },
     data: {
       decision: input.decision,
       decidedById: user.id,
-      decidedAt: new Date(),
-    },
-    select: {
-      id: true,
-      decision: true,
-      decidedById: true,
-      decidedAt: true,
-      operation: true,
-      environment: true,
-      externalId: true,
-      solutionId: true,
-      expiresAt: true,
+      decidedAt,
     },
   });
+  if (settled.count === 0) {
+    // Nothing was written, so nothing is audited.
+    return studioError(
+      "CONFLICT",
+      "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+    );
+  }
+
+  // The row exactly as written: the guard makes this the only write that can
+  // settle the grant, so a re-read would return the same values.
+  const updated = {
+    id: grant.id,
+    decision: input.decision,
+    decidedById: user.id,
+    decidedAt,
+    operation: grant.operation,
+    environment: grant.environment,
+    externalId: grant.externalId,
+    solutionId: grant.solutionId,
+    expiresAt: grant.expiresAt,
+  };
 
   await writeConfigAudit({
     organizationId: grant.organizationId,
@@ -347,7 +379,7 @@ export async function PATCH(request: NextRequest) {
     before,
     after: {
       ...updated,
-      decidedAt: updated.decidedAt?.toISOString() ?? null,
+      decidedAt: updated.decidedAt.toISOString(),
       expiresAt: updated.expiresAt?.toISOString() ?? null,
       // Recorded so the trail shows WHERE the decision was taken. The same
       // decision from two workspaces is two different governance events.
@@ -359,11 +391,17 @@ export async function PATCH(request: NextRequest) {
     id: updated.id,
     decision: updated.decision,
     decidedById: updated.decidedById,
-    decidedAt: updated.decidedAt?.toISOString() ?? null,
+    decidedAt: updated.decidedAt.toISOString(),
     expiresAt: updated.expiresAt?.toISOString() ?? null,
-    /** What this decision authorises from now on, by the runtime predicates. */
+    /**
+     * What this decision authorises from now on, by the runtime predicates —
+     * and, like the GET, never a read on a write grant: the broker matches on
+     * operation, so a CREATE or UPDATE row cannot serve one.
+     */
     authorises: {
-      read: grantsRead(updated.decision as GrantDecision, updated.environment as GrantEnvironment),
+      read:
+        !isWriteOperation(updated.operation as GrantOperation) &&
+        grantsRead(updated.decision as GrantDecision, updated.environment as GrantEnvironment),
       write:
         isWriteOperation(updated.operation as GrantOperation) &&
         grantsWrite(updated.decision as GrantDecision, updated.environment as GrantEnvironment),

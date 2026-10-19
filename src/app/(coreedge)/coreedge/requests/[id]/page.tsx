@@ -11,6 +11,7 @@ import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { getRequest, listSapSystems } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isWriteOperation, type GrantOperation } from "@/lib/studio/grants";
 
 import { CoreEdgeShell } from "../../CoreEdgeShell";
 
@@ -49,6 +50,7 @@ export default async function RequestReview({
   const systems = await listSapSystems(user.organizationId);
 
   const isOwnRequest = request.requestedById === user.id;
+  const isWrite = isWriteOperation(request.operation as GrantOperation);
   const hasExpiry = request.expiresAt !== null;
   const targetEnvironment = request.environment;
   const hasSystemForEnvironment =
@@ -90,16 +92,28 @@ export default async function RequestReview({
         ? {}
         : { owner: "platformAdmin" as const }),
     },
-    {
-      /*
-       * Not "skipped" as a way of avoiding the question: the write checklist is
-       * a PR-5 capability, and a check that cannot run says so rather than
-       * passing by default.
-       */
-      state: "skipped",
-      title: "Write checklist confirmed",
-      detail: "Not applicable — this request is for reads.",
-    },
+    /*
+     * DERIVED FROM THE REQUEST'S OPERATION. This row was hard-coded to "this
+     * request is for reads" on every request, CREATE and UPDATE included — and
+     * the bar never sent the acknowledgement, so Approve on a write could only
+     * ever be refused and read-only was the one approval that went through.
+     *
+     * For a write the checklist is confirmed in the bar below, by the reviewer,
+     * at the moment of approving. Until then it is not done and it is theirs.
+     */
+    isWrite
+      ? {
+          state: "fail",
+          title: "Write checklist confirmed",
+          detail:
+            "This request writes into the client's SAP system. Confirm the write checklist below before approving.",
+          owner: "reviewer" as const,
+        }
+      : {
+          state: "skipped",
+          title: "Write checklist confirmed",
+          detail: "Not applicable — this request is for reads.",
+        },
   ];
 
   /*
@@ -116,6 +130,7 @@ export default async function RequestReview({
     role: user.role,
     userId: user.id,
     requestedById: request.requestedById,
+    ownerIds: request.ownerIds,
     expiresAt: request.expiresAt,
   });
   const blockingReason =
@@ -165,6 +180,7 @@ export default async function RequestReview({
       */}
       <ReviewDecision
         requestId={request.id}
+        isWrite={isWrite}
         blockedBecause={blockingReason}
         narrowerBlockedBecause={isOwnRequest ? DISABLED_REASONS.ownRequest : null}
       />

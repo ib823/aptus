@@ -182,6 +182,10 @@ export async function PATCH(request: NextRequest) {
       externalId: true,
       solutionId: true,
       expiresAt: true,
+      // The app's owners, for OWN_APP: an owner may not approve their own app.
+      solution: {
+        select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+      },
     },
   });
   if (!grant) return studioError("NOT_FOUND", "Request not found.");
@@ -192,6 +196,11 @@ export async function PATCH(request: NextRequest) {
     environment: grant.environment as GrantEnvironment,
     requestedById: grant.requestedById,
     deciderId: user.id,
+    ownerIds: [
+      grant.solution.technicalOwnerId,
+      grant.solution.businessOwnerId,
+      grant.solution.supportOwnerId,
+    ],
     next: input.decision as GrantDecision,
     writeChecklistAcknowledged: input.writeChecklistAcknowledged,
     // Taken from the REQUEST, not from the decision: an approver may not invent
@@ -208,23 +217,41 @@ export async function PATCH(request: NextRequest) {
     return studioError(code, verdict.message);
   }
 
-  const updated = await prisma.apiAccessGrant.update({
-    where: { id: grant.id, organizationId },
+  /*
+   * A COMPARE-AND-SET, not an update. The NOT_PENDING check above read the row
+   * a moment ago, and two reviewers deciding together both pass it — so a plain
+   * update let the later one silently overwrite a decision already recorded and
+   * audited, which is the history rewrite NOT_PENDING exists to forbid. With
+   * `decision: "REQUESTED"` in the WHERE only the first write matches; the
+   * second matches nothing and is refused, and writes no audit row.
+   */
+  const decidedAt = new Date();
+  const settled = await prisma.apiAccessGrant.updateMany({
+    where: { id: grant.id, organizationId, decision: "REQUESTED" },
     data: {
       decision: input.decision,
       decidedById: user.id,
-      decidedAt: new Date(),
-    },
-    select: {
-      id: true,
-      decision: true,
-      decidedById: true,
-      decidedAt: true,
-      operation: true,
-      environment: true,
-      externalId: true,
+      decidedAt,
     },
   });
+  if (settled.count === 0) {
+    return studioError(
+      "CONFLICT",
+      "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+    );
+  }
+
+  // The row exactly as written: the guard makes this the only write that can
+  // settle the grant, so a re-read would return the same values.
+  const updated = {
+    id: grant.id,
+    decision: input.decision,
+    decidedById: user.id,
+    decidedAt,
+    operation: grant.operation,
+    environment: grant.environment,
+    externalId: grant.externalId,
+  };
 
   await writeConfigAudit({
     organizationId,
