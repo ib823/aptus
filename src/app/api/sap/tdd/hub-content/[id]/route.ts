@@ -26,7 +26,7 @@ import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { probeStorageKey } from "@/lib/sap-public/hub-content";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 // A read endpoint whose result depends on a live per-tenant probe — never cache.
@@ -79,6 +79,11 @@ export async function GET(
   const resolvedTenant = tenantKey
     ? await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey)
     : null;
+  // Refused for the same reason as the list: the stored read below would
+  // otherwise come from a slot that is not this organization's.
+  if (resolvedTenant && "refused" in resolvedTenant) {
+    return readTenantRefusalResponse(resolvedTenant, tenantKey ?? "");
+  }
   const tenant = mayProbe ? (resolvedTenant?.tenant ?? null) : null;
   const probeKey =
     resolvedTenant && tenantKey

@@ -14,7 +14,11 @@ import {
   newCorrelationId,
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
-import { resolveReadTenant, unknownTenantMessage } from "@/lib/sap-public/tenant-for-read";
+import {
+  readTenantRefusalResponse,
+  resolveReadTenant,
+  unknownTenantMessage,
+} from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
 import { ERROR_CODES } from "@/types/api";
 
@@ -80,6 +84,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     viewer.organizationId ?? null,
     tenantKey,
   );
+  if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey);
   const tenant = resolved?.tenant ?? null;
   const service = await resolveHubService(product, serviceParam ?? "");
   const probe = probeParam === "1";
@@ -162,11 +167,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const startedAt = Date.now();
   try {
     // Short-TTL cache: inspect (+ probe, the ~3.6s path) is expensive; a warm
-    // instance serves repeats. ?refresh=1 forces a live re-read.
-    const cacheKey = `ent:${product.key}:${tenant.key}:${service.key}:${probe ? "1" : "0"}`;
+    // instance serves repeats. ?refresh=1 forces a live re-read. Filed under the
+    // system that answered, not the bare tenant key, which another organization
+    // may share — see live-cache.
+    const cacheOwner = { tenant, connection: conn };
+    const cacheKey = `ent:${product.key}:${service.key}:${probe ? "1" : "0"}`;
     const refresh = params.get("refresh") === "1";
     if (!refresh) {
-      const cached = getLiveCache<{ entitySets: unknown; probes: unknown }>(cacheKey);
+      const cached = getLiveCache<{ entitySets: unknown; probes: unknown }>(cacheOwner, cacheKey);
       if (cached) {
         // A cache hit reached no tenant, so there is nothing to audit: the row
         // would claim load this request did not cause. The read it was served
@@ -190,7 +198,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         durationMs: Date.now() - startedAt,
       });
     }
-    const at = setLiveCache(cacheKey, { entitySets, probes });
+    const at = setLiveCache(cacheOwner, cacheKey, { entitySets, probes });
     return NextResponse.json({ data: { entitySets, probes, generatedAt: new Date(at).toISOString(), fromCache: false, correlationId } });
   } catch (error) {
     console.error("[sap/tdd/entities] request failed:", error);

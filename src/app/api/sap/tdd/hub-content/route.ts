@@ -45,7 +45,7 @@ import {
 } from "@/lib/sap-public/hub-content";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { probeStorageKey } from "@/lib/sap-public/hub-content";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 // This read endpoint must ALWAYS reflect the latest stored probe — never a
@@ -193,6 +193,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const resolvedTenant = tenantKey
     ? await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey)
     : null;
+  // Refused, not degraded to "no tenant": a shadowed key's stored probes sit
+  // under the deployment's bare key, so rendering them would present the shared
+  // tenant's verdicts as this organization's — the thing being refused.
+  if (resolvedTenant && "refused" in resolvedTenant) {
+    return readTenantRefusalResponse(resolvedTenant, tenantKey ?? "");
+  }
   const tenant = resolvedTenant?.tenant ?? null;
   /*
    * WHERE THIS VIEWER'S PROBES ARE FILED, derived from the same resolution the

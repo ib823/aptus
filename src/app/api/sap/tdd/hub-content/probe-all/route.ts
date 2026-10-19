@@ -28,7 +28,7 @@ import { hubApiToService, httpToRuntimeStatus, isProbeable, mergeStoredProbe, pr
 import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 const CONFIRMATION = "PROBE ALL SAP SERVICES";
@@ -82,6 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const resolved = tenantKey
     ? await resolveReadTenant(product.envPrefix, product.key, auth.user.organizationId ?? null, tenantKey)
     : null;
+  if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey ?? "");
   // Guard on the RESOLUTION, not only on its tenant: the storage key below
   // needs `source`, and narrowing `tenant` alone leaves `resolved` nullable.
   if (!resolved || !tenantKey) {
