@@ -319,6 +319,40 @@ describe("every change to a key closes the lane's pending claim links", () => {
     }
   });
 
+  it("still hands back the new key when the close AFTER the write fails — that close is a backstop", async () => {
+    // The key has already changed by then; failing would lose the only copy
+    // of the new token and its audit row over a link that is almost never there.
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const changes = [
+      () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
+      () => rotateClientToken(SCOPE, "client_1"),
+      () => revokeClientToken(SCOPE, "client_1"),
+    ];
+    for (const run of changes) {
+      mocks.closeLinks.mockReset();
+      mocks.closeLinks.mockResolvedValueOnce({ count: 0 }).mockRejectedValueOnce(new Error("pool timeout"));
+      await expect(run()).resolves.not.toBeNull();
+    }
+    const issued = await (async () => {
+      mocks.closeLinks.mockReset();
+      mocks.closeLinks.mockResolvedValueOnce({ count: 0 }).mockRejectedValueOnce(new Error("pool timeout"));
+      return issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    })();
+    expect(issued.rawToken).toMatch(/^ce_/);
+    expect(errors).toHaveBeenCalledWith(
+      "[issue] claim-link close after key write failed",
+      expect.objectContaining({ organizationId: "org_a", solutionId: "sol_1", error: "Error" }),
+    );
+    errors.mockRestore();
+  });
+
+  it("still fails when the close BEFORE the write fails — the key must not change with a link aimed at it", async () => {
+    mocks.closeLinks.mockReset();
+    mocks.closeLinks.mockRejectedValueOnce(new Error("pool timeout"));
+    await expect(rotateClientToken(SCOPE, "client_1")).rejects.toThrow("pool timeout");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it("closes nothing for a credential in another tenant", async () => {
     mocks.findFirst.mockResolvedValue(null);
     await revokeClientToken(SCOPE, "client_other");

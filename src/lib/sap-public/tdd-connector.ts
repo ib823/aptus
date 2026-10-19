@@ -1275,7 +1275,15 @@ export async function deleteSapEntityByLocation(
   let url: string;
   if (/^[a-z][a-z\d+.-]*:/i.test(location) || location.startsWith("//")) {
     const origin = new URL(tenant.baseUrl).origin;
-    const absolute = new URL(location, tenant.baseUrl);
+    // One that does not even parse — an unbracketed IPv6 backend address from a
+    // dispatcher — names no origin to compare, so it is refused the same way,
+    // and the write-test reports it as a record left behind rather than a crash.
+    let absolute: URL;
+    try {
+      absolute = new URL(location, tenant.baseUrl);
+    } catch {
+      throw new SapUrlOriginError();
+    }
     if (absolute.origin !== origin) throw new SapUrlOriginError();
     url = buildSapUrl({
       baseUrl: origin,

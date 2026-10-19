@@ -76,6 +76,28 @@ export async function closePendingClaimLinks(
 }
 
 /**
+ * The second close, after the key is written: BEST-EFFORT, never a failure.
+ *
+ * By the time it runs the key has changed, and the caller is about to show the
+ * new token once — its only copy — and write the audit row. Failing here
+ * would lose both over a backstop for a link that is almost never there, and
+ * leave a working key nobody holds. The first close, before the write, is the
+ * one that must succeed; this one is logged and passed over.
+ */
+async function closeAgainAfterKeyWrite(lane: ClaimLinkLane, reason: string): Promise<void> {
+  try {
+    await closePendingClaimLinks(lane, reason);
+  } catch (err) {
+    console.error("[issue] claim-link close after key write failed", {
+      organizationId: lane.organizationId,
+      solutionId: lane.solutionId,
+      environment: lane.environment,
+      error: err instanceof Error ? err.name : "unknown",
+    });
+  }
+}
+
+/**
  * Has this stored expiry already passed?
  *
  * Renewal must not carry a lapsed expiry onto the new token: the key would be
@@ -222,7 +244,7 @@ export async function issueClientToken(
   });
 
   // And after: a link sent between the close and the upsert. See `closePendingClaimLinks`.
-  await closePendingClaimLinks(lane, reason);
+  await closeAgainAfterKeyWrite(lane, reason);
 
   return { ...row, rawToken };
 }
@@ -273,7 +295,7 @@ export async function rotateClientToken(
   });
 
   // And after: a link sent between the close and the update. See `closePendingClaimLinks`.
-  await closePendingClaimLinks(lane, reason);
+  await closeAgainAfterKeyWrite(lane, reason);
 
   return { ...row, rawToken };
 }
@@ -333,7 +355,7 @@ export async function revokeClientToken(
   });
 
   // And after: a link sent between the close and the update. See `closePendingClaimLinks`.
-  await closePendingClaimLinks(lane, reason);
+  await closeAgainAfterKeyWrite(lane, reason);
 
   return revoked;
 }

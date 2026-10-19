@@ -59,6 +59,9 @@ describe("an absolute Location on another origin", () => {
     ["another host over https", `https://attacker.example${PATH}/A_BusinessPartner('1')`],
     ["another port", `${BASE}:8443${PATH}/A_BusinessPartner('1')`],
     ["a network-path reference", `//attacker.example${PATH}/A_BusinessPartner('1')`],
+    // Names no origin to compare at all: refused the same way, not a TypeError.
+    ["one that does not parse (an unbracketed IPv6 backend)", `http://fd00::1:8000${PATH}/A_BusinessPartner('1')`],
+    ["one that does not parse (a broken bracket)", `http://[bad${PATH}/A_BusinessPartner('1')`],
   ])("is refused before anything is sent: %s", async (_label, location) => {
     await expect(deleteSapEntityByLocation("S4_TDD", tenant(), SERVICE, location)).rejects.toBeInstanceOf(
       SapUrlOriginError,
