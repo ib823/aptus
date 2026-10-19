@@ -38,6 +38,22 @@ export function failureReasonFromHttp(status: number): string | null {
 /** A 2xx whose body could not be read as the shape the contract requires. */
 export const FAILURE_REASON_INVALID_BODY = "INVALID_UPSTREAM_BODY";
 
+/** The connection's credential could not be turned into request headers. */
+export const FAILURE_REASON_CREDENTIAL_SETUP = "CREDENTIAL_SETUP";
+
+/**
+ * Why the connection's credential could not be used, before any request was
+ * sent to the tenant. The error's own code where it has one — TIMEOUT for a
+ * token endpoint that did not answer, SAML_BEARER_REJECTED, ENOTFOUND — and
+ * CREDENTIAL_SETUP, not FETCH_FAILED, where it has none: a missing password or
+ * a refused token exchange did not fail to fetch anything from the tenant, and
+ * the shapeless code sent triage to the tenant's operators.
+ */
+export function failureReasonFromCredentialError(err: unknown): string {
+  const reason = failureReasonFromError(err);
+  return reason === "FETCH_FAILED" ? FAILURE_REASON_CREDENTIAL_SETUP : reason;
+}
+
 function causeOf(err: unknown): unknown {
   return err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
 }

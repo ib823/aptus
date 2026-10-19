@@ -45,9 +45,12 @@ export async function rollupDay(day: Date): Promise<number> {
       where: { ...window, operation: "READ", status: { lt: 400 } },
       _sum: { rowCount: true },
     }),
+    // A REPLAY IS NOT A WRITE. A same-key retry re-serves the stored outcome
+    // without calling SAP; counting its row billed one created record once per
+    // retry — over-counting, the one direction this data must never be wrong in.
     prisma.northboundAuditEvent.groupBy({
       by: ["organizationId"],
-      where: { ...window, operation: { not: "READ" }, status: { lt: 400 } },
+      where: { ...window, operation: { not: "READ" }, status: { lt: 400 }, replayed: false },
       _count: { _all: true },
     }),
     // Refused before or at the gates: the caller's integration is failing,

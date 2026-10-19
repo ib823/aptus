@@ -12,11 +12,12 @@
  *
  * NOT row states, and deliberately not presented as filterable ones:
  *   - "replayed"   — a REQUEST-TIME response. A replay re-serves the stored
- *                    outcome without mutating the row; nothing counts it.
+ *                    outcome without mutating the row. Its audit row is
+ *                    marked `replayed`, so it is counted from the audit feed
+ *                    as an event, and never as a second refusal.
  *   - "conflicted" — likewise computed (PAYLOAD_MISMATCH / IN_FLIGHT) and
- *                    returned, never written.
- * Their only persisted trace is a 409 in the audit feed, so they are reported
- * from there, as events.
+ *                    returned, never written. Its only persisted trace is a
+ *                    409 in the audit feed, so it is reported from there.
  *
  * WHY THE COUNTS DRIFT. "Blocked" has two shapes:
  *   1. Refused BEFORE reserving — the write-credential gate. No row is ever
@@ -56,13 +57,27 @@ export async function GET(request: NextRequest) {
 
   // Shared `where`s, so the counts below and the row pages cannot diverge.
   const keyWhere = opsWhere(guard.actor, { createdAt: { gte: since } });
+  // Replays excluded: a same-key retry of a stored failure re-serves it without
+  // calling SAP, and counted here it was one more refusal per retry.
   const failedWriteWhere = opsWhere(guard.actor, {
     operation: "WRITE",
     at: { gte: since },
     status: { gte: 400 },
+    replayed: false,
   });
 
-  const [keys, writeEvents, keyTotal, staleCount, inFlightCount, completedCount, failedCount, conflicts, blocked] =
+  const [
+    keys,
+    writeEvents,
+    keyTotal,
+    staleCount,
+    inFlightCount,
+    completedCount,
+    failedCount,
+    conflicts,
+    blocked,
+    replayed,
+  ] =
     await Promise.all([
       prisma.northboundIdempotencyKey.findMany({
         where: keyWhere,
@@ -119,6 +134,9 @@ export async function GET(request: NextRequest) {
       prisma.northboundAuditEvent.count({
         where: { ...failedWriteWhere, status: { not: 409 } },
       }),
+      prisma.northboundAuditEvent.count({
+        where: opsWhere(guard.actor, { operation: "WRITE", at: { gte: since }, replayed: true }),
+      }),
     ]);
 
   return studioOk({
@@ -134,7 +152,7 @@ export async function GET(request: NextRequest) {
       total: keyTotal,
     },
     // From the audit feed — these are events, not states.
-    fromAudit: { blocked, conflicts },
+    fromAudit: { blocked, conflicts, replayed },
     truncated: keyTotal > keys.length || conflicts + blocked > writeEvents.length,
     provenance: {
       // Rendered on the screen, not buried: the two panels above count different
@@ -143,7 +161,7 @@ export async function GET(request: NextRequest) {
       why: [
         "a write refused at the credential gate never reserves a key, so it appears only in the audit feed",
         "a write refused after reserving but before SAP has its reservation deleted, so the in-flight count can fall with nothing completing",
-        "replayed and conflicted are computed at request time and never stored as row state — they are reported from the audit feed as events",
+        "replayed and conflicted are computed at request time and never stored as row state — they are reported from the audit feed as events, and a replayed failure is not counted as another refusal",
       ],
       emptyByDesign:
         keyTotal === 0

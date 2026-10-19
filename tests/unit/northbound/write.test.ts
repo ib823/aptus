@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeEntitySet, writeHttpStatusFor } from "@/lib/northbound/write";
 import { extractCookies } from "@/lib/sap-public/cookies";
-import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
+import { clearOAuthTokenCache, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 
 const connection: ResolvedSapConnection = {
   source: "db", id: "c1", organizationId: "org_a", product: "s4hana", key: "sandbox",
@@ -137,5 +137,168 @@ describe("the write result never carries the SAP host", () => {
     expect(r.status).toBe("CREATED");
     expect(r.location).toBeNull();
     expect(JSON.stringify(r)).not.toContain("internal-gw");
+  });
+});
+
+/*
+ * WHAT A FAILURE SAYS ABOUT THE RECORD (audit A04, A07, A25).
+ *
+ * `attempted` is what the route keys the Idempotency-Key's fate on: an
+ * attempted write is stored and replayed, an unattempted one is released so the
+ * same key genuinely retries. Before it, every outcome was stored — including
+ * failures that provably never reached the record — and a client that fixed the
+ * cause got the old answer back for 24 hours, then moved to a new key.
+ */
+const hang = (_url: string | URL | Request, init?: RequestInit) =>
+  new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+  });
+const fast = { ...input, connection: { ...connection, timeoutMs: 50 } };
+
+describe("a credential that fails before anything is sent (A25)", () => {
+  const oauth: ResolvedSapConnection = {
+    ...connection,
+    id: "c_oauth",
+    authType: "oauth-client-credentials",
+    oauthTokenUrl: "https://auth.example/oauth/token",
+    secrets: { clientId: "client", clientSecret: "rotated-away" },
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearOAuthTokenCache();
+  });
+
+  it("is NEEDS_SETUP with nothing sent when the connection is missing a field", async () => {
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: { ...connection, secrets: { username: "u" } } }, f);
+    expect(r.status).toBe("NEEDS_SETUP");
+    expect(writeHttpStatusFor(r.status)).toBe(403);
+    expect(r.attempted).toBe(false);
+    // Nothing was fetched, so not FETCH_FAILED — that code sent triage to SAP.
+    expect(r.failureReason).toBe("CREDENTIAL_SETUP");
+    expect(r.detail).toContain("nothing was sent to the tenant");
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("is NEEDS_SETUP, not a 502, when the token endpoint refuses a rotated secret", async () => {
+    const token = vi.fn(async () => Response.json({ error: "invalid_client" }, { status: 401 }));
+    vi.stubGlobal("fetch", token);
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: oauth }, f);
+    expect(r.status).toBe("NEEDS_SETUP");
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe("CREDENTIAL_SETUP");
+    // Only the token endpoint was contacted; no CSRF GET, no POST.
+    expect(token).toHaveBeenCalledTimes(1);
+    expect(f).not.toHaveBeenCalled();
+    expect(r.detail).not.toContain("rotated-away");
+  });
+
+  it("does not blame the tenant when the token endpoint times out", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new DOMException("aborted", "AbortError"))));
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: oauth }, f);
+    expect(r.status).toBe("TIMEOUT");
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe("TIMEOUT");
+    expect(r.detail).toContain("token endpoint");
+    expect(r.detail).not.toContain("The tenant did not respond");
+    expect(r.detail).not.toContain("may or may not");
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("a timeout says which side of the POST it fell on (A04)", () => {
+  it("a CSRF handshake that hangs never sends the write, and says so", async () => {
+    const f = vi.fn(hang);
+    const r = await writeEntitySet(fast, f as unknown as typeof fetch);
+    expect(r.status).toBe("TIMEOUT");
+    expect(r.attempted).toBe(false);
+    expect(f).toHaveBeenCalledTimes(1);
+    expect((f.mock.calls[0]?.[1] as RequestInit).method).toBe("GET");
+    expect(r.detail).toContain("never sent");
+    expect(r.detail).not.toContain("may or may not");
+  });
+
+  it("a POST that hangs is ambiguous, and does not promise a retry will find out", async () => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockImplementationOnce(hang);
+    const r = await writeEntitySet(fast, f);
+    expect(r.status).toBe("TIMEOUT");
+    expect(writeHttpStatusFor(r.status)).toBe(504);
+    expect(r.attempted).toBe(true);
+    expect(r.detail).toContain("may or may not have been applied");
+    // The stored outcome is what every same-key retry gets back.
+    expect(r.detail).toContain("returns this same answer until the key expires");
+    expect(r.detail).not.toContain("to find out");
+  });
+
+  function slowBody(status: number) {
+    return (_url: string | URL | Request, init?: RequestInit) => {
+      const body = new ReadableStream({
+        start(controller) {
+          init?.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
+        },
+      });
+      return Promise.resolve(
+        new Response(body, { status, headers: { location: `${connection.baseUrl}${input.servicePath}/A_Thing('1')` } }),
+      );
+    };
+  }
+
+  it("a 201 whose body is cut off by the timeout is a created record, not a timeout", async () => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockImplementationOnce(slowBody(201));
+    const r = await writeEntitySet(fast, f);
+    expect(r.status).toBe("CREATED");
+    expect(r.record).toBeNull();
+    expect(r.location).toBe("/A_Thing('1')");
+    expect(r.attempted).toBe(true);
+  });
+
+  it("a 200 whose body is cut off stays ambiguous — only its body could prove a create", async () => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockImplementationOnce(slowBody(200));
+    const r = await writeEntitySet(fast, f);
+    expect(r.status).toBe("TIMEOUT");
+    expect(r.attempted).toBe(true);
+  });
+});
+
+describe("throttling is not a payload error (A07)", () => {
+  it.each([408, 429])("a POST answered %i is an upstream error, and was not attempted", async (code) => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockResolvedValueOnce(new Response("", { status: code }));
+    const r = await writeEntitySet(input, f);
+    expect(r.status).toBe("ERROR");
+    expect(writeHttpStatusFor(r.status)).toBe(502);
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe(`HTTP_${code}`);
+    expect(r.detail).not.toContain("field values");
+    expect(r.detail).toContain("not created");
+  });
+
+  it.each([408, 429])("a handshake answered %i never sends the write", async (code) => {
+    const f = vi.fn().mockResolvedValue(new Response("", { status: code }));
+    const r = await writeEntitySet(input, f);
+    expect(r.status).toBe("ERROR");
+    expect(r.attempted).toBe(false);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("a genuine validation failure stays REJECTED, and is stored", async () => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockResolvedValueOnce(new Response("", { status: 400 }));
+    const r = await writeEntitySet(input, f);
+    expect(r.status).toBe("REJECTED");
+    expect(writeHttpStatusFor(r.status)).toBe(422);
+    expect(r.attempted).toBe(true);
+  });
+
+  it("a refused handshake is not attempted either", async () => {
+    const f = vi.fn().mockResolvedValue(new Response("", { status: 403 }));
+    expect((await writeEntitySet(input, f)).attempted).toBe(false);
+  });
+
+  it("a created record is attempted", async () => {
+    const f = vi.fn().mockResolvedValueOnce(handshake()).mockResolvedValueOnce(
+      Response.json({ d: { ID: "1" } }, { status: 201 }),
+    );
+    expect((await writeEntitySet(input, f)).attempted).toBe(true);
   });
 });

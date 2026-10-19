@@ -22,6 +22,7 @@ import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
   FAILURE_REASON_INVALID_BODY,
+  failureReasonFromCredentialError,
   failureReasonFromError,
   failureReasonFromHttp,
 } from "@/lib/northbound/failure-reason";
@@ -55,10 +56,42 @@ export interface NorthboundWriteResult {
    * the audit column means one thing whichever route wrote it.
    */
   failureReason: string | null;
+  /**
+   * FALSE WHEN SAP CANNOT HAVE CREATED ANYTHING FOR THIS CALL: the POST was
+   * never sent (the connection's credential could not be used, or the CSRF
+   * handshake was refused, failed or timed out), or SAP declined to process it
+   * at all (408, 429). TRUE once a POST that SAP may have acted on was sent.
+   *
+   * The route decides the Idempotency-Key's fate on it. An attempted write's
+   * outcome is stored and replayed to every retry under the key — that is what
+   * stops a retry creating a second record. An unattempted one is RELEASED.
+   * Storing it froze a failure that never touched the record for the key's
+   * whole 24 hours, and the only way past it was a new key: exactly the
+   * duplicate the key exists to prevent, whenever an earlier attempt under the
+   * same intent had in fact committed.
+   */
+  attempted: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_TIMEOUT_MS = 45_000;
+
+/**
+ * Statuses with which SAP, or BTP API Management in front of it, declines to
+ * process a request at all — so the record was certainly not created.
+ */
+const NOT_PROCESSED = new Set([408, 429]);
+
+/*
+ * WHAT A RETRY OF AN AMBIGUOUS WRITE ACTUALLY GETS. The outcome is stored
+ * under the key, so a retry with the same key is answered with this same
+ * response, without contacting SAP, until the key expires. The old advice —
+ * "retry with the SAME Idempotency-Key to find out" — promised a re-check
+ * that never happens, and an integration that gave up on the frozen answer
+ * moved to a new key: a second record, if the first had committed.
+ */
+const AMBIGUOUS_RETRY =
+  "Retrying with this Idempotency-Key returns this same answer until the key expires: check SAP for the record before writing it again under a new key.";
 
 function classify(httpStatus: number): { status: NorthboundWriteStatus; detail: string } {
   if (httpStatus === 201 || httpStatus === 200) {
@@ -82,6 +115,19 @@ function classify(httpStatus: number): { status: NorthboundWriteStatus; detail: 
   }
   if (httpStatus === 404) {
     return { status: "NOT_FOUND", detail: "The target entity set does not exist on this tenant." };
+  }
+  /*
+   * 408 AND 429 ARE NOT A BAD PAYLOAD. The tenant throttled the request, or
+   * gave up waiting for it, and did not process it. They fell into the 4xx
+   * branch below and went out as 422 VALIDATION_ERROR "check the field
+   * values" — conventionally do-not-retry, and a data problem that does not
+   * exist. Same answer as the read executor, which already calls them ERROR.
+   */
+  if (NOT_PROCESSED.has(httpStatus)) {
+    return {
+      status: "ERROR",
+      detail: `The tenant throttled or timed out the request (HTTP ${httpStatus}), so the record was not created. Retry later with the same Idempotency-Key.`,
+    };
   }
   if (httpStatus >= 400 && httpStatus < 500) {
     // SAP validation failure — the caller's payload is wrong. Distinct from a
@@ -164,7 +210,9 @@ export interface WriteEntitySetInput {
  *
  * NOTE this performs a CSRF fetch followed by the POST — two upstream calls. The
  * idempotency reservation is taken by the CALLER before either happens, so a
- * retry cannot reach this function twice for the same intent.
+ * retry cannot reach this function twice for an intent SAP may have acted on.
+ * It can after a call that returned `attempted: false`, because the caller
+ * releases the key for exactly those — nothing was written to protect.
  */
 export async function writeEntitySet(
   input: WriteEntitySetInput,
@@ -193,9 +241,17 @@ export async function writeEntitySet(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Set the moment the POST is handed to fetch. Everything that fails before
+  // it is known not to have touched the record — see `attempted`.
+  let postSent = false;
 
   try {
-    const authHeaders = await buildAuthHeadersFromConnection(connection);
+    let authHeaders: Record<string, string>;
+    try {
+      authHeaders = await buildAuthHeadersFromConnection(connection);
+    } catch (err) {
+      return credentialFailure(err, started);
+    }
 
     // 1 — CSRF handshake against the service root, with the same credentials.
     const csrfRes = await fetchImpl(sapUrl("/"), {
@@ -219,6 +275,8 @@ export async function writeEntitySet(
         durationMs: Date.now() - started,
         // A 200 that withheld the token is its own failure, not an HTTP_200.
         failureReason: csrfRes.ok && !csrfToken ? "NO_CSRF_TOKEN" : failureReasonFromHttp(csrfRes.status),
+        // The POST was never sent, whatever the handshake said.
+        attempted: false,
       };
     }
 
@@ -232,6 +290,7 @@ export async function writeEntitySet(
     if (cookie) headers.Cookie = cookie;
 
     // 2 — the write itself.
+    postSent = true;
     const res = await fetchImpl(sapUrl(`/${encodeURIComponent(input.entitySet)}`), {
       method: "POST",
       headers,
@@ -241,7 +300,22 @@ export async function writeEntitySet(
     });
 
     let json: unknown = null;
-    const text = await res.text();
+    let text: string;
+    try {
+      text = await res.text();
+    } catch (err) {
+      /*
+       * SAP HAS ALREADY ANSWERED; only the body was lost — the timeout fired
+       * mid-read, or the stream dropped. The status line is the outcome: a
+       * 201 is a created record, and every non-2xx is classified from its
+       * status alone. Treating this as an unanswered call reported an
+       * OBSERVED success as an ambiguous timeout. A 200 is the exception: it
+       * is only a create when its body says so (see below), so without one
+       * the outcome genuinely is unknown.
+       */
+      if (res.status === 200) throw err;
+      text = "";
+    }
     if (text) {
       try {
         json = JSON.parse(text);
@@ -257,9 +331,10 @@ export async function writeEntitySet(
     if (status === "CREATED" && record === null && (text.trim() !== "" || res.status !== 201)) {
       return {
         status: "ERROR", httpStatus: res.status, record: null, location: null,
-        detail: "The tenant returned an invalid write response. The write may have been applied; retry only with the same Idempotency-Key.",
+        detail: `The tenant returned an invalid write response, so the write may have been applied. ${AMBIGUOUS_RETRY}`,
         durationMs: Date.now() - started,
         failureReason: FAILURE_REASON_INVALID_BODY,
+        attempted: true,
       };
     }
     return {
@@ -270,6 +345,7 @@ export async function writeEntitySet(
       detail,
       durationMs: Date.now() - started,
       failureReason: failureReasonFromHttp(res.status),
+      attempted: !NOT_PROCESSED.has(res.status),
     };
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
@@ -281,17 +357,57 @@ export async function writeEntitySet(
       failureReason: failureReasonFromError(err),
       // Deliberately generic: the caught error carries the host, and on the OAuth
       // path the request body. Neither belongs in a client response.
-      detail: aborted
-        ? // Said explicitly because a timed-out WRITE is genuinely ambiguous —
-          // the record may or may not exist. The idempotency key is what makes
-          // the retry safe.
-          `The tenant did not respond within ${timeoutMs}ms. The write may or may not have been applied — retry with the SAME Idempotency-Key to find out safely.`
-        : "The write could not be completed.",
+      //
+      // WHICH SIDE OF THE POST IT FAILED ON is the whole difference. Before it,
+      // nothing was written and the key is released, so the same key really
+      // does retry. After it, the write is genuinely ambiguous and the outcome
+      // is stored — and the text says what a retry will actually get.
+      detail: !postSent
+        ? aborted
+          ? `The tenant did not answer the CSRF handshake within ${timeoutMs}ms, so the write was never sent and nothing was created. Retry with the same Idempotency-Key.`
+          : "The CSRF handshake with the tenant failed, so the write was never sent and nothing was created. Retry with the same Idempotency-Key."
+        : aborted
+          ? `The tenant did not respond within ${timeoutMs}ms after the write was sent, so it may or may not have been applied. ${AMBIGUOUS_RETRY}`
+          : "The write could not be completed.",
       durationMs: Date.now() - started,
+      attempted: postSent,
     };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/*
+ * THE CREDENTIAL FAILED BEFORE ANYTHING WAS SENT. A rotated OAuth client
+ * secret, a refused SAML exchange, a missing password, an API-key header the
+ * validator now rejects, the SuccessFactors Basic-auth sunset: each throws from
+ * buildAuthHeadersFromConnection. Built inside the request's try, each landed in
+ * its catch as a 502 "could not be completed" with FETCH_FAILED — counted by the
+ * upstream-errors incident as the tenant's answer though the tenant was never
+ * contacted, and stored under the key for a day. It is the problem this module
+ * already calls NEEDS_SETUP when SAP itself answers 401, fixed in the same
+ * place: the connection, in Studio.
+ *
+ * A token endpoint that does not answer in time stays a TIMEOUT, but says whose
+ * timeout it was. The old text blamed the tenant, and quoted the WRITE timeout
+ * for an exchange that has its own.
+ */
+function credentialFailure(err: unknown, started: number): NorthboundWriteResult {
+  const aborted = err instanceof Error && err.name === "AbortError";
+  return {
+    status: aborted ? "TIMEOUT" : "NEEDS_SETUP",
+    httpStatus: null,
+    record: null,
+    location: null,
+    // Generic for the same reason as the catch above: the error names the
+    // connection, and on the OAuth path can carry the token endpoint.
+    detail: aborted
+      ? "The connection's token endpoint did not answer in time, so nothing was sent to the tenant and no record was created. Retry with the same Idempotency-Key."
+      : "The connection's credentials could not be used (the token exchange was refused, or the connection is incomplete), so nothing was sent to the tenant. Fix the connection in Studio, then retry with the same Idempotency-Key.",
+    durationMs: Date.now() - started,
+    failureReason: failureReasonFromCredentialError(err),
+    attempted: false,
+  };
 }
 
 /** The HTTP status the BROKER returns for each write outcome. */

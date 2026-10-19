@@ -95,16 +95,29 @@ export async function GET(request: NextRequest) {
       durationMs: true,
       correlationId: true,
       clientTokenId: true,
+      replayed: true,
       at: true,
     },
     orderBy: { at: "desc" },
     take: limit,
   });
 
-  const [total, statusGroups, emptyReads, solutionGroups, tokenGroups, noConnection, bindingPairs] =
+  const [total, statusGroups, replays, emptyReads, solutionGroups, tokenGroups, noConnection, bindingPairs] =
     await Promise.all([
       prisma.northboundAuditEvent.count({ where }),
-      prisma.northboundAuditEvent.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      /*
+       * REPLAYS ARE THEIR OWN BUCKET. A same-key write retry re-serves the
+       * outcome stored under its Idempotency-Key and SAP is not called. Bucketed
+       * by its stored status, five retries of one 504 read as five tenant
+       * errors and a replayed 201 as a fresh success; so the status breakdown
+       * is over everything else, and replays are counted beside it.
+       */
+      prisma.northboundAuditEvent.groupBy({
+        by: ["status"],
+        where: { ...where, replayed: false },
+        _count: { _all: true },
+      }),
+      prisma.northboundAuditEvent.count({ where: { ...where, replayed: true } }),
       // `classify` calls a 2xx with zero rows "empty", which no status code can
       // express on its own. Counted separately so the ok/empty split stays exact.
       prisma.northboundAuditEvent.count({ where: { ...where, status: { lt: 400 }, rowCount: 0 } }),
@@ -134,6 +147,7 @@ export async function GET(request: NextRequest) {
     byStatus.empty = (byStatus.empty ?? 0) + emptyReads;
     if (byStatus.ok === 0) delete byStatus.ok;
   }
+  if (replays > 0) byStatus.replayed = replays;
 
   /*
    * CONSOLE READS ARE COUNTED IN THE TOTAL AND IN NEITHER BREAKDOWN.
@@ -245,7 +259,9 @@ export async function GET(request: NextRequest) {
       connectionEnvironment: r.connectionEnvironment,
       connectionId: r.connectionId,
       status: r.status,
-      outcome: classify(r.status, r.rowCount),
+      // The stored status is still on `status`; the outcome says it was not a
+      // fresh one.
+      outcome: r.replayed ? "replayed" : classify(r.status, r.rowCount),
       rowCount: r.rowCount,
       durationMs: r.durationMs,
       correlationId: r.correlationId,
