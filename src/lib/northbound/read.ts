@@ -22,6 +22,7 @@ import {
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
+  credentialStepOutcome,
   FAILURE_REASON_INVALID_BODY,
   failureReasonFromError,
   failureReasonFromHttp,
@@ -152,7 +153,23 @@ export async function readEntitySet(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const authHeaders = await buildAuthHeadersFromConnection(connection);
+    /*
+     * THE CREDENTIAL STEP HAS ITS OWN CATCH (audit A08). It shared the one
+     * below, so a token endpoint refusing a rotated client secret, an expired
+     * SuccessFactors assertion or a row missing its password came back as 502
+     * UPSTREAM_ERROR / FETCH_FAILED — retried by every app following the guide,
+     * each retry hitting the customer's token endpoint with the bad credential
+     * again — though the tenant was never called. A credential that could not
+     * be used is NEEDS_SETUP, as SAP's own 401 is; only the token endpoint
+     * failing is ERROR, and its timeout is TIMEOUT naming its own limit.
+     */
+    let authHeaders: Record<string, string>;
+    try {
+      authHeaders = await buildAuthHeadersFromConnection(connection);
+    } catch (err) {
+      const { status, detail, failureReason } = credentialStepOutcome(err);
+      return { status, httpStatus: null, records: [], detail, durationMs: Date.now() - started, failureReason };
+    }
     const url = buildSapUrl({
       baseUrl: connection.baseUrl,
       path: `${input.servicePath}/${encodeURIComponent(input.entitySet)}`,

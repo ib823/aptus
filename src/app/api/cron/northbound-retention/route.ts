@@ -34,10 +34,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const result = await enforceNorthboundAuditRetention(new Date(), config.days);
-    await recordCronRun("northbound-retention", startedAt, true, {
+    /*
+     * A RUN THAT FELL BEHIND IS NOT A SUCCESS. `moreRemaining` means the sweep
+     * spent its time budget with rows past the stated period still in the
+     * table — the retention this route exists to enforce did not happen. It was
+     * recorded `ok: true` with the flag buried in the summary, so a backlog that
+     * grew every night read as a healthy job every night.
+     */
+    await recordCronRun("northbound-retention", startedAt, !result.moreRemaining, {
       deleted: result.deleted,
-      // Surfaced rather than swallowed: a run that hit its cap has NOT cleared
-      // the backlog, and "deleted: 5000" alone would read as done.
+      // Surfaced rather than swallowed: a run that stopped on its budget has
+      // NOT cleared the backlog, and "deleted: N" alone would read as done.
       moreRemaining: result.moreRemaining,
       retentionDays: result.retentionDays,
       retentionSource: config.source,

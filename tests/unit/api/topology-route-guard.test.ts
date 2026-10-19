@@ -233,7 +233,10 @@ describe("edges are built from pairings, not from node totals", () => {
      * two-token edit, and this is the line it has to cross.
      */
     expect(/edge\([^)]*recordedCalls/.test(code)).toBe(false);
-    expect(/deriveGrant\(\{ \.\.\.g, recordedCalls \}/.test(code)).toBe(true);
+    // `recordedFailures` rides with it: the node's state is what its calls did
+    // (audit A35), and it is just as much a node total as the call count.
+    expect(/edge\([^)]*recordedFailures/.test(code)).toBe(false);
+    expect(/deriveGrant\(\{ \.\.\.g, recordedCalls, recordedFailures \}/.test(code)).toBe(true);
   });
 
   it("passes a connection's own total only to the edge that genuinely carries it", () => {

@@ -48,7 +48,7 @@ interface AuditRow {
   solutionId: string;
   externalId: string;
   status: number;
-  kind: "conflict" | "blocked";
+  kind: "conflict" | "blocked" | "upstream-failed" | "outcome-unknown";
   correlationId: string;
   clientTokenId: string;
 }
@@ -62,7 +62,7 @@ interface LedgerPayload {
     staleReservation: number;
     total: number;
   };
-  fromAudit: { blocked: number; conflicts: number };
+  fromAudit: { blocked: number; conflicts: number; upstreamFailed: number; outcomeUnknown: number };
   truncated: boolean;
   provenance: {
     sourcesDoNotReconcile: boolean;
@@ -81,12 +81,38 @@ interface LedgerPayload {
 const RESERVATION: Record<ReservationRow["state"], { tone: OpsTone; label: string; meaning: string }> = {
   "in-flight": { tone: "info", label: "in flight", meaning: "reserved, no outcome yet, still inside its TTL" },
   completed: { tone: "good", label: "completed", meaning: "the write reached SAP and succeeded" },
-  failed: { tone: "bad", label: "failed", meaning: "the write reached SAP and was refused" },
+  failed: {
+    tone: "bad",
+    label: "failed",
+    meaning: "the write was sent to SAP and did not succeed — after a 502 or 504 it may still have been applied",
+  },
   "stale-reservation": {
     tone: "attention",
     label: "stale reservation",
     // The one state an operator may need to act on.
     meaning: "reserved, past its TTL, never completed — a retry on that key gets 409 until it lapses",
+  },
+};
+
+/*
+ * WHAT A FAILED WRITE EVENT WAS — and only one of these means "never reached
+ * SAP". Every one used to render as blocked, so a 504 whose POST SAP may have
+ * committed read as a write that never happened, and the developer resubmitted
+ * it under a new key. `outcome-unknown` is the one to check in SAP before
+ * anybody retries.
+ */
+const AUDIT_KIND: Record<AuditRow["kind"], { tone: OpsTone; label: string; meaning: string }> = {
+  conflict: { tone: "attention", label: "conflict", meaning: "409 — that key was already in flight" },
+  blocked: { tone: "muted", label: "blocked", meaning: "refused at a gate before SAP was reached — nothing was written" },
+  "upstream-failed": {
+    tone: "bad",
+    label: "SAP refused",
+    meaning: "reached SAP, which refused it — nothing was written",
+  },
+  "outcome-unknown": {
+    tone: "attention",
+    label: "outcome unknown",
+    meaning: "502/504 — the write may have been applied; check SAP before anyone resubmits",
   },
 };
 
@@ -98,7 +124,7 @@ export function WriteLedgerClient() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <OpsHeading
         title="Write ledger"
-        lede="Idempotency reservations, and the writes refused before one was made. These are two different records of two different things — they will not add up, and the reason is stated below rather than left to be discovered."
+        lede="Idempotency reservations, and the failed writes the audit feed recorded — refused before one was made, refused by SAP, or with an outcome only SAP knows. These are two different records of two different things — they will not add up, and the reason is stated below rather than left to be discovered."
       />
       <FeedAsAt fetchedAt={fetchedAt} />
 
@@ -201,7 +227,18 @@ function LedgerBody({
           <Stat
             label="Refused before reserving"
             value={count(fromAudit.blocked)}
-            basis="from the audit feed, not a row state"
+            basis="blocked at a gate — SAP never reached"
+          />
+          <Stat
+            label="Refused by SAP"
+            value={count(fromAudit.upstreamFailed)}
+            basis="reached SAP, nothing written"
+          />
+          <Stat
+            label="Outcome unknown"
+            value={count(fromAudit.outcomeUnknown)}
+            basis="502/504 — may have been applied"
+            tone={fromAudit.outcomeUnknown > 0 ? "attention" : "default"}
           />
           <Stat
             label="Idempotency conflicts"
@@ -216,7 +253,7 @@ function LedgerBody({
             title="No refused writes in this window"
             // Not the same claim as the reservation panel above, and must not
             // read like it: this counts events, that counts row states.
-            detail="Nothing was refused at the credential gate or conflicted on a key. This counts events in the audit feed, which is a different record from the reservations above."
+            detail="No write was refused at a gate, refused or failed by SAP, or conflicted on a key. This counts events in the audit feed, which is a different record from the reservations above."
           />
         ) : (
           <OpsTable head={["Time", "Solution", "Capability", "Kind", "HTTP"]}>
@@ -231,11 +268,11 @@ function LedgerBody({
                 </td>
                 <td style={opsMonoStyle}>{a.externalId}</td>
                 <td style={opsCellStyle}>
-                  {a.kind === "conflict" ? (
-                    <OpsChip tone="attention" label="conflict" meaning="409 — that key was already in flight" />
-                  ) : (
-                    <OpsChip tone="muted" label="blocked" meaning="refused before SAP was reached" />
-                  )}
+                  <OpsChip
+                    tone={AUDIT_KIND[a.kind].tone}
+                    label={AUDIT_KIND[a.kind].label}
+                    meaning={AUDIT_KIND[a.kind].meaning}
+                  />
                 </td>
                 <td style={opsMonoStyle}>{a.status}</td>
               </tr>
@@ -244,8 +281,8 @@ function LedgerBody({
         )}
 
         <ProvenanceStrip claim="Events, not row states">
-          These come from the append-only audit feed. A write refused at the credential gate never
-          reserves a key, so it appears here and nowhere above.
+          These come from the append-only audit feed. A write refused at any gate never reserves a
+          key, so it appears here and nowhere above; one SAP refused or failed appears in both.
           {page.auditRows.of > 0 ? (
             <> Showing {count(page.auditRows.returned)} of {count(page.auditRows.of)}.</>
           ) : null}

@@ -23,9 +23,10 @@
 
 import {
   buildAuthHeadersFromConnection,
+  TOKEN_REQUEST_TIMEOUT_MS,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
-import { publicSamlFailure } from "@/lib/sap-public/oauth-saml-bearer";
+import { publicCredentialFailure } from "@/lib/sap-public/upstream-failure";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
@@ -85,6 +86,130 @@ function classify(httpStatus: number): { status: ConnectionHealthStatus; detail:
   return { status: "ERROR", detail: `The tenant responded with HTTP ${httpStatus}.` };
 }
 
+/** How much of a 200 is read to decide whether it is a metadata document. */
+const METADATA_SNIFF_BYTES = 8 * 1024;
+
+/** An EDMX root element, under any namespace prefix (V2 and V4 alike). */
+const EDMX_ROOT = /<(?:[A-Za-z_][\w.-]*:)?Edmx[\s>]/;
+
+/**
+ * The start of the body, no further than METADATA_SNIFF_BYTES. A real
+ * $metadata document can run to megabytes and only its root element is
+ * needed, so the rest of the stream is cancelled rather than read.
+ */
+async function bodyPrefix(res: Response): Promise<string> {
+  if (res.body && typeof res.body.getReader === "function") {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    let size = 0;
+    while (size < METADATA_SNIFF_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+    }
+    await reader.cancel().catch(() => undefined);
+    return text.slice(0, METADATA_SNIFF_BYTES);
+  }
+  // Not a stream (a test double, or an environment without one).
+  return typeof res.text === "function" ? (await res.text()).slice(0, METADATA_SNIFF_BYTES) : "";
+}
+
+/**
+ * WHAT THE TENANT ANSWERED, judged on more than the status (audit A21).
+ *
+ * Any 200 was "Reachable and authenticated" — and fetch followed redirects, so
+ * the S/4HANA UI host (allowlisted, but not the -api host) answering the
+ * communication user with an IdP login page or a SAML auto-post form, directly
+ * or after a 302, recorded OK and moved lastValidatedAt while every real read
+ * failed as invalid OData. The read path already refuses a 200 that is not
+ * OData; the probe now holds the same line, because it never claims health it
+ * did not observe:
+ *   - a redirect to another origin is not followed, and is a sign-in that did
+ *     not happen (Node answers the 3xx itself; a browser, an opaqueredirect) —
+ *     a same-origin one is followed first, see followSameOrigin;
+ *   - a 200 is OK only when its body is an EDMX document and is not HTML.
+ *
+ * `redirected` says a same-origin redirect was followed to get here. What it
+ * landed on, when not metadata, is the login page the redirect was for.
+ */
+async function classifyResponse(
+  res: Response,
+  redirected: boolean,
+): Promise<{ status: ConnectionHealthStatus; detail: string }> {
+  const loginRedirect = {
+    status: "UNAUTHORIZED",
+    detail: "The tenant redirected to a login page; check that the base URL is the API host and the credentials.",
+  } as const;
+  if (isRedirect(res)) return loginRedirect;
+  if (res.status === 200) {
+    const contentType = res.headers?.get?.("content-type") ?? "";
+    const metadata = !/html/i.test(contentType) && EDMX_ROOT.test(await bodyPrefix(res));
+    if (!metadata) {
+      if (redirected) return loginRedirect;
+      return {
+        status: "ERROR",
+        detail: "The tenant answered 200 but not with an OData metadata document (often a login page).",
+      };
+    }
+  }
+  return classify(res.status);
+}
+
+function isRedirect(res: Response): boolean {
+  return res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400);
+}
+
+/** Same-origin redirects followed before the probe stops and calls it a login redirect. */
+const MAX_SAME_ORIGIN_REDIRECTS = 3;
+
+/**
+ * THE SAME HOST MOVING THE PATH IS NOT A LOGIN PAGE. Every 3xx used to be
+ * "redirected to a login page", so a reverse proxy or web dispatcher that
+ * answers `$metadata` with a 3xx to the real path ON ITS OWN ORIGIN — a tenant
+ * the read and write paths serve, since they follow redirects — was probed
+ * UNAUTHORIZED: lastValidatedAt stopped moving, the lane said SAP rejected
+ * CoreEdge's sign-in, and the drift alert emailed every platform admin.
+ *
+ * A Location on the request's own origin is followed, a bounded number of
+ * times, with the same headers, and what it lands on is classified like any
+ * answer — so it is OK only as an EDMX document. A Location on another origin
+ * (the IdP, the UI host), one that does not parse, or none at all, stops here
+ * and is never sent the credentials.
+ */
+async function followSameOrigin(
+  first: Response,
+  url: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+): Promise<{ res: Response; redirected: boolean }> {
+  const origin = new URL(url).origin;
+  let res = first;
+  let current = url;
+  let redirected = false;
+  for (let hop = 0; hop < MAX_SAME_ORIGIN_REDIRECTS && isRedirect(res); hop++) {
+    const next = resolveLocation(res, current);
+    if (!next || next.origin !== origin) break;
+    await res.body?.cancel().catch(() => undefined);
+    current = next.href;
+    res = await fetchImpl(current, init);
+    redirected = true;
+  }
+  return { res, redirected };
+}
+
+/** A redirect's Location against the URL it answered, or null when it has none that parses. */
+function resolveLocation(res: Response, base: string): URL | null {
+  const location = res.headers?.get?.("location");
+  if (!location) return null;
+  try {
+    return new URL(location, base);
+  } catch {
+    return null;
+  }
+}
+
 export async function probeConnection(
   conn: ResolvedSapConnection,
   fetchImpl: typeof fetch = fetch,
@@ -105,31 +230,38 @@ export async function probeConnection(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  // Whether the credential step finished — so a timeout names the right host
+  // and the right limit: the token endpoint's, or the tenant's.
+  let signedIn = false;
   try {
     // Build the header inside the try: an OAuth exchange can itself fail, and a
     // credential problem should surface as UNAUTHORIZED rather than a crash.
     const authHeaders = await buildAuthHeadersFromConnection(conn);
-    const res = await fetchImpl(
-      buildSapUrl({ baseUrl: conn.baseUrl, path: `${path}/$metadata`, client: conn.client }),
-      {
-        method: "GET",
-        headers: { ...authHeaders, Accept: "application/xml" },
-        signal: controller.signal,
-        cache: "no-store",
-      },
-    );
-    const { status, detail } = classify(res.status);
+    signedIn = true;
+    const url = buildSapUrl({ baseUrl: conn.baseUrl, path: `${path}/$metadata`, client: conn.client });
+    const init: RequestInit = {
+      method: "GET",
+      headers: { ...authHeaders, Accept: "application/xml" },
+      signal: controller.signal,
+      cache: "no-store",
+      redirect: "manual",
+    };
+    const { res, redirected } = await followSameOrigin(await fetchImpl(url, init), url, init, fetchImpl);
+    const { status, detail } = await classifyResponse(res, redirected);
     return { status, httpStatus: res.status, detail, durationMs: Date.now() - started };
   } catch (err) {
     /*
-     * THREE ERRORS ARE SAID OUT LOUD — SuccessFactors' own sanitised refusal of
-     * the token request, a signing key that cannot be used, and a value the
-     * assertion cannot carry — because each is built to be shown and each is
-     * the only diagnostic a first SuccessFactors test gets. publicSamlFailure
-     * is the single place that decides it, and returns null for every other
-     * error, which stays generic.
+     * THE ERRORS BUILT TO BE SHOWN ARE SAID OUT LOUD — SuccessFactors' own
+     * sanitised answer to the token request, a signing key that cannot be
+     * used, a value the assertion cannot carry, a field the connection lacks,
+     * and the token endpoint's refusal of the client credentials — because
+     * each is the only diagnostic Test gets. publicCredentialFailure is the
+     * single place that decides it, and it also decides the status: a
+     * credential that could not be used is UNAUTHORIZED, the platform admin's
+     * problem, not ERROR — "SAP unavailable" — for a tenant that was never
+     * called (audit A20). Every other error returns null and stays generic.
      */
-    const said = publicSamlFailure(err);
+    const said = publicCredentialFailure(err);
     if (said) return { ...said, durationMs: Date.now() - started };
     const aborted = err instanceof Error && err.name === "AbortError";
     return {
@@ -138,7 +270,9 @@ export async function probeConnection(
       // Deliberately generic: the underlying error can carry the host, and in the
       // OAuth case the request body. Neither belongs in a client response.
       detail: aborted
-        ? `The tenant did not respond within ${timeoutMs}ms.`
+        ? signedIn
+          ? `The tenant did not respond within ${timeoutMs}ms.`
+          : `The connection's token endpoint did not respond within ${TOKEN_REQUEST_TIMEOUT_MS}ms.`
         : "The connection could not be established.",
       durationMs: Date.now() - started,
     };

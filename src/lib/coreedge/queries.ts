@@ -8,6 +8,7 @@ import type { GrantOperation } from "@/lib/studio/grants";
 
 import {
   deriveLaneStatus,
+  laneEnvironmentAliases,
   notStartedVerdict,
   parseLaneEnvironment,
   type LaneEnvironment,
@@ -1208,12 +1209,23 @@ function fieldNamesOf(schema: unknown): readonly string[] {
  * an answer — returns "not found" for it. A person quoting it to support would
  * have sent them hunting for a call that was never recorded under that name.
  *
- * Returns null where the lane has never been called, which the screen says out
- * loud. An invented id is worse than an admitted absence, because only one of
- * them wastes somebody else's afternoon.
+ * Returns null where no call on the lane is on record — never made, or older
+ * than the audit trail's retention — which the screen says out loud. An
+ * invented id is worse than an admitted absence, because only one of them
+ * wastes somebody else's afternoon.
  *
  * `dryRun` rows are excluded for the same reason the traffic count excludes
- * them: they are rehearsals, and quoting one as the failure would mislead.
+ * them: they are rehearsals, and quoting one as the failure would mislead. So
+ * are `-schema-` rows: a schema fetch names the interface but reads no data,
+ * and an app's later successful schema fetch quoted as the reference on a
+ * failing lane would point support at the one call that worked.
+ *
+ * THE ENVIRONMENT IS MATCHED IN SQL. This used to fetch the newest 50 rows for
+ * the feed across every environment and fold them here — but a feed holds one
+ * credential per environment, so 50 SANDBOX calls after a PROD failure pushed
+ * every PROD row off the page and the PROD lane said no call had ever been
+ * recorded. Matching each spelling the parser accepts, case-insensitively,
+ * keeps the "prod" / "PROD" split closed without a page to fall off.
  */
 export async function lastLaneCall(
   organizationId: string,
@@ -1221,22 +1233,21 @@ export async function lastLaneCall(
   interfaceId: string,
   environment: LaneEnvironment,
 ): Promise<{ readonly correlationId: string; readonly at: Date; readonly status: number } | null> {
-  const rows = await prisma.northboundAuditEvent.findMany({
-    where: { organizationId, solutionId, interfaceId, dryRun: false },
-    select: { correlationId: true, at: true, status: true, environment: true },
+  const row = await prisma.northboundAuditEvent.findFirst({
+    where: {
+      organizationId,
+      solutionId,
+      interfaceId,
+      dryRun: false,
+      externalId: { not: "-schema-" },
+      OR: laneEnvironmentAliases(environment).map((alias) => ({
+        environment: { equals: alias, mode: "insensitive" as const },
+      })),
+    },
+    select: { correlationId: true, at: true, status: true },
     orderBy: { at: "desc" },
-    /*
-     * `environment` is a free-text column, so it cannot be matched in the WHERE
-     * without reintroducing the "prod" / "PROD" split `parseLaneEnvironment`
-     * exists to close. A small bounded page is fetched and folded here instead.
-     */
-    take: 50,
   });
-  for (const row of rows) {
-    if (parseLaneEnvironment(row.environment) !== environment) continue;
-    return { correlationId: row.correlationId, at: row.at, status: row.status };
-  }
-  return null;
+  return row ? { correlationId: row.correlationId, at: row.at, status: row.status } : null;
 }
 
 /** Traffic for one lane over a window: what the board's Calls and Errors say. */
@@ -1261,6 +1272,11 @@ export const TRAFFIC_WINDOW_MS = 24 * 60 * 60 * 1000;
  * Lanes with no traffic are absent from the map rather than present with zero.
  * "No calls" and "calls that all failed" are different facts and the board
  * renders them differently.
+ *
+ * A REPLAY IS NOT ANOTHER CALL ON THE LANE. A same-key retry re-serves the
+ * stored outcome without calling SAP; counted, one SAP 504 retried five times
+ * read as six calls and six errors, and one created record as one call per
+ * retry. Excluded from both, so the two columns still describe the same calls.
  */
 export async function listLaneTraffic(
   organizationId: string,
@@ -1268,7 +1284,7 @@ export async function listLaneTraffic(
 ): Promise<Map<string, LaneTraffic>> {
   const since = new Date(now.getTime() - TRAFFIC_WINDOW_MS);
   const events = await prisma.northboundAuditEvent.findMany({
-    where: { organizationId, at: { gte: since }, dryRun: false },
+    where: { organizationId, at: { gte: since }, dryRun: false, replayed: false },
     select: { solutionId: true, interfaceId: true, environment: true, status: true },
   });
 

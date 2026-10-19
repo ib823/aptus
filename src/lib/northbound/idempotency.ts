@@ -201,7 +201,8 @@ export async function reserveIdempotencyKey(
  * Record the terminal outcome so a later retry replays it.
  *
  * Stores FAILURES too. A 403 that is retried should return the same 403 rather
- * than re-attempting a write the tenant already refused.
+ * than re-attempting a write the tenant already refused. A failure that never
+ * reached the write is released instead — see releaseIdempotencyKey.
  */
 export async function completeIdempotencyKey(
   scope: TenantScope,
@@ -228,9 +229,13 @@ export async function completeIdempotencyKey(
 /**
  * Release a reservation that never reached SAP.
  *
- * Used when the request is rejected BEFORE any write is attempted (bad payload,
- * failed gate). Without this, a client that fixed their payload and retried with
- * the same key would be told the request is still in flight forever.
+ * Used when the write is known not to have been attempted — the executor's
+ * `attempted: false`: the connection's credential could not be used, the CSRF
+ * handshake failed or timed out, or SAP declined to process the POST (408,
+ * 429). Nothing was written, so there is nothing for the key to protect, and
+ * storing the failure would replay it to the client's corrected retry for the
+ * key's whole lifetime. Without this, a client that fixed the cause and retried
+ * with the same key would get the old failure back until the key expired.
  */
 export async function releaseIdempotencyKey(scope: TenantScope, recordId: string): Promise<void> {
   try {

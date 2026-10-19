@@ -1,0 +1,13 @@
+-- Northbound audit: mark a write answered by replaying its Idempotency-Key.
+--
+-- A replay re-serves the outcome stored under the key without calling SAP, and
+-- its audit row was byte-identical to a fresh call. Nothing downstream could
+-- tell them apart: the usage rollup billed one record retried three times as
+-- four writes, a stored 504 retried five times fired the upstream-errors
+-- incident after a single SAP call, and replayed 201s were counted as calls
+-- refused before reaching a connection. The row stays — it is real traffic
+-- from a real credential — and this says what it was.
+--
+-- Generated with `prisma migrate diff`. Additive; existing rows read false,
+-- because earlier replays were never marked and cannot now be told apart.
+ALTER TABLE "NorthboundAuditEvent" ADD COLUMN "replayed" BOOLEAN NOT NULL DEFAULT false;

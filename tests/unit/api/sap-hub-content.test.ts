@@ -213,6 +213,18 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(po.dataConfirmed).toBe(true);
   });
 
+  it("a live overlay that could not authenticate does not override the stored verdict (A28)", async () => {
+    // Stored: ACTIVATED. The overlay's credential could not be obtained, so the
+    // tenant was never asked; its status 0 used to win as PROBE_FAILED.
+    mocks.probeTenantCapabilities.mockResolvedValue([
+      { service: "API_PO", exposed: false, status: 0, ladder: "unreachable", credentialError: "refused", error: "x" },
+    ]);
+    const body = await (await GET(makeRequest("product=s4hana&dataProbe=1"))).json();
+    expect(mocks.probeTenantCapabilities).toHaveBeenCalled();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED");
+  });
+
   it("passes a contentType filter through to the query", async () => {
     await GET(makeRequest("product=s4hana&contentType=EVENT"));
     const pageCall = mocks.findMany.mock.calls.find((c) => (c[0] as { where?: { AND?: unknown } }).where?.AND);

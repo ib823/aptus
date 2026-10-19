@@ -278,9 +278,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let requested = 0;
   const byOutcome: Record<string, number> = { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, PROBE_FAILED: 0 };
   let cursor = 0;
+  /*
+   * THE FIRST "COULD NOT AUTHENTICATE" STOPS THE RUN, AND IS NEVER STORED
+   * (audit A28). A missing {PREFIX}_PASSWORD or a mistyped token URL fails
+   * every service the same way without a request reaching SAP, and the run
+   * used to write that over hundreds of rows' stored outcomes — PROBE_FAILED,
+   * or NOT_FOUND for a token endpoint's 404 — so services proven ACTIVATED
+   * read as broken until someone re-probed. Probes already in flight finish,
+   * and their real answers are stored; nothing more is started.
+   */
+  let credentialFailure: { kind: "refused" | "unavailable"; detail: string } | null = null;
 
   async function worker(): Promise<void> {
-    while (cursor < targets.length) {
+    while (cursor < targets.length && !credentialFailure) {
       const row = targets[cursor++];
       if (!row) continue;
       const svc = hubApiToService({
@@ -294,6 +304,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!svc) continue;
       requested++;
       const result = await probeService(product!.envPrefix, tenant!, svc); // read-only $metadata; never throws
+      if (result.credentialError) {
+        // Not a request that left: it is not counted as load, and not stored.
+        requested--;
+        credentialFailure ??= { kind: result.credentialError, detail: result.error ?? "" };
+        continue;
+      }
       const { read, write } = deriveReadWrite(result.entities ?? []);
       // MERGE under THIS tenant's OWNER-SCOPED key — preserves sibling keys
       // (source/apiId/steps), the legacy singular `probe`, and every other
@@ -314,6 +330,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // write failed part-way through the run.
     await audit(502, requested, { durationMs: Date.now() - startedAt });
     throw error;
+  }
+  // `as` because TypeScript cannot see the workers assign it.
+  const stopped = credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
+  if (stopped) {
+    // A setup problem is a refusal, recorded as one (403); only a token
+    // endpoint that failed is a 502. Either way, the tenant was not asked.
+    const status = stopped.kind === "refused" ? 403 : 502;
+    await audit(status, requested, { durationMs: Date.now() - startedAt });
+    return NextResponse.json(
+      {
+        error: {
+          code: stopped.kind === "refused" ? ERROR_CODES.FORBIDDEN : ERROR_CODES.INTERNAL_ERROR,
+          message:
+            "Probe all stopped: CoreEdge could not authenticate to this tenant, so no request was sent for the " +
+            `remaining services and none of their stored results was changed. ${stopped.detail}`.trim(),
+          correlationId,
+        },
+      },
+      { status },
+    );
   }
   await audit(200, requested, { durationMs: Date.now() - startedAt });
 

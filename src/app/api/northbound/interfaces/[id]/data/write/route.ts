@@ -31,6 +31,7 @@ import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   completeIdempotencyKey,
   isValidIdempotencyKey,
+  releaseIdempotencyKey,
   reserveIdempotencyKey,
 } from "@/lib/northbound/idempotency";
 import {
@@ -109,6 +110,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     bindingRefusal?: string | null,
     /** Why the upstream call failed, from the write result. See failure-reason.ts. */
     failureReason?: string | null,
+    /**
+     * TRUE for an idempotent replay. Without it the replayed row was
+     * indistinguishable from a fresh call: the usage rollup billed every
+     * same-key retry of one created record as another write, and a stored
+     * 504 retried five times fired the upstream-errors incident after one
+     * SAP call. See `replayed` on NorthboundAuditEvent.
+     */
+    replayed?: boolean,
   ) =>
     recordNorthboundCall({
       organizationId: client.organizationId,
@@ -126,6 +135,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       durationMs: durationMs ?? null,
       bindingRefusal: bindingRefusal ?? null,
       failureReason: failureReason ?? null,
+      replayed: replayed ?? false,
     });
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
@@ -293,7 +303,21 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (reservation.outcome === "replay") {
     // Byte-for-byte the original outcome, so a retry is indistinguishable from
     // the first call and the client's retry logic never has to branch.
-    await audit(reservation.status, iface.id, iface.externalId);
+    //
+    // Indistinguishable to the CLIENT, not to the trail. The row is marked as
+    // a replay, and names the connection this request was bound to — it got
+    // past the binding, and without one it counted as a call refused before
+    // reaching any connection. No duration: SAP was not called.
+    await audit(
+      reservation.status,
+      iface.id,
+      iface.externalId,
+      connection,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
     return NextResponse.json(reservation.body, {
       status: reservation.status,
       headers: {
@@ -352,7 +376,21 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
   // Persist the actual envelope: retries preserve interface metadata and the
   // original error code/body rather than translating a failure into CONFLICT.
-  await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+  //
+  // ONLY FOR A WRITE SAP MAY HAVE ACTED ON. One that is known not to have been
+  // attempted — the credential could not be used, the CSRF handshake failed or
+  // timed out, or SAP throttled the POST — releases the key instead. Stored, it
+  // replayed a failure that never touched the record for 24 hours, so a client
+  // that fixed the cause and retried as the contract says got the old failure
+  // back, and could only finish its intent under a new key.
+  //
+  // Released only on an explicit `false`. Storing can never write twice, so
+  // anything less certain than that is stored.
+  if (result.attempted === false) {
+    await releaseIdempotencyKey(client.scope, reservation.recordId);
+  } else {
+    await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+  }
   await audit(status, iface.id, iface.externalId, connection, durationMs, undefined, result.failureReason);
   // Same as the read route: the cause meets the correlation id here and only here.
   if (result.failureReason) {

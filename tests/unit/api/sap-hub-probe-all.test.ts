@@ -414,3 +414,78 @@ describe("Probe all on a stored connection takes the console ceiling and leaves 
     ]);
   });
 });
+
+/*
+ * AUDIT A28 — a credential that could not be obtained is never stored as a
+ * service's outcome. The trigger: the deployment tenant loses S4_TDD_PASSWORD,
+ * or a token URL is mistyped. Every service then failed the same way without
+ * a request reaching SAP, and Probe all wrote PROBE_FAILED (or NOT_FOUND, for
+ * the token endpoint's 404) over hundreds of rows' stored outcomes — so a
+ * service proven ACTIVATED read as broken until somebody re-probed.
+ */
+describe("Probe all stops at the first credential failure and stores nothing for it (A28)", () => {
+  const PROVEN = { http: 200, at: "2026-10-10T00:00:00.000Z", read: true, write: true };
+  const unauthenticated = (credentialError: "refused" | "unavailable") =>
+    mocks.probeService.mockImplementation(async (_p: string, _t: unknown, svc: { key: string }) => ({
+      service: svc.key,
+      exposed: false,
+      status: 0,
+      ladder: "unreachable",
+      credentialError,
+      error: "This connection is basic auth but is missing its username or password. Save it again with both filled in.",
+    }));
+
+  beforeEach(() => {
+    rowsRaw.set("1", { source: "SapApiReference", apiId: "API_PO", probes: { default: PROVEN } });
+    rowsRaw.set("2", { probes: { default: PROVEN } });
+  });
+
+  it("keeps every stored outcome, and says why it stopped", async () => {
+    unauthenticated("refused");
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(mocks.persistStoredProbe).not.toHaveBeenCalled();
+    expect(rawOf("1").probes!.default).toEqual(PROVEN);
+    expect(rawOf("2").probes!.default).toEqual(PROVEN);
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe("FORBIDDEN");
+    expect(body.error.message).toMatch(/could not authenticate to this tenant/);
+    expect(body.error.message).toMatch(/missing its username or password/);
+  });
+
+  it("starts nothing after the first failure", async () => {
+    unauthenticated("refused");
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    // Two rows, a pool of up to CONCURRENCY workers: each worker that had
+    // already started finishes, and none picks up another row after the flag.
+    expect(mocks.probeService.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(mocks.logDecision).not.toHaveBeenCalled();
+  });
+
+  it("is audited as the refusal it is, not a tenant 5xx — and no request is counted as load", async () => {
+    unauthenticated("refused");
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    const rows = mocks.auditCreate.mock.calls.map((c) => c[0].data);
+    expect(rows).toEqual([expect.objectContaining({ externalId: "-probe-all-", status: 403, rowCount: 0 })]);
+  });
+
+  it("a token endpoint that failed is a 502, and still stores nothing", async () => {
+    unauthenticated("unavailable");
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(res.status).toBe(502);
+    expect(mocks.persistStoredProbe).not.toHaveBeenCalled();
+  });
+
+  it("a real answer that finished first is still stored", async () => {
+    mocks.probeService.mockImplementation(async (_p: string, _t: unknown, svc: { key: string }) =>
+      svc.key === "API_PO"
+        ? { service: "API_PO", exposed: false, status: 403, entities: [] }
+        : { service: svc.key, exposed: false, status: 0, credentialError: "refused", error: "x" },
+    );
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(mocks.persistStoredProbe).toHaveBeenCalledTimes(1);
+    expect(mocks.persistStoredProbe).toHaveBeenCalledWith("1", "default", expect.objectContaining({ http: 403 }));
+    expect(rawOf("2").probes!.default).toEqual(PROVEN);
+  });
+});

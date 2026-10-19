@@ -132,7 +132,14 @@ describe("the sweep", () => {
     }
   });
 
-  it("reports moreRemaining when it hits the cap, so a full run is not read as a clear backlog", async () => {
+  /*
+   * UPDATED FOR AUDIT A34. This used to assert that ONE full batch ended the run
+   * with moreRemaining — i.e. that the sweep's whole capacity was 5,000 rows a
+   * night, below what a single polling integration writes. A full batch now
+   * means "take another"; only a run that spends its time budget with full
+   * batches still coming back has an uncleared backlog to report.
+   */
+  it("reports moreRemaining when it stops on its time budget, so a full run is not read as a clear backlog", async () => {
     mocks.findMany.mockResolvedValue(
       Array.from({ length: RETENTION_BATCH_LIMIT }, (_, i) => ({
         id: `r${i}`,
@@ -140,8 +147,71 @@ describe("the sweep", () => {
       })),
     );
     mocks.deleteMany.mockResolvedValue({ count: RETENTION_BATCH_LIMIT });
-    const result = await enforceNorthboundAuditRetention(NOW, 30);
+    // A zero budget: one batch, then out of time with the batch still full.
+    const result = await enforceNorthboundAuditRetention(NOW, 30, RETENTION_BATCH_LIMIT, 0);
     expect(result.moreRemaining).toBe(true);
+    expect(result.deleted).toBe(RETENTION_BATCH_LIMIT);
+  });
+
+  it("keeps taking batches until one comes back short, so a busy day is cleared in one run", async () => {
+    // Twice the cap past the period, plus a remainder: one run clears it all.
+    const batch = (n: number, from: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `r${from + i}`, organizationId: "org_a" }));
+    mocks.findMany
+      .mockResolvedValueOnce(batch(RETENTION_BATCH_LIMIT, 0))
+      .mockResolvedValueOnce(batch(RETENTION_BATCH_LIMIT, RETENTION_BATCH_LIMIT))
+      .mockResolvedValueOnce(batch(1_234, 2 * RETENTION_BATCH_LIMIT))
+      .mockResolvedValue([]);
+    mocks.deleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => ({
+      count: where.id.in.length,
+    }));
+
+    const result = await enforceNorthboundAuditRetention(NOW, 30);
+
+    expect(mocks.findMany).toHaveBeenCalledTimes(3);
+    expect(result.deleted).toBe(2 * RETENTION_BATCH_LIMIT + 1_234);
+    expect(result.moreRemaining).toBe(false);
+  });
+
+  it("does not let the backlog outgrow the period at twice the cap a day", async () => {
+    /*
+     * The trigger in the audit: an integration writing 2 × the cap every day.
+     * At one batch a night the oldest row aged by half a day each night, past
+     * 60 days after 90 nights. A table modelled in memory, swept each night:
+     * after the sweep nothing older than the period may remain. The batch is
+     * scaled down to keep the table small; the ratio is what matters.
+     */
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const LIMIT = 50;
+    const perDay = 2 * LIMIT;
+    let table: Array<{ id: string; organizationId: string; at: number }> = [];
+    let seq = 0;
+    mocks.findMany.mockImplementation(
+      async ({ where, take }: { where: { at: { lt: Date } }; take: number }) =>
+        table
+          .filter((r) => r.at < where.at.lt.getTime())
+          .sort((a, b) => a.at - b.at)
+          .slice(0, take)
+          .map(({ id, organizationId }) => ({ id, organizationId })),
+    );
+    mocks.deleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => {
+      const doomed = new Set(where.id.in);
+      const before = table.length;
+      table = table.filter((r) => !doomed.has(r.id));
+      return { count: before - table.length };
+    });
+
+    const start = new Date("2026-06-01T00:00:00Z").getTime();
+    for (let night = 1; night <= 40; night++) {
+      for (let i = 0; i < perDay; i++) {
+        table.push({ id: `r${seq++}`, organizationId: "org_a", at: start + (night - 1) * DAY_MS + i });
+      }
+      const now = new Date(start + night * DAY_MS);
+      const result = await enforceNorthboundAuditRetention(now, 30, LIMIT);
+      expect(result.moreRemaining).toBe(false);
+      const oldest = Math.min(...table.map((r) => r.at));
+      expect(now.getTime() - oldest, `night ${night}`).toBeLessThanOrEqual(30 * DAY_MS);
+    }
   });
 
   it("does not report moreRemaining on a partial batch", async () => {

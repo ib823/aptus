@@ -1340,6 +1340,16 @@ model NorthboundAuditEvent {
   /// "floor, not census" strip names. Default false so history stays truthful.
   dryRun Boolean @default(false)
 
+  /// TRUE when the write route answered this call by REPLAYING the outcome
+  /// stored under its Idempotency-Key — SAP was not called again. Recorded,
+  /// not omitted, like `dryRun`: it is a real request from a real credential.
+  /// But it is not a second write, a second upstream error, or a refusal, and
+  /// without this column it was byte-identical to one: one record retried
+  /// three times billed as four writes, and a stored 504 retried five times
+  /// fired the upstream-errors incident after a single SAP call. Default false
+  /// — earlier replays were never marked, and cannot now be told apart.
+  replayed Boolean @default(false)
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])

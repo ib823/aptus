@@ -102,6 +102,11 @@ const OUTCOME: Record<string, { tone: OpsTone; label: string; meaning: string }>
   refused: { tone: "attention", label: "refused", meaning: "refused before reaching SAP" },
   throttled: { tone: "muted", label: "throttled", meaning: "429 — rate limited" },
   error: { tone: "bad", label: "error", meaning: "5xx from the tenant or the broker" },
+  replayed: {
+    tone: "neutral",
+    label: "replayed",
+    meaning: "a write retried with the same Idempotency-Key — the stored outcome was re-served and SAP was not called",
+  },
 };
 
 /** The closed credential-environment vocabulary, as the grant/credential forms use it. */

@@ -75,6 +75,7 @@ const grant = (over: Partial<Parameters<typeof deriveGrant>[0]> = {}, since: Dat
       revokedAt: null,
       revokedReason: null,
       recordedCalls: 0,
+      recordedFailures: 0,
       ...over,
     },
     NOW,
@@ -275,6 +276,16 @@ describe("collapsing a column keeps what needs acting on", () => {
     expect(ids).toContain("defect");
     expect(ids).toContain("wasLive");
   });
+
+  it("keeps a partly failing node ahead of healthy rows, and behind a wholly failing one", () => {
+    const nodes = [
+      ...Array.from({ length: COLLAPSE_THRESHOLD }, (_, i) => node(`ok${i}`)),
+      node("mixed", { state: "observed-mixed" }),
+      node("bad", { state: "observed-bad" }),
+    ];
+    const ids = collapseColumn(nodes).kept.map((n) => n.id);
+    expect(ids.slice(0, 2)).toEqual(["bad", "mixed"]);
+  });
 });
 
 describe("a node links to its own workspace's screen", () => {
@@ -390,6 +401,28 @@ describe("call attribution pairs both ends, and never repeats one end's total", 
     const gk = grantKey("sol1", "API_BUSINESS_PARTNER", "READ", "PROD");
     expect(a.byGrant.get(gk)).toEqual({ calls: 100, failures: 10 });
     expect(observeEdge(100, 10)).toBe("mixed");
+  });
+
+  /*
+   * A REPLAY CALLED NOTHING BEYOND THE BROKER. Its row names the connection the
+   * request was bound to, so as not to read as a refusal before any binding —
+   * and attributed like a fresh call, one 201, one 504 and five same-key
+   * retries of the 504 drew seven calls and six failures through a connection
+   * SAP answered twice.
+   */
+  it("routes a replay to the broker's side of the graph, never through the connection", () => {
+    const write = { operation: "WRITE" };
+    const a = attributeCalls([
+      slice({ ...write, status: 201, count: 1 }),
+      slice({ ...write, status: 504, count: 1 }),
+      slice({ ...write, status: 504, count: 5, replayed: true }),
+    ]);
+
+    expect(a.byConnection.get("conn1")).toEqual({ calls: 2, failures: 1 });
+    expect(tallyOf(a.byInterfaceConnection, pairKey("if1", "conn1"))).toEqual({ calls: 2, failures: 1 });
+    // The broker did answer every retry, along the credential's and the grant's edges.
+    expect(a.byInterface.get("if1")).toEqual({ calls: 7, failures: 6 });
+    expect(tallyOf(a.byCredentialSolution, pairKey("tok1", "sol1"))).toEqual({ calls: 7, failures: 6 });
   });
 
   it("treats 5xx as a failure and 3xx as not one", () => {
@@ -592,7 +625,7 @@ describe("the decision vocabulary is pinned to the schema", () => {
  */
 describe("a solution with an empty owner slot", () => {
   const sol = (over: Partial<Parameters<typeof deriveSolution>[0]> = {}) =>
-    deriveSolution({ missingOwnerCount: 0, recordedCalls: 0, holdsProdGrant: false, ...over });
+    deriveSolution({ missingOwnerCount: 0, recordedCalls: 0, recordedFailures: 0, holdsProdGrant: false, ...over });
 
   it("is a defect wherever it occurs, PROD or not", () => {
     // The slot is who gets called when this breaks. Empty means nobody.

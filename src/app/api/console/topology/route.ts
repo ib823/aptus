@@ -22,7 +22,7 @@
  * WHAT IT REFUSES TO COMPUTE. No health score, no uptime, no totals worth
  * copying. The Operations home already argues why: a second copy of a number is
  * a thing that disagrees with the screen that owns it. This returns structure,
- * five honest states, and the provenance for each.
+ * six honest states, and the provenance for each.
  */
 
 import type { NextRequest } from "next/server";
@@ -48,6 +48,7 @@ import {
   deriveCredential,
   deriveGrant,
   grantKey,
+  observedState,
   observeEdge,
   pairKey,
   routeFor,
@@ -161,6 +162,13 @@ export async function GET(request: NextRequest) {
      * times out before its audit write leaves none either; and the write itself
      * can fail, which means the feed thins exactly when the system is
      * struggling. Nothing below may present these numbers as totals.
+     *
+     * DRY RUNS ARE NOT DEPLOYED TRAFFIC, and are left out as the lane board
+     * leaves them out. A Test Console broker run carries the solution, the
+     * interface and the credential, so counted here one rehearsal turned a
+     * never-deployed app's grant and interface green and drew a call on the
+     * "client applications → credential" edge — a token the console never
+     * presents. Console reads carry no solution and would be skipped anyway.
      */
     prisma.northboundAuditEvent.groupBy({
       by: [
@@ -172,8 +180,11 @@ export async function GET(request: NextRequest) {
         "operation",
         "environment",
         "status",
+        // Apart, so a replay can be kept off the connection: SAP was not
+        // called. See AuditSlice.replayed.
+        "replayed",
       ],
-      where: opsWhere(actor, { at: { gte: since } }),
+      where: opsWhere(actor, { at: { gte: since }, dryRun: false }),
       _count: { _all: true },
     }),
   ]);
@@ -206,6 +217,7 @@ export async function GET(request: NextRequest) {
       environment: row.environment,
       status: row.status,
       count: row._count._all,
+      replayed: row.replayed,
     })),
   );
 
@@ -306,7 +318,12 @@ export async function GET(request: NextRequest) {
         g.environment.toUpperCase() === "PROD" &&
         grantConfersAccess(g.decision),
     );
-    const d = deriveSolution({ missingOwnerCount: missing.length, recordedCalls: seen.calls, holdsProdGrant });
+    const d = deriveSolution({
+      missingOwnerCount: missing.length,
+      recordedCalls: seen.calls,
+      recordedFailures: seen.failures,
+      holdsProdGrant,
+    });
 
     nodes.push({
       id: `sol:${s.id}`,
@@ -321,7 +338,7 @@ export async function GET(request: NextRequest) {
       provenance: {
         derived: missing.length
           ? `Solution ${s.status}; no ${missing.join(", no ")} assigned.`
-          : `Solution ${s.status}; all three owners assigned; ${seen.calls} call(s) recorded across its grants in the window.`,
+          : `Solution ${s.status}; all three owners assigned; ${seen.calls} call(s) recorded across its grants in the window, ${seen.failures} of them failed.`,
         observedAt: null,
         cannotTell: `Which deployment is calling as this solution — the platform sees one credential, not the applications holding it. ${FEED_CAVEAT}`,
         ...(d.noRule ? { noRule: d.noRule } : {}),
@@ -352,7 +369,8 @@ export async function GET(request: NextRequest) {
     const gk = grantKey(g.solutionId, g.externalId, g.operation, g.environment);
     const grantTally = tallyOf(attributed.byGrant, gk);
     const recordedCalls = grantTally.calls;
-    const d = deriveGrant({ ...g, recordedCalls }, now, since);
+    const recordedFailures = grantTally.failures;
+    const d = deriveGrant({ ...g, recordedCalls, recordedFailures }, now, since);
     nodes.push({
       id: `grant:${g.id}`,
       kind: "grant",
@@ -364,7 +382,7 @@ export async function GET(request: NextRequest) {
       badge: d.badge ?? g.decision,
       href: routeFor(lens, "grant", "/control-tower/grants"),
       provenance: {
-        derived: `decision ${g.decision} in ${g.environment}; ${recordedCalls} call(s) recorded in the window, matched on solution + service + operation + environment.`,
+        derived: `decision ${g.decision} in ${g.environment}; ${recordedCalls} call(s) recorded in the window, ${recordedFailures} of them failed, matched on solution + service + operation + environment.`,
         observedAt: null,
         cannotTell: `Which grant authorised a given call, when two grants overlap on that tuple — there is no grant id on an audit row. ${FEED_CAVEAT}`,
         ...(d.quiet
@@ -396,7 +414,8 @@ export async function GET(request: NextRequest) {
       kind: "interface",
       column: 4,
       label: i.name,
-      state: noEntitySet ? "defect" : calls > 0 ? "observed-good" : "never-observed",
+      // What its calls did, not merely that there were some — see observedState.
+      state: noEntitySet ? "defect" : observedState(calls, seen.failures),
       ended: null,
       quiet: false,
       badge: noEntitySet ? "NO ENTITY SET" : i.operation,
@@ -404,7 +423,7 @@ export async function GET(request: NextRequest) {
       provenance: {
         derived: noEntitySet
           ? "No entity set is declared, so the broker refuses every read with a 400."
-          : `entity set ${i.entitySet}; ${calls} call(s) recorded in the window.`,
+          : `entity set ${i.entitySet}; ${calls} call(s) recorded in the window, ${seen.failures} of them failed.`,
         observedAt: null,
         cannotTell: `Whether the capability is permitted — that is decided by a grant and enforced per call. ${FEED_CAVEAT}`,
       },

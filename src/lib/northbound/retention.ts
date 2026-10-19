@@ -39,6 +39,15 @@
  * WHY BOUNDED BATCHES, same as the reaper: a table nobody has ever swept can
  * hold a very large first night, and an unbounded `deleteMany` would take a lock
  * long enough to matter to the write path that records live traffic into it.
+ *
+ * AND WHY THE BATCHES REPEAT. One batch per night made 5,000 rows a day the
+ * sweep's whole capacity — while one integration polling every 15 seconds
+ * writes 5,760, and the broker's own per-credential budget allows 86,400.
+ * Above the cap the backlog grew without bound and the oldest row aged past the
+ * stated period by about half a day a night, each run recorded as a success.
+ * So a run repeats the batch until one comes back short, and stops early only
+ * on a time budget under the route's `maxDuration` — the one case it reports
+ * as `moreRemaining`.
  */
 
 import { prisma } from "@/lib/db/prisma";
@@ -56,8 +65,15 @@ export const MINIMUM_RETENTION_DAYS = 7;
 /** A ceiling, so a typo cannot quietly mean "never delete anything". */
 export const MAXIMUM_RETENTION_DAYS = 3_650;
 
-/** One night's work. Steady state is far below this; the cap protects run one. */
+/** One batch: the most rows one scan selects and one round of deletes removes. */
 export const RETENTION_BATCH_LIMIT = 5_000;
+
+/**
+ * How long one run keeps taking batches — under the route's `maxDuration` of
+ * 300 s, with room left to record the run. A run that stops on this has not
+ * cleared the backlog, and says so.
+ */
+export const RETENTION_TIME_BUDGET_MS = 240_000;
 
 export type RetentionConfig =
   | { ok: true; days: number; source: "default" | "environment" }
@@ -99,7 +115,10 @@ export function resolveRetentionDays(
 
 export interface RetentionResult {
   deleted: number;
-  /** True when the cap was hit, so the caller can say the backlog is not clear. */
+  /**
+   * True when the run stopped on its time budget with full batches still coming
+   * back — the backlog is not clear and rows past the period remain.
+   */
   moreRemaining: boolean;
   /** The period applied, echoed so a run is self-describing in CronRunLog. */
   retentionDays: number;
@@ -108,7 +127,8 @@ export interface RetentionResult {
 }
 
 /**
- * Delete audit rows older than the retention period, oldest first, up to the cap.
+ * Delete audit rows older than the retention period, oldest first, a batch at a
+ * time, until a batch comes back short or the time budget is spent.
  *
  * Oldest-first drains the backlog in the order it accumulated rather than
  * leaving an arbitrary residue that never quite clears — the same reasoning as
@@ -118,52 +138,64 @@ export async function enforceNorthboundAuditRetention(
   now: Date = new Date(),
   retentionDays: number = DEFAULT_RETENTION_DAYS,
   limit: number = RETENTION_BATCH_LIMIT,
+  budgetMs: number = RETENTION_TIME_BUDGET_MS,
 ): Promise<RetentionResult> {
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  // Wall clock, not `now`: `now` fixes which rows are eligible, this measures
+  // how long the run itself has been going.
+  const startedAt = Date.now();
 
   // A platform maintenance sweep has no caller organization, so the scan below
   // crosses tenants by design. Declared so the attached tenant-scope guard
   // permits it; every DELETE still re-asserts the organization it touches.
   permitCrossTenantReads("northbound-retention: platform maintenance sweep");
 
-  const doomed = await prisma.northboundAuditEvent.findMany({
-    where: { at: { lt: cutoff } },
-    select: { id: true, organizationId: true },
-    orderBy: { at: "asc" },
-    take: limit,
-  });
-
-  if (doomed.length === 0) {
-    return { deleted: 0, moreRemaining: false, retentionDays, cutoff: cutoff.toISOString() };
-  }
-
-  /*
-   * DELETED PER TENANT, for the same reason the reaper does it: the model is
-   * tenant-anchored and the scope guard requires every mutation's `where` to
-   * carry the organization rather than trusting the lookup above it. The same
-   * rows die either way; each DELETE independently re-asserts whose they were.
-   */
-  const byOrg = new Map<string, string[]>();
-  for (const d of doomed) {
-    const ids = byOrg.get(d.organizationId) ?? [];
-    ids.push(d.id);
-    byOrg.set(d.organizationId, ids);
-  }
-
   let deleted = 0;
-  for (const [organizationId, ids] of byOrg) {
-    const result = await prisma.northboundAuditEvent.deleteMany({
-      // Re-check the age at deletion time. The scan and the delete are not in one
-      // transaction, and a row is only ever eligible on its own age, so the
-      // predicate is repeated rather than assumed.
-      where: { organizationId, id: { in: ids }, at: { lt: cutoff } },
+  let moreRemaining = false;
+  for (;;) {
+    const doomed = await prisma.northboundAuditEvent.findMany({
+      where: { at: { lt: cutoff } },
+      select: { id: true, organizationId: true },
+      orderBy: { at: "asc" },
+      take: limit,
     });
-    deleted += result.count;
+
+    if (doomed.length === 0) break;
+
+    /*
+     * DELETED PER TENANT, for the same reason the reaper does it: the model is
+     * tenant-anchored and the scope guard requires every mutation's `where` to
+     * carry the organization rather than trusting the lookup above it. The same
+     * rows die either way; each DELETE independently re-asserts whose they were.
+     */
+    const byOrg = new Map<string, string[]>();
+    for (const d of doomed) {
+      const ids = byOrg.get(d.organizationId) ?? [];
+      ids.push(d.id);
+      byOrg.set(d.organizationId, ids);
+    }
+
+    for (const [organizationId, ids] of byOrg) {
+      const result = await prisma.northboundAuditEvent.deleteMany({
+        // Re-check the age at deletion time. The scan and the delete are not in one
+        // transaction, and a row is only ever eligible on its own age, so the
+        // predicate is repeated rather than assumed.
+        where: { organizationId, id: { in: ids }, at: { lt: cutoff } },
+      });
+      deleted += result.count;
+    }
+
+    // A short batch is the bottom of the backlog: nothing older is left.
+    if (doomed.length < limit) break;
+    if (Date.now() - startedAt >= budgetMs) {
+      moreRemaining = true;
+      break;
+    }
   }
 
   return {
     deleted,
-    moreRemaining: doomed.length === limit,
+    moreRemaining,
     retentionDays,
     cutoff: cutoff.toISOString(),
   };

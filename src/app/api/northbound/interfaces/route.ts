@@ -119,7 +119,14 @@ export async function GET(request: NextRequest) {
       .map((g) => `${g.externalId}::${g.operation}`),
   );
 
-  // Discovery is audited like the data routes: a 200 with the interface count.
+  /*
+   * Discovery is audited like the data routes — a 200 — but with a NULL
+   * rowCount, as the schema route does. `rowCount` means SAP records read, and
+   * discovery reads none: it lists this solution's interfaces from CoreEdge's
+   * own tables. Recording the interface count there put it in the usage
+   * rollup's "Rows read", so an app that listed ten interfaces on every boot
+   * was billed ten phantom SAP rows per boot.
+   */
   await recordNorthboundCall({
     organizationId: client.organizationId,
     solutionId: client.solutionId,
@@ -128,7 +135,7 @@ export async function GET(request: NextRequest) {
     externalId: "-discovery-",
     environment: client.environment,
     status: 200,
-    rowCount: interfaces.length,
+    rowCount: null,
     correlationId,
     clientTokenId: client.clientId,
   });

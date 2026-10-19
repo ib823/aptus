@@ -107,13 +107,34 @@ describe("the idempotency reaper is bounded and honest about it", () => {
     expect(result.deleted).toBe(2);
   });
 
-  it("reports moreRemaining when it hits the cap, so a full run is not read as a clear backlog", async () => {
+  /*
+   * UPDATED FOR AUDIT A34. This asserted that one full batch ended the run with
+   * moreRemaining — a nightly capacity of one batch, below what one
+   * credential's write budget can reserve. A full batch now means "take
+   * another"; the backlog is reported uncleared only when the time budget runs
+   * out with full batches still coming back.
+   */
+  it("reports moreRemaining when it stops on its time budget, so a full run is not read as a clear backlog", async () => {
     // Reporting only "deleted: N" after a capped run reads as done. It is not.
     mocks.findMany.mockResolvedValue(Array.from({ length: 3 }, (_, i) => ({ id: `k${i}` })));
     mocks.deleteMany.mockResolvedValue({ count: 3 });
 
-    const result = await reapExpiredIdempotencyKeys(new Date(), 3);
+    const result = await reapExpiredIdempotencyKeys(new Date(), 3, 0);
     expect(result).toEqual({ deleted: 3, moreRemaining: true });
+  });
+
+  it("keeps taking batches until one comes back short", async () => {
+    mocks.findMany
+      .mockResolvedValueOnce(Array.from({ length: 3 }, (_, i) => ({ id: `k${i}`, organizationId: "org_a" })))
+      .mockResolvedValueOnce(Array.from({ length: 3 }, (_, i) => ({ id: `k${3 + i}`, organizationId: "org_a" })))
+      .mockResolvedValueOnce([{ id: "k6", organizationId: "org_a" }]);
+    mocks.deleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => ({
+      count: where.id.in.length,
+    }));
+
+    const result = await reapExpiredIdempotencyKeys(new Date(), 3);
+    expect(mocks.findMany).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ deleted: 7, moreRemaining: false });
   });
 
   it("does not report moreRemaining on a partial batch", async () => {

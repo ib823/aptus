@@ -86,6 +86,14 @@ export interface NorthboundAuditInput {
    */
   dryRun?: boolean;
   /**
+   * TRUE when the write route answered by REPLAYING the outcome stored under
+   * the call's Idempotency-Key — SAP was not called again. Recorded, never
+   * omitted, like a dry run; but a replay is not a second write, a second
+   * upstream error or a refusal, and before this field nothing downstream
+   * could tell it from one. See the column in schema.prisma.
+   */
+  replayed?: boolean;
+  /**
    * WHY the upstream call failed, as a bounded code — ENOTFOUND, ECONNREFUSED,
    * CERT_HAS_EXPIRED, TIMEOUT, HTTP_503 — or null when it did not fail, or was
    * never made. Never the host, the URL or the error text.
@@ -107,6 +115,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
       data: {
         bindingRefusal: input.bindingRefusal ?? null,
         dryRun: input.dryRun ?? false,
+        replayed: input.replayed ?? false,
         organizationId: input.organizationId,
         solutionId: input.solutionId,
         interfaceId: input.interfaceId,
