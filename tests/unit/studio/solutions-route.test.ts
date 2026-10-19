@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   updateSolution: vi.fn(),
   createAudit: vi.fn(),
   closeLinks: vi.fn(),
+  closeLinksOutsideTransaction: vi.fn(),
   findFirstGrant: vi.fn(),
   findManyGrants: vi.fn(),
   lockSolution: vi.fn(),
@@ -32,10 +33,16 @@ vi.mock("@/lib/db/prisma", () => {
       findMany: vi.fn().mockResolvedValue([]),
     },
     configAudit: { create: mocks.createAudit },
-    keyClaimLink: { updateMany: mocks.closeLinks },
+    // On the client, a close would need a second pooled connection while the
+    // transaction holds one and the Solution lock; the PATCH must use `tx`.
+    keyClaimLink: { updateMany: mocks.closeLinksOutsideTransaction },
     apiAccessGrant: { findFirst: mocks.findFirstGrant, findMany: mocks.findManyGrants },
     // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
-    $queryRaw: mocks.lockSolution,
+    // Outside a transaction the lock would commit and release at once, so taking
+    // it on the client instead of on `tx` is a failure, not a pass.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction, not the client");
+    },
   };
   return {
     prisma: {
@@ -44,7 +51,11 @@ vi.mock("@/lib/db/prisma", () => {
       // sees what the PATCH reads and writes inside it; `commit` marks where it
       // ends, so a test can tell what happened while the lock was held.
       $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
-        const out = await fn(client);
+        const out = await fn({
+          ...client,
+          $queryRaw: mocks.lockSolution,
+          keyClaimLink: { updateMany: mocks.closeLinks },
+        } as unknown as typeof client);
         mocks.commit();
         return out;
       },
@@ -328,6 +339,20 @@ describe("retiring a solution closes the key links still out for it", () => {
     expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.updateSolution.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("closes them inside the transaction, so it never waits on a second pooled connection", async () => {
+    // Run on the client, the close needed another connection while the PATCH
+    // held one and the Solution lock: with the pool exhausted the retire waited
+    // for itself and timed out, taking every queued decision with it.
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+
+    const res = await PATCH(req({ id: "sol_1", status: "RETIRED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.closeLinks).toHaveBeenCalledTimes(1);
+    expect(mocks.closeLinksOutsideTransaction).not.toHaveBeenCalled();
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(mocks.commit.mock.invocationCallOrder[0]!);
   });
 
   it("leaves links alone on an ordinary edit, and on re-saving an already retired app", async () => {

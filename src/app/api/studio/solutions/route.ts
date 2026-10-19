@@ -319,14 +319,14 @@ export async function PATCH(request: NextRequest) {
      * this row, so a claim link sent while the app was live stayed live for the
      * rest of its window and, once opened, minted a key for a retired app —
      * refused today, working again the moment someone set the app back to DRAFT.
-     * Closed before the status is written, so a failure between the two leaves a
-     * dead link on a live app rather than a live link on a retired one. (It
-     * writes through its own connection and commits ahead of this transaction,
-     * which keeps exactly that order; it touches no Solution row, so it never
-     * waits on the lock held here.)
+     * Closed in THIS transaction, so the close and the RETIRED status commit
+     * together or not at all — never a live link on a retired app. It used to
+     * run on its own pooled connection while this transaction held one and the
+     * Solution row lock: with the pool exhausted the retire waited for itself,
+     * timed out, and every decision queued on the lock failed with it.
      */
     if (resolution.status === "RETIRED" && currentStatus !== "RETIRED") {
-      await closePendingClaimLinks({ organizationId, solutionId: current.id }, "The app was retired.");
+      await closePendingClaimLinks({ organizationId, solutionId: current.id }, "The app was retired.", new Date(), tx);
     }
 
     const updated = await tx.solution.update({

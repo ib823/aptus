@@ -61,8 +61,11 @@ export async function closePendingClaimLinks(
   lane: ClaimLinkLane,
   reason: string,
   now: Date = new Date(),
+  // A caller already inside a transaction passes it, so the close runs on that
+  // connection instead of waiting for a second one from the pool.
+  db: Pick<typeof prisma, "keyClaimLink"> = prisma,
 ): Promise<number> {
-  const closed = await prisma.keyClaimLink.updateMany({
+  const closed = await db.keyClaimLink.updateMany({
     where: {
       organizationId: lane.organizationId,
       solutionId: lane.solutionId,

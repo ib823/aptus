@@ -31,7 +31,11 @@ vi.mock("@/lib/db/prisma", () => {
     },
     configAudit: { create: mocks.createAudit },
     // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
-    $queryRaw: mocks.lockSolution,
+    // Outside a transaction the lock would commit and release at once, so taking
+    // it on the client instead of on `tx` is a failure, not a pass.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction, not the client");
+    },
   };
   return {
     prisma: {
@@ -40,7 +44,7 @@ vi.mock("@/lib/db/prisma", () => {
       // assertions below still see its reads and its compare-and-set; `commit`
       // marks where the transaction — and the lock — ends.
       $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
-        const out = await fn(client);
+        const out = await fn({ ...client, $queryRaw: mocks.lockSolution } as unknown as typeof client);
         mocks.commit();
         return out;
       },
