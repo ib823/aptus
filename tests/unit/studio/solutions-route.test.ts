@@ -18,11 +18,13 @@ const mocks = vi.hoisted(() => ({
   closeLinks: vi.fn(),
   findFirstGrant: vi.fn(),
   findManyGrants: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solution: {
       findFirst: mocks.findFirstSolution,
       create: mocks.createSolution,
@@ -32,8 +34,23 @@ vi.mock("@/lib/db/prisma", () => ({
     configAudit: { create: mocks.createAudit },
     keyClaimLink: { updateMany: mocks.closeLinks },
     apiAccessGrant: { findFirst: mocks.findFirstGrant, findMany: mocks.findManyGrants },
-  },
-}));
+    // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
+    $queryRaw: mocks.lockSolution,
+  };
+  return {
+    prisma: {
+      ...client,
+      // The transaction runs on these same mocks, so every assertion below still
+      // sees what the PATCH reads and writes inside it; `commit` marks where it
+      // ends, so a test can tell what happened while the lock was held.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn(client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/solutions/route";
 
@@ -361,16 +378,79 @@ describe("own-app holds across owner-slot changes", () => {
     );
   });
 
-  it("treats claiming over someone else's slot as releasing theirs", async () => {
-    // u_tech owned the app when access was asked for; taking the slot from
-    // them would let them decide it.
-    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+  it("refuses an owner stepping down from their last slot while a request waits, even with others named", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, technicalOwnerId: "u1" });
     mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
 
-    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: null }, "PATCH"));
 
     expect(res.status).toBe(409);
     expect(mocks.updateSolution).not.toHaveBeenCalled();
+  });
+
+  /*
+   * ONLY THE CALLER STEPPING DOWN WAITS. Any colleague may raise a request on
+   * any app, and a REQUESTED grant has no withdraw route — so freezing every
+   * slot change behind it froze the app's ownership until a non-owner decided,
+   * including the clear that recovers a departed owner's slot. None of these
+   * saves makes the caller a non-owner, so none opens the self-service path.
+   */
+  it("lets anyone clear a departed owner's slot while a request waits — the orphan recovery path", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, businessOwnerId: "u_left_company" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", businessOwnerId: null }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.businessOwnerId).toBeNull();
+    expect(data.status).toBe("RESTRICTED");
+  });
+
+  it("lets a colleague claim over a stale slot while a request waits — they gain a slot, nobody steps down", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, businessOwnerId: "u_left_company" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", businessOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.businessOwnerId).toBe("u1");
+  });
+
+  it("lets an owner move between slots, or step down from one of several, while a request waits", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, technicalOwnerId: "u1", supportOwnerId: "u1" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const swap = await PATCH(req({ id: "sol_1", technicalOwnerId: null, businessOwnerId: "u1" }, "PATCH"));
+    const stepDownFromOne = await PATCH(req({ id: "sol_1", supportOwnerId: null }, "PATCH"));
+
+    expect(swap.status).toBe(200);
+    expect(stepDownFromOne.status).toBe(200);
+    // The caller still owns the app after either save, so the pending request
+    // is never even consulted.
+    expect(mocks.findFirstGrant).not.toHaveBeenCalled();
+  });
+
+  it("takes the Solution row lock before it reads the app or the caller's decisions, and holds it through the write", async () => {
+    // A decision fired together with a reclaim used to pass both: each read
+    // what the other had not yet written. The decision routes take this lock
+    // too; here it must come before every read the refusals depend on.
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "DRAFT", technicalOwnerId: null });
+
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol_1", "org_a"]);
+
+    const order = (m: { mock: { invocationCallOrder: number[] } }) => m.mock.invocationCallOrder[0]!;
+    expect(order(mocks.lockSolution)).toBeLessThan(order(mocks.findFirstSolution));
+    expect(order(mocks.findFirstSolution)).toBeLessThan(order(mocks.findManyGrants));
+    expect(order(mocks.findManyGrants)).toBeLessThan(order(mocks.updateSolution));
+    expect(order(mocks.updateSolution)).toBeLessThan(order(mocks.commit));
   });
 
   it("still lets a release through when nothing awaits a decision", async () => {

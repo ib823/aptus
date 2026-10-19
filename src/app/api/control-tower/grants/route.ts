@@ -37,6 +37,7 @@ import {
   type GrantEnvironment,
   type GrantOperation,
 } from "@/lib/studio/grants";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { canMutateControlTower } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -279,82 +280,107 @@ export async function PATCH(request: NextRequest) {
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid decision.");
   const input = parsed.data;
 
-  const grant = await prisma.apiAccessGrant.findFirst({
+  const located = await prisma.apiAccessGrant.findFirst({
     where: opsWhere(guard.actor, { id: input.grantId }),
-    select: {
-      id: true,
-      // Read explicitly: a GLOBAL admin's `where` carries no organization, so
-      // the row's own tenant is the only thing that can anchor the write and
-      // the audit entry below.
-      organizationId: true,
-      decision: true,
-      operation: true,
-      environment: true,
-      requestedById: true,
-      externalId: true,
-      solutionId: true,
-      expiresAt: true,
-      // The app's owners, for OWN_APP: an owner may not approve their own app,
-      // and being a platform admin is no more an exemption than for SELF_APPROVAL.
-      solution: {
-        select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+    // The row's own tenant, read explicitly: a GLOBAL admin's `where` carries
+    // no organization, so this is the only thing that can anchor the lock, the
+    // write and the audit entry below.
+    select: { organizationId: true, solutionId: true },
+  });
+  if (!located) return studioError("NOT_FOUND", "Request not found.");
+
+  /*
+   * LOCK THE APP, THEN READ WHAT IS DECIDED ON. OWN_APP compares the decider
+   * with the app's owners, which the Studio solutions PATCH writes on a
+   * different row from the grant settled here — so a reclaim fired together
+   * with a decision used to pass on owners read a moment before it landed.
+   * Every decision door and that PATCH take the same lock
+   * (lib/studio/owner-lock.ts), so whichever lands first, the other reads what
+   * it wrote and is refused.
+   */
+  const decided = await prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, located);
+
+    const grant = await tx.apiAccessGrant.findFirst({
+      // Anchored on the tenant the actor-scoped lookup above found it in.
+      where: { id: input.grantId, organizationId: located.organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        decision: true,
+        operation: true,
+        environment: true,
+        requestedById: true,
+        externalId: true,
+        solutionId: true,
+        expiresAt: true,
+        // The app's owners, for OWN_APP: an owner may not approve their own app,
+        // and being a platform admin is no more an exemption than for SELF_APPROVAL.
+        solution: {
+          select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+        },
       },
-    },
-  });
-  if (!grant) return studioError("NOT_FOUND", "Request not found.");
+    });
+    if (!grant) return { refusal: studioError("NOT_FOUND", "Request not found.") };
 
-  const verdict = evaluateDecision({
-    current: grant.decision as GrantDecision,
-    operation: grant.operation as GrantOperation,
-    environment: grant.environment as GrantEnvironment,
-    requestedById: grant.requestedById,
-    deciderId: user.id,
-    ownerIds: [
-      grant.solution.technicalOwnerId,
-      grant.solution.businessOwnerId,
-      grant.solution.supportOwnerId,
-    ],
-    next: input.decision as GrantDecision,
-    writeChecklistAcknowledged: input.writeChecklistAcknowledged,
-    // Taken from the REQUEST, not from this decision — an approver may not
-    // invent the boundary on a write they are approving. Same rule as the
-    // Studio path, and for the same reason: a write request that arrived with
-    // no expiry is refused and re-raised, leaving both rows in the ledger.
-    expiresAt: grant.expiresAt,
-  });
+    const verdict = evaluateDecision({
+      current: grant.decision as GrantDecision,
+      operation: grant.operation as GrantOperation,
+      environment: grant.environment as GrantEnvironment,
+      requestedById: grant.requestedById,
+      deciderId: user.id,
+      ownerIds: [
+        grant.solution.technicalOwnerId,
+        grant.solution.businessOwnerId,
+        grant.solution.supportOwnerId,
+      ],
+      next: input.decision as GrantDecision,
+      writeChecklistAcknowledged: input.writeChecklistAcknowledged,
+      // Taken from the REQUEST, not from this decision — an approver may not
+      // invent the boundary on a write they are approving. Same rule as the
+      // Studio path, and for the same reason: a write request that arrived with
+      // no expiry is refused and re-raised, leaving both rows in the ledger.
+      expiresAt: grant.expiresAt,
+    });
 
-  if (!verdict.ok) {
-    // CONFLICT for "already settled", FORBIDDEN for the governance controls —
-    // the distinction tells a caller whether to retry or to find a colleague.
-    const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
-    return studioError(code, verdict.message);
-  }
+    if (!verdict.ok) {
+      // CONFLICT for "already settled", FORBIDDEN for the governance controls —
+      // the distinction tells a caller whether to retry or to find a colleague.
+      const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
+      return { refusal: studioError(code, verdict.message) };
+    }
+
+    const decidedAt = new Date();
+    const settled = await tx.apiAccessGrant.updateMany({
+      // Tenant-anchored in the write itself, from the row's own organization —
+      // never from the actor, who may be a global admin with none.
+      //
+      // And a compare-and-set on the pending state. Two decisions arriving
+      // together (this door and Studio's, say) both pass NOT_PENDING above; a
+      // plain update let the later one silently overwrite the earlier, audited
+      // decision. Only the first write matches a REQUESTED row now.
+      where: { id: grant.id, organizationId: grant.organizationId, decision: "REQUESTED" },
+      data: {
+        decision: input.decision,
+        decidedById: user.id,
+        decidedAt,
+      },
+    });
+    if (settled.count === 0) {
+      // Nothing was written, so nothing is audited.
+      return {
+        refusal: studioError(
+          "CONFLICT",
+          "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+        ),
+      };
+    }
+    return { grant, decidedAt };
+  });
+  if ("refusal" in decided) return decided.refusal;
+  const { grant, decidedAt } = decided;
 
   const before = { decision: grant.decision, decidedById: null, decidedAt: null };
-
-  const decidedAt = new Date();
-  const settled = await prisma.apiAccessGrant.updateMany({
-    // Tenant-anchored in the write itself, from the row's own organization —
-    // never from the actor, who may be a global admin with none.
-    //
-    // And a compare-and-set on the pending state. Two decisions arriving
-    // together (this door and Studio's, say) both pass NOT_PENDING above; a
-    // plain update let the later one silently overwrite the earlier, audited
-    // decision. Only the first write matches a REQUESTED row now.
-    where: { id: grant.id, organizationId: grant.organizationId, decision: "REQUESTED" },
-    data: {
-      decision: input.decision,
-      decidedById: user.id,
-      decidedAt,
-    },
-  });
-  if (settled.count === 0) {
-    // Nothing was written, so nothing is audited.
-    return studioError(
-      "CONFLICT",
-      "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
-    );
-  }
 
   // The row exactly as written: the guard makes this the only write that can
   // settle the grant, so a re-read would return the same values.

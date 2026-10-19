@@ -32,11 +32,13 @@ const mocks = vi.hoisted(() => ({
   grantCount: vi.fn(),
   grantGroupBy: vi.fn(),
   solutionFindMany: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     apiAccessGrant: {
       findFirst: mocks.grantFindFirst,
       updateMany: mocks.grantUpdateMany,
@@ -46,8 +48,23 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     solution: { findMany: mocks.solutionFindMany },
     configAudit: { create: mocks.auditCreate },
-  },
-}));
+    // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
+    $queryRaw: mocks.lockSolution,
+  };
+  return {
+    prisma: {
+      ...client,
+      // The decision runs on these same mocks inside its transaction, so every
+      // assertion below still sees its reads and its compare-and-set; `commit`
+      // marks where the transaction — and the lock — ends.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn(client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 
 import { PATCH } from "@/app/api/control-tower/grants/route";
 import { canMutateStudio } from "@/lib/studio/rbac";
@@ -244,6 +261,36 @@ describe("the write is tenant-anchored and audited", () => {
     await decide({ grantId: "g1", decision: "READ_ONLY" });
     expect(mocks.grantUpdateMany.mock.calls[0]?.[0]?.where?.organizationId).toBe("org_other");
     expect(mocks.auditCreate.mock.calls[0]?.[0]?.data?.organizationId).toBe("org_other");
+  });
+
+  it("locks the app's Solution row, in the row's own tenant, before reading its owners", async () => {
+    // OWN_APP reads the owners the Studio solutions PATCH writes — a different
+    // row from this grant — so a reclaim fired together with a decision used to
+    // pass on owners read a moment before it landed. Every door takes the same
+    // lock; for a global admin the tenant can only come from the row.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN_NO_ORG);
+    mocks.grantFindFirst.mockResolvedValue(pendingGrant({ organizationId: "org_other" }));
+
+    const res = await decide({ grantId: "g1", decision: "READ_ONLY" });
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol_1", "org_other"]);
+
+    // Located first (to know which app to lock), then read again under the lock.
+    const reads = mocks.grantFindFirst.mock.invocationCallOrder;
+    const lock = mocks.lockSolution.mock.invocationCallOrder[0]!;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]!).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]!);
+    expect(mocks.grantFindFirst.mock.calls[1]?.[0]?.where).toEqual({ id: "g1", organizationId: "org_other" });
+    expect(mocks.grantFindFirst.mock.calls[1]?.[0]?.select?.solution).toBeDefined();
+    expect(reads[1]!).toBeLessThan(mocks.grantUpdateMany.mock.invocationCallOrder[0]!);
+    expect(mocks.grantUpdateMany.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.commit.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("writes a DECISION audit entry naming the workspace it came from", async () => {

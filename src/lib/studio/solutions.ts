@@ -94,10 +94,11 @@ export type OwnerField = (typeof OWNER_FIELDS)[number];
  *     and accountability lands on a person who accepted it. Clearing is safe
  *     because it never makes anyone accountable — it makes the solution
  *     visibly unowned, which auto-drops an ACTIVE solution to RESTRICTED and is
- *     written to the config audit. (Not while an access request awaits a
- *     decision — see OWNER_RELEASE_WHILE_PENDING — and claiming has its own
- *     limit, OWNER_CLAIM_BY_DECIDER. Both are about who decides, not who is
- *     named, so they are applied by the route beside this rule.)
+ *     written to the config audit. (Stepping down from your own LAST slot waits
+ *     while an access request awaits a decision — see
+ *     OWNER_RELEASE_WHILE_PENDING — and claiming has its own limit,
+ *     OWNER_CLAIM_BY_DECIDER. Both are about who decides, not who is named, so
+ *     they are applied by the route beside this rule.)
  *
  * So the rule is exactly: an owner id may be your own, or null. Nothing else.
  */
@@ -128,12 +129,17 @@ export function ownerAssignmentRefusal(fields: readonly OwnerField[]): string {
 }
 
 /**
- * The slots this save takes away from the person holding them — cleared, or
- * claimed over them. An empty slot that stays empty, or is claimed, releases
- * nobody.
+ * Does this save turn the caller from an owner into a non-owner — holding a
+ * slot before it, and none after?
+ *
+ * That is the only slot change that hands the CALLER a decision OWN_APP would
+ * have refused them. Clearing a departed owner's slot, clearing or claiming
+ * over a colleague's, or moving between slots all leave the caller exactly as
+ * visible to OWN_APP as they were, so none of them is asked about here.
  */
-export function releasedOwnerSlots(current: Ownership, next: Ownership): OwnerField[] {
-  return OWNER_FIELDS.filter((field) => current[field] !== null && next[field] !== current[field]);
+export function stepsCallerDown(current: Ownership, next: Ownership, callerId: string): boolean {
+  const holdsASlot = (o: Ownership) => OWNER_FIELDS.some((field) => o[field] === callerId);
+  return holdsASlot(current) && !holdsASlot(next);
 }
 
 /** The slots this save gives the caller that they did not already hold. */
@@ -148,15 +154,23 @@ export function claimedOwnerSlots(current: Ownership, next: Ownership, callerId:
  * self-service — so an owner could release their slots, approve their own
  * app's PROD write as a "non-owner", and claim the slots straight back, ending
  * as both the decider and the owner of the grant. The two refusals below close
- * one half each, on the save that would open it.
+ * one half each, on the save that would open it. Both are checked under the
+ * Solution row lock every decision route also takes (lib/studio/owner-lock.ts),
+ * so a decision and a slot change fired together cannot each pass on what the
+ * other has not yet written.
  *
- * While a request awaits a decision, no slot may be taken from its holder:
- * whoever owned the app when access was asked for still owns it when the
- * access is decided, so OWN_APP sees them. Claiming an empty slot stays open —
- * it adds an owner, and OWN_APP then refuses that person's decision.
+ * While a request awaits a decision, an owner may not step down from their
+ * LAST slot (`stepsCallerDown`): whoever owned the app when access was asked
+ * for still owns it when the access is decided, so OWN_APP sees them.
+ * Everything else stays open while the request waits — clearing a departed
+ * owner's slot, clearing or claiming over a colleague's, moving between slots,
+ * claiming an empty one — because none of it makes the caller a non-owner. A
+ * colleague who has been cleared and then decides is a second person acting,
+ * not the self-service path, and OWNER_CLAIM_BY_DECIDER still keeps them from
+ * claiming the slot back while their decision is live.
  */
 export const OWNER_RELEASE_WHILE_PENDING =
-  "This app has an access request waiting for a decision, so its owners can't change until it is decided — " +
+  "This app has an access request waiting for a decision, so you can't step down from your last owner slot until it is decided — " +
   "otherwise an owner could step down, decide their own app's access, and step back. " +
   "Ask a colleague who doesn't own the app to decide the request first.";
 
@@ -165,6 +179,15 @@ export const OWNER_RELEASE_WHILE_PENDING =
  * given as a non-owner stays a non-owner's approval for as long as it
  * authorises anything; once it has lapsed or been revoked it authorises
  * nothing, and the slot can be claimed.
+ *
+ * REJECTIONS ARE EXEMPT, DELIBERATELY. A rejection authorises nothing, so
+ * owning an app whose request you rejected is no escalation: there is no live
+ * access for the new owner to be sitting on, and the requester can raise the
+ * request again, to be decided under OWN_APP like any other. So release →
+ * reject → reclaim is allowed. This is narrower than OWN_APP at the moment of
+ * deciding, which refuses an owner's rejection too (see `evaluateDecision`):
+ * that rule is about who may settle a request, this one about what a past
+ * settlement still grants its decider.
  */
 export const OWNER_CLAIM_BY_DECIDER =
   "You decided access for this app that is still live, so you can't become one of its owners — " +

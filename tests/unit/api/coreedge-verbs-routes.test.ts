@@ -22,16 +22,33 @@ const mocks = vi.hoisted(() => ({
   recheckOneLane: vi.fn(),
   checkRateLimit: vi.fn(),
   writeConfigAudit: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     apiAccessGrant: { findFirst: mocks.grantFindFirst, updateMany: mocks.grantUpdateMany },
     solution: { findFirst: mocks.solutionFindFirst },
     solutionClient: { findFirst: mocks.clientFindFirst },
-  },
-}));
+    // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
+    $queryRaw: mocks.lockSolution,
+  };
+  return {
+    prisma: {
+      ...client,
+      // A decision runs on these same mocks inside its transaction, so every
+      // assertion below still sees its reads and its compare-and-set; `commit`
+      // marks where the transaction — and the lock — ends.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn(client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 vi.mock("@/lib/northbound/issue", () => ({ revokeClientToken: mocks.revokeClientToken }));
 vi.mock("@/lib/northbound/claim-link", () => ({ createClaimLink: mocks.createClaimLink }));
 vi.mock("@/lib/ops/lane-check-sweep", () => ({ recheckOneLane: mocks.recheckOneLane }));
@@ -56,6 +73,7 @@ const params = <T,>(value: T) => ({ params: Promise.resolve(value) });
 const PENDING_GRANT = {
   id: "g1",
   organizationId: "org1",
+  solutionId: "sol1",
   decision: "REQUESTED",
   operation: "READ",
   environment: "TEST",
@@ -222,6 +240,36 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
       organizationId: "org1",
       decision: "REQUESTED",
     });
+  });
+
+  it("locks the app's Solution row before reading its owners, and holds it through the write", async () => {
+    // OWN_APP reads the owners the Studio solutions PATCH writes — a different
+    // row from this grant — so a reclaim fired together with this decision used
+    // to pass on owners read a moment before it landed. The PATCH takes the same
+    // lock; the read that decides must come after it.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue(PENDING_GRANT);
+    mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
+
+    const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol1", "org1"]);
+
+    // Located first (to know which app to lock), then read again under the lock.
+    const reads = mocks.grantFindFirst.mock.invocationCallOrder;
+    const lock = mocks.lockSolution.mock.invocationCallOrder[0]!;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]!).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]!);
+    expect(mocks.grantFindFirst.mock.calls[1]?.[0].select.solution).toBeDefined();
+    expect(reads[1]!).toBeLessThan(mocks.grantUpdateMany.mock.invocationCallOrder[0]!);
+    expect(mocks.grantUpdateMany.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.commit.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("409s the second of two concurrent decisions, and audits nothing for it", async () => {

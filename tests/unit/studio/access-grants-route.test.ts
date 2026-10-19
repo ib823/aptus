@@ -15,11 +15,13 @@ const mocks = vi.hoisted(() => ({
   findFirstGrant: vi.fn(),
   updateManyGrant: vi.fn(),
   createAudit: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solution: { findFirst: mocks.findFirstSolution },
     apiAccessGrant: {
       create: mocks.createGrant,
@@ -28,8 +30,23 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([]),
     },
     configAudit: { create: mocks.createAudit },
-  },
-}));
+    // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
+    $queryRaw: mocks.lockSolution,
+  };
+  return {
+    prisma: {
+      ...client,
+      // The decision runs on these same mocks inside its transaction, so the
+      // assertions below still see its reads and its compare-and-set; `commit`
+      // marks where the transaction — and the lock — ends.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn(client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/access-grants/route";
 
@@ -294,6 +311,35 @@ describe("recording a decision", () => {
       organizationId: "org_a",
       decision: "REQUESTED",
     });
+  });
+
+  it("locks the app's Solution row before reading its owners, and holds it through the write", async () => {
+    // OWN_APP reads the owners the solutions PATCH writes — a different row
+    // from this grant — so a reclaim fired together with this decision used to
+    // pass on owners read a moment before it landed. The PATCH takes the same
+    // lock; the read that decides must come after it.
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
+
+    const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol_1", "org_a"]);
+
+    // Located first (to know which app to lock), then read again under the lock.
+    const reads = mocks.findFirstGrant.mock.invocationCallOrder;
+    const lock = mocks.lockSolution.mock.invocationCallOrder[0]!;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]!).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]!);
+    expect(mocks.findFirstGrant.mock.calls[1]?.[0]?.select?.solution).toBeDefined();
+    expect(reads[1]!).toBeLessThan(mocks.updateManyGrant.mock.invocationCallOrder[0]!);
+    expect(mocks.updateManyGrant.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.commit.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("409s a decision that lost the race, and audits nothing for it", async () => {

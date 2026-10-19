@@ -21,6 +21,7 @@ import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { DATA_CLASS_VALUES } from "@/lib/studio/data-class";
 import { effectiveDecision, isGranting } from "@/lib/studio/grants";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import {
   OWNER_CLAIM_BY_DECIDER,
   OWNER_RELEASE_WHILE_PENDING,
@@ -29,9 +30,9 @@ import {
   isOrphaningAnActiveSolution,
   ownerAssignmentRefusal,
   rejectedOwnerAssignments,
-  releasedOwnerSlots,
   resolveStatusOnSave,
   slugify,
+  stepsCallerDown,
   type SolutionStatus,
 } from "@/lib/studio/solutions";
 
@@ -213,124 +214,151 @@ export async function PATCH(request: NextRequest) {
     return studioError("FORBIDDEN", ownerAssignmentRefusal(assignedToOthers));
   }
 
-  // Re-scope the caller-supplied id. Another tenant's solution is
-  // indistinguishable from one that does not exist.
-  const current = await prisma.solution.findFirst({
-    where: { id: input.id, organizationId },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      technicalOwnerId: true,
-      businessOwnerId: true,
-      supportOwnerId: true,
-      repoUrl: true,
-      packagingNote: true,
-      reuseIntent: true,
-      businessProblem: true,
-      dataClass: true,
-      classification: true,
-    },
-  });
-  if (!current) return studioError("NOT_FOUND", "Solution not found.");
-
-  // `undefined` means "not mentioned in this request" (keep); `null` means
-  // "explicitly cleared" — the distinction is what makes losing an owner
-  // expressible at all, and therefore what makes the auto-drop possible.
-  const nextOwnership = {
-    technicalOwnerId:
-      input.technicalOwnerId === undefined ? current.technicalOwnerId : (input.technicalOwnerId ?? null),
-    businessOwnerId:
-      input.businessOwnerId === undefined ? current.businessOwnerId : (input.businessOwnerId ?? null),
-    supportOwnerId:
-      input.supportOwnerId === undefined ? current.supportOwnerId : (input.supportOwnerId ?? null),
-  };
-
   /*
-   * OWN_APP HOLDS ACROSS OWNER-SLOT CHANGES. Both refusals are explained at
-   * OWNER_RELEASE_WHILE_PENDING and OWNER_CLAIM_BY_DECIDER: without them an
-   * owner could release every slot, approve their own app's PROD write, and
-   * reclaim the slots — three self-service calls, each one allowed. Checked
-   * before anything is written, so a refused save changes nothing.
+   * ONE TRANSACTION, LOCKED ON THE SOLUTION ROW BEFORE ANYTHING IS READ. The
+   * owner-slot refusals below read this app's grants, and every decision route
+   * reads the owners this save writes — different rows, so neither write is
+   * conditional on what the other checks, and a decision fired together with a
+   * reclaim used to pass both. Every decision route takes this same lock
+   * (lib/studio/owner-lock.ts), so whichever lands first, the other waits,
+   * reads what it wrote, and is refused.
    */
-  if (releasedOwnerSlots(current, nextOwnership).length > 0) {
-    const awaitingDecision = await prisma.apiAccessGrant.findFirst({
-      where: { organizationId, solutionId: current.id, decision: "REQUESTED" },
-      select: { id: true },
+  const saved = await prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, { organizationId, solutionId: input.id });
+
+    // Re-scope the caller-supplied id. Another tenant's solution is
+    // indistinguishable from one that does not exist.
+    const current = await tx.solution.findFirst({
+      where: { id: input.id, organizationId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        technicalOwnerId: true,
+        businessOwnerId: true,
+        supportOwnerId: true,
+        repoUrl: true,
+        packagingNote: true,
+        reuseIntent: true,
+        businessProblem: true,
+        dataClass: true,
+        classification: true,
+      },
     });
-    if (awaitingDecision) return studioError("CONFLICT", OWNER_RELEASE_WHILE_PENDING);
-  }
-  if (claimedOwnerSlots(current, nextOwnership, user.id).length > 0) {
-    const now = new Date();
-    const decidedByCaller = await prisma.apiAccessGrant.findMany({
-      where: { organizationId, solutionId: current.id, decidedById: user.id },
-      select: { decision: true, expiresAt: true, revokedAt: true },
+    if (!current) return { refusal: studioError("NOT_FOUND", "Solution not found.") };
+
+    // `undefined` means "not mentioned in this request" (keep); `null` means
+    // "explicitly cleared" — the distinction is what makes losing an owner
+    // expressible at all, and therefore what makes the auto-drop possible.
+    const nextOwnership = {
+      technicalOwnerId:
+        input.technicalOwnerId === undefined ? current.technicalOwnerId : (input.technicalOwnerId ?? null),
+      businessOwnerId:
+        input.businessOwnerId === undefined ? current.businessOwnerId : (input.businessOwnerId ?? null),
+      supportOwnerId:
+        input.supportOwnerId === undefined ? current.supportOwnerId : (input.supportOwnerId ?? null),
+    };
+
+    /*
+     * OWN_APP HOLDS ACROSS OWNER-SLOT CHANGES. Both refusals are explained at
+     * OWNER_RELEASE_WHILE_PENDING and OWNER_CLAIM_BY_DECIDER: without them an
+     * owner could release every slot, approve their own app's PROD write, and
+     * reclaim the slots — three self-service calls, each one allowed. Checked
+     * before anything is written, so a refused save changes nothing.
+     *
+     * Only the caller stepping down from their last slot waits on a pending
+     * request. Clearing a stale or a colleague's slot, or moving between slots,
+     * never makes the caller a non-owner, so it stays open — that is how a
+     * departed owner's slot is recovered while a request sits in the queue.
+     */
+    if (stepsCallerDown(current, nextOwnership, user.id)) {
+      const awaitingDecision = await tx.apiAccessGrant.findFirst({
+        where: { organizationId, solutionId: current.id, decision: "REQUESTED" },
+        select: { id: true },
+      });
+      if (awaitingDecision) return { refusal: studioError("CONFLICT", OWNER_RELEASE_WHILE_PENDING) };
+    }
+    if (claimedOwnerSlots(current, nextOwnership, user.id).length > 0) {
+      const now = new Date();
+      const decidedByCaller = await tx.apiAccessGrant.findMany({
+        where: { organizationId, solutionId: current.id, decidedById: user.id },
+        select: { decision: true, expiresAt: true, revokedAt: true },
+      });
+      // "Live" through the one resolver every surface uses, so a lapsed or
+      // revoked grant — which authorises nothing — never blocks a claim. Nor
+      // does a rejection, which never authorised anything: exempt on purpose,
+      // see OWNER_CLAIM_BY_DECIDER.
+      const stillAuthorises = decidedByCaller.some((g) => {
+        const effective = effectiveDecision(g, now);
+        return effective !== "REVOKED" && isGranting(effective);
+      });
+      if (stillAuthorises) return { refusal: studioError("FORBIDDEN", OWNER_CLAIM_BY_DECIDER) };
+    }
+
+    const requestedStatus = (input.status ?? current.status) as SolutionStatus;
+    const currentStatus = current.status as SolutionStatus;
+
+    // Promoting into ACTIVE from anywhere else must satisfy the gate outright —
+    // refused, not silently downgraded, because a promotion that quietly did not
+    // happen is worse than one that was clearly declined.
+    const isPromotion = requestedStatus === "ACTIVE" && currentStatus !== "ACTIVE";
+    if (isPromotion) {
+      const verdict = evaluatePromotion(nextOwnership);
+      if (!verdict.ok) return { refusal: studioError("CONFLICT", verdict.reason) };
+    }
+
+    // An ALREADY-active solution that just lost an owner is a different case: the
+    // caller is not promoting, they are orphaning. Drop it rather than refuse,
+    // so the record can never sit ACTIVE with nobody accountable.
+    const resolution = isOrphaningAnActiveSolution(currentStatus, requestedStatus, nextOwnership)
+      ? resolveStatusOnSave(requestedStatus, nextOwnership)
+      : { status: requestedStatus, autoDropped: false as const };
+
+    /*
+     * RETIRING CLOSES THE KEY LINKS THAT ARE STILL OUT. Retirement changed only
+     * this row, so a claim link sent while the app was live stayed live for the
+     * rest of its window and, once opened, minted a key for a retired app —
+     * refused today, working again the moment someone set the app back to DRAFT.
+     * Closed before the status is written, so a failure between the two leaves a
+     * dead link on a live app rather than a live link on a retired one. (It
+     * writes through its own connection and commits ahead of this transaction,
+     * which keeps exactly that order; it touches no Solution row, so it never
+     * waits on the lock held here.)
+     */
+    if (resolution.status === "RETIRED" && currentStatus !== "RETIRED") {
+      await closePendingClaimLinks({ organizationId, solutionId: current.id }, "The app was retired.");
+    }
+
+    const updated = await tx.solution.update({
+      where: { id: current.id, organizationId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.classification !== undefined ? { classification: input.classification } : {}),
+        ...(input.businessProblem !== undefined ? { businessProblem: input.businessProblem } : {}),
+        ...(input.dataClass !== undefined ? { dataClass: input.dataClass } : {}),
+        ...(input.repoUrl !== undefined ? { repoUrl: input.repoUrl ?? null } : {}),
+        ...(input.packagingNote !== undefined ? { packagingNote: input.packagingNote ?? null } : {}),
+        ...(input.reuseIntent !== undefined ? { reuseIntent: input.reuseIntent ?? null } : {}),
+        technicalOwnerId: nextOwnership.technicalOwnerId,
+        businessOwnerId: nextOwnership.businessOwnerId,
+        supportOwnerId: nextOwnership.supportOwnerId,
+        status: resolution.status,
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        technicalOwnerId: true,
+        businessOwnerId: true,
+        supportOwnerId: true,
+        repoUrl: true,
+      },
     });
-    // "Live" through the one resolver every surface uses, so a lapsed or
-    // revoked grant — which authorises nothing — never blocks a claim.
-    const stillAuthorises = decidedByCaller.some((g) => {
-      const effective = effectiveDecision(g, now);
-      return effective !== "REVOKED" && isGranting(effective);
-    });
-    if (stillAuthorises) return studioError("FORBIDDEN", OWNER_CLAIM_BY_DECIDER);
-  }
 
-  const requestedStatus = (input.status ?? current.status) as SolutionStatus;
-  const currentStatus = current.status as SolutionStatus;
-
-  // Promoting into ACTIVE from anywhere else must satisfy the gate outright —
-  // refused, not silently downgraded, because a promotion that quietly did not
-  // happen is worse than one that was clearly declined.
-  const isPromotion = requestedStatus === "ACTIVE" && currentStatus !== "ACTIVE";
-  if (isPromotion) {
-    const verdict = evaluatePromotion(nextOwnership);
-    if (!verdict.ok) return studioError("CONFLICT", verdict.reason);
-  }
-
-  // An ALREADY-active solution that just lost an owner is a different case: the
-  // caller is not promoting, they are orphaning. Drop it rather than refuse,
-  // so the record can never sit ACTIVE with nobody accountable.
-  const resolution = isOrphaningAnActiveSolution(currentStatus, requestedStatus, nextOwnership)
-    ? resolveStatusOnSave(requestedStatus, nextOwnership)
-    : { status: requestedStatus, autoDropped: false as const };
-
-  /*
-   * RETIRING CLOSES THE KEY LINKS THAT ARE STILL OUT. Retirement changed only
-   * this row, so a claim link sent while the app was live stayed live for the
-   * rest of its window and, once opened, minted a key for a retired app —
-   * refused today, working again the moment someone set the app back to DRAFT.
-   * Closed before the status is written, so a failure between the two leaves a
-   * dead link on a live app rather than a live link on a retired one.
-   */
-  if (resolution.status === "RETIRED" && currentStatus !== "RETIRED") {
-    await closePendingClaimLinks({ organizationId, solutionId: current.id }, "The app was retired.");
-  }
-
-  const updated = await prisma.solution.update({
-    where: { id: current.id, organizationId },
-    data: {
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.classification !== undefined ? { classification: input.classification } : {}),
-      ...(input.businessProblem !== undefined ? { businessProblem: input.businessProblem } : {}),
-      ...(input.dataClass !== undefined ? { dataClass: input.dataClass } : {}),
-      ...(input.repoUrl !== undefined ? { repoUrl: input.repoUrl ?? null } : {}),
-      ...(input.packagingNote !== undefined ? { packagingNote: input.packagingNote ?? null } : {}),
-      ...(input.reuseIntent !== undefined ? { reuseIntent: input.reuseIntent ?? null } : {}),
-      technicalOwnerId: nextOwnership.technicalOwnerId,
-      businessOwnerId: nextOwnership.businessOwnerId,
-      supportOwnerId: nextOwnership.supportOwnerId,
-      status: resolution.status,
-    },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      technicalOwnerId: true,
-      businessOwnerId: true,
-      supportOwnerId: true,
-      repoUrl: true,
-    },
+    return { current, updated, isPromotion, resolution };
   });
+  if ("refusal" in saved) return saved.refusal;
+  const { current, updated, isPromotion, resolution } = saved;
 
   await writeConfigAudit({
     organizationId,

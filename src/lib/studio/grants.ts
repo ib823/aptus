@@ -192,6 +192,12 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
   // rejecting their own app's request is still the owner settling it, and the
   // ledger's promise is a second pair of eyes on every settlement. A null slot
   // is an unclaimed role and matches nobody.
+  //
+  // Its claim-side half, OWNER_CLAIM_BY_DECIDER (solutions.ts), is narrower on
+  // purpose: it exempts rejections. A non-owner who rejected a request may
+  // claim a slot afterwards, because a rejection authorises nothing for the
+  // new owner to be sitting on. This rule decides who may settle a request;
+  // that one, what a past settlement still grants its decider.
   if (req.ownerIds.some((id) => id !== null && id === req.deciderId)) {
     return {
       ok: false,
