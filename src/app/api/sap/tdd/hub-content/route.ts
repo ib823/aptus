@@ -18,6 +18,12 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { isStudioBuilder } from "@/lib/studio/rbac";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import {
+  decideConsoleRead,
+  DEPLOYMENT_AUDIT_SCOPE,
+  newCorrelationId,
+  recordConsoleRead,
+} from "@/lib/sap-public/console-read-guard";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveReadWrite,
@@ -81,6 +87,8 @@ async function probeActivatedApiIds(
   dataConfirmed: Set<string>;
   capabilities: Map<string, { read: boolean; write: boolean }>;
   probed: number;
+  /** The one-row data GETs that left for the tenant on top of `probed`. */
+  dataReads: number;
 }> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
   /*
@@ -118,7 +126,7 @@ async function probeActivatedApiIds(
   // `service` equals the SapHubContent externalId, not the display key.
   const curated = getSapServices(product).map((s) => ({ ...s, key: serviceApiId(s) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
-  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0 };
+  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0, dataReads: 0 };
   const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });
   // Keep the FULL outcome (HTTP status) per probed service — not just the 200s —
   // so the badge can distinguish 200/403/404, and un-probed stays NOT_CHECKED.
@@ -136,6 +144,7 @@ async function probeActivatedApiIds(
     dataConfirmed: new Set(results.filter((r) => r.dataConfirmed).map((r) => r.service)),
     capabilities,
     probed: targets.length,
+    dataReads: results.filter((r) => r.dataStatus !== undefined).length,
   };
 }
 
@@ -378,16 +387,74 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * could still cause a live read of a customer system by appending a query
    * parameter, which is the 403 branch of the guard, not the 401 one.
    */
-  if (tenant && dataProbe) {
+  /*
+   * AND THE CONSOLE CEILING, AND THE CONSOLE ROW (audit A24). The role gate
+   * says WHO may cause a live read; it never said WHICH landscape. The overlay
+   * is up to sixty $metadata probes plus a $top=1 data GET on each exposed
+   * service, against whatever connection `?tenant=` resolved — including an
+   * organization's PROD system that /entities refuses it 403 NO_APPROVED_GRANT,
+   * and with no NorthboundAuditEvent row. Now it asks console-read-guard.ts the
+   * same question /entities does and records the fan-out the same way.
+   *
+   * A REFUSAL DOES NOT FAIL THE BROWSE. The overlay is an optional freshness
+   * layer over a catalogue that renders from stored results anyway, so a
+   * refused overlay falls back to exactly what the page shows without it, and
+   * says why in `counts.dataProbeRefusal`. `counts.dataProbe` reports whether
+   * the overlay actually ran — a scorecard reading "data-confirmed (read a live
+   * row)" over a read that was refused would be the claim this route exists
+   * not to make.
+   *
+   * `user` is implied by `tenant` (no session resolves no tenant, above);
+   * naming it narrows the type for the row's actor.
+   */
+  let dataProbeRan = false;
+  let dataProbeRefusal: string | null = null;
+  if (tenant && dataProbe && user) {
     const probeRefusal = await refuseUnlessMayProbeTenant();
     if (probeRefusal) return probeRefusal;
-    try {
-      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);
-      for (const [k, v] of r.outcomes) outcomes.set(k, v);
-      for (const [k, v] of r.capabilities) capabilities.set(k, v);
-      dataConfirmed = r.dataConfirmed;
-    } catch {
-      /* overlay is best-effort; stored results stand */
+    const correlationId = newCorrelationId();
+    const conn = resolvedTenant?.connection ?? null;
+    const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
+    const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+      recordConsoleRead({
+        organizationId: user.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+        actorUserId: user.id,
+        // One row for the fan-out, rowCount carrying every request made — the
+        // $metadata probes AND the one-row data GETs.
+        externalId: "-hub-overlay-",
+        environment: auditEnvironment,
+        status,
+        rowCount,
+        correlationId,
+        connectionId: conn?.id ?? null,
+        connectionEnvironment: conn?.environment ?? null,
+        ...extra,
+      });
+    let allowed = true;
+    if (conn && user.organizationId) {
+      const decision = await decideConsoleRead({
+        organizationId: user.organizationId,
+        environment: conn.environment,
+      });
+      if (!decision.allowed) {
+        await audit(403, null);
+        allowed = false;
+        dataProbeRefusal = decision.message;
+      }
+    }
+    if (allowed) {
+      const startedAt = Date.now();
+      try {
+        const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);
+        await audit(200, r.probed + r.dataReads, { durationMs: Date.now() - startedAt });
+        for (const [k, v] of r.outcomes) outcomes.set(k, v);
+        for (const [k, v] of r.capabilities) capabilities.set(k, v);
+        dataConfirmed = r.dataConfirmed;
+        dataProbeRan = true;
+      } catch {
+        /* overlay is best-effort; stored results stand */
+        await audit(502, null, { durationMs: Date.now() - startedAt });
+      }
     }
   }
 
@@ -550,7 +617,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, stale, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      // `dataProbe` is whether the live overlay RAN, not whether it was asked
+      // for — see the console-ceiling note on the overlay above.
+      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, stale, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe: dataProbeRan, dataProbeRefusal },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,

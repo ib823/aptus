@@ -40,7 +40,10 @@ export interface CapabilityResult {
    * just reach $metadata. Only ever true on a real data 200; never inferred.
    */
   dataConfirmed?: boolean;
-  /** HTTP status of the 1-row data read (when dataProbe ran). */
+  /**
+   * HTTP status of the 1-row data read (when dataProbe ran), 0 when the read was
+   * attempted and never answered. Absent means no data read was made.
+   */
   dataStatus?: number;
   /** 2608 WS4 — OData protocol of the probed path (V4 for CE_PURCHASEORDER_0001). */
   protocol?: "ODATAV2" | "ODATAV4";
@@ -112,6 +115,10 @@ export async function probeService(
           result.dataConfirmed = p.ok && p.status === 200 && !p.hasErrorBody;
         } catch {
           result.dataConfirmed = false; // a failed read never confirms data
+          // 0 = attempted, never answered — the same convention `status` uses
+          // below. Set so that "dataStatus present" means exactly "a data GET
+          // left for the tenant", which the console audit row counts.
+          result.dataStatus = 0;
         }
       } else {
         result.dataConfirmed = false;

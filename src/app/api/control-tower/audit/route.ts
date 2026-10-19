@@ -88,6 +88,17 @@ export async function GET(request: NextRequest) {
    * name into the record forever, and ConfigAudit has no update path to fix it.
    *
    * Two queries, both bounded by the page that was just read.
+   *
+   * THE SOLUTION LOOKUP GOES THROUGH opsWhere, LIKE THE PAGE IT LABELS. It used
+   * to be `where: { id: { in: solutionIds } }` alone. The ids came from a scoped
+   * page, so the rows it could return were already this tenant's — but Solution
+   * is tenant-anchored, and the tenant-scope guard judges the query, not where
+   * its ids came from. For every scoped reader it threw MissingTenantScopeError
+   * (the default outside production, and the documented target inside it) as
+   * soon as the page held one Solution entry, which every solution create,
+   * update or promote writes. The governance trail answered 500 to exactly the
+   * people it exists for. On the global branch opsWhere adds nothing, under the
+   * cross-tenant context the ops guard already declared.
    */
   const actorIds = [...new Set(rows.map((r) => r.actorId).filter(Boolean))];
   const solutionIds = [
@@ -102,7 +113,7 @@ export async function GET(request: NextRequest) {
       : Promise.resolve([]),
     solutionIds.length > 0
       ? prisma.solution.findMany({
-          where: { id: { in: solutionIds } },
+          where: opsWhere(guard.actor, { id: { in: solutionIds } }),
           select: { id: true, name: true },
         })
       : Promise.resolve([]),

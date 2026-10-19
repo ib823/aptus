@@ -19,6 +19,12 @@ import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
+import {
+  decideConsoleRead,
+  DEPLOYMENT_AUDIT_SCOPE,
+  newCorrelationId,
+  recordConsoleRead,
+} from "@/lib/sap-public/console-read-guard";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -72,7 +78,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     request.nextUrl.searchParams.get("tenant") ??
     getConfiguredSapTenants(product.envPrefix)[0]?.key;
   const resolved = tenantKey
-    ? await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey)
+    ? await resolveReadTenant(product.envPrefix, product.key, user.organizationId ?? null, tenantKey)
     : null;
   if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey ?? "");
   const tenant = resolved?.tenant ?? null;
@@ -81,6 +87,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No configured tenant" } },
       { status: 400 },
     );
+  }
+
+  /*
+   * THE CONSOLE CEILING AND THE CONSOLE ROW, AS /entities HAS THEM (audit A24).
+   *
+   * This route sends up to sixty $metadata requests to the system it resolves,
+   * and it resolves the caller's STORED connections through the same
+   * resolveReadTenant /entities does — yet it had the role gate and nothing
+   * else. An organization refused 403 NO_APPROVED_GRANT on /entities for its
+   * PROD connection got the same system's service list and per-entity CRUD map
+   * from here, and no NorthboundAuditEvent row said the reads happened. The
+   * rule is console-read-guard.ts's: Sandbox and Dev freely; TEST, PROD or an
+   * undeclared landscape only under a live grant for it. A deployment tenant
+   * has no connection and so no landscape to cap; it is still recorded.
+   */
+  const correlationId = newCorrelationId();
+  const conn = resolved?.connection ?? null;
+  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
+  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+    recordConsoleRead({
+      organizationId: user.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+      actorUserId: user.id,
+      // One row for the fan-out, rowCount carrying how many probes were made —
+      // the -probe-fanout- convention /entities uses.
+      externalId: "-capabilities-",
+      environment: auditEnvironment,
+      status,
+      rowCount,
+      correlationId,
+      connectionId: conn?.id ?? null,
+      connectionEnvironment: conn?.environment ?? null,
+      ...extra,
+    });
+  if (conn && user.organizationId) {
+    const decision = await decideConsoleRead({
+      organizationId: user.organizationId,
+      environment: conn.environment,
+    });
+    if (!decision.allowed) {
+      await audit(403, null);
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
+        { status: 403 },
+      );
+    }
   }
 
   // Probe the curated (known-configured) services first — the ones this product
@@ -108,7 +159,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
+  const startedAt = Date.now();
   const rows = await probeTenantCapabilities(product.envPrefix, tenant, services);
+  await audit(200, rows.length, { durationMs: Date.now() - startedAt });
   const summary = { ...summarize(tenant.label, rows), catalogueImported: dynamic.length > 0 };
 
   // Append-only audit of the probe (tenant label + counts, never secrets).

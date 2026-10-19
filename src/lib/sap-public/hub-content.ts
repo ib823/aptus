@@ -397,7 +397,13 @@ export function probeStorageKey(input: {
 /**
  * Merge a tenant's probe into rawMetadataJson.probes[tenantKey], preserving every
  * sibling key (source/apiId/steps), every OTHER tenant's entry, and the legacy
- * `probe` slot. This is the ONLY sanctioned write path for a stored probe.
+ * `probe` slot. This is the DEFINITION of a stored-probe write.
+ *
+ * It preserves what is in the value it is given, and only that — so a writer
+ * that hands it a copy read minutes earlier erases whatever other tenants stored
+ * since (audit A23). The persisted write is therefore `persistStoredProbe`
+ * (hub-probe-store.ts), which performs this same merge inside the database on
+ * the row's current value; its tests use this function as the oracle.
  */
 export function mergeStoredProbe(raw: unknown, tenantKey: string, probe: StoredProbe): Record<string, unknown> {
   const base =

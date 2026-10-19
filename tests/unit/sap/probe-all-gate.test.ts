@@ -46,8 +46,12 @@ vi.mock("@/lib/sap-public/tenant-for-read", () => ({ resolveReadTenant: mocks.re
 vi.mock("@/lib/security/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
 vi.mock("@/lib/sap-public/capability-probe", () => ({ probeService: mocks.probeService }));
 vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: mocks.logDecision }));
+// northboundAuditEvent: every run now records one console-read row (audit A24).
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { sapHubContent: { findMany: mocks.findMany, update: mocks.update } },
+  prisma: {
+    sapHubContent: { findMany: mocks.findMany, update: mocks.update },
+    northboundAuditEvent: { create: vi.fn() },
+  },
 }));
 
 import { POST } from "@/app/api/sap/tdd/hub-content/probe-all/route";

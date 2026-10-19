@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { mergeStoredProbe } from "@/lib/sap-public/hub-content";
+
 const mocks = vi.hoisted(() => ({
+  refreshApiProvenance: vi.fn(),
   requireAdmin: vi.fn(),
   apiFindMany: vi.fn(),
   upsert: vi.fn(),
@@ -27,6 +30,9 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: mocks.logDecision }));
+// The provenance merge is one SQL statement on the rows' CURRENT values, proved
+// against real PostgreSQL in tests/unit/sap-public/hub-probe-store.test.ts.
+vi.mock("@/lib/sap-public/hub-probe-store", () => ({ refreshApiProvenance: mocks.refreshApiProvenance }));
 
 const { POST } = await import("@/app/api/sap/tdd/hub-content/seed/route");
 
@@ -50,6 +56,7 @@ beforeEach(() => {
   mocks.catalogFindFirst.mockResolvedValue({ id: "cv-public" });
   mocks.scopeItemFindMany.mockResolvedValue([{ scopeCode: "J60", functionalArea: "Sourcing and Procurement" }]);
   mocks.hubFindMany.mockResolvedValue([]); // no pre-existing hub rows by default
+  mocks.refreshApiProvenance.mockResolvedValue(0);
 });
 
 describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", () => {
@@ -94,27 +101,78 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
   });
 
   it("a rebuild PRESERVES a row's stored tenant probes (does not reset Activated)", async () => {
-    // An existing API row already carries a Probe-all result for a tenant.
-    mocks.hubFindMany.mockResolvedValue([
-      {
-        externalId: "API_PURCHASEORDER_PROCESS_SRV",
-        rawMetadataJson: { source: "SapApiReference", apiId: "API_PURCHASEORDER_PROCESS_SRV", probes: { customizing: { http: 200, at: "2026-07-21T00:00:00Z" } } },
-      },
-    ]);
+    /*
+     * UPDATED FOR A23. This case used to assert that the upsert's update carried
+     * `{ ...snapshot, source, apiId }` — the snapshot read at the start of the
+     * Rebuild, `probes` included. That WAS the defect: written back minutes
+     * later, the copy reverted every probe stored in between. The contract is
+     * now that the update never writes rawMetadataJson, and source/apiId are
+     * merged into each row's CURRENT value by refreshApiProvenance.
+     */
     const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }));
     expect(res.status).toBe(200);
 
-    // The upsert for that api must MERGE — its update.rawMetadataJson keeps probes.
     const call = mocks.upsert.mock.calls.find(
       (c) => c![0].where.contentType_externalId.externalId === "API_PURCHASEORDER_PROCESS_SRV",
     )!;
-    expect(call[0].update.rawMetadataJson).toMatchObject({
-      source: "SapApiReference",
-      apiId: "API_PURCHASEORDER_PROCESS_SRV",
-      probes: { customizing: { http: 200, at: "2026-07-21T00:00:00Z" } },
-    });
+    // An EXISTING row's column is left to the database — probes and all.
+    expect("rawMetadataJson" in call[0].update).toBe(false);
     // A NEW row (create) has no stored probe to preserve — fresh raw is fine.
     expect(call[0].create.rawMetadataJson).toEqual({ source: "SapApiReference", apiId: "API_PURCHASEORDER_PROCESS_SRV" });
+    // …and the provenance keys are merged for every projected row, once.
+    expect(mocks.refreshApiProvenance).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshApiProvenance.mock.calls[0]![0]).toEqual(API_ROWS.map((a) => a.apiId));
+    // No start-of-run copy of the column is taken at all.
+    expect(mocks.hubFindMany).not.toHaveBeenCalled();
+  });
+
+  it("a probe stored WHILE the rebuild runs survives it (A23)", async () => {
+    /*
+     * The audit's trigger (4), on an in-memory row. The Rebuild starts; an
+     * organization's Probe-all stores a fresh result on the PO row before the
+     * Rebuild reaches it; the Rebuild then refreshes that row. Writing back its
+     * start-of-run copy, it used to erase the fresh entry for everyone.
+     */
+    const PO = "API_PURCHASEORDER_PROCESS_SRV";
+    const OLD = { http: 200, at: "2026-07-21T00:00:00Z" };
+    const FRESH = { http: 403, at: "2026-10-19T00:00:00Z" };
+    const rows = new Map<string, unknown>([[PO, { source: "SapApiReference", apiId: PO, probes: { customizing: OLD } }]]);
+    mocks.hubFindMany.mockImplementation(async () =>
+      [...rows].map(([externalId, rawMetadataJson]) => ({ externalId, rawMetadataJson: structuredClone(rawMetadataJson) })),
+    );
+    mocks.upsert.mockImplementation(
+      async (args: {
+        where: { contentType_externalId: { externalId: string } };
+        create: { rawMetadataJson?: unknown };
+        update: { rawMetadataJson?: unknown };
+      }) => {
+        const id = args.where.contentType_externalId.externalId;
+        if (id === PO) {
+          // Another organization's Probe-all lands on this row first…
+          rows.set(PO, mergeStoredProbe(rows.get(PO), "org:org-b:s4hana:x5m-100", FRESH));
+          // …and customizing's own re-probe answered 403 this time.
+          rows.set(PO, mergeStoredProbe(rows.get(PO), "customizing", FRESH));
+        }
+        if (!rows.has(id)) rows.set(id, args.create.rawMetadataJson);
+        else if ("rawMetadataJson" in args.update) rows.set(id, args.update.rawMetadataJson);
+        return {};
+      },
+    );
+    mocks.refreshApiProvenance.mockImplementation(async (ids: string[]) => {
+      for (const id of ids) {
+        const cur = rows.get(id);
+        const base = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : {};
+        rows.set(id, { ...base, source: "SapApiReference", apiId: id });
+      }
+      return ids.length;
+    });
+
+    expect((await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }))).status).toBe(200);
+    expect(rows.get(PO)).toEqual({
+      source: "SapApiReference",
+      apiId: PO,
+      probes: { customizing: FRESH, "org:org-b:s4hana:x5m-100": FRESH },
+    });
   });
 
   it("contentType=EVENT imports the bundled type WITHOUT touching the API slice", async () => {
