@@ -154,18 +154,39 @@ describe("refusals do not leak whether a token was ever real", () => {
     // The northbound broker answers one uniform 401 to six token failures for
     // the same reason: a caller with a guessed token learns only that it did
     // not work.
-    const page = readFileSync(
-      path.resolve(ROOT, "src/app/(external)/claim/[token]/page.tsx"),
-      "utf8",
-    );
+    /*
+     * The refusal now has two moments — the page's read-only check and the
+     * collect POST — so it lives in one component both render, and every file
+     * on the surface is checked for branching rather than the page alone.
+     */
+    const surface = (file: string) =>
+      readFileSync(path.resolve(ROOT, "src/app/(external)/claim/[token]", file), "utf8");
+    const refused = surface("ClaimRefused.tsx");
     // The apostrophe is &apos; in JSX, so match the halves around it.
-    expect(page).toContain("This link can");
-    expect(page).toContain("t be used.");
-    for (const refusal of ["LINK_EXPIRED", "UNKNOWN_LINK", "LINK_REVOKED", "LINK_ALREADY_CLAIMED"]) {
-      expect(
-        page,
-        `the claim page branches on ${refusal}, telling the holder which failure it was`,
-      ).not.toContain(refusal);
+    expect(refused).toContain("This link can");
+    expect(refused).toContain("t be used.");
+    expect(surface("page.tsx")).toContain("<ClaimRefused />");
+    expect(surface("CollectKey.tsx")).toContain("<ClaimRefused />");
+
+    const refusals = [
+      "LINK_EXPIRED",
+      "UNKNOWN_LINK",
+      "LINK_REVOKED",
+      "LINK_ALREADY_CLAIMED",
+      "SOLUTION_GONE",
+      "SOLUTION_RETIRED",
+      "OWNERS_MISSING",
+      "SENDER_OWNS_APP",
+      "KEY_REVOKED",
+      "KEY_ISSUED_SINCE",
+    ];
+    for (const file of ["page.tsx", "CollectKey.tsx", "ClaimRefused.tsx", "collect/route.ts"]) {
+      for (const refusal of refusals) {
+        expect(
+          surface(file),
+          `${file} branches on ${refusal}, telling the holder which failure it was`,
+        ).not.toContain(refusal);
+      }
     }
   });
 });

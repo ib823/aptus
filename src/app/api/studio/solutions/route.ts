@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { closePendingClaimLinks } from "@/lib/northbound/issue";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -258,6 +259,18 @@ export async function PATCH(request: NextRequest) {
   const resolution = isOrphaningAnActiveSolution(currentStatus, requestedStatus, nextOwnership)
     ? resolveStatusOnSave(requestedStatus, nextOwnership)
     : { status: requestedStatus, autoDropped: false as const };
+
+  /*
+   * RETIRING CLOSES THE KEY LINKS THAT ARE STILL OUT. Retirement changed only
+   * this row, so a claim link sent while the app was live stayed live for the
+   * rest of its window and, once opened, minted a key for a retired app —
+   * refused today, working again the moment someone set the app back to DRAFT.
+   * Closed before the status is written, so a failure between the two leaves a
+   * dead link on a live app rather than a live link on a retired one.
+   */
+  if (resolution.status === "RETIRED" && currentStatus !== "RETIRED") {
+    await closePendingClaimLinks({ organizationId, solutionId: current.id }, "The app was retired.");
+  }
 
   const updated = await prisma.solution.update({
     where: { id: current.id, organizationId },

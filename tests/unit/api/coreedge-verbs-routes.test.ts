@@ -38,6 +38,7 @@ vi.mock("@/lib/ops/lane-check-sweep", () => ({ recheckOneLane: mocks.recheckOneL
 vi.mock("@/lib/security/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit }));
 
+import { CLAIM_LINK_COPY } from "@/lib/coreedge/copy";
 import { POST as decide } from "@/app/api/coreedge/requests/[id]/decide/route";
 import { POST as sendLink } from "@/app/api/coreedge/keys/claim-link/route";
 import { POST as revoke } from "@/app/api/coreedge/keys/[clientId]/revoke/route";
@@ -155,8 +156,21 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
 /* ── 2 · SEND A KEY ───────────────────────────────────────────────────────── */
 
 describe("POST /api/coreedge/keys/claim-link", () => {
+  /*
+   * Owned, and by people other than the sender. The fixture used to be
+   * `{ id, status }` alone, which is exactly the select that let an unowned
+   * app — or its own sole owner — be sent a key: the route never read owners.
+   */
+  const OWNED_BY_OTHERS = {
+    id: "s1",
+    status: "ACTIVE",
+    technicalOwnerId: "u_tech",
+    businessOwnerId: "u_biz",
+    supportOwnerId: "u_sup",
+  };
+
   beforeEach(() => {
-    mocks.solutionFindFirst.mockResolvedValue({ id: "s1", status: "ACTIVE" });
+    mocks.solutionFindFirst.mockResolvedValue(OWNED_BY_OTHERS);
     mocks.createClaimLink.mockResolvedValue({
       id: "link1",
       rawToken: "cec_example",
@@ -191,10 +205,53 @@ describe("POST /api/coreedge/keys/claim-link", () => {
 
   it("refuses a retired app, whose key would not work anyway", async () => {
     mocks.getCurrentUser.mockResolvedValue(ADMIN);
-    mocks.solutionFindFirst.mockResolvedValue({ id: "s1", status: "RETIRED" });
+    mocks.solutionFindFirst.mockResolvedValue({ ...OWNED_BY_OTHERS, status: "RETIRED" });
 
     expect((await sendLink(req({ solutionId: "s1", environment: "TEST" }) as never)).status)
       .toBe(409);
+    expect(mocks.createClaimLink).not.toHaveBeenCalled();
+  });
+
+  it("refuses the app's own owner — the self-issuance Studio refuses", async () => {
+    /*
+     * A sole owner refused in Studio ("You own this solution, so you cannot
+     * issue its runtime credential") could send themselves a link here and
+     * collect a live PROD key with createdById = themselves.
+     */
+    const OWNER = { id: "u_me", role: "consultant", organizationId: "org1" };
+    mocks.getCurrentUser.mockResolvedValue(OWNER);
+    for (const slot of ["technicalOwnerId", "businessOwnerId", "supportOwnerId"] as const) {
+      mocks.solutionFindFirst.mockResolvedValue({ ...OWNED_BY_OTHERS, [slot]: OWNER.id });
+
+      const res = await sendLink(req({ solutionId: "s1", environment: "PROD" }) as never);
+
+      expect(res.status, `${slot} must be refused`).toBe(403);
+      expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.ownAppKey);
+    }
+    expect(mocks.createClaimLink).not.toHaveBeenCalled();
+    // The gate needs the owners, so the lookup has to select them.
+    expect(mocks.solutionFindFirst.mock.calls[0]?.[0].select).toMatchObject({
+      technicalOwnerId: true,
+      businessOwnerId: true,
+      supportOwnerId: true,
+    });
+  });
+
+  it("refuses an app that does not name all three owners, whoever sends it", async () => {
+    // On an unowned app [null, null, null] contains nobody, so the owner check
+    // alone passes for everyone — the reason ownership is asked first.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.solutionFindFirst.mockResolvedValue({
+      ...OWNED_BY_OTHERS,
+      technicalOwnerId: null,
+      businessOwnerId: null,
+      supportOwnerId: null,
+    });
+
+    const res = await sendLink(req({ solutionId: "s1", environment: "PROD" }) as never);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.appNeedsOwners);
     expect(mocks.createClaimLink).not.toHaveBeenCalled();
   });
 });

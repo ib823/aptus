@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   updateClient: vi.fn(),
   findManyClients: vi.fn(),
   createAudit: vi.fn(),
+  closeLinks: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -34,6 +35,8 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: mocks.findManyClients,
     },
     configAudit: { create: mocks.createAudit },
+    // Issue, rotate and revoke each close the lane's pending claim links.
+    keyClaimLink: { updateMany: mocks.closeLinks },
   },
 }));
 
@@ -64,7 +67,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getCurrentUser.mockResolvedValue(ISSUER);
   mocks.findFirstSolution.mockResolvedValue(SOLUTION);
-  mocks.findFirstClient.mockResolvedValue({ id: "client_1", solutionId: "sol_1" });
+  // The row as the credential lookups select it: live, no expiry.
+  mocks.findFirstClient.mockResolvedValue({
+    id: "client_1",
+    solutionId: "sol_1",
+    environment: "PROD",
+    isActive: true,
+    revokedAt: null,
+    expiresAt: null,
+  });
+  mocks.closeLinks.mockResolvedValue({ count: 0 });
   mocks.upsertClient.mockResolvedValue({
     id: "client_1",
     solutionId: "sol_1",

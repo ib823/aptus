@@ -11,6 +11,12 @@
  * second pair of eyes. A developer who could both request access and issue
  * themselves the credential to use it has no oversight at all, which is the
  * whole thing the access ledger exists to provide.
+ *
+ * A RETIRED SOLUTION GETS NO NEW TOKEN, on issue or on rotate. Its tokens are
+ * refused by the broker today, and reactivating it takes one ungated PATCH —
+ * so a token minted after retirement would wake up with it, past the gate the
+ * write-key route and the claim link both already enforce. Revoke stays open:
+ * stopping a credential is never the dangerous direction.
  */
 
 import type { NextRequest } from "next/server";
@@ -32,6 +38,19 @@ import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The refusal for minting on a retired solution, in the write-key route's
+ * words — one decommissioning rule should not read two ways in one product.
+ */
+function retiredRefusal() {
+  return studioError(
+    "FORBIDDEN",
+    "This solution is RETIRED, so authentication refuses every call it makes. A token " +
+      "issued now would authorise nothing today and everything the moment someone reactivates " +
+      "the solution. Reactivate it first if the integration is meant to run.",
+  );
+}
 
 const issueSchema = z
   .object({
@@ -112,12 +131,14 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      status: true,
       technicalOwnerId: true,
       businessOwnerId: true,
       supportOwnerId: true,
     },
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
+  if (solution.status === "RETIRED") return retiredRefusal();
 
   // OWNERSHIP FIRST, then segregation of duties — and in that order for a
   // reason. The SoD rule below is "the owner cannot mint the token". On a
@@ -298,13 +319,14 @@ export async function PATCH(request: NextRequest) {
 
   const solution = await prisma.solution.findFirst({
     where: scopedById(scope, existing.solutionId),
-    select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+    select: { status: true, technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
   });
 
   // Fail closed on a missing solution. The optional chaining below used to make
   // this pass: [undefined, undefined, undefined] contains nobody, so a
   // credential whose solution could not be resolved rotated freely.
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
+  if (solution.status === "RETIRED") return retiredRefusal();
 
   // Rotating mints a NEW token, so it is an issuance and carries the same two
   // gates. Without the ownership check the SoD rule below is vacuous on an

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
   findMany: vi.fn(),
+  closeLinks: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -23,6 +24,8 @@ vi.mock("@/lib/db/prisma", () => ({
       update: mocks.update,
       findMany: mocks.findMany,
     },
+    // Every change to a lane's key closes the claim links still out for it.
+    keyClaimLink: { updateMany: mocks.closeLinks },
   },
 }));
 
@@ -45,10 +48,21 @@ const ROW = {
   createdAt: new Date("2026-07-25T00:00:00Z"),
 };
 
+/** The row as the lookups select it: a live credential with no expiry. */
+const LIVE = {
+  id: "client_1",
+  solutionId: "sol_1",
+  environment: "PROD",
+  isActive: true,
+  revokedAt: null,
+  expiresAt: null,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.upsert.mockResolvedValue(ROW);
-  mocks.findFirst.mockResolvedValue({ id: "client_1" });
+  mocks.findFirst.mockResolvedValue(LIVE);
+  mocks.closeLinks.mockResolvedValue({ count: 0 });
   mocks.update.mockResolvedValue({ ...ROW, isActive: false, revokedAt: new Date() });
   mocks.findMany.mockResolvedValue([]);
 });
@@ -214,6 +228,120 @@ describe("revocation", () => {
   it("is scoped to the caller's organization", async () => {
     mocks.findFirst.mockResolvedValue(null);
     expect(await revokeClientToken(SCOPE, "client_other")).toBeNull();
+  });
+});
+
+/**
+ * What a change to a lane's key does to everything else that could bring a key
+ * back — the claim links still out for it, and the write key sealed on its row.
+ */
+describe("every change to a key closes the lane's pending claim links", () => {
+  const LANE_LINKS = {
+    organizationId: "org_a",
+    solutionId: "sol_1",
+    environment: "PROD",
+    claimedAt: null,
+    revokedAt: null,
+  };
+
+  it("revoking closes them, before the key is revoked", async () => {
+    // A link sent on day 0 and opened after a day-1 revocation used to bring
+    // the revoked key back as active with a fresh token.
+    await revokeClientToken(SCOPE, "client_1");
+
+    const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: unknown; data: Record<string, unknown> };
+    expect(close.where).toEqual(LANE_LINKS);
+    expect(close.data.revokedAt).toBeInstanceOf(Date);
+    expect(close.data.revokedReason).toBe("The key was revoked.");
+    // Safe-first: a failure between the two writes leaves a dead link and a
+    // live key, never a revoked key with a live link aimed at it.
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.update.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("issuing closes them, so a link sent earlier cannot replace the new key", async () => {
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+
+    const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: unknown };
+    expect(close.where).toEqual(LANE_LINKS);
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.upsert.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("rotating closes them too", async () => {
+    mocks.update.mockResolvedValue(ROW);
+    await rotateClientToken(SCOPE, "client_1");
+
+    const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: unknown };
+    expect(close.where).toEqual(LANE_LINKS);
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.update.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("closes nothing for a credential in another tenant", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    await revokeClientToken(SCOPE, "client_other");
+    await rotateClientToken(SCOPE, "client_other");
+    expect(mocks.closeLinks).not.toHaveBeenCalled();
+  });
+});
+
+describe("a revoked credential does not keep its write key", () => {
+  it("revoking destroys the sealed write key", async () => {
+    // `secretsCiphertext` is sealed against the row id, and every revival
+    // reuses the row — so a write key left here verified again beside the
+    // next token issued on this lane.
+    await revokeClientToken(SCOPE, "client_1");
+    const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data).toHaveProperty("secretsCiphertext", null);
+  });
+
+  it("re-issuing onto a revoked row clears a write key left from before", async () => {
+    mocks.findFirst.mockResolvedValue({ isActive: false, revokedAt: new Date("2026-07-01T00:00:00Z") });
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update).toHaveProperty("secretsCiphertext", null);
+  });
+
+  it("re-issuing a LIVE credential leaves its write key alone", async () => {
+    // Rotation of a working key is not a compromise; killing the write key
+    // there would break writes nobody asked to stop.
+    mocks.findFirst.mockResolvedValue({ isActive: true, revokedAt: null });
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update).not.toHaveProperty("secretsCiphertext");
+  });
+
+  it("rotating a revoked credential clears it, rotating a live one does not", async () => {
+    mocks.update.mockResolvedValue(ROW);
+    mocks.findFirst.mockResolvedValue({ ...LIVE, isActive: false, revokedAt: new Date("2026-07-01T00:00:00Z") });
+    await rotateClientToken(SCOPE, "client_1");
+    expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("secretsCiphertext", null);
+
+    mocks.findFirst.mockResolvedValue(LIVE);
+    await rotateClientToken(SCOPE, "client_1");
+    expect(mocks.update.mock.calls[1]?.[0]?.data).not.toHaveProperty("secretsCiphertext");
+  });
+});
+
+describe("rotation renews a lapsed expiry", () => {
+  beforeEach(() => {
+    mocks.update.mockResolvedValue(ROW);
+  });
+
+  it("clears an expiry that has already passed, so the new token is not refused on arrival", async () => {
+    mocks.findFirst.mockResolvedValue({ ...LIVE, expiresAt: new Date(Date.now() - 60_000) });
+    await rotateClientToken(SCOPE, "client_1");
+    expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("expiresAt", null);
+  });
+
+  it("keeps an expiry still in the future — that is the issuer's decision", async () => {
+    mocks.findFirst.mockResolvedValue({ ...LIVE, expiresAt: new Date(Date.now() + 86_400_000) });
+    await rotateClientToken(SCOPE, "client_1");
+    expect(mocks.update.mock.calls[0]?.[0]?.data).not.toHaveProperty("expiresAt");
   });
 });
 

@@ -1,17 +1,29 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { MaskedKey } from "@/components/coreedge/MaskedKey";
-import { StatusChip } from "@/components/coreedge/StatusChip";
-import { CLIENT_TOKEN_PREFIX, claimKey } from "@/lib/northbound/claim-link";
+import { CLIENT_TOKEN_PREFIX, inspectClaimLink } from "@/lib/northbound/claim-link";
+
+import { ClaimRefused } from "./ClaimRefused";
+import { CollectKey } from "./CollectKey";
 
 /**
- * `/claim/:token` — the screen that mints a key, once.
+ * `/claim/:token` — the screen from which a key is collected, once.
  *
- * THIS PAGE HAS A SIDE EFFECT, which is unusual and deliberate: opening the URL
- * IS the claim. That is the guarantee the whole key-handling model rests on —
- * the key does not exist until someone opens the link, so an expired link has
- * nothing behind it to leak.
+ * OPENING THE URL CHANGES NOTHING. This page used to mint the key during the
+ * GET — "opening the URL IS the claim" — and that made the first GET the
+ * claim, whoever sent it. Corporate mail scanners (Defender Safe Links) and
+ * chat unfurlers (Slack, Teams) GET every URL in a message before a person
+ * does, and this product has no mail sender, so every link travels through
+ * exactly those channels. The scanner received the only copy of the key and
+ * the recipient was told the link could not be used. The magic-link confirm
+ * page and the /a/ and /d/ landings already defend against this; this page
+ * did not.
+ *
+ * So the GET only READS: is the link live, and would a claim succeed. It then
+ * offers a button, and the key is minted by the POST that the person's click
+ * sends to `./collect` — which scanners do not send. The guarantee the
+ * key-handling model rests on is unchanged: the key does not exist until
+ * someone collects it, so an expired link still has nothing behind it.
  *
  * IT LIVES IN `(external)`, NOT `(coreedge)`, and that is load-bearing. The
  * `(coreedge)` layout redirects any caller without a session — correct for every
@@ -26,15 +38,10 @@ import { CLIENT_TOKEN_PREFIX, claimKey } from "@/lib/northbound/claim-link";
  * The `.coreedge` class is therefore applied on this page's own root, because
  * the group layout that normally carries it is not above this route.
  *
- * THE KEY IS SHOWN IN FULL HERE AND NOWHERE ELSE. This is the one surface with
- * that guarantee behind it, which is why `MaskedKey` — a component that has no
- * code path to render a whole key — is used for the reference AFTERWARDS while
- * the full value is printed by this page directly. Keeping them apart is what
- * lets MaskedKey be audited by reading its props.
+ * THE KEY IS SHOWN IN FULL BY `CollectKey` AND NOWHERE ELSE. This page never
+ * holds it: it renders before any key exists.
  *
- * EVERY REFUSAL READS THE SAME. A caller holding a wrong, expired, spent or
- * revoked token learns only that it did not work — distinguishing them would let
- * someone with a guessed token learn whether it was ever real.
+ * EVERY REFUSAL READS THE SAME — `ClaimRefused`, here and after the POST.
  */
 
 export const dynamic = "force-dynamic";
@@ -52,56 +59,16 @@ export default async function ClaimPage({
   params: Promise<{ token: string }>;
 }): Promise<ReactNode> {
   const { token } = await params;
-  const result = await claimKey(token);
+  const preview = await inspectClaimLink(token);
 
-  if (!result.ok) {
-    return (
-      <main className="coreedge mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 p-6">
-        <StatusChip status="noKey" />
-        <h1 className="text-xl font-medium text-ink">This link can&apos;t be used.</h1>
-        <p className="max-w-prose text-sm text-ink-soft">
-          It may have expired, been used already, or been replaced by a newer one. Nothing was
-          issued.
-        </p>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Ask whoever sent it to send a new link. Keys are never re-shown, so a replacement link is
-          the only way to collect one.
-        </p>
-      </main>
-    );
-  }
+  if (!preview.ok) return <ClaimRefused />;
 
   return (
-    <main className="coreedge mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
-      <StatusChip status="live" />
-      <h1 className="text-xl font-medium text-ink">
-        Your key for {result.solutionName} · {result.environment}
-      </h1>
-
-      <p className="max-w-prose text-sm text-ink-soft">
-        Copy it now. It is shown once and cannot be shown again — not by support, not from a backup.
-        The system genuinely does not hold it.
-      </p>
-
-      {/*
-        Printed directly rather than through MaskedKey, which has no code path
-        that renders a whole key. `select-all` so one click takes the value, and
-        `font-mono` so an O and a 0 are distinguishable.
-      */}
-      <code className="select-all break-all rounded-[var(--radius-input)] border border-[color:var(--border-strong)] bg-ink-tint p-4 font-mono text-sm text-ink">
-        {result.rawToken}
-      </code>
-
-      <div className="flex flex-col gap-2">
-        <p className="text-xs text-ink-muted">
-          From now on your lane shows only the reference:
-        </p>
-        <MaskedKey prefix={CLIENT_TOKEN_PREFIX.replace(/_$/, "")} tail={result.tail} />
-      </div>
-
-      <p className="max-w-prose text-xs text-ink-muted">
-        This link is now spent. Opening it again issues nothing.
-      </p>
-    </main>
+    <CollectKey
+      collectPath={`/claim/${encodeURIComponent(token)}/collect`}
+      keyPrefix={CLIENT_TOKEN_PREFIX.replace(/_$/, "")}
+      solutionName={preview.solutionName}
+      environment={preview.environment}
+    />
   );
 }

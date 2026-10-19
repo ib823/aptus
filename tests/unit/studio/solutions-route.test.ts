@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   createSolution: vi.fn(),
   updateSolution: vi.fn(),
   createAudit: vi.fn(),
+  closeLinks: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -27,6 +28,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([]),
     },
     configAudit: { create: mocks.createAudit },
+    keyClaimLink: { updateMany: mocks.closeLinks },
   },
 }));
 
@@ -272,5 +274,46 @@ describe("ownership is claimed on the write path, not just in the form", () => {
     mocks.createSolution.mockResolvedValue({ id: "sol_new", name: "x", slug: "x", status: "DRAFT", classification: "INTERNAL_ACCELERATOR" });
     const res = await POST(req({ ...VALID_CREATE, technicalOwnerId: "u1" }));
     expect(res.status).toBe(201);
+  });
+});
+
+describe("retiring a solution closes the key links still out for it", () => {
+  /*
+   * Retirement changed only the Solution row, so a claim link sent while the
+   * app was live stayed live for its whole window and, opened afterwards,
+   * minted a key for a retired app — one that works again the moment the app
+   * is set back to DRAFT.
+   */
+  beforeEach(() => {
+    mocks.closeLinks.mockResolvedValue({ count: 1 });
+  });
+
+  it("closes every environment's pending links, before the status is written", async () => {
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+
+    const res = await PATCH(req({ id: "sol_1", status: "RETIRED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: Record<string, unknown>; data: Record<string, unknown> };
+    expect(close.where).toEqual({
+      organizationId: "org_a",
+      solutionId: "sol_1",
+      claimedAt: null,
+      revokedAt: null,
+    });
+    expect(close.data.revokedReason).toBe("The app was retired.");
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.updateSolution.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("leaves links alone on an ordinary edit, and on re-saving an already retired app", async () => {
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+    await PATCH(req({ id: "sol_1", name: "Renamed" }, "PATCH"));
+
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "RETIRED" });
+    await PATCH(req({ id: "sol_1", name: "Renamed again" }, "PATCH"));
+
+    expect(mocks.closeLinks).not.toHaveBeenCalled();
   });
 });
