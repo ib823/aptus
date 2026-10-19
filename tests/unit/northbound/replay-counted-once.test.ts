@@ -76,6 +76,7 @@ vi.mock("@/lib/db/prisma", () => ({
     interface: { findMany: async () => db.interfaces },
     sapConnectionProbeEvent: { findMany: async () => [] },
     coreEdgeUsageRollup: { upsert: mocks.rollupUpsert, findMany: async () => [] },
+    $transaction: async (ops: unknown[]) => Promise.all(ops),
   },
 }));
 
@@ -176,7 +177,7 @@ describe("the write ledger does not count a replayed failure as another refusal"
   it("reports the replays as their own events", async () => {
     db.audit = [write(504, false), ...times(2, () => write(504, true)), write(201, true)];
     const body = await (await writeLedger(new NextRequest("https://x.test/api/ops/write-ledger"))).json();
-    expect(body.data.fromAudit).toEqual({ blocked: 1, conflicts: 0, replayed: 3 });
+    expect(body.data.fromAudit).toEqual({ blocked: 0, conflicts: 0, upstreamFailed: 0, outcomeUnknown: 1, replayed: 3 });
     expect(body.data.auditRows).toHaveLength(1);
     expect(body.data.provenance.why.join(" ")).not.toContain("nothing counts it");
   });
@@ -192,7 +193,7 @@ describe("the write ledger does not count a replayed failure as another refusal"
   it("does not count a fresh 201 as blocked", async () => {
     db.audit = [write(201, false), write(504, false), write(504, false), write(409, false)];
     const body = await (await writeLedger(new NextRequest("https://x.test/api/ops/write-ledger"))).json();
-    expect(body.data.fromAudit).toEqual({ blocked: 2, conflicts: 1, replayed: 0 });
+    expect(body.data.fromAudit).toEqual({ blocked: 0, conflicts: 1, upstreamFailed: 0, outcomeUnknown: 2, replayed: 0 });
     // The counts and the page they summarise are drawn from the same rows.
     expect(body.data.auditRows).toHaveLength(3);
     expect(body.data.provenance.rowsAreAPage.auditRows).toMatchObject({ returned: 3, of: 3 });

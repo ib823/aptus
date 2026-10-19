@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   auditFindFirst: vi.fn(),
   rollupUpsert: vi.fn(),
   rollupFindMany: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -26,6 +27,8 @@ vi.mock("@/lib/db/prisma", () => ({
     subscription: { findUnique: mocks.subFindUnique },
     northboundAuditEvent: { groupBy: mocks.auditGroupBy, findFirst: mocks.auditFindFirst },
     coreEdgeUsageRollup: { upsert: mocks.rollupUpsert, findMany: mocks.rollupFindMany },
+    // A day's upserts are written as one batch (audit A33).
+    $transaction: mocks.transaction,
   },
 }));
 
@@ -37,6 +40,7 @@ beforeEach(() => {
   mocks.auditGroupBy.mockResolvedValue([]);
   mocks.rollupUpsert.mockResolvedValue({});
   mocks.rollupFindMany.mockResolvedValue([]);
+  mocks.transaction.mockImplementation((ops: unknown[]) => Promise.all(ops));
 });
 
 describe("getSubscription — one answer per product line", () => {

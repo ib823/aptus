@@ -69,6 +69,19 @@ export function parseLaneEnvironment(value: string | null | undefined): LaneEnvi
   return ENVIRONMENT_ALIASES[value.trim().toUpperCase()] ?? null;
 }
 
+/**
+ * Every spelling that parses to `environment`, upper-cased — the inverse of
+ * `parseLaneEnvironment`, for a query that must match the free-text column in
+ * SQL. Compared case-insensitively, these select the rows the parser accepts,
+ * so a WHERE built from them does not reopen the "prod" / "PROD" split the
+ * parser exists to close. The one step SQL equality does not mirror is the
+ * parser's trim; a credential's environment is written from the
+ * `ClientEnvironment` union, which carries no padding.
+ */
+export function laneEnvironmentAliases(environment: LaneEnvironment): readonly string[] {
+  return Object.keys(ENVIRONMENT_ALIASES).filter((alias) => ENVIRONMENT_ALIASES[alias] === environment);
+}
+
 export const ENVIRONMENT_LABELS: Readonly<Record<LaneEnvironment, string>> = {
   SANDBOX: "Sandbox",
   DEV: "Dev",

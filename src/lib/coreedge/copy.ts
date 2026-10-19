@@ -298,11 +298,15 @@ export const WHY_NEXT_STEP = "Next step:";
  * The lane page used to construct an id from the lane's own slugs. It looked
  * like a correlation id, it was accepted as one, and it matched nothing in the
  * audit trail — so quoting it to support would have started a hunt for a call
- * that was never recorded under that name. A lane that has never been called
- * says that instead, which is both true and the more useful fact.
+ * that was never recorded under that name. A lane with no call on record says
+ * that instead, which is both true and the more useful fact.
+ *
+ * "ON RECORD", NOT "EVER RECORDED". The audit trail keeps its retention period
+ * and no longer, so a lane whose last call was before that has no row to quote
+ * — and saying no call had ever been recorded would have been false for it.
  */
 export const WHY_NO_RECORDED_CALL =
-  "No call has been recorded for this lane, so there is no reference to quote.";
+  "No recent call is on record for this lane, so there is no reference to quote.";
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Sending a key

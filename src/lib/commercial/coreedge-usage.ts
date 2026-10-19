@@ -17,6 +17,7 @@
 
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { prisma } from "@/lib/db/prisma";
+import { DEPLOYMENT_AUDIT_SCOPE } from "@/lib/sap-public/console-read-guard";
 
 /** How many missing days one run may fill — the backfill is a loop, not a scan. */
 export const ROLLUP_BACKFILL_LIMIT = 30;
@@ -36,13 +37,35 @@ function utcMidnight(d: Date): Date {
 export async function rollupDay(day: Date): Promise<number> {
   const start = utcMidnight(day);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  const window = { at: { gte: start, lt: end } };
+  /*
+   * BROKER TRAFFIC ONLY: `dryRun: false`. Two kinds of row carry dryRun — a Test
+   * Console broker run (a builder rehearsing the pipeline from Studio) and a
+   * console read (`recordConsoleRead`: a consultant on /api/sap/tdd/*, with no
+   * solution and no credential). Both are real traffic on a real tenant and the
+   * audit trail keeps them, but neither is a deployed application consuming the
+   * broker, and the lane board already drops them as rehearsals. Counted here,
+   * one press of Run and one `?probe=1` — whose rowCount is entity sets and
+   * probes, not records — landed in Calls and Rows read on the record pricing is
+   * chosen from: an over-count in the vendor's favour, the one direction the
+   * header rules out. The deployment tenant's `-deployment-` sentinel is only
+   * ever written on a console read, so it falls out with them; it is excluded
+   * by name too, so it can never surface as an organization on the Usage screen.
+   */
+  const window = {
+    at: { gte: start, lt: end },
+    dryRun: false,
+    organizationId: { not: DEPLOYMENT_AUDIT_SCOPE },
+  };
 
   const [calls, rows, writes, refusals, byInterface, byCredential] = await Promise.all([
     prisma.northboundAuditEvent.groupBy({ by: ["organizationId"], where: window, _count: { _all: true } }),
     prisma.northboundAuditEvent.groupBy({
       by: ["organizationId"],
-      where: { ...window, operation: "READ", status: { lt: 400 } },
+      // A served read OF AN INTERFACE. Discovery (`-discovery-`, no interface)
+      // makes no SAP call; its rows written before it stopped recording the
+      // interface count as rowCount are still inside retention, and this keeps
+      // them from reading as SAP records.
+      where: { ...window, operation: "READ", status: { lt: 400 }, interfaceId: { not: null } },
       _sum: { rowCount: true },
     }),
     // A REPLAY IS NOT A WRITE. A same-key retry re-serves the stored outcome
@@ -60,8 +83,26 @@ export async function rollupDay(day: Date): Promise<number> {
       where: { ...window, status: { in: [401, 403] } },
       _count: { _all: true },
     }),
-    prisma.northboundAuditEvent.groupBy({ by: ["organizationId", "interfaceId"], where: window }),
-    prisma.northboundAuditEvent.groupBy({ by: ["organizationId", "clientTokenId"], where: window }),
+    /*
+     * DISTINCT COUNTS SKIP THE NULL GROUP, and an interface counts only where it
+     * SERVED. SQL GROUP BY keeps NULL as a group of its own, so a discovery call
+     * or a 429 (no interface) was one more Interface and a credential-less row
+     * one more Credential — the group broker-traffic deliberately skips rather
+     * than invent. And the data, schema and write routes record the raw path
+     * parameter as interfaceId when they refuse it (404, 429), so every distinct
+     * made-up id a key holder requested was one more Interface consumed. A
+     * served call (< 400) can only name an interface that exists and is this
+     * solution's; under-counting one that was only ever refused is the
+     * acceptable direction.
+     */
+    prisma.northboundAuditEvent.groupBy({
+      by: ["organizationId", "interfaceId"],
+      where: { ...window, interfaceId: { not: null }, status: { lt: 400 } },
+    }),
+    prisma.northboundAuditEvent.groupBy({
+      by: ["organizationId", "clientTokenId"],
+      where: { ...window, clientTokenId: { not: null } },
+    }),
   ]);
 
   const orgs = new Map<string, { calls: number; rowsRead: number; writes: number; refusals: number; interfaces: number; credentials: number }>();
@@ -77,9 +118,19 @@ export async function rollupDay(day: Date): Promise<number> {
   for (const g of byInterface) entry(g.organizationId).interfaces += 1;
   for (const g of byCredential) entry(g.organizationId).credentials += 1;
 
-  let written = 0;
-  for (const [organizationId, v] of orgs) {
-    await prisma.coreEdgeUsageRollup.upsert({
+  /*
+   * ONE TRANSACTION PER DAY. `runCoreEdgeUsageRollup` treats a day holding any
+   * rollup row as covered, so a day must hold all of its organizations' rows or
+   * none. Written one upsert at a time, a failure part-way through — a dropped
+   * connection, the function's time limit — kept the organizations already
+   * written, marked the day done for every other one, and no later run came
+   * back for them: their usage for that day never appeared, and retention then
+   * deleted the audit rows it could have been rebuilt from. As one batch a
+   * failure rolls the whole day back, the day stays missing, and the next run
+   * retries it.
+   */
+  const upserts = [...orgs].map(([organizationId, v]) =>
+    prisma.coreEdgeUsageRollup.upsert({
       where: { organizationId_day: { organizationId, day: start } },
       create: {
         organizationId,
@@ -100,10 +151,10 @@ export async function rollupDay(day: Date): Promise<number> {
         distinctCredentials: v.credentials,
         computedAt: new Date(),
       },
-    });
-    written++;
-  }
-  return written;
+    }),
+  );
+  if (upserts.length > 0) await prisma.$transaction(upserts);
+  return upserts.length;
 }
 
 /**
@@ -111,6 +162,10 @@ export async function rollupDay(day: Date): Promise<number> {
  * first, up to the backfill cap. Yesterday is always attempted (re-running is
  * an idempotent upsert), so a day whose late writes landed after the first
  * pass converges on the next run.
+ *
+ * "Holds a rollup row" stands for "covered" only because `rollupDay` writes a
+ * day as one transaction — a day is never left holding some organizations'
+ * rows and not others.
  */
 export async function runCoreEdgeUsageRollup(now: Date = new Date()): Promise<RollupRunResult> {
   // The rollup serves every tenant in one run — declared, per the guard.

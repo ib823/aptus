@@ -75,6 +75,7 @@ const grant = (over: Partial<Parameters<typeof deriveGrant>[0]> = {}, since: Dat
       revokedAt: null,
       revokedReason: null,
       recordedCalls: 0,
+      recordedFailures: 0,
       ...over,
     },
     NOW,
@@ -614,7 +615,7 @@ describe("the decision vocabulary is pinned to the schema", () => {
  */
 describe("a solution with an empty owner slot", () => {
   const sol = (over: Partial<Parameters<typeof deriveSolution>[0]> = {}) =>
-    deriveSolution({ missingOwnerCount: 0, recordedCalls: 0, holdsProdGrant: false, ...over });
+    deriveSolution({ missingOwnerCount: 0, recordedCalls: 0, recordedFailures: 0, holdsProdGrant: false, ...over });
 
   it("is a defect wherever it occurs, PROD or not", () => {
     // The slot is who gets called when this breaks. Empty means nobody.

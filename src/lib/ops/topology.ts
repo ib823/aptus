@@ -194,6 +194,28 @@ export function observeEdge(calls: number, failures: number): EdgeObservation {
   return failures >= calls ? "bad" : "mixed";
 }
 
+/**
+ * A live node's state from what the feed recorded under it — the same two
+ * counts its edges use.
+ *
+ * THIS USED TO READ `calls` ALONE, so any recorded row at all made a grant, a
+ * solution or an interface "observed-good": a PROD grant whose every call was
+ * refused 403 for want of a connection rendered ✓ beside the edge that said
+ * "bad", while the critical binding-refused incident was open about it. That is
+ * health that was not observed, which the vocabulary exists to forbid.
+ *
+ * MIXED READS AS BAD ON A NODE. An edge can say "mixed" because it carries its
+ * counts; a node has one glyph. ✓ over a node whose calls partly failed hides
+ * the failures, which is the claim somebody acts on wrongly. ✕ says only that
+ * something recorded under it failed — true — and the edge and the provenance
+ * beside it say how much.
+ */
+export function observedState(calls: number, failures: number): NodeState {
+  const observed = observeEdge(calls, failures);
+  if (observed === "never") return "never-observed";
+  return observed === "good" ? "observed-good" : "observed-bad";
+}
+
 /* ───────────────────────────── derivation ───────────────────────────── */
 
 /**
@@ -228,6 +250,8 @@ export interface GrantInput {
   revokedReason: string | null;
   /** Calls recorded under this grant in the window. Under-reports; see Ended. */
   recordedCalls: number;
+  /** Of those, the ones that returned 4xx or 5xx. See `observedState`. */
+  recordedFailures: number;
 }
 
 /**
@@ -349,8 +373,14 @@ export function deriveGrant(g: GrantInput, now: Date, since: Date): DerivedGrant
     return { state: "never-observed", ended: null, quiet: false, badge: null };
   }
 
+  /*
+   * A LIVE grant's state is what its calls did. The ended branches above stay
+   * on `carried`: what they answer is whether anything ran before the end, and
+   * a call refused after revocation is the control working, not the grant
+   * failing.
+   */
   return {
-    state: g.recordedCalls > 0 ? "observed-good" : "never-observed",
+    state: observedState(g.recordedCalls, g.recordedFailures),
     ended: null,
     quiet: false,
     badge: null,
@@ -407,6 +437,8 @@ export interface SolutionInput {
   missingOwnerCount: number;
   /** Calls recorded under any grant on this solution, in the window. */
   recordedCalls: number;
+  /** Of those, the ones that returned 4xx or 5xx. See `observedState`. */
+  recordedFailures: number;
   /**
    * Does it hold a live grant conferring PROD access?
    *
@@ -462,7 +494,7 @@ export function deriveSolution(s: SolutionInput): DerivedSolution {
         };
   }
   return {
-    state: s.recordedCalls > 0 ? "observed-good" : "never-observed",
+    state: observedState(s.recordedCalls, s.recordedFailures),
     ended: null,
     quiet: false,
     badge: null,
@@ -608,6 +640,25 @@ export function grantKey(
   return `${solutionId}|${externalId}|${operation}|${environment}`.toUpperCase();
 }
 
+/**
+ * An audit row's operation, in the GRANT's vocabulary.
+ *
+ * The two tables name a write differently. The write route records every call
+ * as `WRITE`; the grant that authorised it says `CREATE` (or `UPDATE`). Keyed on
+ * the raw column the two never met, so every write grant reported zero calls —
+ * "never observed" while carrying production writes, and `carried: false` once
+ * revoked, a claim of absence the feed contradicts.
+ *
+ * WRITE MEANS CREATE, because a create is the only write the broker performs:
+ * `resolveWritableInterface` refuses any other operation before a grant is
+ * consulted and authorises a write only by a grant whose operation equals the
+ * interface's, which is CREATE. An UPDATE grant cannot carry traffic today; if
+ * the executor ever learns UPDATE, the write route must record which one it did.
+ */
+export function grantOperationOf(auditOperation: string): string {
+  return auditOperation.toUpperCase() === "WRITE" ? "CREATE" : auditOperation;
+}
+
 /** A pairing key. The separator cannot occur in a cuid or in a grant key. */
 export function pairKey(a: string, b: string): string {
   return `${a}»${b}`;
@@ -662,7 +713,7 @@ export function attributeCalls(rows: readonly AuditSlice[]): Attribution {
     // one imaginary grant.
     if (row.solutionId === null) continue;
     const solutionId = row.solutionId;
-    const gk = grantKey(solutionId, row.externalId, row.operation, row.environment);
+    const gk = grantKey(solutionId, row.externalId, grantOperationOf(row.operation), row.environment);
 
     add(a.bySolution, solutionId, calls, failures);
     add(a.byGrant, gk, calls, failures);
