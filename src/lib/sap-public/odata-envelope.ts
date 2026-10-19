@@ -46,8 +46,11 @@ const V2_ENVELOPE_KEYS = new Set(["__metadata", "__deferred", "__next"]);
  * V4 control information is any key carrying `@odata.` — on the row itself
  * (`@odata.etag`, `@odata.id`) or attached to a property (`to_Item@odata.navigationLink`).
  * An OData property name cannot contain `@`, so this never matches a field.
+ *
+ * Exported for the one caller that holds key NAMES rather than a row: a schema
+ * captured before this rule existed (see servedResponseSchema).
  */
-function isEnvelopeKey(key: string): boolean {
+export function isEnvelopeKey(key: string): boolean {
   return V2_ENVELOPE_KEYS.has(key) || key.includes("@odata.");
 }
 

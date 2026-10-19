@@ -15,7 +15,7 @@
  * Pure functions: no I/O, no framework, fully testable.
  */
 
-import { isCapturedSchema } from "@/lib/studio/schema-capture";
+import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
 import { stripFixtureEnvelope } from "@/lib/studio/fixtures";
 
 export interface ScaffoldInterface {
@@ -204,12 +204,15 @@ function errorContent() {
 /**
  * The record schema: what this tenant actually returned, or an honest blank.
  *
- * A captured schema is emitted as-is (it already carries its own provenance in
- * `x-captured`). Without one, the document keeps `additionalProperties: true`
- * and states plainly that no run has happened — a reader can then tell the
- * difference between "this entity has no fields" and "nobody has looked yet".
+ * A captured schema is emitted as the served rows can satisfy it (it already
+ * carries its own provenance in `x-captured`; one captured before the envelope
+ * was stripped is reconciled first — see servedResponseSchema). Without one,
+ * the document keeps `additionalProperties: true` and states plainly that no
+ * run has happened — a reader can then tell the difference between "this
+ * entity has no fields" and "nobody has looked yet".
  */
-function describeRecord(responseSchema: unknown): Record<string, unknown> {
+function describeRecord(stored: unknown): Record<string, unknown> {
+  const responseSchema = servedResponseSchema(stored);
   if (isCapturedSchema(responseSchema)) {
     return {
       ...responseSchema,
@@ -271,9 +274,11 @@ function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
  * With a captured schema this emits the real fields, with optional markers for
  * the ones that did not appear in every sampled row. The index signature stays
  * either way: the sample is not a census, and a consumer meeting an unlisted
- * field should get a value, not a type error.
+ * field should get a value, not a type error. Optional markers follow the
+ * schema as served, as openapi.json does (see servedResponseSchema).
  */
-function buildRecordBody(responseSchema: unknown): string {
+function buildRecordBody(stored: unknown): string {
+  const responseSchema = servedResponseSchema(stored);
   if (!isCapturedSchema(responseSchema)) {
     return "  [field: string]: unknown;";
   }

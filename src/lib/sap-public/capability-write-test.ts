@@ -10,6 +10,7 @@
  * Only create-then-delete where metadata says the set is creatable AND
  * deletable. Audited via logDecision by the caller.
  */
+import { SapUrlOriginError } from "@/lib/sap-public/sap-url";
 import {
   createSapEntitySetRecord,
   deleteSapEntityByLocation,
@@ -100,7 +101,30 @@ export async function runCapabilityWriteTest(
       ladder: created.ok ? "writable" : "reachable",
     };
   }
-  const del = await deleteSapEntityByLocation(prefix, tenant, service, created.location);
+  /*
+   * THE CREATE HAS HAPPENED; THE RESULT MUST SAY SO. A Location on another
+   * origin — a web dispatcher that does not rewrite it — is refused before any
+   * DELETE is sent, which keeps the credentials off that host. Thrown past
+   * this function, the refusal also took the result with it: the route
+   * answered a bare 502 and skipped its audit, so a record left behind in SAP
+   * was reported nowhere. Returned as the outcome it is instead — created, not
+   * deleted, no DELETE sent — and only that refusal: anything else still
+   * throws as before.
+   */
+  let del: { ok: boolean; status: number };
+  try {
+    del = await deleteSapEntityByLocation(prefix, tenant, service, created.location);
+  } catch (err) {
+    if (!(err instanceof SapUrlOriginError)) throw err;
+    return {
+      created: true,
+      deleted: false,
+      createStatus: created.status,
+      deleteStatus: null,
+      location: created.location,
+      ladder: "writable",
+    };
+  }
   return {
     created: true,
     deleted: del.ok,
