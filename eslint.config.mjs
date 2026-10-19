@@ -25,6 +25,8 @@ const eslintConfig = [
       "playwright-report/**",
       "test-results/**",
       "next-env.d.ts",
+      // Local agent worktrees and session files, gitignored like this: not source.
+      ".claude/**",
     ],
   },
   {
