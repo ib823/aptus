@@ -1,5 +1,6 @@
-import { buildSapUrl } from "@/lib/sap-public/sap-url";
+import { buildSapUrl, SapUrlOriginError } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
+import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
@@ -1020,13 +1021,13 @@ export function deriveReadWrite(entities: EntityCapability[]): { read: boolean; 
 function toRecordRows(rows: unknown[]): Array<Record<string, unknown>> {
   return rows
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object" && !Array.isArray(row))
-    .map((row) => {
-      // V2 carries __metadata per row; V4 carries @odata.etag / @odata.context
-      // per row. Neither is data — strip both so a V4 preview's `fields` are
-      // the same business properties a V2 preview shows (2608 WS4 parity).
-      const { __metadata: _metadata, ...rest } = row;
-      return Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith("@odata.")));
-    });
+    // V2 carries __metadata per row; V4 carries @odata.etag / @odata.context
+    // per row. Neither is data — strip both so a V4 preview's `fields` are
+    // the same business properties a V2 preview shows (2608 WS4 parity). The
+    // same rule as the broker's rows, so the preview shows what is served:
+    // this also drops V2's unexpanded `{ __deferred }` navigations, which a V4
+    // row never carried. See odata-envelope.ts.
+    .map(stripODataEnvelope);
 }
 
 function extractRows(json: ODataV2Response | ODataV4Response): {
@@ -1251,22 +1252,52 @@ export async function deleteSapEntityByLocation(
   service: SapServiceDefinition,
   location: string,
 ): Promise<{ ok: boolean; status: number }> {
-  const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
   /*
    * The fifth place a SAP URL is built, and the least obvious: `location` comes
-   * from SAP's own Location header on the preceding create. An absolute one is
-   * used verbatim — SAP has already addressed the client it wrote to, and
-   * second-guessing it would risk deleting from a different container than the
-   * one just written. A relative one goes through the builder, which will not
-   * add a client the header already carries.
+   * from SAP's own Location header on the preceding create, and the tenant's
+   * credentials are attached to whatever it says.
+   *
+   * AN ABSOLUTE ONE IS NOT TRUSTED FOR ITS HOST. It used to be used verbatim, on
+   * the reasoning that SAP had already addressed the client it wrote to. But a
+   * web dispatcher or reverse proxy that does not rewrite Location answers with
+   * its own backend address — `http://internal-host:8000/...` — and the DELETE
+   * then carried the deployment's Basic credentials, in clear text, to a host
+   * that is neither the configured base URL nor https. So its origin must be the
+   * tenant's, or nothing is sent; and even then only its path and query are
+   * kept, rebuilt on the tenant's origin. The path is already absolute — it
+   * includes any prefix the base URL carries — and the query is what carries
+   * the client SAP addressed, which the builder will not add a second time, so
+   * the delete still lands in the container just written.
+   *
+   * Checked BEFORE the CSRF fetch, so a refused Location sends nothing at all.
+   * A relative one goes through the builder on the base URL, as it always did.
    */
-  const url = location.startsWith("http")
-    ? location
-    : buildSapUrl({
-        baseUrl: tenant.baseUrl,
-        path: location.startsWith("/") ? location : `/${location}`,
-        client: tenant.client,
-      });
+  let url: string;
+  if (/^[a-z][a-z\d+.-]*:/i.test(location) || location.startsWith("//")) {
+    const origin = new URL(tenant.baseUrl).origin;
+    // One that does not even parse — an unbracketed IPv6 backend address from a
+    // dispatcher — names no origin to compare, so it is refused the same way,
+    // and the write-test reports it as a record left behind rather than a crash.
+    let absolute: URL;
+    try {
+      absolute = new URL(location, tenant.baseUrl);
+    } catch {
+      throw new SapUrlOriginError();
+    }
+    if (absolute.origin !== origin) throw new SapUrlOriginError();
+    url = buildSapUrl({
+      baseUrl: origin,
+      path: `${absolute.pathname}${absolute.search}`,
+      client: tenant.client,
+    });
+  } else {
+    url = buildSapUrl({
+      baseUrl: tenant.baseUrl,
+      path: location.startsWith("/") ? location : `/${location}`,
+      client: tenant.client,
+    });
+  }
+  const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
   const headers: HeadersInit = {
     ...(await authHeadersFor(prefix, tenant)),
     Accept: "application/json",

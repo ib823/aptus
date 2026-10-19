@@ -10,15 +10,22 @@
  *
  * THE KEY IS NEVER IN THIS RESPONSE. `createClaimLink` returns a `cec_` CLAIM
  * token, not a `ce_` key; the key itself is minted only when the recipient
- * opens the link, by `claimKey`, on a page that shows it once. This route
- * returns the link and its expiry and nothing else — a key that travelled
- * through an API response would be a key in a log, a proxy and a browser
- * history.
+ * opens the link and presses Collect, by `claimKey`, on a page that shows it
+ * once. This route returns the link and its expiry and nothing else — a key
+ * that travelled through an API response would be a key in a log, a proxy and
+ * a browser history.
  *
  * SENDING AGAIN REVOKES THE LAST LINK, and that is `createClaimLink`'s own
  * behaviour rather than something added here: one live link per app, feed and
  * environment, with the superseded one revoked rather than deleted. That is
  * what makes "Send a new link" safe to press on an expired one.
+ *
+ * A LINK IS AN ISSUANCE, so it carries Studio's two gates. Collecting from it
+ * mints the same runtime credential POST /api/studio/clients issues, and this
+ * route used to check only the sender's role — so a solution's sole owner,
+ * refused in Studio with "you cannot issue its runtime credential", could send
+ * themselves a link and collect a live PROD key. `claimKey` asks both again at
+ * collection, because ownership can change while a link is out.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -31,6 +38,7 @@ import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { createClaimLink } from "@/lib/northbound/claim-link";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { refuseCredentialIssuer } from "@/lib/studio/solutions";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +67,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // rather than found and then refused.
   const solution = await prisma.solution.findFirst({
     where: { id: solutionId, organizationId: user.organizationId },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      technicalOwnerId: true,
+      businessOwnerId: true,
+      supportOwnerId: true,
+    },
   });
   if (solution === null) return refused("No such app.", 404);
   if (solution.status === "RETIRED") {
@@ -68,6 +82,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // renders before the press, so the refusal reads identically either way.
     return refused(CLAIM_LINK_COPY.appRetired, 409);
   }
+
+  // Owners first, then the sender is none of them — the order Studio uses, and
+  // for its reason: on an unowned app the second check passes for everyone.
+  const issuer = refuseCredentialIssuer(solution, user.id);
+  if (issuer === "ownersMissing") return refused(CLAIM_LINK_COPY.appNeedsOwners, 409);
+  if (issuer === "issuerIsOwner") return refused(CLAIM_LINK_COPY.ownAppKey, 403);
 
   const link = await createClaimLink({
     organizationId: user.organizationId,

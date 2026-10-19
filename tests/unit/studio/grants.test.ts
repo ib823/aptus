@@ -31,6 +31,9 @@ function base(overrides: Partial<DecisionRequest> = {}): DecisionRequest {
     environment: "DEV",
     requestedById: "u_requester",
     deciderId: "u_approver",
+    // Owned by people who are neither party, with one slot unclaimed — the
+    // ordinary shape, so every test not about OWN_APP still walks past it.
+    ownerIds: ["u_owner", "u_other_owner", null],
     next: "APPROVED",
     writeChecklistAcknowledged: false,
     // A REAL DATE, because a bounded grant is now the norm. This defaulted to
@@ -66,6 +69,58 @@ describe("segregation of duties", () => {
     // Rows created before requestedById existed must remain decidable, or they
     // would be stuck in REQUESTED forever with no way to resolve them.
     expect(evaluateDecision(base({ requestedById: null })).ok).toBe(true);
+  });
+});
+
+/*
+ * THE SECOND HALF OF THE SAME RULE. The design brief: "the person who requested
+ * access can't approve it, and an app's owner can't approve their own app's
+ * access." Only the first half was enforced — an owner needed nothing more than
+ * a colleague to press "request", and could then approve their own app's PROD
+ * write themselves.
+ */
+describe("an app's owner cannot decide their own app's access", () => {
+  it("refuses an owner deciding a request someone else raised, from every owner slot", () => {
+    for (const ownerIds of [
+      ["u_approver", null, null],
+      [null, "u_approver", null],
+      [null, null, "u_approver"],
+    ] as const) {
+      const r = evaluateDecision(
+        base({
+          operation: "CREATE",
+          environment: "PROD",
+          ownerIds,
+          writeChecklistAcknowledged: true,
+        }),
+      );
+      expect(r.ok, `owner slots ${JSON.stringify(ownerIds)}`).toBe(false);
+      if (!r.ok) {
+        expect(r.reason).toBe("OWN_APP");
+        expect(r.message).toMatch(/You own this app/);
+      }
+    }
+  });
+
+  it("refuses the owner for EVERY decision, including a rejection — like SELF_APPROVAL", () => {
+    for (const next of DECIDABLE) {
+      const r = evaluateDecision(base({ ownerIds: ["u_approver", null, null], next }));
+      expect(r.ok, `${next} by the app's owner must be refused`).toBe(false);
+      if (!r.ok) expect(r.reason).toBe("OWN_APP");
+    }
+  });
+
+  it("names self-approval first when the requester is also the owner", () => {
+    const r = evaluateDecision(
+      base({ requestedById: "u_approver", ownerIds: ["u_approver", null, null] }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("SELF_APPROVAL");
+  });
+
+  it("lets a colleague who owns nothing decide, and an unclaimed slot matches nobody", () => {
+    expect(evaluateDecision(base({ ownerIds: [null, null, null] })).ok).toBe(true);
+    expect(evaluateDecision(base({ ownerIds: [] })).ok).toBe(true);
   });
 });
 
@@ -177,6 +232,51 @@ describe("the write gate", () => {
     // The rule is about authorisation, not about decisions. Demanding an expiry
     // on a refusal would be ceremony.
     expect(evaluateDecision(base({ next: "REJECTED", expiresAt: null })).ok).toBe(true);
+  });
+
+  /*
+   * READ-ONLY CANNOT NARROW A WRITE. The broker matches a grant on its
+   * operation: a read is served only for a READ interface, whose grant is a READ
+   * row, and `grantsWrite` refuses READ_ONLY. So READ_ONLY on a CREATE or UPDATE
+   * request stored a grant that authorised nothing at all — while Control Tower
+   * and the lane board reported it as access.
+   */
+  it("refuses READ_ONLY on a write request, in every environment, checklist or not", () => {
+    for (const operation of ["CREATE", "UPDATE"] as const) {
+      for (const environment of ENVIRONMENT_ORDER) {
+        for (const writeChecklistAcknowledged of [false, true]) {
+          const r = evaluateDecision(
+            base({ operation, environment, next: "READ_ONLY", writeChecklistAcknowledged }),
+          );
+          expect(r.ok, `READ_ONLY on ${operation} in ${environment}`).toBe(false);
+          if (!r.ok) expect(r.reason).toBe("READ_ONLY_ON_WRITE");
+        }
+      }
+    }
+  });
+
+  it("accepts no READ_ONLY decision the runtime would not honour for that grant", () => {
+    // The property, stated directly: whatever evaluateDecision lets through as
+    // READ_ONLY must authorise something at the broker for the grant's own
+    // operation. On a write it never does, so it is never let through.
+    for (const operation of ["READ", "CREATE", "UPDATE"] as const) {
+      for (const environment of ENVIRONMENT_ORDER) {
+        const r = evaluateDecision(
+          base({ operation, environment, next: "READ_ONLY", writeChecklistAcknowledged: true }),
+        );
+        if (!r.ok) continue;
+        const honoured = isWriteOperation(operation)
+          ? grantsWrite("READ_ONLY", environment)
+          : grantsRead("READ_ONLY", environment);
+        expect(honoured, `READ_ONLY accepted on ${operation} in ${environment}`).toBe(true);
+      }
+    }
+  });
+
+  it("still accepts READ_ONLY on a read request — that is what it is for", () => {
+    expect(
+      evaluateDecision(base({ operation: "READ", environment: "PROD", next: "READ_ONLY" })).ok,
+    ).toBe(true);
   });
 
   it("never requires the checklist for a plain read", () => {

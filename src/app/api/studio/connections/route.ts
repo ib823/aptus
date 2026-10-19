@@ -44,7 +44,12 @@ import {
 } from "@/lib/sap-public/environment";
 import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
-import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
+import {
+  getConfiguredSapTenants,
+  getSapProduct,
+  sanitizeTenantKey,
+  SAP_ODATA_PRODUCTS,
+} from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
@@ -321,6 +326,24 @@ const patchSchema = z.object({
 
 type Actor = { userId: string; organizationId: string };
 
+/**
+ * The keys of the tenants this deployment configures for a product in env.
+ *
+ * `getConfiguredSapTenants` throws on a malformed `{PREFIX}_TENANTS_JSON`. A
+ * product whose env cannot be read has no deployment tenants this check can
+ * see, and the read path refuses a collision anyway once the env is fixed, so
+ * one bad variable must not stop every connection from being saved.
+ */
+function deploymentTenantKeys(productKey: string): string[] {
+  const product = getSapProduct(productKey);
+  if (!product) return [];
+  try {
+    return getConfiguredSapTenants(product.envPrefix).map((t) => t.key);
+  } catch {
+    return [];
+  }
+}
+
 async function requireBuilder(): Promise<{ error: ReturnType<typeof studioError> } | Actor> {
   const user = await getCurrentUser();
   if (!user) return { error: studioError("UNAUTHENTICATED", "Sign in required.") };
@@ -414,6 +437,31 @@ export async function POST(request: NextRequest) {
     where: { organizationId, product: input.product, key },
     select: { id: true },
   });
+
+  /*
+   * REFUSE A KEY THE DEPLOYMENT ALREADY USES FOR ITS OWN TENANT.
+   *
+   * The console resolves a tenant key against the deployment's `{PREFIX}_*`
+   * tenants as well as this organization's connections (tenant-for-read). A
+   * connection keyed "default" on a deployment configured with S4_TDD_BASE_URL
+   * was listed in the switcher as the organization's own system, while every
+   * read went to the shared demo tenant with the deployment's credentials and
+   * skipped the PROD ceiling. The read path now refuses such a key rather than
+   * guess; refusing it here means the consultant learns it while still on the
+   * form, instead of at the first read.
+   *
+   * New keys only. Re-saving an existing row is how its credentials are
+   * rotated, and that row may be serving northbound calls, which never look at
+   * deployment tenants. Blocking the rotation would break those calls to fix a
+   * console read that is already refused.
+   */
+  if (!existing && deploymentTenantKeys(input.product).includes(key)) {
+    return studioError(
+      "VALIDATION_ERROR",
+      `key: "${key}" is already the key of a tenant configured on this deployment, so the console ` +
+        `could not tell your connection from it. Choose another key.`,
+    );
+  }
 
   /*
    * REFUSE A TWIN THE BINDING COULD NOT TELL APART.

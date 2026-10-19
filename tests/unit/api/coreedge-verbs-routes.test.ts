@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   grantFindFirst: vi.fn(),
-  grantUpdate: vi.fn(),
+  grantUpdateMany: vi.fn(),
   solutionFindFirst: vi.fn(),
   clientFindFirst: vi.fn(),
   revokeClientToken: vi.fn(),
@@ -22,22 +22,44 @@ const mocks = vi.hoisted(() => ({
   recheckOneLane: vi.fn(),
   checkRateLimit: vi.fn(),
   writeConfigAudit: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    apiAccessGrant: { findFirst: mocks.grantFindFirst, update: mocks.grantUpdate },
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
+    apiAccessGrant: { findFirst: mocks.grantFindFirst, updateMany: mocks.grantUpdateMany },
     solution: { findFirst: mocks.solutionFindFirst },
     solutionClient: { findFirst: mocks.clientFindFirst },
-  },
-}));
+    // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
+    // Outside a transaction the lock would commit and release at once, so taking
+    // it on the client instead of on `tx` is a failure, not a pass.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction, not the client");
+    },
+  };
+  return {
+    prisma: {
+      ...client,
+      // A decision runs on these same mocks inside its transaction, so every
+      // assertion below still sees its reads and its compare-and-set; `commit`
+      // marks where the transaction — and the lock — ends.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn({ ...client, $queryRaw: mocks.lockSolution } as unknown as typeof client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 vi.mock("@/lib/northbound/issue", () => ({ revokeClientToken: mocks.revokeClientToken }));
 vi.mock("@/lib/northbound/claim-link", () => ({ createClaimLink: mocks.createClaimLink }));
 vi.mock("@/lib/ops/lane-check-sweep", () => ({ recheckOneLane: mocks.recheckOneLane }));
 vi.mock("@/lib/security/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit }));
 
+import { CLAIM_LINK_COPY } from "@/lib/coreedge/copy";
 import { POST as decide } from "@/app/api/coreedge/requests/[id]/decide/route";
 import { POST as sendLink } from "@/app/api/coreedge/keys/claim-link/route";
 import { POST as revoke } from "@/app/api/coreedge/keys/[clientId]/revoke/route";
@@ -55,11 +77,14 @@ const params = <T,>(value: T) => ({ params: Promise.resolve(value) });
 const PENDING_GRANT = {
   id: "g1",
   organizationId: "org1",
+  solutionId: "sol1",
   decision: "REQUESTED",
   operation: "READ",
   environment: "TEST",
   requestedById: "someone-else",
   expiresAt: FUTURE,
+  // Owned by colleagues, not by the deciding admin.
+  solution: { technicalOwnerId: "someone-else", businessOwnerId: "lead", supportOwnerId: null },
 };
 
 beforeEach(() => {
@@ -74,12 +99,13 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
   it("records an approval for a platform admin", async () => {
     mocks.getCurrentUser.mockResolvedValue(ADMIN);
     mocks.grantFindFirst.mockResolvedValue(PENDING_GRANT);
-    mocks.grantUpdate.mockResolvedValue({ id: "g1", decision: "APPROVED" });
+    mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
 
     const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
 
     expect(res.status).toBe(200);
-    expect(mocks.grantUpdate).toHaveBeenCalledOnce();
+    expect(mocks.grantUpdateMany).toHaveBeenCalledOnce();
+    expect((await res.json()).data).toMatchObject({ id: "g1", decision: "APPROVED", decidedById: ADMIN.id });
     // Every verb writes an audit row, and it names the door it came through.
     expect(mocks.writeConfigAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "DECISION", entityType: "ApiAccessGrant" }),
@@ -94,7 +120,7 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
     const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
 
     expect(res.status).toBe(403);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
     expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
   });
 
@@ -105,7 +131,7 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
     const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
 
     expect(res.status).toBe(403);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses a request with no end date", async () => {
@@ -114,7 +140,7 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
 
     expect((await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }))).status)
       .toBe(403);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses SANDBOX_ONLY as an input — D2", async () => {
@@ -129,7 +155,7 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
     const res = await decide(req({ decision: "SANDBOX_ONLY" }) as never, params({ id: "g1" }));
 
     expect(res.status).toBe(400);
-    expect(mocks.grantUpdate).not.toHaveBeenCalled();
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses re-deciding a settled grant", async () => {
@@ -150,13 +176,139 @@ describe("POST /api/coreedge/requests/:id/decide", () => {
       .toBe(404);
     expect(mocks.grantFindFirst.mock.calls[0]?.[0].where.organizationId).toBe("org1");
   });
+
+  it("refuses an app's owner approving a PROD write a colleague raised for it", async () => {
+    // The audit's trigger: B raises, A owns all three slots, A approves.
+    mocks.getCurrentUser.mockResolvedValue({ ...ADMIN, role: "consultant" });
+    mocks.grantFindFirst.mockResolvedValue({
+      ...PENDING_GRANT,
+      operation: "CREATE",
+      environment: "PROD",
+      solution: {
+        technicalOwnerId: ADMIN.id,
+        businessOwnerId: ADMIN.id,
+        supportOwnerId: ADMIN.id,
+      },
+    });
+
+    const res = await decide(
+      req({ decision: "APPROVED", writeChecklistAcknowledged: true }) as never,
+      params({ id: "g1" }),
+    );
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.message).toBe(
+      "You own this app, so a colleague has to approve its access.",
+    );
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses READ_ONLY on a write request — it would authorise nothing", async () => {
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue({ ...PENDING_GRANT, operation: "CREATE", environment: "PROD" });
+
+    const res = await decide(req({ decision: "READ_ONLY" }) as never, params({ id: "g1" }));
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.message).toMatch(/Read-only cannot narrow a write/);
+    expect(mocks.grantUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("approves a write once the bar sends the checklist acknowledgement", async () => {
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue({ ...PENDING_GRANT, operation: "CREATE", environment: "PROD" });
+    mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
+
+    const res = await decide(
+      req({ decision: "APPROVED", writeChecklistAcknowledged: true }) as never,
+      params({ id: "g1" }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  /*
+   * A DECISION IS A COMPARE-AND-SET. Two reviewers deciding together both read
+   * REQUESTED and both pass NOT_PENDING; only the WHERE can tell them apart.
+   */
+  it("writes only while the grant is still REQUESTED, and in this tenant", async () => {
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue(PENDING_GRANT);
+    mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
+
+    await decide(req({ decision: "REJECTED" }) as never, params({ id: "g1" }));
+
+    expect(mocks.grantUpdateMany.mock.calls[0]?.[0].where).toEqual({
+      id: "g1",
+      organizationId: "org1",
+      decision: "REQUESTED",
+    });
+  });
+
+  it("locks the app's Solution row before reading its owners, and holds it through the write", async () => {
+    // OWN_APP reads the owners the Studio solutions PATCH writes — a different
+    // row from this grant — so a reclaim fired together with this decision used
+    // to pass on owners read a moment before it landed. The PATCH takes the same
+    // lock; the read that decides must come after it.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue(PENDING_GRANT);
+    mocks.grantUpdateMany.mockResolvedValue({ count: 1 });
+
+    const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol1", "org1"]);
+
+    // Located first (to know which app to lock), then read again under the lock.
+    const reads = mocks.grantFindFirst.mock.invocationCallOrder;
+    const lock = mocks.lockSolution.mock.invocationCallOrder[0]!;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]!).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]!);
+    expect(mocks.grantFindFirst.mock.calls[1]?.[0].select.solution).toBeDefined();
+    expect(reads[1]!).toBeLessThan(mocks.grantUpdateMany.mock.invocationCallOrder[0]!);
+    expect(mocks.grantUpdateMany.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.commit.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("409s the second of two concurrent decisions, and audits nothing for it", async () => {
+    // The read saw REQUESTED; by the time this write ran, another reviewer's
+    // decision had landed, so the guarded write matched no row.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.grantFindFirst.mockResolvedValue(PENDING_GRANT);
+    mocks.grantUpdateMany.mockResolvedValue({ count: 0 });
+
+    const res = await decide(req({ decision: "APPROVED" }) as never, params({ id: "g1" }));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(/Someone else decided this request/);
+    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+  });
 });
 
 /* ── 2 · SEND A KEY ───────────────────────────────────────────────────────── */
 
 describe("POST /api/coreedge/keys/claim-link", () => {
+  /*
+   * Owned, and by people other than the sender. The fixture used to be
+   * `{ id, status }` alone, which is exactly the select that let an unowned
+   * app — or its own sole owner — be sent a key: the route never read owners.
+   */
+  const OWNED_BY_OTHERS = {
+    id: "s1",
+    status: "ACTIVE",
+    technicalOwnerId: "u_tech",
+    businessOwnerId: "u_biz",
+    supportOwnerId: "u_sup",
+  };
+
   beforeEach(() => {
-    mocks.solutionFindFirst.mockResolvedValue({ id: "s1", status: "ACTIVE" });
+    mocks.solutionFindFirst.mockResolvedValue(OWNED_BY_OTHERS);
     mocks.createClaimLink.mockResolvedValue({
       id: "link1",
       rawToken: "cec_example",
@@ -191,10 +343,53 @@ describe("POST /api/coreedge/keys/claim-link", () => {
 
   it("refuses a retired app, whose key would not work anyway", async () => {
     mocks.getCurrentUser.mockResolvedValue(ADMIN);
-    mocks.solutionFindFirst.mockResolvedValue({ id: "s1", status: "RETIRED" });
+    mocks.solutionFindFirst.mockResolvedValue({ ...OWNED_BY_OTHERS, status: "RETIRED" });
 
     expect((await sendLink(req({ solutionId: "s1", environment: "TEST" }) as never)).status)
       .toBe(409);
+    expect(mocks.createClaimLink).not.toHaveBeenCalled();
+  });
+
+  it("refuses the app's own owner — the self-issuance Studio refuses", async () => {
+    /*
+     * A sole owner refused in Studio ("You own this solution, so you cannot
+     * issue its runtime credential") could send themselves a link here and
+     * collect a live PROD key with createdById = themselves.
+     */
+    const OWNER = { id: "u_me", role: "consultant", organizationId: "org1" };
+    mocks.getCurrentUser.mockResolvedValue(OWNER);
+    for (const slot of ["technicalOwnerId", "businessOwnerId", "supportOwnerId"] as const) {
+      mocks.solutionFindFirst.mockResolvedValue({ ...OWNED_BY_OTHERS, [slot]: OWNER.id });
+
+      const res = await sendLink(req({ solutionId: "s1", environment: "PROD" }) as never);
+
+      expect(res.status, `${slot} must be refused`).toBe(403);
+      expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.ownAppKey);
+    }
+    expect(mocks.createClaimLink).not.toHaveBeenCalled();
+    // The gate needs the owners, so the lookup has to select them.
+    expect(mocks.solutionFindFirst.mock.calls[0]?.[0].select).toMatchObject({
+      technicalOwnerId: true,
+      businessOwnerId: true,
+      supportOwnerId: true,
+    });
+  });
+
+  it("refuses an app that does not name all three owners, whoever sends it", async () => {
+    // On an unowned app [null, null, null] contains nobody, so the owner check
+    // alone passes for everyone — the reason ownership is asked first.
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    mocks.solutionFindFirst.mockResolvedValue({
+      ...OWNED_BY_OTHERS,
+      technicalOwnerId: null,
+      businessOwnerId: null,
+      supportOwnerId: null,
+    });
+
+    const res = await sendLink(req({ solutionId: "s1", environment: "PROD" }) as never);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.appNeedsOwners);
     expect(mocks.createClaimLink).not.toHaveBeenCalled();
   });
 });

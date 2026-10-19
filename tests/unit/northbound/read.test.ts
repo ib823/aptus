@@ -294,6 +294,46 @@ describe("what it sends, and what it never says", () => {
     expect(serialized).not.toContain("password");
   });
 
+  /*
+   * THE ROWS THEMSELVES. Every V2 row SAP Gateway returns carries
+   * `__metadata.uri` and a `__deferred.uri` per navigation, every V4 row its
+   * `@odata.*` links — absolute URLs on the connection's host. They went to the
+   * caller verbatim, so a READ grant on API_BUSINESS_PARTNER handed out the
+   * tenant's hostname on every record, however carefully the rest of the
+   * broker kept it in.
+   */
+  it("never leaks the host through the records' OData envelope", async () => {
+    const svc = "https://my1234-api.s4hana.cloud.sap/sap/opu/odata/sap/API_TEST";
+    const v2 = vi.fn().mockResolvedValue(
+      res(200, {
+        d: {
+          results: [
+            {
+              __metadata: { id: `${svc}/A_Thing('1')`, uri: `${svc}/A_Thing('1')`, type: "API_TEST.A_ThingType" },
+              Thing: "1",
+              Name: "Acme",
+              to_Parts: { __deferred: { uri: `${svc}/A_Thing('1')/to_Parts` } },
+            },
+          ],
+        },
+      }),
+    );
+    const r2 = await readEntitySet({ connection: conn(), ...INPUT }, v2 as unknown as typeof fetch);
+    expect(r2.status).toBe("OK");
+    expect(r2.records).toEqual([{ Thing: "1", Name: "Acme" }]);
+    expect(JSON.stringify(r2.records)).not.toContain(new URL(conn().baseUrl).host);
+
+    const v4 = vi.fn().mockResolvedValue(
+      res(200, {
+        "@odata.context": `${svc}/$metadata#A_Thing`,
+        value: [{ "@odata.id": `${svc}/A_Thing('1')`, "@odata.etag": 'W/"1"', Thing: "1" }],
+      }),
+    );
+    const r4 = await readEntitySet({ connection: conn(), ...INPUT }, v4 as unknown as typeof fetch);
+    expect(r4.records).toEqual([{ Thing: "1" }]);
+    expect(JSON.stringify(r4.records)).not.toContain(new URL(conn().baseUrl).host);
+  });
+
   it("only ever issues a GET", async () => {
     const f = vi.fn().mockResolvedValue(res(200, { value: [] }));
     await readEntitySet({ connection: conn(), ...INPUT }, f as unknown as typeof fetch);

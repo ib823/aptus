@@ -84,10 +84,22 @@ export function ReadinessScorecard({
   aiApis,
   lastProbedAt,
   canProbe = true,
+  dataProbeRefusal = null,
 }: {
   activated: number;
   dataConfirmed: number;
   dataProbe: boolean;
+  /**
+   * Why the live data-read overlay was asked for and refused — the console
+   * ceiling's own sentence, from `counts.dataProbeRefusal`.
+   *
+   * WITHOUT IT A REFUSAL LOOKED LIKE A DEAD CHECKBOX. The route answers a
+   * refused overlay with `dataProbe: false`, which is honest, and this card
+   * read that as "not asked for" and said to enable “Confirm data reads” — to
+   * someone who had just ticked it. The reason the route gave reached nobody.
+   * Optional so the SAP Operations explorer, which never asks, is unchanged.
+   */
+  dataProbeRefusal?: string | null;
   needsSetup: number;
   /** A probe returned 404 — published, but the path is not on this tenant. */
   notFound: number;
@@ -163,6 +175,11 @@ export function ReadinessScorecard({
             (read a live row) · <strong style={{ color: "var(--ink-secondary)" }}>{activated.toLocaleString()}</strong> authorized
             ($metadata reachable)
           </>
+        ) : dataProbeRefusal ? (
+          <span role="status">
+            Authorized = $metadata reachable. Data reads were not confirmed:{" "}
+            <span style={{ color: "var(--status-awaiting-fg)" }}>{dataProbeRefusal}</span>
+          </span>
         ) : (
           <>Authorized = $metadata reachable. Enable “Confirm data reads” to also count data-confirmed (a live 1-row read).</>
         )}

@@ -6,13 +6,14 @@
  * result by MERGING into SapHubContent.rawMetadataJson.probes[tenantKey] =
  * { http, at, read, write } — no schema migration, tenant-scoped (one tenant's run
  * never touches another's), and never clobbering sibling keys (source/steps).
+ * The merge runs in the database against the row's CURRENT value — see
+ * hub-probe-store for how a start-of-run copy broke the "never touches" claim.
  *
  * The list + detail read this stored probe first, so the catalogue no longer
  * live-probes on every page load. Idempotent + re-runnable. SapApiReference is
  * never touched.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { isAdminError, requireAuthenticated } from "@/lib/auth/admin-guard";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { checkRateLimit } from "@/lib/security/rate-limit";
@@ -24,11 +25,18 @@ import {
   getSapProduct,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
-import { hubApiToService, httpToRuntimeStatus, isProbeable, mergeStoredProbe, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
+import {
+  decideConsoleRead,
+  DEPLOYMENT_AUDIT_SCOPE,
+  newCorrelationId,
+  recordConsoleRead,
+} from "@/lib/sap-public/console-read-guard";
+import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
+import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
 import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 const CONFIRMATION = "PROBE ALL SAP SERVICES";
@@ -82,6 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const resolved = tenantKey
     ? await resolveReadTenant(product.envPrefix, product.key, auth.user.organizationId ?? null, tenantKey)
     : null;
+  if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey ?? "");
   // Guard on the RESOLUTION, not only on its tenant: the storage key below
   // needs `source`, and narrowing `tenant` alone leaves `resolved` nullable.
   if (!resolved || !tenantKey) {
@@ -133,6 +142,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const tenant = resolved.tenant;
   const targetTenantKey: string = tenantKey; // narrowed; stable inside the worker closure
+  const viewer = auth.user; // narrowed above (isAdminError guard) — capture for the closures
+
+  /*
+   * THE CONSOLE CEILING AND THE CONSOLE ROW, AS /entities HAS THEM (audit A24).
+   *
+   * This is the most amplifying read the console can cause — six hundred-odd
+   * $metadata requests into one client system — and it was the one with neither
+   * control. A builder's own connection passes the role gate above by design; it
+   * did not follow that the connection's LANDSCAPE may be read. An organization
+   * refused 403 NO_APPROVED_GRANT on /entities for its PROD connection could fire
+   * this at the same production host, and the operations board's console-traffic
+   * view never showed it. console-read-guard.ts states the rule: Sandbox and Dev
+   * freely; TEST, PROD or undeclared only under a live grant for that landscape.
+   *
+   * Checked BEFORE the rate limit, so a refused run does not spend the tenant's
+   * ten-minute window. A deployment tenant has no connection and so no landscape
+   * to cap — it is still recorded, and it is still admin-only above.
+   */
+  const correlationId = newCorrelationId();
+  const conn = resolved.connection;
+  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
+  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+    recordConsoleRead({
+      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+      actorUserId: viewer.id,
+      // One row for the whole fan-out, rowCount carrying how many probes were
+      // made — the -probe-fanout- convention /entities uses, for its reason:
+      // the board is asking how much load this put on the tenant.
+      externalId: "-probe-all-",
+      environment: auditEnvironment,
+      status,
+      rowCount,
+      correlationId,
+      connectionId: conn?.id ?? null,
+      connectionEnvironment: conn?.environment ?? null,
+      ...extra,
+    });
+  if (conn && viewer.organizationId) {
+    const decision = await decideConsoleRead({
+      organizationId: viewer.organizationId,
+      environment: conn.environment,
+    });
+    if (!decision.allowed) {
+      await audit(403, null);
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
+        { status: 403 },
+      );
+    }
+  }
 
   /*
    * WHERE THIS RUN'S RESULTS ARE FILED. Derived once, outside the worker, from
@@ -195,6 +254,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const includeDeprecated = body.includeDeprecated === true;
   // Every probeable row (API/CDS_VIEW on OData V2/V4). SOAP / null apiType are
   // NOT probeable — they stay NOT_PROBEABLE and are skipped here.
+  //
+  // rawMetadataJson is deliberately NOT read. It used to be, once, here — and
+  // minutes later each row was written back from that copy, erasing whatever
+  // other runs had stored on the shared row in the meantime (audit A23). The
+  // write below never needs the old value: the database merges into its own.
   const rows = await prisma.sapHubContent.findMany({
     where: {
       ...scope.where,
@@ -202,13 +266,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       apiType: { in: ["ODATAV2", "ODATAV4"] },
       ...(includeDeprecated ? {} : { NOT: { hubState: "DEPRECATED" } }),
     },
-    select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true, rawMetadataJson: true },
+    select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
   });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).
   const targets = rows.filter((r) => isProbeable({ contentType: r.contentType as HubContentType, apiType: r.apiType }));
 
   const at = new Date().toISOString();
   let probed = 0;
+  // Requests that left for the tenant, counted as they leave — the audit row's
+  // load figure must not depend on every later write succeeding.
+  let requested = 0;
   const byOutcome: Record<string, number> = { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, PROBE_FAILED: 0 };
   let cursor = 0;
 
@@ -225,25 +292,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         communicationScenarios: row.communicationScenarios,
       });
       if (!svc) continue;
+      requested++;
       const result = await probeService(product!.envPrefix, tenant!, svc); // read-only $metadata; never throws
       const { read, write } = deriveReadWrite(result.entities ?? []);
       // MERGE under THIS tenant's OWNER-SCOPED key — preserves sibling keys
       // (source/apiId/steps), the legacy singular `probe`, and every other
       // tenant's stored result, including another organization's tenant that
-      // happens to carry the same name.
-      const merged = mergeStoredProbe(row.rawMetadataJson, storageKey, {
-        http: result.status,
-        at,
-        read,
-        write,
-      }) as Prisma.InputJsonValue;
-      await prisma.sapHubContent.update({ where: { id: row.id }, data: { rawMetadataJson: merged } });
+      // happens to carry the same name. Merged into the row's CURRENT value in
+      // one statement, so an entry another run stored a second ago survives.
+      await persistStoredProbe(row.id, storageKey, { http: result.status, at, read, write });
       probed++;
       const bucket = httpToRuntimeStatus(result.status);
       byOutcome[bucket] = (byOutcome[bucket] ?? 0) + 1;
     }
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+  const startedAt = Date.now();
+  try {
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+  } catch (error) {
+    // The requests already reached the tenant; the row says so even when a
+    // write failed part-way through the run.
+    await audit(502, requested, { durationMs: Date.now() - startedAt });
+    throw error;
+  }
+  await audit(200, requested, { durationMs: Date.now() - startedAt });
 
   try {
     await logDecision({

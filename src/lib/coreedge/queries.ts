@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import type { GrantOperation } from "@/lib/studio/grants";
 
 import {
   deriveLaneStatus,
@@ -277,6 +278,9 @@ export async function listLanes(
         }
 
         const verdict = deriveLaneStatus({
+          // The grant above was matched on this operation and environment, and
+          // the Access hop asks whether its decision authorises exactly that.
+          lane: { operation: feed.operation as GrantOperation, environment },
           appRetired: solution.status === "RETIRED",
           key: {
             exists: client !== undefined,
@@ -452,6 +456,8 @@ export interface RequestRow {
   readonly appName: string;
   readonly appSlug: string;
   readonly feedLabel: string;
+  /** READ, CREATE or UPDATE — a write request carries the write checklist. */
+  readonly operation: string;
   readonly environment: LaneEnvironment | null;
   /** The raw environment string, kept when it does not parse. */
   readonly environmentRaw: string;
@@ -459,6 +465,11 @@ export interface RequestRow {
   readonly justification: string;
   readonly requestedById: string | null;
   readonly requestedByName: string | null;
+  /**
+   * The app's technical, business and support owners (null for an unclaimed
+   * slot), so the review screen can refuse an owner approving their own app.
+   */
+  readonly ownerIds: readonly (string | null)[];
   readonly createdAt: Date;
   readonly expiresAt: Date | null;
 }
@@ -483,7 +494,16 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
       requestedById: true,
       createdAt: true,
       expiresAt: true,
-      solution: { select: { id: true, name: true, slug: true } },
+      solution: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          technicalOwnerId: true,
+          businessOwnerId: true,
+          supportOwnerId: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -506,12 +526,14 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
     appName: g.solution.name,
     appSlug: g.solution.slug,
     feedLabel: `${g.externalId} · ${g.operation}`,
+    operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
     decision: g.decision,
     justification: g.justification,
     requestedById: g.requestedById,
     requestedByName: g.requestedById === null ? null : (nameById.get(g.requestedById) ?? null),
+    ownerIds: [g.solution.technicalOwnerId, g.solution.businessOwnerId, g.solution.supportOwnerId],
     createdAt: g.createdAt,
     expiresAt: g.expiresAt,
   }));
@@ -535,7 +557,16 @@ export async function getRequest(
       requestedById: true,
       createdAt: true,
       expiresAt: true,
-      solution: { select: { id: true, name: true, slug: true } },
+      solution: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          technicalOwnerId: true,
+          businessOwnerId: true,
+          supportOwnerId: true,
+        },
+      },
     },
   });
   if (g === null) return null;
@@ -554,12 +585,14 @@ export async function getRequest(
     appName: g.solution.name,
     appSlug: g.solution.slug,
     feedLabel: `${g.externalId} · ${g.operation}`,
+    operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
     decision: g.decision,
     justification: g.justification,
     requestedById: g.requestedById,
     requestedByName: requester?.name ?? null,
+    ownerIds: [g.solution.technicalOwnerId, g.solution.businessOwnerId, g.solution.supportOwnerId],
     createdAt: g.createdAt,
     expiresAt: g.expiresAt,
   };

@@ -10,15 +10,29 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   findFirst: vi.fn(),
   findMany: vi.fn(),
+  resolveSapConnection: vi.fn(),
+  grantFindMany: vi.fn(),
+  auditCreate: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
+// apiAccessGrant / northboundAuditEvent: the REAL console-read guard's grant read
+// and audit write, which the live probe now goes through (audit A24).
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     sapHubContent: { findUnique: mocks.findUnique },
     scopeCatalogVersion: { findFirst: mocks.findFirst },
     scopeItem: { findMany: mocks.findMany },
+    apiAccessGrant: { findMany: mocks.grantFindMany },
+    northboundAuditEvent: { create: mocks.auditCreate },
   },
+}));
+// A stored connection, resolved without decrypting anything.
+vi.mock("@/lib/sap-public/connection-resolver", () => ({
+  resolveSapConnection: mocks.resolveSapConnection,
+  // No org connection shadows a deployment tenant key in these cases (A41).
+  hasActiveSapConnection: async () => false,
+  toSapTenant: (c: { key: string; label: string; baseUrl: string }) => ({ key: c.key, label: c.label, baseUrl: c.baseUrl }),
 }));
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getSapProduct: mocks.getSapProduct,
@@ -56,6 +70,9 @@ beforeEach(() => {
   mocks.getSapTenant.mockReturnValue(TENANT);
   mocks.findUnique.mockResolvedValue(API_ITEM);
   mocks.probeService.mockResolvedValue({ service: "API_PO", exposed: false, status: 404, ladder: "unreachable" });
+  mocks.resolveSapConnection.mockResolvedValue(null);
+  mocks.grantFindMany.mockResolvedValue([]);
+  mocks.auditCreate.mockResolvedValue({});
 });
 
 describe("GET /api/sap/tdd/hub-content/[id]", () => {
@@ -116,5 +133,77 @@ describe("GET /api/sap/tdd/hub-content/[id]", () => {
     expect(body.data.probeStatus).toBeNull();
     expect(mocks.probeService).not.toHaveBeenCalled();
     expect(body.data.dependencies.debugHint.toLowerCase()).toContain("reference content");
+  });
+});
+
+describe("the detail's live probe takes the console ceiling and leaves a row (A24)", () => {
+  const CONSULTANT = { id: "u1", email: "a@b.co", role: "consultant", organizationId: "org-a" };
+  const ORG_KEY = "org:org-a:s4hana:x5m-prod";
+  const connection = (environment: string | null) => ({
+    id: "conn-prod",
+    key: "x5m-prod",
+    label: "X5M PROD",
+    baseUrl: "https://x5m.example",
+    environment,
+  });
+  const auditRows = () => mocks.auditCreate.mock.calls.map((c) => c[0].data);
+
+  beforeEach(() => {
+    mocks.getCurrentUser.mockResolvedValue(CONSULTANT);
+    mocks.getSapTenant.mockReturnValue(null); // "x5m-prod" is not a deployment key
+    // The organization's own stored verdict for this row on its PROD system.
+    mocks.findUnique.mockResolvedValue({
+      ...API_ITEM,
+      rawMetadataJson: { probes: { [ORG_KEY]: { http: 200, at: new Date().toISOString(), read: true, write: false } } },
+    });
+  });
+
+  it("refused on PROD with no grant: no live probe, the stored verdict renders, the refusal is recorded", async () => {
+    mocks.resolveSapConnection.mockResolvedValue(connection("PROD"));
+    const res = await GET(req("product=s4hana&tenant=x5m-prod"), ctx("1"));
+    expect(res.status).toBe(200); // the browse is not failed
+    const body = await res.json();
+    expect(mocks.probeService).not.toHaveBeenCalled();
+    expect(body.data.probeStatus).toBe(200); // from the stored probe
+    expect(body.data.capability).toEqual({ read: true, write: false });
+    expect(auditRows()).toEqual([
+      expect.objectContaining({
+        organizationId: "org-a",
+        actorUserId: "u1",
+        externalId: "API_PO",
+        environment: "PROD",
+        status: 403,
+        rowCount: null,
+        dryRun: true,
+        connectionId: "conn-prod",
+        connectionEnvironment: "PROD",
+      }),
+    ]);
+  });
+
+  it("probes a DEV connection without a grant and records what SAP answered", async () => {
+    mocks.resolveSapConnection.mockResolvedValue(connection("DEV"));
+    mocks.probeService.mockResolvedValue({
+      service: "API_PO", exposed: true, status: 200, ladder: "readable", entitySetCount: 3, entities: [],
+    });
+    const body = await (await GET(req("product=s4hana&tenant=x5m-prod"), ctx("1"))).json();
+    expect(mocks.probeService).toHaveBeenCalledOnce();
+    expect(mocks.grantFindMany).not.toHaveBeenCalled();
+    expect(body.data.status).toBe("ACTIVATED");
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ externalId: "API_PO", status: 200, rowCount: 3, environment: "DEV" }),
+    ]);
+  });
+
+  it("records a deployment-tenant probe, a refusal SAP gave, and nothing for probe=0", async () => {
+    mocks.getSapTenant.mockReturnValue(TENANT);
+    await GET(req(), ctx("1")); // the default 404 mock
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ environment: "deployment:default", externalId: "API_PO", status: 404, rowCount: null }),
+    ]);
+
+    mocks.auditCreate.mockClear();
+    await GET(req("product=s4hana&probe=0"), ctx("1"));
+    expect(mocks.auditCreate).not.toHaveBeenCalled();
   });
 });

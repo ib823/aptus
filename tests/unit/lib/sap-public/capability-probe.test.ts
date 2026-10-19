@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   inspectSapServiceMetadata: vi.fn(),
+  probeSapEntitySet: vi.fn(),
 }));
 
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   inspectSapServiceMetadata: mocks.inspectSapServiceMetadata,
+  probeSapEntitySet: mocks.probeSapEntitySet,
 }));
 
 import {
@@ -62,6 +64,41 @@ describe("probeService", () => {
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.status).toBe(0);
     expect(r.error).toBe("probe failed");
+  });
+});
+
+describe("probeService — the opt-in data read is countable", () => {
+  /*
+   * The hub-content overlay's console audit row counts the $top=1 GETs that
+   * left for the tenant from `dataStatus` (audit A24). A read that threw left
+   * no status at all, so it went uncounted although it was made; it now carries
+   * 0, the same "attempted, never answered" the metadata status uses.
+   */
+  const META = {
+    entitySets: [{ name: "A" }],
+    entityCapabilities: [{ name: "A", readable: true, creatable: false, updatable: false, deletable: false, pageable: null }],
+    flavor: "v2",
+  };
+
+  it("an answered data read carries its status", async () => {
+    mocks.inspectSapServiceMetadata.mockResolvedValue(META);
+    mocks.probeSapEntitySet.mockResolvedValue({ ok: true, status: 200, hasErrorBody: false });
+    const r = await probeService("S4_TDD", TENANT, SVC, { dataProbe: true });
+    expect(r).toMatchObject({ dataStatus: 200, dataConfirmed: true });
+  });
+
+  it("a data read that threw is still recorded as made — status 0, never confirmed", async () => {
+    mocks.inspectSapServiceMetadata.mockResolvedValue(META);
+    mocks.probeSapEntitySet.mockRejectedValue(new Error("socket hang up"));
+    const r = await probeService("S4_TDD", TENANT, SVC, { dataProbe: true });
+    expect(r).toMatchObject({ dataStatus: 0, dataConfirmed: false });
+  });
+
+  it("no data read, no data status", async () => {
+    mocks.inspectSapServiceMetadata.mockResolvedValue(META);
+    const r = await probeService("S4_TDD", TENANT, SVC);
+    expect(r.dataStatus).toBeUndefined();
+    expect(mocks.probeSapEntitySet).not.toHaveBeenCalled();
   });
 });
 

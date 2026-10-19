@@ -31,6 +31,7 @@ import {
   type LaneFacts,
 } from "@/lib/coreedge/lanes";
 import { LANE_HOPS, LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
+import { grantsRead, grantsWrite, isWriteOperation } from "@/lib/studio/grants";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
 const RECENT = new Date(NOW.getTime() - 60_000);
@@ -39,6 +40,7 @@ const ANCIENT = new Date(NOW.getTime() - CHECK_TTL_MS - 60_000);
 /** A lane where every hop proves. Each test spoils exactly one thing. */
 function healthy(): LaneFacts {
   return {
+    lane: { operation: "READ", environment: "TEST" },
     appRetired: false,
     key: { exists: true, isActive: true, revokedAt: null, expiresAt: null },
     access: { decision: "APPROVED", expiresAt: null, revokedAt: null },
@@ -193,12 +195,89 @@ describe("access states map to the statuses that differ in what to do next", () 
     ).toBe("noAccess");
   });
 
-  it("lets SANDBOX_ONLY and READ_ONLY clear the access hop (D2)", () => {
-    // Historical rows keep meaning what they meant; they are never offered again.
-    for (const decision of ["SANDBOX_ONLY", "READ_ONLY"] as const) {
-      expect(deriveLaneStatus(withFacts({ access: { decision, expiresAt: null, revokedAt: null } })).status).toBe(
-        "live",
+  it("lets SANDBOX_ONLY and READ_ONLY clear the access hop where they authorise (D2)", () => {
+    /*
+     * Historical rows keep meaning what they meant; they are never offered
+     * again. WHAT THEY MEANT IS NARROWER THAN THIS TEST USED TO SAY: it ran on
+     * a lane with no operation or environment and asserted both decisions clear
+     * the hop anywhere. SANDBOX_ONLY clears it in Sandbox, READ_ONLY on a lane
+     * that reads — exactly where the broker honours them. Elsewhere they are
+     * the next test.
+     */
+    expect(
+      deriveLaneStatus(
+        withFacts({
+          lane: { operation: "READ", environment: "SANDBOX" },
+          access: { decision: "SANDBOX_ONLY", expiresAt: null, revokedAt: null },
+        }),
+      ).status,
+    ).toBe("live");
+    expect(
+      deriveLaneStatus(
+        withFacts({
+          lane: { operation: "READ", environment: "PROD" },
+          access: { decision: "READ_ONLY", expiresAt: null, revokedAt: null },
+        }),
+      ).status,
+    ).toBe("live");
+  });
+
+  /*
+   * A LIVE GRANT THAT AUTHORISES NOTHING ON THIS LANE. Every hop after Access
+   * can prove — key collected, system bound, entity set read by the sweep —
+   * and the broker still refuses every call, because the decision does not
+   * permit what the lane carries. The lane used to say "Live — every hop
+   * proved" over that.
+   */
+  it("refuses Access to READ_ONLY on a lane that writes", () => {
+    for (const operation of ["CREATE", "UPDATE"] as const) {
+      const v = deriveLaneStatus(
+        withFacts({
+          lane: { operation, environment: "PROD" },
+          access: { decision: "READ_ONLY", expiresAt: null, revokedAt: null },
+        }),
       );
+      expect(v.status, operation).toBe("noAccess");
+      expect(v.brokenHop).toBe("access");
+      expect(v.because).toContain("read-only");
+    }
+  });
+
+  it("refuses Access to SANDBOX_ONLY outside Sandbox, on reads and writes alike", () => {
+    for (const operation of ["READ", "CREATE"] as const) {
+      for (const environment of ["DEV", "TEST", "PROD"] as const) {
+        const v = deriveLaneStatus(
+          withFacts({
+            lane: { operation, environment },
+            access: { decision: "SANDBOX_ONLY", expiresAt: null, revokedAt: null },
+          }),
+        );
+        expect(v.status, `${operation} in ${environment}`).toBe("noAccess");
+        expect(v.because).toContain("Sandbox only");
+      }
+    }
+  });
+
+  it("clears Access exactly when the broker's predicates would authorise the lane", () => {
+    const decisions = ["APPROVED", "SANDBOX_ONLY", "READ_ONLY"] as const;
+    for (const operation of ["READ", "CREATE", "UPDATE"] as const) {
+      for (const environment of LANE_ENVIRONMENTS) {
+        for (const decision of decisions) {
+          const v = deriveLaneStatus(
+            withFacts({
+              lane: { operation, environment },
+              access: { decision, expiresAt: null, revokedAt: null },
+            }),
+          );
+          const authorises = isWriteOperation(operation)
+            ? grantsWrite(decision, environment)
+            : grantsRead(decision, environment);
+          expect(
+            v.brokenHop !== "access",
+            `${decision} on a ${operation} lane in ${environment}`,
+          ).toBe(authorises);
+        }
+      }
     }
   });
 });

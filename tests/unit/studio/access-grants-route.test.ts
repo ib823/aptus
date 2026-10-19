@@ -13,23 +13,44 @@ const mocks = vi.hoisted(() => ({
   findFirstSolution: vi.fn(),
   createGrant: vi.fn(),
   findFirstGrant: vi.fn(),
-  updateGrant: vi.fn(),
+  updateManyGrant: vi.fn(),
   createAudit: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solution: { findFirst: mocks.findFirstSolution },
     apiAccessGrant: {
       create: mocks.createGrant,
       findFirst: mocks.findFirstGrant,
-      update: mocks.updateGrant,
+      updateMany: mocks.updateManyGrant,
       findMany: vi.fn().mockResolvedValue([]),
     },
     configAudit: { create: mocks.createAudit },
-  },
-}));
+    // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
+    // Outside a transaction the lock would commit and release at once, so taking
+    // it on the client instead of on `tx` is a failure, not a pass.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction, not the client");
+    },
+  };
+  return {
+    prisma: {
+      ...client,
+      // The decision runs on these same mocks inside its transaction, so the
+      // assertions below still see its reads and its compare-and-set; `commit`
+      // marks where the transaction — and the lock — ends.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn({ ...client, $queryRaw: mocks.lockSolution } as unknown as typeof client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/access-grants/route";
 
@@ -61,9 +82,9 @@ beforeEach(() => {
   mocks.createGrant.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: "g_1", ...data }),
   );
-  mocks.updateGrant.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-    Promise.resolve({ id: "g_1", ...data }),
-  );
+  // A compare-and-set reports how many rows matched its guard; one means this
+  // decision is the one that landed.
+  mocks.updateManyGrant.mockResolvedValue({ count: 1 });
   mocks.createAudit.mockResolvedValue({ id: "a_1" });
 });
 
@@ -139,6 +160,8 @@ describe("recording a decision", () => {
     // Bounded. The expiry rule covers reads now, so a request that arrived
     // without one is refused — which is its own test below, not the default.
     expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+    // Owned by the requester and an absent colleague — not by the approver.
+    solution: { technicalOwnerId: "u_req", businessOwnerId: null, supportOwnerId: "u_lead" },
   };
 
   it("403s approving a READ that arrived with no expiry", async () => {
@@ -149,7 +172,7 @@ describe("recording a decision", () => {
     mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, expiresAt: null });
     const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
     expect(res.status).toBe(403);
-    expect(mocks.updateGrant).not.toHaveBeenCalled();
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
   });
 
   it("scopes the grant lookup to the caller's organization", async () => {
@@ -172,7 +195,7 @@ describe("recording a decision", () => {
     mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
     const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
     expect(res.status).toBe(403);
-    expect(mocks.updateGrant).not.toHaveBeenCalled();
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
   });
 
   it("lets a different builder decide, and records who", async () => {
@@ -180,7 +203,7 @@ describe("recording a decision", () => {
     mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
     const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
     expect(res.status).toBe(200);
-    const data = mocks.updateGrant.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    const data = mocks.updateManyGrant.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.decidedById).toBe("u_app");
     expect(data.decision).toBe("APPROVED");
   });
@@ -190,7 +213,7 @@ describe("recording a decision", () => {
     mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, operation: "CREATE" });
     const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
     expect(res.status).toBe(403);
-    expect(mocks.updateGrant).not.toHaveBeenCalled();
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
   });
 
   it("allows the WRITE once the checklist is acknowledged and it is time-bounded", async () => {
@@ -224,7 +247,7 @@ describe("recording a decision", () => {
       req({ grantId: "g_1", decision: "APPROVED", writeChecklistAcknowledged: true }, "PATCH"),
     );
     expect(res.status).toBe(403);
-    expect(mocks.updateGrant).not.toHaveBeenCalled();
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
   });
 
   it("409s re-deciding a settled grant", async () => {
@@ -253,5 +276,84 @@ describe("recording a decision", () => {
         }),
       }),
     );
+  });
+
+  it("403s an app's owner deciding a request a colleague raised for it", async () => {
+    // The approver holds one owner slot; someone else raised the request.
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue({
+      ...PENDING_READ,
+      operation: "CREATE",
+      environment: "PROD",
+      solution: { technicalOwnerId: null, businessOwnerId: "u_app", supportOwnerId: null },
+    });
+    const res = await PATCH(
+      req({ grantId: "g_1", decision: "APPROVED", writeChecklistAcknowledged: true }, "PATCH"),
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.message).toMatch(/You own this app/);
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("403s READ_ONLY on a write request", async () => {
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, operation: "CREATE" });
+    const res = await PATCH(
+      req({ grantId: "g_1", decision: "READ_ONLY", writeChecklistAcknowledged: true }, "PATCH"),
+    );
+    expect(res.status).toBe(403);
+    expect(mocks.updateManyGrant).not.toHaveBeenCalled();
+  });
+
+  it("writes only while the grant is still REQUESTED — a compare-and-set", async () => {
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
+    await PATCH(req({ grantId: "g_1", decision: "REJECTED" }, "PATCH"));
+    expect(mocks.updateManyGrant.mock.calls[0]?.[0]?.where).toEqual({
+      id: "g_1",
+      organizationId: "org_a",
+      decision: "REQUESTED",
+    });
+  });
+
+  it("locks the app's Solution row before reading its owners, and holds it through the write", async () => {
+    // OWN_APP reads the owners the solutions PATCH writes — a different row
+    // from this grant — so a reclaim fired together with this decision used to
+    // pass on owners read a moment before it landed. The PATCH takes the same
+    // lock; the read that decides must come after it.
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
+
+    const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol_1", "org_a"]);
+
+    // Located first (to know which app to lock), then read again under the lock.
+    const reads = mocks.findFirstGrant.mock.invocationCallOrder;
+    const lock = mocks.lockSolution.mock.invocationCallOrder[0]!;
+    expect(reads).toHaveLength(2);
+    expect(reads[0]!).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reads[1]!);
+    expect(mocks.findFirstGrant.mock.calls[1]?.[0]?.select?.solution).toBeDefined();
+    expect(reads[1]!).toBeLessThan(mocks.updateManyGrant.mock.invocationCallOrder[0]!);
+    expect(mocks.updateManyGrant.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.commit.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("409s a decision that lost the race, and audits nothing for it", async () => {
+    // Both reviewers read REQUESTED; the other one's write landed first, so
+    // this guarded write matched no row.
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue(PENDING_READ);
+    mocks.updateManyGrant.mockResolvedValue({ count: 0 });
+    const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
+    expect(res.status).toBe(409);
+    expect(mocks.createAudit).not.toHaveBeenCalled();
   });
 });

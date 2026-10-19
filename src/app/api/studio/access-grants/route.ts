@@ -26,6 +26,7 @@ import {
   type GrantEnvironment,
   type GrantOperation,
 } from "@/lib/studio/grants";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -171,60 +172,110 @@ export async function PATCH(request: NextRequest) {
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid decision.");
   const input = parsed.data;
 
-  const grant = await prisma.apiAccessGrant.findFirst({
+  const located = await prisma.apiAccessGrant.findFirst({
     where: { id: input.grantId, organizationId },
-    select: {
-      id: true,
-      decision: true,
-      operation: true,
-      environment: true,
-      requestedById: true,
-      externalId: true,
-      solutionId: true,
-      expiresAt: true,
-    },
+    select: { solutionId: true },
   });
-  if (!grant) return studioError("NOT_FOUND", "Request not found.");
+  if (!located) return studioError("NOT_FOUND", "Request not found.");
 
-  const verdict = evaluateDecision({
-    current: grant.decision as GrantDecision,
-    operation: grant.operation as GrantOperation,
-    environment: grant.environment as GrantEnvironment,
-    requestedById: grant.requestedById,
-    deciderId: user.id,
-    next: input.decision as GrantDecision,
-    writeChecklistAcknowledged: input.writeChecklistAcknowledged,
-    // Taken from the REQUEST, not from the decision: an approver may not invent
-    // the boundary on a write they are approving. A write request that arrived
-    // without an expiry is rejected and re-raised, which leaves both rows in the
-    // ledger — the same shape as re-deciding a settled grant.
-    expiresAt: grant.expiresAt,
+  /*
+   * LOCK THE APP, THEN READ WHAT IS DECIDED ON. OWN_APP compares the decider
+   * with the app's owners, which the solutions PATCH writes on a different row
+   * from the grant settled here — so a reclaim fired together with this
+   * decision used to pass on owners read a moment before it landed. Both take
+   * the same lock (lib/studio/owner-lock.ts), so whichever lands first, the
+   * other reads what it wrote and is refused.
+   */
+  const decided = await prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, { organizationId, solutionId: located.solutionId });
+
+    const grant = await tx.apiAccessGrant.findFirst({
+      where: { id: input.grantId, organizationId },
+      select: {
+        id: true,
+        decision: true,
+        operation: true,
+        environment: true,
+        requestedById: true,
+        externalId: true,
+        solutionId: true,
+        expiresAt: true,
+        // The app's owners, for OWN_APP: an owner may not approve their own app.
+        solution: {
+          select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+        },
+      },
+    });
+    if (!grant) return { refusal: studioError("NOT_FOUND", "Request not found.") };
+
+    const verdict = evaluateDecision({
+      current: grant.decision as GrantDecision,
+      operation: grant.operation as GrantOperation,
+      environment: grant.environment as GrantEnvironment,
+      requestedById: grant.requestedById,
+      deciderId: user.id,
+      ownerIds: [
+        grant.solution.technicalOwnerId,
+        grant.solution.businessOwnerId,
+        grant.solution.supportOwnerId,
+      ],
+      next: input.decision as GrantDecision,
+      writeChecklistAcknowledged: input.writeChecklistAcknowledged,
+      // Taken from the REQUEST, not from the decision: an approver may not invent
+      // the boundary on a write they are approving. A write request that arrived
+      // without an expiry is rejected and re-raised, which leaves both rows in the
+      // ledger — the same shape as re-deciding a settled grant.
+      expiresAt: grant.expiresAt,
+    });
+
+    if (!verdict.ok) {
+      // CONFLICT for "already settled", FORBIDDEN for the governance controls —
+      // the distinction tells the caller whether to retry or to find a colleague.
+      const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
+      return { refusal: studioError(code, verdict.message) };
+    }
+
+    /*
+     * A COMPARE-AND-SET, not an update. The NOT_PENDING check above read the row
+     * a moment ago, and two reviewers deciding together both pass it — so a plain
+     * update let the later one silently overwrite a decision already recorded and
+     * audited, which is the history rewrite NOT_PENDING exists to forbid. With
+     * `decision: "REQUESTED"` in the WHERE only the first write matches; the
+     * second matches nothing and is refused, and writes no audit row.
+     */
+    const decidedAt = new Date();
+    const settled = await tx.apiAccessGrant.updateMany({
+      where: { id: grant.id, organizationId, decision: "REQUESTED" },
+      data: {
+        decision: input.decision,
+        decidedById: user.id,
+        decidedAt,
+      },
+    });
+    if (settled.count === 0) {
+      return {
+        refusal: studioError(
+          "CONFLICT",
+          "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+        ),
+      };
+    }
+    return { grant, decidedAt };
   });
+  if ("refusal" in decided) return decided.refusal;
+  const { grant, decidedAt } = decided;
 
-  if (!verdict.ok) {
-    // CONFLICT for "already settled", FORBIDDEN for the governance controls —
-    // the distinction tells the caller whether to retry or to find a colleague.
-    const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
-    return studioError(code, verdict.message);
-  }
-
-  const updated = await prisma.apiAccessGrant.update({
-    where: { id: grant.id, organizationId },
-    data: {
-      decision: input.decision,
-      decidedById: user.id,
-      decidedAt: new Date(),
-    },
-    select: {
-      id: true,
-      decision: true,
-      decidedById: true,
-      decidedAt: true,
-      operation: true,
-      environment: true,
-      externalId: true,
-    },
-  });
+  // The row exactly as written: the guard makes this the only write that can
+  // settle the grant, so a re-read would return the same values.
+  const updated = {
+    id: grant.id,
+    decision: input.decision,
+    decidedById: user.id,
+    decidedAt,
+    operation: grant.operation,
+    environment: grant.environment,
+    externalId: grant.externalId,
+  };
 
   await writeConfigAudit({
     organizationId,

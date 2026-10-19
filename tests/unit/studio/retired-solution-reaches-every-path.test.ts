@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   resolveReadableInterface: vi.fn(),
   recordNorthboundCall: vi.fn(),
   setWriteCredential: vi.fn(),
+  findFirstClient: vi.fn(),
+  upsertClient: vi.fn(),
+  updateClient: vi.fn(),
+  closeLinks: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -39,9 +43,15 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     interface: { findFirst: mocks.findFirstInterface },
     solution: { findFirst: mocks.findFirstSolution },
-    solutionClient: { findMany: mocks.findManyClients },
+    solutionClient: {
+      findMany: mocks.findManyClients,
+      findFirst: mocks.findFirstClient,
+      upsert: mocks.upsertClient,
+      update: mocks.updateClient,
+    },
     apiAccessGrant: { findMany: mocks.findManyGrants },
     configAudit: { create: mocks.createAudit },
+    keyClaimLink: { updateMany: mocks.closeLinks },
   },
 }));
 vi.mock("@/lib/northbound/access", () => ({
@@ -55,6 +65,7 @@ vi.mock("@/lib/northbound/write-credential", () => ({
 
 import { POST as brokerRun } from "@/app/api/studio/test/broker-run/route";
 import { POST as issueWriteKey } from "@/app/api/studio/clients/write-credential/route";
+import { PATCH as changeToken, POST as issueToken } from "@/app/api/studio/clients/route";
 
 const BUILDER = { id: "u_builder", email: "dev@abeam.com", role: "consultant", organizationId: "org_a" };
 
@@ -209,5 +220,63 @@ describe("the write key is not minted onto a dead credential", () => {
     const out = await json(await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body)));
 
     expect(out.data?.writeKey).toBe("cew_generated");
+  });
+});
+
+/*
+ * The runtime token's own two doors. Both minted a fresh `ce_` token for a
+ * RETIRED solution and answered "Copy this token now" — a token that works the
+ * moment one ungated PATCH sets the solution back to DRAFT, alongside any
+ * write key still sealed on its row.
+ */
+describe("the runtime token is not minted for a retired solution", () => {
+  function patch(body: unknown) {
+    return new Request("http://localhost/api/studio/clients", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    }) as never;
+  }
+
+  beforeEach(() => {
+    mocks.closeLinks.mockResolvedValue({ count: 0 });
+    mocks.findFirstSolution.mockResolvedValue({ ...OWNED_SOLUTION, status: "RETIRED" });
+    mocks.findFirstClient.mockResolvedValue({
+      id: "cli_test",
+      solutionId: "sol_1",
+      environment: "TEST",
+      isActive: false,
+      revokedAt: new Date("2026-09-01T00:00:00Z"),
+      expiresAt: null,
+    });
+  });
+
+  it("refuses to issue one", async () => {
+    const out = await json(
+      await issueToken(
+        post("http://localhost/api/studio/clients", { solutionId: "sol_1", label: "x", environment: "TEST" }),
+      ),
+    );
+
+    expect(out.error?.code).toBe("FORBIDDEN");
+    expect(out.error?.message).toMatch(/RETIRED/);
+    expect(mocks.upsertClient).not.toHaveBeenCalled();
+  });
+
+  it("refuses to rotate one", async () => {
+    const out = await json(await changeToken(patch({ clientId: "cli_test", action: "rotate" })));
+
+    expect(out.error?.code).toBe("FORBIDDEN");
+    expect(out.error?.message).toMatch(/RETIRED/);
+    expect(mocks.updateClient).not.toHaveBeenCalled();
+  });
+
+  it("still lets it be revoked — stopping a credential is never the dangerous direction", async () => {
+    mocks.updateClient.mockResolvedValue({ id: "cli_test", solutionId: "sol_1" });
+
+    const out = await json(await changeToken(patch({ clientId: "cli_test", action: "revoke" })));
+
+    expect(out.error).toBeUndefined();
+    expect(mocks.updateClient).toHaveBeenCalled();
   });
 });

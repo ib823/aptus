@@ -335,6 +335,14 @@ export const CLAIM_LINK_COPY = {
   sendingAgainRevokes: "Sending a new link revokes the one already out.",
   /** A retired app's keys are refused, so a link for it would deliver nothing. */
   appRetired: "This app is retired, so a key for it would not work.",
+  /*
+   * Studio's two-human rule, said for a key. A link mints the same credential
+   * Studio issues, so it carries the same two gates in the same order: owners
+   * named first, then the sender is none of them.
+   */
+  appNeedsOwners:
+    "This app doesn't name all three owners yet, so nobody would answer for its key. Name them in Studio first.",
+  ownAppKey: "You own this app, so a colleague has to send its key.",
 } as const;
 
 /** The one action the re-check offers, and what it says while it runs. */

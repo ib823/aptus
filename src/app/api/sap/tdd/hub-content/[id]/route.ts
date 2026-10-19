@@ -25,8 +25,14 @@ import {
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import {
+  decideConsoleRead,
+  DEPLOYMENT_AUDIT_SCOPE,
+  newCorrelationId,
+  recordConsoleRead,
+} from "@/lib/sap-public/console-read-guard";
 import { probeStorageKey } from "@/lib/sap-public/hub-content";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 // A read endpoint whose result depends on a live per-tenant probe — never cache.
@@ -79,6 +85,11 @@ export async function GET(
   const resolvedTenant = tenantKey
     ? await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey)
     : null;
+  // Refused for the same reason as the list: the stored read below would
+  // otherwise come from a slot that is not this organization's.
+  if (resolvedTenant && "refused" in resolvedTenant) {
+    return readTenantRefusalResponse(resolvedTenant, tenantKey ?? "");
+  }
   const tenant = mayProbe ? (resolvedTenant?.tenant ?? null) : null;
   const probeKey =
     resolvedTenant && tenantKey
@@ -103,17 +114,68 @@ export async function GET(
   let entities: unknown = null;
   let metadataFlavor: string | null = null;
   let capability: { read: boolean; write: boolean } | null = null;
-  if (tenant && service && request.nextUrl.searchParams.get("probe") !== "0") {
-    try {
-      const result = await probeService(product.envPrefix, tenant, service);
-      probeStatus = result.status;
-      ladder = result.ladder ?? null;
-      entities = result.entities ?? null;
-      metadataFlavor = result.metadataFlavor ?? null;
-      // Same shared derivation as the list — the collapsed chip must match this.
-      if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
-    } catch {
-      probeStatus = null;
+  /*
+   * THE CONSOLE CEILING AND THE CONSOLE ROW, AS /entities HAS THEM (audit A24).
+   * The role gate above decides WHO may cause a live read; it never decided
+   * WHICH landscape. Expanding a row in the catalogue sent a live $metadata
+   * request to whatever connection `?tenant=` resolved — an organization's PROD
+   * system included, though /entities refuses the same organization 403
+   * NO_APPROVED_GRANT there — and left no NorthboundAuditEvent row.
+   *
+   * A REFUSAL FALLS BACK, IT DOES NOT FAIL. The detail already falls through to
+   * the stored probe for a viewer who may not probe, and for `?probe=0`; a
+   * landscape this organization is not cleared to read is the same case. The
+   * refused read is still recorded.
+   *
+   * `viewer` is implied by `tenant` (a tenant is only kept when the probe guard
+   * found a session); naming it narrows the type for the row's actor.
+   */
+  if (tenant && service && viewer && request.nextUrl.searchParams.get("probe") !== "0") {
+    const correlationId = newCorrelationId();
+    const conn = resolvedTenant?.connection ?? null;
+    const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
+    const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+      recordConsoleRead({
+        organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+        actorUserId: viewer.id,
+        externalId: service.key,
+        environment: auditEnvironment,
+        status,
+        rowCount,
+        correlationId,
+        connectionId: conn?.id ?? null,
+        connectionEnvironment: conn?.environment ?? null,
+        ...extra,
+      });
+    let allowed = true;
+    if (conn && viewer.organizationId) {
+      const decision = await decideConsoleRead({
+        organizationId: viewer.organizationId,
+        environment: conn.environment,
+      });
+      if (!decision.allowed) {
+        await audit(403, null);
+        allowed = false;
+      }
+    }
+    if (allowed) {
+      const startedAt = Date.now();
+      try {
+        const result = await probeService(product.envPrefix, tenant, service);
+        // Like /entities: the status SAP gave ($metadata read), how many entity
+        // sets it declared, and 502 when it never answered (probeService's 0).
+        await audit(result.status === 0 ? 502 : result.status, result.exposed ? (result.entitySetCount ?? 0) : null, {
+          durationMs: Date.now() - startedAt,
+        });
+        probeStatus = result.status;
+        ladder = result.ladder ?? null;
+        entities = result.entities ?? null;
+        metadataFlavor = result.metadataFlavor ?? null;
+        // Same shared derivation as the list — the collapsed chip must match this.
+        if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+      } catch {
+        probeStatus = null;
+      }
     }
   }
   /*

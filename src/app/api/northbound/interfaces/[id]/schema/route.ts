@@ -23,6 +23,7 @@ import {
 } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { servedResponseSchema } from "@/lib/studio/schema-capture";
 import { scopedById } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +119,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       mode: iface.mode,
       version: iface.version,
       requestSchema: iface.requestSchema,
-      responseSchema: iface.responseSchema,
+      // As the served rows can satisfy it: a schema captured before the broker
+      // stripped SAP's envelope still requires V2's deferred navigations, which
+      // no served row carries. See servedResponseSchema.
+      responseSchema: servedResponseSchema(iface.responseSchema),
       // Said out loud because a null schema is a real state, not a bug: it means
       // nobody has run this interface in the Test Console yet.
       schemaCaptured: iface.responseSchema !== null,

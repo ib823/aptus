@@ -24,6 +24,8 @@
  * useful thing than a description of what SAP documents.
  */
 
+import { isEnvelopeKey, stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
+
 export interface CapturedSchema {
   type: "object";
   properties: Record<string, { type?: string; format?: string; nullable?: boolean }>;
@@ -41,6 +43,13 @@ export interface CapturedSchema {
      * before this field existed.
      */
     alwaysPresent?: string[];
+    /**
+     * "stripped": the rows were put through the broker's envelope rule before
+     * anything was inferred from them, so nothing here describes a key the
+     * served rows do not carry. Absent on schemas captured before that, which
+     * servedResponseSchema reconciles on the way out.
+     */
+    envelope?: "stripped";
   };
 }
 
@@ -57,9 +66,6 @@ export interface CapturedSchema {
  * which case the reader is looking at.
  */
 export const MIN_SAMPLE_FOR_REQUIRED = 20;
-
-/** OData v2 wraps metadata in `__metadata`; it describes the envelope, not the entity. */
-const ODATA_NOISE = new Set(["__metadata", "__deferred", "@odata.etag", "@odata.context"]);
 
 function jsonTypeOf(value: unknown): { type?: string; format?: string } | null {
   if (value === null) return null; // null tells us nothing about the type
@@ -93,8 +99,15 @@ export function inferResponseSchema(
   const sawNull = new Set<string>();
 
   for (const row of rows) {
-    for (const [key, value] of Object.entries(row)) {
-      if (ODATA_NOISE.has(key)) continue;
+    /*
+     * OData v2 wraps metadata in `__metadata`; it describes the envelope, not
+     * the entity. Removed with the broker's own rule rather than a list kept
+     * here: the rows the broker serves carry neither it, nor V2's unexpanded
+     * `__deferred` navigations, nor any `@odata.*` key, and a contract that
+     * described fields the served rows do not have would make a consumer's
+     * validator reject every row. See odata-envelope.ts.
+     */
+    for (const [key, value] of Object.entries(stripODataEnvelope(row))) {
       seenIn.set(key, (seenIn.get(key) ?? 0) + 1);
       if (value === null) {
         sawNull.add(key);
@@ -155,7 +168,82 @@ export function inferResponseSchema(
           : `The sample is below ${MIN_SAMPLE_FOR_REQUIRED} rows, so no field is marked required — ` +
             `${alwaysPresent.length} ${alwaysPresent.length === 1 ? "was" : "were"} present in every sampled row (x-captured.alwaysPresent), which is an observation, not a guarantee.`),
       alwaysPresent,
+      envelope: "stripped",
     },
+  };
+}
+
+/**
+ * A stored schema as the rows now served can satisfy it.
+ *
+ * Schemas captured before inference used the broker's envelope rule were built
+ * with a list of four top-level keys instead. Two things got through that the
+ * broker now removes from every row it serves: each V2 `to_X: { __deferred }`
+ * navigation, recorded as `{ type: "object" }` and — present in every row —
+ * put in `required`; and any `@odata.*` key beyond the two the list named.
+ * Served as stored, such a contract makes a consumer's validator reject every
+ * row, and the kit's own mock (whose fixtures ARE stripped) breaks it too.
+ *
+ * Applied where a stored schema leaves the product — the kit's openapi.json and
+ * client.ts, and the northbound /schema route — the way stored fixtures are
+ * cleaned on the way out (stripFixtureEnvelope), so the next download is right
+ * without anyone re-capturing. For a schema without the `envelope` marker:
+ *
+ *  - an envelope key is not described at all: no served row carries one.
+ *  - an object-typed field stops being `required` (and `alwaysPresent`) but is
+ *    still described. A V2 broker read sends no $expand, so such a field is a
+ *    deferred navigation — absent from every served row — or a complex type,
+ *    and the stored schema cannot say which. Optional is true of both.
+ *
+ * A schema carrying the marker, and anything that is not a captured schema, is
+ * returned as it is. The input is not modified.
+ */
+export function servedResponseSchema(schema: unknown): unknown {
+  if (!isCapturedSchema(schema)) return schema;
+  // The column is `Json?`: a stored schema may predate any part of x-captured.
+  const captured = (schema as { "x-captured"?: Partial<CapturedSchema["x-captured"]> })["x-captured"];
+  if (captured?.envelope === "stripped") return schema;
+
+  const properties = Object.fromEntries(
+    Object.entries(schema.properties).filter(([name]) => !isEnvelopeKey(name)),
+  );
+  const servable = (name: string) => name in properties && properties[name]?.type !== "object";
+  const storedRequired = Array.isArray(schema.required) ? schema.required : [];
+  const storedAlwaysPresent = Array.isArray(captured?.alwaysPresent) ? captured.alwaysPresent : [];
+  const required = storedRequired.filter(servable);
+  const alwaysPresent = storedAlwaysPresent.filter(servable);
+
+  // Nothing either rule touches: what is stored is already what is served.
+  if (
+    Object.keys(properties).length === Object.keys(schema.properties).length &&
+    required.length === storedRequired.length &&
+    alwaysPresent.length === storedAlwaysPresent.length
+  ) {
+    return schema;
+  }
+
+  return {
+    ...schema,
+    properties,
+    required,
+    ...(captured
+      ? {
+          "x-captured": {
+            ...captured,
+            ...(captured.alwaysPresent ? { alwaysPresent } : {}),
+            // The stored note counted what was marked required at capture; say
+            // why the contract served now asserts less.
+            note: [
+              captured.note,
+              "Captured before CoreEdge stopped serving OData envelope keys and V2's unexpanded navigations: " +
+                "those are no longer described, and object-typed fields are no longer marked required. " +
+                "Capture schema again to describe the rows exactly as they are served.",
+            ]
+              .filter(Boolean)
+              .join(" "),
+          },
+        }
+      : {}),
   };
 }
 

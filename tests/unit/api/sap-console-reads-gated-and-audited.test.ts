@@ -15,7 +15,7 @@
  * behaviourally in console-read-guard.test.ts.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -92,6 +92,99 @@ describe("the probe fan-out is recorded as its own load", () => {
     const hit = withComments.indexOf("fromCache: true");
     const before = withComments.slice(Math.max(0, hit - 600), hit);
     expect(before).toMatch(/reached no tenant/i);
+  });
+});
+
+/*
+ * THE OTHER FOUR LIVE READS OF A STORED CONNECTION (audit A24).
+ *
+ * The three routes above were the ones the E15 audit named, and they were the
+ * only ones fixed. Four more resolve the caller's stored connection through the
+ * same resolveReadTenant and send live OData to it: /capabilities (up to sixty
+ * $metadata probes), the hub-content list's ?dataProbe=1 overlay (the same,
+ * plus a $top=1 data GET each), the hub-content detail (one live probe per
+ * expansion) and Probe all (six hundred-odd). An organization refused 403
+ * NO_APPROVED_GRANT on /entities for its PROD connection got the same system's
+ * service list and CRUD map from the first, and none of the four left a row —
+ * exactly "the omission is never in the route you were told about".
+ *
+ * A TABLE OF ITS OWN, because two of the shapes above do not hold here and
+ * should not: the catalogue routes serve a browse that needs no session, so they
+ * cannot refuse an unattributable reader outright (only the LIVE part needs an
+ * actor), and Probe all has its own builder/admin gate rather than the shared
+ * probe guard. What every one of them must have is asserted below, and the scan
+ * after it makes sure a further route cannot join them without landing here.
+ */
+const OTHER_LIVE_READS = {
+  capabilities: "src/app/api/sap/tdd/capabilities/route.ts",
+  "hub-content": "src/app/api/sap/tdd/hub-content/route.ts",
+  "hub-content/[id]": "src/app/api/sap/tdd/hub-content/[id]/route.ts",
+  "hub-content/probe-all": "src/app/api/sap/tdd/hub-content/probe-all/route.ts",
+} as const;
+
+describe.each(Object.entries(OTHER_LIVE_READS))("%s (A24)", (name, file) => {
+  const src = flat(read(file));
+
+  it("applies the environment ceiling to a stored connection, under its real organization", () => {
+    expect(src).toContain("decideConsoleRead");
+    // Same two-part condition as the three routes above, whatever the actor
+    // variable is called in this route.
+    const cap = src.match(/if \(conn && (\w+)\.organizationId\) \{/);
+    expect(cap, "caps only a stored connection, and names its organization").not.toBeNull();
+    expect(src).toContain(`organizationId: ${cap![1]}.organizationId,`);
+  });
+
+  it("records the read", () => {
+    expect(src).toContain("recordConsoleRead");
+  });
+
+  it("hands the row a correlation id", () => {
+    expect(src).toContain("newCorrelationId()");
+  });
+
+  it("audits the refusal, not only the success", () => {
+    expect(src).toMatch(/await audit\(403/);
+  });
+
+  it("stays in the tight sapLive throttle bucket", () => {
+    expect(isLiveSapTenantRoute(`/api/sap/tdd/${name}`)).toBe(true);
+  });
+});
+
+describe("a fan-out is one row with a scope sentinel, as /entities records -probe-fanout-", () => {
+  it.each([
+    ["capabilities", "-capabilities-"],
+    ["hub-content", "-hub-overlay-"],
+    ["hub-content/probe-all", "-probe-all-"],
+  ] as const)("%s records under %s", (name, sentinel) => {
+    expect(flat(read(OTHER_LIVE_READS[name]))).toContain(`externalId: "${sentinel}"`);
+  });
+});
+
+describe("no route resolves a stored connection for a live read without the guard", () => {
+  function routeFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) return routeFiles(p);
+      return entry.isFile() && entry.name === "route.ts" ? [p] : [];
+    });
+  }
+
+  it("every route.ts that calls resolveReadTenant is in one of the two tables, and uses the guard", () => {
+    // resolveReadTenant is how a console route reaches a caller's STORED
+    // connection — the only kind of system with a landscape to cap. A fifth
+    // route that calls it fails here until it is added above, which is where
+    // it is held to the ceiling and the row.
+    const callers = routeFiles(path.resolve(ROOT, "src/app/api"))
+      .filter((f) => code(readFileSync(f, "utf8")).includes("resolveReadTenant("))
+      .map((f) => path.relative(ROOT, f).split(path.sep).join("/"))
+      .sort();
+    expect(callers).toEqual([...Object.values(ROUTES), ...Object.values(OTHER_LIVE_READS)].sort());
+    for (const file of callers) {
+      const src = flat(read(file));
+      expect(src, file).toContain("decideConsoleRead(");
+      expect(src, file).toContain("recordConsoleRead(");
+    }
   });
 });
 

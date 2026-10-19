@@ -28,7 +28,11 @@ import {
   newCorrelationId,
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
-import { resolveReadTenant, unknownTenantMessage } from "@/lib/sap-public/tenant-for-read";
+import {
+  readTenantRefusalResponse,
+  resolveReadTenant,
+  unknownTenantMessage,
+} from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { ERROR_CODES } from "@/types/api";
@@ -64,6 +68,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     viewer.organizationId ?? null,
     tenantKey,
   );
+  if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey);
   const tenant = resolved?.tenant ?? null;
   const serviceKey = request.nextUrl.searchParams.get("service") ?? "";
   const service = await resolveHubService(product, serviceKey);

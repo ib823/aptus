@@ -108,6 +108,12 @@ export interface DecisionRequest {
   requestedById: string | null;
   /** Who is deciding now. */
   deciderId: string;
+  /**
+   * The app's owners — technical, business and support — as the solution row
+   * holds them, with null for a slot nobody has claimed. See OWN_APP. Required
+   * rather than optional, so a door that forgets to load them does not compile.
+   */
+  ownerIds: readonly (string | null)[];
   next: GrantDecision;
   /** The approver has explicitly worked through the write checklist. */
   writeChecklistAcknowledged: boolean;
@@ -122,6 +128,8 @@ export type DecisionRefusal =
   | "NOT_PENDING"
   | "NOT_DECIDABLE"
   | "SELF_APPROVAL"
+  | "OWN_APP"
+  | "READ_ONLY_ON_WRITE"
   | "WRITE_CHECKLIST_REQUIRED"
   /** Renamed from WRITE_GRANT_REQUIRES_EXPIRY: it applies to reads too now. */
   | "GRANT_REQUIRES_EXPIRY";
@@ -141,6 +149,16 @@ export type DecisionOutcome = { ok: true } | { ok: false; reason: DecisionRefusa
  *  - SELF_APPROVAL — segregation of duties. The person who asked cannot be the
  *    person who agreed, no matter how senior. This is the single control that
  *    makes the ledger worth keeping.
+ *  - OWN_APP — the other half of the same rule. The design brief states it in
+ *    one sentence: the requester can't approve it, AND an app's owner can't
+ *    approve their own app's access. Only the first half was enforced, so an
+ *    owner needed nothing more than a colleague to press "request" and could
+ *    then approve their own app's PROD access themselves.
+ *  - READ_ONLY_ON_WRITE — read-only cannot narrow a write. The broker matches a
+ *    grant on its operation, so a READ_ONLY decision on a CREATE or UPDATE row
+ *    authorises no read (no read interface carries that operation) and no write
+ *    (`grantsWrite` refuses READ_ONLY). It stored a grant that permits nothing
+ *    while every screen reported it as access.
  *  - WRITE_CHECKLIST_REQUIRED — a write into a client's SAP system is never
  *    approved by reflex. The checklist must be worked through explicitly, and no
  *    write is ever auto-approved.
@@ -167,6 +185,33 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
       ok: false,
       reason: "SELF_APPROVAL",
       message: "You cannot decide your own request. Someone else must review it.",
+    };
+  }
+
+  // Every decision, rejections included, exactly like SELF_APPROVAL: an owner
+  // rejecting their own app's request is still the owner settling it, and the
+  // ledger's promise is a second pair of eyes on every settlement. A null slot
+  // is an unclaimed role and matches nobody.
+  //
+  // Its claim-side half, OWNER_CLAIM_BY_DECIDER (solutions.ts), is narrower on
+  // purpose: it exempts rejections. A non-owner who rejected a request may
+  // claim a slot afterwards, because a rejection authorises nothing for the
+  // new owner to be sitting on. This rule decides who may settle a request;
+  // that one, what a past settlement still grants its decider.
+  if (req.ownerIds.some((id) => id !== null && id === req.deciderId)) {
+    return {
+      ok: false,
+      reason: "OWN_APP",
+      message: "You own this app, so a colleague has to approve its access.",
+    };
+  }
+
+  if (req.next === "READ_ONLY" && isWriteOperation(req.operation)) {
+    return {
+      ok: false,
+      reason: "READ_ONLY_ON_WRITE",
+      message:
+        "Read-only cannot narrow a write request: a grant is matched on its operation, so it would authorise neither the write nor any read. Approve the write with its checklist, or reject it and ask for a separate read request.",
     };
   }
 

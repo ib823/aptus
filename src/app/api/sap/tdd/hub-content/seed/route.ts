@@ -22,6 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { classifyApiTypeById, isHubContentType, serviceApiId, type HubContentType } from "@/lib/sap-public/hub-content";
 import { BUNDLED_HUB_CONTENT, BUNDLED_HUB_TYPES, COUNT_ONLY_HUB_TYPES } from "@/lib/sap-public/hub-content-bundled";
+import { refreshApiProvenance } from "@/lib/sap-public/hub-probe-store";
 import { normalizeHubRowForType } from "@/lib/sap-public/hub-import";
 import { hubLifecycleFields } from "@/lib/sap-public/hub-import";
 import { resolveLineOfBusiness } from "@/lib/sap-public/hub-lob";
@@ -92,22 +93,20 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
   const codeToFA = new Map<string, string>();
   for (const si of scopeItems) if (si.functionalArea && !codeToFA.has(si.scopeCode)) codeToFA.set(si.scopeCode, si.functionalArea);
 
-  // Preserve tenant-keyed probe status across a rebuild. The API-slice upsert
-  // refreshes metadata, but its rawMetadataJson ({source, apiId}) must NOT wipe
-  // the stored probes[tenantKey] written by Probe-all — else "Rebuild from API
-  // reference" would reset every Activated row to Not-checked. Read each row's
-  // existing rawMetadataJson first, then MERGE on update (see below).
-  const existingRaw = new Map<string, Record<string, unknown>>();
-  const existingApiRows = await prisma.sapHubContent.findMany({
-    where: { contentType: API },
-    select: { externalId: true, rawMetadataJson: true },
-  });
-  for (const r of existingApiRows) {
-    if (r.rawMetadataJson && typeof r.rawMetadataJson === "object" && !Array.isArray(r.rawMetadataJson)) {
-      existingRaw.set(r.externalId, r.rawMetadataJson as Record<string, unknown>);
-    }
-  }
-
+  /*
+   * Preserve tenant-keyed probe status across a rebuild. The API-slice upsert
+   * refreshes metadata, but its rawMetadataJson ({source, apiId}) must NOT wipe
+   * the stored probes[tenantKey] written by Probe-all — else "Rebuild from API
+   * reference" would reset every Activated row to Not-checked.
+   *
+   * NOT BY SNAPSHOT (audit A23). This used to read every API row's
+   * rawMetadataJson once, here, and write `{ ...thatCopy, source, apiId }` back
+   * over each row as the loop reached it. Every probe stored after the copy was
+   * taken — by any organization's Probe-all running alongside — was reverted to
+   * the copy's version, for every organization at once. So the update below no
+   * longer writes rawMetadataJson at all, and the two keys the Rebuild owns are
+   * merged into each row's CURRENT value afterwards (refreshApiProvenance).
+   */
   let imported = 0;
   let apiTypeBackfilled = 0;
   const byLob: Record<string, number> = {};
@@ -135,19 +134,19 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       // Projected from real SapApiReference rows — SAP-published, not seed.
       illustrative: false,
       hubUrl: a.apiHubUrl,
-      rawMetadataJson: freshRaw as Prisma.InputJsonValue,
     };
-    // On UPDATE, spread the existing rawMetadataJson first so probes (and any
-    // sibling keys) survive; freshRaw only refreshes source/apiId.
-    const prevRaw = existingRaw.get(a.apiId);
-    const mergedRaw = (prevRaw ? { ...prevRaw, ...freshRaw } : freshRaw) as Prisma.InputJsonValue;
+    // A NEW row has no stored probe to preserve, so it is created with freshRaw.
+    // An EXISTING row's rawMetadataJson is left alone here: probes (and any
+    // sibling keys) stay exactly as the database holds them, and source/apiId
+    // are merged in below.
     await prisma.sapHubContent.upsert({
       where: { contentType_externalId: { contentType: API, externalId: a.apiId } },
-      create: { contentType: API, externalId: a.apiId, ...data },
-      update: { ...data, rawMetadataJson: mergedRaw },
+      create: { contentType: API, externalId: a.apiId, ...data, rawMetadataJson: freshRaw as Prisma.InputJsonValue },
+      update: data,
     });
     imported++;
   }
+  await refreshApiProvenance(apis.map((a) => a.apiId));
 
   // Inject the curated known-exposed services (S4HANA_SERVICES) as API rows.
   const s4 = getSapProduct("s4hana");

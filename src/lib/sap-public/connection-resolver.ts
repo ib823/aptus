@@ -156,7 +156,14 @@ export async function resolveSapConnections(
     where: { organizationId, product, isActive: true },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((r) => ({
+  return rows.map(openConnectionRow);
+}
+
+type SapConnectionRow = Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number];
+
+/** One stored row, decrypted and normalized. Throws when the row cannot be opened. */
+function openConnectionRow(r: SapConnectionRow): ResolvedSapConnection {
+  return {
     source: "db" as const,
     id: r.id,
     organizationId: r.organizationId,
@@ -174,7 +181,7 @@ export async function resolveSapConnections(
     timeoutMs: r.timeoutMs,
     environment: r.environment,
     client: r.client,
-  }));
+  };
 }
 
 /**
@@ -186,10 +193,52 @@ export async function resolveSapConnection(
   product: string,
   key?: string | null,
 ): Promise<ResolvedSapConnection | null> {
+  if (key) {
+    /*
+     * A NAMED KEY OPENS ONLY THAT ROW. This used to open every active row for
+     * the org and product and then pick one, so a single sibling that would
+     * not decrypt — sealed under a previous SAP_CONNECTION_ENCRYPTION_KEY, or
+     * restored from a backup — threw for every key, including a healthy one.
+     * Every console read of a perfectly good connection then failed because of
+     * a different connection the user had not asked for.
+     *
+     * Skipping a bad row is safe HERE and not in the environment binding
+     * below: a key names exactly one row (`@@unique([organizationId, product,
+     * key])`), so no other row could be chosen in its place. The key is also
+     * checked again before opening, so a broader result can never open a row
+     * the caller did not name. The named row itself being unreadable still
+     * throws; the caller decides what that means.
+     */
+    if (!organizationId) return null;
+    const rows = await prisma.sapConnection.findMany({
+      where: { organizationId, product, key, isActive: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const row = rows.find((r) => r.key === key);
+    return row ? openConnectionRow(row) : null;
+  }
   const all = await resolveSapConnections(organizationId, product);
-  if (all.length === 0) return null;
-  if (key) return all.find((c) => c.key === key) ?? null;
   return all[0] ?? null;
+}
+
+/**
+ * Whether an organization has an ACTIVE connection under this key, without
+ * opening it. For a caller that only needs to know the row exists: decrypting
+ * secrets to answer that question would make a broken row fail a check that
+ * never needed its credentials.
+ */
+export async function hasActiveSapConnection(
+  organizationId: string,
+  product: string,
+  key: string,
+): Promise<boolean> {
+  if (!organizationId || !key) return false;
+  const rows = await prisma.sapConnection.findMany({
+    where: { organizationId, product, key, isActive: true },
+    select: { key: true },
+    take: 1,
+  });
+  return rows.some((r) => r.key === key);
 }
 
 /**

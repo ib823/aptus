@@ -56,7 +56,10 @@ export default async function StudioAccessPage() {
           revokedAt: true,
           revokedReason: true,
           createdAt: true,
-          solution: { select: { name: true } },
+          // The owners, so the ledger can say OWN_APP before the click.
+          solution: {
+            select: { name: true, technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+          },
         },
         orderBy: { createdAt: "desc" },
       })
@@ -75,6 +78,9 @@ export default async function StudioAccessPage() {
       now,
     ),
     requestedById: r.requestedById,
+    viewerOwnsApp: [r.solution.technicalOwnerId, r.solution.businessOwnerId, r.solution.supportOwnerId].includes(
+      user.id,
+    ),
     decidedById: r.decidedById,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
     revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,

@@ -18,7 +18,12 @@ import {
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
 import { getCurrentUser } from "@/lib/auth/session";
-import { resolveReadTenant, type ResolvedReadTenant } from "@/lib/sap-public/tenant-for-read";
+import {
+  readTenantRefusalResponse,
+  resolveReadTenant,
+  type ReadTenantRefusal,
+  type ResolvedReadTenant,
+} from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 function displayValue(value: unknown): string {
@@ -110,7 +115,7 @@ async function resolveTenant(
   product: SapOdataProduct,
   request: NextRequest,
   organizationId: string | null,
-): Promise<ResolvedReadTenant | null> {
+): Promise<ResolvedReadTenant | ReadTenantRefusal | null> {
   const tenantKey = request.nextUrl.searchParams.get("tenant");
   if (tenantKey) {
     return (await resolveReadTenant(product.envPrefix, product.key, organizationId, tenantKey)) ?? null;
@@ -148,6 +153,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
   const resolved = await resolveTenant(product, request, viewer.organizationId ?? null);
+  if (resolved && "refused" in resolved) {
+    return readTenantRefusalResponse(resolved, request.nextUrl.searchParams.get("tenant") ?? "");
+  }
   if (!resolved) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No SAP tenant is configured" } },
@@ -207,13 +215,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Short-TTL cache: 4 live SAP reads per request is expensive; a warm instance
   // serves repeats from cache. ?refresh=1 forces a live re-read. generatedAt is
-  // the freshness timestamp the UI shows.
-  const cacheKey = `ops:${product.key}:${tenant.key}`;
+  // the freshness timestamp the UI shows. Filed under the system that answered
+  // (`resolved`), not the bare tenant key, which another organization may share
+  // — see live-cache.
+  const cacheKey = `ops:${product.key}`;
   const refresh = request.nextUrl.searchParams.get("refresh") === "1";
   const tenantIdentity = { key: tenant.key, label: tenant.label };
 
   if (!refresh) {
-    const cached = getLiveCache<{ sections: unknown; generatedAt: string }>(cacheKey);
+    const cached = getLiveCache<{ sections: unknown; generatedAt: string }>(resolved, cacheKey);
     if (cached) {
       // A cache hit reached no tenant, so there is nothing to audit — the row
       // would claim load this request did not cause.
@@ -228,7 +238,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     getSapOperations(product).map((config) => loadOperationSection(product, tenant, config)),
   );
   const generatedAt = new Date().toISOString();
-  setLiveCache(cacheKey, { sections, generatedAt });
+  setLiveCache(resolved, cacheKey, { sections, generatedAt });
 
   // Every section that answered at all counts as load on the tenant, whether it
   // returned rows or an error: the request left and was served.

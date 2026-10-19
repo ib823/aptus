@@ -12,11 +12,27 @@ const mocks = vi.hoisted(() => ({
   count: vi.fn(),
   findMany: vi.fn(),
   groupBy: vi.fn(),
+  resolveSapConnection: vi.fn(),
+  grantFindMany: vi.fn(),
+  auditCreate: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
+// apiAccessGrant / northboundAuditEvent: the REAL console-read guard's grant read
+// and audit write, which the live overlay now goes through (audit A24).
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { sapHubContent: { count: mocks.count, findMany: mocks.findMany, groupBy: mocks.groupBy } },
+  prisma: {
+    sapHubContent: { count: mocks.count, findMany: mocks.findMany, groupBy: mocks.groupBy },
+    apiAccessGrant: { findMany: mocks.grantFindMany },
+    northboundAuditEvent: { create: mocks.auditCreate },
+  },
+}));
+// A stored connection, resolved without decrypting anything.
+vi.mock("@/lib/sap-public/connection-resolver", () => ({
+  resolveSapConnection: mocks.resolveSapConnection,
+  // No org connection shadows a deployment tenant key in these cases (A41).
+  hasActiveSapConnection: async () => false,
+  toSapTenant: (c: { key: string; label: string; baseUrl: string }) => ({ key: c.key, label: c.label, baseUrl: c.baseUrl }),
 }));
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getSapProduct: mocks.getSapProduct,
@@ -103,6 +119,9 @@ beforeEach(() => {
     return Promise.resolve(ALL_ROWS);
   });
   mocks.groupBy.mockResolvedValue(GROUPED);
+  mocks.resolveSapConnection.mockResolvedValue(null);
+  mocks.grantFindMany.mockResolvedValue([]);
+  mocks.auditCreate.mockResolvedValue({});
 });
 
 describe("GET /api/sap/tdd/hub-content", () => {
@@ -310,5 +329,92 @@ describe("a stored probe ages out — a memory, not a status", () => {
     expect(po.status).toBe("ACTIVATED");
     expect(po.probeStale).toBe(false);
     expect(po.probedAt).toBeNull();
+  });
+});
+
+describe("the dataProbe overlay takes the console ceiling and leaves a row (A24)", () => {
+  const CONSULTANT = { id: "u1", email: "a@b.co", role: "consultant", organizationId: "org-a" };
+  const ORG_KEY = "org:org-a:s4hana:x5m-prod";
+  const connection = (environment: string | null) => ({
+    id: "conn-prod",
+    key: "x5m-prod",
+    label: "X5M PROD",
+    baseUrl: "https://x5m.example",
+    environment,
+  });
+  const auditRows = () => mocks.auditCreate.mock.calls.map((c) => c[0].data);
+
+  beforeEach(() => {
+    mocks.getCurrentUser.mockResolvedValue(CONSULTANT);
+    mocks.getSapTenant.mockReturnValue(null); // "x5m-prod" is not a deployment key
+    // This organization's own stored verdict for its PROD system.
+    setStored("API_PO", { source: "s", probes: { [ORG_KEY]: { http: 403, at: FRESH_AT, read: false, write: false } } });
+  });
+
+  it("refused on a PROD connection with no grant: no live read, the stored browse stands, and the refusal is recorded", async () => {
+    // The audit's trigger: up to sixty $metadata probes plus a $top=1 data GET
+    // each, against a production host /entities refuses this organization.
+    mocks.resolveSapConnection.mockResolvedValue(connection("PROD"));
+    const res = await GET(makeRequest("product=s4hana&tenant=x5m-prod&dataProbe=1"));
+    expect(res.status).toBe(200); // the browse is not failed
+    const body = await res.json();
+    expect(mocks.probeTenantCapabilities).not.toHaveBeenCalled();
+    // The stored verdict is what renders.
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NEEDS_SETUP");
+    expect(po.dataConfirmed).toBe(false);
+    // And the response does not claim a live read happened.
+    expect(body.data.counts.dataProbe).toBe(false);
+    expect(body.data.counts.dataProbeRefusal).toContain("declared PROD");
+    expect(auditRows()).toEqual([
+      expect.objectContaining({
+        organizationId: "org-a",
+        actorUserId: "u1",
+        externalId: "-hub-overlay-",
+        environment: "PROD",
+        status: 403,
+        rowCount: null,
+        dryRun: true,
+        connectionId: "conn-prod",
+        connectionEnvironment: "PROD",
+      }),
+    ]);
+  });
+
+  it("runs on PROD under a live grant and counts the data GETs in the row", async () => {
+    mocks.resolveSapConnection.mockResolvedValue(connection("PROD"));
+    mocks.grantFindMany.mockResolvedValue([{ decision: "APPROVED", expiresAt: null, revokedAt: null }]);
+    mocks.probeTenantCapabilities.mockResolvedValue([
+      // exposed, data GET answered
+      { service: "API_PO", exposed: true, status: 200, dataStatus: 200, dataConfirmed: true, entities: [] },
+    ]);
+    const body = await (await GET(makeRequest("product=s4hana&tenant=x5m-prod&dataProbe=1"))).json();
+    expect(mocks.probeTenantCapabilities).toHaveBeenCalledOnce();
+    expect(body.data.counts.dataProbe).toBe(true);
+    expect(body.data.counts.dataProbeRefusal).toBeNull();
+    // One $metadata probe (the one target sampled) + one data GET.
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ externalId: "-hub-overlay-", status: 200, rowCount: 2, connectionEnvironment: "PROD" }),
+    ]);
+  });
+
+  it("a default load reaches no tenant, so it records nothing", async () => {
+    mocks.resolveSapConnection.mockResolvedValue(connection("PROD"));
+    await GET(makeRequest("product=s4hana&tenant=x5m-prod"));
+    expect(mocks.probeTenantCapabilities).not.toHaveBeenCalled();
+    expect(mocks.grantFindMany).not.toHaveBeenCalled();
+    expect(mocks.auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("an overlay on the deployment tenant is recorded too", async () => {
+    mocks.getSapTenant.mockReturnValue(TENANT);
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
+    const body = await (await GET(makeRequest("product=s4hana&dataProbe=1"))).json();
+    expect(body.data.counts.dataProbe).toBe(true);
+    expect(mocks.grantFindMany).not.toHaveBeenCalled();
+    // No data GET was made (no dataStatus), so the row counts the one probe.
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ environment: "deployment:default", connectionId: null, status: 200, rowCount: 1 }),
+    ]);
   });
 });

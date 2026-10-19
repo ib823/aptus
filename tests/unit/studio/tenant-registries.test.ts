@@ -29,9 +29,12 @@ import { repoPath } from "../../helpers/source-files";
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+import type { ReadTenantRefusal, ResolvedReadTenant } from "@/lib/sap-public/tenant-for-read";
+
 const mocks = vi.hoisted(() => ({
   getSapTenant: vi.fn(),
   resolveSapConnection: vi.fn(),
+  hasActiveSapConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
@@ -40,12 +43,20 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
 
 vi.mock("@/lib/sap-public/connection-resolver", () => ({
   resolveSapConnection: mocks.resolveSapConnection,
+  hasActiveSapConnection: mocks.hasActiveSapConnection,
+  connectionRefusalMessage: () => "Re-save the connection's secrets in Studio, or deactivate the broken row.",
   toSapTenant: (c: { key: string; label: string; baseUrl: string }) => ({
     key: c.key,
     label: c.label,
     baseUrl: c.baseUrl,
   }),
 }));
+
+/** The resolution, asserted not to be a refusal, so a test can read its fields. */
+function resolvedOf(out: ResolvedReadTenant | ReadTenantRefusal | null): ResolvedReadTenant | null {
+  if (out && "refused" in out) throw new Error(`expected a tenant, got refusal ${out.refused}`);
+  return out;
+}
 
 const DEPLOYMENT_TENANT = {
   key: "customizing",
@@ -62,6 +73,8 @@ const DECLARED_CONNECTION = {
 beforeEach(() => {
   mocks.getSapTenant.mockReset();
   mocks.resolveSapConnection.mockReset();
+  mocks.hasActiveSapConnection.mockReset();
+  mocks.hasActiveSapConnection.mockResolvedValue(false);
 });
 
 describe("a key from either registry resolves", () => {
@@ -69,11 +82,14 @@ describe("a key from either registry resolves", () => {
     mocks.getSapTenant.mockReturnValue(DEPLOYMENT_TENANT);
     const { resolveReadTenant } = await import("@/lib/sap-public/tenant-for-read");
 
-    const out = await resolveReadTenant("S4_TDD", "s4hana", "org_1", "customizing");
+    const out = resolvedOf(await resolveReadTenant("S4_TDD", "s4hana", "org_1", "customizing"));
     expect(out?.tenant.key).toBe("customizing");
     expect(out?.source).toBe("deployment");
-    // The connection registry must not even be consulted — existing callers
-    // keep their exact behaviour and cost.
+    // The organization's connections are asked only whether one SHADOWS this
+    // key (see the collision case below). No connection is opened: that check
+    // needs no secrets, so a deployment read costs one existence lookup and
+    // cannot fail on a row it never uses.
+    expect(mocks.hasActiveSapConnection).toHaveBeenCalledWith("org_1", "s4hana", "customizing");
     expect(mocks.resolveSapConnection).not.toHaveBeenCalled();
   });
 
@@ -82,7 +98,7 @@ describe("a key from either registry resolves", () => {
     mocks.resolveSapConnection.mockResolvedValue(DECLARED_CONNECTION);
     const { resolveReadTenant } = await import("@/lib/sap-public/tenant-for-read");
 
-    const out = await resolveReadTenant("S4_TDD", "s4hana", "org_1", "qa-conn-verify");
+    const out = resolvedOf(await resolveReadTenant("S4_TDD", "s4hana", "org_1", "qa-conn-verify"));
     expect(
       out,
       "a key the product's own tenant switcher offers must be readable",
@@ -93,17 +109,77 @@ describe("a key from either registry resolves", () => {
   });
 });
 
-describe("resolution order is conservative", () => {
-  it("prefers the deployment tenant on a key collision, never silently redirecting", async () => {
-    // Both registries know "shared". The old meaning wins: this function may add
-    // reach, never move an existing caller somewhere new.
-    mocks.getSapTenant.mockReturnValue({ ...DEPLOYMENT_TENANT, key: "shared" });
-    mocks.resolveSapConnection.mockResolvedValue({ ...DECLARED_CONNECTION, key: "shared" });
+describe("a key both registries know is refused, never guessed", () => {
+  /*
+   * THIS CASE USED TO ASSERT THE OPPOSITE: the deployment tenant won, which the
+   * test called "never silently redirecting". It was the silent redirect, in the
+   * other direction. The tenant switcher lists the organization's own rows, so
+   * it showed the organization's connection while every read went to the shared
+   * demo host with the deployment's credentials, without the environment
+   * ceiling a stored connection gets, and with probes filed under the shared
+   * bare key. Picking the connection instead would move every existing reader of
+   * the deployment key. Neither is right, so the read is refused (audit A41).
+   */
+  it("refuses an organization whose own active connection shadows a deployment key", async () => {
+    mocks.getSapTenant.mockReturnValue({ ...DEPLOYMENT_TENANT, key: "default" });
+    mocks.hasActiveSapConnection.mockResolvedValue(true);
     const { resolveReadTenant } = await import("@/lib/sap-public/tenant-for-read");
 
-    const out = await resolveReadTenant("S4_TDD", "s4hana", "org_1", "shared");
+    const out = await resolveReadTenant("S4_TDD", "s4hana", "org_1", "default");
+    expect(out).toEqual({ refused: "TENANT_KEY_SHADOWED" });
+    // The refusal needs to know the row exists, not what its secrets are.
+    expect(mocks.resolveSapConnection).not.toHaveBeenCalled();
+  });
+
+  it("says which key collided and how to get out of it", async () => {
+    const { readTenantRefusalResponse } = await import("@/lib/sap-public/tenant-for-read");
+    const res = readTenantRefusalResponse({ refused: "TENANT_KEY_SHADOWED" }, "default");
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.error.message).toContain('"default"');
+    expect(body.error.message).toMatch(/different key/i);
+  });
+
+  it("still serves the deployment tenant to a caller with no organization", async () => {
+    // No organization, no connections that could shadow anything.
+    mocks.getSapTenant.mockReturnValue({ ...DEPLOYMENT_TENANT, key: "default" });
+    const { resolveReadTenant } = await import("@/lib/sap-public/tenant-for-read");
+
+    const out = resolvedOf(await resolveReadTenant("S4_TDD", "s4hana", null, "default"));
     expect(out?.source).toBe("deployment");
-    expect(out?.tenant.baseUrl).toBe(DEPLOYMENT_TENANT.baseUrl);
+    expect(mocks.hasActiveSapConnection).not.toHaveBeenCalled();
+  });
+});
+
+describe("a connection that will not open is refused, not thrown", () => {
+  /*
+   * The resolver throws when a row's secrets will not decrypt (a rotated
+   * SAP_CONNECTION_ENCRYPTION_KEY, a restored backup) or its auth type is
+   * unknown. Every /api/sap/tdd/* route called this function outside its try
+   * block, so that throw was a 500 with an empty body (audit A27).
+   */
+  it("returns CONNECTION_UNREADABLE instead of rejecting", async () => {
+    mocks.getSapTenant.mockReturnValue(null);
+    mocks.resolveSapConnection.mockRejectedValue(
+      new Error("SapConnection secret blob is too short to be valid ciphertext."),
+    );
+    const { resolveReadTenant } = await import("@/lib/sap-public/tenant-for-read");
+
+    await expect(resolveReadTenant("S4_TDD", "s4hana", "org_1", "old")).resolves.toEqual({
+      refused: "CONNECTION_UNREADABLE",
+    });
+  });
+
+  it("answers it with a 409 that names the fix, not a parse error", async () => {
+    const { readTenantRefusalResponse } = await import("@/lib/sap-public/tenant-for-read");
+    const res = readTenantRefusalResponse({ refused: "CONNECTION_UNREADABLE" }, "old");
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.error.message).toMatch(/Re-save/);
   });
 });
 

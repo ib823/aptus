@@ -15,11 +15,17 @@ const mocks = vi.hoisted(() => ({
   createSolution: vi.fn(),
   updateSolution: vi.fn(),
   createAudit: vi.fn(),
+  closeLinks: vi.fn(),
+  closeLinksOutsideTransaction: vi.fn(),
+  findFirstGrant: vi.fn(),
+  findManyGrants: vi.fn(),
+  lockSolution: vi.fn(),
+  commit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solution: {
       findFirst: mocks.findFirstSolution,
       create: mocks.createSolution,
@@ -27,8 +33,35 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([]),
     },
     configAudit: { create: mocks.createAudit },
-  },
-}));
+    // On the client, a close would need a second pooled connection while the
+    // transaction holds one and the Solution lock; the PATCH must use `tx`.
+    keyClaimLink: { updateMany: mocks.closeLinksOutsideTransaction },
+    apiAccessGrant: { findFirst: mocks.findFirstGrant, findMany: mocks.findManyGrants },
+    // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
+    // Outside a transaction the lock would commit and release at once, so taking
+    // it on the client instead of on `tx` is a failure, not a pass.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction, not the client");
+    },
+  };
+  return {
+    prisma: {
+      ...client,
+      // The transaction runs on these same mocks, so every assertion below still
+      // sees what the PATCH reads and writes inside it; `commit` marks where it
+      // ends, so a test can tell what happened while the lock was held.
+      $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => {
+        const out = await fn({
+          ...client,
+          $queryRaw: mocks.lockSolution,
+          keyClaimLink: { updateMany: mocks.closeLinks },
+        } as unknown as typeof client);
+        mocks.commit();
+        return out;
+      },
+    },
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/solutions/route";
 
@@ -75,6 +108,9 @@ beforeEach(() => {
     Promise.resolve({ id: "sol_1", ...data }),
   );
   mocks.createAudit.mockResolvedValue({ id: "a1" });
+  // No request awaiting a decision, and nothing the caller decided, by default.
+  mocks.findFirstGrant.mockResolvedValue(null);
+  mocks.findManyGrants.mockResolvedValue([]);
 });
 
 describe("registering a solution", () => {
@@ -272,5 +308,235 @@ describe("ownership is claimed on the write path, not just in the form", () => {
     mocks.createSolution.mockResolvedValue({ id: "sol_new", name: "x", slug: "x", status: "DRAFT", classification: "INTERNAL_ACCELERATOR" });
     const res = await POST(req({ ...VALID_CREATE, technicalOwnerId: "u1" }));
     expect(res.status).toBe(201);
+  });
+});
+
+describe("retiring a solution closes the key links still out for it", () => {
+  /*
+   * Retirement changed only the Solution row, so a claim link sent while the
+   * app was live stayed live for its whole window and, opened afterwards,
+   * minted a key for a retired app — one that works again the moment the app
+   * is set back to DRAFT.
+   */
+  beforeEach(() => {
+    mocks.closeLinks.mockResolvedValue({ count: 1 });
+  });
+
+  it("closes every environment's pending links, before the status is written", async () => {
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+
+    const res = await PATCH(req({ id: "sol_1", status: "RETIRED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: Record<string, unknown>; data: Record<string, unknown> };
+    expect(close.where).toEqual({
+      organizationId: "org_a",
+      solutionId: "sol_1",
+      claimedAt: null,
+      revokedAt: null,
+    });
+    expect(close.data.revokedReason).toBe("The app was retired.");
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.updateSolution.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("closes them inside the transaction, so it never waits on a second pooled connection", async () => {
+    // Run on the client, the close needed another connection while the PATCH
+    // held one and the Solution lock: with the pool exhausted the retire waited
+    // for itself and timed out, taking every queued decision with it.
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+
+    const res = await PATCH(req({ id: "sol_1", status: "RETIRED" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.closeLinks).toHaveBeenCalledTimes(1);
+    expect(mocks.closeLinksOutsideTransaction).not.toHaveBeenCalled();
+    expect(mocks.closeLinks.mock.invocationCallOrder[0]).toBeLessThan(mocks.commit.mock.invocationCallOrder[0]!);
+  });
+
+  it("leaves links alone on an ordinary edit, and on re-saving an already retired app", async () => {
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+    await PATCH(req({ id: "sol_1", name: "Renamed" }, "PATCH"));
+
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "RETIRED" });
+    await PATCH(req({ id: "sol_1", name: "Renamed again" }, "PATCH"));
+
+    expect(mocks.closeLinks).not.toHaveBeenCalled();
+  });
+});
+
+describe("own-app holds across owner-slot changes", () => {
+  /*
+   * OWN_APP is checked against the owners the row holds when a decision is
+   * made, and both halves of a slot change are self-service. So an owner could
+   * release every slot, approve their own app's PROD write as a "non-owner",
+   * and reclaim the slots — ending as both the decider and the owner of the
+   * grant, with every call allowed. The scenario itself, through the real
+   * decide route, is own-app-across-owner-changes.test.ts; this pins each
+   * refusal on the write path.
+   */
+  const OWNED_BY_CALLER = {
+    ...ACTIVE_COMPLETE,
+    technicalOwnerId: "u1",
+    businessOwnerId: "u1",
+    supportOwnerId: "u1",
+  };
+
+  it("refuses releasing a slot while a request on the app awaits a decision", async () => {
+    mocks.findFirstSolution.mockResolvedValue(OWNED_BY_CALLER);
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(
+      req({ id: "sol_1", technicalOwnerId: null, businessOwnerId: null, supportOwnerId: null }, "PATCH"),
+    );
+
+    expect(res.status).toBe(409);
+    const json = (await res.json()) as { error: { message: string } };
+    expect(json.error.message).toContain("waiting for a decision");
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+    // The pending request is looked for on THIS app, in THIS tenant.
+    expect(mocks.findFirstGrant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: "org_a", solutionId: "sol_1", decision: "REQUESTED" },
+      }),
+    );
+  });
+
+  it("refuses an owner stepping down from their last slot while a request waits, even with others named", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, technicalOwnerId: "u1" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: null }, "PATCH"));
+
+    expect(res.status).toBe(409);
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+  });
+
+  /*
+   * ONLY THE CALLER STEPPING DOWN WAITS. Any colleague may raise a request on
+   * any app, and a REQUESTED grant has no withdraw route — so freezing every
+   * slot change behind it froze the app's ownership until a non-owner decided,
+   * including the clear that recovers a departed owner's slot. None of these
+   * saves makes the caller a non-owner, so none opens the self-service path.
+   */
+  it("lets anyone clear a departed owner's slot while a request waits — the orphan recovery path", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, businessOwnerId: "u_left_company" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", businessOwnerId: null }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.businessOwnerId).toBeNull();
+    expect(data.status).toBe("RESTRICTED");
+  });
+
+  it("lets a colleague claim over a stale slot while a request waits — they gain a slot, nobody steps down", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, businessOwnerId: "u_left_company" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", businessOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.businessOwnerId).toBe("u1");
+  });
+
+  it("lets an owner move between slots, or step down from one of several, while a request waits", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, technicalOwnerId: "u1", supportOwnerId: "u1" });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const swap = await PATCH(req({ id: "sol_1", technicalOwnerId: null, businessOwnerId: "u1" }, "PATCH"));
+    const stepDownFromOne = await PATCH(req({ id: "sol_1", supportOwnerId: null }, "PATCH"));
+
+    expect(swap.status).toBe(200);
+    expect(stepDownFromOne.status).toBe(200);
+    // The caller still owns the app after either save, so the pending request
+    // is never even consulted.
+    expect(mocks.findFirstGrant).not.toHaveBeenCalled();
+  });
+
+  it("takes the Solution row lock before it reads the app or the caller's decisions, and holds it through the write", async () => {
+    // A decision fired together with a reclaim used to pass both: each read
+    // what the other had not yet written. The decision routes take this lock
+    // too; here it must come before every read the refusals depend on.
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "DRAFT", technicalOwnerId: null });
+
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.lockSolution).toHaveBeenCalledOnce();
+    const [sql, ...bound] = mocks.lockSolution.mock.calls[0] as [readonly string[], ...unknown[]];
+    expect(sql.join("?")).toMatch(/FROM "Solution"[\s\S]*FOR UPDATE/);
+    expect(bound).toEqual(["sol_1", "org_a"]);
+
+    const order = (m: { mock: { invocationCallOrder: number[] } }) => m.mock.invocationCallOrder[0]!;
+    expect(order(mocks.lockSolution)).toBeLessThan(order(mocks.findFirstSolution));
+    expect(order(mocks.findFirstSolution)).toBeLessThan(order(mocks.findManyGrants));
+    expect(order(mocks.findManyGrants)).toBeLessThan(order(mocks.updateSolution));
+    expect(order(mocks.updateSolution)).toBeLessThan(order(mocks.commit));
+  });
+
+  it("still lets a release through when nothing awaits a decision", async () => {
+    mocks.findFirstSolution.mockResolvedValue(OWNED_BY_CALLER);
+
+    const res = await PATCH(req({ id: "sol_1", supportOwnerId: null }, "PATCH"));
+
+    expect(res.status).toBe(200);
+  });
+
+  it("still lets an empty slot be claimed while a request waits — it adds an owner", async () => {
+    // OWN_APP then refuses the new owner's decision, so nothing opens.
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "DRAFT", technicalOwnerId: null });
+    mocks.findFirstGrant.mockResolvedValue({ id: "g_pending" });
+
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
+    expect(mocks.findFirstGrant).not.toHaveBeenCalled();
+  });
+
+  it("refuses claiming a slot on an app whose live access the caller decided", async () => {
+    mocks.findFirstSolution.mockResolvedValue({
+      ...ACTIVE_COMPLETE,
+      status: "RESTRICTED",
+      technicalOwnerId: null,
+      businessOwnerId: null,
+      supportOwnerId: null,
+    });
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: new Date(Date.now() + 86_400_000), revokedAt: null },
+    ]);
+
+    const res = await PATCH(
+      req(
+        { id: "sol_1", technicalOwnerId: "u1", businessOwnerId: "u1", supportOwnerId: "u1", status: "ACTIVE" },
+        "PATCH",
+      ),
+    );
+
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as { error: { message: string } };
+    expect(json.error.message).toContain("You decided access for this app");
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+    expect(mocks.findManyGrants).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: "org_a", solutionId: "sol_1", decidedById: "u1" },
+      }),
+    );
+  });
+
+  it("lets the claim through once that access has lapsed, been revoked, or was a rejection", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "DRAFT", technicalOwnerId: null });
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: new Date(Date.now() - 86_400_000), revokedAt: null },
+      { decision: "APPROVED", expiresAt: new Date(Date.now() + 86_400_000), revokedAt: new Date() },
+      { decision: "REJECTED", expiresAt: new Date(Date.now() + 86_400_000), revokedAt: null },
+    ]);
+
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+
+    expect(res.status).toBe(200);
   });
 });

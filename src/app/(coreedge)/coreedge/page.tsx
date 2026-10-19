@@ -130,34 +130,43 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
               {requests.length} {requests.length === 1 ? HOME_SECTIONS.reviews.one : HOME_SECTIONS.reviews.many}
             </span>
           </h2>
-          {requests.map((r) => (
-            <NeedsYouRow
-              key={r.id}
-              /*
-               * A request YOU raised is blocked, not actionable: you cannot
-               * approve your own. Colouring it as action would put it at the top
-               * of a list where the one thing you cannot do sits first.
-               */
-              accent={r.requestedById === user.id ? "blocked" : "action"}
-              title={`Review access · ${r.appName} → ${
-                r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment]
-              }`}
-              detail={
-                r.requestedById === user.id
-                  ? DISABLED_REASONS.ownRequest
-                  : `Requested by ${r.requestedByName ?? "a colleague"} · ${r.feedLabel}`
-              }
-              chips={<StatusChip status="inReview" />}
-              action={
-                <a
-                  href={`/coreedge/requests/${r.id}`}
-                  className="rounded-[var(--radius-input)] border border-[color:var(--border-default)] px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
-                >
-                  Open
-                </a>
-              }
-            />
-          ))}
+          {requests.map((r) => {
+            /*
+             * A request YOU raised is blocked, not actionable: you cannot
+             * approve your own. Colouring it as action would put it at the top
+             * of a list where the one thing you cannot do sits first. A request
+             * on an app YOU OWN is blocked the same way (ownApp) — the review
+             * screen refuses it — so it is coloured and explained the same way,
+             * in the order `refuseDecision` checks them.
+             */
+            const blockedBecause =
+              r.requestedById === user.id
+                ? DISABLED_REASONS.ownRequest
+                : r.ownerIds.includes(user.id)
+                  ? DISABLED_REASONS.ownApp
+                  : null;
+            return (
+              <NeedsYouRow
+                key={r.id}
+                accent={blockedBecause === null ? "action" : "blocked"}
+                title={`Review access · ${r.appName} → ${
+                  r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment]
+                }`}
+                detail={
+                  blockedBecause ?? `Requested by ${r.requestedByName ?? "a colleague"} · ${r.feedLabel}`
+                }
+                chips={<StatusChip status="inReview" />}
+                action={
+                  <a
+                    href={`/coreedge/requests/${r.id}`}
+                    className="rounded-[var(--radius-input)] border border-[color:var(--border-default)] px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
+                  >
+                    Open
+                  </a>
+                }
+              />
+            );
+          })}
         </section>
       )}
 

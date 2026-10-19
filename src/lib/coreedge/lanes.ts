@@ -23,6 +23,13 @@
  * admits it does not know, because the guess is indistinguishable from evidence.
  */
 
+import {
+  grantsRead,
+  grantsWrite,
+  isWriteOperation,
+  type GrantOperation,
+} from "@/lib/studio/grants";
+
 import { LANE_PROOF_TTL_MS } from "./freshness";
 
 import { LANE_HOPS, type LaneHop, type LaneStatus } from "./status-vocabulary";
@@ -196,7 +203,21 @@ export interface SweepFacts {
   readonly feedServiceResolves: boolean;
 }
 
+/**
+ * Which lane this is: the feed's operation and the environment it runs in.
+ *
+ * The Access hop cannot be answered without it. A decision is not access on its
+ * own — the broker asks whether it authorises THIS operation in THIS
+ * environment (`grantsRead`/`grantsWrite`), and READ_ONLY or SANDBOX_ONLY can
+ * be a live, unexpired grant that permits nothing on a given lane.
+ */
+export interface LaneIdentity {
+  readonly operation: GrantOperation;
+  readonly environment: LaneEnvironment;
+}
+
 export interface LaneFacts {
+  readonly lane: LaneIdentity;
   readonly appRetired: boolean;
   readonly key: KeyFacts;
   readonly access: AccessFacts;
@@ -375,6 +396,32 @@ function deriveHopVerdict(facts: LaneFacts): HopVerdict {
       status: "accessEnded",
       brokenHop: "access",
       because: "Access reached its end date. The key survives; renewing keeps it.",
+      checkedAt: null,
+    };
+  }
+
+  /*
+   * A LIVE GRANT THAT AUTHORISES NOTHING HERE. Everything above asks whether the
+   * decision is settled, withdrawn or lapsed; nothing asked whether it permits
+   * what this lane carries, so every granting decision cleared the hop. A
+   * READ_ONLY decision on a CREATE lane — refused by the broker on every call —
+   * then read Live once the sweep proved the entity set, and so did a historical
+   * SANDBOX_ONLY grant on a Prod lane. The question is now the broker's own:
+   * `grantsWrite` for a lane that writes, `grantsRead` for one that reads, in
+   * this lane's environment.
+   */
+  const { lane } = facts;
+  const authorises = isWriteOperation(lane.operation)
+    ? grantsWrite(access.decision, lane.environment)
+    : grantsRead(access.decision, lane.environment);
+  if (!authorises) {
+    return {
+      status: "noAccess",
+      brokenHop: "access",
+      because:
+        access.decision === "SANDBOX_ONLY"
+          ? `Access was approved for Sandbox only, so it authorises nothing in ${ENVIRONMENT_LABELS[lane.environment]}.`
+          : "Access was approved read-only, so it authorises nothing on a data feed that writes.",
       checkedAt: null,
     };
   }

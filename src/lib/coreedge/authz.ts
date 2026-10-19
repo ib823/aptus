@@ -74,6 +74,8 @@ export interface DecideInput {
   readonly userId: string;
   /** Who raised it. Null when the requester is no longer known. */
   readonly requestedById: string | null;
+  /** The app's technical, business and support owners; null for an unclaimed slot. */
+  readonly ownerIds: readonly (string | null)[];
   /** The grant's own end date. Access is never approved without one. */
   readonly expiresAt: Date | null;
 }
@@ -82,17 +84,21 @@ export interface DecideInput {
  * May this person decide this request?
  *
  * THE ORDER IS THE ARGUMENT. Role first, because someone who cannot decide at
- * all should not be told about the end date; then self-approval, which is about
- * this person; then the missing expiry, which is about the request and is the
- * one a permitted reviewer can actually fix.
+ * all should not be told about the end date; then self-approval and then app
+ * ownership, which are about this person; then the missing expiry, which is
+ * about the request and is the one a permitted reviewer can actually fix.
  *
- * The same three rules are enforced again inside `evaluateDecision`, which is
+ * `ownApp` sat in the refusal union with its copy written and was returned by
+ * nothing, so an app's owner was shown an enabled Approve on their own app.
+ *
+ * The same four rules are enforced again inside `evaluateDecision`, which is
  * the authority. This is the console's copy for rendering a reason BEFORE the
  * click — never instead of the check.
  */
 export function refuseDecision(input: DecideInput): CoreEdgeRefusal | null {
   if (!isPlatformAdmin(input.role) && !isBuilder(input.role)) return "noPermission";
   if (input.requestedById !== null && input.requestedById === input.userId) return "ownRequest";
+  if (input.ownerIds.some((id) => id !== null && id === input.userId)) return "ownApp";
   if (input.expiresAt === null) return "missingExpiry";
   return null;
 }

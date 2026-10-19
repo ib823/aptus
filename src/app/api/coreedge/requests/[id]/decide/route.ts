@@ -29,6 +29,7 @@ import { refuseDecision } from "@/lib/coreedge/authz";
 import { prisma } from "@/lib/db/prisma";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { evaluateDecision, type GrantDecision } from "@/lib/studio/grants";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 
 export const dynamic = "force-dynamic";
 
@@ -65,60 +66,123 @@ export async function POST(
    * checking the organization afterwards leaks which ids exist; this cannot
    * find another tenant's row at all.
    */
-  const grant = await prisma.apiAccessGrant.findFirst({
-    where: { id, organizationId: user.organizationId },
-    select: {
-      id: true,
-      organizationId: true,
-      decision: true,
-      operation: true,
-      environment: true,
-      requestedById: true,
-      expiresAt: true,
-    },
+  const organizationId = user.organizationId;
+  const located = await prisma.apiAccessGrant.findFirst({
+    where: { id, organizationId },
+    select: { solutionId: true },
   });
-  if (grant === null) return refused("No such request.", 404);
+  if (located === null) return refused("No such request.", 404);
 
-  // The console's own gate, rendering the same sentence the screen shows.
-  const consoleRefusal = refuseDecision({
-    role: user.role,
-    userId: user.id,
-    requestedById: grant.requestedById,
+  /*
+   * LOCK THE APP, THEN READ WHAT IS DECIDED ON. OWN_APP compares the decider
+   * with the app's owners, and the solutions PATCH writes those owners — a
+   * different row from the grant this settles, so a reclaim fired together
+   * with this decision used to pass on owners read a moment before it landed.
+   * The PATCH takes the same lock (lib/studio/owner-lock.ts); holding it, the
+   * owners and the grant are read fresh, so whichever lands first, the other
+   * is refused.
+   */
+  const decided = await prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, { organizationId, solutionId: located.solutionId });
+
+    const grant = await tx.apiAccessGrant.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        decision: true,
+        operation: true,
+        environment: true,
+        requestedById: true,
+        expiresAt: true,
+        // The app's owners, for OWN_APP: an owner may not approve their own app.
+        solution: {
+          select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
+        },
+      },
+    });
+    if (grant === null) return { refusal: refused("No such request.", 404) };
+
+    const ownerIds = [
+      grant.solution.technicalOwnerId,
+      grant.solution.businessOwnerId,
+      grant.solution.supportOwnerId,
+    ];
+
+    // The console's own gate, rendering the same sentence the screen shows.
+    const consoleRefusal = refuseDecision({
+      role: user.role,
+      userId: user.id,
+      requestedById: grant.requestedById,
+      ownerIds,
+      expiresAt: grant.expiresAt,
+    });
+    if (consoleRefusal !== null) return { refusal: refused(DISABLED_REASONS[consoleRefusal], 403) };
+
+    // The authority. The console's gate renders a reason early; this decides.
+    const outcome = evaluateDecision({
+      current: grant.decision as GrantDecision,
+      operation: grant.operation as "READ" | "CREATE" | "UPDATE",
+      environment: grant.environment as "SANDBOX" | "DEV" | "TEST" | "PROD",
+      requestedById: grant.requestedById,
+      deciderId: user.id,
+      ownerIds,
+      next: parsed.data.decision,
+      writeChecklistAcknowledged: parsed.data.writeChecklistAcknowledged,
+      expiresAt: grant.expiresAt,
+    });
+    if (!outcome.ok) {
+      return { refusal: refused(outcome.message, outcome.reason === "NOT_PENDING" ? 409 : 403) };
+    }
+
+    const decidedAt = new Date();
+    const settled = await tx.apiAccessGrant.updateMany({
+      /*
+       * THE TENANT IS RE-ASSERTED IN THE WRITE, not merely in the read above.
+       * `tests/unit/studio/tenant-scope-coverage.test.ts` enforces this repo-wide
+       * and caught this line: a write keyed on id alone trusts the lookup that
+       * preceded it, and one refactor that moves or loosens that lookup turns a
+       * scoped update into an unscoped one with nothing failing.
+       *
+       * AND SO IS THE PENDING STATE — a compare-and-set. The NOT_PENDING check
+       * above read the row a moment ago, and two reviewers deciding together both
+       * pass it; a plain update then let the later one silently overwrite a
+       * decision already recorded and audited. With the guard in the WHERE only
+       * the first write matches a REQUESTED row. The second matches nothing and is
+       * refused below — the idiom claim-link uses for the same race.
+       */
+      where: { id: grant.id, organizationId, decision: "REQUESTED" },
+      data: {
+        decision: parsed.data.decision,
+        decidedById: user.id,
+        decidedAt,
+      },
+    });
+    if (settled.count === 0) {
+      // Nothing was written, so nothing is audited: the trail records only the
+      // decision that actually landed.
+      return {
+        refusal: refused(
+          "Someone else decided this request while you were reviewing it. Nothing was changed; reload to see their decision.",
+          409,
+        ),
+      };
+    }
+    return { grant, decidedAt };
+  });
+  if ("refusal" in decided) return decided.refusal;
+  const { grant, decidedAt } = decided;
+
+  // The row exactly as written. The guard above makes this write the only one
+  // that can settle the grant, so these values cannot have been superseded and
+  // a re-read would return the same thing.
+  const updated = {
+    id: grant.id,
+    decision: parsed.data.decision,
+    decidedById: user.id,
+    decidedAt,
     expiresAt: grant.expiresAt,
-  });
-  if (consoleRefusal !== null) return refused(DISABLED_REASONS[consoleRefusal], 403);
-
-  // The authority. The console's gate renders a reason early; this decides.
-  const outcome = evaluateDecision({
-    current: grant.decision as GrantDecision,
-    operation: grant.operation as "READ" | "CREATE" | "UPDATE",
-    environment: grant.environment as "SANDBOX" | "DEV" | "TEST" | "PROD",
-    requestedById: grant.requestedById,
-    deciderId: user.id,
-    next: parsed.data.decision,
-    writeChecklistAcknowledged: parsed.data.writeChecklistAcknowledged,
-    expiresAt: grant.expiresAt,
-  });
-  if (!outcome.ok) {
-    return refused(outcome.message, outcome.reason === "NOT_PENDING" ? 409 : 403);
-  }
-
-  const updated = await prisma.apiAccessGrant.update({
-    /*
-     * THE TENANT IS RE-ASSERTED IN THE WRITE, not merely in the read above.
-     * `tests/unit/studio/tenant-scope-coverage.test.ts` enforces this repo-wide
-     * and caught this line: a write keyed on id alone trusts the lookup that
-     * preceded it, and one refactor that moves or loosens that lookup turns a
-     * scoped update into an unscoped one with nothing failing.
-     */
-    where: { id: grant.id, organizationId: user.organizationId },
-    data: {
-      decision: parsed.data.decision,
-      decidedById: user.id,
-      decidedAt: new Date(),
-    },
-    select: { id: true, decision: true, decidedById: true, decidedAt: true, expiresAt: true },
-  });
+  };
 
   await writeConfigAudit({
     organizationId: grant.organizationId,

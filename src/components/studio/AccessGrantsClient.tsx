@@ -11,9 +11,11 @@
  *      and REVOKED, which are resolved for display so the ledger can never
  *      contradict the broker. (This screen used to claim the opposite, from
  *      before the broker shipped.)
- *   2. You cannot decide your own request. The control is enforced server-side;
- *      the UI disables the buttons as well so the rule is visible before it is
- *      hit, rather than arriving as a rejection.
+ *   2. You cannot decide your own request, nor a request on an app you own. The
+ *      control is enforced server-side; the UI withholds the buttons as well so
+ *      the rule is visible before it is hit, rather than arriving as a
+ *      rejection. The same goes for read-only on a write row, which the server
+ *      refuses (READ_ONLY_ON_WRITE) whoever presses it.
  */
 
 import { useRouter } from "next/navigation";
@@ -62,6 +64,12 @@ export interface LedgerGrant {
    */
   decision: string;
   requestedById: string | null;
+  /**
+   * The viewer holds one of this grant's app's owner slots. OWN_APP refuses
+   * every decision they make on it, so the row says so instead of offering
+   * buttons that can only come back 403.
+   */
+  viewerOwnsApp: boolean;
   decidedById: string | null;
   decidedAt: string | null;
   /** Revocation is a second fact beside the decision, never a re-decision. */
@@ -111,6 +119,10 @@ const DECISION_ACTION: Record<Exclude<GrantDecision, "REQUESTED" | "EXPIRED">, s
   READ_ONLY: "Approve read-only",
   REJECTED: "Reject",
 };
+
+/** Why read-only is not offered on a write row (READ_ONLY_ON_WRITE in `evaluateDecision`). */
+const READ_ONLY_NOT_FOR_WRITES =
+  "Read-only can't narrow a write request: it would authorise neither the write nor any read. Approve the write, or reject it and ask for a read request.";
 
 /**
  * What each ledger state MEANS, in the ledger's own vocabulary — passed to the
@@ -272,6 +284,12 @@ export function AccessGrantsClient({
                           <span style={{ color: "var(--ink-muted)", fontSize: 12, maxWidth: 220, display: "block" }}>
                             You raised this request — someone else must review it.
                           </span>
+                        ) : g.viewerOwnsApp ? (
+                          /* OWN_APP, said before the click. All four buttons were
+                             offered here, and every one came back 403. */
+                          <span style={{ color: "var(--ink-muted)", fontSize: 12, maxWidth: 220, display: "block" }}>
+                            You own this app — someone who doesn&apos;t must review its access.
+                          </span>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                             {write && (
@@ -290,19 +308,36 @@ export function AccessGrantsClient({
                               </label>
                             )}
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                              {(["APPROVED", "SANDBOX_ONLY", "READ_ONLY", "REJECTED"] as const).map((d) => (
-                                <button
-                                  key={d}
-                                  type="button"
-                                  disabled={busy === g.id}
-                                  onClick={() => void decide(g.id, d)}
-                                  style={d === "REJECTED" ? btnDanger : btnSmall}
-                                  title={DECISION_MEANING[d]}
-                                >
-                                  {DECISION_ACTION[d]}
-                                </button>
-                              ))}
+                              {(["APPROVED", "SANDBOX_ONLY", "READ_ONLY", "REJECTED"] as const).map((d) => {
+                                // READ_ONLY_ON_WRITE: a grant is matched on its
+                                // operation, so read-only on a CREATE or UPDATE
+                                // row would authorise neither the write nor any
+                                // read. Disabled with its reason beside it, not
+                                // left to fail after the click.
+                                const refused = d === "READ_ONLY" && write;
+                                return (
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    disabled={busy === g.id || refused}
+                                    aria-describedby={refused ? `${g.id}-read-only-reason` : undefined}
+                                    onClick={() => void decide(g.id, d)}
+                                    style={d === "REJECTED" ? btnDanger : btnSmall}
+                                    title={refused ? READ_ONLY_NOT_FOR_WRITES : DECISION_MEANING[d]}
+                                  >
+                                    {DECISION_ACTION[d]}
+                                  </button>
+                                );
+                              })}
                             </div>
+                            {write && (
+                              <span
+                                id={`${g.id}-read-only-reason`}
+                                style={{ fontSize: 11, color: "var(--ink-muted)", maxWidth: 240 }}
+                              >
+                                {READ_ONLY_NOT_FOR_WRITES}
+                              </span>
+                            )}
                             {errors[g.id] && (
                               <span style={{ fontSize: 11, color: "var(--status-revoked-fg)", maxWidth: 240 }}>
                                 {errors[g.id]}

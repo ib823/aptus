@@ -31,15 +31,45 @@
  *
  * RESOLUTION ORDER IS DELIBERATE. Deployment tenants are tried FIRST so that
  * /sap-explorer and every existing caller behave exactly as before, then the
- * caller's own connections. An organization that has declared a connection whose
- * key happens to collide with a deployment key keeps the old meaning, which is
- * the conservative choice: this function may add reach, never silently
+ * caller's own connections. This function may add reach, never silently
  * redirect an existing one somewhere new.
+ *
+ * A KEY BOTH REGISTRIES KNOW IS REFUSED, NOT GUESSED. This comment used to say
+ * the deployment tenant simply won such a collision, and called that the
+ * conservative choice. It was the opposite. The tenant switcher lists the
+ * organization's OWN rows, so it showed "Org A PROD system" while every read
+ * went to the shared demo host with the deployment's credentials. Because no
+ * connection had resolved, the PROD ceiling was skipped too, and stored probes
+ * were filed under the shared bare key. That is a shared demo tenant silently
+ * presented as the organization's own connection, which tenants.ts names as
+ * the fiction honest status exists to prevent. Picking the connection instead
+ * would silently move every existing reader of that deployment key, which is
+ * the redirect this function promises never to make. So neither is picked: the
+ * read is refused with a sentence that says how to fix it. Creating such a
+ * connection is refused at /api/studio/connections; this check still covers
+ * rows saved before that, and a deployment tenant added to env later.
+ *
+ * A CONNECTION THAT WILL NOT OPEN IS A REFUSAL, NOT A CRASH. The resolver
+ * throws when a row's secrets fail to decrypt or its auth type is unknown.
+ * Every route that calls this one called it outside its try block, so the
+ * throw became a 500 with an empty body. The client's `response.json()` then
+ * failed and the screen showed a JSON parse error instead of a reason. The
+ * northbound binding path catches the same throw as CONNECTION_UNREADABLE;
+ * this is the same treatment for the console.
  */
+
+import { NextResponse } from "next/server";
+
+import { ERROR_CODES } from "@/types/api";
 
 import type { SapEnvironment } from "./environment";
 import { getSapTenant, type SapTenant } from "./tdd-connector";
-import { resolveSapConnection, toSapTenant } from "./connection-resolver";
+import {
+  connectionRefusalMessage,
+  hasActiveSapConnection,
+  resolveSapConnection,
+  toSapTenant,
+} from "./connection-resolver";
 
 export type TenantSource = "deployment" | "connection";
 
@@ -62,26 +92,69 @@ export interface ResolvedReadTenant {
 }
 
 /**
+ * Why a key that DOES name a tenant still cannot be read.
+ *
+ *   - CONNECTION_UNREADABLE: the organization's connection under this key
+ *     exists, but its secrets will not open or its auth type is unknown. The
+ *     same reason the northbound binding gives for the same throw.
+ *   - TENANT_KEY_SHADOWED: the key names both a deployment tenant and one of
+ *     the organization's own active connections, so which system was meant
+ *     cannot be known.
+ */
+export type ReadTenantRefusalReason = "CONNECTION_UNREADABLE" | "TENANT_KEY_SHADOWED";
+
+export interface ReadTenantRefusal {
+  refused: ReadTenantRefusalReason;
+}
+
+/**
  * Find the tenant a live read should run against, from either registry.
  *
  * `organizationId` may be null — an unauthenticated public-catalogue caller has
  * no organization, and for them only deployment tenants exist. Returns null when
- * neither registry knows the key, which the caller renders as a 400.
+ * neither registry knows the key, which the caller renders as a 400. Returns a
+ * refusal when the key is known but cannot be read, which the caller answers
+ * with `readTenantRefusalResponse`.
+ *
+ * A REFUSAL IS ITS OWN SHAPE, NOT A THROW AND NOT NULL. A throw is what every
+ * caller forgot to catch. Null would tell a user their connection does not
+ * exist when it does. As its own member of the return type, a refusal a caller
+ * does not handle is a compile error rather than a 500.
  */
 export async function resolveReadTenant(
   envPrefix: string,
   product: string,
   organizationId: string | null,
   key: string,
-): Promise<ResolvedReadTenant | null> {
+): Promise<ResolvedReadTenant | ReadTenantRefusal | null> {
   if (!key) return null;
 
   const configured = getSapTenant(envPrefix, key);
-  if (configured) return { tenant: configured, source: "deployment", connection: null };
+  if (configured) {
+    // Existence only: whether the row would decrypt does not change that the
+    // key is ambiguous, so its secrets are not opened to find out.
+    if (organizationId && (await hasActiveSapConnection(organizationId, product, key))) {
+      return { refused: "TENANT_KEY_SHADOWED" };
+    }
+    return { tenant: configured, source: "deployment", connection: null };
+  }
 
   if (!organizationId) return null;
 
-  const connection = await resolveSapConnection(organizationId, product, key);
+  let connection;
+  try {
+    connection = await resolveSapConnection(organizationId, product, key);
+  } catch (err) {
+    // The response says only what the user must fix. The log keeps enough to
+    // find the row, and never the error text, which can describe the secret.
+    console.warn("[sap/tdd] connection could not be opened", {
+      organizationId,
+      product,
+      key,
+      reason: err instanceof Error ? err.name : "unknown",
+    });
+    return { refused: "CONNECTION_UNREADABLE" };
+  }
   if (!connection) return null;
 
   return {
@@ -105,4 +178,29 @@ export function unknownTenantMessage(key: string): string {
     `on this deployment nor an active connection declared by your organization — ` +
     `check the connection is active on the Connections screen.`
   );
+}
+
+/**
+ * The answer to a refused read: a 409 with one sentence the user can act on.
+ *
+ * 409 CONFLICT is what the connection test route answers for a row whose
+ * secrets will not open. The request was well formed and the caller may make
+ * it; the stored configuration is what conflicts with it. Nothing was sent to
+ * SAP, so there is no read to audit, the same as the 400 for an unknown key.
+ *
+ * DEACTIVATE FIRST, THEN SAVE AGAIN. The steps used to come the other way
+ * round, and the first one could not be done: /api/studio/connections refuses
+ * a second active connection on the same declared environment, whatever its
+ * key, so saving "the same connection under a different key" while this one
+ * was still active was refused as its twin. Deactivated, this row no longer
+ * shadows the key or collides with the new one.
+ */
+export function readTenantRefusalResponse(refusal: ReadTenantRefusal, key: string): NextResponse {
+  const message =
+    refusal.refused === "CONNECTION_UNREADABLE"
+      ? connectionRefusalMessage("CONNECTION_UNREADABLE", "")
+      : `"${key}" names both a tenant configured on this deployment and an active connection ` +
+        `declared by your organization, so it is not clear which system to read, and neither was read. ` +
+        `Deactivate this connection on the Connections screen, then save it again under a different key.`;
+  return NextResponse.json({ error: { code: ERROR_CODES.CONFLICT, message } }, { status: 409 });
 }
