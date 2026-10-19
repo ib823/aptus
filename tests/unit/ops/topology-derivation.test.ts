@@ -276,6 +276,16 @@ describe("collapsing a column keeps what needs acting on", () => {
     expect(ids).toContain("defect");
     expect(ids).toContain("wasLive");
   });
+
+  it("keeps a partly failing node ahead of healthy rows, and behind a wholly failing one", () => {
+    const nodes = [
+      ...Array.from({ length: COLLAPSE_THRESHOLD }, (_, i) => node(`ok${i}`)),
+      node("mixed", { state: "observed-mixed" }),
+      node("bad", { state: "observed-bad" }),
+    ];
+    const ids = collapseColumn(nodes).kept.map((n) => n.id);
+    expect(ids.slice(0, 2)).toEqual(["bad", "mixed"]);
+  });
 });
 
 describe("a node links to its own workspace's screen", () => {

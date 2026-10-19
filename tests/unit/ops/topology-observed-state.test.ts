@@ -14,6 +14,12 @@
  *   3. WRITES NEVER MET THEIR GRANT. Audit rows say WRITE; grants say CREATE.
  *      The grant key never matched, so a write grant carrying production
  *      writes read "never observed", and once revoked, `carried: false`.
+ *
+ * And the overcorrection the first fix made: it mapped a partly failed node to
+ * ✕ "Observed bad", so ONE routine caller-side 4xx — a 429 throttle among
+ * 10,000 served reads, a 409 from a client retrying a write correctly, a 404
+ * on a mistyped id — turned a healthy solution, grant or interface red. Mixed
+ * is its own state; ✕ means every recorded call failed.
  */
 
 import { NextRequest } from "next/server";
@@ -62,9 +68,13 @@ describe("a live node's state is what its calls did", () => {
     ).toBe("observed-bad");
   });
 
-  it("is observed-bad when some failed — a node has one glyph, and ✓ would hide them", () => {
-    expect(liveGrant(100, 10).state).toBe("observed-bad");
-    expect(observedState(100, 10)).toBe("observed-bad");
+  it("is observed-mixed when some failed — ✓ would hide them, ✕ would say nothing got through", () => {
+    expect(liveGrant(100, 10).state).toBe("observed-mixed");
+    expect(observedState(100, 10)).toBe("observed-mixed");
+    expect(
+      deriveSolution({ missingOwnerCount: 0, recordedCalls: 10_001, recordedFailures: 1, holdsProdGrant: true })
+        .state,
+    ).toBe("observed-mixed");
   });
 
   it("is observed-good only when nothing recorded under it failed", () => {
@@ -278,7 +288,7 @@ async function topology() {
   const body = (await res.json()) as {
     data: {
       nodes: Array<{ id: string; state: string; ended: { carried: boolean | null } | null }>;
-      edges: Array<{ from: string; to: string; calls: number }>;
+      edges: Array<{ from: string; to: string; calls: number; failures: number; observed: string }>;
     };
   };
   const node = (id: string) => body.data.nodes.find((n) => n.id === id);
@@ -295,6 +305,51 @@ describe("GET /api/console/topology", () => {
     expect(node("grant:g_read")?.state).toBe("observed-bad");
     expect(node("sol:sol1")?.state).toBe("observed-bad");
     expect(node("iface:if1")?.state).toBe("observed-bad");
+  });
+
+  it("does not call a healthy solution bad for one throttled call among 10,000 served", async () => {
+    // A data-route 429 is recorded before the interface is looked at: no
+    // interface, externalId "-", so it belongs to no grant and no interface.
+    feed = [
+      row({ status: 200, count: 10_000 }),
+      row({ interfaceId: null, externalId: "-", status: 429, count: 1 }),
+    ];
+    const { node, edge } = await topology();
+    expect(node("sol:sol1")?.state).toBe("observed-mixed");
+    expect(node("grant:g_read")?.state).toBe("observed-good");
+    expect(node("iface:if1")?.state).toBe("observed-good");
+    // The edge into the solution carries the same reading, with its counts.
+    expect(edge("cred:tok1", "sol:sol1")).toMatchObject({ calls: 10_001, failures: 1, observed: "mixed" });
+  });
+
+  it("does not call a write integration bad for one 409 from a correct retry", async () => {
+    feed = [
+      row({ operation: "WRITE", interfaceId: "if_write", status: 201, count: 500 }),
+      // "Idempotency-Key still in progress": the client retried while its own
+      // write was in flight, exactly as the API tells it to.
+      row({ operation: "WRITE", interfaceId: "if_write", status: 409, count: 1 }),
+    ];
+    const { node } = await topology();
+    expect(node("sol:sol1")?.state).toBe("observed-mixed");
+    expect(node("grant:g_write")?.state).toBe("observed-mixed");
+    expect(node("iface:if_write")?.state).toBe("observed-mixed");
+  });
+
+  it("does not call a solution bad for one 404 on a mistyped interface id", async () => {
+    feed = [
+      row({ status: 200, count: 10_000 }),
+      row({ interfaceId: "typo-id", externalId: "-", status: 404, count: 1 }),
+    ];
+    const { node } = await topology();
+    expect(node("sol:sol1")?.state).toBe("observed-mixed");
+    expect(node("iface:if1")?.state).toBe("observed-good");
+  });
+
+  it("still calls a node bad when every recorded call under it failed", async () => {
+    feed = [row({ operation: "WRITE", interfaceId: "if_write", status: 409, count: 3 })];
+    const { node } = await topology();
+    expect(node("grant:g_write")?.state).toBe("observed-bad");
+    expect(node("iface:if_write")?.state).toBe("observed-bad");
   });
 
   it("leaves a Test Console dry run out of the node states and the caller edge", async () => {

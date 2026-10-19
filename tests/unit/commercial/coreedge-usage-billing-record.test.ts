@@ -13,6 +13,11 @@
  *   A33  a day with ANY organization's row counted as done for all of them, so
  *        a run that failed part-way lost the rest of that day for good.
  *
+ * And the rows the old rules had ALREADY written. The rollup only ever upserted,
+ * so a re-roll could correct an organization it still counted but never remove
+ * one it no longer did — `-deployment-` survived even yesterday's re-roll — and
+ * no day older than yesterday was ever re-rolled at all.
+ *
  * The audit table and the rollup table are held in memory here and the
  * rollup's own `where` clauses are evaluated against them, so what is asserted
  * is what the database would have returned — not which arguments were passed.
@@ -66,9 +71,10 @@ function matchField(value: unknown, cond: unknown): boolean {
     if (op === "gte" && !(value !== null && v >= a)) return false;
     else if (op === "lt" && !(value !== null && v < a)) return false;
     else if (op === "in" && !(arg as unknown[]).includes(value)) return false;
+    else if (op === "notIn" && (value === null || (arg as unknown[]).includes(value))) return false;
     // SQL: `col <> x` is never true for a NULL col; `col IS NOT NULL` for null.
     else if (op === "not" && (arg === null ? value === null : value === null || v === a)) return false;
-    else if (!["gte", "lt", "in", "not"].includes(op)) throw new Error(`unsupported filter ${op}`);
+    else if (!["gte", "lt", "in", "notIn", "not"].includes(op)) throw new Error(`unsupported filter ${op}`);
   }
   return true;
 }
@@ -102,16 +108,11 @@ function groupBy(args: {
 }
 
 /**
- * Prisma's upsert is LAZY: it runs when awaited, or as part of a $transaction
+ * Prisma's writes are LAZY: they run when awaited, or as part of a $transaction
  * batch. Modelled that way so a sequential loop and a batch behave as they
  * would against the database when one write in the middle fails.
  */
-function upsert(args: { where: { organizationId_day: { organizationId: string; day: Date } }; create: RollupRow }) {
-  const { organizationId, day } = args.where.organizationId_day;
-  const run = () => {
-    if (db.failUpsert?.(organizationId, day)) throw new Error("connection reset");
-    db.rollups.set(`${organizationId}|${day.toISOString()}`, { ...args.create });
-  };
+function lazy(run: () => void) {
   return {
     run,
     then(resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) {
@@ -123,6 +124,25 @@ function upsert(args: { where: { organizationId_day: { organizationId: string; d
       }
     },
   };
+}
+
+function upsert(args: { where: { organizationId_day: { organizationId: string; day: Date } }; create: RollupRow }) {
+  const { organizationId, day } = args.where.organizationId_day;
+  return lazy(() => {
+    if (db.failUpsert?.(organizationId, day)) throw new Error("connection reset");
+    db.rollups.set(`${organizationId}|${day.toISOString()}`, { ...args.create });
+  });
+}
+
+/** The rollup table's deleteMany, by the same where-evaluation as the feed's. */
+function deleteMany(args: { where?: Record<string, unknown> }) {
+  return lazy(() => {
+    for (const [key, row] of [...db.rollups]) {
+      const r = row as Record<string, unknown>;
+      const hit = Object.entries(args.where ?? {}).every(([col, cond]) => matchField(r[col], cond));
+      if (hit) db.rollups.delete(key);
+    }
+  });
 }
 
 /** All or nothing, as a database transaction is. */
@@ -149,6 +169,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     coreEdgeUsageRollup: {
       upsert,
+      deleteMany,
       findMany: () => {
         const days = new Set([...db.rollups.values()].map((r) => (r as RollupRow).day.getTime()));
         return Promise.resolve([...days].map((t) => ({ day: new Date(t) })));
@@ -158,7 +179,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { rollupDay, runCoreEdgeUsageRollup } from "@/lib/commercial/coreedge-usage";
+import { rerollRetainedUsage, rollupDay, runCoreEdgeUsageRollup } from "@/lib/commercial/coreedge-usage";
 
 const DAY = new Date("2026-10-18T00:00:00.000Z");
 const at = (iso: string) => new Date(iso);
@@ -290,5 +311,129 @@ describe("A33 — a day that failed part-way is retried, not marked done", () =>
     db.failUpsert = (org) => org === "org_b";
     await expect(rollupDay(DAY)).rejects.toThrow();
     expect(rollupFor("org_a"), "a half-written day would read as covered").toBeUndefined();
+  });
+});
+
+/* ── rows the old rules already wrote ─────────────────────────────────────── */
+
+/** A rollup row as the pre-fix rollup wrote it, console traffic and all. */
+function seedRollup(organizationId: string, day: Date, over: Partial<RollupRow> = {}): void {
+  db.rollups.set(`${organizationId}|${day.toISOString()}`, {
+    organizationId,
+    day,
+    calls: 1,
+    rowsRead: 120,
+    writes: 0,
+    refusals: 0,
+    distinctInterfaces: 1,
+    distinctCredentials: 1,
+    ...over,
+  });
+}
+
+const midnight = (isoDay: string) => new Date(`${isoDay}T00:00:00.000Z`);
+
+describe("a re-roll converges on the current rules instead of only adding rows", () => {
+  it("removes the day's rows for organizations the rules no longer count", async () => {
+    db.audit = [
+      brokerRead(),
+      consoleRead({ externalId: "API_SVC", rowCount: 120 }),
+      consoleRead({ organizationId: "-deployment-", rowCount: 120 }),
+      // org_c's only traffic that day: one Test Console rehearsal.
+      brokerRead({ organizationId: "org_c", clientTokenId: "tok_c", dryRun: true }),
+    ];
+    seedRollup("org_a", DAY, { calls: 2 });
+    seedRollup("-deployment-", DAY);
+    seedRollup("org_c", DAY);
+    const dayBefore = midnight("2026-10-17");
+    seedRollup("org_c", dayBefore, { calls: 4, rowsRead: 9 });
+
+    await rollupDay(DAY);
+
+    expect(rollupFor("org_a")).toMatchObject({ calls: 1, rowsRead: 5 });
+    expect(rollupFor("-deployment-"), "the sentinel survived the re-roll").toBeUndefined();
+    expect(rollupFor("org_c"), "a rehearsal-only day is no usage").toBeUndefined();
+    // Another day's rows are not this re-roll's to touch.
+    expect(rollupFor("org_c", dayBefore)).toMatchObject({ calls: 4, rowsRead: 9 });
+  });
+
+  it("empties a day the rules give nobody, rather than leaving it as it was", async () => {
+    db.audit = [consoleRead(), consoleRead({ organizationId: "-deployment-" })];
+    seedRollup("org_a", DAY);
+    seedRollup("-deployment-", DAY);
+
+    expect(await rollupDay(DAY)).toBe(0);
+    expect([...db.rollups.keys()]).toEqual([]);
+  });
+});
+
+describe("the nightly run after the fix lands on a table the old rules wrote", () => {
+  it("drops the sentinel from every day, re-rolled or not", async () => {
+    db.audit = [
+      consoleRead({ organizationId: "-deployment-", at: at("1996-05-08T09:00:00.000Z") }),
+      consoleRead({ at: at("1996-05-08T10:00:00.000Z") }),
+      consoleRead({ organizationId: "-deployment-", at: at("1996-05-09T09:00:00.000Z") }),
+      consoleRead({ at: at("1996-05-09T10:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-09T11:00:00.000Z") }),
+    ];
+    // What the old rules wrote, including a day long past audit retention.
+    seedRollup("-deployment-", midnight("1996-01-02"));
+    seedRollup("-deployment-", midnight("1996-05-08"));
+    seedRollup("org_a", midnight("1996-05-08"));
+    seedRollup("-deployment-", midnight("1996-05-09"));
+    seedRollup("org_a", midnight("1996-05-09"), { calls: 3 });
+
+    const r = await runCoreEdgeUsageRollup(at("1996-05-10T03:00:00.000Z"));
+
+    expect(r.daysProcessed).toBe(1);
+    const sentinel = [...db.rollups.values()].filter((v) => (v as RollupRow).organizationId === "-deployment-");
+    expect(sentinel, "no -deployment- row may remain on any day").toEqual([]);
+    expect(rollupFor("org_a", midnight("1996-05-09"))).toMatchObject({ calls: 1, rowsRead: 5 });
+  });
+});
+
+describe("rerollRetainedUsage — every day the feed still holds whole, once the rules change", () => {
+  const NOW = at("1996-05-10T03:00:00.000Z");
+
+  beforeEach(() => {
+    db.audit = [
+      // Retention has cut the oldest retained day mid-morning: 05-07 is partial.
+      brokerRead({ at: at("1996-05-07T11:00:00.000Z") }),
+      // 05-08: org_a only ran console reads — no deployed usage at all.
+      consoleRead({ at: at("1996-05-08T09:00:00.000Z"), rowCount: 120 }),
+      consoleRead({ organizationId: "-deployment-", at: at("1996-05-08T10:00:00.000Z") }),
+      // 05-09: one real read of 5 rows, plus console traffic.
+      brokerRead({ at: at("1996-05-09T11:00:00.000Z") }),
+      consoleRead({ at: at("1996-05-09T12:00:00.000Z"), rowCount: 120 }),
+    ];
+    seedRollup("org_a", midnight("1996-04-01"), { calls: 7, rowsRead: 70 });
+    seedRollup("org_a", midnight("1996-05-07"), { calls: 9, rowsRead: 45 });
+    seedRollup("org_a", midnight("1996-05-08"));
+    seedRollup("-deployment-", midnight("1996-05-08"));
+    seedRollup("org_a", midnight("1996-05-09"), { calls: 2, rowsRead: 125 });
+  });
+
+  it("brings every whole retained day up to the current rules", async () => {
+    const r = await rerollRetainedUsage(NOW);
+
+    expect(r).toEqual({ daysRerolled: 2, rowsWritten: 1, from: midnight("1996-05-08").toISOString() });
+    expect(rollupFor("org_a", midnight("1996-05-08")), "console reads are no usage").toBeUndefined();
+    expect(rollupFor("-deployment-", midnight("1996-05-08"))).toBeUndefined();
+    expect(rollupFor("org_a", midnight("1996-05-09"))).toMatchObject({ calls: 1, rowsRead: 5 });
+  });
+
+  it("leaves a day retention has eaten into, and every day before it, as they were", async () => {
+    await rerollRetainedUsage(NOW);
+
+    // Re-rolled from what survives of 05-07, org_a would read 1 call, not 9.
+    expect(rollupFor("org_a", midnight("1996-05-07"))).toMatchObject({ calls: 9, rowsRead: 45 });
+    expect(rollupFor("org_a", midnight("1996-04-01"))).toMatchObject({ calls: 7, rowsRead: 70 });
+  });
+
+  it("is safe to run again", async () => {
+    await rerollRetainedUsage(NOW);
+    const first = new Map(db.rollups);
+    await rerollRetainedUsage(NOW);
+    expect(db.rollups).toEqual(first);
   });
 });

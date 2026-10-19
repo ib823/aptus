@@ -26,7 +26,8 @@
  * know and which is probably false. That is exactly the class of assertion the
  * vocabulary exists to prevent, so:
  *
- *   state:  observed-good | observed-bad | never-observed | unobservable | defect
+ *   state:  observed-good | observed-mixed | observed-bad | never-observed
+ *           | unobservable | defect
  *   ended:  null | { kind, at, carried }
  *
  * `carried` is the load-bearing part: did anything actually run under this
@@ -77,6 +78,7 @@ export type NodeKind =
 
 export type NodeState =
   | "observed-good"
+  | "observed-mixed"
   | "observed-bad"
   | "never-observed"
   | "unobservable"
@@ -204,15 +206,19 @@ export function observeEdge(calls: number, failures: number): EdgeObservation {
  * "bad", while the critical binding-refused incident was open about it. That is
  * health that was not observed, which the vocabulary exists to forbid.
  *
- * MIXED READS AS BAD ON A NODE. An edge can say "mixed" because it carries its
- * counts; a node has one glyph. ✓ over a node whose calls partly failed hides
- * the failures, which is the claim somebody acts on wrongly. ✕ says only that
- * something recorded under it failed — true — and the edge and the provenance
- * beside it say how much.
+ * MIXED IS ITS OWN STATE, for the reason `EdgeObservation` gives for edges. ✓
+ * over a node whose calls partly failed hides the failures; ✕ says nothing got
+ * through. Mapping mixed to ✕ was the second claim, and the routine traffic of a
+ * healthy integration made it on almost every busy node: one 429 among 10,000
+ * served reads, one 409 "Idempotency-Key still in progress" from a client
+ * retrying correctly, one 404 on a mistyped interface id — each turned a working
+ * solution, grant or interface red. ✕ is kept for a node where every recorded
+ * call failed; the edge and the provenance beside a mixed node say how many.
  */
 export function observedState(calls: number, failures: number): NodeState {
   const observed = observeEdge(calls, failures);
   if (observed === "never") return "never-observed";
+  if (observed === "mixed") return "observed-mixed";
   return observed === "good" ? "observed-good" : "observed-bad";
 }
 
@@ -773,8 +779,10 @@ export function collapseColumn(nodes: TopologyNode[], limit = COLLAPSE_THRESHOLD
     if (n.state === "defect") return 0;
     if (n.ended?.carried) return 1;
     if (n.state === "observed-bad") return 2;
-    if (n.state === "observed-good") return 3;
-    return 4;
+    // Partly failing is worth seeing before wholly healthy.
+    if (n.state === "observed-mixed") return 3;
+    if (n.state === "observed-good") return 4;
+    return 5;
   };
   const sorted = [...nodes].sort((a, b) => rank(a) - rank(b));
   return { kept: sorted.slice(0, limit), collapsedCount: nodes.length - limit };

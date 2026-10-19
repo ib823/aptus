@@ -75,7 +75,7 @@ vi.mock("@/lib/db/prisma", () => ({
     solution: { findMany: async () => [] },
     interface: { findMany: async () => db.interfaces },
     sapConnectionProbeEvent: { findMany: async () => [] },
-    coreEdgeUsageRollup: { upsert: mocks.rollupUpsert, findMany: async () => [] },
+    coreEdgeUsageRollup: { upsert: mocks.rollupUpsert, deleteMany: async () => ({ count: 0 }), findMany: async () => [] },
     $transaction: async (ops: unknown[]) => Promise.all(ops),
   },
 }));

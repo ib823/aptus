@@ -33,7 +33,16 @@ function utcMidnight(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-/** Roll up ONE day. Exposed for tests; the cron drives it via the runner. */
+/**
+ * Roll up ONE day. Exposed for tests and for `rerollRetainedUsage`; the cron
+ * drives it via the runner.
+ *
+ * ONLY FOR A DAY THE AUDIT FEED STILL HOLDS WHOLE. The day's rollup is made to
+ * match the feed exactly, rows the feed no longer supports included, so on a
+ * day retention has eaten into it would replace real usage with what is left.
+ * Both callers keep to that: see `runCoreEdgeUsageRollup` and
+ * `rerollRetainedUsage`.
+ */
 export async function rollupDay(day: Date): Promise<number> {
   const start = utcMidnight(day);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
@@ -128,7 +137,19 @@ export async function rollupDay(day: Date): Promise<number> {
    * deleted the audit rows it could have been rebuilt from. As one batch a
    * failure rolls the whole day back, the day stays missing, and the next run
    * retries it.
+   *
+   * AND A RE-ROLL CONVERGES. Upserts alone only ever add: an organization the
+   * current rules no longer count — `-deployment-`, or one whose only traffic
+   * that day was console reads and Test Console runs — kept the row an earlier
+   * rollup wrote for it, and the Usage screen kept adding it into its totals.
+   * The day's rows for every organization not recomputed are deleted in the
+   * same transaction, so after a re-roll the day holds what the rules say and
+   * nothing else, including when that is nothing at all.
    */
+  const recomputed = [...orgs.keys()];
+  const stale = prisma.coreEdgeUsageRollup.deleteMany({
+    where: { day: start, organizationId: { notIn: recomputed } },
+  });
   const upserts = [...orgs].map(([organizationId, v]) =>
     prisma.coreEdgeUsageRollup.upsert({
       where: { organizationId_day: { organizationId, day: start } },
@@ -153,15 +174,16 @@ export async function rollupDay(day: Date): Promise<number> {
       },
     }),
   );
-  if (upserts.length > 0) await prisma.$transaction(upserts);
+  await prisma.$transaction([stale, ...upserts]);
   return upserts.length;
 }
 
 /**
  * Roll up every complete day that has audit rows and no rollup yet, newest
- * first, up to the backfill cap. Yesterday is always attempted (re-running is
- * an idempotent upsert), so a day whose late writes landed after the first
- * pass converges on the next run.
+ * first, up to the backfill cap. Yesterday is always attempted (re-running
+ * makes the day match the feed again), so a day whose late writes landed after
+ * the first pass converges on the next run. No OLDER day is re-rolled: when the
+ * counting rules change, `rerollRetainedUsage` is what brings those up to date.
  *
  * "Holds a rollup row" stands for "covered" only because `rollupDay` writes a
  * day as one transaction — a day is never left holding some organizations'
@@ -172,6 +194,18 @@ export async function runCoreEdgeUsageRollup(now: Date = new Date()): Promise<Ro
   permitCrossTenantReads("coreedge-usage-rollup: nightly cross-tenant aggregation");
 
   const today = utcMidnight(now);
+
+  /*
+   * THE SENTINEL IS NEVER AN ORGANIZATION. `rollupDay` stopped writing
+   * `-deployment-` rows, but a rollup from before that wrote one for any day a
+   * global admin read the deployment tenant, and the Usage screen sums every row
+   * it finds for up to 180 days — well past the audit feed's retention, so most
+   * of those days can never be re-rolled. They are removed here, on every run:
+   * a no-op once they are gone. Done before `done` is read, so a day whose only
+   * row was the sentinel goes back through the backfill like any missing day.
+   */
+  await prisma.coreEdgeUsageRollup.deleteMany({ where: { organizationId: DEPLOYMENT_AUDIT_SCOPE } });
+
   const oldest = await prisma.northboundAuditEvent.findFirst({
     orderBy: { at: "asc" },
     select: { at: true },
@@ -205,4 +239,68 @@ export async function runCoreEdgeUsageRollup(now: Date = new Date()): Promise<Ro
   }
 
   return { daysProcessed, rowsWritten, moreRemaining };
+}
+
+export interface RerollResult {
+  /** Days re-rolled, newest first — every day the feed holds whole, through yesterday. */
+  daysRerolled: number;
+  rowsWritten: number;
+  /** The oldest day re-rolled, or null when the feed holds no whole day. */
+  from: string | null;
+}
+
+/**
+ * Re-roll every day the audit feed still holds WHOLE, under the current rules.
+ *
+ * WHY THIS EXISTS. The runner rolls a day once and then treats it as covered,
+ * re-running only yesterday. That is right while the rules stand still and
+ * wrong the moment they change: every day rolled before the change keeps the
+ * old answer. When `rollupDay` stopped counting dry runs, console reads and
+ * discovery, the rows already written kept those figures — over-counts, the one
+ * direction the header rules out — for as long as the Usage screen shows them.
+ * The figures for a day can be recomputed for exactly as long as its audit rows
+ * survive, so this recomputes all of those and leaves every other day alone.
+ *
+ * WHOLE, NOT MERELY PRESENT. Retention deletes by age, not by calendar day, so
+ * the oldest audit row's own day has usually lost its earlier hours; re-rolling
+ * it would replace a complete figure with a partial one, and drop outright any
+ * organization whose calls that day were all in the part already deleted. That
+ * day, and every day before it, keeps the rollup it has.
+ *
+ * IDEMPOTENT AND SAFE TO RE-RUN: each day is one transaction that makes the
+ * day's rows match its audit rows, so a second run writes what the first did,
+ * plus any audit rows that landed in between. Run by
+ * `scripts/reroll-coreedge-usage.ts` once a change to the rules is deployed.
+ */
+export async function rerollRetainedUsage(now: Date = new Date()): Promise<RerollResult> {
+  permitCrossTenantReads("coreedge-usage-reroll: re-rolling every retained day, every tenant");
+
+  await prisma.coreEdgeUsageRollup.deleteMany({ where: { organizationId: DEPLOYMENT_AUDIT_SCOPE } });
+
+  const oldest = await prisma.northboundAuditEvent.findFirst({
+    orderBy: { at: "asc" },
+    select: { at: true },
+  });
+  if (!oldest) return { daysRerolled: 0, rowsWritten: 0, from: null };
+
+  // A row at exactly midnight starts a whole day; anything later may not.
+  const oldestDay = utcMidnight(oldest.at);
+  const firstWhole =
+    oldest.at.getTime() === oldestDay.getTime()
+      ? oldestDay
+      : new Date(oldestDay.getTime() + 24 * 60 * 60 * 1000);
+
+  let daysRerolled = 0;
+  let rowsWritten = 0;
+  let from: string | null = null;
+  for (
+    let day = new Date(utcMidnight(now).getTime() - 24 * 60 * 60 * 1000);
+    day.getTime() >= firstWhole.getTime();
+    day = new Date(day.getTime() - 24 * 60 * 60 * 1000)
+  ) {
+    rowsWritten += await rollupDay(day);
+    daysRerolled++;
+    from = day.toISOString();
+  }
+  return { daysRerolled, rowsWritten, from };
 }

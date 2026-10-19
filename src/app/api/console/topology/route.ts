@@ -22,7 +22,7 @@
  * WHAT IT REFUSES TO COMPUTE. No health score, no uptime, no totals worth
  * copying. The Operations home already argues why: a second copy of a number is
  * a thing that disagrees with the screen that owns it. This returns structure,
- * five honest states, and the provenance for each.
+ * six honest states, and the provenance for each.
  */
 
 import type { NextRequest } from "next/server";
