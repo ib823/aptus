@@ -211,11 +211,32 @@ describe("the detail's live probe takes the console ceiling and leaves a row (A2
     expect(auditRows()).toEqual([expect.objectContaining({ externalId: "API_PO", status: 403, rowCount: null })]);
   });
 
+  /*
+   * SAP'S 429 IS NOT COREEDGE THROTTLING, here as on /preview and /operations.
+   * Recorded as itself, ten expansions of a row on a tenant that rate-limits
+   * $metadata raised the 'throttled' incident ("a credential is being rate
+   * limited repeatedly") for a read no credential made.
+   */
+  it("SAP's own 429 on $metadata is recorded as 502 with HTTP_429", async () => {
+    mocks.resolveSapConnection.mockResolvedValue(connection("DEV"));
+    mocks.probeService.mockResolvedValue({ service: "API_PO", exposed: false, status: 429, ladder: "unreachable" });
+    await GET(req("product=s4hana&tenant=x5m-prod"), ctx("1"));
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ externalId: "API_PO", status: 502, failureReason: "HTTP_429", rowCount: null }),
+    ]);
+  });
+
   it("records a deployment-tenant probe, a refusal SAP gave, and nothing for probe=0", async () => {
     mocks.getSapTenant.mockReturnValue(TENANT);
     await GET(req(), ctx("1")); // the default 404 mock
     expect(auditRows()).toEqual([
-      expect.objectContaining({ environment: "deployment:default", externalId: "API_PO", status: 404, rowCount: null }),
+      expect.objectContaining({
+        environment: "deployment:default",
+        externalId: "API_PO",
+        status: 404,
+        failureReason: "HTTP_404",
+        rowCount: null,
+      }),
     ]);
 
     mocks.auditCreate.mockClear();

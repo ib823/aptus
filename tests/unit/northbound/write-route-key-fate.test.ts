@@ -240,7 +240,8 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
         });
       },
     });
-    await expectRetryable(502, "UPSTREAM_ERROR", "ECONNRESET");
+    // Not a bare ECONNRESET: that is the row an unreachable tenant leaves.
+    await expectRetryable(502, "UPSTREAM_ERROR", "TOKEN_ECONNRESET");
     expect(methods(f)).toEqual(["TOKEN"]);
   });
 
@@ -259,6 +260,34 @@ describe("a token endpoint that is down is retryable, not a setup problem", () =
     state.connection = SAML;
     sap({ token: async () => new Response("", { status: 503 }) });
     await expectRetryable(502, "UPSTREAM_ERROR", "SAML_BEARER_HTTP_503");
+  });
+
+  /*
+   * A WRONG TOKEN URL IS NOT AN OUTAGE. The token endpoint's path is wrong
+   * (404) or lands on a login page (200 HTML): the same answer every time, so
+   * "retry later" sent the client round a loop that never ends.
+   */
+  it.each([
+    ["an OAuth token URL answering 404", "OAUTH", 404, "OAUTH_TOKEN_REJECTED"],
+    ["an OAuth token URL answering a 200 login page", "OAUTH", 200, "OAUTH_TOKEN_MISSING"],
+    ["a SAML token URL answering 404", "SAML", 404, "SAML_BEARER_REJECTED"],
+    ["a SAML token URL answering a 200 login page", "SAML", 200, "SAML_BEARER_NO_TOKEN"],
+  ] as const)("%s is a 403 FORBIDDEN to check the token URL", async (_label, kind, code, reason) => {
+    state.connection = kind === "OAUTH" ? OAUTH : SAML;
+    const f = sap({
+      token: async () =>
+        new Response("<html><body>Sign in</body></html>", { status: code, headers: { "content-type": "text/html" } }),
+    });
+    const res = await post();
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
+    expect(body.error.message).toContain("Check the connection's token URL");
+    expect(body.error.message).not.toContain("Retry later");
+    expect(methods(f)).toEqual(["TOKEN"]);
+    expect(mocks.release).toHaveBeenCalledWith({ organizationId: "org_a" }, "idem_1");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(lastAudit()).toMatchObject({ status: 403, failureReason: reason, replayed: false });
   });
 
   it("a SAML exchange SuccessFactors refuses is still a 403 FORBIDDEN", async () => {

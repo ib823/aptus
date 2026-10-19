@@ -267,6 +267,17 @@ export interface RerollResult {
  * organization whose calls that day were all in the part already deleted. That
  * day, and every day before it, keeps the rollup it has.
  *
+ * WHOLE IS DECIDED AGAIN BEFORE EVERY DAY, not once before the loop. The
+ * northbound-retention sweep moves its cutoff about a day forward each night,
+ * into exactly the oldest whole day — the one this loop, newest first, reaches
+ * last. Decided once, a sweep that ran while the loop did left that day's
+ * figures to be recomputed from what survived it, and the convergence delete
+ * then removed every organization whose calls that day were all before the
+ * cutoff. Read again, the oldest row says where retention has got to now, and
+ * the loop stops at the first day it has reached. That cannot close the moment
+ * between the check and the day's own reads, so the script is not run while
+ * the sweep is (03:45 UTC).
+ *
  * IDEMPOTENT AND SAFE TO RE-RUN: each day is one transaction that makes the
  * day's rows match its audit rows, so a second run writes what the first did,
  * plus any audit rows that landed in between. Run by
@@ -277,30 +288,29 @@ export async function rerollRetainedUsage(now: Date = new Date()): Promise<Rerol
 
   await prisma.coreEdgeUsageRollup.deleteMany({ where: { organizationId: DEPLOYMENT_AUDIT_SCOPE } });
 
+  let daysRerolled = 0;
+  let rowsWritten = 0;
+  let from: string | null = null;
+  let day = new Date(utcMidnight(now).getTime() - 24 * 60 * 60 * 1000);
+  for (;;) {
+    const firstWhole = await firstWholeRetainedDay();
+    if (firstWhole === null || day.getTime() < firstWhole.getTime()) break;
+    rowsWritten += await rollupDay(day);
+    daysRerolled++;
+    from = day.toISOString();
+    day = new Date(day.getTime() - 24 * 60 * 60 * 1000);
+  }
+  return { daysRerolled, rowsWritten, from };
+}
+
+/** The first day the retained audit feed holds whole, or null when it holds no row. */
+async function firstWholeRetainedDay(): Promise<Date | null> {
   const oldest = await prisma.northboundAuditEvent.findFirst({
     orderBy: { at: "asc" },
     select: { at: true },
   });
-  if (!oldest) return { daysRerolled: 0, rowsWritten: 0, from: null };
-
+  if (!oldest) return null;
   // A row at exactly midnight starts a whole day; anything later may not.
   const oldestDay = utcMidnight(oldest.at);
-  const firstWhole =
-    oldest.at.getTime() === oldestDay.getTime()
-      ? oldestDay
-      : new Date(oldestDay.getTime() + 24 * 60 * 60 * 1000);
-
-  let daysRerolled = 0;
-  let rowsWritten = 0;
-  let from: string | null = null;
-  for (
-    let day = new Date(utcMidnight(now).getTime() - 24 * 60 * 60 * 1000);
-    day.getTime() >= firstWhole.getTime();
-    day = new Date(day.getTime() - 24 * 60 * 60 * 1000)
-  ) {
-    rowsWritten += await rollupDay(day);
-    daysRerolled++;
-    from = day.toISOString();
-  }
-  return { daysRerolled, rowsWritten, from };
+  return oldest.at.getTime() === oldestDay.getTime() ? oldestDay : new Date(oldestDay.getTime() + 24 * 60 * 60 * 1000);
 }

@@ -131,6 +131,33 @@ describe("the token endpoint FAILING stays an upstream error — nothing was ref
     const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
     expect(r).toMatchObject({ status: "ERROR", failureReason: "CREDENTIAL_UNAVAILABLE" });
   });
+
+  it("so does one whose socket left its own code — prefixed, never the tenant's bare ECONNREFUSED", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } })),
+    );
+    const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
+    expect(r).toMatchObject({ status: "ERROR", failureReason: "TOKEN_ECONNREFUSED" });
+    expect(tenant).not.toHaveBeenCalled();
+  });
+});
+
+describe("a token URL that answers without a token is NEEDS_SETUP — no retry cures it", () => {
+  it.each([
+    ["a 404 from a wrong path", 404, "OAUTH_TOKEN_REJECTED"],
+    ["a 200 login page", 200, "OAUTH_TOKEN_MISSING"],
+  ])("%s", async (_label, status, reason) => {
+    token(new Response("<html><body>Sign in</body></html>", { status, headers: { "content-type": "text/html" } }));
+    const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
+    expect(r.status).toBe("NEEDS_SETUP");
+    expect(httpStatusFor(r.status)).toBe(403);
+    expect(r.failureReason).toBe(reason);
+    expect(r.detail).toBe(
+      `The connection's token endpoint answered HTTP ${status} without issuing a token, so the tenant was not called. Check the connection's token URL in Studio.`,
+    );
+    expect(tenant).not.toHaveBeenCalled();
+  });
 });
 
 describe("a hung token endpoint is TIMEOUT (504), naming the token endpoint's own limit (A55)", () => {
@@ -159,6 +186,20 @@ describe("a hung token endpoint is TIMEOUT (504), naming the token endpoint's ow
     expect(httpStatusFor(r.status)).toBe(504);
     expect(r.failureReason).toBe("TIMEOUT");
     // Not "The tenant did not respond within 25000ms": wrong host, wrong limit.
+    expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms, so the tenant was not called.");
+    expect(tenant).not.toHaveBeenCalled();
+  });
+
+  it("names the token endpoint's limit when the connection's own timeout is shorter", async () => {
+    // The reported case: timeoutMs 5000, a SAML token endpoint that hangs. The
+    // read said "The tenant did not respond within 5000ms" after 10,000ms on
+    // the token endpoint, with the tenant never contacted.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    hang();
+    const pending = readEntitySet({ connection: { ...sfPreSigned(), timeoutMs: 5_000 }, ...READ }, tenant as unknown as typeof fetch);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const r = await pending;
+    expect(r).toMatchObject({ status: "TIMEOUT", failureReason: "TIMEOUT" });
     expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms, so the tenant was not called.");
     expect(tenant).not.toHaveBeenCalled();
   });

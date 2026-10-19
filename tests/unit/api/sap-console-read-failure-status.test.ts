@@ -173,7 +173,7 @@ describe("/operations", () => {
     mocks.previewSapEntitySet.mockResolvedValue(answered(403));
     const res = await operations.GET(get(OPERATIONS));
     expect(res.status).toBe(200);
-    expect(audited()).toEqual([expect.objectContaining({ status: 403 })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 403, failureReason: "HTTP_403" })]);
   });
 
   it("every section unauthenticated is recorded as the setup refusal", async () => {
@@ -181,28 +181,33 @@ describe("/operations", () => {
       new SapCredentialError(new OAuthTokenRequestError("OAuth token request failed: HTTP 401", 401)),
     );
     await operations.GET(get(OPERATIONS));
-    expect(audited()).toEqual([expect.objectContaining({ status: 403 })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 403, failureReason: "OAUTH_TOKEN_REJECTED" })]);
   });
 
-  it("every section rate-limited by SAP (429) is a 502, not CoreEdge throttling", async () => {
+  /*
+   * SAP'S STATUS STAYS ON THE ROW. Recorded as 502 and nothing else, a tenant
+   * rate-limiting every section could not be told from a 5xx or a timeout —
+   * /preview keeps it as failureReason HTTP_<n>, and so does this row.
+   */
+  it("every section rate-limited by SAP (429) is a 502, not CoreEdge throttling, with HTTP_429 kept", async () => {
     mocks.previewSapEntitySet.mockResolvedValue(answered(429));
     const res = await operations.GET(get(OPERATIONS));
     expect(res.status).toBe(200);
     expect((await res.json()).data.sections.every((s: { status: number }) => s.status === 429)).toBe(true);
-    expect(audited()).toEqual([expect.objectContaining({ status: 502 })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 502, failureReason: "HTTP_429" })]);
   });
 
-  it("any section the tenant failed makes the row a 502", async () => {
+  it("any section the tenant failed makes the row a 502, with that section's reason", async () => {
     let n = 0;
-    mocks.previewSapEntitySet.mockImplementation(async () => answered(n++ === 0 ? 503 : 403));
+    mocks.previewSapEntitySet.mockImplementation(async () => answered(n++ === 0 ? 403 : 503));
     await operations.GET(get(OPERATIONS));
-    expect(audited()).toEqual([expect.objectContaining({ status: 502 })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 502, failureReason: "HTTP_503" })]);
   });
 
-  it("one section read is a 200, as before", async () => {
+  it("one section read is a 200, as before, with no failure reason", async () => {
     let n = 0;
     mocks.previewSapEntitySet.mockImplementation(async () => answered(n++ === 0 ? 200 : 403));
     await operations.GET(get(OPERATIONS));
-    expect(audited()).toEqual([expect.objectContaining({ status: 200 })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 200, failureReason: null })]);
   });
 });

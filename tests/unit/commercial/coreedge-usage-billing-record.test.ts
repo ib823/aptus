@@ -56,6 +56,8 @@ const db = vi.hoisted(() => ({
   rollups: new Map<string, unknown>(),
   /** Throws inside the write of one organization's row, like a dropped connection. */
   failUpsert: null as null | ((organizationId: string, day: Date) => boolean),
+  /** Runs inside the write of one organization's row — something else happening meanwhile. */
+  onUpsert: null as null | ((organizationId: string, day: Date) => void),
 }));
 
 const comparable = (v: unknown): unknown => (v instanceof Date ? v.getTime() : v);
@@ -130,6 +132,7 @@ function upsert(args: { where: { organizationId_day: { organizationId: string; d
   const { organizationId, day } = args.where.organizationId_day;
   return lazy(() => {
     if (db.failUpsert?.(organizationId, day)) throw new Error("connection reset");
+    db.onUpsert?.(organizationId, day);
     db.rollups.set(`${organizationId}|${day.toISOString()}`, { ...args.create });
   });
 }
@@ -211,6 +214,7 @@ beforeEach(() => {
   db.audit = [];
   db.rollups.clear();
   db.failUpsert = null;
+  db.onUpsert = null;
 });
 
 describe("A32 — only deployed broker traffic is on the record pricing is chosen from", () => {
@@ -435,5 +439,40 @@ describe("rerollRetainedUsage — every day the feed still holds whole, once the
     const first = new Map(db.rollups);
     await rerollRetainedUsage(NOW);
     expect(db.rollups).toEqual(first);
+  });
+
+  /*
+   * THE NIGHTLY RETENTION SWEEP CAN RUN WHILE THIS DOES. Its cutoff moves about
+   * a day a night, into the oldest whole day — the day this loop, newest first,
+   * reaches last. Decided once up front, that day was re-rolled from what the
+   * sweep left: org_c, whose only call was before the cutoff, was deleted from
+   * it and org_a dropped from 2 calls to 1. The reviewer's seed, on a real
+   * Postgres; here the sweep runs while 05-10 is being written.
+   */
+  it("stops at the day a retention sweep cut while it was running", async () => {
+    db.audit = [
+      brokerRead({ at: at("1996-05-07T10:00:00.000Z") }), // the oldest: 05-07 is partial
+      brokerRead({ organizationId: "org_c", at: at("1996-05-08T08:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-08T08:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-08T20:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-09T09:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-10T09:00:00.000Z") }),
+      brokerRead({ at: at("1996-05-11T09:00:00.000Z") }),
+    ];
+    db.rollups.clear();
+    seedRollup("org_a", midnight("1996-05-08"), { calls: 2, rowsRead: 10 });
+    seedRollup("org_c", midnight("1996-05-08"), { calls: 1, rowsRead: 5 });
+    const cutoff = at("1996-05-08T12:00:00.000Z").getTime();
+    db.onUpsert = (_org, day) => {
+      if (day.getTime() !== midnight("1996-05-10").getTime()) return;
+      db.audit = (db.audit as AuditRow[]).filter((r) => r.at.getTime() >= cutoff);
+    };
+
+    const r = await rerollRetainedUsage(at("1996-05-12T03:00:00.000Z"));
+
+    // 05-08 is no longer whole once the sweep has cut into it, so it is left.
+    expect(r).toMatchObject({ daysRerolled: 3, from: midnight("1996-05-09").toISOString() });
+    expect(rollupFor("org_a", midnight("1996-05-08"))).toMatchObject({ calls: 2, rowsRead: 10 });
+    expect(rollupFor("org_c", midnight("1996-05-08"))).toMatchObject({ calls: 1, rowsRead: 5 });
   });
 });

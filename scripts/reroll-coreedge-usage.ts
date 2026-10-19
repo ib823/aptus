@@ -8,6 +8,12 @@
  * older day otherwise keeps the figures the old rules gave it for as long as
  * the Usage screen shows it.
  *
+ * NOT AROUND 03:45 UTC, while the northbound-retention cron (vercel.json) is
+ * running. That sweep cuts into the oldest day this re-rolls; the re-roll
+ * checks before each day how far retention has got and stops there, but a day
+ * read at the very moment the sweep is deleting from it would be rolled from
+ * what was left.
+ *
  * WHAT IT TOUCHES. Every day from the first one the retained feed holds whole
  * through yesterday: each is made to match its audit rows, in one transaction
  * per day. Days older than that are left exactly as they are, because their

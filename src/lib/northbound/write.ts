@@ -18,8 +18,6 @@ import {
   TOKEN_REQUEST_TIMEOUT_MS,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
-import { SamlBearerExchangeError } from "@/lib/sap-public/oauth-saml-bearer";
-import { OAuthTokenRequestError } from "@/lib/sap-public/upstream-failure";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
@@ -28,6 +26,8 @@ import {
   FAILURE_REASON_INVALID_BODY,
   failureReasonFromError,
   failureReasonFromHttp,
+  tokenEndpointAnswer,
+  wrongTokenUrlAnswer,
 } from "@/lib/northbound/failure-reason";
 
 export type NorthboundWriteStatus =
@@ -404,9 +404,10 @@ export async function writeEntitySet(
  *
  * AN OUTAGE IS NOT A REFUSAL. NEEDS_SETUP is for what only a fix to the
  * connection cures: a field it lacks, a key that cannot sign, a header the
- * validator rejects, the Basic-auth sunset, or a token endpoint that refused
- * the credential itself (isTokenRefusal). An identity provider answering 429 or
- * 5xx, or not reachable at all, is briefly unwell — and called NEEDS_SETUP it
+ * validator rejects, the Basic-auth sunset, a token endpoint that refused the
+ * credential itself, or a token URL that answers without a token (a 404, a
+ * login page). An identity provider answering 408, 429 or 5xx, or not
+ * reachable at all, is briefly unwell — and called NEEDS_SETUP it
  * went out as 403 FORBIDDEN "fix the connection", the code the developer
  * fixtures teach as "not set up", so a client branching on it dropped or
  * escalated the write mid-outage while the read path called the same outage a
@@ -440,7 +441,7 @@ function credentialFailure(err: unknown, started: number): NorthboundWriteResult
     };
   }
   if (status === "ERROR") {
-    const answered = tokenEndpointStatus(err);
+    const answered = tokenEndpointAnswer(err);
     return {
       ...unsent,
       detail:
@@ -449,18 +450,16 @@ function credentialFailure(err: unknown, started: number): NorthboundWriteResult
           : "The connection's token endpoint could not be reached, so nothing was sent to the tenant. The write was not applied. Retry later with the same Idempotency-Key.",
     };
   }
+  // A token URL that answers, but not with a token, is not cured by a retry:
+  // "Retry later" sent a client round that loop until its key expired.
+  const wrongUrl = wrongTokenUrlAnswer(err);
   return {
     ...unsent,
     detail:
-      "The connection's credentials could not be used (a credential is missing, or the token endpoint refused it), so nothing was sent to the tenant. The write was not applied. Fix the connection in Studio, then retry with the same Idempotency-Key.",
+      wrongUrl !== null
+        ? `The connection's token endpoint answered HTTP ${wrongUrl} without issuing a token, so nothing was sent to the tenant. The write was not applied. Check the connection's token URL in Studio, then retry with the same Idempotency-Key.`
+        : "The connection's credentials could not be used (a credential is missing, or the token endpoint refused it), so nothing was sent to the tenant. The write was not applied. Fix the connection in Studio, then retry with the same Idempotency-Key.",
   };
-}
-
-/** What the token endpoint answered, when it answered and issued no token. */
-function tokenEndpointStatus(err: unknown): number | null {
-  return err instanceof OAuthTokenRequestError || err instanceof SamlBearerExchangeError
-    ? err.httpStatus
-    : null;
 }
 
 /** The HTTP status the BROKER returns for each write outcome. */

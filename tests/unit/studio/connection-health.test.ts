@@ -457,6 +457,27 @@ describe("a hung token endpoint is TIMEOUT, on every auth type (A55)", () => {
     expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms.");
     expect(sap).not.toHaveBeenCalled();
   });
+
+  it("names the token endpoint's limit when the connection's own timeout is shorter", async () => {
+    // The reported case: Test on a SuccessFactors connection with timeoutMs
+    // 5000 said "The tenant did not respond within 5000ms" — wrong host, wrong
+    // limit — after 10,000ms on a token endpoint that hung.
+    const sap = vi.fn();
+    const pending = probeConnection(
+      conn({
+        authType: "oauth-saml-bearer",
+        secrets: { clientId: "API_KEY_ABC", companyId: "acmeT1", samlAssertion: "PHNhbWw+" },
+        oauthTokenUrl: "https://tokens.example.com/oauth/token",
+        timeoutMs: 5_000,
+      }),
+      sap as unknown as typeof fetch,
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    const r = await pending;
+    expect(r.status).toBe("TIMEOUT");
+    expect(r.detail).toBe("The connection's token endpoint did not respond within 10000ms.");
+    expect(sap).not.toHaveBeenCalled();
+  });
 });
 
 describe("what the probe sends", () => {

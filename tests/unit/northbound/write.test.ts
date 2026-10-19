@@ -273,7 +273,9 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
   });
 
   it.each([
-    ["client-credentials", "ECONNRESET", oauth],
+    // TOKEN_-prefixed: a bare ECONNRESET is word for word an unreachable
+    // TENANT's row, and sent triage there.
+    ["client-credentials", "TOKEN_ECONNRESET", oauth],
     // The SAML exchange wraps fetch's TypeError to keep the URL out of the
     // message, so the socket's own code is one level further down.
     ["SAML bearer", "CREDENTIAL_UNAVAILABLE", saml],
@@ -320,6 +322,77 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     expect(r.attempted).toBe(false);
     expect(r.failureReason).toBe(reason);
     expect(r.detail).toContain("Fix the connection");
+  });
+
+  it("a client-credentials token host that does not resolve is audited as the token endpoint's", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(new TypeError("fetch failed", { cause: { code: "ENOTFOUND" } }))),
+    );
+    const r = await writeEntitySet({ ...input, connection: oauth }, vi.fn());
+    expect(r.status).toBe("ERROR");
+    expect(r.failureReason).toBe("TOKEN_ENOTFOUND");
+  });
+
+  it("a 408 from the token endpoint is still an outage to retry", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => page(408)));
+    const r = await writeEntitySet({ ...input, connection: oauth }, vi.fn());
+    expect(r.status).toBe("ERROR");
+    expect(r.failureReason).toBe("OAUTH_TOKEN_HTTP_408");
+    expect(r.detail).toContain("Retry later");
+  });
+});
+
+/*
+ * A TOKEN URL THAT ANSWERS WITHOUT A TOKEN IS NOT AN OUTAGE. Only 408, 429 and
+ * a 5xx are the endpoint being briefly unwell. A wrong path (404, 405) or a URL
+ * that lands on a login page (200 HTML) answered the same thing every time,
+ * and was a 502 "retry later": the key was released, the client retried as
+ * told, forever, and the upstream-errors incident counted a misconfiguration
+ * as an outage.
+ */
+describe("a token URL that answers without a token is a setup problem, not an outage", () => {
+  const TOKEN_URL = "https://auth.example/oauth/token";
+  const oauth: ResolvedSapConnection = {
+    ...connection,
+    id: "c_oauth_wrong_url",
+    authType: "oauth-client-credentials",
+    oauthTokenUrl: TOKEN_URL,
+    secrets: { clientId: "client", clientSecret: "still-valid" },
+  };
+  const saml: ResolvedSapConnection = {
+    ...connection,
+    id: "c_saml_wrong_url",
+    product: "successfactors",
+    authType: "oauth-saml-bearer",
+    oauthTokenUrl: TOKEN_URL,
+    secrets: { clientId: "sf-api-key", companyId: "acmeT1", samlAssertion: "PHNhbWw+" },
+  };
+  const html = (status: number) =>
+    new Response("<html><body>Sign in</body></html>", { status, headers: { "content-type": "text/html" } });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearOAuthTokenCache();
+  });
+
+  it.each([
+    ["client-credentials", 404, "OAUTH_TOKEN_REJECTED", oauth],
+    ["client-credentials", 405, "OAUTH_TOKEN_REJECTED", oauth],
+    ["client-credentials", 200, "OAUTH_TOKEN_MISSING", oauth],
+    ["SAML bearer", 404, "SAML_BEARER_REJECTED", saml],
+    ["SAML bearer", 200, "SAML_BEARER_NO_TOKEN", saml],
+  ])("a %s token URL answering %i is NEEDS_SETUP: check the token URL", async (_label, code, reason, conn) => {
+    vi.stubGlobal("fetch", vi.fn(async () => html(code)));
+    const f = vi.fn();
+    const r = await writeEntitySet({ ...input, connection: conn }, f);
+    expect(r.status).toBe("NEEDS_SETUP");
+    expect(writeHttpStatusFor(r.status)).toBe(403);
+    expect(r.attempted).toBe(false);
+    expect(r.failureReason).toBe(reason);
+    expect(r.detail).toContain(`answered HTTP ${code} without issuing a token`);
+    expect(r.detail).toContain("Check the connection's token URL");
+    expect(r.detail).not.toContain("Retry later");
+    expect(f).not.toHaveBeenCalled();
   });
 });
 

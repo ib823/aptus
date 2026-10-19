@@ -18,6 +18,7 @@ import {
   recordConsoleRead,
 } from "@/lib/sap-public/console-read-guard";
 import { getCurrentUser } from "@/lib/auth/session";
+import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import {
   readTenantRefusalResponse,
@@ -54,7 +55,9 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
  * the section rather than in it, so the response shape is unchanged. SAP's own
  * refusal when it answered (answeredReadAuditStatus — a 429 is a 502, not
  * CoreEdge throttling); consoleReadFailure's when the read threw (audit A26):
- * a refused section is a 401/403/404, not a tenant 5xx.
+ * a refused section is a 401/403/404, not a tenant 5xx. And the failureReason
+ * beside it, as /preview records it: without one, a row of SAP 429s read 502
+ * and nothing else, indistinguishable from a 5xx or a timeout.
  */
 async function loadOperationSection(
   product: SapOdataProduct,
@@ -77,6 +80,7 @@ async function loadOperationSection(
     const fields = chooseFields(preview.rows, config.fields);
     return {
       auditStatus: answeredReadAuditStatus(preview.ok, preview.status),
+      failureReason: failureReasonFromHttp(preview.status),
       section: {
         key: config.key,
         title: config.title,
@@ -98,8 +102,10 @@ async function loadOperationSection(
       },
     };
   } catch (error) {
+    const failure = consoleReadFailure(error, "SAP section load failed");
     return {
-      auditStatus: consoleReadFailure(error, "SAP section load failed").auditStatus,
+      auditStatus: failure.auditStatus,
+      failureReason: failure.failureReason,
       section: {
         key: config.key,
         title: config.title,
@@ -189,7 +195,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * sections actually reached the tenant, which is the number that says how much
    * load this request caused.
    */
-  const audit = (status: number, rowCount: number | null, durationMs?: number) =>
+  const audit = (
+    status: number,
+    rowCount: number | null,
+    extra: { durationMs?: number; failureReason?: string | null } = {},
+  ) =>
     recordConsoleRead({
       organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
       actorUserId: viewer.id,
@@ -200,7 +210,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       correlationId,
       connectionId: conn?.id ?? null,
       connectionEnvironment: conn?.environment ?? null,
-      ...(durationMs === undefined ? {} : { durationMs }),
+      ...extra,
     });
 
   // The environment ceiling. Only a stored connection has a landscape to cap.
@@ -261,15 +271,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // THE STATUS IS THE SECTIONS' OWN (audit A26), not a flat 502 whenever none
   // was ok: every section refused 403 is SAP saying "not set up", and was
   // counted by the upstream-errors incident as the tenant failing. A 5xx (or
-  // no answer) from any section still makes the row a 502.
+  // no answer) from any section still makes the row a 502. The failureReason is
+  // that of the section whose status the row carries, so SAP's own answer — a
+  // 429 among them — is still on the row.
+  const decisive = loaded.some((l) => l.auditStatus === 200)
+    ? null
+    : (loaded.find((l) => l.auditStatus >= 500) ?? loaded[0]);
   await audit(
-    loaded.some((l) => l.auditStatus === 200)
-      ? 200
-      : loaded.some((l) => l.auditStatus >= 500) || loaded.length === 0
-        ? 502
-        : loaded[0]!.auditStatus,
+    decisive === null ? 200 : decisive === undefined || decisive.auditStatus >= 500 ? 502 : decisive.auditStatus,
     sections.length,
-    Date.now() - startedAt,
+    { durationMs: Date.now() - startedAt, failureReason: decisive?.failureReason ?? null },
   );
 
   return NextResponse.json({
