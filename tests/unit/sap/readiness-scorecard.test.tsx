@@ -133,6 +133,28 @@ describe("the reason a readiness of zero is explained to the right person", () =
   });
 });
 
+describe("a refused “Confirm data reads” says why, not to tick the box", () => {
+  /*
+   * The route answers an overlay the console ceiling refused with
+   * `dataProbe: false` and the ceiling's sentence in `dataProbeRefusal`. This
+   * card read the false alone and told the reader to enable the checkbox they
+   * had just ticked, so the refusal looked like a control that did nothing.
+   */
+  const REFUSAL =
+    "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD.";
+
+  it("shows the refusal in place of the enable hint", () => {
+    render(<ReadinessScorecard {...NOTHING_PROBED} dataProbeRefusal={REFUSAL} />);
+    expect(screen.getByRole("status").textContent).toContain(REFUSAL);
+    expect(screen.queryByText(/Enable “Confirm data reads”/)).toBeNull();
+  });
+
+  it("keeps the enable hint when nothing was refused", () => {
+    render(<ReadinessScorecard {...NOTHING_PROBED} dataProbeRefusal={null} />);
+    expect(screen.getByText(/Enable “Confirm data reads”/)).toBeTruthy();
+  });
+});
+
 describe("readinessPercent", () => {
   it("is 0 when nothing was probed, rather than NaN", () => {
     expect(readinessPercent(0, 0)).toBe(0);

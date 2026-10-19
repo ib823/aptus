@@ -210,7 +210,7 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
        * concurrent request got here first, this updates zero rows and we refuse
        * instead of minting a second key. It is also what a revoke, issue or
        * rotate racing this claim wins on — each closes the lane's links before
-       * it touches the key, on this same row.
+       * it touches the key, on this same row, and again after it.
        */
       const claimed = await tx.keyClaimLink.updateMany({
         where: { id: link.id, claimedAt: null, revokedAt: null },

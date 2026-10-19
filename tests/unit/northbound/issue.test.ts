@@ -281,6 +281,44 @@ describe("every change to a key closes the lane's pending claim links", () => {
     );
   });
 
+  it("each closes them again once the key is written, for a link sent in between", async () => {
+    // The close and the write are separate statements. A link sent between
+    // them is stamped after the close, and a re-issue, a rotation and a
+    // revocation all leave the row's createdAt where it was, so no claim-time
+    // check can tell it from a deliberate send against the new key.
+    const changes = [
+      {
+        reason: "A key was issued for this environment.",
+        write: mocks.upsert,
+        run: () =>
+          issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
+      },
+      {
+        reason: "The key for this environment was rotated.",
+        write: mocks.update,
+        run: () => rotateClientToken(SCOPE, "client_1"),
+      },
+      {
+        reason: "The key was revoked.",
+        write: mocks.update,
+        run: () => revokeClientToken(SCOPE, "client_1"),
+      },
+    ];
+    for (const { reason, write, run } of changes) {
+      mocks.closeLinks.mockClear();
+      write.mockClear();
+      await run();
+
+      expect(mocks.closeLinks, reason).toHaveBeenCalledTimes(2);
+      const [before, after] = mocks.closeLinks.mock.invocationCallOrder;
+      expect(before, reason).toBeLessThan(write.mock.invocationCallOrder[0]!);
+      expect(after, reason).toBeGreaterThan(write.mock.invocationCallOrder[0]!);
+      const second = mocks.closeLinks.mock.calls[1]?.[0] as { where: unknown; data: Record<string, unknown> };
+      expect(second.where, reason).toEqual(LANE_LINKS);
+      expect(second.data.revokedReason).toBe(reason);
+    }
+  });
+
   it("closes nothing for a credential in another tenant", async () => {
     mocks.findFirst.mockResolvedValue(null);
     await revokeClientToken(SCOPE, "client_other");

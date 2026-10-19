@@ -248,6 +248,119 @@ describe("A39 · a link opened after a key was issued elsewhere does not kill it
   });
 });
 
+/*
+ * THE WINDOW BETWEEN A CHANGE'S CLOSE AND ITS WRITE.
+ *
+ * Issue, rotate and revoke each close the lane's links and then write the key,
+ * as two separate statements. A link sent from CoreEdge in between passed the
+ * close and was stamped after it, so neither claim-time backstop saw it: an
+ * upsert onto an existing row and a rotation keep the row's createdAt, so
+ * KEY_ISSUED_SINCE never fired, and a revocation is stamped with the instant
+ * before its own close, so KEY_REVOKED read it as revoked BEFORE the link was
+ * sent. Opened hours later, the link replaced the key Studio had just issued,
+ * or brought back the one an admin had just revoked.
+ */
+describe("A39 · a link sent while Studio is changing the key does not outlive the change", () => {
+  /**
+   * Run `change`, sending a link the moment its first close of the lane's
+   * links has returned and before it writes the key.
+   *
+   * The clock moves a millisecond either side of the send because the store
+   * stamps rows with the system clock, and a link the database writes after
+   * the close is stamped after it.
+   */
+  async function sendLinkMidChange<T>(change: () => Promise<T>): Promise<{ link: string; result: T }> {
+    const close = laneStore.client.keyClaimLink.updateMany;
+    let link: string | null = null;
+    const spy = vi.spyOn(laneStore.client.keyClaimLink, "updateMany").mockImplementationOnce(async (args) => {
+      const closed = await close(args);
+      moveTo(new Date(Date.now() + 1));
+      link = await sendLink();
+      moveTo(new Date(Date.now() + 1));
+      return closed;
+    });
+    try {
+      const result = await change();
+      if (link === null) throw new Error("the change never closed the lane's links");
+      return { link, result };
+    } finally {
+      spy.mockRestore();
+    }
+  }
+
+  it("re-issuing onto a revoked lane: the link is closed and Studio's key keeps working", async () => {
+    moveTo(at(-5));
+    const first = await issueInStudio();
+    moveTo(at(-4));
+    await revokeClientToken(SCOPE, first.id);
+
+    moveTo(at(0));
+    const { link, result: t1 } = await sendLinkMidChange(() => issueInStudio());
+    expect(t1.id).toBe(first.id);
+
+    moveTo(at(1));
+    expect((await claimKey(link)).ok).toBe(false);
+    expect((await authenticateClientToken(t1.rawToken)).ok).toBe(true);
+    expect(laneStore.links.at(-1)).toMatchObject({
+      claimedAt: null,
+      revokedReason: "A key was issued for this environment.",
+    });
+  });
+
+  it("re-issuing onto a live lane: the same", async () => {
+    moveTo(at(-5));
+    await issueInStudio();
+
+    moveTo(at(0));
+    const { link, result: t1 } = await sendLinkMidChange(() => issueInStudio());
+
+    moveTo(at(1));
+    expect((await claimKey(link)).ok).toBe(false);
+    expect((await authenticateClientToken(t1.rawToken)).ok).toBe(true);
+  });
+
+  it("rotating: the link is closed and the rotated key keeps working", async () => {
+    moveTo(at(-5));
+    const first = await issueInStudio();
+
+    moveTo(at(0));
+    const { link, result: rotated } = await sendLinkMidChange(() => rotateClientToken(SCOPE, first.id));
+
+    moveTo(at(1));
+    expect((await claimKey(link)).ok).toBe(false);
+    expect((await authenticateClientToken(rotated!.rawToken)).ok).toBe(true);
+    expect(laneStore.links.at(-1)).toMatchObject({
+      claimedAt: null,
+      revokedReason: "The key for this environment was rotated.",
+    });
+  });
+
+  it("revoking: the link is closed and the key stays revoked", async () => {
+    moveTo(at(-5));
+    const first = await issueInStudio();
+
+    moveTo(at(0));
+    const { link } = await sendLinkMidChange(() => revokeClientToken(SCOPE, first.id));
+    const revokedHash = lane()!.tokenHash;
+
+    moveTo(at(1));
+    expect((await claimKey(link)).ok).toBe(false);
+    expect((await authenticateClientToken(first.rawToken)).ok).toBe(false);
+    expect(lane()).toMatchObject({ isActive: false, tokenHash: revokedHash });
+    expect(laneStore.links.at(-1)).toMatchObject({ claimedAt: null, revokedReason: "The key was revoked." });
+  });
+
+  it("a link sent once the change is over is a deliberate send, and still mints", async () => {
+    moveTo(at(-5));
+    const first = await issueInStudio();
+    moveTo(at(0));
+    await rotateClientToken(SCOPE, first.id);
+
+    moveTo(at(0.5));
+    expect((await claimKey(await sendLink())).ok).toBe(true);
+  });
+});
+
 describe("A37 · revoking a credential destroys its write key", () => {
   const WRITE_KEY = "cew_taken_with_the_server";
 

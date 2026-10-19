@@ -11,7 +11,9 @@
  *
  * The read path now refuses such a key (tenant-registries.test.ts). This is the
  * other half: the collision is refused while the consultant is still on the
- * form, before anything is saved.
+ * form, before anything is saved. The last block holds the two halves to each
+ * other: the way out the read refusal names has to be one this route lets a
+ * consultant take, in the order it names the steps.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,13 +23,14 @@ import type * as ConnectionResolverModule from "@/lib/sap-public/connection-reso
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   findFirstConnection: vi.fn(),
+  updateConnection: vi.fn(),
   upsert: vi.fn(),
   writeConfigAudit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { sapConnection: { findFirst: mocks.findFirstConnection } },
+  prisma: { sapConnection: { findFirst: mocks.findFirstConnection, update: mocks.updateConnection } },
 }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionResolverModule>();
@@ -35,7 +38,8 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
 });
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit }));
 
-import { POST } from "@/app/api/studio/connections/route";
+import { PATCH, POST } from "@/app/api/studio/connections/route";
+import { readTenantRefusalResponse } from "@/lib/sap-public/tenant-for-read";
 
 const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com" };
 
@@ -53,9 +57,9 @@ function body(over: Record<string, unknown> = {}) {
   };
 }
 
-function request(payload: unknown) {
+function request(payload: unknown, method = "POST") {
   return new Request("https://example.test/api/studio/connections", {
-    method: "POST",
+    method,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   }) as never;
@@ -127,5 +131,91 @@ describe("what is still allowed", () => {
 
     const res = await POST(request(body()));
     expect(res.status).toBe(200);
+  });
+});
+
+/*
+ * THE WAY OUT THE READ REFUSAL NAMES, TAKEN ON THIS ROUTE.
+ *
+ * A row saved as "default" before the check above existed is still refused at
+ * read time with TENANT_KEY_SHADOWED, and that message is the only place the
+ * consultant learns what to do. It used to say "save the connection again
+ * under a different key, then deactivate this one". The first step could not
+ * be done: the twin check refuses a second active connection on the same
+ * declared environment whatever its key, and the row A41 was about is PROD.
+ * So these drive the route over rows it can actually read back, in both
+ * orders, and hold the message to the one that works.
+ */
+describe("the TENANT_KEY_SHADOWED remedy, followed in the order it is given", () => {
+  type Row = Record<string, unknown>;
+  let rows: Row[];
+
+  /** Applies the route's own `where`, including the twin check's NOT. */
+  function matches(row: Row, where: Row): boolean {
+    return Object.entries(where).every(([field, expected]) =>
+      field === "NOT" ? !matches(row, expected as Row) : (row[field] ?? null) === expected,
+    );
+  }
+
+  beforeEach(() => {
+    rows = [
+      {
+        id: "conn_old",
+        organizationId: "org_a",
+        product: "s4hana",
+        key: "default",
+        label: "Org A PROD system",
+        environment: "PROD",
+        client: null,
+        isActive: true,
+        writeEnabled: false,
+      },
+    ];
+    mocks.findFirstConnection.mockImplementation(
+      async ({ where }: { where: Row }) => rows.find((r) => matches(r, where)) ?? null,
+    );
+    mocks.updateConnection.mockImplementation(async ({ where, data }: { where: Row; data: Row }) => {
+      const row = rows.find((r) => matches(r, where));
+      if (!row) throw new Error("update matched no SapConnection");
+      return Object.assign(row, data);
+    });
+    mocks.upsert.mockImplementation(async (input: Row) => {
+      const row = { ...input, id: "conn_new", isActive: true };
+      rows.push(row);
+      return row;
+    });
+  });
+
+  async function remedy(): Promise<string> {
+    const res = readTenantRefusalResponse({ refused: "TENANT_KEY_SHADOWED" }, "default");
+    return ((await res.json()) as { error: { message: string } }).error.message;
+  }
+
+  it("names deactivating this connection before saving it under another key", async () => {
+    const message = await remedy();
+    const deactivate = message.search(/deactivate this connection/i);
+    const saveAgain = message.search(/save it again under a different key/i);
+
+    expect(deactivate, message).toBeGreaterThanOrEqual(0);
+    expect(saveAgain, message).toBeGreaterThan(deactivate);
+  });
+
+  it("works in that order: deactivated first, the connection saves under its new key", async () => {
+    const off = await PATCH(request({ id: "conn_old", isActive: false }, "PATCH"));
+    expect(off.status).toBe(200);
+
+    const res = await POST(request(body({ key: "acme-prod" })));
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
+    expect(mocks.upsert).toHaveBeenCalledOnce();
+    expect(rows.filter((r) => r.isActive).map((r) => r.key)).toEqual(["acme-prod"]);
+  });
+
+  it("does not work the other way round: the new key is refused as the active row's twin", async () => {
+    const res = await POST(request(body({ key: "acme-prod" })));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.message).toMatch(/already the active PROD connection/);
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
 });

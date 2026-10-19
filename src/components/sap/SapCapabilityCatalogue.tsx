@@ -65,7 +65,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; byTypeDeprecated?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
+  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; byTypeDeprecated?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean; dataProbeRefusal?: string | null };
   catalogueImported: boolean;
   /** The tenant's display LABEL — for captions, never for query params. */
   tenant: string | null;
@@ -459,6 +459,8 @@ export function SapCapabilityCatalogue({
   const lastProbedAt = data?.counts.lastProbedAt ?? null;
   const dataConfirmedCount = data?.counts.dataConfirmed ?? 0;
   const dataProbeOn = data?.counts.dataProbe ?? false;
+  // Why a ticked “Confirm data reads” did not run, when the console ceiling refused it.
+  const dataProbeRefusal = data?.counts.dataProbeRefusal ?? null;
   const apiTotal = data?.counts.byType.API ?? 0;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
   const groups = data ? groupByLoB(data.items) : [];
@@ -563,6 +565,7 @@ export function SapCapabilityCatalogue({
               activated={byStatus.ACTIVATED}
               dataConfirmed={dataConfirmedCount}
               dataProbe={dataProbeOn}
+              dataProbeRefusal={dataProbeRefusal}
               needsSetup={byStatus.NEEDS_SETUP}
               notFound={byStatus.NOT_FOUND}
               notChecked={byStatus.NOT_CHECKED}

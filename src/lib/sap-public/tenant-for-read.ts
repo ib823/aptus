@@ -187,6 +187,13 @@ export function unknownTenantMessage(key: string): string {
  * secrets will not open. The request was well formed and the caller may make
  * it; the stored configuration is what conflicts with it. Nothing was sent to
  * SAP, so there is no read to audit, the same as the 400 for an unknown key.
+ *
+ * DEACTIVATE FIRST, THEN SAVE AGAIN. The steps used to come the other way
+ * round, and the first one could not be done: /api/studio/connections refuses
+ * a second active connection on the same declared environment, whatever its
+ * key, so saving "the same connection under a different key" while this one
+ * was still active was refused as its twin. Deactivated, this row no longer
+ * shadows the key or collides with the new one.
  */
 export function readTenantRefusalResponse(refusal: ReadTenantRefusal, key: string): NextResponse {
   const message =
@@ -194,6 +201,6 @@ export function readTenantRefusalResponse(refusal: ReadTenantRefusal, key: strin
       ? connectionRefusalMessage("CONNECTION_UNREADABLE", "")
       : `"${key}" names both a tenant configured on this deployment and an active connection ` +
         `declared by your organization, so it is not clear which system to read, and neither was read. ` +
-        `Save the connection again under a different key on the Connections screen, then deactivate this one.`;
+        `Deactivate this connection on the Connections screen, then save it again under a different key.`;
   return NextResponse.json({ error: { code: ERROR_CODES.CONFLICT, message } }, { status: 409 });
 }

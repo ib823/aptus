@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { SapCapabilityCatalogue } from "@/components/sap/SapCapabilityCatalogue";
 
 const PAYLOAD = {
@@ -57,6 +57,35 @@ describe("SapCapabilityCatalogue — DEPRECATED rows (2608 WS3)", () => {
     expect(screen.getByRole("tab", { name: /APIs: .*56 deprecated/i })).toBeInTheDocument();
     // Scorecard still sums every bucket (DEPRECATED defaulted to 0 from the old payload).
     expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("SapCapabilityCatalogue — a refused “Confirm data reads”", () => {
+  /*
+   * A consultant on a TEST, PROD or undeclared connection with no live grant
+   * ticks the box. The route refuses the live overlay, still serves the
+   * stored catalogue, and says why in `counts.dataProbeRefusal`. The client
+   * type had no such field, so the reason was dropped and the scorecard kept
+   * saying to enable the checkbox that was ticked.
+   */
+  const REFUSAL =
+    "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD.";
+
+  it("shows the route's reason once the box is ticked, instead of saying to tick it", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const asked = new URL(url, "https://example.test").searchParams.get("dataProbe") === "1";
+      const counts = { ...PAYLOAD.data.counts, dataProbe: false, dataProbeRefusal: asked ? REFUSAL : null };
+      return { ok: true, json: async () => ({ data: { ...PAYLOAD.data, counts } }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SapCapabilityCatalogue product="s4hana" />);
+    expect(await screen.findByText(/Enable “Confirm data reads”/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Confirm data reads/ }));
+
+    expect(await screen.findByText(REFUSAL)).toBeInTheDocument();
+    expect(screen.queryByText(/Enable “Confirm data reads”/)).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("dataProbe=1"))).toBe(true);
   });
 });
 

@@ -43,6 +43,16 @@ export interface ClaimLinkLane {
  * changed key with a live link still aimed at it. A claim racing this is
  * refused by its own compare-and-set on the same row.
  *
+ * AND CLOSED AGAIN AFTER IT. The close and the key write are separate
+ * statements, and a link sent from CoreEdge between them passed the first
+ * close, was stamped after it, and slipped both claim-time backstops: an
+ * upsert onto an existing row and a rotation keep the row's createdAt, so
+ * KEY_ISSUED_SINCE never fires, and a revocation is stamped before its own
+ * close, so KEY_REVOKED reads the link as sent after it. Opened later, that
+ * link replaced the new key or undid the revocation. The second close shuts
+ * it. A link sent after the second close was sent against the key as it now
+ * stands, which is a deliberate re-key and is left alone.
+ *
  * It lives here rather than in claim-link.ts because every path that changes
  * a lane's key already runs through this module, and claim-link.ts imports
  * from this one — so the dependency still points one way.
@@ -161,7 +171,8 @@ export async function issueClientToken(
 
   // Before the key changes: a link sent against the old key would otherwise
   // replace this one when it is opened.
-  await closePendingClaimLinks(lane, "A key was issued for this environment.");
+  const reason = "A key was issued for this environment.";
+  await closePendingClaimLinks(lane, reason);
 
   const previous = await prisma.solutionClient.findFirst({
     where: lane,
@@ -210,6 +221,9 @@ export async function issueClientToken(
     select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
   });
 
+  // And after: a link sent between the close and the upsert. See `closePendingClaimLinks`.
+  await closePendingClaimLinks(lane, reason);
+
   return { ...row, rawToken };
 }
 
@@ -234,11 +248,13 @@ export async function rotateClientToken(
   if (!existing) return null;
 
   const now = new Date();
-  await closePendingClaimLinks(
-    { organizationId: scope.organizationId, solutionId: existing.solutionId, environment: existing.environment },
-    "The key for this environment was rotated.",
-    now,
-  );
+  const lane = {
+    organizationId: scope.organizationId,
+    solutionId: existing.solutionId,
+    environment: existing.environment,
+  };
+  const reason = "The key for this environment was rotated.";
+  await closePendingClaimLinks(lane, reason, now);
 
   const rawToken = generateClientToken();
   const row = await prisma.solutionClient.update({
@@ -255,6 +271,9 @@ export async function rotateClientToken(
     },
     select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
   });
+
+  // And after: a link sent between the close and the update. See `closePendingClaimLinks`.
+  await closePendingClaimLinks(lane, reason);
 
   return { ...row, rawToken };
 }
@@ -274,7 +293,8 @@ export async function rotateClientToken(
  * ISSUE_WRITE — not an accident of which row a new token landed on.
  *
  * Pending claim links for the lane are closed first, so revocation cannot be
- * undone by a link that was already out when it happened.
+ * undone by a link that was already out when it happened, and again after, so
+ * it cannot be undone by one sent while it was being written.
  */
 export async function revokeClientToken(
   scope: TenantScope,
@@ -287,13 +307,15 @@ export async function revokeClientToken(
   if (!existing) return null;
 
   const now = new Date();
-  await closePendingClaimLinks(
-    { organizationId: scope.organizationId, solutionId: existing.solutionId, environment: existing.environment },
-    "The key was revoked.",
-    now,
-  );
+  const lane = {
+    organizationId: scope.organizationId,
+    solutionId: existing.solutionId,
+    environment: existing.environment,
+  };
+  const reason = "The key was revoked.";
+  await closePendingClaimLinks(lane, reason, now);
 
-  return prisma.solutionClient.update({
+  const revoked = await prisma.solutionClient.update({
     where: { id: existing.id, organizationId: scope.organizationId },
     data: { isActive: false, revokedAt: now, secretsCiphertext: null },
     select: {
@@ -309,6 +331,11 @@ export async function revokeClientToken(
       createdAt: true,
     },
   });
+
+  // And after: a link sent between the close and the update. See `closePendingClaimLinks`.
+  await closePendingClaimLinks(lane, reason);
+
+  return revoked;
 }
 
 /** Metadata for the UI. There is no field here that could carry a credential. */
