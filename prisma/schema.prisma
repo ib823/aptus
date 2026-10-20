@@ -779,7 +779,8 @@ model SapConnection {
 /// every sealed blob untouched — that is the point of the envelope. A NEW DATA
 /// KEY (`pnpm keys:rotate --rekey`) adds a row with the next `version`; blobs
 /// name the version they were sealed under (`ce2:<version>:…`), so older rows
-/// stay until `pnpm keys:reseal` has moved every blob forward.
+/// stay until `pnpm keys:reseal` has moved every blob forward, and then
+/// `pnpm keys:retire` withdraws them (retiredAt) so they open nothing.
 ///
 /// Additive and unused until an operator names an active master key: with only
 /// the legacy SAP_CONNECTION_ENCRYPTION_KEY set no row is ever written here.
@@ -801,6 +802,10 @@ model OrgDataKey {
   createdAt DateTime  @default(now())
   /// When the wrap was last replaced by a master rotation; null until then.
   rotatedAt DateTime?
+  /// When `pnpm keys:retire` withdrew this version after a rekey; null while
+  /// it may open blobs. A retired key opens nothing, so a leaked old data key
+  /// cannot forge a blob the application accepts. Never the newest version.
+  retiredAt DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

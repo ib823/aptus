@@ -153,13 +153,16 @@ master key (KeyProvider: env ring today, a cloud KMS later)
   header, so neither the row nor the version can be swapped.
 - **Unwrapped data keys are cached per process** for 10 minutes
   (`DATA_KEY_CACHE_TTL_MS`). That is also the longest a warm instance keeps
-  opening secrets after a KMS grant is withdrawn.
+  opening secrets after a KMS grant is withdrawn, or keeps opening a data-key
+  version after `keys:retire`. A cached key is tied to the `OrgDataKey` row it
+  came from: a seal re-unwraps when the row changed (as after a restore), and
+  an open that fails with a cached key retries once with the stored one.
 
 Code: `src/lib/sap-public/keys/` (`keyring.ts`, `key-provider.ts`,
 `org-data-key.ts`, `maintenance.ts`), `src/lib/sap-public/secret-envelope.ts`
 (the call-site API), `src/lib/sap-public/connection-crypto.ts` (the legacy
 codec underneath), `scripts/ce-keys.ts`, table `OrgDataKey`
-(migration `20261021010000_org_data_keys`).
+(migrations `20261021010000_org_data_keys`, `20261021020000_org_data_key_retired_at`).
 
 ### Every sealed secret (the inventory the scripts cover)
 
@@ -181,33 +184,52 @@ reaches for the legacy codec. **Not covered:** BYOAI provider keys
 | `SAP_CONNECTION_ENCRYPTION_KEY` | The legacy single key. Still valid; it **is** `v1`. |
 | `SAP_CONNECTION_ENCRYPTION_KEYS` | `v1:<64 hex>,v2:<64 hex>` — every master key still needed. A `v1` entry must equal the legacy key if both are set. |
 | `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` | The master version new data keys are wrapped under. **Setting it switches new writes to `ce2`.** |
-| `SAP_CONNECTION_KEY_PROVIDER` | `env` (default) or the name of a registered KMS adapter. A non-env provider also switches writes to `ce2`. |
+| `SAP_CONNECTION_KEY_PROVIDER` | `env` (default) or the name of a registered KMS adapter, exactly (names are lowercase and case-sensitive). A non-env provider also switches writes to `ce2`. |
 
 **Safe default.** With only `SAP_CONNECTION_ENCRYPTION_KEY` set, nothing
 changes: same key, same format, `OrgDataKey` is never read or written. The
 deploy gate (`scripts/check-production-env.js`) fails a build whose ring is
-malformed or whose active key is not in it, so a typo cannot reach a running
-deployment.
+malformed, whose active key is not in it, or whose
+`SAP_CONNECTION_KEY_PROVIDER` names a provider the application does not
+register (`ENV`, or a KMS adapter that has not shipped), so a typo cannot reach
+a running deployment.
 
-**Rollback.** Code older than P0.10 cannot read `ce2`. Before rolling a
-deployment back past this change, run `pnpm keys:reseal --to legacy --apply`
-(needs the legacy key / `v1`), then `pnpm keys:verify`.
+**Rollback.** Code older than P0.10 cannot read `ce2`. To roll a deployment
+back past this change, in this order:
+
+1. **Stop writing `ce2`.** Unset `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` and set
+   `SAP_CONNECTION_KEY_PROVIDER` to `env` (or unset it), keeping
+   `SAP_CONNECTION_ENCRYPTION_KEYS` and the legacy key / `v1`, and redeploy
+   the P0.10 code. It now writes legacy and still reads both formats. Skipping
+   this step leaves every save made after the reseal in `ce2`, unreadable by
+   the rolled-back code; `keys:reseal --to legacy --apply` refuses to run (exit
+   2) while envelope sealing is still on.
+2. `pnpm keys:reseal --to legacy --apply`, with the same settings.
+3. `pnpm keys:verify --expect-format=legacy` — exit 0 means every blob is
+   legacy and opens; exit 1 names any row still in `ce2` or failing.
+4. Roll back.
 
 ### Commands
 
 All run against `DATABASE_URL` with the deployment's key settings in the
-environment. `rotate` and `reseal` are **dry runs** unless given `--apply`; a dry
-run still decrypts every row, so it reports exactly what would fail. Both are
-idempotent and resumable: re-running finds only what is left, and every write is
-conditional on the row still holding the value that was read. Nothing secret is
-ever printed. `--json` gives a machine-readable report; `--batch-size=<n>`
-tunes paging.
+environment. `rotate`, `reseal` and `retire` are **dry runs** unless given
+`--apply`; a dry run still reads (and, for rotate and reseal, decrypts) every
+row, so it reports exactly what would fail. They are idempotent and
+resumable: re-running finds only what is left, and every write is conditional
+on the row still holding the value that was read. **`rotate --rekey` is the
+exception:** every run mints another data-key version for every organisation
+whose newest key predates the run. Its report prints the cutoff it used; to
+resume a rekey that failed part-way, re-run it with
+`--rekey-before=<that value>` so organisations it already rekeyed are skipped.
+Nothing secret is ever printed. `--json` gives a machine-readable report;
+`--batch-size=<n>` tunes paging.
 
 | Command | Does | Exit |
 |---|---|---|
-| `pnpm keys:verify` | Unwraps every data key and opens every sealed blob, from cold; counts blobs by format and data-key version, flags legacy blobs that are still unbound and data keys not on the active master. | 0 all open, 1 any failure |
-| `pnpm keys:rotate [--apply] [--rekey]` | Re-wraps every data key under the active provider and master version. `--rekey` also mints a new data-key version per organisation (then reseal). | 0 / 1 on a failed row |
-| `pnpm keys:reseal [--apply] [--to ce2\|legacy]` | Re-encrypts every blob into the target format: `ce2` under each organisation's newest data key (minting v1 if needed), re-binding unbound legacy blobs; or `legacy` for a rollback. Verifies each new blob before writing it. | 0 / 1 on a failed row |
+| `pnpm keys:verify [--expect-format=legacy\|ce2]` | Unwraps every data key and opens every sealed blob, from cold; counts blobs by format and data-key version, flags legacy blobs that are still unbound, data keys not on the active master, retired data keys, and `ce2` blobs still on a data key older than their organisation's newest (warns: reseal, then retire). A blob naming a retired version fails. `--expect-format` also fails every blob not in that format. | 0 all open, 1 any failure |
+| `pnpm keys:rotate [--apply] [--rekey [--rekey-before=<ISO>]]` | Re-wraps every data key under the active provider and master version. `--rekey` also mints a new data-key version for each organisation whose newest key was created before the cutoff (default: now) — then reseal. | 0 / 1 on a failed row |
+| `pnpm keys:reseal [--apply] [--to ce2\|legacy]` | Re-encrypts every blob into the target format: `ce2` under each organisation's newest data key (minting v1 if needed), re-binding unbound legacy blobs; or `legacy` for a rollback (refused with `--apply` while envelope sealing is on). Verifies each new blob before writing it. | 0 / 1 on a failed row |
+| `pnpm keys:retire [--apply]` | Retires (`OrgDataKey.retiredAt`) every data-key version older than its organisation's newest that no sealed blob still names. A retired version opens nothing. Never retires the newest; a version still in use is reported and left open. | 0 / 1 on a version still in use |
 
 Exit code 2 means the command or configuration is wrong; nothing was done.
 
@@ -237,10 +259,26 @@ Exit code 2 means the command or configuration is wrong; nothing was done.
 
 ### Procedure: suspected data-key exposure (rekey)
 
-`pnpm keys:rotate --rekey --apply` (new data-key version per organisation),
-then `pnpm keys:reseal --apply`, then `pnpm keys:verify` (every blob on the new
-version). Older data-key rows stay: they are wrapped, and a backup taken before
-the reseal needs them to open.
+A leaked data key, plus write access to the database, is enough to seal a blob
+the application accepts (the AAD strings are public structure). Moving every
+blob off the leaked key is not enough on its own; the old version must also
+stop opening anything. In this order:
+
+1. `pnpm keys:rotate --rekey --apply` — a new data-key version per
+   organisation. Note the `--rekey-before=` value it prints; if it fails
+   part-way, fix the cause and re-run with that value (never a bare re-run,
+   which rekeys everyone again).
+2. `pnpm keys:reseal --apply` — every blob onto the new version.
+3. `pnpm keys:verify` — exit 0 and no "on a data key older than" warning.
+4. `pnpm keys:retire` (dry run), then `pnpm keys:retire --apply` — the older
+   versions now open nothing. Warm instances may keep a cached old version for
+   up to 10 minutes (`DATA_KEY_CACHE_TTL_MS`); redeploy to cut that short.
+5. `pnpm keys:verify` — `retired` counts the withdrawn versions. A blob that
+   names one fails here: either one the reseal missed or a forgery.
+
+Retired rows stay, wrapped: a backup taken before the reseal needs them, and
+the restore drill un-retires them in its scratch database
+([SAP-KEY-RESTORE-DRILL.md](./SAP-KEY-RESTORE-DRILL.md)).
 
 ### Plugging in a cloud KMS
 

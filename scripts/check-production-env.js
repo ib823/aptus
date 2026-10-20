@@ -179,6 +179,25 @@ if (sapKeyring.trim() || sapActive) {
   }
 }
 
+/*
+ * The SAP key provider (P0.10), also checked on every deploy type and whether
+ * or not a ring is set. Any name but blank or "env" switches new writes to the
+ * ce2 format under that provider, so a name the application does not register
+ * ("ENV", or a KMS adapter that has not shipped) fails every connection save
+ * and write-key issue after go-live while reads keep working.
+ *
+ * MIRRORS BUILT_IN_KEY_PROVIDER_NAMES in src/lib/sap-public/keys/key-provider.ts;
+ * tests/unit/scripts/check-production-env-sap-keyring pins the two together.
+ */
+const SAP_KEY_PROVIDERS = ["env"];
+const sapProvider = (process.env.SAP_CONNECTION_KEY_PROVIDER || "").trim();
+if (sapProvider && !SAP_KEY_PROVIDERS.includes(sapProvider)) {
+  console.error(
+    `[FAIL] SAP_CONNECTION_KEY_PROVIDER names a key provider the application does not register (registered: ${SAP_KEY_PROVIDERS.join(", ")}; names are case-sensitive) — every SAP connection save would fail.`,
+  );
+  exitCode = 1;
+}
+
 // Flag dangerous vars + enforce prod-only requirements on production deploys.
 if (isProductionDeploy) {
   for (const { key, reason } of DANGEROUS_IN_PRODUCTION) {

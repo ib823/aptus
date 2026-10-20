@@ -22,7 +22,10 @@
  * KMS provider selected — writes stay legacy, byte for byte as before. That
  * matters for rollback: a deployment rolled back to code older than P0.10
  * cannot read `ce2`, so the switch must be something an operator flips on
- * purpose and can flip back (`pnpm keys:reseal --to legacy --apply`).
+ * purpose and can flip back: unset the active key (and any KMS provider) and
+ * redeploy FIRST, so nothing new is written as `ce2`, then
+ * `pnpm keys:reseal --to legacy --apply`, which refuses to run while envelope
+ * sealing is on, then `pnpm keys:verify --expect-format=legacy`.
  *
  * THE ROW BINDING IS UNCHANGED. The caller's AAD (connectionAad,
  * solutionClientRowAad) is authenticated with every `ce2` blob exactly as with
@@ -115,14 +118,7 @@ export async function encryptEnvelope(
   return `${header}${iv.toString("base64url")}:${body.toString("base64url")}`;
 }
 
-/** Decrypt a `ce2` blob. Throws on tamper, a wrong row, or a data key this database does not hold. */
-export async function decryptEnvelope(
-  organizationId: string,
-  blob: string,
-  aad: string,
-): Promise<string> {
-  const env = parseEnvelope(blob);
-  const key = await dataKeyForOpen(organizationId, env.dataKeyVersion);
+function openWithKey(env: ParsedEnvelope, key: Buffer, aad: string): string {
   const decipher = createDecipheriv(ALGORITHM, key, env.iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAAD(envelopeAad(env.header, aad));
   decipher.setAuthTag(env.body.subarray(env.body.length - AUTH_TAG_LENGTH));
@@ -130,6 +126,31 @@ export async function decryptEnvelope(
     decipher.update(env.body.subarray(0, env.body.length - AUTH_TAG_LENGTH), undefined, "utf8") +
     decipher.final("utf8")
   );
+}
+
+/**
+ * Decrypt a `ce2` blob. Throws on tamper, a wrong row, a retired data key, or
+ * a data key this database does not hold.
+ *
+ * The data key may come from the per-process cache, which does not re-read the
+ * row. When it fails to open the blob, the row is read once more and, if it
+ * now holds a different key (a database restored underneath a warm instance),
+ * that key is tried; the same key failing twice is a genuine failure.
+ */
+export async function decryptEnvelope(
+  organizationId: string,
+  blob: string,
+  aad: string,
+): Promise<string> {
+  const env = parseEnvelope(blob);
+  const key = await dataKeyForOpen(organizationId, env.dataKeyVersion);
+  try {
+    return openWithKey(env, key, aad);
+  } catch (err) {
+    const fresh = await dataKeyForOpen(organizationId, env.dataKeyVersion, { refresh: true });
+    if (fresh.equals(key)) throw err;
+    return openWithKey(env, fresh, aad);
+  }
 }
 
 /**

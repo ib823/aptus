@@ -1,8 +1,8 @@
 /**
- * Key maintenance for sealed SAP secrets: rotate, reseal, verify (P0.10).
+ * Key maintenance for sealed SAP secrets: rotate, reseal, verify, retire (P0.10).
  *
- * The library behind `pnpm keys:rotate`, `pnpm keys:reseal` and
- * `pnpm keys:verify` (scripts/ce-keys.ts). Kept here, not in the script, so it
+ * The library behind `pnpm keys:rotate`, `pnpm keys:reseal`, `pnpm keys:verify`
+ * and `pnpm keys:retire` (scripts/ce-keys.ts). Kept here, not in the script, so it
  * runs against a real database in tests and so the one list of sealed columns
  * below is the list the application itself is held to.
  *
@@ -20,12 +20,15 @@
  * different key (BYOAI_ENCRYPTION_KEY) and are not SAP secrets; moving them
  * onto this envelope is separate work.
  *
- * ALL THREE ARE DRY RUNS UNLESS TOLD OTHERWISE. A dry run reads and decrypts
- * — so it reports exactly what would fail — and writes nothing, not even a new
- * data key. Every write is conditional on the row still holding the value that
- * was read, so a person saving a connection mid-run is never overwritten, and a
- * re-run picks up exactly what is left: the operations are idempotent, and
- * resumable by simply running them again.
+ * ALL ARE DRY RUNS UNLESS TOLD OTHERWISE. A dry run reads and decrypts — so
+ * it reports exactly what would fail — and writes nothing, not even a new data
+ * key. Every write is conditional on the row still holding the value that was
+ * read, so a person saving a connection mid-run is never overwritten, and a
+ * re-run picks up exactly what is left: rotate, reseal and retire are
+ * idempotent, and resumable by simply running them again. `rotate --rekey` is
+ * resumable with the cutoff its report prints (`rekeyBefore`), which a re-run
+ * must be given so organisations rekeyed by the first run are not rekeyed
+ * again.
  *
  * NOTHING SECRET IS REPORTED. Failures carry the table, row id, organisation
  * and the error's message — crypto errors never contain plaintext.
@@ -45,8 +48,8 @@ import {
   type SealedFormat,
 } from "@/lib/sap-public/secret-envelope";
 
-import { envelopeSealingEnabled, getKeyProvider } from "./key-provider";
-import { KeyringConfigError } from "./keyring";
+import { ENV_KEY_PROVIDER, envelopeSealingEnabled, getKeyProvider } from "./key-provider";
+import { ENV_ACTIVE_KEY, KeyringConfigError } from "./keyring";
 import { clearDataKeyCache, createOrgDataKey, unwrapOrgDataKey } from "./org-data-key";
 
 export type SealedTable = "SapConnection" | "SolutionClient";
@@ -197,7 +200,10 @@ function emptyCounts(): TableCounts {
  *
  * Target `legacy` is the way BACK: before rolling a deployment back to code
  * older than P0.10, which cannot read `ce2`, reseal everything to legacy
- * under the legacy key (v1).
+ * under the legacy key (v1). It refuses to write while envelope sealing is
+ * on: the running deployment would keep sealing new saves as `ce2` behind the
+ * reseal, and the rolled-back code could not open them. Switch sealing off
+ * and redeploy first; the ring stays configured so `ce2` blobs still open.
  *
  * Each new blob is decrypted again and compared with the plaintext before it is
  * written, so a reseal can never replace a working secret with a broken one.
@@ -213,6 +219,11 @@ export async function resealAll(options: ResealOptions = {}): Promise<ResealRepo
   }
   if (to === "ce2" && !getKeyProvider().isConfigured()) {
     throw new KeyringConfigError("The configured key provider cannot wrap a data key; check its settings.");
+  }
+  if (to === "legacy" && apply && envelopeSealingEnabled()) {
+    throw new KeyringConfigError(
+      `Resealing to legacy while envelope sealing is on would race the deployment: every save after this run is written as ce2 again. Unset ${ENV_ACTIVE_KEY} and set ${ENV_KEY_PROVIDER} to env (keep SAP_CONNECTION_ENCRYPTION_KEYS so ce2 blobs still open), redeploy, then reseal with the same settings here.`,
+    );
   }
 
   const tables: Record<SealedTable, TableCounts> = {
@@ -281,6 +292,12 @@ export interface VerifyTableCounts {
   legacyUnbound: number;
   /** ce2 blobs by data-key version. */
   ce2ByVersion: Record<string, number>;
+  /**
+   * ce2 blobs on a data-key version older than their organisation's newest —
+   * after a rekey, what `keys:reseal --apply` has still to move before
+   * `keys:retire` can withdraw the old version.
+   */
+  onOlderDataKey: number;
 }
 
 export interface VerifyReport {
@@ -293,13 +310,24 @@ export interface VerifyReport {
     byMasterKey: Record<string, number>;
     /** Rows not wrapped by the active provider and master key — `keys:rotate` moves them. */
     notOnActiveMaster: number;
+    /** Versions withdrawn by `keys:retire`: they still unwrap (custody) but open no blob. */
+    retired: number;
   };
   readonly tables: Record<SealedTable, VerifyTableCounts>;
   readonly failures: RowFailure[];
 }
 
 function emptyVerifyCounts(): VerifyTableCounts {
-  return { total: 0, opened: 0, failed: 0, legacyBound: 0, legacyUnbound: 0, ce2ByVersion: {} };
+  return { total: 0, opened: 0, failed: 0, legacyBound: 0, legacyUnbound: 0, ce2ByVersion: {}, onOlderDataKey: 0 };
+}
+
+export interface VerifyOptions {
+  readonly batchSize?: number;
+  /**
+   * Every blob must be in this format; any other is a failure. `legacy` gates
+   * a rollback to code older than P0.10, which cannot open `ce2`.
+   */
+  readonly expectFormat?: SealedFormat;
 }
 
 /** The active provider and master version, or null when envelope sealing is off. */
@@ -316,16 +344,29 @@ function activeMaster(): { provider: string; keyVersion: string } | null {
  *
  * The data-key cache is cleared first: a verify that hits warm keys proves the
  * process remembers them, not that the database and master keys still open.
+ *
+ * A blob that names a retired data-key version does not open, so it fails
+ * here — that is either a blob the reseal missed or one forged with the
+ * retired key.
  */
-export async function verifyAll(options: { readonly batchSize?: number } = {}): Promise<VerifyReport> {
+export async function verifyAll(options: VerifyOptions = {}): Promise<VerifyReport> {
   permitCrossTenantReads("keys:verify: platform key maintenance");
   clearDataKeyCache();
   const failures: RowFailure[] = [];
   const master = activeMaster();
+  const latest = await latestDataKeyVersions();
 
-  const dataKeys = { total: 0, unwrapped: 0, failed: 0, byMasterKey: {} as Record<string, number>, notOnActiveMaster: 0 };
+  const dataKeys = {
+    total: 0,
+    unwrapped: 0,
+    failed: 0,
+    byMasterKey: {} as Record<string, number>,
+    notOnActiveMaster: 0,
+    retired: 0,
+  };
   for await (const row of orgDataKeyRows(options.batchSize)) {
     dataKeys.total++;
+    if (row.retiredAt) dataKeys.retired++;
     const label = `${row.provider}:${row.keyVersion}`;
     dataKeys.byMasterKey[label] = (dataKeys.byMasterKey[label] ?? 0) + 1;
     if (master && (row.provider !== master.provider || row.keyVersion !== master.keyVersion)) {
@@ -357,10 +398,17 @@ export async function verifyAll(options: { readonly batchSize?: number } = {}): 
         if (description.format === "ce2") {
           const v = String(description.dataKeyVersion);
           counts.ce2ByVersion[v] = (counts.ce2ByVersion[v] ?? 0) + 1;
+          const newest = latest.get(row.organizationId);
+          if (newest !== undefined && description.dataKeyVersion < newest) counts.onOlderDataKey++;
         } else if (isBoundLegacyBlob(row.blob, row.aad)) {
           counts.legacyBound++;
         } else {
           counts.legacyUnbound++;
+        }
+        if (options.expectFormat && description.format !== options.expectFormat) {
+          throw new Error(
+            `Sealed as ${description.format}, but every blob is expected to be ${options.expectFormat} (keys:reseal --to ${options.expectFormat} --apply).`,
+          );
         }
       } catch (err) {
         counts.failed++;
@@ -381,7 +429,16 @@ async function* orgDataKeyRows(batchSize = DEFAULT_BATCH_SIZE) {
       where: { id: { gt: after } },
       orderBy: { id: "asc" },
       take: batchSize,
-      select: { id: true, organizationId: true, version: true, provider: true, keyVersion: true, wrappedKey: true },
+      select: {
+        id: true,
+        organizationId: true,
+        version: true,
+        provider: true,
+        keyVersion: true,
+        wrappedKey: true,
+        createdAt: true,
+        retiredAt: true,
+      },
     });
     if (rows.length === 0) return;
     after = rows[rows.length - 1]!.id;
@@ -397,6 +454,13 @@ export interface RotateOptions {
    * suspected data-key exposure; a routine master rotation does not need it.
    */
   readonly rekey?: boolean;
+  /**
+   * With `rekey`: only organisations whose newest data key was created before
+   * this moment get a new one. Defaults to the start of the run. A re-run
+   * after a partial failure passes the first run's value (its report's
+   * `rekeyBefore`), so organisations that run already rekeyed are skipped.
+   */
+  readonly rekeyBefore?: Date;
   readonly batchSize?: number;
 }
 
@@ -413,6 +477,10 @@ export interface RotateReport {
   failed: number;
   /** New data-key versions minted (apply) or that would be (dry run). */
   rekeyed: number;
+  /** With rekey: organisations whose newest data key is already newer than `rekeyBefore`. */
+  alreadyRekeyed: number;
+  /** With rekey: the cutoff used — pass it back as --rekey-before to resume. */
+  readonly rekeyBefore: string | null;
   readonly failures: RowFailure[];
 }
 
@@ -435,6 +503,7 @@ export async function rotateMasterKey(options: RotateOptions = {}): Promise<Rota
     );
   }
   const apply = options.apply ?? false;
+  const rekeyBefore = options.rekey ? (options.rekeyBefore ?? new Date()) : null;
   const provider = getKeyProvider();
   const keyVersion = provider.activeKeyVersion();
   const report: RotateReport = {
@@ -447,13 +516,18 @@ export async function rotateMasterKey(options: RotateOptions = {}): Promise<Rota
     changedUnderneath: 0,
     failed: 0,
     rekeyed: 0,
+    alreadyRekeyed: 0,
+    rekeyBefore: rekeyBefore ? rekeyBefore.toISOString() : null,
     failures: [],
   };
-  const newestByOrg = new Map<string, number>();
+  const newestByOrg = new Map<string, { readonly version: number; readonly createdAt: Date }>();
 
   for await (const row of orgDataKeyRows(options.batchSize)) {
     report.scanned++;
-    newestByOrg.set(row.organizationId, Math.max(newestByOrg.get(row.organizationId) ?? 0, row.version));
+    const newest = newestByOrg.get(row.organizationId);
+    if (!newest || row.version > newest.version) {
+      newestByOrg.set(row.organizationId, { version: row.version, createdAt: row.createdAt });
+    }
     if (row.provider === provider.name && row.keyVersion === keyVersion) {
       report.current++;
       continue;
@@ -485,16 +559,135 @@ export async function rotateMasterKey(options: RotateOptions = {}): Promise<Rota
     }
   }
 
-  if (options.rekey) {
+  if (rekeyBefore) {
     for (const [organizationId, newest] of newestByOrg) {
+      // Rekeyed already — by an earlier run with this cutoff, or by a first
+      // seal since — so its newest key is fresh material.
+      if (newest.createdAt >= rekeyBefore) {
+        report.alreadyRekeyed++;
+        continue;
+      }
+      const next = newest.version + 1;
       try {
-        if (apply) await createOrgDataKey(organizationId, newest + 1);
+        if (apply) await createOrgDataKey(organizationId, next);
         report.rekeyed++;
       } catch (err) {
         report.failed++;
-        report.failures.push({ table: "OrgDataKey", id: `${organizationId}#${newest + 1}`, organizationId, reason: reasonOf(err) });
+        report.failures.push({ table: "OrgDataKey", id: `${organizationId}#${next}`, organizationId, reason: reasonOf(err) });
       }
     }
   }
+  return report;
+}
+
+/* ── retire ─────────────────────────────────────────────────────────────── */
+
+export interface RetireOptions {
+  readonly apply?: boolean;
+  readonly batchSize?: number;
+}
+
+export interface RetireReport {
+  readonly apply: boolean;
+  /** Data-key rows read. */
+  scanned: number;
+  /** Older than their organisation's newest version and retired (apply) or would be (dry run). */
+  retired: number;
+  /** Retired by an earlier run. */
+  alreadyRetired: number;
+  /** The newest version of each organisation: never retired. */
+  newest: number;
+  /** Still named by a sealed blob, so left open — reseal first. */
+  stillInUse: number;
+  changedUnderneath: number;
+  readonly failures: RowFailure[];
+}
+
+/** One (organisation, data-key version) pair as a map key. */
+function versionSlot(organizationId: string, version: number): string {
+  return `${organizationId}:${version}`;
+}
+
+/**
+ * Withdraw every data-key version older than its organisation's newest, so it
+ * opens nothing — the last step after a suspected data-key exposure: rekey,
+ * reseal, verify, retire. Until a version is retired, anyone holding it (and
+ * write access to the database) can seal a blob the application accepts.
+ *
+ * A version still named by any sealed blob is left alone and reported as a
+ * failure: retiring it would strand that secret. Run `keys:reseal --apply`
+ * and retire again. The newest version is never retired, and new seals only
+ * ever use the newest, so no blob can move onto a version between the scan
+ * and the write.
+ *
+ * The row and its wrapped key stay: a backup taken before the reseal still
+ * needs them, and the restore drill un-retires them in its scratch database.
+ * Warm application instances that cached a version before it was retired keep
+ * it for at most DATA_KEY_CACHE_TTL_MS.
+ */
+export async function retireDataKeys(options: RetireOptions = {}): Promise<RetireReport> {
+  permitCrossTenantReads("keys:retire: platform key maintenance");
+  const apply = options.apply ?? false;
+  const report: RetireReport = {
+    apply,
+    scanned: 0,
+    retired: 0,
+    alreadyRetired: 0,
+    newest: 0,
+    stillInUse: 0,
+    changedUnderneath: 0,
+    failures: [],
+  };
+
+  // How many sealed blobs still name each (organisation, version).
+  const inUse = new Map<string, number>();
+  for await (const batch of sealedRows(options.batchSize)) {
+    for (const row of batch) {
+      try {
+        const description = describeSealedBlob(row.blob);
+        if (description.format !== "ce2") continue;
+        const slot = versionSlot(row.organizationId, description.dataKeyVersion);
+        inUse.set(slot, (inUse.get(slot) ?? 0) + 1);
+      } catch {
+        // A malformed blob names no version; keys:verify reports it.
+      }
+    }
+  }
+
+  const latest = await latestDataKeyVersions();
+  const retiredAt = new Date();
+  for await (const row of orgDataKeyRows(options.batchSize)) {
+    report.scanned++;
+    if (row.version >= (latest.get(row.organizationId) ?? row.version)) {
+      report.newest++;
+      continue;
+    }
+    if (row.retiredAt) {
+      report.alreadyRetired++;
+      continue;
+    }
+    const blobs = inUse.get(versionSlot(row.organizationId, row.version)) ?? 0;
+    if (blobs > 0) {
+      report.stillInUse++;
+      report.failures.push({
+        table: "OrgDataKey",
+        id: row.id,
+        organizationId: row.organizationId,
+        reason: `Data key version ${row.version} still seals ${blobs} blob(s); run keys:reseal --apply first. Not retired.`,
+      });
+      continue;
+    }
+    if (!apply) {
+      report.retired++;
+      continue;
+    }
+    const result = await prisma.orgDataKey.updateMany({
+      where: { id: row.id, organizationId: row.organizationId, retiredAt: null },
+      data: { retiredAt },
+    });
+    if (result.count === 1) report.retired++;
+    else report.changedUnderneath++;
+  }
+  if (apply) clearDataKeyCache();
   return report;
 }

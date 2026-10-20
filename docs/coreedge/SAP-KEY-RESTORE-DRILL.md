@@ -39,6 +39,16 @@ scratch database restored from a production backup.
    export SAP_CONNECTION_ENCRYPTION_KEY="<v1 from custody, if legacy blobs may exist>"
    ```
 
+   Retired data-key versions (`keys:retire`) open nothing. A backup taken
+   before the retire holds those rows un-retired and opens as it is; a later
+   backup should hold no blob that names a retired version. If one does and
+   the drill must open it, un-retire in the scratch database only, never in
+   production:
+
+   ```sql
+   UPDATE "OrgDataKey" SET "retiredAt" = NULL WHERE "retiredAt" IS NOT NULL;
+   ```
+
 3. **Verify**, from cold:
 
    ```bash
@@ -56,6 +66,16 @@ scratch database restored from a production backup.
 6. **Record it** below: date, backup timestamp, counts, exit codes, time from
    step 1 to a passing step 3 (this is the measured recovery time for secrets).
 
+## Restoring production itself
+
+The drill restores into a scratch database. If PRODUCTION's database is ever
+restored in place, **redeploy (or restart every instance) straight after**:
+each warm instance holds unwrapped data keys for up to 10 minutes, and the
+restored `OrgDataKey` table may no longer match them. The code re-reads the row
+on every seal and retries a failed open with the stored key, so this is
+belt-and-braces, not a correctness requirement. Then run `pnpm keys:verify`
+against the restored database with the deployment's settings.
+
 ## Reading a failure
 
 | `verify` reports | Meaning | Fix |
@@ -63,13 +83,15 @@ scratch database restored from a production backup.
 | `Master key vN is not in SAP_CONNECTION_ENCRYPTION_KEYS` | a data key is wrapped by a version custody did not supply | retrieve vN from custody; if it was destroyed, those organisations' secrets must be re-entered |
 | `No data key version N is stored for organization …` | a blob names a data key the restored `OrgDataKey` table does not hold — the tables came from different points in time | restore the database as one consistent snapshot |
 | `A legacy-format secret needs key v1` | the backup predates the reseal | supply `v1` from custody |
+| `Data key version N of organization … is retired` | a blob names a version `keys:retire` withdrew: missed by the reseal before the retire, or forged with the retired key | in production, treat it as a forgery until shown otherwise: re-enter the credential; in a scratch drill database, un-retire (step 2) to inspect it |
 | `Unsupported state or unable to authenticate data` | the bytes, the key or the row binding do not match — a corrupted row, a blob moved between rows, or the wrong key under the right name | compare the key fingerprint with custody; re-enter the credential if the row itself is damaged |
 
 ## In CI
 
 `tests/integration/sap-key-envelope.test.ts` runs the same lifecycle against a
 real database on every pull request: legacy rows, switching envelope sealing on,
-reseal to 100%, rotation with the old keys removed, rekey, the way back to
+reseal to 100%, rotation with the old keys removed, rekey, retire (a blob forged
+with the retired key is refused), the way back to
 legacy, and `scripts/ce-keys.ts verify` exiting 1 on a row that will not open.
 That proves the tooling; only this drill proves the custody.
 

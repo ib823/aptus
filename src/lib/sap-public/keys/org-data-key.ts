@@ -14,6 +14,20 @@
  * grant is withdrawn, the longest any instance can still open secrets is the
  * TTL. A re-wrap never invalidates the cache, because the key it holds is the
  * same key.
+ *
+ * An entry remembers WHICH ROW it was unwrapped from, not just (organisation,
+ * version). After a database restore the same version can name a different
+ * row and key; a seal must never use a key the database no longer holds (the
+ * blob would never open again), so the seal path, which reads the row anyway,
+ * only takes a cached key for the row it just read. The open path does not
+ * read the row on a hit; secret-envelope.ts retries a failed open once with
+ * `refresh` instead.
+ *
+ * RETIRED VERSIONS OPEN NOTHING. After a rekey and reseal, `pnpm keys:retire`
+ * sets `retiredAt` on the older versions. A retired row is refused here and is
+ * never cached, so a leaked old data key cannot forge a blob the application
+ * accepts. A warm instance that cached the version before it was retired keeps
+ * it for at most the TTL.
  */
 import { randomBytes } from "crypto";
 
@@ -24,6 +38,16 @@ import { getKeyProvider } from "./key-provider";
 /** AES-256: the data key is 32 random bytes. */
 export const DATA_KEY_BYTES = 32;
 export const DATA_KEY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** The data key a blob names was retired after a rekey (`pnpm keys:retire`). */
+export class DataKeyRetiredError extends Error {
+  constructor(organizationId: string, version: number) {
+    super(
+      `Data key version ${version} of organization ${organizationId} is retired and opens nothing. A blob that names it was either sealed before the rekey and missed by keys:reseal, or forged with the retired key.`,
+    );
+    this.name = "DataKeyRetiredError";
+  }
+}
 
 /** The organisation holds no data key with the version a blob names. */
 export class DataKeyMissingError extends Error {
@@ -45,6 +69,8 @@ export interface OrgDataKeyRow {
 }
 
 interface CachedKey {
+  /** The OrgDataKey row the key was unwrapped from. */
+  readonly rowId: string;
   readonly key: Buffer;
   readonly expiresAt: number;
 }
@@ -55,18 +81,18 @@ function cacheKey(organizationId: string, version: number): string {
   return `${organizationId}\u0000${version}`;
 }
 
-function cached(organizationId: string, version: number, now = Date.now()): Buffer | null {
+function cached(organizationId: string, version: number, now = Date.now()): CachedKey | null {
   const hit = cache.get(cacheKey(organizationId, version));
   if (!hit) return null;
   if (hit.expiresAt <= now) {
     cache.delete(cacheKey(organizationId, version));
     return null;
   }
-  return hit.key;
+  return hit;
 }
 
-function remember(organizationId: string, version: number, key: Buffer): void {
-  cache.set(cacheKey(organizationId, version), { key, expiresAt: Date.now() + DATA_KEY_CACHE_TTL_MS });
+function remember(organizationId: string, version: number, rowId: string, key: Buffer): void {
+  cache.set(cacheKey(organizationId, version), { rowId, key, expiresAt: Date.now() + DATA_KEY_CACHE_TTL_MS });
 }
 
 /** Forget every unwrapped key in this process. Tests, and an operator hook after revoking a key. */
@@ -93,19 +119,34 @@ const ROW_SELECT = {
   provider: true,
   keyVersion: true,
   wrappedKey: true,
+  retiredAt: true,
 } as const;
 
-/** The data key a `ce2:<version>:` blob of this organisation was sealed under. */
-export async function dataKeyForOpen(organizationId: string, version: number): Promise<Buffer> {
-  const hit = cached(organizationId, version);
-  if (hit) return hit;
+/**
+ * The data key a `ce2:<version>:` blob of this organisation was sealed under.
+ *
+ * `refresh` skips the cache and reads the row again — for a retry after a
+ * cached key failed to open a blob (the row may have changed underneath, as
+ * after a restore).
+ */
+export async function dataKeyForOpen(
+  organizationId: string,
+  version: number,
+  options: { readonly refresh?: boolean } = {},
+): Promise<Buffer> {
+  if (!options.refresh) {
+    const hit = cached(organizationId, version);
+    if (hit) return hit.key;
+  }
+  cache.delete(cacheKey(organizationId, version));
   const row = await prisma.orgDataKey.findFirst({
     where: { organizationId, version },
     select: ROW_SELECT,
   });
   if (!row) throw new DataKeyMissingError(organizationId, version);
+  if (row.retiredAt) throw new DataKeyRetiredError(organizationId, version);
   const key = await unwrapOrgDataKey(row);
-  remember(organizationId, version, key);
+  remember(organizationId, version, row.id, key);
   return key;
 }
 
@@ -126,10 +167,15 @@ export async function dataKeyForSeal(
     select: ROW_SELECT,
   });
   if (!latest) return createOrgDataKey(organizationId, 1);
+  // keys:retire never retires the newest version; should one be retired all
+  // the same, the next seal moves on rather than sealing under it.
+  if (latest.retiredAt) return createOrgDataKey(organizationId, latest.version + 1);
+  // Only a key unwrapped from THIS row: after a restore the same version can
+  // name a different row, and a blob sealed under the old key never opens.
   const hit = cached(organizationId, latest.version);
-  if (hit) return { version: latest.version, key: hit };
+  if (hit && hit.rowId === latest.id) return { version: latest.version, key: hit.key };
   const key = await unwrapOrgDataKey(latest);
-  remember(organizationId, latest.version, key);
+  remember(organizationId, latest.version, latest.id, key);
   return { version: latest.version, key };
 }
 
@@ -155,8 +201,9 @@ export async function createOrgDataKey(
   const provider = getKeyProvider();
   const key = randomBytes(DATA_KEY_BYTES);
   const wrapped = await provider.wrapDataKey(key, { organizationId, dataKeyVersion: version });
+  let rowId: string;
   try {
-    await prisma.orgDataKey.create({
+    ({ id: rowId } = await prisma.orgDataKey.create({
       data: {
         organizationId,
         version,
@@ -165,13 +212,13 @@ export async function createOrgDataKey(
         wrappedKey: wrapped.wrappedKey,
       },
       select: { id: true },
-    });
+    }));
   } catch (err) {
     if (isUniqueViolation(err)) {
-      return { version, key: await dataKeyForOpen(organizationId, version) };
+      return { version, key: await dataKeyForOpen(organizationId, version, { refresh: true }) };
     }
     throw err;
   }
-  remember(organizationId, version, key);
+  remember(organizationId, version, rowId, key);
   return { version, key };
 }

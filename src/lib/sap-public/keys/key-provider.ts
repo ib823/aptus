@@ -205,6 +205,14 @@ const BUILT_IN: ReadonlyArray<readonly [string, KeyProviderFactory]> = [
 const factories = new Map<string, KeyProviderFactory>(BUILT_IN);
 
 /**
+ * The names SAP_CONNECTION_KEY_PROVIDER may take. scripts/check-production-env.js
+ * mirrors this list (it runs under plain node) and its test pins the two
+ * together, so a deploy naming anything else fails the build rather than
+ * every connection save.
+ */
+export const BUILT_IN_KEY_PROVIDER_NAMES: readonly string[] = BUILT_IN.map(([name]) => name);
+
+/**
  * Make a provider selectable by name; `SAP_CONNECTION_KEY_PROVIDER=<name>`
  * then selects it for NEW data keys. Rows wrapped by another provider keep
  * naming it, so both must stay registered until `pnpm keys:rotate` has moved

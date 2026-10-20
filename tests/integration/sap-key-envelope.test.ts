@@ -10,14 +10,19 @@
  *     idempotent;
  *   - every connection and write key opens after a master rotation, with the
  *     old master key and the legacy key both gone;
- *   - rekey + reseal moves every blob to fresh key material;
- *   - reseal --to legacy is the way back for a rollback;
- *   - verify fails, and the script exits non-zero, on a row that will not open.
+ *   - rekey + reseal moves every blob to fresh key material, and a resumed
+ *     rekey does not mint again;
+ *   - retire withdraws the old data key, so a blob forged with it is refused;
+ *   - reseal --to legacy is the way back for a rollback, and refuses to run
+ *     while the deployment still seals ce2;
+ *   - verify fails, and the script exits non-zero, on a row that will not open;
+ *   - a data-key cache warmed before a database restore neither seals under,
+ *     nor fails to open with, a key the database no longer holds.
  *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
 import { spawnSync } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,11 +37,17 @@ vi.mock("@/lib/db/prisma", async () => {
 
 import { prisma } from "@/lib/db/prisma";
 import { setWriteCredential, verifyWriteCredential } from "@/lib/northbound/write-credential";
-import { connectionAad, openSecrets, sealSecrets } from "@/lib/sap-public/connection-crypto";
+import {
+  connectionAad,
+  openSecrets,
+  sealSecrets,
+  solutionClientRowAad,
+} from "@/lib/sap-public/connection-crypto";
 import { resolveSapConnections, upsertSapConnection } from "@/lib/sap-public/connection-resolver";
-import { clearDataKeyCache } from "@/lib/sap-public/keys/org-data-key";
-import { resealAll, rotateMasterKey, verifyAll } from "@/lib/sap-public/keys/maintenance";
-import { describeSealedBlob, openSecretsForOrg } from "@/lib/sap-public/secret-envelope";
+import { getKeyProvider } from "@/lib/sap-public/keys/key-provider";
+import { clearDataKeyCache, unwrapOrgDataKey } from "@/lib/sap-public/keys/org-data-key";
+import { resealAll, retireDataKeys, rotateMasterKey, verifyAll } from "@/lib/sap-public/keys/maintenance";
+import { describeSealedBlob, openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -52,6 +63,20 @@ const LEGACY = randomBytes(32).toString("hex");
 const V2 = randomBytes(32).toString("hex");
 const V3 = randomBytes(32).toString("hex");
 const NAME_PREFIX = "p010-envelope-test";
+
+/**
+ * A `ce2` blob sealed directly under a raw data key — what anyone holding that
+ * key (an attacker with a leaked key, or another instance) can produce. The
+ * format is public: header, then the header plus the row's AAD as GCM AAD.
+ */
+function sealWithRawKey(key: Buffer, version: number, plaintext: string, aad: string): string {
+  const header = `ce2:${version}:`;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: 16 });
+  cipher.setAAD(Buffer.from(`${header}${aad}`, "utf8"));
+  const body = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final(), cipher.getAuthTag()]);
+  return `${header}${iv.toString("base64url")}:${body.toString("base64url")}`;
+}
 
 function useKeys(values: KeyEnv): void {
   for (const k of VARS) {
@@ -114,7 +139,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
   }
 
   /** The report's failures, for this test's rows only. */
-  const ours = (failures: readonly { organizationId: string }[]) =>
+  const ours = <T extends { organizationId: string }>(failures: readonly T[]) =>
     failures.filter((f) => ORGS.includes(f.organizationId));
 
   beforeAll(async () => {
@@ -278,30 +303,115 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
   it("rekey + reseal moves every blob onto a new data key", async () => {
     const rekey = await rotateMasterKey({ apply: true, rekey: true });
     expect(ours(rekey.failures)).toEqual([]);
-    expect((await dataKeys()).map((k) => [k.organizationId, k.version])).toEqual(
-      [[orgA, 1], [orgA, 2], [orgB, 1], [orgB, 2]].sort(),
-    );
+    const afterRekey = [[orgA, 1], [orgA, 2], [orgB, 1], [orgB, 2]].sort();
+    expect((await dataKeys()).map((k) => [k.organizationId, k.version])).toEqual(afterRekey);
+
+    // Resuming the rekey with the cutoff it printed mints nothing more for
+    // organisations it already rekeyed — and neither does its dry run.
+    expect(rekey.rekeyBefore).not.toBeNull();
+    const resumeFrom = new Date(rekey.rekeyBefore!);
+    const resumedDry = await rotateMasterKey({ rekey: true, rekeyBefore: resumeFrom });
+    expect(resumedDry.alreadyRekeyed).toBeGreaterThanOrEqual(2);
+    const resumed = await rotateMasterKey({ apply: true, rekey: true, rekeyBefore: resumeFrom });
+    expect(ours(resumed.failures)).toEqual([]);
+    expect((await dataKeys()).map((k) => [k.organizationId, k.version])).toEqual(afterRekey);
+
+    // Until the reseal, verify flags every blob still on the old data key, and
+    // retire refuses to withdraw a version that blobs still name.
+    const before = await verifyAll();
+    expect(before.tables.SapConnection.onOlderDataKey).toBeGreaterThanOrEqual(4);
+    expect(before.tables.SolutionClient.onOlderDataKey).toBeGreaterThanOrEqual(1);
+    const early = await retireDataKeys({ apply: true });
+    expect(ours(early.failures).map((f) => f.organizationId).sort()).toEqual([orgA, orgB].sort());
+    expect((await dataKeys()).every((k) => k.retiredAt === null)).toBe(true);
+
     const report = await resealAll({ apply: true });
     expect(ours(report.failures)).toEqual([]);
     for (const b of await blobs()) expect(describeSealedBlob(b.blob)).toEqual({ format: "ce2", dataKeyVersion: 2 });
     await everythingOpens();
+    const after = await verifyAll();
+    expect(after.tables.SapConnection.onOlderDataKey + after.tables.SolutionClient.onOlderDataKey).toBe(0);
   });
 
-  it("reseal --to legacy is the way back before a rollback", async () => {
+  it("retire withdraws the old data key: a blob forged with the leaked key is refused", async () => {
+    // The attacker's copy of org A's exposed data key v1.
+    const v1Row = (await dataKeys()).find((k) => k.organizationId === orgA && k.version === 1)!;
+    const leaked = await unwrapOrgDataKey(v1Row);
+    const client = await prisma.solutionClient.findFirst({ where: { id: clientId, organizationId: orgA } });
+    const genuine = client!.secretsCiphertext!;
+    const forged = sealWithRawKey(
+      leaked,
+      1,
+      JSON.stringify({ writeSecret: "cew_attacker" }),
+      solutionClientRowAad(orgA, client!.solutionId, clientId),
+    );
+    const plant = (blob: string) =>
+      prisma.solutionClient.updateMany({ where: { id: clientId, organizationId: orgA }, data: { secretsCiphertext: blob } });
+
+    // Before retirement the forgery is accepted: this is the exposure.
+    await plant(forged);
+    clearDataKeyCache();
+    expect(await verifyWriteCredential(tenantScopeOf(orgA), clientId, "cew_attacker")).toBe(true);
+    await plant(genuine);
+
+    const dry = await retireDataKeys();
+    expect(ours(dry.failures)).toEqual([]);
+    expect(dry.retired).toBeGreaterThanOrEqual(2);
+    expect((await dataKeys()).every((k) => k.retiredAt === null)).toBe(true);
+
+    const applied = await retireDataKeys({ apply: true });
+    expect(ours(applied.failures)).toEqual([]);
+    expect((await dataKeys()).map((k) => [k.organizationId, k.version, k.retiredAt !== null])).toEqual(
+      [[orgA, 1, true], [orgA, 2, false], [orgB, 1, true], [orgB, 2, false]].sort(),
+    );
+    // Idempotent: a second run finds nothing left to retire.
+    const again = await retireDataKeys({ apply: true });
+    expect(again.alreadyRetired).toBeGreaterThanOrEqual(2);
+    expect(ours(again.failures)).toEqual([]);
+
+    await plant(forged);
+    clearDataKeyCache();
+    expect(await verifyWriteCredential(tenantScopeOf(orgA), clientId, "cew_attacker")).toBe(false);
+    const verify = await verifyAll();
+    expect(verify.ok).toBe(false);
+    expect(ours(verify.failures).map((f) => [f.id, /retired/.test(f.reason)])).toEqual([[clientId, true]]);
+    expect(verify.dataKeys.retired).toBeGreaterThanOrEqual(2);
+
+    await plant(genuine);
+    await everythingOpens();
+    expect(ours((await verifyAll()).failures)).toEqual([]);
+  });
+
+  it("reseal --to legacy is the way back before a rollback — once ce2 writes are switched off", async () => {
     useKeys({
       SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
       SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}`,
       SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v3",
     });
+    // While the deployment still seals ce2, every save after the reseal would
+    // be ce2 again, unreadable by the rolled-back code: refused, nothing written.
+    const before = await blobs();
+    await expect(resealAll({ apply: true, to: "legacy" })).rejects.toThrow(/ACTIVE_KEY/);
+    expect(await blobs()).toEqual(before);
+
+    // Step 1 of the rollback: active key unset, the ring kept so ce2 still opens.
+    useKeys({ SAP_CONNECTION_ENCRYPTION_KEY: LEGACY, SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}` });
+    expect(ours((await verifyAll({ expectFormat: "legacy" })).failures).length).toBe(before.length);
     const report = await resealAll({ apply: true, to: "legacy" });
     expect(report.to).toBe("legacy");
     expect(ours(report.failures)).toEqual([]);
+    expect(ours((await verifyAll({ expectFormat: "legacy" })).failures)).toEqual([]);
     const conns = await prisma.sapConnection.findMany({ where: { organizationId: { in: ORGS } } });
     for (const c of conns) {
       // Readable by the pre-P0.10 codec — what a rolled-back deployment runs.
       expect(openSecrets(c.secretsCiphertext, connectionAad(c.organizationId, c.product, c.key)).password).toMatch(/^pw-/);
     }
     // And back again to ce2 for the rest of the journey.
+    useKeys({
+      SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
+      SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}`,
+      SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v3",
+    });
     expect(ours((await resealAll({ apply: true })).failures)).toEqual([]);
     await everythingOpens();
   });
@@ -347,5 +457,72 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
 
     expect(cli("verify", "--apply").status).toBe(2);
     expect(cli("rotate", "--to=legacy").status).toBe(2);
+    expect(cli("verify", "--rekey-before=2026-01-01T00:00:00Z").status).toBe(2);
+    expect(cli("rotate", "--rekey", "--rekey-before=yesterday").status).toBe(2);
+
+    // Put the row back so a whole-database verify run later sees nothing of ours.
+    await prisma.sapConnection.updateMany({
+      where: { id: prod!.id, organizationId: orgB },
+      data: { secretsCiphertext: prod!.secretsCiphertext },
+    });
   }, 120_000);
+});
+
+describe.skipIf(!process.env.TEST_DATABASE_URL)("the data-key cache across a database restore", () => {
+  const orgC = `org_p010_c_${randomUUID().slice(0, 8)}`;
+  const aad = connectionAad(orgC, "s4hana", "prod");
+  const saved: Record<string, string | undefined> = {};
+
+  /**
+   * What a warm instance sees after an in-place restore to before the
+   * organisation's first seal, followed by another instance's first seal: the
+   * same version 1, on a new row, wrapping a different key.
+   */
+  async function restoreUnderneath(): Promise<Buffer> {
+    await prisma.orgDataKey.deleteMany({ where: { organizationId: orgC } });
+    const key = randomBytes(32);
+    const wrapped = await getKeyProvider().wrapDataKey(key, { organizationId: orgC, dataKeyVersion: 1 });
+    await prisma.orgDataKey.create({
+      data: { organizationId: orgC, version: 1, provider: "env", keyVersion: wrapped.keyVersion, wrappedKey: wrapped.wrappedKey },
+    });
+    return key;
+  }
+
+  beforeAll(async () => {
+    for (const k of VARS) saved[k] = process.env[k];
+    await prisma.organization.create({ data: { id: orgC, name: `${NAME_PREFIX} ${orgC}`, type: "client" } });
+    useKeys({ SAP_CONNECTION_ENCRYPTION_KEYS: `v2:${V2}`, SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v2" });
+  });
+
+  afterAll(async () => {
+    await prisma.organization.deleteMany({ where: { id: orgC } });
+    for (const k of VARS) {
+      const v = saved[k];
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    clearDataKeyCache();
+  });
+
+  it("a seal never uses a cached key for a row the database no longer holds", async () => {
+    await sealSecretsForOrg(orgC, { password: "before-restore" }, aad); // mints and caches v1
+    await restoreUnderneath();
+
+    const blob = await sealSecretsForOrg(orgC, { password: "after-restore" }, aad);
+    expect(describeSealedBlob(blob)).toEqual({ format: "ce2", dataKeyVersion: 1 });
+    clearDataKeyCache(); // the instance restarts, or the TTL runs out
+    expect((await openSecretsForOrg(orgC, blob, aad)).password).toBe("after-restore");
+  });
+
+  it("an open whose cached key fails retries once with the stored key", async () => {
+    await sealSecretsForOrg(orgC, { password: "warm" }, aad); // caches the current v1
+    const stored = await restoreUnderneath();
+    // Sealed by another instance under the key the database now holds.
+    const blob = sealWithRawKey(stored, 1, JSON.stringify({ password: "from-another-instance" }), aad);
+    expect((await openSecretsForOrg(orgC, blob, aad)).password).toBe("from-another-instance");
+
+    // A blob no stored key opens still fails — the retry is not a bypass.
+    const stray = sealWithRawKey(randomBytes(32), 1, JSON.stringify({ password: "x" }), aad);
+    await expect(openSecretsForOrg(orgC, stray, aad)).rejects.toThrow();
+  });
 });

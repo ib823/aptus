@@ -1,14 +1,20 @@
 /**
- * `ce keys` — rotate, reseal and verify the keys that seal SAP secrets (P0.10).
+ * `ce keys` — rotate, reseal, verify and retire the keys that seal SAP secrets (P0.10).
  *
- *   pnpm keys:verify                       open every data key and sealed secret; exit 1 on any failure
- *   pnpm keys:rotate [--apply] [--rekey]   re-wrap every org data key under the ACTIVE master key
+ *   pnpm keys:verify [--expect-format=legacy|ce2]
+ *                                          open every data key and sealed secret; exit 1 on any failure
+ *                                          (or on any blob not in the expected format)
+ *   pnpm keys:rotate [--apply] [--rekey [--rekey-before=<ISO time>]]
+ *                                          re-wrap every org data key under the ACTIVE master key
  *   pnpm keys:reseal [--apply] [--to ce2|legacy]
  *                                          re-encrypt every sealed secret into the target format/key
+ *   pnpm keys:retire [--apply]             withdraw data-key versions older than each org's newest
  *
- * DRY RUN BY DEFAULT. rotate and reseal read and decrypt everything — so the
+ * DRY RUN BY DEFAULT. rotate, reseal and retire read everything — so the
  * report says exactly what would fail — and write nothing without --apply.
- * Both are idempotent and resumable: a re-run finds only what is left.
+ * They are idempotent and resumable: a re-run finds only what is left. The
+ * exception is rotate --rekey, which mints a new version on every run: to
+ * resume one, pass the --rekey-before value its report printed.
  *
  * Options: --batch-size=<n> (default 200), --json (machine-readable report).
  *
@@ -25,19 +31,22 @@
 import { prisma } from "@/lib/db/prisma";
 import {
   resealAll,
+  retireDataKeys,
   rotateMasterKey,
   verifyAll,
   type RowFailure,
 } from "@/lib/sap-public/keys/maintenance";
 
 const USAGE =
-  "usage: tsx scripts/ce-keys.ts <verify|rotate|reseal> [--apply] [--rekey] [--to=ce2|legacy] [--batch-size=<n>] [--json]";
+  "usage: tsx scripts/ce-keys.ts <verify|rotate|reseal|retire> [--apply] [--rekey] [--rekey-before=<ISO time>] [--to=ce2|legacy] [--expect-format=ce2|legacy] [--batch-size=<n>] [--json]";
 
 interface Args {
   readonly command: string;
   readonly apply: boolean;
   readonly rekey: boolean;
+  readonly rekeyBefore: Date | undefined;
   readonly to: "ce2" | "legacy" | undefined;
+  readonly expectFormat: "ce2" | "legacy" | undefined;
   readonly batchSize: number | undefined;
   readonly json: boolean;
 }
@@ -51,6 +60,8 @@ function parseArgs(argv: readonly string[]): Args {
   let rekey = false;
   let json = false;
   let to: Args["to"];
+  let expectFormat: Args["expectFormat"];
+  let rekeyBefore: Date | undefined;
   let batchSize: number | undefined;
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -67,6 +78,17 @@ function parseArgs(argv: readonly string[]): Args {
       const v = value();
       if (v !== "ce2" && v !== "legacy") throw new UsageError(`--to must be ce2 or legacy.\n${USAGE}`);
       to = v;
+    } else if (flag === "--expect-format") {
+      const v = value();
+      if (v !== "ce2" && v !== "legacy") throw new UsageError(`--expect-format must be ce2 or legacy.\n${USAGE}`);
+      expectFormat = v;
+    } else if (flag === "--rekey-before") {
+      const v = value();
+      const at = new Date(v);
+      if (!/^\d{4}-\d{2}-\d{2}T/.test(v) || Number.isNaN(at.getTime())) {
+        throw new UsageError("--rekey-before must be an ISO time, as a previous rotate --rekey report printed it.");
+      }
+      rekeyBefore = at;
     } else if (flag === "--batch-size") {
       const n = Number(value());
       if (!Number.isInteger(n) || n < 1 || n > 5000) throw new UsageError("--batch-size must be 1-5000.");
@@ -74,9 +96,11 @@ function parseArgs(argv: readonly string[]): Args {
     } else throw new UsageError(`Unknown option ${arg}.\n${USAGE}`);
   }
   if (rekey && command !== "rotate") throw new UsageError("--rekey applies to rotate only.");
+  if (rekeyBefore && !rekey) throw new UsageError("--rekey-before applies to rotate --rekey only.");
   if (to && command !== "reseal") throw new UsageError("--to applies to reseal only.");
+  if (expectFormat && command !== "verify") throw new UsageError("--expect-format applies to verify only.");
   if (apply && command === "verify") throw new UsageError("verify never writes; drop --apply.");
-  return { command, apply, rekey, to, batchSize, json };
+  return { command, apply, rekey, rekeyBefore, to, expectFormat, batchSize, json };
 }
 
 function printFailures(failures: readonly RowFailure[]): void {
@@ -94,12 +118,12 @@ async function main(): Promise<number> {
   const batch = args.batchSize === undefined ? {} : { batchSize: args.batchSize };
 
   if (args.command === "verify") {
-    const report = await verifyAll(batch);
+    const report = await verifyAll({ ...batch, ...(args.expectFormat ? { expectFormat: args.expectFormat } : {}) });
     if (args.json) console.log(JSON.stringify(report, null, 2));
     else {
       const dk = report.dataKeys;
       console.log(
-        `Org data keys: ${dk.total} (unwrapped ${dk.unwrapped}, failed ${dk.failed}, not on the active master key ${dk.notOnActiveMaster})`,
+        `Org data keys: ${dk.total} (unwrapped ${dk.unwrapped}, failed ${dk.failed}, not on the active master key ${dk.notOnActiveMaster}, retired ${dk.retired})`,
       );
       for (const [label, n] of Object.entries(dk.byMasterKey)) console.log(`  wrapped by ${label}: ${n}`);
       for (const [table, c] of Object.entries(report.tables)) {
@@ -109,6 +133,11 @@ async function main(): Promise<number> {
         console.log(
           `${table}: ${c.total} sealed, ${c.opened} opened, ${c.failed} failed — legacy bound ${c.legacyBound}, legacy unbound ${c.legacyUnbound}, ce2 ${ce2 || "0"}`,
         );
+        if (c.onOlderDataKey > 0) {
+          console.log(
+            `  WARN ${c.onOlderDataKey} ce2 blob(s) on a data key older than their organisation's newest — run keys:reseal --apply, then keys:retire --apply.`,
+          );
+        }
       }
       printFailures(report.failures);
       console.log(report.ok ? "VERIFY OK: every sealed secret opens." : "VERIFY FAILED: see the rows above.");
@@ -117,14 +146,24 @@ async function main(): Promise<number> {
   }
 
   if (args.command === "rotate") {
-    const report = await rotateMasterKey({ apply: args.apply, rekey: args.rekey, ...batch });
+    const report = await rotateMasterKey({
+      apply: args.apply,
+      rekey: args.rekey,
+      ...(args.rekeyBefore ? { rekeyBefore: args.rekeyBefore } : {}),
+      ...batch,
+    });
     if (args.json) console.log(JSON.stringify(report, null, 2));
     else {
       console.log(`Rotate to ${report.provider}:${report.keyVersion} — ${mode(report.apply)}`);
       console.log(
         `  scanned ${report.scanned}, already current ${report.current}, re-wrapped ${report.rewrapped}, changed underneath ${report.changedUnderneath}, failed ${report.failed}`,
       );
-      if (args.rekey) console.log(`  new data keys ${report.rekeyed} — run keys:reseal --apply next`);
+      if (args.rekey) {
+        console.log(
+          `  new data keys ${report.rekeyed}, already rekeyed ${report.alreadyRekeyed} — run keys:reseal --apply next`,
+        );
+        console.log(`  to resume this rekey, re-run with --rekey-before=${report.rekeyBefore}`);
+      }
       printFailures(report.failures);
     }
     return report.failed === 0 ? 0 : 1;
@@ -140,6 +179,19 @@ async function main(): Promise<number> {
           `  ${table}: scanned ${c.scanned}, already current ${c.current}, ${report.apply ? "resealed" : "would reseal"} ${c.resealed}, changed underneath ${c.changedUnderneath}, failed ${c.failed}`,
         );
       }
+      printFailures(report.failures);
+    }
+    return report.failures.length === 0 ? 0 : 1;
+  }
+
+  if (args.command === "retire") {
+    const report = await retireDataKeys({ apply: args.apply, ...batch });
+    if (args.json) console.log(JSON.stringify(report, null, 2));
+    else {
+      console.log(`Retire older data keys — ${mode(report.apply)}`);
+      console.log(
+        `  scanned ${report.scanned}, newest kept ${report.newest}, ${report.apply ? "retired" : "would retire"} ${report.retired}, already retired ${report.alreadyRetired}, still in use ${report.stillInUse}, changed underneath ${report.changedUnderneath}`,
+      );
       printFailures(report.failures);
     }
     return report.failures.length === 0 ? 0 : 1;

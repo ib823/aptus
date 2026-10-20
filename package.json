@@ -93,6 +93,7 @@
     "keys:verify": "tsx scripts/ce-keys.ts verify",
     "keys:rotate": "tsx scripts/ce-keys.ts rotate",
     "keys:reseal": "tsx scripts/ce-keys.ts reseal",
+    "keys:retire": "tsx scripts/ce-keys.ts retire",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",

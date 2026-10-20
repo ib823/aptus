@@ -94,6 +94,25 @@ describe("the SAP key ring at deploy time", () => {
     expect(r.out).toContain("different keys");
   });
 
+  it("fails a key provider the application does not register", () => {
+    // "ENV" is not "env": the app treats any name but "env" as a KMS provider,
+    // switches writes to ce2 and then cannot find it — every save would fail.
+    for (const provider of ["ENV", "aws-kms"]) {
+      const r = run({ ...BASE_PROD_ENV, SAP_CONNECTION_ENCRYPTION_KEY: hex(), SAP_CONNECTION_KEY_PROVIDER: provider });
+      expect(r.code, r.out).toBe(1);
+      expect(r.out).toContain("SAP_CONNECTION_KEY_PROVIDER");
+    }
+  });
+
+  it("passes every provider the application registers, and a blank one", async () => {
+    const { BUILT_IN_KEY_PROVIDER_NAMES } = await import("@/lib/sap-public/keys/key-provider");
+    for (const provider of [...BUILT_IN_KEY_PROVIDER_NAMES, ""]) {
+      const r = run({ ...BASE_PROD_ENV, SAP_CONNECTION_ENCRYPTION_KEY: hex(), SAP_CONNECTION_KEY_PROVIDER: provider });
+      expect(r.code, r.out).toBe(0);
+      expect(r.out).not.toContain("SAP_CONNECTION_KEY_PROVIDER");
+    }
+  });
+
   it("is checked on a preview deploy too — a broken ring breaks any deploy", () => {
     const r = run({
       ...BASE_PROD_ENV,
