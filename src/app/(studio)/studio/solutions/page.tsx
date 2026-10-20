@@ -51,9 +51,11 @@ export default async function StudioSolutionsPage() {
     // Names for the owner slots. An owner is stored as a user id, and the
     // accountability panel printed that id — a cuid nobody can recognise as a
     // colleague. Name and email are what a person reads; the id stays the key.
+    // ACTIVE members only (A69): a deactivated owner is no owner, so their id
+    // gets the "no longer in this organization" marker instead of their name.
     organizationId
       ? prisma.user.findMany({
-          where: { organizationId },
+          where: { organizationId, isActive: true },
           select: { id: true, name: true, email: true },
         })
       : Promise.resolve([]),

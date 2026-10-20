@@ -29,9 +29,16 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { CLIENT_TOKEN_PREFIX, hashClientToken } from "@/lib/northbound/auth";
-import { endedCredential, generateClientToken, hasLapsed } from "@/lib/northbound/issue";
+import {
+  endedCredential,
+  generateClientToken,
+  hasLapsed,
+  KeyIssuerRefused,
+  refuseKeyIssuer,
+} from "@/lib/northbound/issue";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { refuseCredentialIssuer } from "@/lib/studio/solutions";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
+import { refuseCredentialIssuerLive } from "@/lib/studio/owner-liveness";
 
 /** Claim tokens are their own namespace, so one can never be mistaken for a key. */
 export const CLAIM_TOKEN_PREFIX = "cec_";
@@ -70,7 +77,11 @@ export type LaneRefusal =
   | "SOLUTION_GONE"
   /** The app was retired. The broker refuses its keys, and reactivating it would wake this one. */
   | "SOLUTION_RETIRED"
-  /** The app no longer names all three owners, so nobody is accountable for the key. */
+  /**
+   * The app no longer names all three owners — or one of them has since been
+   * deactivated or left the organization (A69) — so nobody is accountable for
+   * the key.
+   */
   | "OWNERS_MISSING"
   /** Whoever sent the link owns the app — the self-issuance Studio refuses. */
   | "SENDER_OWNS_APP"
@@ -139,32 +150,45 @@ export interface CreatedClaimLink {
  * Superseding REVOKES rather than deletes, so "you were sent three links" stays
  * answerable — and so a link that arrives after a newer one was issued fails
  * with a recorded reason rather than silently doing nothing.
+ *
+ * ONE TRANSACTION, LOCKED ON THE APP (P0.1), like every key change in
+ * issue.ts: the sender is re-checked against the app's live owners while the
+ * lock is held (a reclaim fired at the same moment is seen or waits), and a
+ * link can no longer be sent in the middle of an issue, rotate or revoke —
+ * the window the second close in issue.ts existed for. Throws
+ * KeyIssuerRefused, and nothing is written.
  */
 export async function createClaimLink(input: CreateClaimLinkInput): Promise<CreatedClaimLink> {
   const now = input.now ?? new Date();
   const rawToken = generateClaimToken();
 
-  await prisma.keyClaimLink.updateMany({
-    where: {
-      organizationId: input.organizationId,
-      solutionId: input.solutionId,
-      environment: input.environment,
-      claimedAt: null,
-      revokedAt: null,
-    },
-    data: { revokedAt: now, revokedReason: "A newer link was sent." },
-  });
+  const link = await prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, { organizationId: input.organizationId, solutionId: input.solutionId });
+    const refusal = await refuseKeyIssuer(tx, input.organizationId, input.solutionId, input.createdById);
+    if (refusal !== null) throw new KeyIssuerRefused(refusal);
 
-  const link = await prisma.keyClaimLink.create({
-    data: {
-      organizationId: input.organizationId,
-      solutionId: input.solutionId,
-      environment: input.environment,
-      tokenHash: hashClaimToken(rawToken),
-      createdById: input.createdById,
-      expiresAt: new Date(now.getTime() + CLAIM_LINK_TTL_MS),
-    },
-    select: { id: true, expiresAt: true },
+    await tx.keyClaimLink.updateMany({
+      where: {
+        organizationId: input.organizationId,
+        solutionId: input.solutionId,
+        environment: input.environment,
+        claimedAt: null,
+        revokedAt: null,
+      },
+      data: { revokedAt: now, revokedReason: "A newer link was sent." },
+    });
+
+    return tx.keyClaimLink.create({
+      data: {
+        organizationId: input.organizationId,
+        solutionId: input.solutionId,
+        environment: input.environment,
+        tokenHash: hashClaimToken(rawToken),
+        createdById: input.createdById,
+        expiresAt: new Date(now.getTime() + CLAIM_LINK_TTL_MS),
+      },
+      select: { id: true, expiresAt: true },
+    });
   });
 
   return { id: link.id, rawToken, expiresAt: link.expiresAt };
@@ -179,9 +203,11 @@ export async function createClaimLink(input: CreateClaimLinkInput): Promise<Crea
  * constraint on (organization, solution, environment) would catch the duplicate
  * anyway, but as a crash rather than as an answer.
  *
- * THE LANE IS READ INSIDE THAT TRANSACTION, and judged by the same rules the
- * read-only check uses. A lane refusal also closes the link with its reason,
- * so the holder still learns only "it did not work" while the record says why.
+ * THE LANE IS READ INSIDE THAT TRANSACTION, after taking the app's owner lock
+ * (P0.1), and judged by the same rules the read-only check uses — so an owner
+ * reclaim, a key change or a newer link racing this claim is either seen or
+ * waits. A lane refusal also closes the link with its reason, so the holder
+ * still learns only "it did not work" while the record says why.
  *
  * Called only from the POST that the person's own click sends — never from a
  * page render. See `inspectClaimLink` for why.
@@ -194,6 +220,7 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
   let outcome: ClaimOutcome;
   try {
     outcome = await prisma.$transaction(async (tx): Promise<ClaimOutcome> => {
+      await lockSolutionOwnership(tx, { organizationId: link.organizationId, solutionId: link.solutionId });
       const facts = await readLaneFacts(tx, link);
       const refusal = refuseLane(link, facts);
       if (refusal !== null) {
@@ -334,6 +361,8 @@ interface LaneFacts {
     readonly businessOwnerId: string | null;
     readonly supportOwnerId: string | null;
   } | null;
+  /** The owner gate against the SENDER, judged on live owners (A69). */
+  readonly issuer: "ownersMissing" | "issuerIsOwner" | null;
   /** The key the lane holds now, if any — what claiming would replace. */
   readonly client: {
     readonly createdAt: Date;
@@ -347,7 +376,10 @@ interface LaneFacts {
  * The app and the lane's key, as they stand now. Given the transaction when
  * claiming, so the rules are judged on what the write will actually replace.
  */
-async function readLaneFacts(db: Prisma.TransactionClient, link: OpenedLink): Promise<LaneFacts> {
+async function readLaneFacts(
+  db: Pick<Prisma.TransactionClient, "solution" | "solutionClient" | "user">,
+  link: OpenedLink,
+): Promise<LaneFacts> {
   const solution = await db.solution.findFirst({
     where: { id: link.solutionId, organizationId: link.organizationId },
     select: {
@@ -366,7 +398,13 @@ async function readLaneFacts(db: Prisma.TransactionClient, link: OpenedLink): Pr
     },
     select: { createdAt: true, isActive: true, revokedAt: true, expiresAt: true },
   });
-  return { solution, client };
+  // Against the SENDER: they are who issues the key, and owners change — or
+  // leave (a departed owner's slot reads as empty).
+  const issuer =
+    solution === null
+      ? null
+      : ((await refuseCredentialIssuerLive(db, link.organizationId, solution, link.createdById))?.refusal ?? null);
+  return { solution, client, issuer };
 }
 
 /**
@@ -380,12 +418,10 @@ async function readLaneFacts(db: Prisma.TransactionClient, link: OpenedLink): Pr
  * inbox cannot be the way round it.
  */
 function refuseLane(link: OpenedLink, facts: LaneFacts): LaneRefusal | null {
-  const { solution, client } = facts;
+  const { solution, client, issuer } = facts;
   if (solution === null) return "SOLUTION_GONE";
   if (solution.status === "RETIRED") return "SOLUTION_RETIRED";
 
-  // Against the SENDER: they are who issues the key, and owners change.
-  const issuer = refuseCredentialIssuer(solution, link.createdById);
   if (issuer === "ownersMissing") return "OWNERS_MISSING";
   if (issuer === "issuerIsOwner") return "SENDER_OWNS_APP";
 

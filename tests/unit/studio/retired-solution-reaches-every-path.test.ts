@@ -39,8 +39,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     interface: { findFirst: mocks.findFirstInterface },
     solution: { findFirst: mocks.findFirstSolution },
     solutionClient: {
@@ -49,11 +49,19 @@ vi.mock("@/lib/db/prisma", () => ({
       upsert: mocks.upsertClient,
       update: mocks.updateClient,
     },
+    // Every owner named here is a live member of the organization (A69).
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id })),
+    },
     apiAccessGrant: { findMany: mocks.findManyGrants },
     configAudit: { create: mocks.createAudit },
     keyClaimLink: { updateMany: mocks.closeLinks },
-  },
-}));
+  };
+  // Each key change is one transaction under the app lock (P0.1).
+  return {
+    prisma: { ...client, $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ ...client, $queryRaw: async () => [] }) },
+  };
+});
 vi.mock("@/lib/northbound/access", () => ({
   resolveReadableInterface: mocks.resolveReadableInterface,
 }));

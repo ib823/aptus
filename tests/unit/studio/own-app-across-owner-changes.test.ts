@@ -120,12 +120,38 @@ async function appOwnedBy(
 
 const activeAppOwnedByA = () => appOwnedBy([A.id, A.id, A.id]);
 
-/** A PROD write request, raised straight into the ledger by `requester`. */
+/** The app's sales-order CREATE interface, which every request here is raised against. */
+async function salesOrderInterface(solutionId: string): Promise<string> {
+  const existing = await prisma.interface.findFirst({
+    where: { organizationId: ORG, solutionId, externalId: "API_SALES_ORDER_SRV" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const i = await prisma.interface.create({
+    data: {
+      organizationId: ORG,
+      solutionId,
+      name: "Sales orders",
+      sapProduct: "s4hana",
+      externalId: "API_SALES_ORDER_SRV",
+      operation: "CREATE",
+      entitySet: "A_SalesOrder",
+      mode: "WRITE",
+    },
+    select: { id: true },
+  });
+  return i.id;
+}
+
+/** A PROD write request, raised straight into the ledger by `requester`, bound to its interface (P0.1). */
 async function prodWriteRequest(solutionId: string, requester: typeof A): Promise<string> {
+  const interfaceId = await salesOrderInterface(solutionId);
   const g = await prisma.apiAccessGrant.create({
     data: {
       organizationId: ORG,
       solutionId,
+      interfaceId,
+      sapProduct: "s4hana",
       externalId: "API_SALES_ORDER_SRV",
       operation: "CREATE",
       environment: "PROD",
@@ -170,19 +196,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("own-app across owner-slot chang
 
   it("refuses the release while B's request waits, so A is still an owner when A decides", async () => {
     const solutionId = await activeAppOwnedByA();
-    const grant = await prisma.apiAccessGrant.create({
-      data: {
-        organizationId: ORG,
-        solutionId,
-        externalId: "API_SALES_ORDER_SRV",
-        operation: "CREATE",
-        environment: "PROD",
-        justification: "Raise sales orders from the portal.",
-        requestedById: B.id,
-        expiresAt: inDays(30),
-      },
-      select: { id: true },
-    });
+    const grant = { id: await prodWriteRequest(solutionId, B) };
 
     as(A);
     // The original trigger: blocked.
@@ -211,10 +225,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("own-app across owner-slot chang
 
     // B asks for PROD write access through Studio.
     as(B);
+    const interfaceId = await salesOrderInterface(solutionId);
     const raised = await raiseRequest(
       json(
         {
           solutionId,
+          interfaceId,
           externalId: "API_SALES_ORDER_SRV",
           operation: "CREATE",
           environment: "PROD",

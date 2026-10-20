@@ -471,6 +471,40 @@ describe("A01 · ownership is asked again when the link is opened", () => {
     expect(await claimKey(link)).toEqual({ ok: false, refusal: "OWNERS_MISSING" });
     expect(laneStore.clients).toHaveLength(0);
   });
+
+  it("refuses when an owner has since been deactivated or left — a departed owner fills no slot (A69)", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    laneStore.departedUsers.add("u_biz");
+
+    moveTo(at(1));
+    expect(await claimKey(link)).toEqual({ ok: false, refusal: "OWNERS_MISSING" });
+    expect(laneStore.clients).toHaveLength(0);
+  });
+
+  it("refuses to SEND a link for an app with a departed owner, and writes nothing", async () => {
+    laneStore.departedUsers.add("u_sup");
+    await expect(sendLink()).rejects.toMatchObject({
+      name: "KeyIssuerRefused",
+      refusal: { reason: "ownersMissing", departed: true },
+    });
+    expect(laneStore.links).toHaveLength(0);
+  });
+});
+
+describe("P0.1 · every key change and claim takes the app's owner lock first", () => {
+  it("send, claim, issue, rotate and revoke each lock the Solution row", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    moveTo(at(1));
+    await claimKey(link);
+    const issued = await issueInStudio();
+    await rotateClientToken(SCOPE, issued.id);
+    await revokeClientToken(SCOPE, issued.id);
+
+    expect(laneStore.locks).toHaveLength(5);
+    expect(laneStore.locks.every(([org, sol]) => org === ORG && sol === "sol_1")).toBe(true);
+  });
 });
 
 describe("retiring the app closes its links in every environment", () => {

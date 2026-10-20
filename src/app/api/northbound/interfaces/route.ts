@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { customServiceDefinition } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { grantsUsableUnder, isBoundTo } from "@/lib/studio/grant-binding";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
@@ -83,7 +84,15 @@ export async function GET(request: NextRequest) {
         solutionId: client.solutionId,
         environment: client.environment,
       }),
-      select: { externalId: true, operation: true, decision: true, expiresAt: true, revokedAt: true },
+      select: {
+        externalId: true,
+        operation: true,
+        decision: true,
+        expiresAt: true,
+        revokedAt: true,
+        interfaceId: true,
+        sapProduct: true,
+      },
     }),
   ]);
 
@@ -109,19 +118,30 @@ export async function GET(request: NextRequest) {
   // `callable` outright a few lines down, so a read predicate is the whole of
   // what this set can ever decide. If that exclusion is ever relaxed, this must
   // branch on `isWriteOperation(g.operation)` at the same time.
+  //
+  // And with BINDING (P0.1, A47): a grant counts for the one interface it is
+  // bound to, on its product — or, while COREEDGE_GRANT_BINDING is legacy, an
+  // unbound grant counts on the old tuple. `grantsUsableUnder` is the same
+  // call access.ts makes.
   const environment = client.environment as GrantEnvironment;
-  const liveGrants = new Set(
-    grants
-      .filter(
-        (g) =>
-          grantsRead(g.decision as GrantDecision, environment) &&
-          // `== null` to match access.ts exactly — an unselected field must not
-          // read as revoked. Same predicate, same nullishness, or they drift.
-          g.revokedAt == null &&
-          (g.expiresAt === null || g.expiresAt.getTime() > now),
-      )
-      .map((g) => `${g.externalId}::${g.operation}`),
+  const liveReadGrants = grants.filter(
+    (g) =>
+      grantsRead(g.decision as GrantDecision, environment) &&
+      // `== null` to match access.ts exactly — an unselected field must not
+      // read as revoked. Same predicate, same nullishness, or they drift.
+      g.revokedAt == null &&
+      (g.expiresAt === null || g.expiresAt.getTime() > now),
   );
+  const hasLiveGrant = (i: { id: string; externalId: string; operation: string; sapProduct: string }) =>
+    grantsUsableUnder(
+      liveReadGrants.filter(
+        (g) =>
+          g.externalId === i.externalId &&
+          g.operation === i.operation &&
+          (g.interfaceId == null || isBoundTo(g, i)),
+      ),
+      i,
+    ).length > 0;
 
   /*
    * Discovery is audited like the data routes — a 200 — but with a NULL
@@ -169,7 +189,7 @@ export async function GET(request: NextRequest) {
         callable:
           i.mode !== "WRITE" &&
           i.status !== "DEPRECATED" &&
-          liveGrants.has(`${i.externalId}::${i.operation}`) &&
+          hasLiveGrant(i) &&
           (i.servicePath == null ||
             customServiceDefinition(getSapProduct(i.sapProduct) ?? { key: "" }, i) !== null),
         // Which kind of service this is, and its version when the interface

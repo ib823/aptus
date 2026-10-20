@@ -252,6 +252,29 @@ Reads check the interface's status too, asymmetrically and on purpose:
 
 ---
 
+## One grant, one interface
+
+An approved grant authorises **one interface, on one SAP product**: the
+interface the request was raised against. Adding an interface for the same
+service on another SAP system (an on-premise system beside S/4HANA Cloud, say)
+does not inherit the approval; request access for it as well. A grant still
+names its environment and operation, so a READ grant in SANDBOX authorises
+neither a write nor PROD.
+
+Grants approved before this rule (P0.1) were bound to the one interface they
+matched. One that matched none or several is flagged for re-approval on the
+CoreEdge requests board and keeps working until the deployment switches to
+strict binding (`COREEDGE_GRANT_BINDING=strict`). After that its calls are
+refused with `403 GRANT_NEEDS_REAPPROVAL`: ask for access again from the
+interface, and do not retry.
+
+An interface that is ACTIVE stays behind the activation checks when its
+contract changes: switching an active interface to a write, or changing its
+entity set, runs the same checks as activating it and is audited as a
+promotion.
+
+---
+
 ## Writing to SAP
 
 Writes are supported, and deliberately harder to reach than reads. **Today a write

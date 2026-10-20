@@ -55,6 +55,7 @@ import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verific
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { grantsForInterfaceWhere, grantsUsableUnder } from "@/lib/studio/grant-binding";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import {
   readyEnvironments,
@@ -381,6 +382,44 @@ export async function PATCH(request: NextRequest) {
    */
   const verificationReset = serviceChanged || entitySetChanged;
 
+  // Bump the version only when the contract actually moved. A consumer pins a
+  // version; inflating it for a rename would cry wolf, and NOT inflating it for
+  // an operation change would hide a breaking edit behind an unchanged number.
+  const contractChanged =
+    (input.operation !== undefined && input.operation !== current.operation) ||
+    (input.entitySet !== undefined && nextEntitySet !== current.entitySet) ||
+    serviceChanged;
+
+  /*
+   * AN ACTIVE WRITE INTERFACE WHOSE CONTRACT WAS UNVERIFIED GOES BACK TO
+   * DRAFT. A new path, version or dataset on your own API clears
+   * verification, and the write route refuses an unverified custom service;
+   * leaving it ACTIVE would keep it looking live while every write is
+   * refused. One rule for all three edits. A READ interface stays ACTIVE —
+   * reads are not gated on verification; on a path change its grants detach
+   * (the id changed), so calls answer 403 until a new grant is approved,
+   * which is the governance outcome intended, and Studio says so before the
+   * save.
+   */
+  const unverifiedWriteContract = isCustom && nextMode === "WRITE" && verificationReset;
+  const demoted = unverifiedWriteContract && current.status === "ACTIVE";
+  const nextStatus = input.status ?? (demoted ? "DRAFT" : undefined);
+
+  /*
+   * EVERY ROUTE TO ACTIVE PASSES THE GATES (P0.1, A46). They used to run only
+   * on the status transition, so an interface could be activated as a READ
+   * with an entity set and then, already ACTIVE, be switched to CREATE or
+   * UPDATE or have its entity set cleared — reaching an ACTIVE write with no
+   * check, recorded as an ordinary UPDATE. A contract change to an interface
+   * that STAYS active is a promotion of a new contract: it runs every gate
+   * below and is audited as PROMOTE. The product is not editable here (the
+   * schema strips it), and the version follows the contract.
+   */
+  const promoting = input.status === "ACTIVE" && current.status !== "ACTIVE";
+  const willBeActive = (nextStatus ?? current.status) === "ACTIVE";
+  const repromoting = willBeActive && current.status === "ACTIVE" && contractChanged;
+  const gated = promoting || repromoting;
+
   /*
    * ACTIVE IS LOAD-BEARING, SO PROMOTION HAS PRECONDITIONS.
    *
@@ -400,7 +439,7 @@ export async function PATCH(request: NextRequest) {
    *      audit record rather than a second approver is the proportionate
    *      control here.
    */
-  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextEntitySet === null) {
+  if (gated && nextEntitySet === null) {
     return studioError(
       "VALIDATION_ERROR",
       "An interface cannot be activated without an entity set — the broker refuses every call on one. Set the entity set first.",
@@ -413,7 +452,7 @@ export async function PATCH(request: NextRequest) {
    *      an update as a create would add a record instead of changing one.
    *      Checked before the write chain, because no grant or key fixes it.
    */
-  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation === "UPDATE") {
+  if (gated && nextOperation === "UPDATE") {
     return studioError("VALIDATION_ERROR", UPDATE_NOT_EXECUTABLE);
   }
 
@@ -424,7 +463,6 @@ export async function PATCH(request: NextRequest) {
    *      interface's dataset: a new dataset is unverified too, and the write
    *      route refuses it until it is verified again.
    */
-  const unverifiedWriteContract = isCustom && nextMode === "WRITE" && verificationReset;
   if ((serviceChanged || unverifiedWriteContract) && input.status === "ACTIVE") {
     return studioError(
       "VALIDATION_ERROR",
@@ -441,8 +479,7 @@ export async function PATCH(request: NextRequest) {
    *      would be building toward that wall.
    */
   if (
-    input.status === "ACTIVE" &&
-    current.status !== "ACTIVE" &&
+    gated &&
     isCustom &&
     nextMode === "WRITE" &&
     (verificationReset || current.serviceVerifiedAt == null)
@@ -464,9 +501,10 @@ export async function PATCH(request: NextRequest) {
    *      developer built toward a wall with the gate's blessing. The order is
    *      enforced where the developer is standing, per environment: write
    *      grant approved for E → write credential issued for E → ACTIVE.
-   *      Checked on PROMOTION only, like the entity set: an interface already
-   *      ACTIVE is not demoted by a later revocation — the broker refuses that
-   *      call itself.
+   *      Checked on PROMOTION — of the status, or of a new contract on an
+   *      interface that stays ACTIVE (A46) — like the entity set: an
+   *      interface already ACTIVE is not demoted by a later revocation — the
+   *      broker refuses that call itself.
    *
    *      For YOUR OWN API the same environment must ALSO hold a verification
    *      that still matches its connection: the write route refuses a custom
@@ -474,8 +512,14 @@ export async function PATCH(request: NextRequest) {
    *      asks "verified somewhere"), so "verified in SANDBOX, chain complete
    *      in PROD" is another wall (review round 2).
    */
-  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation !== "READ") {
+  if (gated && nextOperation !== "READ") {
     const now = new Date();
+    const grantedAs = {
+      id: current.id,
+      externalId: nextExternalId,
+      operation: nextOperation,
+      sapProduct: current.sapProduct,
+    };
     const [liveCredentials, writeKeyHolders, grants, connections] = await Promise.all([
       prisma.solutionClient.findMany({
         where: { organizationId, solutionId: current.solutionId, isActive: true, revokedAt: null },
@@ -497,9 +541,22 @@ export async function PATCH(request: NextRequest) {
         },
         select: { id: true },
       }),
+      // The grants that would authorise THIS interface's writes: bound to it on
+      // its product, or (legacy) unbound — the broker's own match (P0.1).
       prisma.apiAccessGrant.findMany({
-        where: { organizationId, solutionId: current.solutionId, externalId: nextExternalId, operation: nextOperation },
-        select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
+        where: {
+          organizationId,
+          solutionId: current.solutionId,
+          ...grantsForInterfaceWhere(grantedAs),
+        },
+        select: {
+          environment: true,
+          decision: true,
+          expiresAt: true,
+          revokedAt: true,
+          interfaceId: true,
+          sapProduct: true,
+        },
       }),
       isCustom ? loadCurrentConnections(organizationId, current.sapProduct) : Promise.resolve(null),
     ]);
@@ -516,7 +573,7 @@ export async function PATCH(request: NextRequest) {
     }));
     const readiness = writeReadinessByEnvironment({
       credentials: readinessCredentials,
-      grants,
+      grants: grantsUsableUnder(grants, grantedAs),
       // A contract this request changes is verified nowhere (3b refuses it anyway).
       // Otherwise verified only where a live credential's own binding —
       // environment AND its SAP client — holds the verification (round 3).
@@ -536,28 +593,6 @@ export async function PATCH(request: NextRequest) {
       return studioError("VALIDATION_ERROR", writeReadinessRefusal(nextOperation, readiness));
     }
   }
-
-  // Bump the version only when the contract actually moved. A consumer pins a
-  // version; inflating it for a rename would cry wolf, and NOT inflating it for
-  // an operation change would hide a breaking edit behind an unchanged number.
-  const contractChanged =
-    (input.operation !== undefined && input.operation !== current.operation) ||
-    (input.entitySet !== undefined && nextEntitySet !== current.entitySet) ||
-    serviceChanged;
-
-  /*
-   * AN ACTIVE WRITE INTERFACE WHOSE CONTRACT WAS UNVERIFIED GOES BACK TO
-   * DRAFT. A new path, version or dataset on your own API clears
-   * verification, and the write route refuses an unverified custom service;
-   * leaving it ACTIVE would keep it looking live while every write is
-   * refused. One rule for all three edits. A READ interface stays ACTIVE —
-   * reads are not gated on verification; on a path change its grants detach
-   * (the id changed), so calls answer 403 until a new grant is approved,
-   * which is the governance outcome intended, and Studio says so before the
-   * save.
-   */
-  const demoted = unverifiedWriteContract && current.status === "ACTIVE";
-  const nextStatus = input.status ?? (demoted ? "DRAFT" : undefined);
 
   const updated = await prisma.interface.update({
     where: { id: current.id, organizationId },
@@ -605,11 +640,12 @@ export async function PATCH(request: NextRequest) {
     entityType: "Interface",
     entityId: current.id,
     // A promotion to ACTIVE is the load-bearing act (it is the write path's
-    // precondition) and gets the PROMOTE verb; everything else is an edit.
-    action: input.status === "ACTIVE" && current.status !== "ACTIVE" ? "PROMOTE" : "UPDATE",
+    // precondition) and gets the PROMOTE verb — and so does a new contract on
+    // an interface that stays ACTIVE (A46). Everything else is an edit.
+    action: gated ? "PROMOTE" : "UPDATE",
     before: current,
-    after: { ...updated, contractChanged, serviceChanged, verificationReset, demoted },
+    after: { ...updated, contractChanged, serviceChanged, verificationReset, demoted, repromoted: repromoting },
   });
 
-  return studioOk({ ...updated, contractChanged, serviceChanged, verificationReset, demoted });
+  return studioOk({ ...updated, contractChanged, serviceChanged, verificationReset, demoted, repromoted: repromoting });
 }

@@ -15,6 +15,11 @@
  * A DECISION NEEDS A FRESH PASSKEY once COREEDGE_STEP_UP is enforce
  * (lib/auth/step-up.ts); raising a request does not, because the requester is
  * not the control.
+ *
+ * EVERY REQUEST IS BOUND TO ONE INTERFACE (P0.1, A47). The request names the
+ * interface it is for, and the service, operation and SAP product are read
+ * from that row, never taken from the body; a decision binds a request that
+ * is not bound yet, or refuses to approve it (lib/studio/grant-binding.ts).
  */
 
 import type { NextRequest } from "next/server";
@@ -30,6 +35,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { bindingForDecision, findBinding } from "@/lib/studio/grant-binding";
 import {
   evaluateDecision,
   type GrantDecision,
@@ -43,6 +49,13 @@ export const dynamic = "force-dynamic";
 
 const requestSchema = z.object({
   solutionId: z.string().min(1),
+  /**
+   * The interface the request is for. The service, operation and SAP product
+   * of the grant are read from it. Optional only for callers that predate
+   * P0.1: without it the request is bound to the one interface its externalId
+   * and operation name, and refused when there are several.
+   */
+  interfaceId: z.string().min(1).max(80).optional(),
   externalId: z.string().min(1).max(200),
   operation: z.enum(["READ", "CREATE", "UPDATE"]),
   environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
@@ -109,6 +122,11 @@ export async function GET() {
       revokedAt: true,
       revokedReason: true,
       createdAt: true,
+      // The binding (P0.1): which interface and SAP system this grant covers,
+      // and why a legacy one covers none.
+      interfaceId: true,
+      sapProduct: true,
+      unboundReason: true,
       solution: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -136,12 +154,58 @@ export async function POST(request: NextRequest) {
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
 
+  /*
+   * BIND THE REQUEST TO ITS INTERFACE (P0.1, A47). The interface is re-scoped
+   * to this tenant AND this app, and the grant takes its service, operation
+   * and product from the row. The body's externalId and operation are kept
+   * for older callers and must agree with it: a mismatch is a request for
+   * something other than what the interface is.
+   */
+  let binding: { interfaceId: string; externalId: string; operation: string; sapProduct: string };
+  if (input.interfaceId !== undefined) {
+    const iface = await prisma.interface.findFirst({
+      where: { id: input.interfaceId, organizationId, solutionId: solution.id },
+      select: { id: true, externalId: true, operation: true, sapProduct: true },
+    });
+    if (!iface) return studioError("NOT_FOUND", "Interface not found on this solution.");
+    if (iface.externalId !== input.externalId || iface.operation !== input.operation) {
+      return studioError(
+        "VALIDATION_ERROR",
+        "The service or operation does not match the interface named. Raise the request from the interface itself.",
+      );
+    }
+    binding = { interfaceId: iface.id, externalId: iface.externalId, operation: iface.operation, sapProduct: iface.sapProduct };
+  } else {
+    const found = await findBinding(prisma, {
+      organizationId,
+      solutionId: solution.id,
+      externalId: input.externalId,
+      operation: input.operation,
+    });
+    if (!found.ok) {
+      return studioError(
+        "VALIDATION_ERROR",
+        found.reason === "AMBIGUOUS"
+          ? "More than one of this solution's interfaces uses this service and operation (on different SAP systems). Name the interface the request is for."
+          : "No interface of this solution uses this service and operation. Add the interface first, then request access to it.",
+      );
+    }
+    binding = {
+      interfaceId: found.interfaceId,
+      externalId: input.externalId,
+      operation: input.operation,
+      sapProduct: found.sapProduct,
+    };
+  }
+
   const created = await prisma.apiAccessGrant.create({
     data: {
       solutionId: solution.id,
       organizationId,
-      externalId: input.externalId,
-      operation: input.operation,
+      interfaceId: binding.interfaceId,
+      sapProduct: binding.sapProduct,
+      externalId: binding.externalId,
+      operation: binding.operation,
       environment: input.environment,
       justification: input.justification,
       // Always REQUESTED. A request never arrives pre-approved — least of all a
@@ -152,6 +216,8 @@ export async function POST(request: NextRequest) {
     },
     select: {
       id: true,
+      interfaceId: true,
+      sapProduct: true,
       externalId: true,
       operation: true,
       environment: true,
@@ -211,7 +277,10 @@ export async function PATCH(request: NextRequest) {
         requestedById: true,
         externalId: true,
         solutionId: true,
+        organizationId: true,
         expiresAt: true,
+        interfaceId: true,
+        sapProduct: true,
         // The app's owners, for OWN_APP: an owner may not approve their own app.
         solution: {
           select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
@@ -247,6 +316,11 @@ export async function PATCH(request: NextRequest) {
       return { refusal: studioError(code, verdict.message) };
     }
 
+    // The decision binds the request to its one interface, or an approval is
+    // refused (P0.1, A47): see lib/studio/grant-binding.ts.
+    const bound = await bindingForDecision(tx, grant, input.decision);
+    if (!bound.ok) return { refusal: studioError("CONFLICT", bound.message) };
+
     // The passkey last, once every rule has passed: it is then the one thing
     // between this person and the decision (lib/auth/step-up.ts). Checked
     // here, recorded after the transaction: the record needs a pooled
@@ -274,6 +348,7 @@ export async function PATCH(request: NextRequest) {
         decision: input.decision,
         decidedById: user.id,
         decidedAt,
+        ...(bound.binding ? { ...bound.binding, unboundReason: null } : {}),
       },
     });
     if (settled.count === 0) {
@@ -284,11 +359,11 @@ export async function PATCH(request: NextRequest) {
         ),
       };
     }
-    return { grant, decidedAt };
+    return { grant, decidedAt, binding: bound.binding };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt } = decided;
+  const { grant, decidedAt, binding } = decided;
 
   // The row exactly as written: the guard makes this the only write that can
   // settle the grant, so a re-read would return the same values.
@@ -300,6 +375,8 @@ export async function PATCH(request: NextRequest) {
     operation: grant.operation,
     environment: grant.environment,
     externalId: grant.externalId,
+    interfaceId: binding?.interfaceId ?? grant.interfaceId,
+    sapProduct: binding?.sapProduct ?? grant.sapProduct,
   };
 
   await writeConfigAudit({

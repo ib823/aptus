@@ -29,6 +29,7 @@ import {
   highestApprovedEnvironment,
   type GrantEnvironment,
 } from "@/lib/studio/grants";
+import { unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { canMutateStudio } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,10 @@ export default async function StudioAccessPage() {
           revokedAt: true,
           revokedReason: true,
           createdAt: true,
+          // Which SAP system the grant covers, or why a legacy one covers none (P0.1).
+          interfaceId: true,
+          sapProduct: true,
+          unboundReason: true,
           // The owners, so the ledger can say OWN_APP before the click.
           solution: {
             select: { name: true, technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
@@ -86,6 +91,10 @@ export default async function StudioAccessPage() {
     revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
     revokedReason: r.revokedReason,
     createdAt: r.createdAt.toISOString(),
+    sapProduct: r.sapProduct,
+    // A REQUESTED row is bound by its decision, so only a settled one is flagged.
+    needsReapproval:
+      r.interfaceId === null && r.decision !== "REQUESTED" ? unboundGrantLabel(r.unboundReason) : null,
   }));
 
   const highest = highestApprovedEnvironment(

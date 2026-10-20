@@ -14,10 +14,14 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   findMany: vi.fn(),
   closeLinks: vi.fn(),
+  lock: vi.fn(),
+  transaction: vi.fn(),
+  solutionFind: vi.fn(),
+  liveUsers: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solutionClient: {
       upsert: mocks.upsert,
       findFirst: mocks.findFirst,
@@ -26,13 +30,32 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     // Every change to a lane's key closes the claim links still out for it.
     keyClaimLink: { updateMany: mocks.closeLinks },
-  },
-}));
+    // The owner gate's reads, re-applied under the lock when an issuer is named.
+    solution: { findFirst: mocks.solutionFind },
+    user: { findMany: mocks.liveUsers },
+    // The Solution row lock must be taken on the transaction, never the client.
+    $queryRaw: () => {
+      throw new Error("the Solution row lock must be taken on the transaction");
+    },
+  };
+  return {
+    prisma: {
+      ...client,
+      // Each key change is ONE transaction (P0.1): the lock, both closes and the
+      // write run on `tx`, and a throw anywhere in it is the transaction's throw.
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        mocks.transaction();
+        return fn({ ...client, $queryRaw: mocks.lock });
+      },
+    },
+  };
+});
 
 import { hashClientToken } from "@/lib/northbound/auth";
 import {
   generateClientToken,
   issueClientToken,
+  KeyIssuerRefused,
   listClients,
   revokeClientToken,
   rotateClientToken,
@@ -319,10 +342,11 @@ describe("every change to a key closes the lane's pending claim links", () => {
     }
   });
 
-  it("still hands back the new key when the close AFTER the write fails — that close is a backstop", async () => {
-    // The key has already changed by then; failing would lose the only copy
-    // of the new token and its audit row over a link that is almost never there.
-    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("fails as a whole when the close AFTER the write fails — the write is in the same transaction", async () => {
+    // It used to be a best-effort statement after the write: a failure left the
+    // new key standing with a live link aimed at it, and that link, opened
+    // later, replaced the token its holder had just been shown. Now the close
+    // and the write commit together or not at all, and no token is returned.
     const changes = [
       () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
       () => rotateClientToken(SCOPE, "client_1"),
@@ -331,19 +355,31 @@ describe("every change to a key closes the lane's pending claim links", () => {
     for (const run of changes) {
       mocks.closeLinks.mockReset();
       mocks.closeLinks.mockResolvedValueOnce({ count: 0 }).mockRejectedValueOnce(new Error("pool timeout"));
-      await expect(run()).resolves.not.toBeNull();
+      await expect(run()).rejects.toThrow("pool timeout");
     }
-    const issued = await (async () => {
-      mocks.closeLinks.mockReset();
-      mocks.closeLinks.mockResolvedValueOnce({ count: 0 }).mockRejectedValueOnce(new Error("pool timeout"));
-      return issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
-    })();
-    expect(issued.rawToken).toMatch(/^ce_/);
-    expect(errors).toHaveBeenCalledWith(
-      "[issue] claim-link close after key write failed",
-      expect.objectContaining({ organizationId: "org_a", solutionId: "sol_1", error: "Error" }),
-    );
-    errors.mockRestore();
+  });
+
+  it("runs the lock, both closes and the write inside ONE transaction, the lock first", async () => {
+    const changes = [
+      { write: mocks.upsert, run: () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }) },
+      { write: mocks.update, run: () => rotateClientToken(SCOPE, "client_1") },
+      { write: mocks.update, run: () => revokeClientToken(SCOPE, "client_1") },
+    ];
+    for (const { write, run } of changes) {
+      vi.clearAllMocks();
+      mocks.closeLinks.mockResolvedValue({ count: 0 });
+      mocks.findFirst.mockResolvedValue(LIVE);
+      mocks.upsert.mockResolvedValue(ROW);
+      mocks.update.mockResolvedValue(ROW);
+      await run();
+      expect(mocks.transaction).toHaveBeenCalledOnce();
+      // The app's row lock, on the transaction, keyed by the tenant too.
+      expect(mocks.lock).toHaveBeenCalledOnce();
+      expect(mocks.lock.mock.calls[0]?.slice(1)).toEqual(["sol_1", "org_a"]);
+      const lockedAt = mocks.lock.mock.invocationCallOrder[0]!;
+      expect(lockedAt).toBeLessThan(mocks.closeLinks.mock.invocationCallOrder[0]!);
+      expect(lockedAt).toBeLessThan(write.mock.invocationCallOrder[0]!);
+    }
   });
 
   it("still fails when the close BEFORE the write fails — the key must not change with a link aimed at it", async () => {
@@ -429,5 +465,52 @@ describe("listing", () => {
     await listClients(SCOPE);
     const where = mocks.findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
     expect(where.organizationId).toBe("org_a");
+  });
+});
+
+describe("the owner gate is re-applied under the lock, with the key write (P0.1)", () => {
+  const OWNERS = { status: "ACTIVE", technicalOwnerId: "u_t", businessOwnerId: "u_b", supportOwnerId: "u_s" };
+  const issue = () =>
+    issueClientToken(
+      SCOPE,
+      { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u_issuer" },
+      { issuerId: "u_issuer" },
+    );
+
+  beforeEach(() => {
+    mocks.solutionFind.mockResolvedValue(OWNERS);
+    mocks.liveUsers.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+      Promise.resolve(where.id.in.map((id) => ({ id }))),
+    );
+  });
+
+  it("issues when three live owners hold the slots and the issuer is none of them", async () => {
+    await expect(issue()).resolves.toMatchObject({ id: "client_1" });
+    // Read after the lock, on the transaction.
+    expect(mocks.lock.mock.invocationCallOrder[0]).toBeLessThan(mocks.solutionFind.mock.invocationCallOrder[0]!);
+  });
+
+  it("refuses, and writes nothing, when a slot's owner has left — judged on live members", async () => {
+    mocks.liveUsers.mockResolvedValue([{ id: "u_t" }, { id: "u_s" }]);
+    await expect(issue()).rejects.toMatchObject({
+      name: "KeyIssuerRefused",
+      refusal: { reason: "ownersMissing", missing: ["business owner"], departed: true },
+    });
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.closeLinks).not.toHaveBeenCalled();
+  });
+
+  it("refuses an issuer who became an owner before the lock was theirs", async () => {
+    mocks.solutionFind.mockResolvedValue({ ...OWNERS, supportOwnerId: "u_issuer" });
+    const err = await issue().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KeyIssuerRefused);
+    expect((err as KeyIssuerRefused).refusal).toEqual({ reason: "issuerIsOwner" });
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a RETIRED app under the lock too", async () => {
+    mocks.solutionFind.mockResolvedValue({ ...OWNERS, status: "RETIRED" });
+    await expect(issue()).rejects.toMatchObject({ refusal: { reason: "solutionRetired" } });
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
 });

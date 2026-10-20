@@ -192,12 +192,29 @@ async function grant(
   solutionId: string,
   shape: { decision?: "REQUESTED" | "APPROVED"; operation?: "READ" | "CREATE"; environment?: string } = {},
 ): Promise<string> {
+  // Bound to an interface, as every grant is since P0.1 (lib/studio/grant-binding.ts).
+  const operation = shape.operation ?? "READ";
+  const iface = await prisma.interface.create({
+    data: {
+      organizationId: ORG,
+      solutionId,
+      name: "Sales orders",
+      sapProduct: "s4hana",
+      externalId: "API_SALES_ORDER_SRV",
+      operation,
+      entitySet: "A_SalesOrder",
+      mode: operation === "READ" ? "READ" : "WRITE",
+    },
+    select: { id: true },
+  });
   const g = await prisma.apiAccessGrant.create({
     data: {
       organizationId: ORG,
       solutionId,
+      interfaceId: iface.id,
+      sapProduct: "s4hana",
       externalId: "API_SALES_ORDER_SRV",
-      operation: shape.operation ?? "READ",
+      operation,
       environment: shape.environment ?? "TEST",
       justification: "Read sales orders for the portal.",
       requestedById: `${RUN}-requester`,
@@ -430,6 +447,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
       await prisma.user.create({ data: { ...person, name: person.role, organizationId: ORG } });
       await signIn(person);
     }
+    // The app's owners are live members: a departed owner fills no slot (A69).
+    for (const id of Object.values(OWNERS)) {
+      await prisma.user.create({ data: { id, email: `${id}@abeam.test`, name: "Owner", role: "consultant", organizationId: ORG } });
+    }
     for (const person of [BUILDER, ADMIN]) {
       await prisma.webAuthnCredential.create({
         data: {
@@ -444,7 +465,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
   });
 
   afterAll(async () => {
-    const userIds = [BUILDER.id, ADMIN.id, NO_PASSKEY.id];
+    const userIds = [BUILDER.id, ADMIN.id, NO_PASSKEY.id, ...Object.values(OWNERS)];
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.webAuthnCredential.deleteMany({ where: { userId: { in: userIds } } });

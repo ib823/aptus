@@ -2102,11 +2102,13 @@ lifecycle stages are scored separately (0, 1, 2); lifecycleFull counts the 2s
 
 **Fixed** in batches 1 and 2 (commits `c31a385c` and `33d0ef86`): A00-A13, A20-A28, A31-A37, A39-A41, A48, A49, A53-A55, A64-A68.
 
+**Fixed in P0.1** (Phase 0b): A46, A47, A52, A69, with the batch-1 residual races (owner lock on every key change and claim link; key write and link close in one transaction). Operator steps: `docs/runbooks/coreedge-grant-binding.md`.
+
 **Open (33)**, each assigned to a roadmap item:
 
 | Findings | Subject | Item |
 |---|---|---|
-| A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 |
+| A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 (fixed) |
 | A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 |
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 |

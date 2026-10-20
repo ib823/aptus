@@ -49,6 +49,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
+import { refuseKeyIssuer } from "@/lib/northbound/issue";
 import { generateWriteCredential, setWriteCredential } from "@/lib/northbound/write-credential";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -60,7 +61,6 @@ import {
   type GrantOperation,
 } from "@/lib/studio/grants";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -116,21 +116,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const missing = missingOwners(solution);
-  if (missing.length > 0) {
+  // Owners first, then the issuer is none of them — on LIVE owners: a slot
+  // whose owner was deactivated or left the organization counts as empty
+  // (P0.1, A69), because nobody there can answer for the key.
+  const refusal = await refuseKeyIssuer(prisma, scope.organizationId, solution.id, user.id);
+  if (refusal?.reason === "ownersMissing") {
     return studioError(
       "FORBIDDEN",
-      `This solution has no ${missing.join(", ")}. Assign owners before issuing its write key — ` +
-        "a write into a client's ledger needs an accountability record more than anything else does.",
+      `This solution has no ${refusal.missing.join(", ")}. Assign owners before issuing its write key — ` +
+        "a write into a client's ledger needs an accountability record more than anything else does." +
+        (refusal.departed
+          ? " A slot whose owner has been deactivated or has left the organization counts as empty."
+          : ""),
     );
   }
-
-  const isOwner = [
-    solution.technicalOwnerId,
-    solution.businessOwnerId,
-    solution.supportOwnerId,
-  ].includes(user.id);
-  if (isOwner) {
+  if (refusal?.reason === "issuerIsOwner") {
     return studioError(
       "FORBIDDEN",
       "You own this solution, so you cannot issue its write key. Ask a colleague to issue it.",

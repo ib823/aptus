@@ -93,33 +93,39 @@ describe("the original check was vacuous, and that is why it needed a second gat
 
 describe("both mint paths carry both gates", () => {
   const src = code(read(ROUTE));
+  // Since P0.1 both gates live in ONE predicate, applied on live owners, and
+  // re-applied under the app lock with the key write (lib/northbound/issue.ts).
+  const gate = code(read("src/lib/studio/owner-liveness.ts"));
 
   it("issuing checks ownership before segregation of duties", () => {
-    const post = src.slice(src.indexOf("export async function POST"));
-    const ownerGate = post.indexOf("missingOwners");
-    const sodGate = post.indexOf("isOwner");
-    expect(ownerGate, "issue must check owners").toBeGreaterThan(-1);
-    expect(sodGate, "issue must check SoD").toBeGreaterThan(-1);
+    const fn = gate.slice(gate.indexOf("export async function refuseCredentialIssuerLive"));
+    const ownerGate = fn.indexOf("missingOwners(live)");
+    const sodGate = fn.indexOf('return { refusal: "issuerIsOwner" }');
+    expect(ownerGate, "the gate must check owners").toBeGreaterThan(-1);
+    expect(sodGate, "the gate must check SoD").toBeGreaterThan(-1);
     expect(ownerGate, "ownership must be checked first").toBeLessThan(sodGate);
+
+    const post = src.slice(src.indexOf("export async function POST"), src.indexOf("export async function PATCH"));
+    expect(post).toContain("refuseKeyIssuer(");
+    expect(post, "and again under the lock, with the write").toMatch(/issueClientToken\([\s\S]*\{ issuerId: user\.id \}/);
   });
 
   it("rotating carries them too — it mints a new token", () => {
     // An owner blocked from issuing could otherwise rotate instead: the same
     // act under a different verb, producing an equally usable token.
     const patch = src.slice(src.indexOf("export async function PATCH"));
-    expect(patch).toContain("missingOwners");
-    expect(patch).toContain("isOwner");
+    expect(patch).toContain("refuseKeyIssuer(");
+    expect(patch).toContain("rotateClientToken(scope, clientId, { issuerId: user.id })");
   });
 
   it("rotating fails closed when the solution cannot be resolved", () => {
     // `solution?.technicalOwnerId` on a missing row yields
     // [undefined, undefined, undefined] — which contains nobody, so the check
     // passed. A credential whose solution could not be found rotated freely.
-    const patch = src.slice(src.indexOf("export async function PATCH"));
-    expect(patch).toMatch(/if \(!solution\) return studioError\("NOT_FOUND"/);
-    expect(patch, "optional chaining here re-opens the hole").not.toMatch(
-      /\[\s*solution\?\.\w+/,
-    );
+    const issue = code(read("src/lib/northbound/issue.ts"));
+    expect(issue).toMatch(/if \(solution === null\) return \{ reason: "solutionGone" \}/);
+    expect(src).toMatch(/case "solutionGone":\s*return studioError\("NOT_FOUND"/);
+    expect(src, "optional chaining here re-opens the hole").not.toMatch(/\[\s*solution\?\.\w+/);
   });
 
   it("says what to do, not just no", () => {

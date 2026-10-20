@@ -20,6 +20,12 @@
  *
  * ISSUE, ROTATE AND REVOKE ALL NEED A FRESH PASSKEY once COREEDGE_STEP_UP is
  * enforce (lib/auth/step-up.ts), asked after the gates above have passed.
+ *
+ * OWNERS ARE LIVE OWNERS, AND THE GATE IS RE-RUN UNDER THE APP LOCK (P0.1). An
+ * owner who was deactivated or left the organization no longer fills a slot
+ * (A69), and the owner gate is applied twice: here, to refuse before asking
+ * for a passkey, and again inside the key write's own transaction, holding
+ * the Solution row lock an owner reclaim also takes (lib/northbound/issue.ts).
  */
 
 import type { NextRequest } from "next/server";
@@ -30,15 +36,17 @@ import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import {
   issueClientToken,
+  KeyIssuerRefused,
   listClients,
+  refuseKeyIssuer,
   revokeClientToken,
   rotateClientToken,
+  type KeyIssuerRefusal,
 } from "@/lib/northbound/issue";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 import type { SessionUser } from "@/types/assessment";
 
@@ -56,6 +64,40 @@ function retiredRefusal() {
       "the solution. Reactivate it first if the integration is meant to run.",
   );
 }
+
+/**
+ * The owner gate's refusal, in this route's words. `verb` is what was asked:
+ * "issue" or "rotate" — rotating mints a token, so it carries the same gate.
+ */
+function issuerRefusal(refusal: KeyIssuerRefusal, verb: "issue" | "rotate") {
+  switch (refusal.reason) {
+    case "solutionGone":
+      return studioError("NOT_FOUND", "Solution not found.");
+    case "solutionRetired":
+      return retiredRefusal();
+    case "ownersMissing":
+      return studioError(
+        "FORBIDDEN",
+        verb === "issue"
+          ? `This solution has no ${refusal.missing.join(", ")}. Assign owners before issuing a runtime credential — ` +
+              "the accountability record is what makes issuing it reviewable." +
+              (refusal.departed ? DEPARTED_NOTE : "")
+          : `This solution has no ${refusal.missing.join(", ")}. Assign owners before rotating its runtime credential.` +
+              (refusal.departed ? DEPARTED_NOTE : ""),
+      );
+    case "issuerIsOwner":
+      return studioError(
+        "FORBIDDEN",
+        verb === "issue"
+          ? "You own this solution, so you cannot issue its runtime credential. Ask a colleague to issue it."
+          : "You own this solution, so you cannot rotate its runtime credential. Ask a colleague to rotate it.",
+      );
+  }
+}
+
+/** Why a slot with a name in it can still read as empty. */
+const DEPARTED_NOTE =
+  " A slot whose owner has been deactivated or has left the organization counts as empty: someone who can still answer for the key must claim it.";
 
 const issueSchema = z
   .object({
@@ -131,26 +173,19 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid credential request.");
   const input = parsed.data;
 
-  // Re-scope the caller-supplied solutionId, and read its owners for the SoD check.
+  // Re-scope the caller-supplied solutionId.
   const solution = await prisma.solution.findFirst({
     where: scopedById(scope, input.solutionId),
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      technicalOwnerId: true,
-      businessOwnerId: true,
-      supportOwnerId: true,
-    },
+    select: { id: true, name: true },
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
-  if (solution.status === "RETIRED") return retiredRefusal();
 
-  // OWNERSHIP FIRST, then segregation of duties — and in that order for a
-  // reason. The SoD rule below is "the owner cannot mint the token". On a
-  // solution with no owners that is VACUOUSLY TRUE: [null, null, null] contains
-  // nobody, the check passes, and the person who registered the solution issues
-  // themselves a credential to a client's live SAP with no second pair of eyes.
+  // A RETIRED app first, then OWNERSHIP, then segregation of duties — and in
+  // that order for a reason. The SoD rule is "the owner cannot mint the token".
+  // On a solution with no owners that is VACUOUSLY TRUE: [null, null, null]
+  // contains nobody, the check passes, and the person who registered the
+  // solution issues themselves a credential to a client's live SAP with no
+  // second pair of eyes.
   //
   // Unowned is the DEFAULT state of every newly registered solution, so the way
   // to bypass the control was to skip a step nothing forced you to complete. A
@@ -158,29 +193,10 @@ export async function POST(request: NextRequest) {
   //
   // This also matches the rule the product already states elsewhere: a solution
   // cannot be ACTIVE without all three owners. A credential is a stronger thing
-  // than ACTIVE status, so it cannot ask for less.
-  const missing = missingOwners(solution);
-  if (missing.length > 0) {
-    return studioError(
-      "FORBIDDEN",
-      `This solution has no ${missing.join(", ")}. Assign owners before issuing a runtime credential — ` +
-        "the accountability record is what makes issuing it reviewable.",
-    );
-  }
-
-  // Segregation of duties — see the file header. Meaningful only because the
-  // check above guarantees there IS an owner to be distinct from.
-  const isOwner = [
-    solution.technicalOwnerId,
-    solution.businessOwnerId,
-    solution.supportOwnerId,
-  ].includes(user.id);
-  if (isOwner) {
-    return studioError(
-      "FORBIDDEN",
-      "You own this solution, so you cannot issue its runtime credential. Ask a colleague to issue it.",
-    );
-  }
+  // than ACTIVE status, so it cannot ask for less. And the owners are LIVE ones:
+  // an id left behind by someone who has gone counts as no owner (A69).
+  const refusal = await refuseKeyIssuer(prisma, scope.organizationId, solution.id, user.id);
+  if (refusal !== null) return issuerRefusal(refusal, "issue");
 
   // Was there already a credential for this solution IN THIS ENVIRONMENT?
   // Read it BEFORE the upsert, because afterwards the row has been overwritten
@@ -204,14 +220,25 @@ export async function POST(request: NextRequest) {
   });
   if (!stepUp.ok) return stepUp.response;
 
-  const issued = await issueClientToken(scope, {
-    solutionId: solution.id,
-    label: input.label,
-    environment: input.environment,
-    sapClient: input.sapClient ?? null,
-    createdById: user.id,
-    expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-  });
+  let issued: Awaited<ReturnType<typeof issueClientToken>>;
+  try {
+    issued = await issueClientToken(
+      scope,
+      {
+        solutionId: solution.id,
+        label: input.label,
+        environment: input.environment,
+        sapClient: input.sapClient ?? null,
+        createdById: user.id,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      },
+      // Re-applied under the app lock, with the key write (see the header).
+      { issuerId: user.id },
+    );
+  } catch (err) {
+    if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal, "issue");
+    throw err;
+  }
 
   /*
    * ITS OWN ENTITY AND ITS OWN VERB.
@@ -344,40 +371,13 @@ export async function PATCH(request: NextRequest) {
   });
   if (!existing) return studioError("NOT_FOUND", "Credential not found.");
 
-  const solution = await prisma.solution.findFirst({
-    where: scopedById(scope, existing.solutionId),
-    select: { status: true, technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
-  });
-
-  // Fail closed on a missing solution. The optional chaining below used to make
-  // this pass: [undefined, undefined, undefined] contains nobody, so a
-  // credential whose solution could not be resolved rotated freely.
-  if (!solution) return studioError("NOT_FOUND", "Solution not found.");
-  if (solution.status === "RETIRED") return retiredRefusal();
-
-  // Rotating mints a NEW token, so it is an issuance and carries the same two
-  // gates. Without the ownership check the SoD rule below is vacuous on an
-  // unowned solution — and an owner blocked from issuing could simply rotate
-  // instead, which is the same act under a different verb.
-  const missingForRotate = missingOwners(solution);
-  if (missingForRotate.length > 0) {
-    return studioError(
-      "FORBIDDEN",
-      `This solution has no ${missingForRotate.join(", ")}. Assign owners before rotating its runtime credential.`,
-    );
-  }
-
-  const isOwner = [
-    solution.technicalOwnerId,
-    solution.businessOwnerId,
-    solution.supportOwnerId,
-  ].includes(user.id);
-  if (isOwner) {
-    return studioError(
-      "FORBIDDEN",
-      "You own this solution, so you cannot rotate its runtime credential. Ask a colleague to rotate it.",
-    );
-  }
+  // Rotating mints a NEW token, so it is an issuance and carries the same
+  // gates, on live owners. Without the ownership check the SoD rule is vacuous
+  // on an unowned solution — and an owner blocked from issuing could simply
+  // rotate instead, which is the same act under a different verb. A missing
+  // solution fails closed (solutionGone), never open.
+  const refusal = await refuseKeyIssuer(prisma, scope.organizationId, existing.solutionId, user.id);
+  if (refusal !== null) return issuerRefusal(refusal, "rotate");
 
   const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
     action: "credential.rotate",
@@ -385,7 +385,13 @@ export async function PATCH(request: NextRequest) {
   });
   if (!stepUp.ok) return stepUp.response;
 
-  const rotated = await rotateClientToken(scope, clientId);
+  let rotated: Awaited<ReturnType<typeof rotateClientToken>>;
+  try {
+    rotated = await rotateClientToken(scope, clientId, { issuerId: user.id });
+  } catch (err) {
+    if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal, "rotate");
+    throw err;
+  }
   if (!rotated) return studioError("NOT_FOUND", "Credential not found.");
 
   // ClientCredential/ROTATE — the verb exists precisely so a rotation (which

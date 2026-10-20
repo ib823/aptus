@@ -35,6 +35,7 @@ const work = vi.hoisted(() => ({
   trials: vi.fn(),
   probes: vi.fn(),
   lanes: vi.fn(),
+  owners: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", async () => {
@@ -48,6 +49,8 @@ vi.mock("@/lib/db/prisma", async () => {
 vi.mock("@/lib/analytics/nightly-job", () => ({ runNightlyAnalytics: work.analytics }));
 vi.mock("@/lib/commercial/coreedge-usage", () => ({ runCoreEdgeUsageRollup: work.usage }));
 vi.mock("@/lib/northbound/reap", () => ({ reapExpiredIdempotencyKeys: work.reap }));
+// Rides the reap route (P0.1); stubbed so it never sweeps other files' rows.
+vi.mock("@/lib/studio/owner-liveness", () => ({ sweepOwnerLiveness: work.owners }));
 vi.mock("@/lib/northbound/retention", async (importOriginal) => ({
   ...(await importOriginal<typeof RetentionModule>()),
   enforceNorthboundAuditRetention: work.retention,
@@ -119,7 +122,7 @@ const CRONS: readonly Cron[] = [
   },
 ];
 
-const JOBS = [...CRONS.map((c) => c.job), "coreedge-usage"];
+const JOBS = [...CRONS.map((c) => c.job), "coreedge-usage", "owner-liveness"];
 
 const call = (route: Route, headers: Record<string, string> = { authorization: `Bearer ${SECRET}` }) =>
   route(new NextRequest("http://localhost/api/cron/test", { headers }));
@@ -142,6 +145,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cron job leases with real Postg
     vi.stubEnv("CRON_SECRET", SECRET);
     vi.stubEnv("NORTHBOUND_AUDIT_RETENTION_DAYS", "");
     work.usage.mockResolvedValue({ daysProcessed: 1, rowsWritten: 1, moreRemaining: false });
+    work.owners.mockResolvedValue({ checked: 0, restricted: 0, skipped: 0 });
     await prisma.jobLease.deleteMany({ where: { job: { in: JOBS } } });
   });
 
@@ -233,6 +237,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cron job leases with real Postg
       expect(await prisma.jobLease.findUnique({ where: { job } })).toBeNull();
       expect(await prisma.cronRunLog.count({ where: { job, startedAt: { gte: since } } })).toBe(0);
     });
+  });
+
+  it("records a skipped reap invocation under the owner sweep that rides it too (P0.1)", async () => {
+    const since = new Date();
+    await prisma.jobLease.create({
+      data: { job: "northbound-reap", holder: "still-running", acquiredAt: new Date(), expiresAt: new Date(Date.now() + 60_000) },
+    });
+    await call(reapRoute);
+    expect(work.owners).not.toHaveBeenCalled();
+    const skips = await prisma.cronRunLog.findMany({
+      where: { skipped: true, startedAt: { gte: since }, job: { in: ["northbound-reap", "owner-liveness"] } },
+    });
+    expect(skips.map((s) => s.job).sort()).toEqual(["northbound-reap", "owner-liveness"]);
   });
 
   it("records a skipped analytics invocation under the usage rollup that rides it too", async () => {

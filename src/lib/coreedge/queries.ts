@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import { unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { productName } from "@/lib/studio/product-marks";
 import type { GrantOperation } from "@/lib/studio/grants";
 
 import {
@@ -498,6 +500,16 @@ export interface RequestRow {
 }
 
 /**
+ * "API_BUSINESS_PARTNER · READ · SAP S/4HANA Cloud": the product too once the
+ * request is bound to an interface (P0.1), because one approval now covers
+ * exactly one SAP system and the reviewer should see which.
+ */
+function requestFeedLabel(g: { externalId: string; operation: string; sapProduct: string | null }): string {
+  const base = `${g.externalId} · ${g.operation}`;
+  return g.sapProduct ? `${base} · ${productName(g.sapProduct)}` : base;
+}
+
+/**
  * Access requests awaiting a decision, newest first.
  *
  * `requestedById` is returned so the review screen can refuse self-approval
@@ -517,6 +529,8 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
       requestedById: true,
       createdAt: true,
       expiresAt: true,
+      // The SAP system the request is bound to (P0.1), named on the feed.
+      sapProduct: true,
       solution: {
         select: {
           id: true,
@@ -548,7 +562,7 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
     appId: g.solution.id,
     appName: g.solution.name,
     appSlug: g.solution.slug,
-    feedLabel: `${g.externalId} · ${g.operation}`,
+    feedLabel: requestFeedLabel(g),
     operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
@@ -580,6 +594,8 @@ export async function getRequest(
       requestedById: true,
       createdAt: true,
       expiresAt: true,
+      // The SAP system the request is bound to (P0.1), named on the feed.
+      sapProduct: true,
       solution: {
         select: {
           id: true,
@@ -607,7 +623,7 @@ export async function getRequest(
     appId: g.solution.id,
     appName: g.solution.name,
     appSlug: g.solution.slug,
-    feedLabel: `${g.externalId} · ${g.operation}`,
+    feedLabel: requestFeedLabel(g),
     operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
@@ -619,6 +635,68 @@ export async function getRequest(
     createdAt: g.createdAt,
     expiresAt: g.expiresAt,
   };
+}
+
+/** A live legacy grant bound to no interface (P0.1, A47): it needs re-approval. */
+export interface ReapprovalRow {
+  readonly id: string;
+  readonly appName: string;
+  readonly feedLabel: string;
+  readonly environment: LaneEnvironment | null;
+  readonly environmentRaw: string;
+  /** Why the backfill could not bind it, in an approver's words. */
+  readonly reason: string;
+  /** When it last authorised a call; null when it has not since P0.1. */
+  readonly lastUsedAt: Date | null;
+  readonly expiresAt: Date | null;
+}
+
+/**
+ * Settled grants that still authorise something but are bound to no
+ * interface, most recently used first.
+ *
+ * WHY ON THE REQUESTS BOARD. This is where approvers look. Each of these was
+ * approved before a grant named the one interface it covers, and matches none
+ * or several of its app's interfaces — so one approval reaches every SAP
+ * system that offers the same service. They keep working until
+ * COREEDGE_GRANT_BINDING is strict; the remedy is a fresh request from the
+ * interface, decided like any other.
+ */
+export async function listGrantsNeedingReapproval(
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<ReapprovalRow[]> {
+  const grants = await prisma.apiAccessGrant.findMany({
+    where: {
+      organizationId,
+      interfaceId: null,
+      revokedAt: null,
+      decision: { notIn: ["REQUESTED", "REJECTED"] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    select: {
+      id: true,
+      externalId: true,
+      operation: true,
+      environment: true,
+      unboundReason: true,
+      unboundLastUsedAt: true,
+      expiresAt: true,
+      solution: { select: { name: true } },
+    },
+    orderBy: [{ unboundLastUsedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: 200,
+  });
+  return grants.map((g) => ({
+    id: g.id,
+    appName: g.solution.name,
+    feedLabel: `${g.externalId} · ${g.operation}`,
+    environment: parseLaneEnvironment(g.environment),
+    environmentRaw: g.environment,
+    reason: unboundGrantLabel(g.unboundReason),
+    lastUsedAt: g.unboundLastUsedAt,
+    expiresAt: g.expiresAt,
+  }));
 }
 
 export interface SapSystemRow {

@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 
 import { useCallback, useState } from "react";
 
+import { ProductLabel } from "@/components/sap/ProductLabel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import {
@@ -35,8 +36,9 @@ import { formatDate, formatDateTime } from "@/lib/format/date";
 /**
  * An interface a request may be raised against.
  *
- * A request is ALWAYS raised against one of these, never typed by hand. At
- * runtime the broker matches a grant on solutionId + externalId + operation +
+ * A request is ALWAYS raised against one of these, never typed by hand, and the
+ * grant is bound to it (P0.1): the broker serves a grant only for its own
+ * interface. It also matches solutionId + externalId + operation +
  * environment, all four exact — so a grant whose externalId differs from an
  * interface's by a character is approved, listed in the ledger, counted in the
  * portfolio, and authorises nothing, with no diagnostic anywhere. Deriving both
@@ -77,6 +79,10 @@ export interface LedgerGrant {
   revokedAt: string | null;
   revokedReason: string | null;
   createdAt: string;
+  /** The SAP product the grant is bound to (P0.1); null on a legacy unbound grant. */
+  sapProduct?: string | null;
+  /** Set on a settled legacy grant bound to no interface: why it needs re-approval. */
+  needsReapproval?: string | null;
 }
 
 /** Ledger decision → the console's shared status vocabulary (tones only). */
@@ -237,7 +243,21 @@ export function AccessGrantsClient({
                 return (
                   <tr key={g.id} style={{ borderTop: "1px solid var(--border-default)" }}>
                     <Td>{g.solutionName}</Td>
-                    <Td mono>{g.externalId}</Td>
+                    <Td mono>
+                      {g.externalId}
+                      {g.sapProduct ? (
+                        <span style={{ display: "block", fontSize: 11.5 }}>
+                          <ProductLabel product={g.sapProduct} size={14} mutedName />
+                        </span>
+                      ) : null}
+                      {g.needsReapproval ? (
+                        <span
+                          style={{ display: "block", marginTop: 2, fontSize: 11.5, color: "var(--status-awaiting-fg)", fontWeight: 600 }}
+                        >
+                          {g.needsReapproval}
+                        </span>
+                      ) : null}
+                    </Td>
                     <Td>
                       {g.operation}
                       {write && (
@@ -504,6 +524,8 @@ function RequestAccess({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           solutionId: selected.solutionId,
+          // The grant is bound to THIS interface and its SAP product (P0.1).
+          interfaceId: selected.id,
           externalId: selected.externalId,
           operation: selected.operation,
           environment,

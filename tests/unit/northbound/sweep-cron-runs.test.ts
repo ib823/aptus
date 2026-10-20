@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   enforce: vi.fn(),
   reap: vi.fn(),
   record: vi.fn(),
+  owners: vi.fn(),
 }));
 
 vi.mock("@/lib/northbound/retention", async (importOriginal) => {
@@ -26,6 +27,7 @@ vi.mock("@/lib/northbound/retention", async (importOriginal) => {
   return { ...real, enforceNorthboundAuditRetention: mocks.enforce };
 });
 vi.mock("@/lib/northbound/reap", () => ({ reapExpiredIdempotencyKeys: mocks.reap }));
+vi.mock("@/lib/studio/owner-liveness", () => ({ sweepOwnerLiveness: mocks.owners }));
 vi.mock("@/lib/ops/cron", () => ({
   authorizeCron: () => true,
   recordCronRun: mocks.record,
@@ -38,6 +40,7 @@ const req = (path: string) => new NextRequest(`https://x.test${path}`);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.record.mockResolvedValue(undefined);
+  mocks.owners.mockResolvedValue({ checked: 3, restricted: 1, skipped: 0 });
 });
 
 describe("northbound-retention", () => {
@@ -85,5 +88,34 @@ describe("northbound-reap", () => {
     mocks.reap.mockResolvedValue({ deleted: 12, moreRemaining: false });
     await reapRoute(req("/api/cron/northbound-reap"));
     expect(mocks.record).toHaveBeenCalledWith("northbound-reap", expect.any(Date), true, expect.anything());
+  });
+});
+
+describe("owner-liveness rides the reap slot (P0.1, A69)", () => {
+  it("runs the owner sweep after the reaper and records it as its own job", async () => {
+    mocks.reap.mockResolvedValue({ deleted: 0, moreRemaining: false });
+    const res = await reapRoute(req("/api/cron/northbound-reap"));
+    expect(mocks.owners).toHaveBeenCalledOnce();
+    expect(mocks.record).toHaveBeenCalledWith("owner-liveness", expect.any(Date), true, {
+      checked: 3,
+      restricted: 1,
+      skipped: 0,
+    });
+    expect(((await res.json()) as { data: { ownerLiveness: unknown } }).data.ownerLiveness).toEqual({
+      checked: 3,
+      restricted: 1,
+      skipped: 0,
+    });
+  });
+
+  it("records a failed owner sweep as not ok without failing the reaper", async () => {
+    mocks.reap.mockResolvedValue({ deleted: 4, moreRemaining: false });
+    mocks.owners.mockRejectedValue(new Error("connection reset"));
+    const res = await reapRoute(req("/api/cron/northbound-reap"));
+    expect(res.status).toBe(200);
+    expect(mocks.record).toHaveBeenCalledWith("northbound-reap", expect.any(Date), true, expect.anything());
+    expect(mocks.record).toHaveBeenCalledWith("owner-liveness", expect.any(Date), false, {
+      error: "connection reset",
+    });
   });
 });

@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     solution: { findFirst: mocks.findFirstSolution },
     solutionClient: {
       findFirst: mocks.findFirstClient,
@@ -34,11 +34,19 @@ vi.mock("@/lib/db/prisma", () => ({
       update: mocks.updateClient,
       findMany: mocks.findManyClients,
     },
+    // Every owner named here is a live member of the organization (A69).
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id })),
+    },
     configAudit: { create: mocks.createAudit },
     // Issue, rotate and revoke each close the lane's pending claim links.
     keyClaimLink: { updateMany: mocks.closeLinks },
-  },
-}));
+  };
+  // Each key change is one transaction under the app lock (P0.1).
+  return {
+    prisma: { ...client, $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ ...client, $queryRaw: async () => [] }) },
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/clients/route";
 
