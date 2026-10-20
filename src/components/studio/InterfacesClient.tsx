@@ -3,9 +3,16 @@
 /**
  * Interfaces — the governed config for what a solution consumes.
  *
- * The detail is four cards: Source (which catalogue service), Runtime (how it
- * behaves), Contract (what goes in and comes back), Governance (who can see it
- * and how it is recorded) — plus a fifth, Mapping, which is DISABLED.
+ * The detail is four cards: Source (which SAP service: catalogue or your own),
+ * Runtime (how it behaves), Contract (what goes in and comes back), Governance
+ * (who can see it and how it is recorded) — plus a fifth, Mapping, which is
+ * DISABLED.
+ *
+ * YOUR OWN API. "Register your own API" creates an interface for a service the
+ * customer built (Z*, YY1_*, an ECC Gateway service), named by its service
+ * path. Its Source card shows the path and version, edits both in place, and
+ * — for every OData interface — offers Verify, which asks the SAP system for
+ * the service's description and lists its datasets.
  *
  * On the disabled mapping card: it is shown rather than hidden because the shape
  * of the eventual feature is part of the design, and hiding it would invite
@@ -24,7 +31,24 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { ProductLabel } from "@/components/sap/ProductLabel";
+import {
+  RegisterOwnApiDialog,
+  type RegisterProductOption,
+  type RegisterSolutionOption,
+} from "@/components/studio/RegisterOwnApiDialog";
+import {
+  ServiceVerifyPanel,
+  type VerifiedEnvironment,
+  type VerifyTarget,
+} from "@/components/studio/ServiceVerifyPanel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import {
+  inferODataVersion,
+  isODataVersion,
+  ODATA_VERSIONS,
+  validateServicePath,
+  type ODataVersion,
+} from "@/lib/sap-public/service-path";
 import {
   describeWriteReadiness,
   readyEnvironments,
@@ -62,7 +86,21 @@ export interface StudioInterface {
   hasResponseSchema: boolean;
   solutionId: string;
   solutionName: string;
+  /**
+   * The interface's OWN service root (your own API), or null/absent for a
+   * catalogue service. Optional so callers that predate it read as catalogue.
+   */
+  servicePath?: string | null;
+  odataVersion?: string | null;
+  /** ISO timestamp of the last successful Verify of the current contract. */
+  serviceVerifiedAt?: string | null;
+  serviceVerifiedEnvironment?: string | null;
+  serviceVerifiedEntitySets?: readonly string[] | null;
+  /** Your own API: each environment with a current successful verify (the write gate is per environment). */
+  serviceVerifiedEnvironments?: readonly VerifiedEnvironment[];
 }
+
+export type { VerifyTarget, RegisterProductOption, RegisterSolutionOption };
 
 const STATUS_CHIP: Record<StudioInterface["status"], HonestStatus> = {
   ACTIVE: "ACTIVATED",
@@ -88,16 +126,34 @@ const RUNTIME_DEFAULTS = [
 export function InterfacesClient({
   interfaces,
   canAuthor,
+  solutions = [],
+  products = [],
+  verifyTargets = [],
+  openRegister = false,
 }: {
   interfaces: readonly StudioInterface[];
   canAuthor: boolean;
+  /** For "Register your own API": the organization's solutions. */
+  solutions?: readonly RegisterSolutionOption[];
+  /** OData products only — Ariba has no service path. */
+  products?: readonly RegisterProductOption[];
+  /** Declared connections, per product, that Verify may ask. Never a secret. */
+  verifyTargets?: readonly VerifyTarget[];
+  /** Open the register dialog on arrival (/studio/interfaces?register=1). */
+  openRegister?: boolean;
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(interfaces[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(openRegister && canAuthor);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
+  const selectedIsCustom = selected?.servicePath != null && selected.servicePath !== "";
+  const selectedIsOData = selected !== null && products.some((p) => p.key === selected.sapProduct);
+  // A live write through your own API: any dataset, path or version change
+  // clears verification and returns it to draft. Every editor says so first.
+  const selectedLiveWrite = selectedIsCustom && selected?.mode === "WRITE" && selected.status === "ACTIVE";
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -118,19 +174,48 @@ export function InterfacesClient({
     }
   }, [router]);
 
+  const registerBar = canAuthor ? (
+    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <button type="button" style={btnSmall} onClick={() => setRegistering(true)}>
+        Register your own API
+      </button>
+    </div>
+  ) : null;
+
+  const registerDialog = registering ? (
+    <RegisterOwnApiDialog
+      solutions={solutions}
+      products={products}
+      onClose={() => setRegistering(false)}
+      onCreated={(id) => {
+        setSelectedId(id);
+        setRegistering(false);
+        router.refresh();
+      }}
+    />
+  ) : null;
+
   if (interfaces.length === 0) {
     return (
-      <section style={card}>
-        <h2 style={h2}>No interfaces yet</h2>
-        <p style={body}>
-          An interface records that a solution consumes one catalogue service, at one
-          operation. Add one from Discover — open a capability and choose “Add to interface”.
-        </p>
-      </section>
+      <>
+        {registerBar}
+        <section style={card}>
+          <h2 style={h2}>No interfaces yet</h2>
+          <p style={body}>
+            An interface records that a solution consumes one SAP service, at one
+            operation. Add one from Discover — open a capability and choose “Add to interface” —
+            or register your own API (a Z* RAP service, a YY1_* custom CDS view, an ECC Gateway
+            service) with its service path.
+          </p>
+        </section>
+        {registerDialog}
+      </>
     );
   }
 
   return (
+    <>
+    {registerBar}
     <div style={{ display: "grid", gap: 16, gridTemplateColumns: "minmax(280px, 360px) 1fr", alignItems: "start" }}>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -155,7 +240,10 @@ export function InterfacesClient({
               >
                 <Td>
                   <span style={{ fontWeight: 600 }}>{i.name}</span>
-                  <span style={{ display: "block", ...muted }}>{i.solutionName}</span>
+                  <span style={{ display: "block", ...muted }}>
+                    {i.solutionName}
+                    {i.servicePath ? " · own API" : ""}
+                  </span>
                 </Td>
                 <Td>{i.operation}</Td>
                 <Td>v{i.version}</Td>
@@ -171,7 +259,27 @@ export function InterfacesClient({
       {selected && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <DetailCard title="Source">
-            <Row label="Catalogue service" mono>{selected.externalId}</Row>
+            {selectedIsCustom ? (
+              <>
+                <Row label="Your own service" mono>
+                  {canAuthor ? (
+                    <ServicePathEditor
+                      key={`${selected.id}:${selected.servicePath}:${selected.odataVersion}`}
+                      value={selected.servicePath ?? ""}
+                      version={isODataVersion(selected.odataVersion) ? selected.odataVersion : null}
+                      busy={busy}
+                      onSave={(change) => patch({ id: selected.id, ...change })}
+                    />
+                  ) : (
+                    selected.servicePath
+                  )}
+                </Row>
+                <Row label="OData version">{selected.odataVersion ?? "not set"}</Row>
+                <Row label="Grant id" mono>{selected.externalId}</Row>
+              </>
+            ) : (
+              <Row label="Catalogue service" mono>{selected.externalId}</Row>
+            )}
             <Row label="Product">
               {/* The NAME via the one component, never the raw key — the sweep
                   that guards this matched `product` and not `sapProduct`. */}
@@ -183,6 +291,7 @@ export function InterfacesClient({
                   key={selected.id}
                   value={selected.entitySet}
                   suggestion={selected.suggestedEntitySet ?? null}
+                  liveWrite={selectedLiveWrite}
                   busy={busy}
                   onSave={(next) => patch({ id: selected.id, entitySet: next })}
                 />
@@ -191,6 +300,26 @@ export function InterfacesClient({
               )}
             </Row>
             <Row label="Solution">{selected.solutionName}</Row>
+            {selectedIsOData && (
+              <Row label="Verified">
+                <ServiceVerifyPanel
+                  key={selected.id}
+                  interfaceId={selected.id}
+                  interfaceVersion={selected.version}
+                  isCustom={selectedIsCustom}
+                  entitySet={selected.entitySet}
+                  verifiedAt={selected.serviceVerifiedAt ?? null}
+                  verifiedEnvironment={selected.serviceVerifiedEnvironment ?? null}
+                  verifiedEntitySets={selected.serviceVerifiedEntitySets ?? null}
+                  verifiedEnvironments={selected.serviceVerifiedEnvironments ?? []}
+                  odataVersion={selected.odataVersion ?? null}
+                  liveWrite={selectedLiveWrite}
+                  targets={verifyTargets.filter((t) => t.product === selected.sapProduct)}
+                  canAuthor={canAuthor}
+                  productLabel={products.find((p) => p.key === selected.sapProduct)?.label}
+                />
+              </Row>
+            )}
           </DetailCard>
 
           <DetailCard title="Runtime">
@@ -229,7 +358,9 @@ export function InterfacesClient({
                   <span style={{ ...muted, marginTop: 4 }}>
                     {readyEnvironments(selected.writeReadiness ?? []).length > 0
                       ? `Ready in ${readyEnvironments(selected.writeReadiness ?? []).join(", ")} — the solution can write there once this interface is ACTIVE.`
-                      : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
+                      : selectedIsCustom
+                        ? "No environment is ready — the broker refuses every write that lacks a write key, an approved write grant, or a verification of this service in that environment, so this interface cannot be activated yet. Get the write grant approved for an environment, issue that environment's write credential under API Access, and verify the service there."
+                        : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
                   </span>
                 </div>
               </Row>
@@ -292,6 +423,7 @@ export function InterfacesClient({
                     busy ||
                     selected.entitySet === null ||
                     selected.operation === "UPDATE" ||
+                    (selected.mode === "WRITE" && selectedIsCustom && !selected.serviceVerifiedAt) ||
                     (selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0)
                   }
                   title={
@@ -299,8 +431,12 @@ export function InterfacesClient({
                       ? "Set the entity set first — an ACTIVE interface with none would refuse every read."
                       : selected.operation === "UPDATE"
                         ? UPDATE_NOT_EXECUTABLE
+                        : selected.mode === "WRITE" && selectedIsCustom && !selected.serviceVerifiedAt
+                        ? "Verify this interface's own SAP service first — the broker refuses writes to an unverified service."
                         : selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0
-                        ? "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
+                        ? selectedIsCustom
+                          ? "No environment holds the full write chain (credential with write key + approved write grant + this service verified there) — a WRITE interface activated now builds toward a call the broker refuses."
+                          : "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
                         : undefined
                   }
                   onClick={() => patch({ id: selected.id, status: "ACTIVE" })}
@@ -320,6 +456,8 @@ export function InterfacesClient({
         </div>
       )}
     </div>
+    {registerDialog}
+    </>
   );
 }
 
@@ -374,6 +512,7 @@ function Td({ children }: { children: React.ReactNode }) {
 function EntitySetEditor({
   value,
   suggestion,
+  liveWrite = false,
   busy,
   onSave,
 }: {
@@ -386,6 +525,12 @@ function EntitySetEditor({
    * description of what to type when one is not.
    */
   suggestion: string | null;
+  /**
+   * Your own API, a WRITE interface that is ACTIVE: a new dataset clears
+   * verification and returns it to draft — writes stop until it is verified
+   * and activated again. Said before the save, as the path editor does.
+   */
+  liveWrite?: boolean;
   busy: boolean;
   onSave: (next: string | null) => void;
 }) {
@@ -437,6 +582,147 @@ function EntitySetEditor({
       {trimmed.length === 0 && value !== null && (
         <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>Saving empty clears it.</span>
       )}
+      {liveWrite && (
+        <span
+          style={{ flexBasis: "100%", fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)", fontFamily: "inherit", maxWidth: 420 }}
+        >
+          This write interface is live. Saving a new dataset clears verification and returns it to draft, so writes
+          stop until it is verified and activated again.
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Your own API's service path AND OData version, editable in place — the
+ * EntitySetEditor pattern.
+ *
+ * The version is edited here because Verify's VERSION_MISMATCH tells the
+ * developer to change it, and a read-only version left that advice with no
+ * control to follow it. Typing a new path re-infers the version from it (the
+ * register dialog's rule) until the developer picks one by hand.
+ *
+ * A new path is a new service: the route bumps the version, clears
+ * verification, derives a new grant id (so existing grants, which name the old
+ * path, no longer apply) and returns an active WRITE interface to DRAFT. A new
+ * OData version alone bumps the version, clears verification and returns an
+ * active WRITE interface to draft too, but keeps the grant id — grants stay
+ * attached. The warning says which, before the save, because each of those is
+ * a consequence somebody else will notice.
+ */
+function ServicePathEditor({
+  value,
+  version,
+  busy,
+  onSave,
+}: {
+  value: string;
+  version: ODataVersion | null;
+  busy: boolean;
+  onSave: (change: { servicePath?: string; odataVersion?: ODataVersion }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [draftVersion, setDraftVersion] = useState<ODataVersion>(version ?? inferODataVersion(value));
+  const [versionTouched, setVersionTouched] = useState(false);
+
+  if (!editing) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span>{value}</span>
+        <button type="button" style={linkBtn} onClick={() => setEditing(true)}>
+          Change path or version
+        </button>
+      </span>
+    );
+  }
+
+  const trimmed = draft.trim();
+  const check = validateServicePath(trimmed);
+  const normalized = check.ok ? check.path : null;
+  const pathChanged = normalized !== null && normalized !== value;
+  const versionChanged = draftVersion !== version;
+  const change: { servicePath?: string; odataVersion?: ODataVersion } = {
+    ...(pathChanged ? { servicePath: normalized } : {}),
+    ...(versionChanged ? { odataVersion: draftVersion } : {}),
+  };
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <input
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // The register dialog's rule: the path suggests the version until
+            // the developer chooses one.
+            if (!versionTouched) {
+              const next = validateServicePath(e.target.value.trim());
+              if (next.ok) setDraftVersion(inferODataVersion(next.path));
+            }
+          }}
+          aria-label="Service path"
+          spellCheck={false}
+          style={{
+            height: 28,
+            padding: "0 8px",
+            borderRadius: "var(--radius-input, 8px)",
+            border: "1px solid var(--border-strong)",
+            background: "var(--surface-paper)",
+            color: "var(--ink-primary)",
+            fontSize: 12.5,
+            fontFamily: "var(--font-mono, ui-monospace), monospace",
+            minWidth: 280,
+          }}
+        />
+        <span role="radiogroup" aria-label="OData version" style={{ display: "inline-flex", gap: 8, fontFamily: "inherit" }}>
+          {ODATA_VERSIONS.map((v) => (
+            <label key={v} style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="radio"
+                name="service-odata-version"
+                value={v}
+                checked={draftVersion === v}
+                onChange={() => {
+                  setDraftVersion(v);
+                  setVersionTouched(true);
+                }}
+              />
+              OData {v}
+            </label>
+          ))}
+        </span>
+        <button
+          type="button"
+          style={linkBtn}
+          disabled={busy || normalized === null || (!pathChanged && !versionChanged)}
+          onClick={() => normalized !== null && onSave(change)}
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          style={linkBtn}
+          disabled={busy}
+          onClick={() => {
+            setDraft(value);
+            setDraftVersion(version ?? inferODataVersion(value));
+            setVersionTouched(false);
+            setEditing(false);
+          }}
+        >
+          Cancel
+        </button>
+      </span>
+      {!check.ok && trimmed.length > 0 && (
+        <span style={{ fontSize: 11, color: "var(--status-revoked-fg)", fontFamily: "inherit" }}>{check.message}</span>
+      )}
+      <span style={{ fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)", fontFamily: "inherit", maxWidth: 420 }}>
+        Saving a new path or OData version creates a new interface version, clears verification, and returns an
+        active write interface to draft. A new path also detaches existing access grants (they name the old
+        path): an active read interface stays active but its calls are refused until a grant for the new path
+        is approved. A version change alone keeps the grants attached.
+      </span>
     </span>
   );
 }

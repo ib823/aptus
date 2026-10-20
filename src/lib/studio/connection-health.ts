@@ -26,6 +26,12 @@ import {
   TOKEN_REQUEST_TIMEOUT_MS,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import {
+  credentialStepOutcome,
+  FAILURE_REASON_INVALID_BODY,
+  failureReasonFromError,
+  failureReasonFromHttp,
+} from "@/lib/northbound/failure-reason";
 import { publicCredentialFailure } from "@/lib/sap-public/upstream-failure";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
@@ -87,33 +93,51 @@ function classify(httpStatus: number): { status: ConnectionHealthStatus; detail:
 }
 
 /** How much of a 200 is read to decide whether it is a metadata document. */
-const METADATA_SNIFF_BYTES = 8 * 1024;
+export const METADATA_SNIFF_BYTES = 8 * 1024;
 
 /** An EDMX root element, under any namespace prefix (V2 and V4 alike). */
 const EDMX_ROOT = /<(?:[A-Za-z_][\w.-]*:)?Edmx[\s>]/;
 
 /**
- * The start of the body, no further than METADATA_SNIFF_BYTES. A real
- * $metadata document can run to megabytes and only its root element is
- * needed, so the rest of the stream is cancelled rather than read.
+ * The start of the body, no further than `maxBytes`. A real $metadata document
+ * can run to megabytes; the connection probe needs only its root element, so
+ * it reads METADATA_SNIFF_BYTES and cancels the rest of the stream rather than
+ * reading it. Service verification reads the whole document, up to its own
+ * bound, because it lists the entity sets.
+ *
+ * `truncated` says the read stopped on size while the body had more to give —
+ * so a caller that needs the whole document knows it does not have it.
  */
-async function bodyPrefix(res: Response): Promise<string> {
+async function bodyPrefix(
+  res: Response,
+  maxBytes: number = METADATA_SNIFF_BYTES,
+): Promise<{ text: string; truncated: boolean }> {
   if (res.body && typeof res.body.getReader === "function") {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let text = "";
     let size = 0;
-    while (size < METADATA_SNIFF_BYTES) {
+    let truncated = false;
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
       text += decoder.decode(value, { stream: true });
+      if (size > maxBytes) {
+        truncated = true;
+        break;
+      }
     }
+    text += decoder.decode();
     await reader.cancel().catch(() => undefined);
-    return text.slice(0, METADATA_SNIFF_BYTES);
+    return { text: text.slice(0, maxBytes), truncated };
   }
   // Not a stream (a test double, or an environment without one).
-  return typeof res.text === "function" ? (await res.text()).slice(0, METADATA_SNIFF_BYTES) : "";
+  const full = typeof res.text === "function" ? await res.text() : "";
+  return {
+    text: full.slice(0, maxBytes),
+    truncated: new TextEncoder().encode(full).byteLength > maxBytes,
+  };
 }
 
 /**
@@ -134,27 +158,57 @@ async function bodyPrefix(res: Response): Promise<string> {
  * `redirected` says a same-origin redirect was followed to get here. What it
  * landed on, when not metadata, is the login page the redirect was for.
  */
+interface ClassifiedResponse {
+  status: ConnectionHealthStatus;
+  detail: string;
+  /** The document read, only when the answer is an EDMX document (status OK). */
+  body: string | null;
+  truncated: boolean;
+  /** A bounded code for the audit row (failure-reason.ts); null on OK. */
+  failureReason: string | null;
+}
+
 async function classifyResponse(
   res: Response,
   redirected: boolean,
-): Promise<{ status: ConnectionHealthStatus; detail: string }> {
+  maxBytes: number,
+): Promise<ClassifiedResponse> {
   const loginRedirect = {
     status: "UNAUTHORIZED",
     detail: "The tenant redirected to a login page; check that the base URL is the API host and the credentials.",
+    body: null,
+    truncated: false,
   } as const;
-  if (isRedirect(res)) return loginRedirect;
+  if (isRedirect(res)) {
+    return { ...loginRedirect, failureReason: failureReasonFromHttp(res.status) ?? FAILURE_REASON_INVALID_BODY };
+  }
   if (res.status === 200) {
     const contentType = res.headers?.get?.("content-type") ?? "";
-    const metadata = !/html/i.test(contentType) && EDMX_ROOT.test(await bodyPrefix(res));
+    const { text, truncated } = await bodyPrefix(res, maxBytes);
+    // The EDMX test reads the same prefix it always did, however much more
+    // was read: the root element is at the top, and a bigger read must not
+    // change what counts as metadata.
+    const metadata = !/html/i.test(contentType) && EDMX_ROOT.test(text.slice(0, METADATA_SNIFF_BYTES));
     if (!metadata) {
-      if (redirected) return loginRedirect;
+      if (redirected) return { ...loginRedirect, failureReason: FAILURE_REASON_INVALID_BODY };
       return {
         status: "ERROR",
         detail: "The tenant answered 200 but not with an OData metadata document (often a login page).",
+        body: null,
+        truncated: false,
+        failureReason: FAILURE_REASON_INVALID_BODY,
       };
     }
+    return { ...classify(200), body: text, truncated, failureReason: null };
   }
-  return classify(res.status);
+  const { status, detail } = classify(res.status);
+  return {
+    status,
+    detail,
+    body: null,
+    truncated: false,
+    failureReason: failureReasonFromHttp(res.status) ?? FAILURE_REASON_INVALID_BODY,
+  };
 }
 
 function isRedirect(res: Response): boolean {
@@ -214,7 +268,6 @@ export async function probeConnection(
   conn: ResolvedSapConnection,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ConnectionHealthResult> {
-  const started = Date.now();
   const path = resolveProbePath(conn);
   if (!path) {
     return {
@@ -225,6 +278,49 @@ export async function probeConnection(
       durationMs: 0,
     };
   }
+  const { status, httpStatus, detail, durationMs } = await fetchMetadataDocument(conn, path, fetchImpl, {
+    maxBytes: METADATA_SNIFF_BYTES,
+  });
+  return { status, httpStatus, detail, durationMs };
+}
+
+/** A $metadata fetch, with the document when it is one. */
+export interface MetadataDocumentResult extends ConnectionHealthResult {
+  /** The EDMX document read (up to `maxBytes`), only when status is OK. */
+  body: string | null;
+  /** The document was larger than `maxBytes`; `body` holds its start only. */
+  truncated: boolean;
+  /** A bounded code for the audit row (failure-reason.ts); null on OK. */
+  failureReason: string | null;
+  /**
+   * The credential step finished, so the tenant was called. False when the
+   * failure (a TIMEOUT included) was the token endpoint's: what the tenant
+   * would have answered is then unknown (review round 5).
+   */
+  signedIn: boolean;
+}
+
+/**
+ * GET `{baseUrl}{servicePath}/$metadata` through a stored connection — THE
+ * PROBE'S OWN REQUEST, shared rather than copied: the same timeout, the same
+ * credential headers, the same SAP client placement (`buildSapUrl`), the same
+ * same-origin redirect rule and the same EDMX test. The connection probe and
+ * Studio's service verification therefore cannot disagree about what a
+ * service's description looks like, or about whose host they asked.
+ *
+ * `servicePath` must already be a validated path on the connection's host
+ * (a curated or catalogue path, or one that passed service-path.ts);
+ * `buildSapUrl`'s origin guard stays behind it regardless.
+ */
+export async function fetchMetadataDocument(
+  conn: ResolvedSapConnection,
+  servicePath: string,
+  fetchImpl: typeof fetch = fetch,
+  options: { maxBytes?: number } = {},
+): Promise<MetadataDocumentResult> {
+  const started = Date.now();
+  const path = servicePath;
+  const maxBytes = options.maxBytes ?? METADATA_SNIFF_BYTES;
 
   const timeoutMs = Math.min(conn.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const controller = new AbortController();
@@ -247,8 +343,17 @@ export async function probeConnection(
       redirect: "manual",
     };
     const { res, redirected } = await followSameOrigin(await fetchImpl(url, init), url, init, fetchImpl);
-    const { status, detail } = await classifyResponse(res, redirected);
-    return { status, httpStatus: res.status, detail, durationMs: Date.now() - started };
+    const { status, detail, body, truncated, failureReason } = await classifyResponse(res, redirected, maxBytes);
+    return {
+      status,
+      httpStatus: res.status,
+      detail,
+      durationMs: Date.now() - started,
+      body,
+      truncated,
+      failureReason,
+      signedIn,
+    };
   } catch (err) {
     /*
      * THE ERRORS BUILT TO BE SHOWN ARE SAID OUT LOUD — SuccessFactors' own
@@ -261,10 +366,17 @@ export async function probeConnection(
      * problem, not ERROR — "SAP unavailable" — for a tenant that was never
      * called (audit A20). Every other error returns null and stays generic.
      */
+    // The credential step's own code when it was that step that failed, so
+    // the audit row says the tenant was never called.
+    const failureReason = signedIn ? failureReasonFromError(err) : credentialStepOutcome(err).failureReason;
     const said = publicCredentialFailure(err);
-    if (said) return { ...said, durationMs: Date.now() - started };
+    if (said) return { ...said, durationMs: Date.now() - started, body: null, truncated: false, failureReason, signedIn };
     const aborted = err instanceof Error && err.name === "AbortError";
     return {
+      body: null,
+      truncated: false,
+      failureReason,
+      signedIn,
       status: aborted ? "TIMEOUT" : "ERROR",
       httpStatus: null,
       // Deliberately generic: the underlying error can carry the host, and in the

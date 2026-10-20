@@ -11,6 +11,23 @@ commit that includes it. Statements about the code cite `path:line` so an
 engineer can check them. Anything that could not be confirmed is marked **unverified** or
 listed as unknown. It is not presented as fact.
 
+**Updated on 2026-10-20** for interfaces that carry their own service path
+(branch `custom-service-path`): your own `Z*`, `YY1_*`, ECC Gateway and
+SuccessFactors custom services are now registered by path and verified live
+(sections 2, 5.6, 5.7, 6.1 and exercise 4). A review round on the same branch
+then made verification per environment (a DEV verify no longer opens PROD
+writes), refused SAP routing in the path (`;o=`, `/sap(...)/`, `..;`), let
+SuccessFactors verify one dataset instead of the whole tenant, and added the
+OData version control to Studio. A second review round kept one verification
+per SAP client (two clients of one PROD system no longer overwrite each other),
+refused service paths outside the OData handlers (`/sap/bc/...` and other ICF
+paths), made activation of a write interface require the verification and the
+write chain in the **same** environment, marked an environment whose connection
+was edited after its verify, and bounded the `$metadata` parsing so a hostile
+8 MB answer cannot stall CoreEdge. Everything said about that feature was traced
+in code and is covered by unit tests; it has **not been run against a live
+tenant**.
+
 **Before you share this repository with anyone, read section 9.** The code is
 proprietary. Copying or hosting it needs the author's written permission.
 
@@ -20,9 +37,9 @@ proprietary. Copying or hosting it needs the author's written permission.
 
 | Question | Answer |
 |---|---|
-| Can we use it today? | Yes, as a proof of concept or R&D lab. It can make governed reads of SAP-published OData APIs and create records, on SAP cloud tenants that the CoreEdge host can reach. It cannot yet serve your own `Z*` or `YY1_*` services, update records, filter reads, or reach on-premise systems from a cloud-hosted instance. |
-| What is the best way to use it? | Run a separate instance for the lab, with its own database. Connect it to an S/4HANA Cloud Public Edition development or test tenant. Start by using ABAP as a **consumer** of the CoreEdge API, and build your RAP services in ADT so they are ready when custom-service support arrives. |
-| How does an ABAP team develop with it? | ABAP stays in ADT/Eclipse. CoreEdge has no ABAP editor, no transports and no deploy step (`docs/coreedge-developer-guide.md:79-83`). ABAP code can call CoreEdge over HTTPS. CoreEdge can call standard SAP services on your behalf, but not yet your own. |
+| Can we use it today? | Yes, as a proof of concept or R&D lab. It can make governed reads of SAP-published OData APIs and of your own OData services (`Z*`, `YY1_*`, registered by their service path), and create records, on SAP tenants that the CoreEdge host can reach. It cannot yet update records, filter reads, or reach on-premise systems from a cloud-hosted instance. |
+| What is the best way to use it? | Run a separate instance for the lab, with its own database. Connect it to an S/4HANA Cloud Public Edition development or test tenant. Use ABAP both ways: as a **consumer** of the CoreEdge API, and as a **provider** — build RAP services in ADT, register them in Studio by their service path, verify them and govern them like any SAP API (section 6.1). |
+| How does an ABAP team develop with it? | ABAP stays in ADT/Eclipse. CoreEdge has no ABAP editor, no transports and no deploy step (`docs/coreedge-developer-guide.md:79-83`). ABAP code can call CoreEdge over HTTPS. CoreEdge can call standard SAP services and your own OData services on your behalf. |
 | Can other teams take it, host it and connect their own tenant? | Technically yes: sections 4 and 5 are the runbook. Legally, only with the author's prior written permission (`LICENSE:9-13`). |
 
 ---
@@ -109,15 +126,14 @@ not mean every SAP release has been tested end to end.
 | Northbound create (POST) | Two of the required steps have no screen yet. Enabling writes on a connection and minting the write key both need a direct API call (Appendix B). |
 | Onboarding developers | Needs the admin screens, which are reachable only when `WORKBENCH_ONLY` is unset, or a direct API call (section 4.7). |
 | SAP services beyond the curated ones | A platform admin must load the SAP API catalogue first (section 4.8). OData V4 service paths are guessed, so they may be wrong (section 6.1). |
-| SuccessFactors | In-app SAML-bearer signing exists. The code itself says it has not been verified against a live tenant (`src/lib/sap-public/connection-resolver.ts:646-653`). Only three curated SuccessFactors services resolve, and Discover cannot create an interface the broker can serve for them. Create it with a direct API call instead (section 5.6). |
+| SuccessFactors | In-app SAML-bearer signing exists. The code itself says it has not been verified against a live tenant (`src/lib/sap-public/connection-resolver.ts:646-653`). Discover cannot create an interface the broker can serve. Register your own API with the path `/odata/v2` instead (section 5.6). |
 | S/4HANA on-premise or SAP Cloud ERP Private (RISE) | Only from an instance hosted inside your network. The system needs a DNS name, `SAP_HOST_ALLOWLIST_EXTRA` set, and an HTTPS certificate that Node trusts (section 5.5). |
 | ABAP calling the CoreEdge API | Plain HTTPS with a Bearer header works in principle. No ABAP client has been tested, and the SAP system must be able to reach the CoreEdge host (section 6.2). |
-| Your own `Z*` OData V2 service | **Unverified workaround**, for self-hosted instances only. It was traced in the code but never run (section 6.1). |
+| Your own OData service (V2 or V4), any product except Ariba | Register it with its service path and OData version, then **Verify** it (section 6.1). Writes through it need a current verification in the environment they write to. On-premise and Private systems also need network reachability (section 5.5). Traced in code and covered by unit tests; not run against a live tenant. |
 
 ### Not available yet
 
-- Your own `Z*` or `YY1_*` services as a supported feature. There is no Gateway catalogue discovery (`/IWFND/CATALOGSERVICE`).
-- ECC through the broker. A connection can be stored and tested, but no service ever resolves.
+- Gateway catalogue discovery (`/IWFND/CATALOGSERVICE`): you must know the service path. Nothing lists the customer's own services for you.
 - `$filter`, `$select`, key lookup, `$expand`, `$orderby` and paging on reads.
 - UPDATE, DELETE, OData actions and function imports.
 - X.509/mTLS client certificates, principal propagation, SAP Cloud Connector, an outbound HTTP proxy, or a custom CA option in code.
@@ -414,7 +430,7 @@ the sign-in bridge. A user without an organization, including the platform
 owner, may hold one session at a time: signing in from a second browser silently
 ends the first. Organization users are limited by the organization's
 `maxConcurrentSessions` setting, 3 by default (`session.ts:52`;
-`prisma/schema.prisma:2811`).
+`prisma/schema.prisma:2833`).
 
 ### 4.8 Load the SAP API catalogue (platform owner)
 
@@ -438,7 +454,7 @@ API reference** calls the same route, but it sits inside the catalogue, and
 Discover shows "No tenant connected" instead of the catalogue to anyone whose
 organization has no connection. The platform owner has no organization, so it
 never sees the button (`src/lib/auth/auth-options.ts:24-33`;
-`src/app/(studio)/studio/discover/page.tsx:64-95`; `src/lib/studio/tenants.ts:77-123`).
+`src/app/(studio)/studio/discover/page.tsx:74-105`; `src/lib/studio/tenants.ts:77-123`).
 
 ### 4.9 Smoke test
 
@@ -488,7 +504,7 @@ Only a `consultant` can add, change or test a connection.
 | Label | A display name |
 | Environment | `SANDBOX`, `DEV`, `TEST` or `PROD`. Aliases are accepted: `SBX`, `DEVELOPMENT`, `QA`, `QAS`, `PRD` and `PRODUCTION`. Any other word is **refused** (`src/lib/sap-public/environment.ts:26-49`). The form's help text suggests free text; the server disagrees. Always set an environment, because a connection with no environment never accepts a write. |
 | Base URL | The API host, for example `https://<your-tenant>-api.s4hana.cloud.sap`, with no trailing path to a service |
-| Probe path | Optional. The service root that the Test calls, for example `/sap/opu/odata/sap/API_BUSINESS_PARTNER`. The broker does not use it, but it replaces the default target of the daily connection probe and the lane checks, so Operations health reports on it (`src/lib/studio/connection-health.ts:60-66`). |
+| Probe path | Optional. The service root that the Test calls, for example `/sap/opu/odata/sap/API_BUSINESS_PARTNER`. The broker does not use it, but it replaces the default target of the daily connection probe and the lane checks, so Operations health reports on it (`src/lib/studio/connection-health.ts:66-72`). |
 | Timeout (ms) | Optional. The form accepts up to 120000, but the code caps the Test and reads at 30 s and writes at 45 s. |
 | Auth type | `basic`, `bearer`, `oauth-client-credentials`, `oauth-saml-bearer` (SuccessFactors) or `api-key`. There is no X.509 option. |
 
@@ -501,7 +517,7 @@ active. The save is refused, because the broker could not tell them apart.
 client when one is set. Without a probe path, S/4 products use the V4 Purchase
 Order service (`/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001`,
 scenario `SAP_COM_0053`), SuccessFactors uses `/odata/v2/$metadata`, and ECC and
-Ariba have no default (`src/lib/studio/connection-health.ts:60-67`).
+Ariba have no default (`src/lib/studio/connection-health.ts:66-73`).
 
 | Result | Meaning | Usual cause, in SAP terms |
 |---|---|---|
@@ -509,7 +525,7 @@ Ariba have no default (`src/lib/studio/connection-health.ts:60-67`).
 | `UNAUTHORIZED` | 401 or 403. Also: the token endpoint refused the client credentials, a credential field is missing, or the tenant redirected to another host, such as a login page (`src/lib/sap-public/upstream-failure.ts:124-153`). | Communication arrangement not set up, wrong communication user or password, locked user, missing `S_SERVICE` authorisation, wrong SAP client, wrong OAuth client |
 | `NOT_FOUND` | 404 | Service not activated (`/IWFND/MAINT_SERVICE`, `/IWFND/V4_ADMIN`), or the probe path is wrong. Common when `SAP_COM_0053` is not in your arrangement and no probe path is set. |
 | `TIMEOUT` | No answer within the timeout (10 s by default, 30 s at most) | Firewall drops the traffic, or the host cannot be reached from where CoreEdge runs |
-| `ERROR` | Any other status, or the connection could not be made. Also a 200 that is not an OData metadata document (`src/lib/studio/connection-health.ts:146-155`). | DNS failure, connection refused, or a TLS certificate the CoreEdge host does not trust. A 200 that is not metadata usually means the UI host was entered instead of the `-api` host. |
+| `ERROR` | Any other status, or the connection could not be made. Also a 200 that is not an OData metadata document (`src/lib/studio/connection-health.ts:185-201`). | DNS failure, connection refused, or a TLS certificate the CoreEdge host does not trust. A 200 that is not metadata usually means the UI host was entered instead of the `-api` host. |
 | `NO_PROBE_PATH` | Nothing to call | ECC or Ariba without a probe path |
 | `CONNECTION_UNREADABLE` | The stored secrets cannot be decrypted | `SAP_CONNECTION_ENCRYPTION_KEY` changed. Save the connection again. |
 
@@ -591,8 +607,9 @@ two connections match. A credential whose client no connection carries gets the
 same code with a different message (`src/lib/sap-public/connection-resolver.ts:414-429,509-512`).
 
 For the broker to serve a standard service on these products, the catalogue row
-must be marked for that edition (section 6.1). Whether the loaded catalogue
-covers Private and on-premise well enough was not checked.
+must be marked for that edition, or register the service path yourself
+(section 6.1). Whether the loaded catalogue covers Private and on-premise well
+enough was not checked. A registered path does not depend on it.
 
 ### 5.6 SuccessFactors
 
@@ -609,27 +626,46 @@ Follow `docs/runbooks/successfactors-saml-signing.md`.
 Caveats:
 
 - The exchange has **not** been verified against a live tenant.
-- Only three curated services resolve: `employee-central`, `recruiting` and
-  `onboarding`.
 - **Discover cannot create a SuccessFactors interface the broker can serve.**
-  For SuccessFactors the broker matches only those curated keys and skips the
-  catalogue fallback (`src/lib/sap-public/resolve-hub-service.ts:21-33`), while
-  Discover's **Add to interface** always sends the catalogue row's SAP API id
-  (`src/components/studio/DiscoverClient.tsx:62-70`). Such an interface returns
-  400 "The catalogue service for this interface could not be resolved." Create
-  it with the direct `POST /api/studio/interfaces` in Appendix B instead, with
-  `sapProduct: 'successfactors'` and `externalId` exactly `employee-central`,
-  `recruiting` or `onboarding`. All three resolve to `/odata/v2`
-  (`src/lib/sap-public/tdd-connector.ts:370-392`), so the interface's entity set
-  decides what is read. This path was traced in the code but not run.
+  For SuccessFactors the broker matches only three curated keys
+  (`employee-central`, `recruiting`, `onboarding`) and skips the catalogue
+  fallback (`src/lib/sap-public/resolve-hub-service.ts:21-33`), while Discover's
+  **Add to interface** always sends the catalogue row's SAP API id
+  (`src/components/studio/DiscoverClient.tsx:62-70`).
+- **Register your own API instead.** Studio → Interfaces → **Register your own
+  API**: product `SuccessFactors`, service path `/odata/v2`, OData version `V2`,
+  and the entity set — a standard entity such as `PerPerson`, or one of your
+  custom MDF objects (`cust_*`). Then **Verify** it. Set the entity set
+  first: with one set, Verify asks for that dataset's own description,
+  `/odata/v2/<EntitySet>/$metadata`, not the whole tenant's
+  (`src/lib/studio/service-verify.ts:49-79`). Only the `/odata/v2` root works
+  this way; an OData V4 service under `/odatav4/` serves its description only
+  at its own root, so Verify reads it whole. The tenant-wide `/odata/v2/$metadata`
+  is large and slow (SAP's own Employee Central performance guidance says so)
+  and is likely to end in `TIMEOUT` (10 s by default, 30 s at most) or
+  `METADATA_TOO_LARGE` (8 MB); with no entity set, that is what Verify has to
+  ask, and those two answers then say to set the dataset and verify again
+  (`src/lib/studio/service-verify.ts:81-97`). The path is `/odata/v2` itself: a
+  URL such as `/odata/v2/cust_TravelRequest` is refused with a sentence saying
+  to enter `/odata/v2` as the path and `cust_TravelRequest` as the entity set.
+  The one-dataset request was traced in code and covered by unit tests, not
+  run against a live tenant.
+- Every custom SuccessFactors interface on `/odata/v2` has the same grant id,
+  `custom:/odata/v2`, so one approved grant covers all of that solution's
+  interfaces on the root. This is the same per-service grant rule as for
+  catalogue services; the entity set still decides what is read. The curated-key
+  route in Appendix B also still works.
 - Basic auth is allowed with warnings after 2026-11-20 and refused after the
   deletion date (2027-11-12 by default; `SF_BASIC_AUTH_DELETION_DATE` overrides it).
 
 ### 5.7 ECC, Ariba and the Business Accelerator Hub sandbox
 
-- **ECC.** You can save a connection and test it with a probe path. The broker
-  can never serve an ECC service, because ECC has an empty service list and no
-  catalogue scope (`src/lib/sap-public/dynamic-catalog.ts:105-111`).
+- **ECC.** You can save a connection and test it with a probe path. ECC has an
+  empty service list and no catalogue scope
+  (`src/lib/sap-public/dynamic-catalog.ts:105-111`), so the broker serves your
+  Gateway services by registering their paths (section 6.1) — the only way in.
+  Only services activated in NetWeaver Gateway (`/IWFND/MAINT_SERVICE`) exist.
+  Reachability is as for on-premise (section 5.5).
 - **Ariba.** The Ariba connector reads only `ARIBA_*` environment variables. A
   stored Ariba connection can be saved, but it is not usable in practice.
 - **Business Accelerator Hub sandbox.** The `api-key` auth type exists for it
@@ -655,87 +691,181 @@ write key.
 
 ### 6.1 ABAP as provider: your RAP or CDS service behind CoreEdge
 
-**What CoreEdge supports today.** At call time, the broker turns an interface's
-service id into a URL path from two sources only
-(`src/lib/sap-public/resolve-hub-service.ts:15-40`):
+**What CoreEdge supports today.** At call time, the broker turns an interface
+into a URL path from one of three sources, in this order
+(`src/lib/sap-public/interface-service.ts:94-110`):
 
-1. The curated service list of the product.
-2. A row in the catalogue table (`SapHubContent`) with the same id. This applies
-   only to S/4 edition products: Public, Private and on-premise. SuccessFactors,
-   Ariba and ECC are excluded.
+1. **The interface's own service path**, when it carries one. This is how your
+   `Z*` RAP service, a key-user `YY1_*_CDS` view or custom business object, an
+   ECC Gateway service or a SuccessFactors custom MDF object is reached. The
+   path is used as given and nothing else is tried: if it is no longer valid,
+   the call is refused with 400, never sent to a catalogue service instead.
+2. The curated service list of the product.
+3. A row in the catalogue table (`SapHubContent`) with the same id. This applies
+   only to S/4 edition products: Public, Private and on-premise
+   (`src/lib/sap-public/resolve-hub-service.ts:15-40`).
 
-A `Z*` RAP service or a key-user `YY1_*_CDS` view is in neither source. You can
-save an interface for it through the API, but **every call returns 400 "The
-catalogue service for this interface could not be resolved."** The developer
-guide says the same (`docs/coreedge-developer-guide.md:85-96`). Discover offers
-only catalogue rows, so the screens cannot create such an interface at all.
+Sources 2 and 3 are unchanged. The same resolution serves the northbound read
+and write, the Test Console, the nightly lane checks and the `callable` flag in
+the discovery list, so none of them can disagree about which service an
+interface calls (`src/lib/ops/lane-check-sweep.ts:88-106`).
 
 **What you can do today.**
 
-- Build the service properly in ADT, so it is ready when custom-service support
-  arrives. See exercise 4 in section 7.
-- Prove that CoreEdge can reach it. Set the connection's **Probe path** to your
-  service root, for example `/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2`, and run
-  **Test**. An `OK` proves reachability, authentication and that `$metadata` is
-  served. It does not make the service callable through the broker. Changing the
-  probe path means saving the connection again, which turns writes off when done
-  through the form (section 5.8; exercise 4, step 3).
+- Build the service in ADT. The table below and exercise 4 in section 7 cover
+  the choices.
+- Register it in Studio → Interfaces → **Register your own API** (Discover links
+  there too), with its service path and OData version.
+- **Verify** it in an environment. CoreEdge fetches `$metadata` through your
+  connection for that environment, confirms it is an EDMX document, checks the
+  OData version, and lists the entity sets. Pick yours from the list.
+- Request access, issue the credential and, for writes, the write key, exactly
+  as for a catalogue service.
 
-**How to build the service so it fits CoreEdge later.**
+Evidence level: traced in code and covered by unit tests
+(`tests/unit/lib/sap-public/service-path.test.ts`,
+`tests/unit/lib/sap-public/interface-service.test.ts`,
+`tests/unit/northbound/custom-service-read.test.ts`,
+`tests/unit/northbound/custom-service-write.test.ts`,
+`tests/unit/studio/verify-service-route.test.ts`). **Not run against a live
+tenant.**
+
+**How to build the service so it fits CoreEdge.**
 
 | Choice | Recommendation | Why |
 |---|---|---|
-| Protocol | Service binding of type **OData V2 - Web API** | The V2 path is derived reliably as `/sap/opu/odata/sap/<service id>`. The V4 path is guessed as `/sap/opu/odata4/sap/<base>/srvd_a2x/sap/<base>/<version>`, which is wrong whenever the service group or binding name differs from the definition. Only one V4 service has a verified path (`src/lib/sap-public/hub-content.ts:526-542`). |
+| Protocol | Service binding of type **OData V2 - Web API** or **OData V4 - Web API** | Both work when you register the exact path, because nothing is guessed. Copy it from the binding's *Service URL*: V2 is `/sap/opu/odata/sap/<service>`, V4 is `/sap/opu/odata4/sap/<service group>/srvd_a2x/sap/<service>/<version>`. (A **catalogue** V4 path is still guessed (`src/lib/sap-public/hub-content.ts:526-542`); Verify can check it.) |
 | Draft | A non-draft projection for the API | A create through a draft-enabled V4 BO most likely produces only a draft instance. This is SAP-side behaviour and was not tested. |
 | Authentication | User and password on the inbound communication user, or OAuth client credentials | CoreEdge has no X.509 client certificates. |
 | Operation | Design for create and read | The broker can read the first N rows and create records. It cannot update. |
 | Exposure, S/4HANA Cloud Public | A custom communication scenario with your binding as inbound service, plus a communication system with an inbound user and a communication arrangement | This is SAP's documented inbound pattern for custom services. |
 | Exposure, on-premise or Private | Register the V2 service in `/IWFND/MAINT_SERVICE`, or publish the V4 service group in `/IWFND/V4_ADMIN` | |
 
-**Unverified workaround for self-hosted labs: custom OData V2 only.** Because the
-broker resolves from the catalogue table, a self-hosted instance can add its own
-row. This was traced in the code but **never run** against a database or tenant.
+**Registering your own API.**
 
-1. Write a file, for example `custom-services.json`:
+1. **Find the service root.** In ADT, open the service binding and copy the
+   *Service URL*; on-premise, `/IWFND/MAINT_SERVICE` shows it too. Keep only the
+   part after the host, starting with `/`, without `$metadata` and without
+   `?sap-client=…` — CoreEdge adds the SAP client from the connection, after the
+   full path. For example `/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2`. A version
+   suffix such as `;v=0002` on the last segment is kept (`;v=2` is accepted and
+   stored as `;v=0002`, so both are one grant id); every other matrix
+   parameter is refused (see the rules below).
+2. **Register it.** Studio → Interfaces → **Register your own API**: solution,
+   name, product, service path, OData version (set from the path until you
+   choose), operation, and optionally the entity set. Or with the API
+   (Appendix B):
 
-   ```json
-   [
-     {
-       "contentType": "API",
-       "externalId": "ZUI_LAB_TRAVEL_O2",
-       "title": "Lab travel service (custom, lab only)",
-       "description": "Custom RAP service for R&D. Not SAP-published.",
-       "apiType": "ODATAV2",
-       "appliesToPublic": false,
-       "appliesToPrivate": false,
-       "appliesToOnPrem": true,
-       "communicationScenarios": []
-     }
-   ]
+   ```js
+   await fetch('/api/studio/interfaces', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({
+       solutionId: '<solution id>', sapProduct: 's4hana', name: 'Lab travel read',
+       servicePath: '/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2', odataVersion: 'V2',
+       operation: 'READ', entitySet: 'Travel'
+     })
+   }).then(r => r.json());
    ```
 
-2. Import it with `DATABASE_URL` pointing at your lab database:
+   It creates a DRAFT and grants nothing, like **Add to interface**.
+3. **Verify it in each environment you will write to.** Open the interface,
+   choose the environment (and SAP client) under **Verified**, and press
+   **Verify** (`POST /api/studio/interfaces/<id>/verify-service`,
+   `src/app/api/studio/interfaces/[id]/verify-service/route.ts:73`). It asks the
+   connection a call from that environment would use, and a success is recorded
+   for that environment and SAP client only. Two clients of one system in the
+   same environment are verified, and kept, separately. The panel lists the
+   environments verified, and flags one whose connection has been edited since
+   (*Verify again: the connection for ... has changed*). A result on screen
+   belongs to the interface version it was asked about; after a change to the
+   path, the version or the dataset it disappears, so verify again.
+   Outcomes:
 
-   ```bash
-   HUB_IMPORT_FILE=custom-services.json pnpm sap:hub:import
-   ```
+   | Shown as | Status | What to do |
+   |---|---|---|
+   | verified | `OK` | Nothing. The datasets are listed; pick one with **Use this dataset** if you have not. |
+   | no such service | `NOT_FOUND` | Check the path against the binding's Service URL or `/IWFND/MAINT_SERVICE`, and that the service is published. |
+   | sign-in refused | `UNAUTHORIZED` | SAP answered 401 or 403, or redirected to a login page: check the communication user, the arrangement and `S_SERVICE`. |
+   | dataset not found | `ENTITY_SET_MISSING` | Names are case-sensitive. A near match is offered as *Did you mean …?*. |
+   | version differs | `VERSION_MISMATCH` | The service describes itself as the other OData version. Press **Switch to V2/V4 and verify again** under the answer, or change it under **Change path or version**. |
+   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:100`). Split the service. On SuccessFactors `/odata/v2` with no entity set, the answer says to set the dataset instead. |
+   | no connection | `BINDING_REFUSED` | No connection declares that environment (or SAP client). Fix it in Connections. |
+   | failed, no answer | `ERROR`, `TIMEOUT` | 5xx, a 200 that is not EDMX (often a login page), or no answer in time. |
 
-Constraints:
+4. **Request the grant, issue the credential**, and for a write interface the
+   write key, as for any service. Then **Mark ACTIVE**.
 
-- `externalId` must be exactly the V2 service name that follows
-  `/sap/opu/odata/sap/` in the real URL. Check the URL in
-  `/IWFND/MAINT_SERVICE` or in the communication arrangement before you import.
-  Services under a namespace path other than `/sap/` will not resolve.
-- Set exactly the `appliesTo*` flag that matches your connection's product.
-- The catalogue table has **no organization column**. A row you add is visible
-  to every organization on that instance (`prisma/schema.prisma:574`).
-- This does not help OData V4 services (their paths are guessed) or ECC (never
-  resolves).
-- The Rebuild button warns that rows SAP no longer publishes disappear. The
-  rebuild route contains no delete, so a custom row should survive a rebuild,
-  but this was not tested.
-- Then create the interface from Discover, set the entity set, and follow the
-  normal grant and credential flow.
+**Rules that follow from the design.**
+
+- **The id is derived**: `custom:<path>`
+  (`src/lib/sap-public/service-path.ts:281-283`). Grants name that id, so a
+  grant a second person approved for one path never authorises another.
+- **The path is a path on the connection's host and nothing else.** A full URL,
+  `//host`, `.` or `..` segments (also with parameters, `..;` or `..;x=1`, which
+  servlet containers and proxies read as `..`), empty segments, `?`, `#`,
+  backslashes, whitespace and control characters, `$metadata`, and
+  percent-escapes that decode to any of those or to `;` (`%2e%2e`, `%2f`,
+  `%3b`, `%252e`) are refused, with a sentence saying what to enter instead.
+  Every other percent-escape is decoded and the path stored as plain text, so
+  `%73ap`, `Z%28X%29` or `;v=%30002` give the same path, and the same id, as
+  `sap`, `Z(X)` and `;v=0002`
+  (`src/lib/sap-public/service-path.ts:197-277`). Ariba is REST, not OData, and
+  has no path.
+- **The path must be an OData service.** It has to sit under `/sap/opu/odata/`
+  or `/sap/opu/odata4/`, or be SuccessFactors' `/odata/v2` or under `/odatav4/`
+  (`src/lib/sap-public/service-path.ts:142-168`). Reads are not checked against
+  `$metadata`, and the connection's credentials go with every call, so without
+  this rule a path such as `/sap/bc/adt/...`, `/sap/bc/soap/rfc` or a customer
+  REST handler would have been called through the broker and its JSON served as
+  records. An ICF alias for an OData service is refused too; register the
+  service's `/sap/opu/odata...` path instead.
+- **The path cannot choose the SAP system or client.** The connection and its
+  environment binding decide that, and the grant, the audit row and the write
+  gate all read the binding. A Gateway hub routes `;o=<system alias>` to another
+  backend, and an ICF session segment such as `/sap(bD1lbiZjPTIwMA==)/` carries
+  another client (`c=200`), both behind the connection's host where no origin
+  check sees them. So every matrix parameter except a version suffix on the
+  last segment (`;v=` and one to four digits, stored as four) is refused, and `(` or `)` in the first
+  two segments are refused. These are documented SAP behaviours; whether a
+  particular hub honours them was not tested. A path stored before this rule
+  no longer resolves, and its calls answer 400 until the path is corrected.
+- **Writes need a current verification for the caller's environment.** The
+  write route refuses a custom service unless the write credential's
+  environment has a successful verify since the interface last changed, made
+  through the same connection, SAP client and host the write is bound to. It
+  refuses before the `Idempotency-Key` is reserved and before SAP is called
+  (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:302-318`,
+  `src/lib/sap-public/service-verifications.ts:116-128`). Verifying SANDBOX or
+  DEV does not open PROD, and verifying client 200 does not open (or close)
+  client 100. A custom WRITE interface is activated only when one environment
+  holds a credential with a write key, an approved write grant **and** a
+  verification of the very connection that credential binds to (its
+  environment and SAP client), unchanged since
+  (`src/app/api/studio/interfaces/route.ts:433-450,503-528`,
+  `src/lib/sap-public/current-connections.ts`, `src/lib/studio/write-readiness.ts:104-111`).
+  Verified in SANDBOX with the write chain only in PROD is refused, and the
+  Write chain row shows `service not verified here` for PROD. So is PROD
+  client 100 verified while the PROD credential is bound to client 200. Reads are not
+  gated.
+- **Changing the path, the version or the dataset is a new contract.** The
+  version bumps, verification clears in every environment, and an active write
+  interface returns to draft; changing one of them and activating in the same
+  request is refused. Only a **path** change produces a new id, so only then do
+  existing grants detach (ask for a new one); an active read interface stays
+  active, and its calls answer 403 until the new grant is approved. After a
+  version or dataset change the grants stay attached
+  (`src/app/api/studio/interfaces/route.ts:416-431,539-576`).
+- **A failed verify never clears an earlier success**, in any environment, so a
+  timeout cannot stop live writes. A verify is recorded only if the interface
+  did not change while SAP was answering; a verify of another environment that
+  lands at the same moment is kept, not overwritten
+  (`src/app/api/studio/interfaces/[id]/verify-service/route.ts:226-273`).
+- **Verify is audited and throttled like the connection Test**: a console-read
+  row in the northbound trail and a `TEST_CONNECT` config-audit entry, and the
+  tight live-SAP rate-limit bucket (`src/lib/security/rate-limit.ts:292`).
+- **Catalogue and custom do not convert.** To move an interface from one to the
+  other, register a new one.
 
 ### 6.2 ABAP as consumer: calling CoreEdge from ABAP
 
@@ -903,7 +1033,7 @@ it.
 | 201 | | Record created | Store `record` and `location` |
 | 400 | `VALIDATION_ERROR` | Configuration problem: no entity set, unresolvable service, bad body or bad idempotency key | Fix the configuration. Do not retry. |
 | 401 | `UNAUTHENTICATED` | Token missing, wrong, revoked, rotated or expired | Stop. Get a new token. |
-| 403 | `FORBIDDEN` | CoreEdge refused: no live grant, grant expired or revoked, or wrong write key; writes are not enabled on the connection (any Studio-form save turns them off, section 5.8); the interface is not ACTIVE (writes) or is DEPRECATED (reads); the interface's operation does not match the route (a CREATE interface on `/data`, a READ interface on `/data/write`) (`src/lib/northbound/access.ts:127-143,271-287`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:247-255`). Or SAP itself answered 401/403. Also: the connection's stored credential is unusable or its token endpoint refused it, and SAP was never called (`src/lib/northbound/read.ts:166-172`). | Do not retry. Fix the cause the message names: in Studio, with the Appendix B call, in the grant, or in the SAP arrangement. CoreEdge's own refusals are never stored under the key. A 401/403 from SAP on a write **is** stored and replayed for 24 hours, so after fixing the SAP side, send under a **new** key. SAP refused, so nothing was created. |
+| 403 | `FORBIDDEN` | CoreEdge refused: no live grant, grant expired or revoked, or wrong write key; writes are not enabled on the connection (any Studio-form save turns them off, section 5.8); the interface is not ACTIVE (writes) or is DEPRECATED (reads); the interface's operation does not match the route (a CREATE interface on `/data`, a READ interface on `/data/write`) (`src/lib/northbound/access.ts:146-162,298-314`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:248-256`). Or SAP itself answered 401/403. Also: the connection's stored credential is unusable or its token endpoint refused it, and SAP was never called (`src/lib/northbound/read.ts:166-172`). | Do not retry. Fix the cause the message names: in Studio, with the Appendix B call, in the grant, or in the SAP arrangement. CoreEdge's own refusals are never stored under the key. A 401/403 from SAP on a write **is** stored and replayed for 24 hours, so after fixing the SAP side, send under a **new** key. SAP refused, so nothing was created. |
 | 403 | `CONNECTION_NOT_CONFIGURED` | No connection bound to the credential's environment, two connections match (the credential names no SAP client), or none carries the credential's SAP client (`src/lib/sap-public/connection-resolver.ts:414-429`) | Fix the connection or the credential's SAP client. Do not retry. |
 | 404 | `NOT_FOUND` | Interface not found for this solution, or SAP returned 404 | Check the interface id and the service activation |
 | 409 | `CONFLICT` | Key reused with a different payload, or the first request is still in flight | Use a new key only for a new intent |
@@ -919,7 +1049,7 @@ it.
   released, so retry with the **same** key; it really does write. This
   covers the credential step, the CSRF handshake and SAP's 408 or 429
   (`src/lib/northbound/write.ts:275-290,358,375-383,423-463`;
-  `src/app/api/northbound/interfaces/[id]/data/write/route.ts:389-393`).
+  `src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`).
 - Otherwise SAP may have acted, and the same key replays the stored answer for
   24 hours (`idempotency-replayed: true`). Check SAP for the record before you
   send again under a new key.
@@ -1108,31 +1238,28 @@ prove that CoreEdge can reach it.
 **Steps.**
 
 1. In ADT, build a small non-draft RAP business object with a projection, a
-   service definition and a service binding of type **OData V2 - Web API**.
+   service definition and a service binding of type **OData V2 - Web API** (or
+   **OData V4 - Web API**).
 2. Expose it:
    - S/4HANA Cloud: a custom communication scenario with the binding as inbound
      service, a communication system with an inbound user, and a communication
      arrangement.
    - On-premise: register the service in `/IWFND/MAINT_SERVICE`.
-3. In CoreEdge, set the connection's **Probe path** to the service root and run
-   **Test**. Setting it means saving the connection again, with all its
-   credentials. If exercise 3 turned writes on, do it with the Appendix B `POST`,
-   including `apiPath`, `writeEnabled: true` and `writeSecret`, because a
-   Studio-form save silently turns writes off (section 5.8). A second DEV
-   connection for the same product is refused, so re-saving is the only option
-   (`src/app/api/studio/connections/route.ts:483-505`). The broker ignores the
-   probe path, but the daily connection probe and the lane checks use it from
-   then on (`src/lib/studio/connection-health.ts:60-66`), so Operations health
-   reports on your custom service instead of the default.
+3. In CoreEdge, register it: Studio → Interfaces → **Register your own API**,
+   with the path from the binding's Service URL and its OData version (section
+   6.1). Open the interface and press **Verify** for DEV. Pick your entity set
+   from the list it returns. You do not need to change the connection's probe
+   path for this; the connection stays as it is, writes included.
 4. Write down what the team would need from CoreEdge to call this service:
    entity sets, operations, filters and keys. This becomes your input to the
    product backlog (section 8).
-5. *Optional stretch, self-hosted only, unverified.* Try the catalogue-row
-   workaround from section 6.1, attempt a broker read, and record exactly what
-   happened.
+5. Request a READ grant for DEV on the interface, have a second person approve
+   it, issue a DEV credential, and make one broker read — from the Test Console,
+   or with `curl` and the credential's token. Record exactly what came back.
 
-**Done when.** The Test returns `OK` against your own service's `$metadata`, which
-must be an EDMX document. The gap list is written down.
+**Done when.** Verify returns `OK` with your entity set, and one broker read of
+your own service succeeds (rows, or an honest empty result). The gap list is
+written down.
 
 ### Exercise 5: ATC and code analysis with an MCP client (week 2, optional, in parallel)
 
@@ -1163,7 +1290,7 @@ is logged.
 | Limit | Detail |
 |---|---|
 | Reads | Only `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100. CoreEdge sends SAP only `$top` and `$format=json`. There is no `$filter`, `$select`, key lookup, `$expand` or paging, and `?entity=` is ignored (`src/app/api/northbound/interfaces/[id]/data/route.ts:87`; `src/lib/northbound/read.ts:56, 149, 177`). |
-| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:139-141`). |
+| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:177-179`). |
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. The middleware also limits per IP: 300 GET and 120 POST per minute on `/api/*`, shared by every caller behind the same egress IP, with its own 429 shape (section 6.2). |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
@@ -1172,8 +1299,8 @@ is logged.
 
 ### Product gaps that matter most for an ABAP team
 
-1. Custom service registration: a stored service path and protocol per
-   interface, or Gateway catalogue discovery.
+1. Gateway catalogue discovery (`/IWFND/CATALOGSERVICE`), so a developer can
+   pick one of the customer's own services instead of typing its path.
 2. On-premise reachability from a hosted instance, through Cloud Connector, a
    proxy or a custom CA.
 3. Filtered and keyed reads, and paging.
@@ -1259,7 +1386,7 @@ Every call needs `Authorization: Bearer ce_...`.
 
 | Method and path | Purpose | Calls SAP? |
 |---|---|---|
-| `GET /api/northbound/interfaces` | Lists this solution's interfaces, with `callable` | No |
+| `GET /api/northbound/interfaces` | Lists this solution's interfaces, with `callable` and `service: { source: "custom" \| "catalogue", odataVersion }` | No |
 | `GET /api/northbound/interfaces/{id}/schema` | Returns the stored response schema. `requestSchema` is always null. | No |
 | `GET /api/northbound/interfaces/{id}/data?limit=N` | Read. N is between 1 and 100. | Yes |
 | `POST /api/northbound/interfaces/{id}/data/write` | Create. Also needs `X-CoreEdge-Write-Key` and `Idempotency-Key`. | Yes |
@@ -1272,9 +1399,13 @@ northbound route handlers carries `x-correlation-id` and `cache-control: no-stor
 
 A DRAFT interface is still served for reads, with the header
 `x-coreedge-interface-status: DRAFT`. Writes require ACTIVE and return 403
-`FORBIDDEN` otherwise (`src/lib/northbound/access.ts:134-143`). `callable` in the
+`FORBIDDEN` otherwise (`src/lib/northbound/access.ts:153-162`). `callable` in the
 discovery list describes reads only, and is always false for CREATE interfaces
-(`src/app/api/northbound/interfaces/route.ts:161-164`).
+(`src/app/api/northbound/interfaces/route.ts:169-174`). For your own API it is
+also false when the stored path would be refused. The list never returns a
+service path field or a host; a custom interface's `externalId` is its grant id,
+`custom:<path>`. A write through your own API is refused with 400
+`VALIDATION_ERROR` until it has been verified since it last changed.
 
 ## Appendix B: Studio API calls that have no screen yet
 
@@ -1307,8 +1438,65 @@ turns writes off again. For on-premise and Private, include `client`: a `POST`
 without it clears the stored SAP client (`src/app/api/studio/connections/route.ts:558`).
 `apiPath` also becomes the target of the daily connection probe (section 5.2).
 
-**Create an interface without Discover** (needed for SuccessFactors, section
-5.6). Any `consultant` can run this.
+**Register your own API** (the same as the Studio dialog, section 6.1). Any
+`consultant` can run this. Leave `externalId` out: it is derived as
+`custom:<servicePath>`.
+
+```js
+await fetch('/api/studio/interfaces', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    solutionId: '<solution id>', sapProduct: 's4hana-onprem', name: '<name>',
+    servicePath: '/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2', odataVersion: 'V2',
+    operation: 'READ', entitySet: '<entity set>'
+  })
+}).then(r => r.json());
+```
+
+**Change your own API's OData version** (the **Change path or version** control,
+or **Switch to V2/V4 and verify again** after a `VERSION_MISMATCH`). Any
+`consultant` can run this. The interface version bumps, verification clears and
+an active write interface returns to draft; the grant id is unchanged.
+
+```js
+await fetch('/api/studio/interfaces', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: '<interface id>', odataVersion: 'V4' })
+}).then(r => r.json());
+```
+
+**Choose your own API's dataset** (the **Use this dataset** button, after a
+verify lists the datasets). Verify never saves one. Any `consultant` can run
+this. The interface version bumps, verification clears (verify again) and an
+active write interface returns to draft; the grant id is unchanged.
+
+```js
+await fetch('/api/studio/interfaces', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: '<interface id>', entitySet: '<entity set>' })
+}).then(r => r.json());
+```
+
+**Verify an interface's service in one environment** (the **Verify** button).
+Any `consultant` can run this; `sapClient` only where the product addresses one.
+Run it for each environment (and SAP client) you will write to: a write is
+refused in an environment that has not been verified through the connection and
+client it uses.
+
+```js
+await fetch('/api/studio/interfaces/<interface id>/verify-service', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ environment: 'DEV', sapClient: '100' })
+}).then(r => r.json());   // data.status, data.verified, data.entitySets
+```
+
+**Create an interface against a curated SuccessFactors key** (the older route
+for section 5.6; registering `/odata/v2` as your own API also works). Any
+`consultant` can run this.
 
 ```js
 await fetch('/api/studio/interfaces', {
@@ -1368,7 +1556,7 @@ In each case the code is what runs.
 | `SAP_HOST_ALLOWLIST_EXTRA` | Missing from `.env.example` | Read by `src/lib/studio/sap-host-allowlist.ts:56-63` |
 | Connection environment | The form describes the field as free text | Only SANDBOX, DEV, TEST, PROD and their aliases are accepted |
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
-| Write replays | `docs/coreedge-developer-guide.md:206-208` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:389-393`). |
+| Write replays | `docs/coreedge-developer-guide.md:289-291` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`). |
 | Read options | The design mock lists `$top`, `$skip`, `$filter` and `$select` | Only `limit` is read |
 | Starter kit OpenAPI | Its 400 description says "pass ?entity=" (`src/lib/studio/scaffold.ts:146`) | `?entity=` is ignored |
 | Target expansion spec | `docs/coreedge-sap-target-expansion-spec.md` says nothing in it has been applied, and that SAML bearer and CSRF are missing | Private, on-premise and ECC products, SAP-client addressing, SAML bearer and CSRF all exist |

@@ -3,7 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import { resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
 import type { GrantOperation } from "@/lib/studio/grants";
 
 import {
@@ -142,6 +142,8 @@ export async function listLanes(
           operation: true,
           status: true,
           entitySet: true,
+          servicePath: true,
+          odataVersion: true,
         },
         orderBy: { name: "asc" },
       },
@@ -155,14 +157,25 @@ export async function listLanes(
    * `resolveLaneServicePath` call the sweep makes, once per distinct service,
    * so a lane it skips says why instead of claiming it was never reached.
    */
-  const serviceKeys = new Set(
-    solutions.flatMap((s) => s.interfaces.map((f) => `${f.sapProduct}::${f.externalId}`)),
-  );
+  const serviceFeeds = new Map<
+    string,
+    { product: string; externalId: string; servicePath: string | null; odataVersion: string | null }
+  >();
+  for (const f of solutions.flatMap((s) => s.interfaces)) {
+    const feed = {
+      product: f.sapProduct,
+      externalId: f.externalId,
+      servicePath: f.servicePath ?? null,
+      odataVersion: f.odataVersion ?? null,
+    };
+    serviceFeeds.set(laneServiceKey(feed), feed);
+  }
   const resolvableServices = new Set<string>();
   await Promise.all(
-    [...serviceKeys].map(async (key) => {
-      const [product, externalId] = key.split("::") as [string, string];
-      if ((await resolveLaneServicePath(product, externalId)) !== null) resolvableServices.add(key);
+    [...serviceFeeds].map(async ([key, f]) => {
+      if ((await resolveLaneServicePath(f.product, f.externalId, f.servicePath, f.odataVersion)) !== null) {
+        resolvableServices.add(key);
+      }
     }),
   );
 
@@ -336,7 +349,14 @@ export async function listLanes(
           sweep: {
             appIsActive: solution.status === "ACTIVE",
             feedHasDataset: feed.entitySet !== null && feed.entitySet !== "",
-            feedServiceResolves: resolvableServices.has(`${feed.sapProduct}::${feed.externalId}`),
+            feedServiceResolves: resolvableServices.has(
+              laneServiceKey({
+                product: feed.sapProduct,
+                externalId: feed.externalId,
+                servicePath: feed.servicePath ?? null,
+                odataVersion: feed.odataVersion ?? null,
+              }),
+            ),
           },
           now,
         });

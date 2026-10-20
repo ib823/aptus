@@ -85,8 +85,13 @@ beforeEach(() => {
  * shape of its where-clause.
  */
 function credentials(all: { environment: string; expiresAt: Date | null }[], withWriteKey: string[]) {
+  // Each credential has its own id: the write key is joined per credential,
+  // not per environment (review round 4).
+  const rows = all.map((c, i) => ({ id: `cl_${i}`, ...c }));
   mocks.findManyClients.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
-    Promise.resolve("NOT" in where ? all.filter((c) => withWriteKey.includes(c.environment)) : all),
+    Promise.resolve(
+      "NOT" in where ? rows.filter((c) => withWriteKey.includes(c.environment)).map((c) => ({ id: c.id })) : rows,
+    ),
   );
 }
 
@@ -112,7 +117,7 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     expect(body.error.message).toMatch(/CREATE interface cannot be activated until some environment holds the full write chain/);
     expect(body.error.message).toMatch(/No environment has a credential or a write grant yet/);
     expect(mocks.updateInterface).not.toHaveBeenCalled();
-    // The write-key lookup is a FILTER on the sealed column, selecting the environment only.
+    // The write-key lookup is a FILTER on the sealed column, selecting the credential id only.
     const writeKeyQuery = mocks.findManyClients.mock.calls.find(
       (c) => "NOT" in (c[0] as { where: Record<string, unknown> }).where,
     )?.[0] as { where: Record<string, unknown>; select: Record<string, unknown> };
@@ -123,7 +128,7 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
       revokedAt: null,
       NOT: { secretsCiphertext: null },
     });
-    expect(writeKeyQuery.select).toEqual({ environment: true });
+    expect(writeKeyQuery.select).toEqual({ id: true });
     // …and the grants are this capability's, for THIS operation.
     expect(mocks.findManyGrants).toHaveBeenCalledWith(
       expect.objectContaining({

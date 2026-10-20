@@ -16,8 +16,8 @@ const NOTES: Record<ScopeTopic, { title: string; body: string }> = {
     title: "Building ABAP? That stays in ADT.",
     body:
       "CoreEdge governs the OData your ABAP exposes — it does not build, transport or deploy ABAP. " +
-      "Publish an OData service (RAP or a CDS view) and it appears here like any other capability, " +
-      "with status from a real probe against this tenant.",
+      "Publish an OData service (RAP or a CDS view), then register it under Interfaces → Register your own API, " +
+      "or find it here if SAP publishes it.",
   },
   "byo-stack": {
     title: "Your stack stays yours.",
