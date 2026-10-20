@@ -97,7 +97,9 @@ authentication uses:
 
 Nothing that works today stops working.
 
-- The migration `20261022010000_credential_hygiene` adds four columns.
+- The migration `20261022010000_credential_hygiene` adds four columns, and
+  `20261022020000_retired_client_tokens` adds the empty `RetiredClientToken`
+  table.
   `tokenPrefix` is `NOT NULL DEFAULT 'ce_'`, which is a metadata-only change.
   `previousTokenHash`, `previousValidUntil` and `overlapForTokenHash` are
   nullable, and the new unique

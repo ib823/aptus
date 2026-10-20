@@ -38,7 +38,9 @@
 -- time zone, and a bare CURRENT_TIMESTAMP would store the migrating session's
 -- local time (wave 1a final review).
 --
--- Interface.grantMatchChangedAt (wave 1a final review) records when a PATCH
+-- Interface.grantMatchChangedAt (wave 1a final review; added by the earlier
+-- migration 20261021090000_interface_grant_match_changed_at so that a preview
+-- database which already ran this file still gets it) records when a PATCH
 -- last changed an interface's externalId or operation, the two fields a grant
 -- is matched on. NULL on every existing row: what each matched before the
 -- deploy, it matched by its creation as far as anything can tell, and legacy
@@ -60,7 +62,6 @@
 --          ALTER TABLE "ApiAccessGrant" DROP COLUMN "interfaceId", DROP COLUMN "sapProduct",
 --            DROP COLUMN "unboundReason", DROP COLUMN "unboundLastUsedAt",
 --            DROP COLUMN "unboundCutoffAt";
---          ALTER TABLE "Interface" DROP COLUMN "grantMatchChangedAt";
 
 -- AlterTable
 ALTER TABLE "ApiAccessGrant" ADD COLUMN     "interfaceId" TEXT,
@@ -68,9 +69,6 @@ ADD COLUMN     "sapProduct" TEXT,
 ADD COLUMN     "unboundCutoffAt" TIMESTAMP(3),
 ADD COLUMN     "unboundLastUsedAt" TIMESTAMP(3),
 ADD COLUMN     "unboundReason" TEXT;
-
--- AlterTable
-ALTER TABLE "Interface" ADD COLUMN     "grantMatchChangedAt" TIMESTAMP(3);
 
 -- CreateIndex
 CREATE INDEX "ApiAccessGrant_interfaceId_idx" ON "ApiAccessGrant"("interfaceId");

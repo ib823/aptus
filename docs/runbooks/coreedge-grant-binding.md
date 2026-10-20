@@ -46,7 +46,8 @@ transaction as the key write.
 
 Nothing that works today stops without an operator choosing it.
 
-- The migration `20261022000000_grant_interface_binding` adds the columns and
+- The migrations `20261021090000_interface_grant_match_changed_at` and
+  `20261022000000_grant_interface_binding` add the columns, and the second
   binds each existing grant to the single interface it matches today (same
   solution, service id and operation, which is what the broker matched on),
   provided that interface existed when the request was raised. A grant that
