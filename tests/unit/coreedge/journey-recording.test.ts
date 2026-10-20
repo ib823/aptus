@@ -182,15 +182,35 @@ describe("the hot path's cheap guard", () => {
 describe("reading", () => {
   it("scopes to one organization, or reads all only when asked to", async () => {
     await loadJourneySummary("org-1", new Date("2026-10-21T12:00:00Z"));
-    expect(db.findMany.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1" });
+    const scoped = db.findMany.mock.calls.map((c) => c[0]);
+    expect(scoped).toHaveLength(2);
+    for (const args of scoped) expect(args.where).toMatchObject({ organizationId: "org-1" });
+    db.findMany.mockClear();
     await loadJourneySummary(null, new Date("2026-10-21T12:00:00Z"));
-    expect(db.findMany.mock.calls[1]![0].where).not.toHaveProperty("organizationId");
-    expect(db.findMany.mock.calls[1]![0].take).toBe(MAX_JOURNEY_ROWS + 1);
+    const all = db.findMany.mock.calls.map((c) => c[0]);
+    expect(all).toHaveLength(2);
+    for (const args of all) {
+      expect(args.where).not.toHaveProperty("organizationId");
+      expect(args.take).toBe(MAX_JOURNEY_ROWS + 1);
+    }
+  });
+
+  it("reads the window, and first calls from before it whatever their age", async () => {
+    const now = new Date("2026-10-21T12:00:00Z");
+    await loadJourneySummary("org-1", now);
+    const readFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    expect(db.findMany.mock.calls.map((c) => c[0].where)).toEqual(
+      expect.arrayContaining([
+        { organizationId: "org-1", at: { gte: readFrom } },
+        { organizationId: "org-1", kind: "FIRST_CALL", at: { lt: readFrom } },
+      ]),
+    );
   });
 
   it("says so when the row cap cut the window short", async () => {
-    db.findMany.mockResolvedValueOnce(
-      Array.from({ length: MAX_JOURNEY_ROWS + 1 }, (_, i) => ({
+    // The window read (not the read of earlier first calls) comes back full.
+    db.findMany.mockImplementation(async (args: { where: { kind?: string } }) =>
+      args.where.kind === "FIRST_CALL" ? [] : Array.from({ length: MAX_JOURNEY_ROWS + 1 }, (_, i) => ({
         organizationId: "org-1",
         kind: "INTERFACE_REGISTERED",
         scopeKey: `solution:${i}`,

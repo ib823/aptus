@@ -266,25 +266,41 @@ export async function loadJourneySummary(
   now: Date = new Date(),
 ): Promise<JourneySummary> {
   const readFrom = new Date(now.getTime() - (JOURNEY_WINDOW_DAYS + JOURNEY_LOOKBACK_DAYS) * DAY_MS);
-  const rows = await prisma.developerJourneyEvent.findMany({
-    where: {
-      ...(organizationId === null ? {} : { organizationId }),
-      at: { gte: readFrom },
-    },
-    select: {
-      organizationId: true,
-      kind: true,
-      scopeKey: true,
-      solutionId: true,
-      environment: true,
-      subjectId: true,
-      detail: true,
-      at: true,
-    },
-    orderBy: { at: "asc" },
-    take: MAX_JOURNEY_ROWS + 1,
-  });
-  const truncated = rows.length > MAX_JOURNEY_ROWS;
-  const events: JourneyEventRow[] = truncated ? rows.slice(0, MAX_JOURNEY_ROWS) : rows;
+  const org = organizationId === null ? {} : { organizationId };
+  const select = {
+    organizationId: true,
+    kind: true,
+    scopeKey: true,
+    solutionId: true,
+    environment: true,
+    subjectId: true,
+    detail: true,
+    at: true,
+  } as const;
+  const [earlierCalls, rows] = await Promise.all([
+    // First calls older than the read window, whatever their age. Each is
+    // written once per (app, environment) and never again, so without them
+    // an app first called long ago would look, on its next request, like one
+    // that has never called: an open journey instead of "already calling".
+    // Bounded by apps x environments, so small.
+    prisma.developerJourneyEvent.findMany({
+      where: { ...org, kind: "FIRST_CALL", at: { lt: readFrom } },
+      select,
+      orderBy: { at: "asc" },
+      take: MAX_JOURNEY_ROWS + 1,
+    }),
+    prisma.developerJourneyEvent.findMany({
+      where: { ...org, at: { gte: readFrom } },
+      select,
+      orderBy: { at: "asc" },
+      take: MAX_JOURNEY_ROWS + 1,
+    }),
+  ]);
+  const truncated = rows.length > MAX_JOURNEY_ROWS || earlierCalls.length > MAX_JOURNEY_ROWS;
+  // Both reads are ascending and every earlier call precedes the window.
+  const events: JourneyEventRow[] = [
+    ...earlierCalls.slice(0, MAX_JOURNEY_ROWS),
+    ...rows.slice(0, MAX_JOURNEY_ROWS),
+  ];
   return summarizeJourneys(events, now, { truncated });
 }

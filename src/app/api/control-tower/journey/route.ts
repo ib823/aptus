@@ -6,7 +6,8 @@
  * Read-only, so no step-up: nothing here changes what anyone may do. The
  * figures are computed from DeveloperJourneyEvent alone (lib/coreedge/
  * journey.ts), a table of first occurrences, so one read covers the window
- * and the payload says when the row cap cut it short.
+ * (with a second for the first calls made before it) and the payload says
+ * when the row cap cut it short.
  */
 
 import { loadJourneySummary } from "@/lib/coreedge/journey";

@@ -224,6 +224,95 @@ describe("time to first real call", () => {
     expect(summary.ttfrc.parts.sapSetupWait.p90).toBe(3 * HOUR);
   });
 
+  describe("a finished journey's approver wait is the requests that gated its call", () => {
+    const mon = Date.parse("2026-10-19T08:00:00Z");
+    const dev = (extra: Partial<Omit<JourneyEventRow, "at">> = {}) => ({
+      solutionId: "portal",
+      environment: "DEV",
+      subjectId: "g-dev",
+      ...extra,
+    });
+    const prod = (extra: Partial<Omit<JourneyEventRow, "at">> = {}) => ({
+      solutionId: "portal",
+      environment: "PROD",
+      subjectId: "g-prod",
+      ...extra,
+    });
+    const devApprovedThenCalled = [
+      ev("acme", "GRANT_REQUESTED", mon, dev()),
+      ev("acme", "GRANT_REQUESTED", mon, prod()),
+      ev("acme", "GRANT_DECIDED", mon + HOUR, dev({ detail: "APPROVED" })),
+      ev("acme", "FIRST_CALL", mon + 21 * HOUR, dev({ subjectId: null, detail: "broker" })),
+    ];
+
+    it("does not count a parallel PROD request still pending when the DEV call succeeded", () => {
+      const summary = summarizeJourneys(devApprovedThenCalled, NOW);
+      expect(summary.ttfrc).toMatchObject({ completed: 1, open: 0 });
+      expect(summary.ttfrc.stats.median).toBe(21 * HOUR);
+      expect(summary.ttfrc.parts.approverWait.median).toBe(HOUR);
+      expect(summary.ttfrc.parts.developerTime.median).toBe(20 * HOUR);
+    });
+
+    it("does not count a parallel PROD request decided after the DEV call", () => {
+      const summary = summarizeJourneys(
+        [...devApprovedThenCalled, ev("acme", "GRANT_DECIDED", mon + 30 * HOUR, prod({ detail: "APPROVED" }))],
+        NOW,
+      );
+      expect(summary.ttfrc.parts.approverWait.median).toBe(HOUR);
+      expect(summary.ttfrc.parts.developerTime.median).toBe(20 * HOUR);
+    });
+
+    it("does not count a PROD request decided before the DEV call either: the call did not need it", () => {
+      const summary = summarizeJourneys(
+        [...devApprovedThenCalled, ev("acme", "GRANT_DECIDED", mon + 15 * HOUR, prod({ detail: "APPROVED" }))],
+        NOW,
+      );
+      expect(summary.ttfrc.parts.approverWait.median).toBe(HOUR);
+      expect(summary.ttfrc.parts.developerTime.median).toBe(20 * HOUR);
+    });
+
+    it("does not count a write request in the same environment that was still pending at the call", () => {
+      const summary = summarizeJourneys(
+        [
+          ev("acme", "GRANT_REQUESTED", mon, dev()),
+          ev("acme", "GRANT_REQUESTED", mon, dev({ subjectId: "g-dev-write" })),
+          ev("acme", "GRANT_DECIDED", mon + HOUR, dev({ detail: "APPROVED" })),
+          ev("acme", "FIRST_CALL", mon + 21 * HOUR, dev({ subjectId: null, detail: "broker" })),
+        ],
+        NOW,
+      );
+      expect(summary.ttfrc.parts.approverWait.median).toBe(HOUR);
+      expect(summary.ttfrc.parts.developerTime.median).toBe(20 * HOUR);
+    });
+
+    it("still counts every request decided before the call when none was in the call's environment", () => {
+      // The call was served by a connection in TEST although the app only asked for DEV.
+      const summary = summarizeJourneys(
+        [
+          ev("acme", "GRANT_REQUESTED", mon, dev()),
+          ev("acme", "GRANT_DECIDED", mon + 3 * HOUR, dev({ detail: "APPROVED" })),
+          ev("acme", "FIRST_CALL", mon + 5 * HOUR, dev({ environment: "TEST", subjectId: null, detail: "broker" })),
+        ],
+        NOW,
+      );
+      expect(summary.ttfrc.parts.approverWait.median).toBe(3 * HOUR);
+      expect(summary.ttfrc.parts.developerTime.median).toBe(2 * HOUR);
+    });
+
+    it("keeps every pending request in an open journey's approver wait", () => {
+      const summary = summarizeJourneys(
+        [
+          ev("acme", "GRANT_REQUESTED", ago(5 * HOUR), dev()),
+          ev("acme", "GRANT_REQUESTED", ago(5 * HOUR), prod()),
+          ev("acme", "GRANT_DECIDED", ago(4 * HOUR), dev({ detail: "APPROVED" })),
+        ],
+        NOW,
+      );
+      expect(summary.ttfrc).toMatchObject({ open: 1, openWaitingOn: { approver: 1 } });
+      expect(summary.ttfrc.parts.approverWait.median).toBe(5 * HOUR);
+    });
+  });
+
   it("excludes an app already calling a real system before its first recorded request", () => {
     const summary = summarizeJourneys(
       [

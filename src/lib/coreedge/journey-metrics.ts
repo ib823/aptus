@@ -24,7 +24,8 @@
  *           Console run, both through the pipeline with the app's credential).
  *           Target: median one business day or less (A.3 #2). Business time:
  *           Saturdays and Sundays (UTC) do not count. Split into approver wait
- *           (request -> decision), SAP-admin set-up wait (connection saved ->
+ *           (request -> decision; for a finished journey only the requests
+ *           that gated its first call), SAP-admin set-up wait (connection saved ->
  *           first successful probe) and developer time (the rest). Journeys
  *           still open ARE in the median, as "at least this long" — A.3 #2
  *           says unfinished SAP set-up is reported, not excluded — and the
@@ -336,9 +337,29 @@ function computeTtfc(events: readonly JourneyEventRow[], since: number, now: num
   };
 }
 
+/**
+ * The requests that gated a finished journey's first call: those decided at
+ * or before it, narrowed to the call's environment when any of them is there.
+ * (The call can be served in an environment the app never asked for — the
+ * connection's declared environment wins — so then every request decided by
+ * the call stands.)
+ */
+function gatingRequests(
+  requests: readonly JourneyEventRow[],
+  firstCall: JourneyEventRow,
+  decidedAt: ReadonlyMap<string, number>,
+): JourneyEventRow[] {
+  const decidedByCall = requests.filter((r) => {
+    const at = decidedAt.get(subjectKey(r));
+    return at !== undefined && at <= firstCall.at.getTime();
+  });
+  const sameEnvironment = decidedByCall.filter((r) => r.environment === firstCall.environment);
+  return sameEnvironment.length > 0 ? sameEnvironment : decidedByCall;
+}
+
 function computeTtfrc(events: readonly JourneyEventRow[], since: number, now: number): TtfrcSummary {
   const requestsBySolution = new Map<string, JourneyEventRow[]>();
-  const appCallsBySolution = new Map<string, number[]>();
+  const appCallsBySolution = new Map<string, JourneyEventRow[]>();
   const decidedAt = new Map<string, number>();
   const savedByOrg = new Map<string, JourneyEventRow[]>();
   const probedOkAt = new Map<string, number>();
@@ -350,7 +371,7 @@ function computeTtfrc(events: readonly JourneyEventRow[], since: number, now: nu
     } else if (e.kind === "GRANT_DECIDED") {
       decidedAt.set(subjectKey(e), e.at.getTime());
     } else if (isAppCall(e) && solutionKey && isRealEnvironment(e.environment)) {
-      appCallsBySolution.set(solutionKey, [...(appCallsBySolution.get(solutionKey) ?? []), e.at.getTime()]);
+      appCallsBySolution.set(solutionKey, [...(appCallsBySolution.get(solutionKey) ?? []), e]);
     } else if (e.kind === "CONNECTION_SAVED" && isRealEnvironment(e.environment)) {
       savedByOrg.set(e.organizationId, [...(savedByOrg.get(e.organizationId) ?? []), e]);
     } else if (e.kind === "CONNECTION_PROBE_OK") {
@@ -371,17 +392,27 @@ function computeTtfrc(events: readonly JourneyEventRow[], since: number, now: nu
     const start = Math.min(...requests.map((r) => r.at.getTime()));
     if (start < since || start > now) continue;
     const calls = appCallsBySolution.get(solutionKey) ?? [];
-    if (calls.some((t) => t < start)) {
+    if (calls.some((c) => c.at.getTime() < start)) {
       excludedAlreadyCalling += 1;
       continue;
     }
-    const end = calls.length === 0 ? null : Math.min(...calls);
+    const firstCall = calls.reduce<JourneyEventRow | null>(
+      (first, c) => (first === null || c.at.getTime() < first.at.getTime() ? c : first),
+      null,
+    );
+    const end = firstCall === null ? null : firstCall.at.getTime();
     const windowEnd = end ?? now;
     const journey: Interval = { from: start, to: windowEnd };
     const isOpen = end === null;
 
-    // Approver wait: every real-environment request of this app, until decided.
-    const approverRaw = requests.map((r) => ({
+    // Approver wait: a request of this app, until decided. While the journey
+    // is open, every undecided request may be what it waits on. Once a call
+    // succeeded, only the requests that gated it count: those decided by
+    // then, in the environment the call was made in when there are any. A
+    // parallel PROD request, or a write request still pending beside the read
+    // that was used, was not what the developer waited on.
+    const approverRequests = firstCall === null ? requests : gatingRequests(requests, firstCall, decidedAt);
+    const approverRaw = approverRequests.map((r) => ({
       from: r.at.getTime(),
       to: decidedAt.get(subjectKey(r)) ?? windowEnd,
     }));
@@ -536,7 +567,7 @@ export const JOURNEY_COPY = {
       developerTime: "Developer time",
     },
     partsNote:
-      "Each part is its own median over the same journeys, so the three need not add up to the median above. Approver wait runs from a request to its decision; SAP set-up wait from saving a connection to its first successful probe, less any time already counted as approver wait; developer time is the rest.",
+      "Each part is its own median over the same journeys, so the three need not add up to the median above. Approver wait runs from a request to its decision (once the app has called, only the requests that call needed); SAP set-up wait from saving a connection to its first successful probe, less any time already counted as approver wait; developer time is the rest.",
   },
   stats: { median: "Median", p90: "90th percentile", journeys: "Journeys" },
   verdicts: {

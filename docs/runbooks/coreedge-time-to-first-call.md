@@ -11,8 +11,10 @@ roadmap's targets:
 | Time to first call (TTFC) | a developer workspace is created (self-service sign-up, P0.13) | the organization's first successful call of any kind: a SANDBOX console read, a Test Console run or a broker call, in any environment | 30 minutes or less (60 for ABAP on-premise) |
 | Time to first real call (TTFRC) | an app's first access request for DEV, TEST or PROD | that app's first successful governed call on DEV, TEST or PROD (broker read or write, or a Test Console run) | 1 business day or less |
 
-TTFRC is shown in three parts: **approver wait** (a request to its decision),
-**SAP set-up wait** (a connection's first save to its first successful probe,
+TTFRC is shown in three parts: **approver wait** (a request to its decision;
+once the app has called, only the requests that call needed: those decided by
+then, in the call's environment when there are any, so a parallel PROD or
+write request still waiting is not counted), **SAP set-up wait** (a connection's first save to its first successful probe,
 less any time already counted as approver wait) and **developer time** (the
 rest).
 
@@ -100,6 +102,9 @@ keys and cleared when full (worst case: one more no-op insert per key).
   exactly: approver wait + SAP set-up wait + developer time = the journey.
 - **Window.** Journeys that started in the last 90 days; milestones up to 90
   days before that are read so a journey sees a connection saved earlier.
+  First calls are read whatever their age: each is written once per app and
+  environment, so an app first called long ago is still known to be "already
+  calling a real system" when it raises a new request.
   One read is capped at 50,000 rows; past that the tile says it covers only the
   earliest part of the window.
 
