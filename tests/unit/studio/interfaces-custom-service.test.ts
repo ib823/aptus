@@ -53,6 +53,8 @@ import { PATCH, POST } from "@/app/api/studio/interfaces/route";
 
 const BUILDER = { id: "u1", email: "dev@abeam.com", role: "consultant", organizationId: "org_a" };
 const PATH = "/sap/opu/odata/sap/ZUI_X_O2";
+/** PATH's derived grant identity: `custom:` and the case-folded path (review round 5). */
+const ID = "custom:/sap/opu/odata/sap/zui_x_o2";
 
 function req(method: "POST" | "PATCH", body: unknown) {
   return new Request("http://localhost:3003/api/studio/interfaces", {
@@ -86,7 +88,7 @@ const CUSTOM = {
   status: "DRAFT",
   mappingVersion: null,
   solutionId: "sol_1",
-  externalId: `custom:${PATH}`,
+  externalId: ID,
   sapProduct: "s4hana-onprem",
   servicePath: PATH,
   odataVersion: "V2",
@@ -162,7 +164,7 @@ describe("POST — register your own API", () => {
     const res = await POST(req("POST", REGISTER));
     expect(res.status).toBe(201);
     expect(createData()).toMatchObject({
-      externalId: `custom:${PATH}`,
+      externalId: ID,
       servicePath: PATH,
       odataVersion: "V2",
       sapProduct: "s4hana-onprem",
@@ -174,11 +176,21 @@ describe("POST — register your own API", () => {
 
   it("normalizes one trailing slash before deriving the id", async () => {
     await POST(req("POST", { ...REGISTER, servicePath: `${PATH}/` }));
-    expect(createData()).toMatchObject({ servicePath: PATH, externalId: `custom:${PATH}` });
+    expect(createData()).toMatchObject({ servicePath: PATH, externalId: ID });
+  });
+
+  it("derives one id for spellings that differ only in letter case (review round 5)", async () => {
+    await POST(req("POST", { ...REGISTER, servicePath: "/SAP/OPU/ODATA/%53AP/ZUI_X_O2" }));
+    expect(createData()).toMatchObject({
+      // The path called keeps the developer's spelling (escapes decoded)…
+      servicePath: "/SAP/OPU/ODATA/SAP/ZUI_X_O2",
+      // …and the grant identity is the case-folded one, the same as PATH's.
+      externalId: ID,
+    });
   });
 
   it("accepts an explicit externalId only when it is the derived one", async () => {
-    expect((await POST(req("POST", { ...REGISTER, externalId: `custom:${PATH}` }))).status).toBe(201);
+    expect((await POST(req("POST", { ...REGISTER, externalId: ID }))).status).toBe(201);
     const res = await POST(req("POST", { ...REGISTER, externalId: "API_BUSINESS_PARTNER" }));
     expect(res.status).toBe(400);
     expect(await message(res)).toBe(
@@ -217,7 +229,7 @@ describe("POST — register your own API", () => {
 
   it("reserves the custom: prefix — a catalogue interface cannot pose as one", async () => {
     const res = await POST(
-      req("POST", { solutionId: "sol_1", sapProduct: "s4hana", name: "x", externalId: `custom:${PATH}` }),
+      req("POST", { solutionId: "sol_1", sapProduct: "s4hana", name: "x", externalId: ID }),
     );
     expect(res.status).toBe(400);
     expect(await message(res)).toMatch(/reserved for your own APIs/);
@@ -256,7 +268,7 @@ describe("PATCH — the service is part of the contract", () => {
       version: { increment: 1 },
       servicePath: next,
       odataVersion: "V2",
-      externalId: `custom:${next}`,
+      externalId: `custom:${next.toLowerCase()}`,
       serviceVerifiedAt: null,
       serviceVerifiedEnvironment: null,
       serviceVerifiedEntitySets: Prisma.DbNull,
@@ -278,7 +290,7 @@ describe("PATCH — the service is part of the contract", () => {
 
   it("a version change alone keeps the grant id — grants stay attached (what the guides now say)", async () => {
     await PATCH(req("PATCH", { id: "if_1", odataVersion: "V4" }));
-    expect(updateData().externalId).toBe(`custom:${PATH}`);
+    expect(updateData().externalId).toBe(ID);
   });
 
   it("a version change alone on an ACTIVE WRITE interface returns it to DRAFT", async () => {
@@ -306,7 +318,7 @@ describe("PATCH — the service is part of the contract", () => {
     mocks.findFirstInterface.mockResolvedValue({ ...CUSTOM, status: "ACTIVE" });
     await PATCH(req("PATCH", { id: "if_1", servicePath: "/sap/opu/odata/sap/ZUI_Y_O2" }));
     expect(updateData()).not.toHaveProperty("status");
-    expect(updateData().externalId).toBe("custom:/sap/opu/odata/sap/ZUI_Y_O2");
+    expect(updateData().externalId).toBe("custom:/sap/opu/odata/sap/zui_y_o2");
   });
 
   it("refuses a service change and activation in one request", async () => {
@@ -394,7 +406,7 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
     expect(res.status).toBe(200);
     expect(updateData().status).toBe("ACTIVE");
     expect(mocks.findManyGrants).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ externalId: `custom:${PATH}`, operation: "CREATE" }) }),
+      expect.objectContaining({ where: expect.objectContaining({ externalId: ID, operation: "CREATE" }) }),
     );
   });
 
@@ -477,6 +489,57 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
       expect(res.status).toBe(200);
       expect(updateData().status).toBe("ACTIVE");
     });
+
+    /**
+     * The one PROD credential is bound to client 200 and has no write key yet;
+     * only client 100 is verified. The write key is sealed onto that same row
+     * (one credential per environment), so its binding — client 200 — is the
+     * one its writes will use, and PROD is NOT verified for it. Asking only
+     * write-key holders left PROD with "no credential", and any matching
+     * entry then counted it verified (review round 5).
+     */
+    it("judges a READ-ONLY credential's environment by its own binding, not by any entry (review round 5)", async () => {
+      mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p100", "100") });
+      mocks.findManyClients.mockImplementation((args: { where: Record<string, unknown> }) =>
+        Promise.resolve(args.where.NOT ? [] : [{ id: "cl_b", environment: "PROD", expiresAt: null, sapClient: "200" }]),
+      );
+      mocks.findManyGrants.mockResolvedValue([{ environment: "PROD", decision: "APPROVED", expiresAt: null, revokedAt: null }]);
+      mocks.findManyConnections.mockResolvedValue([P100, P200]);
+      const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+      expect(res.status).toBe(400);
+      expect(await message(res)).toContain(
+        "PROD: credential without a write key · write grant approved · service not verified here",
+      );
+    });
+  });
+
+  /**
+   * A connection with writeEnabled=false is a deliberate veto: the write
+   * route refuses every write through it ("Writes are not enabled on this SAP
+   * connection") whatever the grant and verification say. Activation must
+   * not call that environment ready (review round 5).
+   */
+  it("refuses when the verified connection the credential binds to has writes disabled (review round 5)", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_TEST });
+    mocks.findManyConnections.mockResolvedValue([{ ...TEST_CONNECTION, writeEnabled: false }]);
+    writeChainReadyInTest();
+    const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect(await message(res)).toContain(
+      "TEST: credential with write key · write grant approved · service verified here · writes disabled on the connection",
+    );
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+    expect(mocks.findManyConnections).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ writeEnabled: true }) }),
+    );
+  });
+
+  it("allows it when that connection has writes enabled", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_TEST });
+    mocks.findManyConnections.mockResolvedValue([{ ...TEST_CONNECTION, writeEnabled: true }]);
+    writeChainReadyInTest();
+    const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(200);
   });
 
   it("refuses when the connection that answered the verify has since been edited (new host)", async () => {

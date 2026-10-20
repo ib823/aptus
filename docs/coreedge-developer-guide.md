@@ -153,8 +153,14 @@ SAP's catalogue. You register it **by its service path** instead:
 What is different, and why:
 
 - **The interface's id is derived**: `custom:<path>`, for example
-  `custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2`. Grants name that id, so a grant a
-  second person approved for one path can never authorise another.
+  `custom:/sap/opu/odata/sap/zui_travel_o2`. Grants name that id, so a grant a
+  second person approved for one service can never authorise another. Under
+  `/sap/opu/odata/` and `/sap/opu/odata4/` the id is the path in lower case,
+  because SAP resolves those paths without regard to case: typing
+  `/SAP/OPU/ODATA/SAP/ZUI_TRAVEL_O2` gives the same id and the same grants. On
+  `/sap/opu/odata/`, `;v=0001` is the default version and is left out of the
+  id, so the path with and without it is one service. The path CoreEdge calls
+  keeps the spelling you typed.
 - **Writes need a current verification in the caller's environment.** The broker
   refuses a write through your own service unless that environment has been
   verified since the interface last changed, through the same connection, SAP
@@ -163,7 +169,10 @@ What is different, and why:
   environment holds all of it at once: a credential with a write key, an
   approved write grant, **and** a verification of the service there. Verified in
   SANDBOX with the write chain only in PROD is refused, and the Write chain row
-  says `service not verified here` for PROD. Reads are not gated.
+  says `service not verified here` for PROD. The connection that environment's
+  credential binds to must also have writes enabled; if it does not, the row
+  says `writes disabled on the connection`, and an administrator enables them
+  under Connections. Reads are not gated.
 - **Editing a connection asks for a new verify.** If an administrator changes a
   connection's host or SAP client after a verify (or deactivates it), writes in
   that environment are refused, and Studio says *Verify again: the connection

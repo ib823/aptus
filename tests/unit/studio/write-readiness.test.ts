@@ -141,6 +141,29 @@ describe("your own API: verification is a third half, per environment (review ro
   it("a catalogue interface (no list) is exactly as before: no service half", () => {
     const rows = writeReadinessByEnvironment(chainIn("PROD"));
     expect(rows.every((r) => !("service" in r))).toBe(true);
+    expect(rows.every((r) => !("writesDisabled" in r))).toBe(true);
     expect(readyEnvironments(rows)).toEqual(["PROD"]);
+  });
+
+  /**
+   * The write route refuses every write through a connection with
+   * writeEnabled=false, whatever the grant and verification say, so an
+   * environment whose credential binds to one is not ready (review round 5).
+   */
+  it("writes disabled on the environment's connection → not ready, and the line says why", () => {
+    const rows = writeReadinessByEnvironment({
+      ...chainIn("PROD"),
+      serviceVerifiedEnvironments: ["PROD"],
+      writesDisabledEnvironments: ["PROD"],
+    });
+    expect(readyEnvironments(rows)).toEqual([]);
+    const prod = rows.find((r) => r.environment === "PROD")!;
+    expect(prod).toMatchObject({ service: "verified", writesDisabled: true, ready: false });
+    expect(describeWriteReadiness(prod)).toBe(
+      "PROD: credential with write key · write grant approved · service verified here · writes disabled on the connection",
+    );
+    const msg = writeReadinessRefusal("CREATE", rows);
+    expect(msg).toContain("An administrator enables writes on the connection under Connections.");
+    expect(rows.filter((r) => r.environment !== "PROD").every((r) => !("writesDisabled" in r))).toBe(true);
   });
 });

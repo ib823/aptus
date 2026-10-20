@@ -46,7 +46,11 @@ import {
   ODATA_VERSIONS,
   validateServicePath,
 } from "@/lib/sap-public/service-path";
-import { loadCurrentConnections, verifiedEnvironmentsForCredentials } from "@/lib/sap-public/current-connections";
+import {
+  loadCurrentConnections,
+  verifiedEnvironmentsForCredentials,
+  writesDisabledEnvironmentsForCredentials,
+} from "@/lib/sap-public/current-connections";
 import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -501,25 +505,30 @@ export async function PATCH(request: NextRequest) {
     ]);
     const withWriteKey = new Set(writeKeyHolders.map((c) => c.id));
     const unexpired = liveCredentials.filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime());
-    const writers = unexpired.filter((c) => withWriteKey.has(c.id));
+    // Every live credential, with its write key: the binding is judged
+    // whether or not the key is sealed yet, because it is sealed onto that
+    // same row (review round 5); where a write-key holder exists, only its
+    // binding decides (review round 4).
+    const readinessCredentials = unexpired.map((c) => ({
+      environment: c.environment,
+      sapClient: c.sapClient ?? null,
+      hasWriteKey: withWriteKey.has(c.id),
+    }));
     const readiness = writeReadinessByEnvironment({
-      credentials: unexpired.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.id) })),
+      credentials: readinessCredentials,
       grants,
       // A contract this request changes is verified nowhere (3b refuses it anyway).
-      // Otherwise verified only where a live WRITE credential's own binding —
+      // Otherwise verified only where a live credential's own binding —
       // environment AND its SAP client — holds the verification (round 3).
-      // Only credentials with a write key are asked: a read-only credential
-      // on a verified client cannot write, so it must not mark its
-      // environment verified beside a write key whose client is not
-      // (review round 4).
       serviceVerifiedEnvironments: connections
         ? verificationReset
           ? []
-          : verifiedEnvironmentsForCredentials(
-              current.serviceVerifications,
-              connections,
-              writers.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
-            )
+          : verifiedEnvironmentsForCredentials(current.serviceVerifications, connections, readinessCredentials)
+        : null,
+      // …and where that binding's connection has writes switched on: the
+      // write route refuses every write through one that has not (round 5).
+      writesDisabledEnvironments: connections
+        ? writesDisabledEnvironmentsForCredentials(connections, readinessCredentials)
         : null,
       now,
     });

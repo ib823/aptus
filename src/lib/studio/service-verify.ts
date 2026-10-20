@@ -202,8 +202,12 @@ export async function verifyServiceMetadata(
           ? target.scope === "entitySet"
             ? `The SAP system has no dataset called "${input.entitySet}" under this service path. Check the name in the system's OData API Data Dictionary (names are case-sensitive), and the path (/odata/v2).`
             : "The SAP system has no service at this path. Check it against the service binding in ADT (Service URL) or /IWFND/MAINT_SERVICE, and that the service is published."
-          : status === "TIMEOUT" && datasetNeeded
-            ? DATASET_NEEDED_DETAIL
+          : status === "TIMEOUT" && datasetNeeded && r.signedIn
+            ? // The TENANT did not answer in time: what happened, then the
+              // likely cause. A timeout of the token endpoint never reached
+              // the tenant, so the dataset is not its cause and its own
+              // sentence stays (review round 5).
+              `${r.detail} ${DATASET_NEEDED_DETAIL}`
             : r.detail,
       entitySets: [],
       detectedODataVersion: null,

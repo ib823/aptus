@@ -233,9 +233,54 @@ describe("validateServicePath — the shapes SAP prints are accepted", () => {
 });
 
 describe("the derived grant identity", () => {
-  it("is custom:<path>", () => {
-    expect(customExternalId("/sap/opu/odata/sap/ZUI_X_O2")).toBe("custom:/sap/opu/odata/sap/ZUI_X_O2");
+  it("is custom:<path>, with the path case-folded on Gateway roots", () => {
+    expect(customExternalId("/sap/opu/odata/sap/ZUI_X_O2")).toBe("custom:/sap/opu/odata/sap/zui_x_o2");
     expect(CUSTOM_EXTERNAL_ID_PREFIX).toBe("custom:");
+  });
+
+  /**
+   * ONE SERVICE, ONE GRANT IDENTITY — ACROSS LETTER CASE (review round 5).
+   * The validator matches the OData roots case-insensitively, and ICF and
+   * Gateway resolve a /sap/opu/odata(4)/ path without regard to case, so
+   * /SAP/OPU/ODATA/SAP/ZX_SRV, /sap/opu/odata/%53ap/ZX_SRV and
+   * /sap/opu/odata/sap/zx_srv reach one service. Each had its own id, so a
+   * denied or revoked grant could be side-stepped by registering the same
+   * service again in another case.
+   */
+  const idOf = (raw: string): string => {
+    const check = validateServicePath(raw);
+    if (!check.ok) throw new Error(`${raw}: ${check.reason}`);
+    return customExternalId(check.path);
+  };
+
+  it("folds letter case on Gateway roots, plain or behind an escape (review round 5)", () => {
+    for (const raw of [
+      "/sap/opu/odata/sap/ZX_SRV",
+      "/SAP/OPU/ODATA/SAP/ZX_SRV",
+      "/sap/opu/odata/%73ap/ZX_SRV",
+      "/sap/opu/odata/%53ap/ZX_SRV",
+      "/Sap/Opu/OData/sap/zx_srv/",
+    ]) {
+      expect(idOf(raw), raw).toBe("custom:/sap/opu/odata/sap/zx_srv");
+    }
+    expect(idOf("/SAP/OPU/ODATA4/SAP/ZUI_X_O4/SRVD_A2X/SAP/ZX/0001")).toBe(
+      idOf("/sap/opu/odata4/sap/zui_x_o4/srvd_a2x/sap/zx/0001"),
+    );
+    expect(idOf("/OData/V2")).toBe("custom:/odata/v2");
+    // The path that is CALLED keeps the developer's spelling; only the id folds.
+    expect(validateServicePath("/SAP/OPU/ODATA/SAP/ZX_SRV")).toEqual({ ok: true, path: "/SAP/OPU/ODATA/SAP/ZX_SRV" });
+  });
+
+  it("treats a Gateway V2 service without ;v= as its default version 0001 (review round 5)", () => {
+    expect(idOf("/sap/opu/odata/sap/ZX_SRV;v=1")).toBe(idOf("/sap/opu/odata/sap/ZX_SRV"));
+    expect(idOf("/sap/opu/odata/sap/ZX_SRV;v=0001")).toBe("custom:/sap/opu/odata/sap/zx_srv");
+    // Another version is another service.
+    expect(idOf("/sap/opu/odata/sap/ZX_SRV;v=2")).toBe("custom:/sap/opu/odata/sap/zx_srv;v=0002");
+  });
+
+  it("folds only the root under SuccessFactors /odatav4/, whose service paths are not known to ignore case", () => {
+    expect(customExternalId("/ODATAV4/talent/Goals/v1")).toBe("custom:/odatav4/talent/Goals/v1");
+    expect(customExternalId("/odatav4/talent/Goals/v1")).not.toBe(customExternalId("/odatav4/talent/goals/v1"));
   });
 
   it("is recognised, and catalogue ids are not", () => {
