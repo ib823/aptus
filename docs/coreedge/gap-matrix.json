@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-20",
+ "generatedAt": "2026-10-23",
  "method": "scenario = target x tech x pattern x origin x network x sapAuth x consumer x consumerAuth; valid if SAP-side feasible; a platform supports a scenario fully if every relevant cell is full (min rule), at least partially if every cell is at least partial",
  "dimensions": {
   "target": [
@@ -81,8 +81,33 @@
    "SAP_UPGRADE_IMPACT",
    "SELF_HOST_SETUP",
    "AI_ASSIST",
-   "ONBOARDING_TIME_TO_FIRST_CALL"
-  ]
+   "ONBOARDING_TIME_TO_FIRST_CALL",
+   "PROVIDER_BUILD_TRANSPORT",
+   "API_VERSIONING",
+   "PERFORMANCE_TEST",
+   "SUPPORT_INCIDENT",
+   "RETIRE"
+  ],
+  "lifecycleMeaning": {
+   "DISCOVER": "Find which APIs exist and which work on *this* system",
+   "DESIGN_MAP": "Define the contract, the fields and the mapping",
+   "MOCK_TEST_BEFORE_CODE": "Try and test an API before writing a program",
+   "DEVELOP_SDK_CODEGEN": "Typed client in the developer's language",
+   "CI_PRECOMMIT_GOVERNANCE": "Checks in the developer's commit and CI pipeline",
+   "DEPLOY_PROMOTE_ENVIRONMENTS": "Move DEV to TEST to PROD with evidence",
+   "RUN_MONITOR_ALERT": "Watch, trace and alert the right people",
+   "GOVERN_AUDIT_COMPLY": "Approvals, separation of duties, audit",
+   "SECRETS_KEYS": "Custody and rotation of credentials",
+   "SAP_UPGRADE_IMPACT": "Know what an SAP release breaks before it breaks",
+   "SELF_HOST_SETUP": "Install and run it yourself",
+   "AI_ASSIST": "AI help that is checked against real runs",
+   "ONBOARDING_TIME_TO_FIRST_CALL": "From sign-up to first call",
+   "PROVIDER_BUILD_TRANSPORT": "Build a Z*/YY1_* service, verify it per environment, transport it",
+   "API_VERSIONING": "CoreEdge's own contract with consumers: versions, deprecation, changelog",
+   "PERFORMANCE_TEST": "Load-test before promotion",
+   "SUPPORT_INCIDENT": "Who is paged, the status page, consumer tickets",
+   "RETIRE": "Revoke keys, archive evidence, delete fixtures and twin data"
+  }
  },
  "sapFeasibility": {
   "avail": [
@@ -2634,13 +2659,13 @@
     "row": "AI_AGENT",
     "col": "STATIC_BEARER",
     "status": "partial",
-    "note": "Agents can call API Management proxies via OpenAPI. Native MCP or agent tooling is unverified."
+    "note": "Agents can call API Management proxies via OpenAPI. Native MCP or agent tooling is unverified. Kept partial in P0.15: whether the MCP Gateway accepts an API Management key as an agent's credential was not checked [unverified]."
    },
    {
     "row": "AI_AGENT",
     "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "partial",
-    "note": "Works as generic OAuth. Agent-specific governance (per-tool scopes) is custom."
+    "status": "full",
+    "note": "Re-scored in P0.15 (roadmap section 3.7). SAP names the MCP Gateway the endorsed pathway for agents to reach SAP APIs [E2, E9], and SAP API Policy section 2.2.2 permits agent access only through SAP-endorsed architectures [E17]. MCP authorization is OAuth-based [E40]. Full on the endorsed path; the edition it needs is [unverified] (E9 defers to SAP Note 2903776, not read)."
    },
    {
     "row": "AI_AGENT",
@@ -2744,6 +2769,31 @@
     "row": "ONBOARDING_TIME_TO_FIRST_CALL",
     "status": "partial",
     "note": "Needs BTP subaccount, entitlements, capability activation, roles, and Cloud Connector. Booster and trial help; typically days, not minutes."
+   },
+   {
+    "row": "PROVIDER_BUILD_TRANSPORT",
+    "status": "partial",
+    "note": "Integration Suite does not build the provider's Z*/YY1_* service (that stays in ADT or the key-user apps); it transports its own content with Cloud Transport Management or CTS+ and the CI/CD service pipeline for Integration Suite artifacts [E1, E7]."
+   },
+   {
+    "row": "API_VERSIONING",
+    "status": "full",
+    "note": "API Management publishes API proxies and products with versions to the Developer Hub, where consumers subscribe to a version [E66]; policies can route by version [E8]. Version and revision mechanics recalled, not re-read for this revision [unverified]."
+   },
+   {
+    "row": "PERFORMANCE_TEST",
+    "status": "none",
+    "note": "No load testing in the product: integration flow simulation runs one message through a flow to check it functionally [E4]. Load tests use external tools."
+   },
+   {
+    "row": "SUPPORT_INCIDENT",
+    "status": "partial",
+    "note": "Message monitoring and traces [E5], external logging to Splunk or OTLP [E14], Cloud ALM integration monitoring and alerting [E19], and a 99.95% multi-AZ SLA [E67]. No consumer-facing status page per API and no consumer ticket intake."
+   },
+   {
+    "row": "RETIRE",
+    "status": "partial",
+    "note": "API proxies and products can be withdrawn and applications' keys revoked in the Developer Hub [E66]; flows are undeployed; message logs age out [E5]. No evidence pack is archived at retirement."
    }
   ],
   "sources": [
@@ -2772,2779 +2822,9 @@
    "https://kissflow.com/low-code/ai-low-code-sap-integration/ and https://www.mindsetconsulting.com/top-10-things-you-should-know-about-the-latest-sap-integration-suite-features/ (GenAI iFlow generation, AI adapter - third-party, unverified)",
    "https://api.sap.com (SAP Business Accelerator Hub: catalogue, sandbox keys, prepackaged content)",
    "From memory, not re-verified this session: Cloud Connector (help.sap.com/docs/connectivity), Cloud Transport Management, CI/CD service, BTP regional egress IPs, ABAP Cloud outbound communication systems, SAP Cloud SDK for Java/JS, the OData V4 sender, V4 $batch, Ariba/Concur event support",
-   "Prior research built on: /tmp/claude-0/-home-user-aptus/c1cf7191-6502-561d-af92-682ad71ec6da/scratchpad/assessment.md lines 22, 75-83, 155"
+   "Prior research built on: /tmp/claude-0/-home-user-aptus/c1cf7191-6502-561d-af92-682ad71ec6da/scratchpad/assessment.md lines 22, 75-83, 155",
+   "P0.15 additions cite the roadmap's Appendix C list: E1, E2, E3, E4, E5, E7, E8, E9, E14, E17, E19, E40, E63, E66, E67."
   ]
- },
- "coreedgeToday": {
-  "targetTech": [
-   {
-    "row": "S4_PUBLIC",
-    "col": "ODATA_V2",
-    "status": "full",
-    "note": "SAP-published V2 resolves via curated list or Hub catalogue (resolve-hub-service.ts:15-40); demo tenant returned 200s. Read first<=100 rows, create only."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "ODATA_V4",
-    "status": "partial",
-    "note": "Non-curated V4 path guessed (dynamic-catalog.ts:142); one guess checked was wrong; curated V4 PO got 403 on demo tenant."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "SOAP",
-    "status": "none",
-    "note": "212 SOAP APIs catalogued but non-probeable; resolver returns null (dynamic-catalog.ts:144)."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "REST",
-    "status": "none",
-    "note": "No REST executor; only OData paths derived (dynamic-catalog.ts:139-144)."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "No RFC or WebSocket RFC code in src."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "IDOC",
-    "status": "none",
-    "note": "No IDoc handling in src."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "147 events listed in catalogue as reference only; no Event Mesh/webhook consumer."
-   },
-   {
-    "row": "S4_PUBLIC",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "No file/SFTP adapter."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "ODATA_V2",
-    "status": "partial",
-    "note": "Product cloud-erp-private exists (tdd-connector.ts:481-491); reachable only self-hosted in-network via DNS name plus SAP_HOST_ALLOWLIST_EXTRA; untested."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "ODATA_V4",
-    "status": "partial",
-    "note": "Same as V2 plus guessed V4 paths; no Cloud Connector; untested end to end."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "SOAP",
-    "status": "none",
-    "note": "OData only."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "REST",
-    "status": "none",
-    "note": "OData only."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "No RFC; no Cloud Connector."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "IDOC",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "No event consumption."
-   },
-   {
-    "row": "S4_PRIVATE_RISE",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "ODATA_V2",
-    "status": "partial",
-    "note": "Product s4hana-onprem (tdd-connector.ts:493-502); self-host in network only; IPs/.local/.internal refused (connection-url-guard.ts:22-33); untested."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "ODATA_V4",
-    "status": "partial",
-    "note": "As V2, plus guessed V4 paths; untested end to end."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "SOAP",
-    "status": "none",
-    "note": "OData only."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "REST",
-    "status": "none",
-    "note": "OData only."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "No RFC/BAPI client."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "IDOC",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "No event consumption."
-   },
-   {
-    "row": "S4_ONPREM",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "ECC",
-    "col": "ODATA_V2",
-    "status": "none",
-    "note": "ECC has empty service list and catalogue scope none (tdd-connector.ts:518-526); nothing ever resolves."
-   },
-   {
-    "row": "ECC",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "No services; no Gateway catalogue discovery."
-   },
-   {
-    "row": "ECC",
-    "col": "SOAP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ECC",
-    "col": "REST",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ECC",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ECC",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ECC",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ECC",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "ODATA_V2",
-    "status": "partial",
-    "note": "Three curated /odata/v2 keys only (tdd-connector.ts:372-386); sapsf.* hosts not allowlisted (sap-host-allowlist.ts:42-52); SAML unverified live."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "No SF V4 services; non-edition products resolve curated keys only (resolve-hub-service.ts:32-33)."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "SOAP",
-    "status": "none",
-    "note": "Not supported (CompoundEmployee etc.)."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "REST",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not applicable/not supported."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "No SF intelligent services/event intake."
-   },
-   {
-    "row": "SUCCESSFACTORS",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ARIBA",
-    "col": "ODATA_V2",
-    "status": "none",
-    "note": "Ariba is not OData; northbound placeholder has no services (tdd-connector.ts:540-545)."
-   },
-   {
-    "row": "ARIBA",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "ARIBA",
-    "col": "SOAP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ARIBA",
-    "col": "REST",
-    "status": "none",
-    "note": "ariba-connector is env-only explorer path; stored connection cannot carry OAuth plus apiKey (connection-resolver.ts:574-594); northbound unusable."
-   },
-   {
-    "row": "ARIBA",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "ARIBA",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ARIBA",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ARIBA",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "CONCUR",
-    "col": "ODATA_V2",
-    "status": "none",
-    "note": "concursolutions.com allowlisted (sap-host-allowlist.ts:51) but no Concur product exists."
-   },
-   {
-    "row": "CONCUR",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "No product."
-   },
-   {
-    "row": "CONCUR",
-    "col": "SOAP",
-    "status": "none",
-    "note": "No product."
-   },
-   {
-    "row": "CONCUR",
-    "col": "REST",
-    "status": "none",
-    "note": "No product or REST executor."
-   },
-   {
-    "row": "CONCUR",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "CONCUR",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "CONCUR",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "CONCUR",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "ODATA_V2",
-    "status": "none",
-    "note": "No BTP product; ondemand.com hosts allowlisted, so BTP-fronted S/4 proxy might work as s4hana connection (unverified)."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "No BTP product (CAP/HANA services not modelled)."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "SOAP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "REST",
-    "status": "none",
-    "note": "No REST executor."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "No Event Mesh/Advanced Event Mesh integration."
-   },
-   {
-    "row": "BTP_SERVICE",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "ODATA_V2",
-    "status": "none",
-    "note": "Host allowlist is SAP domains only (sap-host-allowlist.ts:42-52); no non-SAP products."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "ODATA_V4",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "SOAP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "REST",
-    "status": "none",
-    "note": "No Salesforce/ServiceNow connectors."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "RFC_BAPI",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "IDOC",
-    "status": "none",
-    "note": "Not applicable."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "EVENTS",
-    "status": "none",
-    "note": "No webhook intake."
-   },
-   {
-    "row": "NON_SAP_SAAS",
-    "col": "FILE_SFTP",
-    "status": "none",
-    "note": "Not supported."
-   }
-  ],
-  "techPattern": [
-   {
-    "row": "ODATA_V2",
-    "col": "SYNC_READ",
-    "status": "partial",
-    "note": "Only $top<=100 and $format sent (read.ts:56,177); no filter, key, select, expand or paging."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "SYNC_CREATE",
-    "status": "partial",
-    "note": "POST with CSRF, write key, Idempotency-Key works in code (write.ts:267-310); writeEnabled not settable in Studio; not verified live."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "Executor refuses non-CREATE (access.ts:152); no PATCH/DELETE/function imports."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "No push/subscription to apps."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "Northbound only proxies into SAP; no SAP-to-external route."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "One call reaches one API; mapping card disabled (interfaces/route.ts:66-72)."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "No $batch or multipart support; 100-row cap."
-   },
-   {
-    "row": "ODATA_V2",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "SYNC_READ",
-    "status": "partial",
-    "note": "Same $top-only read; non-curated V4 paths guessed and may be wrong."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "SYNC_CREATE",
-    "status": "partial",
-    "note": "V4 create unit-tested only; never verified against a live tenant."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "CREATE only (access.ts:152); no RAP actions."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "No flows or mapping."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "No $batch."
-   },
-   {
-    "row": "ODATA_V4",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SOAP",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "SOAP not executable."
-   },
-   {
-    "row": "SOAP",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "SOAP not executable."
-   },
-   {
-    "row": "SOAP",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "SOAP not executable."
-   },
-   {
-    "row": "SOAP",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SOAP",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No SOAP endpoint for SAP outbound proxies."
-   },
-   {
-    "row": "SOAP",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SOAP",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "SOAP",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "REST",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "No REST executor (Ariba env-only explorer aside)."
-   },
-   {
-    "row": "REST",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "REST",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "REST",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "No webhooks to apps."
-   },
-   {
-    "row": "REST",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No inbound route for SAP-initiated calls to external programs."
-   },
-   {
-    "row": "REST",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "REST",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "REST",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "No RFC/WebSocket RFC."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "No BAPI calls."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No RFC server/destination."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "RFC_BAPI",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "IDOC",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No IDoc receiver."
-   },
-   {
-    "row": "IDOC",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "No IDoc."
-   },
-   {
-    "row": "IDOC",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "No EDI/AS2/partner profiles."
-   },
-   {
-    "row": "EVENTS",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "Events only catalogued, not consumable."
-   },
-   {
-    "row": "EVENTS",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "EVENTS",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "EVENTS",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "No Event Mesh subscription or webhook fan-out."
-   },
-   {
-    "row": "EVENTS",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No event intake endpoint."
-   },
-   {
-    "row": "EVENTS",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "EVENTS",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "EVENTS",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "Not supported."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "SYNC_READ",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "SYNC_CREATE",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "SYNC_UPDATE_DELETE_ACTION",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "EVENT_TO_APP",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "SAP_CALLS_OUT",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "A2A_FLOW_WITH_MAPPING",
-    "status": "none",
-    "note": "No file adapter."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "BULK_BATCH",
-    "status": "none",
-    "note": "No file/bulk import."
-   },
-   {
-    "row": "FILE_SFTP",
-    "col": "B2B_EDI",
-    "status": "none",
-    "note": "No SFTP/AS2."
-   }
-  ],
-  "network": [
-   {
-    "row": "PUBLIC_INTERNET",
-    "status": "full",
-    "note": "Internet-facing SAP cloud hosts on 11 SAP domains work from Vercel (sap-host-allowlist.ts:42-52); demo S/4 Public tenant answered."
-   },
-   {
-    "row": "SAP_SIDE_IP_ALLOWLIST",
-    "status": "partial",
-    "note": "Vercel egress not fixed by default; production Static IPs unknown; self-host or paid Static IPs needed; untested."
-   },
-   {
-    "row": "PRIVATE_NETWORK",
-    "status": "partial",
-    "note": "Only a self-hosted copy in-network, DNS names only, no Cloud Connector/proxy/custom CA (connection-url-guard.ts:22-33); untested."
-   }
-  ],
-  "origin": [
-   {
-    "row": "SAP_STANDARD",
-    "status": "partial",
-    "note": "Curated plus Hub catalogue OData only; ~193 V2 dependable, ~250 V4 guessed paths; SOAP/REST APIs unusable; hub seed needed on fresh DB."
-   },
-   {
-    "row": "CUSTOMER_CUSTOM",
-    "status": "none",
-    "note": "Z*/YY1_* refused with 400 'catalogue service could not be resolved' (resolve-hub-service.ts:34-38); no service-path field. SF MDF via curated key untested."
-   },
-   {
-    "row": "PARTNER",
-    "status": "none",
-    "note": "Partner-published APIs absent from catalogue; same resolver refusal."
-   }
-  ],
-  "sapAuth": [
-   {
-    "row": "BASIC",
-    "status": "full",
-    "note": "connection-resolver.ts:610-622; SF Basic warns, deprecated 2026-11-20 (sf-basic-auth-sunset.ts:49)."
-   },
-   {
-    "row": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "full",
-    "note": "Token fetch with cache in code (connection-resolver.ts:652); S/4 Public arrangement token URL undocumented; not verified live."
-   },
-   {
-    "row": "OAUTH_SAML_BEARER",
-    "status": "partial",
-    "note": "In-app assertion signing for SuccessFactors; code says unverified against a live tenant (connection-resolver.ts:640-653)."
-   },
-   {
-    "row": "X509_MTLS",
-    "status": "none",
-    "note": "No client-certificate auth (auth types: basic, bearer, oauth-cc, saml-bearer, api-key; connection-resolver.ts:143)."
-   },
-   {
-    "row": "PRINCIPAL_PROPAGATION",
-    "status": "none",
-    "note": "All calls run as one stored communication user; end-user identity not passed."
-   },
-   {
-    "row": "API_KEY",
-    "status": "partial",
-    "note": "Header-based API key works (connection-resolver.ts:574-592); useful mainly for api.sap.com sandbox; cannot combine with OAuth (Ariba)."
-   }
-  ],
-  "consumerAuth": [
-   {
-    "row": "JS_TS",
-    "col": "STATIC_BEARER",
-    "status": "full",
-    "note": "ce_ token, SHA-256 hashed (northbound/auth.ts:24-37); TS starter kit, reads only; writes add write key plus Idempotency-Key."
-   },
-   {
-    "row": "JS_TS",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "No northbound token endpoint."
-   },
-   {
-    "row": "JS_TS",
-    "col": "MTLS",
-    "status": "none",
-    "note": "No client-cert handling in src."
-   },
-   {
-    "row": "JS_TS",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "No OIDC on northbound."
-   },
-   {
-    "row": "PYTHON",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Plain HTTPS header works by design; no SDK or sample; OpenAPI 3.1 with one GET path; untested."
-   },
-   {
-    "row": "PYTHON",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "PYTHON",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "PYTHON",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "JAVA",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Generic HTTPS works; no SDK/sample; openapi-generator suggested only; untested."
-   },
-   {
-    "row": "JAVA",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "JAVA",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "JAVA",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "DOTNET",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Generic HTTPS works; no SDK/sample; untested."
-   },
-   {
-    "row": "DOTNET",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "DOTNET",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "DOTNET",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "ABAP_ONPREM",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Untested; header set in code (SM59 stores no static header); needs egress and STRUST trust; no ABAP sample."
-   },
-   {
-    "row": "ABAP_ONPREM",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered, though SM59 OAuth is native."
-   },
-   {
-    "row": "ABAP_ONPREM",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered, though SM59 X.509 is native."
-   },
-   {
-    "row": "ABAP_ONPREM",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "ABAP_CLOUD",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Untested; communication arrangement storage of static header unconfirmed; secret custody left to team."
-   },
-   {
-    "row": "ABAP_CLOUD",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "ABAP_CLOUD",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "ABAP_CLOUD",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "LOW_CODE",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Bearer header usable in custom connectors; OpenAPI 3.1 import compatibility (e.g. Power Platform 2.0) unverified; untested."
-   },
-   {
-    "row": "LOW_CODE",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "LOW_CODE",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "LOW_CODE",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "AI_AGENT",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Agent can call HTTPS with token; no MCP server or tool schema for northbound; untested."
-   },
-   {
-    "row": "AI_AGENT",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "AI_AGENT",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "AI_AGENT",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "HUMAN_TESTER",
-    "col": "STATIC_BEARER",
-    "status": "partial",
-    "note": "Test Console uses magic-link session, reads only, limit<=50 (broker-run/route.ts); manual curl with ce_ token works."
-   },
-   {
-    "row": "HUMAN_TESTER",
-    "col": "OAUTH_CLIENT_CREDENTIALS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "HUMAN_TESTER",
-    "col": "MTLS",
-    "status": "none",
-    "note": "Not offered."
-   },
-   {
-    "row": "HUMAN_TESTER",
-    "col": "USER_DELEGATED_OIDC",
-    "status": "none",
-    "note": "Login is magic link only; org SSO config stored but unused (sso/route.ts:14-24)."
-   }
-  ],
-  "lifecycle": [
-   {
-    "row": "DISCOVER",
-    "status": "partial",
-    "note": "Studio Discover and Workbench catalogue (SAP Hub copy); no tenant Gateway discovery; scenario-to-API table unused in screens."
-   },
-   {
-    "row": "DESIGN_MAP",
-    "status": "partial",
-    "note": "Interface = API, entity set, operation; schema capture exists; mapping disabled, field picker cannot save (interfaces/route.ts:66-72)."
-   },
-   {
-    "row": "MOCK_TEST_BEFORE_CODE",
-    "status": "partial",
-    "note": "Test Console dry-run reads against live tenant; starter kit mock.mjs plus fixtures (scaffold.ts:1023-1032); no write tests, collections or assertions."
-   },
-   {
-    "row": "DEVELOP_SDK_CODEGEN",
-    "status": "partial",
-    "note": "TypeScript read-only kit plus OpenAPI 3.1 with one GET path (scaffold.ts:1023-1030); no write, ABAP or other languages."
-   },
-   {
-    "row": "CI_PRECOMMIT_GOVERNANCE",
-    "status": "none",
-    "note": "No consumer CI templates, contract tests or policy gates; starter kit ships no workflow."
-   },
-   {
-    "row": "DEPLOY_PROMOTE_ENVIRONMENTS",
-    "status": "partial",
-    "note": "Per-environment connections, grants and tokens (SANDBOX/DEV/TEST/PROD); promotion is manual repetition; writes enabled by direct API."
-   },
-   {
-    "row": "RUN_MONITOR_ALERT",
-    "status": "partial",
-    "note": "Operations Center, Control Tower, incidents (ops/incidents.ts); daily probe emails org admins on transitions (connection-probe-sweep.ts:63-73); no real-time alerts/webhooks."
-   },
-   {
-    "row": "GOVERN_AUDIT_COMPLY",
-    "status": "full",
-    "note": "Grants with expiry, two-person rule, revoke, 60/min throttle, audit with 7-3650 day retention; caveat: read tokens may never expire."
-   },
-   {
-    "row": "SECRETS_KEYS",
-    "status": "partial",
-    "note": "Sealed SAP secrets with probe-before-swap rotation (rotation.ts); master key raw env var, no KMS or reseal (connection-crypto.ts:95-103)."
-   },
-   {
-    "row": "SAP_UPGRADE_IMPACT",
-    "status": "partial",
-    "note": "Catalogue tracks deprecation and hand-recorded successors (hub-successors.ts); production copy lacks flags; no impact alert to interface owners."
-   },
-   {
-    "row": "SELF_HOST_SETUP",
-    "status": "partial",
-    "note": "pnpm build/start works in CI; no Dockerfile, standalone output or runbook; Vercel crons and Upstash assumed; proprietary licence."
-   },
-   {
-    "row": "AI_ASSIST",
-    "status": "none",
-    "note": "AI orchestrator serves Workbench analyzer only; vendored abap-mcp not integrated; no CoreEdge agent or MCP surface."
-   },
-   {
-    "row": "ONBOARDING_TIME_TO_FIRST_CALL",
-    "status": "partial",
-    "note": "Magic-link only; WORKBENCH_ONLY hides admin screens; needs two consultants in one org; onboarding via direct API or DB."
-   }
-  ],
-  "sources": [
-   "/home/user/aptus/src/lib/sap-public/resolve-hub-service.ts:15-40",
-   "/home/user/aptus/src/lib/sap-public/tdd-connector.ts:372-386,445-545",
-   "/home/user/aptus/src/lib/sap-public/dynamic-catalog.ts:97-144",
-   "/home/user/aptus/src/lib/sap-public/connection-resolver.ts:143,565-700",
-   "/home/user/aptus/src/lib/sap-public/sf-basic-auth-sunset.ts:49",
-   "/home/user/aptus/src/lib/sap-public/rotation.ts:1-25",
-   "/home/user/aptus/src/lib/sap-public/hub-successors.ts:1-30",
-   "/home/user/aptus/src/lib/studio/sap-host-allowlist.ts:42-60",
-   "/home/user/aptus/src/lib/studio/scaffold.ts:1023-1032",
-   "/home/user/aptus/src/lib/northbound/read.ts:54-56,177",
-   "/home/user/aptus/src/lib/northbound/write.ts:267-310",
-   "/home/user/aptus/src/lib/northbound/access.ts:145-173",
-   "/home/user/aptus/src/lib/northbound/auth.ts:1-37",
-   "/home/user/aptus/src/lib/ops/incidents.ts",
-   "/home/user/aptus/src/lib/ops/connection-probe-sweep.ts:26,63-73",
-   "/home/user/aptus/src/app/api/studio/clients/route.ts:66,196",
-   "/home/user/aptus/vercel.json",
-   "/home/user/aptus/scripts/check-production-env.js:23-27",
-   "/tmp/claude-0/-home-user-aptus/c1cf7191-6502-561d-af92-682ad71ec6da/scratchpad/assessment.md",
-   "/tmp/claude-0/-home-user-aptus/c1cf7191-6502-561d-af92-682ad71ec6da/scratchpad/dossier-summary.txt",
-   "Repo state: working tree clean; src and prisma identical to main 33d0ef86 (git diff --stat empty)"
-  ]
- },
- "simulation": {
-  "integrationSuite": {
-   "totalPermutations": 1119744,
-   "validScenarios": 497340,
-   "fullySupported": 126000,
-   "atLeastPartial": 466725,
-   "fullPct": 25.3,
-   "partialPct": 93.8,
-   "byTarget": {
-    "S4_PUBLIC": {
-     "valid": 50760,
-     "fullPct": 22.7,
-     "partialPct": 82.7
-    },
-    "S4_PRIVATE_RISE": {
-     "valid": 76140,
-     "fullPct": 34,
-     "partialPct": 97.2
-    },
-    "S4_ONPREM": {
-     "valid": 76140,
-     "fullPct": 34,
-     "partialPct": 97.2
-    },
-    "ECC": {
-     "valid": 76140,
-     "fullPct": 21.7,
-     "partialPct": 97.2
-    },
-    "SUCCESSFACTORS": {
-     "valid": 30240,
-     "fullPct": 21.6,
-     "partialPct": 97.2
-    },
-    "ARIBA": {
-     "valid": 24192,
-     "fullPct": 17.5,
-     "partialPct": 97.2
-    },
-    "CONCUR": {
-     "valid": 4320,
-     "fullPct": 17.8,
-     "partialPct": 97.2
-    },
-    "BTP_SERVICE": {
-     "valid": 91368,
-     "fullPct": 18,
-     "partialPct": 86.9
-    },
-    "NON_SAP_SAAS": {
-     "valid": 68040,
-     "fullPct": 26.7,
-     "partialPct": 97.2
-    }
-   },
-   "byPattern": {
-    "SYNC_READ": {
-     "valid": 52668,
-     "fullPct": 35.1,
-     "partialPct": 95.2
-    },
-    "SYNC_CREATE": {
-     "valid": 52668,
-     "fullPct": 35.1,
-     "partialPct": 95.2
-    },
-    "SYNC_UPDATE_DELETE_ACTION": {
-     "valid": 52668,
-     "fullPct": 35.1,
-     "partialPct": 95.2
-    },
-    "SAP_CALLS_OUT": {
-     "valid": 85104,
-     "fullPct": 21.8,
-     "partialPct": 93.8
-    },
-    "A2A_FLOW_WITH_MAPPING": {
-     "valid": 85104,
-     "fullPct": 32.1,
-     "partialPct": 93.8
-    },
-    "BULK_BATCH": {
-     "valid": 73260,
-     "fullPct": 12.4,
-     "partialPct": 93.2
-    },
-    "EVENT_TO_APP": {
-     "valid": 51876,
-     "fullPct": 20,
-     "partialPct": 91.6
-    },
-    "B2B_EDI": {
-     "valid": 43992,
-     "fullPct": 11.8,
-     "partialPct": 92.9
-    }
-   },
-   "byTech": {
-    "ODATA_V2": {
-     "valid": 64152,
-     "fullPct": 36.4,
-     "partialPct": 97.2
-    },
-    "ODATA_V4": {
-     "valid": 64152,
-     "fullPct": 22.7,
-     "partialPct": 97.2
-    },
-    "SOAP": {
-     "valid": 92448,
-     "fullPct": 23.1,
-     "partialPct": 97.2
-    },
-    "REST": {
-     "valid": 94752,
-     "fullPct": 28.8,
-     "partialPct": 97.2
-    },
-    "RFC_BAPI": {
-     "valid": 55188,
-     "fullPct": 15.7,
-     "partialPct": 83.9
-    },
-    "IDOC": {
-     "valid": 43740,
-     "fullPct": 24.7,
-     "partialPct": 75.6
-    },
-    "EVENTS": {
-     "valid": 35532,
-     "fullPct": 30.8,
-     "partialPct": 97.2
-    },
-    "FILE_SFTP": {
-     "valid": 47376,
-     "fullPct": 19.1,
-     "partialPct": 97.2
-    }
-   },
-   "byConsumer": {
-    "JS_TS": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "PYTHON": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "JAVA": {
-     "valid": 55260,
-     "fullPct": 42.8,
-     "partialPct": 96.5
-    },
-    "DOTNET": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "ABAP_ONPREM": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "ABAP_CLOUD": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "LOW_CODE": {
-     "valid": 55260,
-     "fullPct": 28.5,
-     "partialPct": 96.5
-    },
-    "AI_AGENT": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 96.5
-    },
-    "HUMAN_TESTER": {
-     "valid": 55260,
-     "fullPct": 14.3,
-     "partialPct": 72.4
-    }
-   },
-   "byOrigin": {
-    "SAP_STANDARD": {
-     "valid": 166500,
-     "fullPct": 25.3,
-     "partialPct": 93.9
-    },
-    "CUSTOMER_CUSTOM": {
-     "valid": 164340,
-     "fullPct": 25.4,
-     "partialPct": 93.8
-    },
-    "PARTNER": {
-     "valid": 166500,
-     "fullPct": 25.3,
-     "partialPct": 93.9
-    }
-   },
-   "byNetwork": {
-    "PUBLIC_INTERNET": {
-     "valid": 184032,
-     "fullPct": 24.9,
-     "partialPct": 93.5
-    },
-    "SAP_SIDE_IP_ALLOWLIST": {
-     "valid": 184032,
-     "fullPct": 24.9,
-     "partialPct": 93.5
-    },
-    "PRIVATE_NETWORK": {
-     "valid": 129276,
-     "fullPct": 26.5,
-     "partialPct": 94.8
-    }
-   },
-   "lifecycle": {
-    "DISCOVER": 2,
-    "DESIGN_MAP": 2,
-    "MOCK_TEST_BEFORE_CODE": 1,
-    "DEVELOP_SDK_CODEGEN": 1,
-    "CI_PRECOMMIT_GOVERNANCE": 1,
-    "DEPLOY_PROMOTE_ENVIRONMENTS": 1,
-    "RUN_MONITOR_ALERT": 2,
-    "GOVERN_AUDIT_COMPLY": 1,
-    "SECRETS_KEYS": 2,
-    "SAP_UPGRADE_IMPACT": 1,
-    "SELF_HOST_SETUP": 1,
-    "AI_ASSIST": 1,
-    "ONBOARDING_TIME_TO_FIRST_CALL": 1
-   }
-  },
-  "coreedgeToday": {
-   "totalPermutations": 1119744,
-   "validScenarios": 497340,
-   "fullySupported": 0,
-   "atLeastPartial": 936,
-   "fullPct": 0,
-   "partialPct": 0.2,
-   "byTarget": {
-    "S4_PUBLIC": {
-     "valid": 50760,
-     "fullPct": 0,
-     "partialPct": 0.4
-    },
-    "S4_PRIVATE_RISE": {
-     "valid": 76140,
-     "fullPct": 0,
-     "partialPct": 0.4
-    },
-    "S4_ONPREM": {
-     "valid": 76140,
-     "fullPct": 0,
-     "partialPct": 0.4
-    },
-    "ECC": {
-     "valid": 76140,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "SUCCESSFACTORS": {
-     "valid": 30240,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "ARIBA": {
-     "valid": 24192,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "CONCUR": {
-     "valid": 4320,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "BTP_SERVICE": {
-     "valid": 91368,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "NON_SAP_SAAS": {
-     "valid": 68040,
-     "fullPct": 0,
-     "partialPct": 0
-    }
-   },
-   "byPattern": {
-    "SYNC_READ": {
-     "valid": 52668,
-     "fullPct": 0,
-     "partialPct": 0.9
-    },
-    "SYNC_CREATE": {
-     "valid": 52668,
-     "fullPct": 0,
-     "partialPct": 0.9
-    },
-    "SYNC_UPDATE_DELETE_ACTION": {
-     "valid": 52668,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "SAP_CALLS_OUT": {
-     "valid": 85104,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "A2A_FLOW_WITH_MAPPING": {
-     "valid": 85104,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "BULK_BATCH": {
-     "valid": 73260,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "EVENT_TO_APP": {
-     "valid": 51876,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "B2B_EDI": {
-     "valid": 43992,
-     "fullPct": 0,
-     "partialPct": 0
-    }
-   },
-   "byTech": {
-    "ODATA_V2": {
-     "valid": 64152,
-     "fullPct": 0,
-     "partialPct": 0.8
-    },
-    "ODATA_V4": {
-     "valid": 64152,
-     "fullPct": 0,
-     "partialPct": 0.7
-    },
-    "SOAP": {
-     "valid": 92448,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "REST": {
-     "valid": 94752,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "RFC_BAPI": {
-     "valid": 55188,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "IDOC": {
-     "valid": 43740,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "EVENTS": {
-     "valid": 35532,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "FILE_SFTP": {
-     "valid": 47376,
-     "fullPct": 0,
-     "partialPct": 0
-    }
-   },
-   "byConsumer": {
-    "JS_TS": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "PYTHON": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "JAVA": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "DOTNET": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "ABAP_ONPREM": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "ABAP_CLOUD": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "LOW_CODE": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "AI_AGENT": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "HUMAN_TESTER": {
-     "valid": 55260,
-     "fullPct": 0,
-     "partialPct": 0.2
-    }
-   },
-   "byOrigin": {
-    "SAP_STANDARD": {
-     "valid": 166500,
-     "fullPct": 0,
-     "partialPct": 0.6
-    },
-    "CUSTOMER_CUSTOM": {
-     "valid": 164340,
-     "fullPct": 0,
-     "partialPct": 0
-    },
-    "PARTNER": {
-     "valid": 166500,
-     "fullPct": 0,
-     "partialPct": 0
-    }
-   },
-   "byNetwork": {
-    "PUBLIC_INTERNET": {
-     "valid": 184032,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "SAP_SIDE_IP_ALLOWLIST": {
-     "valid": 184032,
-     "fullPct": 0,
-     "partialPct": 0.2
-    },
-    "PRIVATE_NETWORK": {
-     "valid": 129276,
-     "fullPct": 0,
-     "partialPct": 0.2
-    }
-   },
-   "lifecycle": {
-    "DISCOVER": 1,
-    "DESIGN_MAP": 1,
-    "MOCK_TEST_BEFORE_CODE": 1,
-    "DEVELOP_SDK_CODEGEN": 1,
-    "CI_PRECOMMIT_GOVERNANCE": 0,
-    "DEPLOY_PROMOTE_ENVIRONMENTS": 1,
-    "RUN_MONITOR_ALERT": 1,
-    "GOVERN_AUDIT_COMPLY": 2,
-    "SECRETS_KEYS": 1,
-    "SAP_UPGRADE_IMPACT": 1,
-    "SELF_HOST_SETUP": 1,
-    "AI_ASSIST": 0,
-    "ONBOARDING_TIME_TO_FIRST_CALL": 1
-   },
-   "topBlockers": []
-  },
-  "phases": [
-   {
-    "phase": "P0",
-    "name": "Phase 0: Harden what exists",
-    "fullPct": 0,
-    "partialPct": 0.2,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 0,
-      "partialPct": 0.4
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 0.4
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 0.4
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 0.9
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 0.9
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.2
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 1,
-     "DESIGN_MAP": 1,
-     "MOCK_TEST_BEFORE_CODE": 1,
-     "DEVELOP_SDK_CODEGEN": 1,
-     "CI_PRECOMMIT_GOVERNANCE": 0,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 1,
-     "RUN_MONITOR_ALERT": 1,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 1,
-     "SELF_HOST_SETUP": 1,
-     "AI_ASSIST": 0,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 1
-    }
-   },
-   {
-    "phase": "P1",
-    "name": "Phase 1: Any SAP OData API, contract-first, with a Tenant Twin",
-    "fullPct": 0,
-    "partialPct": 0.8,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 0,
-      "partialPct": 1.3
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 1.3
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 1.3
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 0.6
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 0,
-      "partialPct": 0.7
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 0,
-      "partialPct": 0.7
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 3.7
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 3.7
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 0.8
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 1,
-     "MOCK_TEST_BEFORE_CODE": 1,
-     "DEVELOP_SDK_CODEGEN": 1,
-     "CI_PRECOMMIT_GOVERNANCE": 0,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 1,
-     "RUN_MONITOR_ALERT": 1,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 1,
-     "SELF_HOST_SETUP": 1,
-     "AI_ASSIST": 0,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 1
-    }
-   },
-   {
-    "phase": "P2",
-    "name": "Phase 2: Postman before code, full OData writes, every language",
-    "fullPct": 0,
-    "partialPct": 2.8,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 0.3,
-      "partialPct": 4.5
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 4.5
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 4.5
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 2.3
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 0.1,
-      "partialPct": 2.5
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 0,
-      "partialPct": 2.5
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 6.7
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 6.7
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 6.7
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 0,
-      "partialPct": 4.8
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 3.2
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 3.2
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 3.2
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 1.6
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 1.6
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 1,
-     "MOCK_TEST_BEFORE_CODE": 2,
-     "DEVELOP_SDK_CODEGEN": 2,
-     "CI_PRECOMMIT_GOVERNANCE": 1,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 1,
-     "RUN_MONITOR_ALERT": 1,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 1,
-     "SELF_HOST_SETUP": 1,
-     "AI_ASSIST": 1,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 2
-    }
-   },
-   {
-    "phase": "P3",
-    "name": "Phase 3: Govern every connected program as code",
-    "fullPct": 0,
-    "partialPct": 3.2,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 0.3,
-      "partialPct": 5.1
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 5.1
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 5.1
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 0,
-      "partialPct": 2.6
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 0.1,
-      "partialPct": 2.9
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 0,
-      "partialPct": 2.8
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 7.5
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 7.5
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 0.1,
-      "partialPct": 7.5
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 0,
-      "partialPct": 5.4
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 4.8
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 4.8
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 0.1,
-      "partialPct": 3.2
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 3.2
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 1.6
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 1.6
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 1,
-     "MOCK_TEST_BEFORE_CODE": 2,
-     "DEVELOP_SDK_CODEGEN": 2,
-     "CI_PRECOMMIT_GOVERNANCE": 2,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 2,
-     "RUN_MONITOR_ALERT": 2,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 2,
-     "SELF_HOST_SETUP": 1,
-     "AI_ASSIST": 1,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 2
-    }
-   },
-   {
-    "phase": "P4",
-    "name": "Phase 4: Reach any SAP landscape, run anywhere",
-    "fullPct": 0.3,
-    "partialPct": 3.9,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 0.7,
-      "partialPct": 6.2
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 0.7,
-      "partialPct": 6.2
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 0.7,
-      "partialPct": 6.2
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 0.3,
-      "partialPct": 3.1
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 0.3,
-      "partialPct": 3.5
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 0,
-      "partialPct": 3.5
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 1.1,
-      "partialPct": 9.1
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 1.1,
-      "partialPct": 9.1
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 1.1,
-      "partialPct": 9.1
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 0,
-      "partialPct": 6.6
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0,
-      "partialPct": 0
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 0
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 6.3
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 4.8
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 4.8
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 4.8
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 4.8
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 0.4,
-      "partialPct": 3.2
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 0.2,
-      "partialPct": 3.2
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 1.6
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 0.2,
-      "partialPct": 1.6
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 1,
-     "MOCK_TEST_BEFORE_CODE": 2,
-     "DEVELOP_SDK_CODEGEN": 2,
-     "CI_PRECOMMIT_GOVERNANCE": 2,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 2,
-     "RUN_MONITOR_ALERT": 2,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 2,
-     "SELF_HOST_SETUP": 2,
-     "AI_ASSIST": 1,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 2
-    }
-   },
-   {
-    "phase": "P5",
-    "name": "Phase 5: Every protocol and pattern on one pipeline",
-    "fullPct": 2,
-    "partialPct": 11.6,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 3.1,
-      "partialPct": 15.6
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 2.9,
-      "partialPct": 10.9
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 2.9,
-      "partialPct": 12.5
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 1.8,
-      "partialPct": 9.4
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 1.5,
-      "partialPct": 14.8
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 2.3,
-      "partialPct": 19.6
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 3.2,
-      "partialPct": 14.3
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 1.8,
-      "partialPct": 10.4
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 0,
-      "partialPct": 8.1
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 4.3,
-      "partialPct": 19.7
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 4.3,
-      "partialPct": 19.7
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 4.3,
-      "partialPct": 19.7
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0.4,
-      "partialPct": 6.5
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 1.9,
-      "partialPct": 9.6
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 1.8,
-      "partialPct": 10.6
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0.2,
-      "partialPct": 3.1
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 8
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 19
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 14.3
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 14.3
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 14.3
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 14.3
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 2.6,
-      "partialPct": 9.5
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 1.3,
-      "partialPct": 9.5
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 0,
-      "partialPct": 4.8
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 1.3,
-      "partialPct": 4.8
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 2,
-     "MOCK_TEST_BEFORE_CODE": 2,
-     "DEVELOP_SDK_CODEGEN": 2,
-     "CI_PRECOMMIT_GOVERNANCE": 2,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 2,
-     "RUN_MONITOR_ALERT": 2,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 2,
-     "SELF_HOST_SETUP": 2,
-     "AI_ASSIST": 1,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 2
-    }
-   },
-   {
-    "phase": "P6",
-    "name": "Phase 6: AI-native and provable",
-    "fullPct": 3.3,
-    "partialPct": 14.8,
-    "byTarget": {
-     "S4_PUBLIC": {
-      "valid": 50760,
-      "fullPct": 4.6,
-      "partialPct": 19.9
-     },
-     "S4_PRIVATE_RISE": {
-      "valid": 76140,
-      "fullPct": 4.3,
-      "partialPct": 13.9
-     },
-     "S4_ONPREM": {
-      "valid": 76140,
-      "fullPct": 4.3,
-      "partialPct": 15.9
-     },
-     "ECC": {
-      "valid": 76140,
-      "fullPct": 2.6,
-      "partialPct": 11.9
-     },
-     "SUCCESSFACTORS": {
-      "valid": 30240,
-      "fullPct": 2.2,
-      "partialPct": 18.9
-     },
-     "ARIBA": {
-      "valid": 24192,
-      "fullPct": 3.5,
-      "partialPct": 25
-     },
-     "CONCUR": {
-      "valid": 4320,
-      "fullPct": 4.9,
-      "partialPct": 18.1
-     },
-     "BTP_SERVICE": {
-      "valid": 91368,
-      "fullPct": 2.8,
-      "partialPct": 13.2
-     },
-     "NON_SAP_SAAS": {
-      "valid": 68040,
-      "fullPct": 1.9,
-      "partialPct": 10.4
-     }
-    },
-    "byPattern": {
-     "SYNC_READ": {
-      "valid": 52668,
-      "fullPct": 6.9,
-      "partialPct": 25.1
-     },
-     "SYNC_CREATE": {
-      "valid": 52668,
-      "fullPct": 6.9,
-      "partialPct": 25.1
-     },
-     "SYNC_UPDATE_DELETE_ACTION": {
-      "valid": 52668,
-      "fullPct": 6.9,
-      "partialPct": 25.1
-     },
-     "SAP_CALLS_OUT": {
-      "valid": 85104,
-      "fullPct": 0.8,
-      "partialPct": 8.3
-     },
-     "A2A_FLOW_WITH_MAPPING": {
-      "valid": 85104,
-      "fullPct": 3.1,
-      "partialPct": 12.3
-     },
-     "BULK_BATCH": {
-      "valid": 73260,
-      "fullPct": 2.6,
-      "partialPct": 13.5
-     },
-     "EVENT_TO_APP": {
-      "valid": 51876,
-      "fullPct": 0.3,
-      "partialPct": 3.9
-     },
-     "B2B_EDI": {
-      "valid": 43992,
-      "fullPct": 0,
-      "partialPct": 10.2
-     }
-    },
-    "byConsumer": {
-     "JS_TS": {
-      "valid": 55260,
-      "fullPct": 4.2,
-      "partialPct": 19
-     },
-     "PYTHON": {
-      "valid": 55260,
-      "fullPct": 4.2,
-      "partialPct": 14.3
-     },
-     "JAVA": {
-      "valid": 55260,
-      "fullPct": 4.2,
-      "partialPct": 19
-     },
-     "DOTNET": {
-      "valid": 55260,
-      "fullPct": 4.2,
-      "partialPct": 19
-     },
-     "ABAP_ONPREM": {
-      "valid": 55260,
-      "fullPct": 2.8,
-      "partialPct": 14.3
-     },
-     "ABAP_CLOUD": {
-      "valid": 55260,
-      "fullPct": 2.8,
-      "partialPct": 9.5
-     },
-     "LOW_CODE": {
-      "valid": 55260,
-      "fullPct": 1.4,
-      "partialPct": 14.3
-     },
-     "AI_AGENT": {
-      "valid": 55260,
-      "fullPct": 2.8,
-      "partialPct": 14.3
-     },
-     "HUMAN_TESTER": {
-      "valid": 55260,
-      "fullPct": 2.8,
-      "partialPct": 9.5
-     }
-    },
-    "lifecycle": {
-     "DISCOVER": 2,
-     "DESIGN_MAP": 2,
-     "MOCK_TEST_BEFORE_CODE": 2,
-     "DEVELOP_SDK_CODEGEN": 2,
-     "CI_PRECOMMIT_GOVERNANCE": 2,
-     "DEPLOY_PROMOTE_ENVIRONMENTS": 2,
-     "RUN_MONITOR_ALERT": 2,
-     "GOVERN_AUDIT_COMPLY": 2,
-     "SECRETS_KEYS": 2,
-     "SAP_UPGRADE_IMPACT": 2,
-     "SELF_HOST_SETUP": 2,
-     "AI_ASSIST": 2,
-     "ONBOARDING_TIME_TO_FIRST_CALL": 2
-    }
-   }
-  ],
-  "method": "scenario = target x tech x pattern x origin x network x sapAuth x consumer x consumerAuth; valid if SAP-side feasible; a platform supports a scenario fully if every relevant cell is full (min rule), at least partially if every cell is at least partial"
  },
  "roadmapPhases": [
   {
@@ -5694,6 +2974,22 @@
      "status": "full",
      "items": "P0.3, P1.3, P1.8",
      "reason": "Live V4 create and draft-enabled RAP POST, each with a correlation id (P1.8)."
+    },
+    {
+     "table": "lifecycle",
+     "row": "API_VERSIONING",
+     "col": "",
+     "status": "full",
+     "items": "P1.10",
+     "reason": "Today's routes are served as version 2026-10 and aliased under /api/northbound/v1; breaking changes ship behind a dated version header with Deprecation and Sunset headers and a public changelog."
+    },
+    {
+     "table": "lifecycle",
+     "row": "PERFORMANCE_TEST",
+     "col": "",
+     "status": "partial",
+     "items": "P1.6a",
+     "reason": "The read-only twin gives a load test something to run against without touching a customer's SAP system. No roadmap item delivers the A.3 #14 load test itself, so the stage stays partial (open decision D14)."
     }
    ]
   },
@@ -5972,6 +3268,30 @@
      "status": "partial",
      "items": "P3.9, P4.1, P2.5, P2.7",
      "reason": "Governed outbound routes with egress grants and SSRF-safe dispatch. The external-API twin is deferred to P5.3."
+    },
+    {
+     "table": "lifecycle",
+     "row": "PROVIDER_BUILD_TRANSPORT",
+     "col": "",
+     "status": "full",
+     "items": "P1.2, P3.4, P3.8",
+     "reason": "The service is registered from its EDMX (P1.2), re-verified on each environment with a promotion gate (P3.4), and its contract diffed on change (P3.8). Building it stays in SAP's own tools, which is SAP's job, not CoreEdge's."
+    },
+    {
+     "table": "lifecycle",
+     "row": "SUPPORT_INCIDENT",
+     "col": "",
+     "status": "partial",
+     "items": "P3.7, P2.13",
+     "reason": "Stored incidents with owner paging (P3.7) and approver notifications (P2.13). No item delivers a public status page or consumer ticket intake, so the stage stays partial (open decision D14)."
+    },
+    {
+     "table": "lifecycle",
+     "row": "GOVERN_AUDIT_COMPLY",
+     "col": "",
+     "status": "full",
+     "items": "P0.1, P0.12, P3.10",
+     "reason": "Grant binding (P0.1) and step-up (P0.12) switched to strict and enforce, and audit writes fail closed with a hash chain (P3.10). The registry holds the stage at partial until then (caveat 9a)."
     }
    ]
   },
@@ -6760,7 +4080,7 @@
   {
    "id": "P6",
    "name": "Phase 6: AI-native and provable",
-   "goal": "Lead where Integration Suite is weakest in the simulation: AI_AGENT consumers (0% full) and AI_ASSIST and GOVERN at 1. This phase turns CoreEdge's governance into continuous, exportable proof:\n- a runtime MCP gateway for agents with human-confirmed writes;\n- a grounded Studio copilot;\n- behavioural anomaly detection with graded auto-containment;\n- an evidence vault with SIEM streaming and evidence packs;\n- end-user acting-for with consent;\n- the Digital Access estimator.\n\nEstimate: 10 to 12 weeks. P6.1 is gated by the SAP API Policy \u00a72.2.2 legal reading.",
+   "goal": "Lead where Integration Suite is weakest in the simulation: AI_AGENT consumers (0% full) and AI_ASSIST and GOVERN at 1. This phase turns CoreEdge's governance into continuous, exportable proof:\n- a runtime MCP gateway for agents with human-confirmed writes;\n- a grounded Studio copilot;\n- behavioural anomaly detection with graded auto-containment;\n- an evidence vault with SIEM streaming and evidence packs;\n- end-user acting-for with consent;\n- the Digital Access estimator.\n\nEstimate: 10 to 12 weeks. P6.1 is gated by the SAP API Policy §2.2.2 legal reading.",
    "cellUpgrades": [
     {
      "table": "lifecycle",
@@ -6873,8 +4193,1741 @@
      "status": "partial",
      "items": "P6.0, P6.5, P2.6b",
      "reason": "As JS_TS: P2.6b's runtime covers client credentials only, and no item or test covers user-delegated tokens from .NET."
+    },
+    {
+     "table": "lifecycle",
+     "row": "RETIRE",
+     "col": "",
+     "status": "partial",
+     "items": "P6.4",
+     "reason": "Evidence packs (P6.4) archive what a retired app did. No item deletes fixtures and twin data at retirement, so the stage stays partial (open decision D14)."
     }
    ]
   }
- ]
+ ],
+ "coreedgeTodaySource": "docs/coreedge/capability-registry.json, generated from the code by src/lib/coreedge/capability-registry.ts (pnpm coreedge:registry). CoreEdge's cells are no longer rated by hand here.",
+ "extendedModel": {
+  "note": "Caveat 8 dimension values. Scored in a separate extended run and kept out of the headline figures, because the feasibility rules for the six new targets are general SAP knowledge, not checked against SAP documentation for this revision [unverified]; whether to fold them into the headline is open decision D13.",
+  "dimensions": {
+   "target": [
+    "SAP_SALES_SERVICE_CLOUD",
+    "SAP_FIELDGLASS",
+    "SAP_IBP",
+    "SAP_BYDESIGN",
+    "SAP_BUSINESS_ONE",
+    "SAP_COMMERCE_CLOUD"
+   ],
+   "tech": [
+    "DATA_PRODUCT",
+    "BINARY_MEDIA"
+   ],
+   "consumer": [
+    "GO",
+    "PHP",
+    "MOBILE",
+    "SAP_CAP",
+    "SAP_BUILD"
+   ]
+  },
+  "sapFeasibility": {
+   "avail": [
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "ODATA_V2",
+     "status": "yes",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "ODATA_V4",
+     "status": "no",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "SOAP",
+     "status": "yes",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "REST",
+     "status": "partial",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "IDOC",
+     "status": "no",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "Sales and Service Cloud (C4C, and Version 2): OData V2 and SOAP A2X services; Version 2 adds REST; event notifications; file import through the data workbench; attachments over OData. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "ODATA_V2",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "ODATA_V4",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "REST",
+     "status": "yes",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "IDOC",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "EVENTS",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "FILE_SFTP",
+     "status": "yes",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "Fieldglass: REST APIs and flat-file connectors over SFTP; few legacy SOAP services; attachments over REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "ODATA_V2",
+     "status": "yes",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "ODATA_V4",
+     "status": "partial",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "REST",
+     "status": "no",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "IDOC",
+     "status": "no",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "EVENTS",
+     "status": "no",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "DATA_PRODUCT",
+     "status": "partial",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "BINARY_MEDIA",
+     "status": "no",
+     "note": "IBP: OData services for master data and key figures; some SOAP; file upload through the data integration tooling; planning data as data products. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "ODATA_V2",
+     "status": "yes",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "ODATA_V4",
+     "status": "no",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "SOAP",
+     "status": "yes",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "REST",
+     "status": "no",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "IDOC",
+     "status": "no",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "Business ByDesign: OData (standard and custom) and SOAP A2X web services; file input; event notifications. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "ODATA_V2",
+     "status": "no",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "ODATA_V4",
+     "status": "yes",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "REST",
+     "status": "no",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "IDOC",
+     "status": "no",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "Business One: the Service Layer speaks OData V3 and V4 (V3 is not V2); DI Server SOAP; Data Transfer Workbench files; attachments through the Service Layer. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "ODATA_V2",
+     "status": "yes",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "ODATA_V4",
+     "status": "no",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "SOAP",
+     "status": "no",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "REST",
+     "status": "yes",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "RFC_BAPI",
+     "status": "no",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "IDOC",
+     "status": "partial",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "EVENTS",
+     "status": "yes",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "FILE_SFTP",
+     "status": "yes",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "Commerce Cloud: OCC REST and the Integration API (OData V2); hot-folder files; webhooks and events; IDoc only through the legacy ERP integration; media through OCC. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_PUBLIC",
+     "col": "DATA_PRODUCT",
+     "status": "partial",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_PRIVATE_RISE",
+     "col": "DATA_PRODUCT",
+     "status": "partial",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_ONPREM",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "ECC",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "SUCCESSFACTORS",
+     "col": "DATA_PRODUCT",
+     "status": "partial",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "ARIBA",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "CONCUR",
+     "col": "DATA_PRODUCT",
+     "status": "no",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "BTP_SERVICE",
+     "col": "DATA_PRODUCT",
+     "status": "yes",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "NON_SAP_SAAS",
+     "col": "DATA_PRODUCT",
+     "status": "partial",
+     "note": "Data products are published through SAP Business Data Cloud for the cloud suites; on-premise systems and ECC publish none; non-SAP platforms share data through Delta Sharing. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_PUBLIC",
+     "col": "BINARY_MEDIA",
+     "status": "yes",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_PRIVATE_RISE",
+     "col": "BINARY_MEDIA",
+     "status": "yes",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "S4_ONPREM",
+     "col": "BINARY_MEDIA",
+     "status": "yes",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "ECC",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "SUCCESSFACTORS",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "ARIBA",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "CONCUR",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "BTP_SERVICE",
+     "col": "BINARY_MEDIA",
+     "status": "yes",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    },
+    {
+     "row": "NON_SAP_SAAS",
+     "col": "BINARY_MEDIA",
+     "status": "yes",
+     "note": "OData media streams and attachment services (S/4HANA attachment API, BTP Document Management); ECC through Gateway only; SuccessFactors carries attachments base64 in an entity; Ariba and Concur through REST. Low confidence [unverified]."
+    }
+   ],
+   "authAvail": [
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "BASIC",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "X509_MTLS",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "API_KEY",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "BASIC",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "X509_MTLS",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "API_KEY",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "BASIC",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "X509_MTLS",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "API_KEY",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "BASIC",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "X509_MTLS",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "API_KEY",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "BASIC",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "X509_MTLS",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "API_KEY",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "BASIC",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "yes",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "X509_MTLS",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "API_KEY",
+     "status": "no",
+     "note": "Inbound login methods the target offers, from general SAP knowledge. Business One's Service Layer logs in with company, user and password (a session, counted as partial Basic). Low confidence [unverified]."
+    }
+   ],
+   "originAvail": [
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "PARTNER",
+     "status": "partial",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "no",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "PARTNER",
+     "status": "partial",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "partial",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "PARTNER",
+     "status": "partial",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "PARTNER",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "PARTNER",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "SAP_STANDARD",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "CUSTOMER_CUSTOM",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "PARTNER",
+     "status": "yes",
+     "note": "Custom services: C4C and ByDesign custom OData, Business One user-defined objects, Commerce integration objects; Fieldglass has none. Low confidence [unverified]."
+    }
+   ],
+   "netApplicable": [
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "PUBLIC_INTERNET",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "PRIVATE_NETWORK",
+     "status": "no",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "PUBLIC_INTERNET",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "partial",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "PRIVATE_NETWORK",
+     "status": "no",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "PUBLIC_INTERNET",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "PRIVATE_NETWORK",
+     "status": "no",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "PUBLIC_INTERNET",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "partial",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "PRIVATE_NETWORK",
+     "status": "no",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "PUBLIC_INTERNET",
+     "status": "partial",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "PRIVATE_NETWORK",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "PUBLIC_INTERNET",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "SAP_SIDE_IP_ALLOWLIST",
+     "status": "yes",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "PRIVATE_NETWORK",
+     "status": "partial",
+     "note": "SaaS targets have no customer-controlled private network; Business One usually runs on the customer's own servers. Low confidence [unverified]."
+    }
+   ],
+   "techPattern": [
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_READ",
+     "status": "yes",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_CREATE",
+     "status": "no",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "no",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "EVENT_TO_APP",
+     "status": "partial",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SAP_CALLS_OUT",
+     "status": "no",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "BULK_BATCH",
+     "status": "yes",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "B2B_EDI",
+     "status": "no",
+     "note": "A data product is read (SQL or Delta Sharing) and moved in bulk; it is not written through, and it can signal change. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_READ",
+     "status": "yes",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_CREATE",
+     "status": "yes",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "yes",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "EVENT_TO_APP",
+     "status": "no",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "B2B_EDI",
+     "status": "no",
+     "note": "A media stream or attachment is read, created and replaced; SAP can push one out; flows carry them; bulk transfer is limited. Low confidence [unverified]."
+    }
+   ]
+  },
+  "integrationSuite": {
+   "targetTech": [
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "ODATA_V2",
+     "status": "full",
+     "note": "Prepackaged Sales and Service Cloud integration content and the OData and SOAP adapters [E1]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "ODATA_V4",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "SOAP",
+     "status": "full",
+     "note": "Prepackaged Sales and Service Cloud integration content and the OData and SOAP adapters [E1]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "REST",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "IDOC",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Webhooks reach the HTTPS sender adapter with custom endpoint security [E1]."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_SALES_SERVICE_CLOUD",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "ODATA_V2",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "ODATA_V4",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "REST",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "IDOC",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "EVENTS",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "FILE_SFTP",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_FIELDGLASS",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "ODATA_V2",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "ODATA_V4",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "REST",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "IDOC",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "EVENTS",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "SAP_IBP",
+     "col": "BINARY_MEDIA",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "ODATA_V2",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "ODATA_V4",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "SOAP",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "REST",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "IDOC",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Webhooks reach the HTTPS sender adapter with custom endpoint security [E1]."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BYDESIGN",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "ODATA_V2",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "ODATA_V4",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "SOAP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "REST",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "IDOC",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Webhooks reach the HTTPS sender adapter with custom endpoint security [E1]."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]. The target offers it only in part."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_BUSINESS_ONE",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "ODATA_V2",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "ODATA_V4",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "SOAP",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "REST",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "RFC_BAPI",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "IDOC",
+     "status": "partial",
+     "note": "IDoc and RFC adapters exist, but this target offers them only in a narrow form [E1]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "EVENTS",
+     "status": "partial",
+     "note": "Webhooks reach the HTTPS sender adapter with custom endpoint security [E1]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "FILE_SFTP",
+     "status": "full",
+     "note": "Generic receiver adapters (OData, SOAP, HTTP, SFTP) reach any endpoint the target offers [E1]."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SAP_COMMERCE_CLOUD",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "S4_PUBLIC",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "S4_PRIVATE_RISE",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "S4_ONPREM",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "ECC",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "SUCCESSFACTORS",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "ARIBA",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "CONCUR",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "The target does not offer this technology."
+    },
+    {
+     "row": "BTP_SERVICE",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "NON_SAP_SAAS",
+     "col": "DATA_PRODUCT",
+     "status": "none",
+     "note": "Data products are consumed through SAP Business Data Cloud and Datasphere, not through Integration Suite's adapters [E3]; mapping recalled [unverified]."
+    },
+    {
+     "row": "S4_PUBLIC",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "S4_PRIVATE_RISE",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "S4_ONPREM",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "ECC",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "SUCCESSFACTORS",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "ARIBA",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "CONCUR",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "BTP_SERVICE",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    },
+    {
+     "row": "NON_SAP_SAAS",
+     "col": "BINARY_MEDIA",
+     "status": "partial",
+     "note": "The HTTP and OData adapters carry binary payloads, but media-stream handling in the OData adapter is narrower than entity handling [E1; detail unverified]."
+    }
+   ],
+   "techPattern": [
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_READ",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_CREATE",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "EVENT_TO_APP",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "SAP_CALLS_OUT",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "BULK_BATCH",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "DATA_PRODUCT",
+     "col": "B2B_EDI",
+     "status": "none",
+     "note": "Integration Suite does not consume data products; Business Data Cloud and Datasphere do [E3]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_READ",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_CREATE",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "EVENT_TO_APP",
+     "status": "none",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    },
+    {
+     "row": "BINARY_MEDIA",
+     "col": "B2B_EDI",
+     "status": "none",
+     "note": "Binary payloads pass through the HTTP and OData adapters and flows; media-stream details unverified [E1]."
+    }
+   ],
+   "consumerAuth": [
+    {
+     "row": "GO",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP Go SDK; mTLS and user tokens need custom work."
+    },
+    {
+     "row": "GO",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP Go SDK; mTLS and user tokens need custom work."
+    },
+    {
+     "row": "GO",
+     "col": "MTLS",
+     "status": "partial",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP Go SDK; mTLS and user tokens need custom work."
+    },
+    {
+     "row": "GO",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP Go SDK; mTLS and user tokens need custom work."
+    },
+    {
+     "row": "PHP",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP PHP SDK."
+    },
+    {
+     "row": "PHP",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP PHP SDK."
+    },
+    {
+     "row": "PHP",
+     "col": "MTLS",
+     "status": "partial",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP PHP SDK."
+    },
+    {
+     "row": "PHP",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "note": "Generic HTTP with an API Management key or OAuth token [E8]; no SAP PHP SDK."
+    },
+    {
+     "row": "MOBILE",
+     "col": "STATIC_BEARER",
+     "status": "partial",
+     "note": "An app key or client secret in a distributed app is extractable; user login through IAS or XSUAA needs custom set-up [E8]."
+    },
+    {
+     "row": "MOBILE",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "note": "An app key or client secret in a distributed app is extractable; user login through IAS or XSUAA needs custom set-up [E8]."
+    },
+    {
+     "row": "MOBILE",
+     "col": "MTLS",
+     "status": "partial",
+     "note": "An app key or client secret in a distributed app is extractable; user login through IAS or XSUAA needs custom set-up [E8]."
+    },
+    {
+     "row": "MOBILE",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "note": "An app key or client secret in a distributed app is extractable; user login through IAS or XSUAA needs custom set-up [E8]."
+    },
+    {
+     "row": "SAP_CAP",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "note": "CAP consumes remote services through BTP destinations with Basic, OAuth or client certificates [E63]; principal propagation on BTP only."
+    },
+    {
+     "row": "SAP_CAP",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "note": "CAP consumes remote services through BTP destinations with Basic, OAuth or client certificates [E63]; principal propagation on BTP only."
+    },
+    {
+     "row": "SAP_CAP",
+     "col": "MTLS",
+     "status": "full",
+     "note": "CAP consumes remote services through BTP destinations with Basic, OAuth or client certificates [E63]; principal propagation on BTP only."
+    },
+    {
+     "row": "SAP_CAP",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "note": "CAP consumes remote services through BTP destinations with Basic, OAuth or client certificates [E63]; principal propagation on BTP only."
+    },
+    {
+     "row": "SAP_BUILD",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "note": "SAP Build Apps and Process Automation call through BTP destinations, as for low-code [E1]."
+    },
+    {
+     "row": "SAP_BUILD",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "note": "SAP Build Apps and Process Automation call through BTP destinations, as for low-code [E1]."
+    },
+    {
+     "row": "SAP_BUILD",
+     "col": "MTLS",
+     "status": "partial",
+     "note": "SAP Build Apps and Process Automation call through BTP destinations, as for low-code [E1]."
+    },
+    {
+     "row": "SAP_BUILD",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "note": "SAP Build Apps and Process Automation call through BTP destinations, as for low-code [E1]."
+    }
+   ]
+  }
+ }
 }
