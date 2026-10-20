@@ -176,6 +176,32 @@ describe("A72 — a malformed realm configuration is an error, not zero realms",
     expect(realmCalls().map((u) => u.searchParams.get("realm"))).toEqual(["acme-T", null]);
   });
 
+  it("an empty ARIBA_REALMS_JSON list is invalid, not a silent override of ARIBA_REALM and the allowlist", async () => {
+    // ARIBA_REALM=acme-T stays set: "[]" used to discard it, report
+    // "configured, zero realms", and pass any realm, or none, through.
+    vi.stubEnv("ARIBA_REALMS_JSON", " [ ] ");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const catalog = (await (await catalogGET()).json()) as CatalogBody;
+    expect(catalog.data.configured).toBe(false);
+    expect(catalog.data.realms).toEqual([]);
+    expect(catalog.data.realmsError).toBe(
+      "ARIBA_REALMS_JSON is invalid: it lists no realms; unset it to use ARIBA_REALM, or list at least one",
+    );
+    expect(() => getAribaRealms()).toThrow(AribaRealmConfigError);
+
+    for (const realm of ["", "acme-T", "someone-else"]) {
+      const res = await call(`endpoint=suppliers&realm=${realm}`);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as CallBody).error?.message).toMatch(/realm configuration is invalid/);
+    }
+    // Not even the rollback passes a broken list through.
+    vi.stubEnv("ARIBA_REALM_ALLOWLIST", "off");
+    expect((await call("endpoint=suppliers&realm=someone-else")).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it("keeps reading a valid list, a label alone still deriving its key as before", () => {
     vi.stubEnv("ARIBA_REALMS_JSON", '[{"key":" acme-T ","label":"Test"},{"label":"Prod Realm"},{"key":"acme-Q"}]');
     expect(getAribaRealms()).toEqual([
@@ -202,6 +228,42 @@ describe("A73 — an unknown endpoint key is the caller's error", () => {
     expect(res.status).toBe(400);
     expect(body.error).toEqual({ code: "VALIDATION_ERROR", message: "Unknown Ariba endpoint: operational-views" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("A73 — a malformed ARIBA_* URL is the deployment's 400, not a 502 'Ariba call failed'", () => {
+  it.each([
+    ["ARIBA_BASE_URL", "a host without a scheme", "ariba-api.test"],
+    ["ARIBA_BASE_URL", "a value that is not a URL", "https://"],
+    ["ARIBA_BASE_URL", "a scheme fetch cannot send", "ftp://ariba-api.test"],
+    ["ARIBA_OAUTH_TOKEN_URL", "a host without a scheme", "ariba-token.test/v2/oauth/token"],
+    ["ARIBA_OAUTH_TOKEN_URL", "a scheme fetch cannot send", "file:///etc/token"],
+  ])("%s set to %s answers 400 naming the variable, never its value, and sends nothing", async (name, _label, value) => {
+    vi.stubEnv(name, value);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await call("endpoint=suppliers&realm=acme-T");
+    const body = (await res.json()) as CallBody;
+
+    expect(res.status).toBe(400);
+    expect(body.error).toEqual({
+      code: "VALIDATION_ERROR",
+      message: `Ariba configuration is invalid. ${name} is not an absolute http(s) URL`,
+    });
+    expect(body.error?.message).not.toContain(value);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const catalog = (await (await catalogGET()).json()) as CatalogBody & { data: { configError: string | null } };
+    expect(catalog.data.configured).toBe(false);
+    expect(catalog.data.configError).toBe(`${name} is not an absolute http(s) URL`);
+    expect(JSON.stringify(spy.mock.calls)).not.toContain(value);
+    spy.mockRestore();
+  });
+
+  it("a well-formed configuration reports no configError", async () => {
+    const catalog = (await (await catalogGET()).json()) as CatalogBody & { data: { configError: string | null } };
+    expect(catalog.data.configured).toBe(true);
+    expect(catalog.data.configError).toBeNull();
   });
 });
 

@@ -30,10 +30,11 @@ import { ERROR_CODES } from "@/types/api";
  * unless this route learns to cap the role itself.
  *
  * NOTHING LEAVES ON A BAD REQUEST OR A BAD CONFIGURATION (roadmap P0.6).
- * parseAribaCallRequest refuses an unknown endpoint key (A73, once a 502), a
- * malformed ARIBA_REALMS_JSON or a realm it does not list (A72), and a limit
- * that is not a positive integer (A75, once `$top=NaN`), each 400
- * VALIDATION_ERROR before any token exchange. 502 is kept for a failure this
+ * parseAribaCallRequest refuses an unknown endpoint key (A73, once a 502), an
+ * ARIBA_BASE_URL or ARIBA_OAUTH_TOKEN_URL that is not an absolute http(s) URL
+ * (also once a 502), a malformed or empty ARIBA_REALMS_JSON or a realm it does
+ * not list (A72), and a limit that is not a positive integer (A75, once
+ * `$top=NaN`), each 400 VALIDATION_ERROR before any token exchange. 502 is kept for a failure this
  * route did not expect; what Ariba or its token endpoint answered is the
  * result's `status`, `stage` and `failureReason`, answered 200.
  */

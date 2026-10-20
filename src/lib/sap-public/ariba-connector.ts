@@ -16,11 +16,13 @@
  *
  * TRUTHFUL BY CONSTRUCTION (roadmap P0.6, audit A71-A75), as a holding fix
  * until P5.3 moves Ariba onto the REST adapter. The catalogue lists the paths
- * the call sends to; a malformed realm configuration is an error, not "no
- * realms"; an unknown endpoint key, a realm the deployment does not configure
- * and a limit that is not a positive integer are the caller's 400, refused
- * before any token exchange (parseAribaCallRequest); and a token endpoint
- * that fails says so, with its status, instead of a JSON parse error.
+ * the call sends to; a malformed realm configuration, an empty realm list
+ * included, is an error, not "no realms"; a malformed ARIBA_BASE_URL or
+ * ARIBA_OAUTH_TOKEN_URL is a configuration error, not "Ariba call failed"; an
+ * unknown endpoint key, a realm the deployment does not configure and a limit
+ * that is not a positive integer are the caller's 400; all of these are
+ * refused before any token exchange (parseAribaCallRequest); and a token
+ * endpoint that fails says so, with its status, instead of a JSON parse error.
  */
 import { isCredentialRefusal } from "./oauth-saml-bearer";
 import { OAuthTokenRequestError, credentialFailure, publicCredentialFailure } from "./upstream-failure";
@@ -218,6 +220,37 @@ export function isAribaConfigured(): boolean {
   );
 }
 
+/** The ARIBA_* URLs a call sends to: the realm's base, and the token endpoint. */
+const ARIBA_URL_VARIABLES = ["ARIBA_BASE_URL", "ARIBA_OAUTH_TOKEN_URL"] as const;
+
+/**
+ * What is wrong with the deployment's ARIBA_* URLs, or null (P0.6 review).
+ *
+ * A base URL without a scheme ("myrealm.ariba.com") made `new URL` throw in
+ * callAribaEndpoint, outside its try blocks, and the route answered 502 "Ariba
+ * call failed" for a call that never happened; a token URL like it failed the
+ * token step as "could not be reached". Each must parse as an absolute http or
+ * https URL. The message names the variable, never its value. An unset
+ * variable is isAribaConfigured()'s concern, not this one's.
+ *
+ * http is still accepted, as before; whether to require https is an open
+ * decision (docs/runbooks/sap-ariba-explorer.md).
+ */
+export function aribaUrlConfigError(env: EnvLike = process.env): string | null {
+  for (const name of ARIBA_URL_VARIABLES) {
+    const raw = env[name];
+    if (!raw) continue;
+    let protocol: string;
+    try {
+      protocol = new URL(raw).protocol;
+    } catch {
+      protocol = "";
+    }
+    if (protocol !== "https:" && protocol !== "http:") return `${name} is not an absolute http(s) URL`;
+  }
+  return null;
+}
+
 export function isAribaPublicAccessEnabled(): boolean {
   const raw = process.env.ARIBA_PUBLIC_ACCESS;
   if (raw === "true") return true;
@@ -247,7 +280,9 @@ export class AribaRealmConfigError extends Error {
  * swallowed the error) left an empty picker and sent requests with no realm.
  * An entry with neither a key nor a label cannot name a realm, so it is an
  * error too, not a made-up "realm-1"; a label alone still derives a key, as it
- * always has.
+ * always has. So is an empty list (P0.6 review): `[]` is a set variable that
+ * names no realm, and reading it as "none" silently discarded ARIBA_REALM and,
+ * with it, the realm allowlist, so any realm or none was sent.
  */
 export function getAribaRealms(): AribaRealm[] {
   const json = process.env.ARIBA_REALMS_JSON;
@@ -260,6 +295,9 @@ export function getAribaRealms(): AribaRealm[] {
     }
     if (!Array.isArray(parsed)) {
       throw new AribaRealmConfigError("it must be a JSON array of {key, label} objects");
+    }
+    if (parsed.length === 0) {
+      throw new AribaRealmConfigError("it lists no realms; unset it to use ARIBA_REALM, or list at least one");
     }
     return parsed.map((r: unknown, i) => {
       if (!r || typeof r !== "object" || Array.isArray(r)) {
@@ -308,7 +346,9 @@ export type AribaCallRequest =
  *
  *   - an endpoint key the catalogue does not list. A renamed key used to be a
  *     502 "Ariba call failed" although Ariba was never contacted;
- *   - a malformed ARIBA_REALMS_JSON;
+ *   - an ARIBA_BASE_URL or ARIBA_OAUTH_TOKEN_URL that is not an absolute
+ *     http(s) URL (aribaUrlConfigError), once also a 502;
+ *   - a malformed ARIBA_REALMS_JSON, an empty list included;
  *   - while realms are configured, a missing realm or one not in the list, so
  *     the deployment's token and apiKey are not spent on a realm it does not
  *     serve. With none configured, the realm is passed through as before, and
@@ -332,6 +372,9 @@ export function parseAribaCallRequest(params: URLSearchParams): AribaCallRequest
     }
     limit = Math.min(Number(rawLimit), ARIBA_MAX_LIMIT);
   }
+
+  const urlError = aribaUrlConfigError();
+  if (urlError) return { ok: false, message: `Ariba configuration is invalid. ${urlError}` };
 
   let realms: AribaRealm[];
   try {

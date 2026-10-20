@@ -34,6 +34,24 @@ realm. Now:
 When `ARIBA_REALMS_JSON` is set and broken, `ARIBA_REALM` is not used instead.
 The variable that was set is the one the operator meant.
 
+An empty list, `ARIBA_REALMS_JSON="[]"`, is malformed too: `realmsError` is
+"it lists no realms; unset it to use ARIBA_REALM, or list at least one". It
+used to read as "configured, zero realms". That silently dropped `ARIBA_REALM`
+and the realm check, so a call went out with no realm, or with any realm the
+caller named. To mean "no extra realms", leave `ARIBA_REALMS_JSON` unset or
+empty (`""`).
+
+**A malformed `ARIBA_*` URL is a configuration error (A73 class).**
+`ARIBA_BASE_URL` and `ARIBA_OAUTH_TOKEN_URL` must each be an absolute `http` or
+`https` URL. A value without a scheme, for example `myrealm.ariba.com`, used to
+answer `502 "Ariba call failed"` although nothing was sent, and named no
+variable. Now:
+
+- The catalogue answers `configured: false` and `configError: "<variable> is not an absolute http(s) URL"`.
+- The server log gets the same line. Neither names the value.
+- The explorer shows the error and keeps Run disabled.
+- The call route answers `400 VALIDATION_ERROR "Ariba configuration is invalid. <variable> is not an absolute http(s) URL"`, before any token exchange.
+
 **A call must name a configured realm (A72).** Once any realm is configured, a
 call that names no realm, or a realm not in the list, is refused with `400`
 before the token exchange. The deployment's token and apiKey are not spent on a
@@ -97,9 +115,12 @@ bad limits are refused whatever these are set to.
   have no `stage` or `failureReason`.
 - **The explorer behaves the same** for a deployment whose `ARIBA_*` values are
   well formed.
-- **A deployment with a malformed `ARIBA_REALMS_JSON`** stops sending realm-less
-  calls and shows the error instead. A call sent with no realm could not reach
-  the realm the operator meant to configure.
+- **A deployment with a malformed `ARIBA_REALMS_JSON`**, `"[]"` included, stops
+  sending realm-less calls and shows the error instead. A call sent with no
+  realm could not reach the realm the operator meant to configure.
+- **A deployment whose `ARIBA_BASE_URL` or `ARIBA_OAUTH_TOKEN_URL` has no
+  scheme** gets `400` naming the variable where it got `502`. No call could
+  succeed with that value before, so nothing that worked stops working.
 - **A script or person calling `/api/sap/ariba/call` directly** with a realm the
   deployment does not list, a renamed endpoint key or a bad `limit` now gets
   `400` where it used to get a call or a `502`.
@@ -107,10 +128,12 @@ bad limits are refused whatever these are set to.
 ## Checks after deploy
 
 1. Open `/sap-explorer` > SAP Ariba. The Realm picker lists the configured realms, and no red banner shows.
-2. If the banner shows, fix `ARIBA_REALMS_JSON` as it says. Common mistakes:
-   - a single object instead of an array: wrap it in `[ ]`;
-   - a trailing comma;
-   - an entry with neither `key` nor `label`.
+2. If the banner shows, fix the variable it names. Common mistakes:
+   - `ARIBA_REALMS_JSON` is a single object instead of an array: wrap it in `[ ]`;
+   - `ARIBA_REALMS_JSON` has a trailing comma;
+   - `ARIBA_REALMS_JSON` has an entry with neither `key` nor `label`;
+   - `ARIBA_REALMS_JSON` is `[]`: unset it, or list the realms;
+   - `ARIBA_BASE_URL` or `ARIBA_OAUTH_TOKEN_URL` lacks `https://`.
 3. With `ARIBA_SOURCING_V1=true`, check that "Sourcing Events" shows `/v1/` and the "v1 pinned" badge.
 4. Run once. A token failure shows "token step failed" in the badge, with what to check.
 
@@ -131,6 +154,11 @@ bad limits are refused whatever these are set to.
 - **Retire `ARIBA_REALM_ALLOWLIST`.** The switch is a rollback only. When to
   remove it is open: one release after the deploy with no use of `off` is the
   suggestion.
+- **Require https for the `ARIBA_*` URLs?** An `http` base or token URL is
+  still accepted, as before this item, although the token step then sends the
+  client secret in clear. Ariba itself serves only https, so refusing `http`
+  is likely right. It would change behaviour for a deployment pointed at an
+  http proxy or mock, so it is left for the Ariba owner to decide with P5.3.
 - **v2 sourcing paths are still unverified** against a live tenant (2608 WS8).
   This item does not change that. It only makes the explorer show which version
   is being called.

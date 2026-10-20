@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   AribaRealmConfigError,
+  aribaUrlConfigError,
   getAribaRealms,
   isAribaConfigured,
   isAribaPublicAccessEnabled,
@@ -18,7 +19,10 @@ import { ERROR_CODES } from "@/types/api";
  *     ARIBA_ENDPOINTS showed v2 while ARIBA_SOURCING_V1 sent v1 (audit A71).
  *   - a malformed ARIBA_REALMS_JSON is `realmsError`, with `configured: false`,
  *     not `configured: true` with zero realms (audit A72). The error and an
- *     empty result are never the same answer.
+ *     empty result are never the same answer. An empty list is malformed too.
+ *   - an ARIBA_BASE_URL or ARIBA_OAUTH_TOKEN_URL that is not an absolute
+ *     http(s) URL is `configError`, with `configured: false`: the call route
+ *     refuses every call while it is set so (P0.6 review).
  */
 export async function GET(): Promise<NextResponse> {
   if (!isAribaPublicAccessEnabled() && !(await getCurrentUser())) {
@@ -39,11 +43,16 @@ export async function GET(): Promise<NextResponse> {
     realmsError = error.message;
   }
 
+  // Names the variable, never its value.
+  const configError = aribaUrlConfigError();
+  if (configError) console.error(`[sap/ariba/catalog] ${configError}`);
+
   return NextResponse.json({
     data: {
-      configured: isAribaConfigured() && realmsError === null,
+      configured: isAribaConfigured() && realmsError === null && configError === null,
       realms,
       realmsError,
+      configError,
       endpoints: resolveAribaEndpoints(),
     },
   });

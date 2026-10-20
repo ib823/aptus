@@ -74,6 +74,27 @@ describe("SapAribaExplorer", () => {
   });
 });
 
+describe("SapAribaExplorer — a malformed ARIBA_* URL (P0.6 review)", () => {
+  it("shows the configuration error and never calls the route", async () => {
+    const fetchMock = stubCatalog({
+      configured: false,
+      realms: [{ key: "acme-T", label: "Test" }],
+      realmsError: null,
+      configError: "ARIBA_BASE_URL is not an absolute http(s) URL",
+      endpoints: [ENDPOINT],
+    });
+    render(<SapAribaExplorer />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("ARIBA_BASE_URL is not an absolute http(s) URL");
+    expect(alert.textContent).not.toContain("realm configuration");
+    const run = screen.getByRole("button", { name: /run/i });
+    expect((run as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(run);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).startsWith("/api/sap/ariba/call"))).toBe(false);
+  });
+});
+
 describe("resultBadgeLabel", () => {
   it("names a call that stopped at the token step, with no realm status", () => {
     expect(resultBadgeLabel({ status: 0, durationMs: 12, stage: "token" })).toBe("token step failed · 12ms");

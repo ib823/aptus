@@ -38,7 +38,7 @@ interface Realm {
   label: string;
 }
 interface CatalogResponse {
-  data: { configured: boolean; realms: Realm[]; realmsError?: string | null; endpoints: Endpoint[] };
+  data: { configured: boolean; realms: Realm[]; realmsError?: string | null; configError?: string | null; endpoints: Endpoint[] };
 }
 interface CallResult {
   endpoint: string;
@@ -74,6 +74,7 @@ export function SapAribaExplorer() {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [realm, setRealm] = useState("");
   const [realmsError, setRealmsError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [endpointKey, setEndpointKey] = useState("");
   const [result, setResult] = useState<CallResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,7 +93,7 @@ export function SapAribaExplorer() {
   const selectedEndpoint = endpoints.find((e) => e.key === endpointKey);
   const previewFields = result?.fields.slice(0, 8) ?? [];
   // The call route refuses both with 400; do not offer a Run that cannot work.
-  const runBlocked = realmsError !== null || (realms.length > 0 && !realm);
+  const runBlocked = realmsError !== null || configError !== null || (realms.length > 0 && !realm);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +104,7 @@ export function SapAribaExplorer() {
         if (!j.data) throw new Error(j.error?.message ?? "Failed to load Ariba catalog");
         setRealms(j.data.realms);
         setRealmsError(j.data.realmsError ?? null);
+        setConfigError(j.data.configError ?? null);
         setEndpoints(j.data.endpoints);
         setRealm(j.data.realms[0]?.key ?? "");
         setEndpointKey(j.data.endpoints[0]?.key ?? "");
@@ -192,12 +194,21 @@ export function SapAribaExplorer() {
         </div>
       )}
 
-      {realmsError && (
+      {(realmsError || configError) && (
         <div
           role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200"
+          className="space-y-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200"
         >
-          {realmsError}. Fix the deployment&apos;s realm configuration; nothing is sent to Ariba until then.
+          {configError && (
+            <p>
+              {configError}. Fix the deployment&apos;s Ariba configuration; nothing is sent to Ariba until then.
+            </p>
+          )}
+          {realmsError && (
+            <p>
+              {realmsError}. Fix the deployment&apos;s realm configuration; nothing is sent to Ariba until then.
+            </p>
+          )}
         </div>
       )}
 
