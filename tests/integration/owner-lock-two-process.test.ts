@@ -24,10 +24,22 @@
  *      sweep that read the slot before the claim and wrote after it would
  *      leave a fully, live-owned app RESTRICTED. It must end ACTIVE.
  *
+ *   3. Key change vs reclaim (review round 2). The decision doors above were
+ *      already locked before P0.1; what P0.1 locked is every door that mints
+ *      a key: Studio issue and rotate, the write key, the claim-link send and
+ *      the claim. A, who owns nothing, mints in one process while, in the
+ *      other, a reclaim putting A into an owner slot has taken the Solution
+ *      lock and written the slot but not yet committed. That is the window an
+ *      unlocked check-then-write fell through: the check read the committed
+ *      owners (not A), the write landed after the reclaim, and A ended up
+ *      owning the app AND having minted its key. Holding the reclaim open
+ *      makes the interleaving certain instead of a matter of timing. Each
+ *      door must wait for the reclaim, read A in the slot, and refuse.
+ *
  * Opt-in on TEST_DATABASE_URL. Rows are namespaced per run and removed after.
  */
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +81,12 @@ import { prisma } from "@/lib/db/prisma";
 import { POST as decide } from "@/app/api/coreedge/requests/[id]/decide/route";
 import { PATCH as decideInStudio } from "@/app/api/studio/access-grants/route";
 import { PATCH as patchSolution } from "@/app/api/studio/solutions/route";
+import { PATCH as rotateInStudio, POST as issueInStudio } from "@/app/api/studio/clients/route";
+import { POST as issueWriteKey } from "@/app/api/studio/clients/write-credential/route";
+import { POST as sendClaimLink } from "@/app/api/coreedge/keys/claim-link/route";
+import { claimKey, createClaimLink } from "@/lib/northbound/claim-link";
+import { hashClientToken } from "@/lib/northbound/auth";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { sweepOwnerLiveness } from "@/lib/studio/owner-liveness";
 
 const RUN = `two-proc-${randomUUID()}`;
@@ -155,6 +173,61 @@ async function boundWriteRequest(solutionId: string): Promise<string> {
 }
 
 const RUNS = 12;
+
+/** A PROD runtime key for the app, issued earlier by B (who owns nothing either). */
+async function prodKey(solutionId: string): Promise<string> {
+  const c = await prisma.solutionClient.create({
+    data: {
+      organizationId: ORG,
+      solutionId,
+      label: "Order portal · PROD",
+      tokenHash: hashClientToken(`cek_${randomUUID()}`),
+      environment: "PROD",
+      createdById: B.id,
+    },
+    select: { id: true },
+  });
+  return c.id;
+}
+
+/** An approved PROD write grant: what the write key is minted against. */
+async function approvedProdWrite(solutionId: string): Promise<void> {
+  const grantId = await boundWriteRequest(solutionId);
+  await prisma.apiAccessGrant.update({
+    where: { id: grantId, organizationId: ORG },
+    data: { decision: "APPROVED", decidedById: C.id, decidedAt: new Date() },
+  });
+}
+
+/**
+ * Run `attempt` in process one while, in process two, a reclaim putting A into
+ * the support slot holds the Solution lock with its write made and not yet
+ * committed. The attempt is given time to make its own early, unlocked check
+ * (which sees the committed owners) before the reclaim commits.
+ */
+async function againstHeldReclaim<T>(solutionId: string, attempt: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let holding!: () => void;
+  const held = new Promise<void>((resolve) => (holding = resolve));
+  const reclaim = as("two", () =>
+    prisma.$transaction(
+      async (tx) => {
+        await lockSolutionOwnership(tx, { organizationId: ORG, solutionId });
+        await tx.solution.update({ where: { id: solutionId, organizationId: ORG }, data: { supportOwnerId: A.id } });
+        holding();
+        await released;
+      },
+      { timeout: 30_000 },
+    ),
+  );
+  await held;
+  const attempted = as("one", attempt);
+  await new Promise((resolve) => setTimeout(resolve, 750));
+  release();
+  await reclaim;
+  return attempted;
+}
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("two processes racing on one app, against real PostgreSQL", () => {
   beforeAll(async () => {
@@ -248,6 +321,84 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("two processes racing on one app
       }
     });
   }
+
+  describe("a key minted against a reclaim in flight", () => {
+    beforeEach(() => {
+      vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", randomBytes(32).toString("hex"));
+    });
+
+    const lane = (solutionId: string) =>
+      prisma.solutionClient.findFirst({
+        where: { organizationId: ORG, solutionId, environment: "PROD" },
+        select: { tokenHash: true, secretsCiphertext: true },
+      });
+    const ownedByA = async (solutionId: string) =>
+      (await prisma.solution.findFirst({ where: { id: solutionId, organizationId: ORG }, select: { supportOwnerId: true } }))
+        ?.supportOwnerId === A.id;
+
+    it("Studio issue waits for the reclaim, sees A in the slot, and mints nothing", async () => {
+      const solutionId = await app([B.id, C.id, D.id], "ACTIVE");
+      session.user = A;
+      const res = await againstHeldReclaim(solutionId, () =>
+        issueInStudio(
+          json({ solutionId, label: "prod", environment: "PROD" }, "POST", "http://localhost/api/studio/clients"),
+        ),
+      );
+      expect(await ownedByA(solutionId)).toBe(true);
+      expect(res.status).toBe(403);
+      expect(await lane(solutionId)).toBeNull();
+    });
+
+    it("Studio rotate waits for the reclaim, sees A in the slot, and leaves B's key standing", async () => {
+      const solutionId = await app([B.id, C.id, D.id], "ACTIVE");
+      const clientId = await prodKey(solutionId);
+      const before = await lane(solutionId);
+      session.user = A;
+      const res = await againstHeldReclaim(solutionId, () =>
+        rotateInStudio(json({ clientId, action: "rotate" }, "PATCH", "http://localhost/api/studio/clients")),
+      );
+      expect(await ownedByA(solutionId)).toBe(true);
+      expect(res.status).toBe(403);
+      expect((await lane(solutionId))?.tokenHash).toBe(before?.tokenHash);
+    });
+
+    it("the write key waits for the reclaim, sees A in the slot, and seals nothing", async () => {
+      const solutionId = await app([B.id, C.id, D.id], "ACTIVE");
+      await prodKey(solutionId);
+      await approvedProdWrite(solutionId);
+      session.user = A;
+      const res = await againstHeldReclaim(solutionId, () =>
+        issueWriteKey(
+          json({ solutionId, environment: "PROD" }, "POST", "http://localhost/api/studio/clients/write-credential"),
+        ),
+      );
+      expect(await ownedByA(solutionId)).toBe(true);
+      expect(res.status).toBe(403);
+      expect((await lane(solutionId))?.secretsCiphertext ?? null).toBeNull();
+    });
+
+    it("the claim-link send waits for the reclaim, sees A in the slot, and sends nothing", async () => {
+      const solutionId = await app([B.id, C.id, D.id], "ACTIVE");
+      session.user = A;
+      const res = await againstHeldReclaim(solutionId, () =>
+        sendClaimLink(
+          json({ solutionId, environment: "PROD" }, "POST", "http://localhost/api/coreedge/keys/claim-link"),
+        ),
+      );
+      expect(await ownedByA(solutionId)).toBe(true);
+      expect(res.status).toBe(403);
+      expect(await prisma.keyClaimLink.count({ where: { organizationId: ORG, solutionId } })).toBe(0);
+    });
+
+    it("opening A's link waits for the reclaim, sees its sender in the slot, and mints nothing", async () => {
+      const solutionId = await app([B.id, C.id, D.id], "ACTIVE");
+      const link = await createClaimLink({ organizationId: ORG, solutionId, environment: "PROD", createdById: A.id });
+      const res = await againstHeldReclaim(solutionId, () => claimKey(link.rawToken));
+      expect(await ownedByA(solutionId)).toBe(true);
+      expect(res).toEqual({ ok: false, refusal: "SENDER_OWNS_APP" });
+      expect(await lane(solutionId)).toBeNull();
+    });
+  });
 
   it("never leaves a fully live-owned app RESTRICTED when the owner sweep races a reclaim", async () => {
     await prisma.user.update({ where: { id: D.id }, data: { isActive: false } });

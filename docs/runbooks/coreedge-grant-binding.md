@@ -30,12 +30,14 @@ active connection answers `409 CONFLICT` naming the other connection, instead of
 an empty 500.
 
 **A departed owner is no owner (A69).** An owner slot counts only while it holds
-an active user of the same organization. The credential gates (issue, rotate,
+an active user of the same organization. A claim link likewise mints nothing once
+the person who sent it has been deactivated or has left the organization: it is
+closed with that reason when opened. The credential gates (issue, rotate,
 write key, claim link) and the promotion to ACTIVE judge ownership that way, and a nightly sweep moves every
 ACTIVE app with a slot no live owner holds to RESTRICTED.
 
-**Races.** Issue, rotate and revoke a key, send a claim link and open one: each
-now runs in one transaction that first takes the Solution row lock (the lock the
+**Races.** Issue, rotate and revoke a key, issue a write key, send a claim link
+and open one: each now runs in one transaction that first takes the Solution row lock (the lock the
 owner-slot PATCH and every decision door already took), re-checks the owner
 gate while holding it, and closes the lane's pending claim links in the same
 transaction as the key write.
@@ -45,11 +47,14 @@ transaction as the key write.
 Nothing that works today stops without an operator choosing it.
 
 - The migration `20261022000000_grant_interface_binding` adds the columns and
-  binds each existing grant to the single interface it matched (same solution,
-  service id and operation, which is what the broker matched on), counting only
-  interfaces that existed when the request was raised. A grant that matched
-  none is marked `NO_MATCH`, one that matched several `AMBIGUOUS`; both stay
-  unbound. A bound grant authorises exactly what it did before.
+  binds each existing grant to the single interface it matches today (same
+  solution, service id and operation, which is what the broker matched on),
+  provided that interface existed when the request was raised. A grant that
+  matches several interfaces today is marked `AMBIGUOUS`, even when only one of
+  them is older than the grant (the old broker serves it on all of them); one
+  that matches none, or only an interface added after it, `NO_MATCH`. Both stay
+  unbound and keep the old matching under `legacy`. So a bound grant authorises
+  exactly what it did before: the one interface it ever matched.
 - `COREEDGE_GRANT_BINDING` defaults to `legacy`: an unbound grant keeps the old
   matching, and each call it authorises stamps `unboundLastUsedAt` (at most
   hourly per grant) and logs `[grant-binding] an unbound legacy grant authorised a call`.
@@ -90,8 +95,15 @@ person approve it, then revoke the old grant in Control Tower.
 3. Re-approve or revoke each live one until `pnpm grants:binding --check` exits 0.
 4. Set `COREEDGE_GRANT_BINDING=strict` in the deployment and redeploy.
 
-Under strict an unbound grant's calls are refused with
-`403 GRANT_NEEDS_REAPPROVAL`. **Rollback:** set it back to `legacy` (or unset
+Under strict an unbound grant's calls are refused with `403` and error code
+`FORBIDDEN`, the code every missing-grant refusal carries; what tells them apart
+is the message, "The access grant for this capability was approved before grants
+were bound to one interface, and this deployment no longer honours such grants.
+Ask for it to be approved again against this interface." (The broker's internal
+reason is `GRANT_NEEDS_REAPPROVAL`; it is not sent on the wire, and the
+northbound call log records the status only.) Because strict is switched on only
+once `--check` reports no live unbound grant, these refusals should not occur;
+if one does, the grant is on the re-approval lists. **Rollback:** set it back to `legacy` (or unset
 it) and redeploy; nothing is migrated by the switch.
 
 ## The owner sweep

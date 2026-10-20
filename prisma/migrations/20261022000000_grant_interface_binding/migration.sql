@@ -8,11 +8,14 @@
 --
 -- BACKFILL. Each existing grant is bound to the single interface its old tuple
 -- matches today (same solution, organization, externalId and operation, which
--- is what the broker matched on) among those that existed when the request was
--- raised: an interface added later is not what anybody asked for. A grant
--- matching zero interfaces is marked NO_MATCH and one matching several
--- AMBIGUOUS; both stay unbound and are flagged for re-approval on the Control
--- Tower grants screen and the CoreEdge requests board. The statement is the one
+-- is what the broker matched on), provided that interface existed when the
+-- request was raised: an interface added later is not what anybody asked for.
+-- A grant matching several interfaces today is marked AMBIGUOUS, even if only
+-- one of them predates it, because the old broker serves it on all of them
+-- (review round 2); one matching none, or only an interface added after it,
+-- NO_MATCH. Both stay unbound, keep the old matching under legacy, and are
+-- flagged for re-approval on the Control Tower grants screen and the CoreEdge
+-- requests board. The statement is the one
 -- `pnpm grants:binding --apply` runs (GRANT_BINDING_BACKFILL_SQL in
 -- src/lib/studio/grant-binding.ts; a test keeps the two identical). It touches
 -- only rows never classified (every row, here; afterwards only those the old
@@ -50,6 +53,7 @@ ALTER TABLE "ApiAccessGrant" ADD CONSTRAINT "ApiAccessGrant_interfaceId_fkey" FO
 WITH "candidates" AS (
   SELECT g."id" AS "grantId",
          COUNT(i."id") AS "matches",
+         COUNT(i."id") FILTER (WHERE i."createdAt" <= g."createdAt") AS "earlier",
          MIN(i."id") AS "interfaceId",
          MIN(i."sapProduct") AS "sapProduct"
   FROM "ApiAccessGrant" g
@@ -58,18 +62,17 @@ WITH "candidates" AS (
    AND i."organizationId" = g."organizationId"
    AND i."externalId" = g."externalId"
    AND i."operation" = g."operation"
-   AND i."createdAt" <= g."createdAt"
   WHERE g."interfaceId" IS NULL
     AND g."unboundReason" IS NULL
   GROUP BY g."id"
 )
 UPDATE "ApiAccessGrant" AS g
-SET "interfaceId" = CASE WHEN c."matches" = 1 THEN c."interfaceId" ELSE NULL END,
-    "sapProduct" = CASE WHEN c."matches" = 1 THEN c."sapProduct" ELSE NULL END,
+SET "interfaceId" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."interfaceId" ELSE NULL END,
+    "sapProduct" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."sapProduct" ELSE NULL END,
     "unboundReason" = CASE
-      WHEN c."matches" = 0 THEN 'NO_MATCH'
       WHEN c."matches" > 1 THEN 'AMBIGUOUS'
-      ELSE NULL
+      WHEN c."matches" = 1 AND c."earlier" = 1 THEN NULL
+      ELSE 'NO_MATCH'
     END
 FROM "candidates" AS c
 WHERE g."id" = c."grantId";

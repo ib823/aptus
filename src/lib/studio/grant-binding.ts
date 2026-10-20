@@ -27,7 +27,8 @@
  *     (at most hourly per grant), so the operator can see what strict would
  *     refuse.
  *   COREEDGE_GRANT_BINDING=strict — an unbound grant authorises nothing; the
- *     broker answers GRANT_NEEDS_REAPPROVAL.
+ *     access check's reason is GRANT_NEEDS_REAPPROVAL, sent to the caller as a
+ *     403 FORBIDDEN whose message asks for re-approval.
  *
  * `pnpm grants:binding` counts the unbound grants (and with --apply binds the
  * ones the old code created during the rollout; a flagged grant is never
@@ -152,11 +153,13 @@ export type BindingOutcome =
 
 /**
  * The single interface a (solution, externalId, operation) names, if exactly
- * one does. The same rule the migration's backfill applies, so a request
- * raised by an older caller (externalId, no interfaceId) and a pending
- * legacy request are bound exactly as the backfill would have bound them —
- * including its time limit: with `raisedAt`, only an interface that existed
- * when the request was raised counts (review round 1).
+ * one does, so a request raised by an older caller (externalId, no
+ * interfaceId) is bound to the interface it names. With `raisedAt`, for a
+ * pending legacy request at its decision, only an interface that existed when
+ * the request was raised counts (review round 1): one added since is not what
+ * was asked for. Unlike the backfill, which must not narrow a grant that
+ * already carries traffic, a pending request carries none, so this limit may
+ * pick the one interface it was raised from out of several.
  */
 export async function findBinding(
   db: InterfaceLookupDb,
@@ -271,28 +274,35 @@ export function unboundGrantLabel(unboundReason: string | null): string {
  * Each unbound grant is bound to the one interface its old tuple matches —
  * same solution, organization, externalId and operation, which is exactly
  * what the broker matched on (the environment comes from the caller's token,
- * not the interface). Zero matches: NO_MATCH; several: AMBIGUOUS; both stay
- * unbound. Cannot fail on existing data: it writes only ids read from
+ * not the interface). Several matches: AMBIGUOUS; none, or only one added
+ * after the grant: NO_MATCH; both stay unbound. Cannot fail on existing data: it writes only ids read from
  * Interface in the same statement. The migration holds a copy of this text;
  * tests/unit/northbound/grant-binding-broker.test.ts keeps the two identical.
  *
- * TWO LIMITS, so the operator's re-run can never widen an approval (review
- * round 1). It used to re-check every unbound row, so a NO_MATCH approval
- * bound itself to whatever interface had been added since — on another SAP
- * product — left the re-approval lists, and strict then served it: A47 again.
+ * TWO LIMITS, so neither the deploy nor the operator's re-run can widen an
+ * approval (review round 1), nor narrow one that carries traffic (round 2).
+ * It used to re-check every unbound row, so a NO_MATCH approval bound itself
+ * to whatever interface had been added since — on another SAP product — left
+ * the re-approval lists, and strict then served it: A47 again.
  *
  *   - Only rows never classified (`unboundReason IS NULL`): a NO_MATCH or
  *     AMBIGUOUS grant waits for a person to re-approve it, whatever changes
  *     later. In the migration every row is unclassified, so this is a no-op
  *     there; afterwards it leaves only the rows the old code created during
  *     the rollout. So the statement is idempotent: a second run binds nothing.
- *   - Only an interface that existed when the request was raised
- *     (`i.createdAt <= g.createdAt`): a request is raised from an interface,
- *     so one added later is not what anybody asked for, let alone approved.
+ *   - A grant is bound only when exactly one interface matches it TODAY and
+ *     that one existed when the request was raised (`earlier`): a request is
+ *     raised from an interface, so one added later is not what anybody asked
+ *     for, let alone approved. The time limit only ever withholds a binding:
+ *     a grant that also matches an interface added since is AMBIGUOUS, not
+ *     bound to the older one, because the old broker serves it on both and a
+ *     binding would stop the newer one's calls on deploy, unflagged (review
+ *     round 2). Unbound, legacy keeps every such call working.
  */
 export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
   SELECT g."id" AS "grantId",
          COUNT(i."id") AS "matches",
+         COUNT(i."id") FILTER (WHERE i."createdAt" <= g."createdAt") AS "earlier",
          MIN(i."id") AS "interfaceId",
          MIN(i."sapProduct") AS "sapProduct"
   FROM "ApiAccessGrant" g
@@ -301,18 +311,17 @@ export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
    AND i."organizationId" = g."organizationId"
    AND i."externalId" = g."externalId"
    AND i."operation" = g."operation"
-   AND i."createdAt" <= g."createdAt"
   WHERE g."interfaceId" IS NULL
     AND g."unboundReason" IS NULL
   GROUP BY g."id"
 )
 UPDATE "ApiAccessGrant" AS g
-SET "interfaceId" = CASE WHEN c."matches" = 1 THEN c."interfaceId" ELSE NULL END,
-    "sapProduct" = CASE WHEN c."matches" = 1 THEN c."sapProduct" ELSE NULL END,
+SET "interfaceId" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."interfaceId" ELSE NULL END,
+    "sapProduct" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."sapProduct" ELSE NULL END,
     "unboundReason" = CASE
-      WHEN c."matches" = 0 THEN 'NO_MATCH'
       WHEN c."matches" > 1 THEN 'AMBIGUOUS'
-      ELSE NULL
+      WHEN c."matches" = 1 AND c."earlier" = 1 THEN NULL
+      ELSE 'NO_MATCH'
     END
 FROM "candidates" AS c
 WHERE g."id" = c."grantId";`;

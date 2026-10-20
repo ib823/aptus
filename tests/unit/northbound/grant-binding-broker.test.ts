@@ -321,6 +321,32 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
     expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
   });
 
+  /*
+   * REVIEW ROUND 2. The round-1 time limit counted only interfaces older than
+   * the grant, so a grant whose tuple ALSO matched an interface added since —
+   * which the old broker served on it — was bound to the older one alone, and
+   * every call to the newer one failed on deploy, unflagged, under legacy.
+   */
+  it("never binds a grant that today matches an older and a newer interface: legacy keeps both working", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const cloud = await addInterface(solutionId, "s4hana");
+    const grantId = await legacyGrant(solutionId);
+    await prisma.interface.update({
+      where: { id: cloud, organizationId: ORG },
+      data: { createdAt: new Date(Date.now() - 7_200_000) },
+    });
+    await backdate(grantId);
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    expect((await read(solutionId, onPrem)).ok).toBe(true);
+
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "AMBIGUOUS" });
+    expect((await read(solutionId, cloud)).ok).toBe(true);
+    expect((await read(solutionId, onPrem)).ok).toBe(true);
+    expect((await listGrantsNeedingReapproval(ORG)).some((r) => r.id === grantId)).toBe(true);
+  });
+
   it("a decision never binds a legacy request to an interface added after it was raised", async () => {
     const solutionId = await app();
     const pending = await legacyGrant(solutionId, "REQUESTED");

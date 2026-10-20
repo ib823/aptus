@@ -49,7 +49,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
-import { refuseKeyIssuer } from "@/lib/northbound/issue";
+import { KeyIssuerRefused, refuseKeyIssuer, type KeyIssuerRefusal } from "@/lib/northbound/issue";
 import { generateWriteCredential, setWriteCredential } from "@/lib/northbound/write-credential";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -64,6 +64,39 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+const RETIRED_REFUSAL =
+  "This solution is RETIRED, so authentication refuses every call it makes. A write key " +
+  "issued now would authorise nothing today and everything the moment someone reactivates " +
+  "the solution. Reactivate it first if the integration is meant to run.";
+
+/**
+ * The owner gate's refusal, in this route's words — the same sentences
+ * whether it was found by the early check or by the re-check under the app
+ * lock in `setWriteCredential`.
+ */
+function issuerRefusal(refusal: KeyIssuerRefusal) {
+  switch (refusal.reason) {
+    case "solutionGone":
+      return studioError("NOT_FOUND", "Solution not found.");
+    case "solutionRetired":
+      return studioError("FORBIDDEN", RETIRED_REFUSAL);
+    case "ownersMissing":
+      return studioError(
+        "FORBIDDEN",
+        `This solution has no ${refusal.missing.join(", ")}. Assign owners before issuing its write key — ` +
+          "a write into a client's ledger needs an accountability record more than anything else does." +
+          (refusal.departed
+            ? " A slot whose owner has been deactivated or has left the organization counts as empty."
+            : ""),
+      );
+    case "issuerIsOwner":
+      return studioError(
+        "FORBIDDEN",
+        "You own this solution, so you cannot issue its write key. Ask a colleague to issue it.",
+      );
+  }
+}
 
 const bodySchema = z.object({
   solutionId: z.string().min(1),
@@ -107,35 +140,16 @@ export async function POST(request: NextRequest) {
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
 
-  if (solution.status === "RETIRED") {
-    return studioError(
-      "FORBIDDEN",
-      "This solution is RETIRED, so authentication refuses every call it makes. A write key " +
-        "issued now would authorise nothing today and everything the moment someone reactivates " +
-        "the solution. Reactivate it first if the integration is meant to run.",
-    );
-  }
+  if (solution.status === "RETIRED") return studioError("FORBIDDEN", RETIRED_REFUSAL);
 
   // Owners first, then the issuer is none of them — on LIVE owners: a slot
   // whose owner was deactivated or left the organization counts as empty
-  // (P0.1, A69), because nobody there can answer for the key.
+  // (P0.1, A69), because nobody there can answer for the key. Asked early so
+  // the refusal comes before the passkey; asked again under the app lock with
+  // the write (`setWriteCredential`), because an owner-slot PATCH can land in
+  // between (review round 2).
   const refusal = await refuseKeyIssuer(prisma, scope.organizationId, solution.id, user.id);
-  if (refusal?.reason === "ownersMissing") {
-    return studioError(
-      "FORBIDDEN",
-      `This solution has no ${refusal.missing.join(", ")}. Assign owners before issuing its write key — ` +
-        "a write into a client's ledger needs an accountability record more than anything else does." +
-        (refusal.departed
-          ? " A slot whose owner has been deactivated or has left the organization counts as empty."
-          : ""),
-    );
-  }
-  if (refusal?.reason === "issuerIsOwner") {
-    return studioError(
-      "FORBIDDEN",
-      "You own this solution, so you cannot issue its write key. Ask a colleague to issue it.",
-    );
-  }
+  if (refusal !== null) return issuerRefusal(refusal);
 
   // The write key seals onto ONE of the solution's runtime credential rows —
   // the one for the environment the caller named, or the only live one.
@@ -202,7 +216,13 @@ export async function POST(request: NextRequest) {
   if (!stepUp.ok) return stepUp.response;
 
   const rawKey = generateWriteCredential();
-  const sealed = await setWriteCredential(scope, client.id, rawKey);
+  let sealed: boolean;
+  try {
+    sealed = await setWriteCredential(scope, client.id, rawKey, { issuerId: user.id });
+  } catch (err) {
+    if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal);
+    throw err;
+  }
   if (!sealed) return studioError("NOT_FOUND", "Credential not found.");
 
   await writeConfigAudit({

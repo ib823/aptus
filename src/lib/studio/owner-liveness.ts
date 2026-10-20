@@ -59,6 +59,15 @@ async function liveUserIds(
   return new Set(users.map((u) => u.id));
 }
 
+/**
+ * Is this person still an active member of this organization? The liveness
+ * an owner slot is judged on, asked of one person — the sender of a claim
+ * link, who issues its key up to 72 hours after sending it (review round 2).
+ */
+export async function isLiveMember(db: UserLookupDb, organizationId: string, userId: string): Promise<boolean> {
+  return (await liveUserIds(db, organizationId, [userId])).has(userId);
+}
+
 /** Apply a known set of live ids to one app's slots. */
 export function applyLiveness(ownership: Ownership, live: ReadonlySet<string>): LiveOwnership {
   const departed: OwnerField[] = [];

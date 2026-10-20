@@ -217,7 +217,9 @@ describe("the write key is not minted onto a dead credential", () => {
     const out = await json(await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body)));
 
     expect(out.data?.writeKey).toBe("cew_generated");
-    expect(mocks.setWriteCredential).toHaveBeenCalledWith(expect.anything(), "cli_test", "cew_generated");
+    expect(mocks.setWriteCredential).toHaveBeenCalledWith(expect.anything(), "cli_test", "cew_generated", {
+      issuerId: BUILDER.id,
+    });
   });
 
   it("an expiry in the future is still live", async () => {

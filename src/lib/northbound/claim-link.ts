@@ -38,7 +38,7 @@ import {
 } from "@/lib/northbound/issue";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
-import { refuseCredentialIssuerLive } from "@/lib/studio/owner-liveness";
+import { isLiveMember, refuseCredentialIssuerLive } from "@/lib/studio/owner-liveness";
 
 /** Claim tokens are their own namespace, so one can never be mistaken for a key. */
 export const CLAIM_TOKEN_PREFIX = "cec_";
@@ -85,6 +85,13 @@ export type LaneRefusal =
   | "OWNERS_MISSING"
   /** Whoever sent the link owns the app — the self-issuance Studio refuses. */
   | "SENDER_OWNS_APP"
+  /**
+   * Whoever sent the link has since been deactivated, deleted or moved to
+   * another organization. The key would be issued in their name, and they can
+   * no longer answer for it — the departed-owner rule (A69), asked of the
+   * issuer too (review round 2).
+   */
+  | "SENDER_DEPARTED"
   /** The lane's key was revoked after the link was sent. Opening it must not undo that. */
   | "KEY_REVOKED"
   /** A key was issued for the lane after the link was sent. Opening it would kill that key. */
@@ -99,6 +106,7 @@ const LANE_REFUSAL_REASONS: Readonly<Record<LaneRefusal, string>> = {
   SOLUTION_RETIRED: "The app was retired.",
   OWNERS_MISSING: "The app no longer names all three owners.",
   SENDER_OWNS_APP: "The person who sent the link owns the app.",
+  SENDER_DEPARTED: "The person who sent the link is no longer an active member of the organization.",
   KEY_REVOKED: "The key was revoked.",
   KEY_ISSUED_SINCE: "A key was issued for this environment after the link was sent.",
 };
@@ -363,6 +371,8 @@ interface LaneFacts {
   } | null;
   /** The owner gate against the SENDER, judged on live owners (A69). */
   readonly issuer: "ownersMissing" | "issuerIsOwner" | null;
+  /** Is the sender still an active member of the link's organization? */
+  readonly senderLive: boolean;
   /** The key the lane holds now, if any — what claiming would replace. */
   readonly client: {
     readonly createdAt: Date;
@@ -404,7 +414,10 @@ async function readLaneFacts(
     solution === null
       ? null
       : ((await refuseCredentialIssuerLive(db, link.organizationId, solution, link.createdById))?.refusal ?? null);
-  return { solution, client, issuer };
+  // The sender issues the key, so their own liveness counts as an owner's
+  // does: deactivating someone must not leave their links minting for 72 hours.
+  const senderLive = await isLiveMember(db, link.organizationId, link.createdById);
+  return { solution, client, issuer, senderLive };
 }
 
 /**
@@ -418,9 +431,10 @@ async function readLaneFacts(
  * inbox cannot be the way round it.
  */
 function refuseLane(link: OpenedLink, facts: LaneFacts): LaneRefusal | null {
-  const { solution, client, issuer } = facts;
+  const { solution, client, issuer, senderLive } = facts;
   if (solution === null) return "SOLUTION_GONE";
   if (solution.status === "RETIRED") return "SOLUTION_RETIRED";
+  if (!senderLive) return "SENDER_DEPARTED";
 
   if (issuer === "ownersMissing") return "OWNERS_MISSING";
   if (issuer === "issuerIsOwner") return "SENDER_OWNS_APP";

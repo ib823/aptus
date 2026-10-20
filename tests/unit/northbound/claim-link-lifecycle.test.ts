@@ -482,6 +482,24 @@ describe("A01 · ownership is asked again when the link is opened", () => {
     expect(laneStore.clients).toHaveLength(0);
   });
 
+  // Review round 2: liveness was asked of the owners only. A sender
+  // deactivated (or moved away) after sending still minted a PROD key, with
+  // the ISSUE row naming someone who can no longer answer for it.
+  it("refuses when the SENDER has since been deactivated or left, and closes the link with why", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    laneStore.departedUsers.add(SENDER);
+
+    moveTo(at(1));
+    expect(await inspectClaimLink(link)).toEqual({ ok: false, refusal: "SENDER_DEPARTED" });
+    expect(await claimKey(link)).toEqual({ ok: false, refusal: "SENDER_DEPARTED" });
+    expect(laneStore.clients).toHaveLength(0);
+    expect(onlyLink()).toMatchObject({
+      claimedAt: null,
+      revokedReason: "The person who sent the link is no longer an active member of the organization.",
+    });
+  });
+
   it("refuses to SEND a link for an app with a departed owner, and writes nothing", async () => {
     laneStore.departedUsers.add("u_sup");
     await expect(sendLink()).rejects.toMatchObject({
@@ -493,17 +511,41 @@ describe("A01 · ownership is asked again when the link is opened", () => {
 });
 
 describe("P0.1 · every key change and claim takes the app's owner lock first", () => {
-  it("send, claim, issue, rotate and revoke each lock the Solution row", async () => {
+  it("send, claim, issue, rotate, write key and revoke each lock the Solution row", async () => {
     moveTo(at(0));
     const link = await sendLink();
     moveTo(at(1));
     await claimKey(link);
     const issued = await issueInStudio();
     await rotateClientToken(SCOPE, issued.id);
+    expect(await setWriteCredential(SCOPE, issued.id, "cew_locked", { issuerId: STUDIO_ISSUER })).toBe(true);
     await revokeClientToken(SCOPE, issued.id);
 
-    expect(laneStore.locks).toHaveLength(5);
+    expect(laneStore.locks).toHaveLength(6);
     expect(laneStore.locks.every(([org, sol]) => org === ORG && sol === "sol_1")).toBe(true);
+  });
+
+  // Review round 2: the write key was sealed with a plain update after the
+  // route's unlocked owner check, so a reclaim landing in between let the
+  // issuer own the app and mint its write key.
+  it("the write key re-checks its issuer under the lock, and writes nothing when refused", async () => {
+    moveTo(at(0));
+    const issued = await issueInStudio();
+    laneStore.solutions[0]!.supportOwnerId = STUDIO_ISSUER;
+
+    await expect(
+      setWriteCredential(SCOPE, issued.id, "cew_refused", { issuerId: STUDIO_ISSUER }),
+    ).rejects.toMatchObject({ name: "KeyIssuerRefused", refusal: { reason: "issuerIsOwner" } });
+    expect(lane()!.secretsCiphertext ?? null).toBeNull();
+  });
+
+  it("the write key is never sealed onto a credential revoked before the lock was held", async () => {
+    moveTo(at(0));
+    const issued = await issueInStudio();
+    await revokeClientToken(SCOPE, issued.id);
+
+    expect(await setWriteCredential(SCOPE, issued.id, "cew_late", { issuerId: STUDIO_ISSUER })).toBe(false);
+    expect(lane()!.secretsCiphertext ?? null).toBeNull();
   });
 });
 
