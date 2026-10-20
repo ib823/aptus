@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
+  AribaRequestError,
   callAribaEndpoint,
   isAribaConfigured,
+  parseAribaCallRequest,
 } from "@/lib/sap-public/ariba-connector";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { logDecision } from "@/lib/audit/decision-logger";
@@ -26,6 +28,14 @@ import { ERROR_CODES } from "@/types/api";
  * so there is no SANDBOX to hold that role to; the guard's default refuses it
  * here, before any OAuth exchange. Do not pass `appliesSandboxDeveloperCeiling`
  * unless this route learns to cap the role itself.
+ *
+ * NOTHING LEAVES ON A BAD REQUEST OR A BAD CONFIGURATION (roadmap P0.6).
+ * parseAribaCallRequest refuses an unknown endpoint key (A73, once a 502), a
+ * malformed ARIBA_REALMS_JSON or a realm it does not list (A72), and a limit
+ * that is not a positive integer (A75, once `$top=NaN`), each 400
+ * VALIDATION_ERROR before any token exchange. 502 is kept for a failure this
+ * route did not expect; what Ariba or its token endpoint answered is the
+ * result's `status`, `stage` and `failureReason`, answered 200.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const refusal = await refuseUnlessMayProbeTenant();
@@ -38,21 +48,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const endpoint = request.nextUrl.searchParams.get("endpoint") ?? "";
-  const realm = request.nextUrl.searchParams.get("realm") ?? "";
-  const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
-
-  if (!endpoint) {
+  const parsed = parseAribaCallRequest(request.nextUrl.searchParams);
+  if (!parsed.ok) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "endpoint is required" } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.message } },
       { status: 400 },
     );
   }
+  const { endpointKey: endpoint, realm, limit } = parsed;
 
   try {
     const result = await callAribaEndpoint(endpoint, realm, limit);
     // Best-effort audit — endpoint + realm + outcome, never payload data. The
-    // guard above means there is always an attributable caller.
+    // guard above means there is always an attributable caller. `stage` and
+    // `failureReason` say whether the realm was asked at all (A74).
     try {
       const user = await getCurrentUser();
       await logDecision({
@@ -60,7 +69,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         entityType: "sap_ariba_call",
         entityId: endpoint,
         action: "SAP_CAPABILITY_PROBED",
-        newValue: { endpoint, realm: realm || null, status: result.status },
+        newValue: {
+          endpoint,
+          realm: realm || null,
+          status: result.status,
+          stage: result.stage,
+          failureReason: result.failureReason,
+        },
         actor: user?.email ?? "unknown",
         actorRole: (user?.role ?? "consultant") as UserRole,
       });
@@ -69,6 +84,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
     return NextResponse.json({ data: result });
   } catch (error) {
+    if (error instanceof AribaRequestError) {
+      // parseAribaCallRequest refuses these first; still the caller's error.
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: error.message } },
+        { status: 400 },
+      );
+    }
     console.error("[sap/ariba/call] request failed:", error);
     return NextResponse.json(
       {

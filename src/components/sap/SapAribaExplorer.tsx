@@ -7,6 +7,10 @@
  * lists the curated endpoint catalog (grouped) + a realm switcher, and
  * previews an endpoint's JSON rows via /api/sap/ariba/call. Mirrors the
  * look of the OData components.
+ *
+ * Says what the routes say (roadmap P0.6): a path ARIBA_SOURCING_V1 pinned to
+ * v1 is marked, a malformed realm configuration is shown and Run stays off,
+ * and a call that stopped at the OAuth token step says so.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,13 +31,14 @@ interface Endpoint {
   group: string;
   path: string;
   description: string;
+  pinnedLegacy?: boolean;
 }
 interface Realm {
   key: string;
   label: string;
 }
 interface CatalogResponse {
-  data: { configured: boolean; realms: Realm[]; endpoints: Endpoint[] };
+  data: { configured: boolean; realms: Realm[]; realmsError?: string | null; endpoints: Endpoint[] };
 }
 interface CallResult {
   endpoint: string;
@@ -44,6 +49,17 @@ interface CallResult {
   fields: string[];
   nextPageToken: string | null;
   error: string | null;
+  stage?: "token" | "request";
+}
+
+/**
+ * The preview badge. A call that stopped at the OAuth token step never reached
+ * the realm, so it shows no realm status (audit A74).
+ */
+export function resultBadgeLabel(result: Pick<CallResult, "status" | "durationMs" | "stage">): string {
+  const outcome =
+    result.stage === "token" ? "token step failed" : result.status ? `HTTP ${result.status}` : "error";
+  return `${outcome} · ${result.durationMs}ms`;
 }
 
 function valueLabel(value: unknown): string {
@@ -57,6 +73,7 @@ export function SapAribaExplorer() {
   const [realms, setRealms] = useState<Realm[]>([]);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [realm, setRealm] = useState("");
+  const [realmsError, setRealmsError] = useState<string | null>(null);
   const [endpointKey, setEndpointKey] = useState("");
   const [result, setResult] = useState<CallResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,6 +91,8 @@ export function SapAribaExplorer() {
 
   const selectedEndpoint = endpoints.find((e) => e.key === endpointKey);
   const previewFields = result?.fields.slice(0, 8) ?? [];
+  // The call route refuses both with 400; do not offer a Run that cannot work.
+  const runBlocked = realmsError !== null || (realms.length > 0 && !realm);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +102,7 @@ export function SapAribaExplorer() {
         if (cancelled) return;
         if (!j.data) throw new Error(j.error?.message ?? "Failed to load Ariba catalog");
         setRealms(j.data.realms);
+        setRealmsError(j.data.realmsError ?? null);
         setEndpoints(j.data.endpoints);
         setRealm(j.data.realms[0]?.key ?? "");
         setEndpointKey(j.data.endpoints[0]?.key ?? "");
@@ -96,7 +116,7 @@ export function SapAribaExplorer() {
   }, []);
 
   const run = useCallback(async () => {
-    if (!endpointKey) return;
+    if (!endpointKey || runBlocked) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -113,7 +133,7 @@ export function SapAribaExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [endpointKey, realm]);
+  }, [endpointKey, realm, runBlocked]);
 
   return (
     <div className="space-y-5">
@@ -157,7 +177,7 @@ export function SapAribaExplorer() {
           </Select>
         </label>
 
-        <Button className="self-end" onClick={() => void run()} disabled={!endpointKey || loading}>
+        <Button className="self-end" onClick={() => void run()} disabled={!endpointKey || loading || runBlocked}>
           {loading ? <RefreshCw className="animate-spin" /> : <Play />}
           Run
         </Button>
@@ -167,7 +187,17 @@ export function SapAribaExplorer() {
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Server className="size-4" />
           <span className="font-mono">{selectedEndpoint.path}</span>
+          {selectedEndpoint.pinnedLegacy && <Badge variant="outline">v1 pinned by ARIBA_SOURCING_V1</Badge>}
           <span>· {selectedEndpoint.description}</span>
+        </div>
+      )}
+
+      {realmsError && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200"
+        >
+          {realmsError}. Fix the deployment&apos;s realm configuration; nothing is sent to Ariba until then.
         </div>
       )}
 
@@ -187,7 +217,7 @@ export function SapAribaExplorer() {
           </div>
           {result && (
             <Badge variant={result.ok ? "default" : "destructive"}>
-              {result.status ? `HTTP ${result.status}` : "error"} · {result.durationMs}ms
+              {resultBadgeLabel(result)}
             </Badge>
           )}
         </div>

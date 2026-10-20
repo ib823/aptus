@@ -1151,6 +1151,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Value: nothing reports a call that never happened.
 - Code: `src/lib/sap-public/ariba*`, `src/app/api/sap/ariba*`.
 - Acceptance: one test per finding; no outbound request is made when the configuration is bad.
+- Status: shipped in Phase 0b. The catalogue lists the paths the call sends to, and marks a v1 path pinned by `ARIBA_SOURCING_V1` with its own description. A malformed `ARIBA_REALMS_JSON` is `realmsError` with `configured: false`, and the call route refuses it. An unknown endpoint key, a realm the deployment does not configure, and a `limit` that is not a positive integer are each `400 VALIDATION_ERROR`. All of these are refused before any token exchange. A token-endpoint failure is reported as `stage: "token"` with a `TOKEN_*` reason and the endpoint's status. One setting was added: `ARIBA_REALM_ALLOWLIST`, which defaults to `enforce`; `off` is the rollback. Tests: `tests/unit/api/sap-ariba-truthful.test.ts`. Operator steps: `docs/runbooks/sap-ariba-explorer.md`.
 
 **P0.7 Close the Workbench write-back audit gap.** Size M. Depends on: none.
 - Problem:
@@ -2335,7 +2336,9 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 
 **Fixed in P0.5** (Phase 0b): A43 and A44. Operator steps: `docs/runbooks/coreedge-rate-limits.md`.
 
-**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1 and P0.5 have since fixed six of them, so 27 remain open:
+**Fixed in P0.6** (Phase 0b): A71, A72, A73, A74 and A75. Operator steps: `docs/runbooks/sap-ariba-explorer.md`.
+
+**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1, P0.5 and P0.6 have since fixed eleven of them, so 22 remain open:
 
 | Findings | Subject | Item |
 |---|---|---|
@@ -2344,7 +2347,7 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 |
 | A43, A44 | Rate-limit attribution | P0.5 (fixed) |
-| A71, A72, A73, A74, A75 | Ariba configuration and errors | P0.6 |
+| A71, A72, A73, A74, A75 | Ariba configuration and errors | P0.6 (fixed) |
 
 **Not in the original 76, found during this study:**
 - No MFA check on the `/coreedge` layout or the CoreEdge API routes (inferred from code, not run). **Fixed in P0.12:** every governance route calls `requireStepUp`; `COREEDGE_STEP_UP` defaults to `warn`.
