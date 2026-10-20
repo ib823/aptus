@@ -218,7 +218,9 @@ describe("#8 · the audit trail is append-only", () => {
     const offenders = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        /(configAudit|northboundAuditEvent)\s*\.\s*(update|updateMany|upsert)/.test(
+        // The platform trail (P0.7) is held to the same rule: its outcome is a
+        // second row, never an update of the first.
+        /(configAudit|northboundAuditEvent|platformAuditEvent|platformAuditOutcome)\s*\.\s*(update|updateMany|upsert)/.test(
           readFileSync(f, "utf8"),
         ),
       )
@@ -238,7 +240,7 @@ describe("#8 · the audit trail is append-only", () => {
     const deleters = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        /(configAudit|northboundAuditEvent)\s*\.\s*(delete|deleteMany)/.test(
+        /(configAudit|northboundAuditEvent|platformAuditEvent|platformAuditOutcome)\s*\.\s*(delete|deleteMany)/.test(
           readFileSync(f, "utf8"),
         ),
       )

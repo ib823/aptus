@@ -14,7 +14,10 @@ export const SAP_SCREEN_GUIDES: Record<string, ScreenGuide> = {
     what: "A live window into your SAP system: what data services exist, which are switched on, and what you can safely read right now.",
     todo: "Skim the readiness summary, browse the catalogue tiles, and open any row to see details. Tap any underlined term or coloured badge to get a plain-language explanation.",
     why: "It turns a huge, jargon-heavy SAP catalogue into an honest, at-a-glance picture — nothing here claims to work unless a live check proved it.",
-    next: "Use ‘Guide me’ any time for a walk-through, or ‘Decode jargon’ to look up any term. Nothing on this page changes your SAP data.",
+    // Not "nothing on this page changes your SAP data", which it said while
+    // rendering Write Mode below. Everything else here only reads; Write Mode
+    // creates real records, and the guide must say so.
+    next: "Use ‘Guide me’ any time for a walk-through, or ‘Decode jargon’ to look up any term. Apart from Write Mode, everything here only reads your SAP data. Write Mode, when switched on, creates real records in SAP, and each write is recorded under your name before SAP is called.",
     keyTerms: ["probe", "activation", "authorized-vs-data-confirmed", "runtime-vs-reference"],
     audience: "consultant",
   },
@@ -57,7 +60,7 @@ export const SAP_SCREEN_GUIDES: Record<string, ScreenGuide> = {
     title: "Carefully create a record (guarded)",
     what: "The one place that can change SAP data — create a record in a chosen service. It's off unless explicitly enabled and confirmed.",
     todo: "Only use this if you intend to write. It requires the service to be enabled, a typed confirmation, and a secret — by design.",
-    why: "Reading is safe; writing isn't. The guards make an accidental change effectively impossible.",
+    why: "Reading is safe; writing isn't. The guards make an accidental change effectively impossible, and every write is recorded under your name before it is sent — if that record cannot be written, nothing is sent.",
     next: "If you only need to look at data, stay in the Entity Explorer — it never writes anything.",
     keyTerms: ["crud", "activation", "communication-arrangement"],
     audience: "consultant",

@@ -4,6 +4,12 @@
  * Confirms a service is truly Writable via create-then-delete, ONLY behind the
  * full write guard + a dedicated write-test ring. Never auto-run; test tenant /
  * test-data ring only. Read the guard contract in capability-write-test.ts.
+ *
+ * AUDITED BEFORE SAP IS CALLED (P0.7). Once the guard has passed and the target
+ * is resolved, a PlatformAuditEvent naming the person is written before the
+ * $metadata check and the create; if it cannot be written, nothing is sent
+ * (503). It replaces the best-effort `logDecision` that was written after the
+ * fact and swallowed on failure. See lib/audit/platform-audit.ts.
  */
 import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
@@ -21,8 +27,14 @@ import {
   assertWriteTestAllowed,
   runCapabilityWriteTest,
 } from "@/lib/sap-public/capability-write-test";
-import { logDecision } from "@/lib/audit/decision-logger";
-import type { UserRole } from "@/types/assessment";
+import {
+  beginPlatformAudit,
+  completePlatformAudit,
+  outcomeForThrown,
+  outcomeForWriteTest,
+  platformAuditUnavailable,
+  type PlatformAuditHandle,
+} from "@/lib/audit/platform-audit";
 import { ERROR_CODES } from "@/types/api";
 
 function readString(v: unknown): string {
@@ -91,6 +103,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const code = decision.status === 400 ? ERROR_CODES.VALIDATION_ERROR : decision.status === 401 ? ERROR_CODES.UNAUTHORIZED : ERROR_CODES.FORBIDDEN;
     return NextResponse.json({ error: { code, message: decision.message } }, { status: decision.status });
   }
+  // Unreachable once the guard has passed (it requires isAdmin); it narrows
+  // `auth` to the signed-in admin the audit row must name.
+  if (isAdminError(auth)) return auth;
 
   const tenant = getSapTenant(prefix, readString(body.tenant));
   const service = getSapService(product, readString(body.service));
@@ -101,6 +116,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // The audit row comes first: before the $metadata read and before the
+  // create. A refusal by the metadata gate below is then recorded as BLOCKED
+  // rather than leaving no trace of an attempt that reached a live tenant.
+  let audit: PlatformAuditHandle;
+  try {
+    audit = await beginPlatformAudit({
+      action: "SAP_WORKBENCH_WRITE_TEST",
+      actor: {
+        id: auth.user.id,
+        email: auth.user.email,
+        role: auth.user.role,
+        organizationId: auth.user.organizationId,
+      },
+      target: {
+        product: product.key,
+        tenantKey: tenant.key,
+        tenantLabel: tenant.label,
+        serviceKey: service.key,
+        servicePath: service.path,
+        entitySet: entity,
+      },
+      payload: body.payload,
+    });
+  } catch {
+    return platformAuditUnavailable();
+  }
+  const headers = { "x-correlation-id": audit.correlationId };
+
   // Metadata gate: only create-then-delete where the set is BOTH creatable and
   // deletable, so nothing is left behind. Never write without this confirmation.
   let cap;
@@ -108,39 +151,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const meta = await inspectSapServiceMetadata(prefix, tenant, service);
     cap = meta.entityCapabilities.find((e) => e.name === entity);
   } catch (err) {
+    await completePlatformAudit(audit, { outcome: "BLOCKED", reason: "METADATA_PROBE_FAILED" });
     return NextResponse.json(
       { error: { code: ERROR_CODES.INTERNAL_ERROR, message: err instanceof Error ? err.message : "metadata probe failed" } },
-      { status: 502 },
+      { status: 502, headers },
     );
   }
   if (!cap || cap.creatable !== true || cap.deletable !== true) {
+    await completePlatformAudit(audit, { outcome: "BLOCKED", reason: "NOT_CREATABLE_AND_DELETABLE" });
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Entity set is not confirmed creatable AND deletable in $metadata — write-test refused" } },
-      { status: 403 },
+      { status: 403, headers },
     );
   }
 
+  const startedAt = Date.now();
   try {
     const result = await runCapabilityWriteTest(prefix, tenant, service, entity, body.payload);
-    try {
-      const user = isAdminError(auth) ? null : auth.user;
-      await logDecision({
-        assessmentId: null,
-        entityType: "sap_write_test",
-        entityId: `${prefix}:${service.key}:${entity}`,
-        action: "SAP_WRITE_TEST_PERFORMED",
-        newValue: { tenantLabel: tenant.label, entity, created: result.created, deleted: result.deleted, ladder: result.ladder },
-        actor: user?.email ?? "system",
-        actorRole: (user?.role ?? "system") as UserRole,
-      });
-    } catch {
-      /* audit is best-effort */
-    }
-    return NextResponse.json({ data: result }, { status: result.created && result.deleted ? 200 : 502 });
+    await completePlatformAudit(audit, { ...outcomeForWriteTest(result), durationMs: Date.now() - startedAt });
+    return NextResponse.json({ data: result }, { status: result.created && result.deleted ? 200 : 502, headers });
   } catch (err) {
+    await completePlatformAudit(audit, { ...outcomeForThrown(err), durationMs: Date.now() - startedAt });
     return NextResponse.json(
       { error: { code: ERROR_CODES.INTERNAL_ERROR, message: err instanceof Error ? err.message : "write-test failed" } },
-      { status: 502 },
+      { status: 502, headers },
     );
   }
 }

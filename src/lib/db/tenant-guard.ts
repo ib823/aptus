@@ -33,7 +33,15 @@ import { AsyncLocalStorage } from "async_hooks";
 
 import type { Prisma } from "@prisma/client";
 
-/** Models whose queries must carry a tenant. Mirrored by tenant-scope.ts. */
+/**
+ * Models whose queries must carry a tenant. Mirrored by tenant-scope.ts.
+ *
+ * `PlatformAuditEvent` is absent ON PURPOSE, not by omission: it records
+ * Workbench writes to the deployment's own SAP tenant, which no organization
+ * owns, made by platform admins who may have none. There is no tenant to scope
+ * it to, so its reads are gated to `platform_admin` instead
+ * (/api/ops/workbench-writes). tenant-guard.test.ts pins this.
+ */
 export const TENANT_ANCHORED_MODELS = [
   "Solution",
   "Interface",

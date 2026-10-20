@@ -1416,6 +1416,119 @@ model NorthboundAuditEvent {
   @@index([at])
 }
 
+/// A change a PERSON made to a live SAP system from the Workbench, outside the
+/// broker: `POST /api/sap/tdd/write` (create a record) and
+/// `POST /api/sap/tdd/hub-content/write-test` (create, then delete). Roadmap
+/// item P0.7.
+///
+/// WRITTEN BEFORE SAP IS CALLED, AND FAIL-CLOSED. The route inserts this row
+/// first; if the insert fails, nothing is sent to SAP and the caller gets 503.
+/// What happened is recorded afterwards as a separate `PlatformAuditOutcome`
+/// row. Both are inserts — nothing here is ever updated — so the trail stays
+/// append-only like every other audit table. An event with no outcome row is a
+/// write whose result was never recorded (the request died, or the outcome
+/// insert failed), and SAP must be checked, exactly like the write ledger's
+/// "outcome unknown".
+///
+/// A DEDICATED TABLE, NOT A NULLABLE COLUMN ON AN EXISTING ONE. Why not:
+///   - `NorthboundAuditEvent` and `ConfigAudit` are tenant-anchored: every query
+///     must carry an `organizationId` (lib/db/tenant-guard.ts). These writes
+///     have no tenant to name. They target the DEPLOYMENT's own `{PREFIX}_*`
+///     tenant, which no organization owns, and they are made by a
+///     `platform_admin`, who may have no organization at all (the first user
+///     becomes one without). Making `organizationId` nullable there would turn
+///     `where: { organizationId: null }` into a "scoped" query the guard
+///     accepts, and every existing reader would have to learn a third kind of
+///     row.
+///   - `NorthboundAuditEvent` is the broker's call log: the operations board,
+///     usage rollups and incident rules count its rows as broker traffic, and
+///     the retention sweep deletes it by age (northbound/retention.ts). A
+///     Workbench write is neither broker traffic nor something to expire.
+///   - The `-deployment-` sentinel the console reads use
+///     (`DEPLOYMENT_AUDIT_SCOPE`) would invent a tenant id for rows that by
+///     definition have none.
+///   - `DecisionLogEntry` is the assessment trail, and its actor is an email
+///     string rather than a user.
+///
+/// NOT TENANT-ANCHORED, ON PURPOSE. It is deliberately absent from
+/// `TENANT_ANCHORED_MODELS`: there is no tenant to scope it to. Reads are gated
+/// to `platform_admin` instead (`/api/ops/workbench-writes`).
+///
+/// No payload is stored. A record written into SAP can hold personal data, and
+/// an operations screen needs to know THAT a write happened, never what was in
+/// it — the same rule the write ledger applies to `responseBody`. The SHA-256
+/// and the top-level field names are enough to match a row to a payload
+/// someone produces later.
+model PlatformAuditEvent {
+  id     String @id @default(cuid())
+  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST
+  action String
+
+  /// The person. Not a relation: an audit row must outlive the user it names
+  /// (the same reason as `NorthboundAuditEvent.actorUserId`), so the email and
+  /// role are copied as they were at the time.
+  actorUserId         String
+  actorEmail          String
+  actorRole           String
+  /// The actor's organization when they acted, or NULL for a platform admin
+  /// without one. CONTEXT, NOT SCOPE — the write's target belongs to no
+  /// organization either way.
+  actorOrganizationId String?
+
+  /// What was written to. Keys as the deployment configuration names them.
+  product     String
+  tenantKey   String
+  tenantLabel String?
+  serviceKey  String
+  servicePath String?
+  entitySet   String
+
+  /// SHA-256 of the JSON payload, and its top-level field names. Never values.
+  payloadSha256 String
+  payloadFields Json
+
+  /// Quoted back to the caller, so a person can find the row for their write.
+  correlationId String
+
+  at DateTime @default(now())
+
+  /// What happened, once known. Absent = never recorded.
+  result PlatformAuditOutcome?
+
+  @@index([at])
+  @@index([actorUserId, at])
+  /// The id the caller was handed; an operator asked about one write starts here.
+  @@index([correlationId])
+}
+
+/// What a `PlatformAuditEvent` led to, written after SAP answered (or did not).
+///
+/// ONE PER EVENT, ENFORCED BY THE DATABASE. `eventId` is unique, so an outcome
+/// can be written once and a second attempt to say something different fails
+/// on the constraint rather than replacing the first. That is the append-only
+/// rule held by the schema, not by convention.
+model PlatformAuditOutcome {
+  id      String             @id @default(cuid())
+  eventId String             @unique
+  event   PlatformAuditEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND — see
+  /// PLATFORM_AUDIT_OUTCOMES in lib/audit/platform-audit.ts.
+  outcome    String
+  /// The HTTP status SAP answered the create with, when it answered.
+  sapStatus  Int?
+  /// A bounded code: never a host, a URL or the payload.
+  reason     String?
+  /// Outcome detail, e.g. the delete status and Location of a write-test.
+  detail     Json?
+  /// Wall-clock milliseconds of the SAP calls, when any were made.
+  durationMs Int?
+
+  at DateTime @default(now())
+
+  @@index([outcome, at])
+}
+
 /// Idempotency for northbound writes.
 ///
 /// A write into a client's production SAP must survive being retried. Networks
