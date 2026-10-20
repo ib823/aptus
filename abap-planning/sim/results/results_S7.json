@@ -1,0 +1,163 @@
+{
+ "V0 | K1 separate people": {
+  "states": 216,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u3:delegate->u1 > u1:approve(for u3)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u3:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V0 | K2 preparer also approver": {
+  "states": 540,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u1:approve(for u1)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u1:approve(for u1) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u1:approve(for u1) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u3:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 0,
+  "shortest_trace_to_dead_end": null
+ },
+ "V0 | K3 reviewer also approver": {
+  "states": 216,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u2:delegate->u1 > u1:approve(for u2)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u2:approve(for u2) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u2:approve(for u2) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u2:approve(for u2)"
+  },
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": "env:revoke u2:A"
+ },
+ "V0 | K4 one-person department": {
+  "states": 216,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u1:recommend > u1:approve(for u1)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u1:recommend > u1:approve(for u1) > u2:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u1:recommend > u1:approve(for u1) > u2:admin-edit-approved > u2:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u1:recommend > u1:edit > u1:delegate->u2 > u2:approve(for u1)"
+  },
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": "env:revoke u1:A"
+ },
+ "V1 | K1 separate people": {
+  "states": 216,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u3:delegate->u1 > u1:approve(for u3)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u3:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V1 | K2 preparer also approver": {
+  "states": 540,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u3:delegate->u1 > u1:approve(for u3)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u3:approve(for u3) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u3:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 100,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V1 | K3 reviewer also approver": {
+  "states": 216,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u2:delegate->u1 > u1:approve(for u2)",
+   "I2 approved data changed in place": "u1:edit > u1:submit > u2:recommend > u2:approve(for u2) > u3:admin-edit-approved",
+   "I3 released values differ from approved snapshot": "u1:edit > u1:submit > u2:recommend > u2:approve(for u2) > u3:admin-edit-approved > u3:release",
+   "I5 approved a stale recommendation": "u1:edit > u1:submit > u2:recommend > u1:edit > u2:approve(for u2)"
+  },
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": "env:revoke u2:A"
+ },
+ "V1 | K4 one-person department": {
+  "states": 60,
+  "violations": {},
+  "states_that_can_never_reach_release": 60,
+  "shortest_trace_to_dead_end": ""
+ },
+ "V2 | K1 separate people": {
+  "states": 156,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u3:delegate->u1 > u1:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 54,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V2 | K2 preparer also approver": {
+  "states": 390,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u3:delegate->u1 > u1:approve(for u3)"
+  },
+  "states_that_can_never_reach_release": 90,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V2 | K3 reviewer also approver": {
+  "states": 156,
+  "violations": {
+   "I1 approver edited the values they approved (SoD)": "u1:edit > u1:submit > u2:recommend > u2:delegate->u1 > u1:approve(for u2)"
+  },
+  "states_that_can_never_reach_release": 54,
+  "shortest_trace_to_dead_end": "env:revoke u2:A"
+ },
+ "V2 | K4 one-person department": {
+  "states": 54,
+  "violations": {},
+  "states_that_can_never_reach_release": 54,
+  "shortest_trace_to_dead_end": ""
+ },
+ "V3 | K1 separate people": {
+  "states": 156,
+  "violations": {},
+  "states_that_can_never_reach_release": 54,
+  "shortest_trace_to_dead_end": "env:revoke u3:A"
+ },
+ "V3 | K2 preparer also approver": {
+  "states": 390,
+  "violations": {},
+  "states_that_can_never_reach_release": 54,
+  "shortest_trace_to_dead_end": "u1:delegate->u2 > env:revoke u3:A"
+ },
+ "V3 | K3 reviewer also approver": {
+  "states": 88,
+  "violations": {},
+  "states_that_can_never_reach_release": 45,
+  "shortest_trace_to_dead_end": "u2:delegate->u1"
+ },
+ "V3 | K4 one-person department": {
+  "states": 42,
+  "violations": {},
+  "states_that_can_never_reach_release": 42,
+  "shortest_trace_to_dead_end": ""
+ },
+ "V4 | K1 separate people": {
+  "states": 225,
+  "violations": {},
+  "states_that_can_never_reach_release": 0,
+  "shortest_trace_to_dead_end": null
+ },
+ "V4 | K2 preparer also approver": {
+  "states": 505,
+  "violations": {},
+  "states_that_can_never_reach_release": 0,
+  "shortest_trace_to_dead_end": null
+ },
+ "V4 | K3 reviewer also approver": {
+  "states": 548,
+  "violations": {},
+  "states_that_can_never_reach_release": 0,
+  "shortest_trace_to_dead_end": null
+ },
+ "V4 | K4 one-person department": {
+  "states": 1102,
+  "violations": {},
+  "states_that_can_never_reach_release": 0,
+  "shortest_trace_to_dead_end": null
+ }
+}

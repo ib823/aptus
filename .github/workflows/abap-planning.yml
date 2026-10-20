@@ -1,0 +1,44 @@
+name: ABAP planning engine
+
+# The ABAP Cloud planning engine is a sibling deliverable inside this repo: it is deployed to SAP
+# systems (BTP ABAP environment for development, S/4HANA on-stack for production), not part of the
+# Next.js build. Path-filtered so web PRs don't pay for it and engine PRs don't run the web CI.
+on:
+  push:
+    branches: [main]
+    paths: ["abap-planning/**", ".github/workflows/abap-planning.yml"]
+  pull_request:
+    paths: ["abap-planning/**", ".github/workflows/abap-planning.yml"]
+
+jobs:
+  checks:
+    name: release gate, lint, reference models, ABAP Unit (emulator)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: abap-planning
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - name: Release gate (every SAP object released on BTP, Public, Private 2023 and 2025)
+        run: python3 -I tools/portability_check.py --profile core
+      - name: ABAP Cloud syntax and lint
+        run: npx abaplint abaplint.json
+      - name: S/4HANA 2023 syntax
+        run: npx abaplint abaplint-s4.json
+      - name: Reference models still hold
+        run: python3 -I tools/check_reference_models.py
+      - name: Generated test classes are up to date
+        run: |
+          python3 -I tools/gen_alloc_tests.py
+          python3 -I tools/gen_money_tests.py
+          python3 -I tools/gen_guard_tests.py
+          git diff --exit-code -- src
+      - name: ABAP Unit in the open-abap emulator
+        run: bash tools/emulator_tests.sh

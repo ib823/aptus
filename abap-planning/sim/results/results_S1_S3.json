@@ -1,0 +1,116 @@
+{
+ "S1_rounding_strategies": {
+  "R1 independent rounding": {
+   "conservation_fail": 37782,
+   "dev_gt_1_unit": 0,
+   "max_dev_units": 0.5,
+   "order_dependent": 0,
+   "reversal_not_cancelling": 0,
+   "sign_flip": 0,
+   "alabama": 0
+  },
+  "R2 plug residual into last row": {
+   "conservation_fail": 0,
+   "dev_gt_1_unit": 21046,
+   "max_dev_units": 11.5,
+   "order_dependent": 34161,
+   "reversal_not_cancelling": 0,
+   "sign_flip": 2838,
+   "alabama": 5660
+  },
+  "R3 plug residual into largest weight": {
+   "conservation_fail": 0,
+   "dev_gt_1_unit": 22390,
+   "max_dev_units": 11.5,
+   "order_dependent": 13693,
+   "reversal_not_cancelling": 0,
+   "sign_flip": 2271,
+   "alabama": 4864
+  },
+  "R4 largest remainder, ties by row order": {
+   "conservation_fail": 0,
+   "dev_gt_1_unit": 0,
+   "max_dev_units": 0.9583333333333334,
+   "order_dependent": 14986,
+   "reversal_not_cancelling": 17263,
+   "sign_flip": 0,
+   "alabama": 1199
+  },
+  "R5 largest remainder, ties by member key": {
+   "conservation_fail": 0,
+   "dev_gt_1_unit": 0,
+   "max_dev_units": 0.9583333333333334,
+   "order_dependent": 0,
+   "reversal_not_cancelling": 17263,
+   "sign_flip": 0,
+   "alabama": 1200
+  },
+  "R6 R5 on |total| with sign re-applied": {
+   "conservation_fail": 0,
+   "dev_gt_1_unit": 0,
+   "max_dev_units": 0.9583333333333334,
+   "order_dependent": 0,
+   "reversal_not_cancelling": 0,
+   "sign_flip": 0,
+   "alabama": 1200
+  }
+ },
+ "S1b_spread_with_locked_months": {
+  "cases": 60000,
+  "infeasible_detected": 6670,
+  "conservation_fail": 0,
+  "locked_changed": 0,
+  "negative_month_when_allowed_naive": 6670
+ },
+ "S2_multilevel_disaggregation": {
+  "cases": 15000,
+  "feasible": 14095,
+  "infeasible": 905,
+  "variants": {
+   "leaf-level, bound-checked (recommended)": {
+    "feasible_rejected": 18,
+    "infeasible_accepted": 0,
+    "root_mismatch": 0,
+    "locked_changed": 0,
+    "negative_leaf": 0,
+    "max_dev_vs_exact_units": 0.773249300918678,
+    "max_dev_pct_of_delta": 0.084
+   },
+   "leaf-level, no bound check": {
+    "feasible_rejected": 18,
+    "infeasible_accepted": 647,
+    "root_mismatch": 0,
+    "locked_changed": 0,
+    "negative_leaf": 647,
+    "max_dev_vs_exact_units": 0.773249300918678,
+    "max_dev_pct_of_delta": 0.084
+   },
+   "level-by-level, eligible-aware weights": {
+    "feasible_rejected": 0,
+    "infeasible_accepted": 647,
+    "root_mismatch": 0,
+    "locked_changed": 0,
+    "negative_leaf": 647,
+    "max_dev_vs_exact_units": 1.3689406874403918,
+    "max_dev_pct_of_delta": 0.084
+   },
+   "level-by-level, subtree-total weights": {
+    "feasible_rejected": 7401,
+    "infeasible_accepted": 286,
+    "root_mismatch": 0,
+    "locked_changed": 0,
+    "negative_leaf": 1139,
+    "max_dev_vs_exact_units": 123328639.06486659,
+    "max_dev_pct_of_delta": 64.516
+   }
+  }
+ },
+ "S3_mixed_sign_weights": {
+  "cases": 60000,
+  "weights_sum_to_zero": 20,
+  "leaf_at_least_10x_total": 2866,
+  "leaf_at_least_100x_total": 289,
+  "worst_amplification": 999.0
+ },
+ "seconds": 96.1
+}

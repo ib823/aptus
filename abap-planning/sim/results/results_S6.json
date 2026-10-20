@@ -1,0 +1,28 @@
+{
+ "445_53_week_years_2020_2045": [
+  2020,
+  2025,
+  2031,
+  2036,
+  2042
+ ],
+ "445_P12_yoy_artifact_pct": 20.0,
+ "445_full_year_yoy_artifact_pct": 1.92,
+ "445_equal_vs_daily_spread_max_gap_pct_of_period": 13.3,
+ "445_spread_conserves": {
+  "equal": true,
+  "by_day": true
+ },
+ "calendar_month_to_445_mapping": {
+  "months_spanning_two_or_more_periods": 6,
+  "fiscal_2026_starts": "2026-01-04",
+  "fiscal_2026_ends": "2027-01-02",
+  "amount_crossing_into_other_fiscal_years_cents": 96778
+ },
+ "april_march_label_conventions_months_differ": 12,
+ "shortened_year": {
+  "transition_periods": 3,
+  "naive_horizon_rule": "FY+1 = 12 periods ahead",
+  "naive_rule_misaligns_by_periods": 9
+ }
+}

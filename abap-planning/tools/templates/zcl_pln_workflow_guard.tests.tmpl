@@ -1,0 +1,160 @@
+CLASS ltc_guard DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS delegation_to_preparer_denied FOR TESTING.
+    METHODS stale_recommendation_denied FOR TESTING.
+    METHODS no_edit_after_submit FOR TESTING.
+    METHODS release_needs_approved_values FOR TESTING.
+    METHODS one_person_dept_escalates FOR TESTING.
+    METHODS differential_decisions FOR TESTING.
+    METHODS differential_escalation FOR TESTING.
+
+    METHODS base_state
+      RETURNING VALUE(rs_state) TYPE zcl_pln_workflow_guard=>ty_state.
+
+    METHODS parse
+      IMPORTING iv_case         TYPE string
+      EXPORTING es_state        TYPE zcl_pln_workflow_guard=>ty_state
+                et_rest         TYPE string_table.
+{{DECL}}
+ENDCLASS.
+
+
+CLASS ltc_guard IMPLEMENTATION.
+
+  METHOD base_state.
+    rs_state = VALUE #(
+      status                 = zcl_pln_workflow_guard=>status-reviewed
+      has_data               = abap_true
+      recommendation_current = abap_true
+      editors                = VALUE #( ( `PREP` ) )
+      recommender            = `REV`
+      roles                  = VALUE #( ( user = `PREP` role = `P` ) ( user = `REV` role = `R` )
+                                        ( user = `APP` role = `A` ) ( user = `ADM` role = `X` ) )
+      candidates             = VALUE #( ( `PREP` ) ( `REV` ) ( `APP` ) ( `ADM` ) ) ).
+  ENDMETHOD.
+
+  METHOD delegation_to_preparer_denied.
+    " The counterexample the model checker found for checks against the assigned approver only.
+    DATA(ls_state) = base_state( ).
+    ls_state-delegations = VALUE #( ( from_user = `APP` to_user = `PREP` ) ).
+    DATA(ls_d) = zcl_pln_workflow_guard=>decide( is_state = ls_state iv_actor = `PREP`
+                                                 iv_action = zcl_pln_workflow_guard=>action-approve ).
+    cl_abap_unit_assert=>assert_false( ls_d-allowed ).
+    cl_abap_unit_assert=>assert_true( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `APP` iv_action = zcl_pln_workflow_guard=>action-approve )-allowed ).
+  ENDMETHOD.
+
+  METHOD stale_recommendation_denied.
+    DATA(ls_state) = base_state( ).
+    ls_state-recommendation_current = abap_false.
+    cl_abap_unit_assert=>assert_false( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `APP` iv_action = zcl_pln_workflow_guard=>action-approve )-allowed ).
+  ENDMETHOD.
+
+  METHOD no_edit_after_submit.
+    DATA(ls_state) = base_state( ).
+    ls_state-status = zcl_pln_workflow_guard=>status-submitted.
+    cl_abap_unit_assert=>assert_false( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `PREP` iv_action = zcl_pln_workflow_guard=>action-edit )-allowed ).
+    ls_state-status = zcl_pln_workflow_guard=>status-approved.
+    cl_abap_unit_assert=>assert_false( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `ADM` iv_action = zcl_pln_workflow_guard=>action-edit )-allowed ).
+  ENDMETHOD.
+
+  METHOD release_needs_approved_values.
+    DATA(ls_state) = base_state( ).
+    ls_state-status = zcl_pln_workflow_guard=>status-approved.
+    ls_state-payload_matches_approval = abap_false.
+    cl_abap_unit_assert=>assert_false( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `ADM` iv_action = zcl_pln_workflow_guard=>action-release )-allowed ).
+    ls_state-payload_matches_approval = abap_true.
+    cl_abap_unit_assert=>assert_true( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `ADM` iv_action = zcl_pln_workflow_guard=>action-release )-allowed ).
+  ENDMETHOD.
+
+  METHOD one_person_dept_escalates.
+    DATA(ls_state) = base_state( ).
+    ls_state-status = zcl_pln_workflow_guard=>status-submitted.
+    ls_state-roles = VALUE #( ( user = `PREP` role = `P` ) ( user = `PREP` role = `R` ) ( user = `PREP` role = `A` )
+                              ( user = `ADM` role = `X` ) ).
+    cl_abap_unit_assert=>assert_equals( act = zcl_pln_workflow_guard=>escalation_needed( ls_state ) exp = `R` ).
+    cl_abap_unit_assert=>assert_false( zcl_pln_workflow_guard=>decide(
+      is_state = ls_state iv_actor = `PREP` iv_action = zcl_pln_workflow_guard=>action-recommend )-allowed ).
+  ENDMETHOD.
+
+  METHOD parse.
+    DATA lt_f TYPE string_table.
+    DATA lt_list TYPE string_table.
+    " EXPORTING parameters passed by reference are not initialised on entry.
+    CLEAR: es_state, et_rest.
+    SPLIT iv_case AT `|` INTO TABLE lt_f.
+    es_state-status = lt_f[ 1 ].
+    es_state-has_data = xsdbool( lt_f[ 2 ] = `X` ).
+    es_state-recommendation_current = xsdbool( lt_f[ 3 ] = `X` ).
+    es_state-payload_matches_approval = xsdbool( lt_f[ 4 ] = `X` ).
+    IF lt_f[ 5 ] IS NOT INITIAL.
+      SPLIT lt_f[ 5 ] AT `;` INTO TABLE es_state-editors.
+    ENDIF.
+    es_state-recommender = lt_f[ 6 ].
+    IF lt_f[ 7 ] IS NOT INITIAL.
+      SPLIT lt_f[ 7 ] AT `;` INTO TABLE lt_list.
+      LOOP AT lt_list INTO DATA(lv_role).
+        SPLIT lv_role AT `:` INTO DATA(lv_user) DATA(lv_code).
+        APPEND VALUE #( user = lv_user role = lv_code ) TO es_state-roles.
+      ENDLOOP.
+    ENDIF.
+    IF lt_f[ 8 ] IS NOT INITIAL.
+      SPLIT lt_f[ 8 ] AT `;` INTO TABLE lt_list.
+      LOOP AT lt_list INTO DATA(lv_deleg).
+        SPLIT lv_deleg AT `>` INTO DATA(lv_from) DATA(lv_to).
+        APPEND VALUE #( from_user = lv_from to_user = lv_to ) TO es_state-delegations.
+      ENDLOOP.
+    ENDIF.
+    SPLIT lt_f[ 9 ] AT `;` INTO TABLE es_state-candidates.
+    et_rest = VALUE #( FOR i = 10 WHILE i <= lines( lt_f ) ( lt_f[ i ] ) ).
+  ENDMETHOD.
+
+  METHOD differential_decisions.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{DECISION_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      parse( EXPORTING iv_case = lv_case IMPORTING es_state = DATA(ls_state) et_rest = DATA(lt_rest) ).
+      DATA(lv_expected) = xsdbool( lines( lt_rest ) >= 3 AND lt_rest[ 3 ] = `X` ).
+      DATA(ls_d) = zcl_pln_workflow_guard=>decide( is_state = ls_state iv_actor = lt_rest[ 1 ] iv_action = lt_rest[ 2 ] ).
+      IF ls_d-allowed <> lv_expected.
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { ls_d-allowed } ({ ls_d-reason })|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+  METHOD differential_escalation.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{ESCALATION_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      parse( EXPORTING iv_case = lv_case IMPORTING es_state = DATA(ls_state) et_rest = DATA(lt_rest) ).
+      DATA(lv_expected) = COND string( WHEN lines( lt_rest ) >= 1 THEN lt_rest[ 1 ] ).
+      DATA(lv_got) = zcl_pln_workflow_guard=>escalation_needed( ls_state ).
+      IF lv_got <> lv_expected.
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got '{ lv_got }'|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+{{IMPL}}
+
+ENDCLASS.

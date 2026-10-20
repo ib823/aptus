@@ -1,0 +1,211 @@
+CLASS ltc_money DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    TYPES ty_decimal TYPE zcl_pln_money=>ty_decimal.
+    TYPES ty_minor TYPE zcl_pln_money=>ty_minor.
+
+    METHODS negative_tie_away_from_zero FOR TESTING RAISING cx_static_check.
+    METHODS yen_and_dinar_internal_format FOR TESTING RAISING cx_static_check.
+    METHODS too_many_decimals_rejected FOR TESTING.
+    METHODS shift_forgotten_is_100x_off FOR TESTING RAISING cx_static_check.
+    METHODS parent_is_sum_of_leaves FOR TESTING RAISING cx_static_check.
+    METHODS invalid_rate_rejected FOR TESTING.
+    METHODS overflow_rejected FOR TESTING.
+    METHODS differential_round FOR TESTING RAISING cx_static_check.
+    METHODS differential_minor FOR TESTING RAISING cx_static_check.
+    METHODS differential_convert FOR TESTING RAISING cx_static_check.
+{{DECL}}
+ENDCLASS.
+
+
+CLASS ltc_money IMPLEMENTATION.
+
+  METHOD negative_tie_away_from_zero.
+    " A browser's Math.round(-100.5) gives -100; ABAP, Excel ROUND and this engine give -101.
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_pln_money=>round_commercial( iv_value = CONV #( '-1.005' ) iv_decimals = 2 )
+      exp = CONV ty_decimal( '-1.01' ) ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_pln_money=>round_commercial( iv_value = CONV #( '2.675' ) iv_decimals = 2 )
+      exp = CONV ty_decimal( '2.68' ) ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_pln_money=>round_commercial( iv_value = CONV #( '-100.5' ) iv_decimals = 0 )
+      exp = CONV ty_decimal( '-101' ) ).
+  ENDMETHOD.
+
+  METHOD yen_and_dinar_internal_format.
+    DATA(lv_jpy) = zcl_pln_money=>to_minor( iv_amount = 1250000 iv_currency_decimals = 0 ).
+    cl_abap_unit_assert=>assert_equals( act = zcl_pln_money=>to_internal( lv_jpy )
+                                        exp = CONV zcl_pln_money=>ty_internal( '12500.00' ) ).
+    DATA(lv_kwd) = zcl_pln_money=>to_minor( iv_amount = CONV #( '1234.567' ) iv_currency_decimals = 3 ).
+    cl_abap_unit_assert=>assert_equals( act = lv_kwd exp = CONV ty_minor( 1234567 ) ).
+    cl_abap_unit_assert=>assert_equals( act = zcl_pln_money=>to_internal( lv_kwd )
+                                        exp = CONV zcl_pln_money=>ty_internal( '12345.67' ) ).
+    cl_abap_unit_assert=>assert_equals(
+      act = zcl_pln_money=>from_minor( iv_minor = zcl_pln_money=>from_internal( CONV #( '12345.67' ) )
+                                       iv_currency_decimals = 3 )
+      exp = CONV ty_decimal( '1234.567' ) ).
+  ENDMETHOD.
+
+  METHOD too_many_decimals_rejected.
+    TRY.
+        zcl_pln_money=>to_minor( iv_amount = CONV #( '1234.5' ) iv_currency_decimals = 0 ).
+        cl_abap_unit_assert=>fail( `fractional yen accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-invalid_decimals ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD shift_forgotten_is_100x_off.
+    " JPY 1,250,000 is stored as 12,500.00. Reading the stored value as yen is 100 times too small.
+    DATA(ls_rate) = VALUE zcl_pln_money=>ty_rate( rate = CONV #( '0.03021' ) from_factor = 1 to_factor = 1 ).
+    DATA(lv_right) = zcl_pln_money=>convert( iv_minor = 1250000 iv_source_decimals = 0 iv_target_decimals = 2
+                                             is_rate = ls_rate ).
+    DATA(lv_wrong) = zcl_pln_money=>convert( iv_minor = 12500 iv_source_decimals = 0 iv_target_decimals = 2
+                                             is_rate = ls_rate ).
+    cl_abap_unit_assert=>assert_equals( act = lv_right exp = CONV ty_minor( 3776250 ) ).
+    cl_abap_unit_assert=>assert_equals( act = lv_wrong exp = CONV ty_minor( 37763 ) ).
+  ENDMETHOD.
+
+  METHOD parent_is_sum_of_leaves.
+    " 3 x 7 cents at 0.21385: each leaf converts to 1 cent, so the parent is 3 cents. Converting
+    " the 21-cent parent directly would give 4 cents and disagree with its own leaves.
+    DATA(ls_rate) = VALUE zcl_pln_money=>ty_rate( rate = CONV #( '0.21385' ) from_factor = 1 to_factor = 1 ).
+    DATA(lv_parent) = zcl_pln_money=>convert_and_sum( it_leaves = VALUE #( ( CONV #( 7 ) ) ( CONV #( 7 ) ) ( CONV #( 7 ) ) )
+                                                      iv_source_decimals = 2 iv_target_decimals = 2
+                                                      is_rate = ls_rate ).
+    DATA(lv_direct) = zcl_pln_money=>convert( iv_minor = 21 iv_source_decimals = 2 iv_target_decimals = 2
+                                              is_rate = ls_rate ).
+    cl_abap_unit_assert=>assert_equals( act = lv_parent exp = CONV ty_minor( 3 ) ).
+    cl_abap_unit_assert=>assert_equals( act = lv_direct exp = CONV ty_minor( 4 ) ).
+  ENDMETHOD.
+
+  METHOD invalid_rate_rejected.
+    TRY.
+        zcl_pln_money=>convert( iv_minor = 1 iv_source_decimals = 2 iv_target_decimals = 2
+                                is_rate = VALUE #( rate = 0 from_factor = 1 to_factor = 1 ) ).
+        cl_abap_unit_assert=>fail( `zero rate accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-invalid_rate ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD overflow_rejected.
+    TRY.
+        zcl_pln_money=>convert( iv_minor = CONV #( '100000000000000000000' ) iv_source_decimals = 0
+                                iv_target_decimals = 6
+                                is_rate = VALUE #( rate = 9999 from_factor = 1 to_factor = 1000 ) ).
+        cl_abap_unit_assert=>fail( `overflow not detected` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-overflow ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD differential_round.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{ROUND_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_value) DATA(lv_dec) DATA(lv_exp).
+      DATA(lv_got) = zcl_pln_money=>round_commercial( iv_value = CONV #( lv_value ) iv_decimals = CONV #( lv_dec ) ).
+      IF lv_got <> CONV ty_decimal( lv_exp ).
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { lv_got }|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+  METHOD differential_minor.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{MINOR_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_amount) DATA(lv_dec) DATA(lv_minor) DATA(lv_internal).
+      DATA(lv_got) = zcl_pln_money=>to_minor( iv_amount = CONV #( lv_amount ) iv_currency_decimals = CONV #( lv_dec ) ).
+      DATA(lv_int) = zcl_pln_money=>to_internal( lv_got ).
+      DATA(lv_back) = zcl_pln_money=>from_minor( iv_minor = zcl_pln_money=>from_internal( lv_int )
+                                                 iv_currency_decimals = CONV #( lv_dec ) ).
+      IF lv_got <> CONV ty_minor( lv_minor ) OR lv_int <> CONV zcl_pln_money=>ty_internal( lv_internal )
+         OR lv_back <> CONV ty_decimal( lv_amount ).
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { lv_got } / { lv_int } / { lv_back }|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+  METHOD differential_convert.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{CONVERT_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_minor) DATA(lv_ds) DATA(lv_dt) DATA(lv_rate) DATA(lv_ff) DATA(lv_tf) DATA(lv_exp).
+      DATA(lv_got) = zcl_pln_money=>convert(
+        iv_minor           = CONV #( lv_minor )
+        iv_source_decimals = CONV #( lv_ds )
+        iv_target_decimals = CONV #( lv_dt )
+        is_rate            = VALUE #( rate = CONV #( lv_rate ) from_factor = CONV #( lv_ff ) to_factor = CONV #( lv_tf ) ) ).
+      IF lv_got <> CONV ty_minor( lv_exp ).
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { lv_got }|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+{{IMPL}}
+
+ENDCLASS.
+
+
+"! Intermediate values at or above 2^53. Exact on an ABAP kernel (packed arithmetic to 31 digits);
+"! the open-abap emulator computes these in float64, so this class carries data only for kernel runs.
+CLASS ltc_money_kernel DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS large_magnitude_convert FOR TESTING RAISING cx_static_check.
+{{KERNEL_DECL}}
+ENDCLASS.
+
+
+CLASS ltc_money_kernel IMPLEMENTATION.
+
+  METHOD large_magnitude_convert.
+    DATA lt_cases TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{KERNEL_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_minor) DATA(lv_ds) DATA(lv_dt) DATA(lv_rate) DATA(lv_ff) DATA(lv_tf) DATA(lv_exp).
+      DATA(lv_got) = zcl_pln_money=>convert(
+        iv_minor           = CONV #( lv_minor )
+        iv_source_decimals = CONV #( lv_ds )
+        iv_target_decimals = CONV #( lv_dt )
+        is_rate            = VALUE #( rate = CONV #( lv_rate ) from_factor = CONV #( lv_ff ) to_factor = CONV #( lv_tf ) ) ).
+      IF lv_got <> CONV zcl_pln_money=>ty_minor( lv_exp ).
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { lv_got }|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+{{KERNEL_IMPL}}
+
+ENDCLASS.

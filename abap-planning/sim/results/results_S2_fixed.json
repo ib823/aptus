@@ -1,0 +1,43 @@
+{
+ "cases": 15000,
+ "feasible": 14095,
+ "infeasible": 905,
+ "variants": {
+  "leaf-level, bound-checked (recommended)": {
+   "feasible_rejected": 0,
+   "infeasible_accepted": 0,
+   "root_mismatch": 0,
+   "locked_changed": 0,
+   "negative_leaf": 0,
+   "max_dev_vs_exact_units": 0.773249300918678,
+   "max_dev_pct_of_delta": 0.084
+  },
+  "leaf-level, no bound check": {
+   "feasible_rejected": 0,
+   "infeasible_accepted": 647,
+   "root_mismatch": 0,
+   "locked_changed": 0,
+   "negative_leaf": 647,
+   "max_dev_vs_exact_units": 0.773249300918678,
+   "max_dev_pct_of_delta": 0.084
+  },
+  "level-by-level, eligible-aware weights": {
+   "feasible_rejected": 0,
+   "infeasible_accepted": 647,
+   "root_mismatch": 0,
+   "locked_changed": 0,
+   "negative_leaf": 647,
+   "max_dev_vs_exact_units": 1.3689406874403918,
+   "max_dev_pct_of_delta": 0.084
+  },
+  "level-by-level, subtree-total weights": {
+   "feasible_rejected": 7401,
+   "infeasible_accepted": 286,
+   "root_mismatch": 0,
+   "locked_changed": 0,
+   "negative_leaf": 1139,
+   "max_dev_vs_exact_units": 123328639.06486659,
+   "max_dev_pct_of_delta": 64.516
+  }
+ }
+}
