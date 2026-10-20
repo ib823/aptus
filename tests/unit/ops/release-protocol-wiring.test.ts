@@ -53,6 +53,7 @@ describe("package.json", () => {
   it("has the protocol's commands", () => {
     expect(scripts["migrations:check"]).toBe("tsx scripts/check-migration-protocol.ts");
     expect(scripts["migrations:backout-sql"]).toBe("tsx scripts/migration-backout.ts sql");
+    expect(scripts["migrations:backout-apply"]).toBe("tsx scripts/migration-backout.ts apply");
     expect(scripts["migrations:rehearse-backout"]).toBe("tsx scripts/migration-backout.ts rehearse");
     expect(scripts["release:post-deploy-check"]).toBe("tsx scripts/coreedge/post-deploy-check.ts");
   });
@@ -65,7 +66,7 @@ describe("package.json", () => {
 describe("the operator settings", () => {
   const example = read(".env.example");
 
-  it.each([...Object.values(ENV), "REHEARSAL_DATABASE_URL", "SHADOW_DATABASE_URL"])(
+  it.each([...Object.values(ENV), "REHEARSAL_DATABASE_URL", "SHADOW_DATABASE_URL", "BACKOUT_DATABASE_URL"])(
     "%s is documented in .env.example, commented out",
     (name) => {
       expect(example).toMatch(new RegExp(`^# ${name}=`, "m"));
@@ -96,6 +97,33 @@ describe("the runbook", () => {
   it("leaves RPO and RTO to the product owner, as open decisions", () => {
     expect(runbook).toMatch(/- \*\*D1, RPO and RTO\.\*\*[\s\S]{0,200}Owner: the product owner/);
     expect(runbook).not.toMatch(/\b(RPO|RTO) (of|is|=) \d/);
+  });
+
+  // schema.prisma has `directUrl = env("DIRECT_DATABASE_URL")`, and the prisma
+  // CLI connects to it rather than to DATABASE_URL: a command that sets only
+  // DATABASE_URL runs on whatever DIRECT_DATABASE_URL holds (shell or .env).
+  it("never tells the operator to run a prisma CLI command with only DATABASE_URL set", () => {
+    expect(read("prisma/schema.prisma")).toMatch(/directUrl\s*=\s*env\("DIRECT_DATABASE_URL"\)/);
+    const lines = runbook.split("\n");
+    const offenders = lines.filter((line, i) => {
+      if (!/\bprisma (db execute|migrate (status|deploy|resolve))\b/.test(line)) return false;
+      // The command's own line, or the export lines just above it.
+      const context = lines.slice(Math.max(0, i - 3), i + 1).join("\n");
+      return /\bDATABASE_URL=/.test(context) && !/\bDIRECT_DATABASE_URL=/.test(context);
+    });
+    expect(offenders).toEqual([]);
+    expect(runbook).not.toMatch(/DATABASE_URL="[^"]*" pnpm exec prisma db execute/);
+  });
+
+  it("backs a migration out with migrations:backout-apply, after removing it from main", () => {
+    const step6 = runbook.slice(runbook.indexOf("## Step 6: rollback"), runbook.indexOf("## Recovery"));
+    expect(step6).toContain("every production build of `main` runs `migrate deploy` against the\nproduction database, promoted or not");
+    const remove = step6.indexOf("**Remove the migration from `main` first.**");
+    const wait = step6.indexOf("**Wait until no production build holds the directory.**");
+    const apply = step6.indexOf("pnpm migrations:backout-apply");
+    expect(remove).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(remove);
+    expect(apply).toBeGreaterThan(wait);
   });
 
   it("names the preview isolation check and the rule learned in Phase 0a/0b", () => {

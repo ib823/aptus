@@ -20,7 +20,7 @@ how each one goes out, how it is checked, and how it is taken back.
 request it came from. A deploy without a recorded PASS is not finished.
 
 Nothing in this runbook changes what the application does. It adds two CI
-gates, three operator commands and one record. No application setting, no
+gates, four operator commands and one record. No application setting, no
 migration, and no change for any user.
 
 ---
@@ -80,8 +80,11 @@ schema after it. That is expand/contract:
 `pnpm migrations:check` refuses, in every migration added after `520ee318`
 without a `Contract:` line: `DROP` of any object (and `ALTER TABLE ... DROP`
 except `DROP NOT NULL`), `DELETE FROM`, `TRUNCATE`, `RENAME`, a column type
-change, `SET NOT NULL`, and `ADD COLUMN ... NOT NULL` without `DEFAULT`. It
-reads only executable SQL (comments and string literals are ignored). It
+change, `SET NOT NULL`, and `ADD COLUMN ... NOT NULL` without `DEFAULT`,
+including inside a guarded `DO $$ BEGIN ... EXCEPTION WHEN ... END $$` or
+`IF ... THEN` block. It reads only executable SQL (comments and string
+literals are ignored), so it also refuses dynamic SQL (`EXECUTE '...'`,
+`EXECUTE format(...)`) it cannot read: write the statement out instead. It
 cannot judge everything: **in review, also ask** whether a new unique index or
 constraint could refuse a write the old code makes, and whether a backfill is
 safe to run while the old code writes the same rows.
@@ -152,6 +155,8 @@ What enforces it:
 pnpm migrations:check                      # the rules, against the cutoff and origin/main
 pnpm db:check-drift                        # history == schema.prisma (needs DATABASE_URL)
 pnpm migrations:backout-sql <name>         # print one migration's backout script
+BACKOUT_DATABASE_URL=postgresql://... \
+  pnpm migrations:backout-apply <name>     # run it on that one database (step 6), after confirming its name
 REHEARSAL_DATABASE_URL=postgresql://...localhost.../scratch \
 SHADOW_DATABASE_URL=postgresql://...localhost.../scratch_shadow \
   pnpm migrations:rehearse-backout          # back out everything under the protocol, then roll forward
@@ -360,11 +365,18 @@ no migration runs, and the schema stays as the release left it, which is
 safe because every migration is additive (step 2).
 
 After a rollback, Vercel stops assigning production to new deployments
-automatically until one is promoted by hand. So:
+automatically until one is promoted by hand. **It does not stop building
+them, and every production build of `main` runs `migrate deploy` against the
+production database, promoted or not** (`vercel-build` runs
+`scripts/migrate-deploy-with-retry.mjs` with the Production `DATABASE_URL`
+before `next build`). A merge to `main` therefore changes production's schema
+even while the rolled-back deployment serves. So:
 
 1. revert the pull request on `main` in its own pull request (`git revert`),
    keeping any migration directory it added (gate 0 refuses removing one
-   unless it was backed out, below);
+   unless it was backed out, below). If a migration is to be backed out too,
+   this revert pull request is the one that removes it, **before** the backout
+   runs: follow the order in the next section instead;
 2. the fix comes as a new pull request through steps 1-5;
 3. promote it (Vercel, Deployments, "Promote", or `vercel promote <url>`),
    which turns automatic promotion back on.
@@ -379,6 +391,14 @@ is the default. Run backout SQL only when the migration itself hurts the code
 that is now serving (for example a constraint that refuses its writes, or a
 backfill that wrote wrong values), and only after the code rollback.
 
+**The order matters.** The backout deletes the migration's
+`_prisma_migrations` row, and every production build of `main` runs `migrate
+deploy` against production (above). If `main` still holds the migration's
+directory when the backout runs, the next merge or redeploy of `main`
+re-applies it, putting back the constraint or backfill that was hurting the
+code now serving. So the directory leaves `main` first, and the backout runs
+after; the reverse order leaves that window open.
+
 1. Print the script, newest migration first, and read it:
 
    ```bash
@@ -391,21 +411,41 @@ backfill that wrote wrong values), and only after the code rollback.
    believes it is applied and the roll-forward deploys code against a schema
    missing it. (`prisma migrate resolve --rolled-back` cannot do this: it only
    accepts a migration that failed.)
-2. Apply it to production with the direct (unpooled) URL:
+2. **Remove the migration from `main` first.** In the revert pull request (or
+   a pull request of its own when the revert already merged), delete the
+   migration's directory and record it in `prisma/backed-out-migrations.json`
+   (`"<name>": "<UTC date>, <who>, <why>, <incident or PR>"`); gate 0 allows
+   exactly that removal. Merge it. Its production build runs `migrate deploy`,
+   which finds nothing pending (the migration is still applied, and an
+   applied migration missing from the directory is ignored), so production is
+   unchanged. The fixed version comes back under a **new** name: a database
+   that applied the old file and was not backed out (a preview, a
+   developer's) would never run a changed file under the old name.
+3. **Wait until no production build holds the directory.** In Vercel,
+   Deployments, filtered to Production: the removal's build has finished, and
+   no build of an older commit of `main` is queued or building (cancel any
+   that is). Until the backout is done, merge nothing else to `main`.
+4. Apply the script to production, with its direct (unpooled) URL:
 
    ```bash
-   DATABASE_URL="<production direct URL>" pnpm exec prisma db execute --schema prisma/schema.prisma --file /tmp/backout.sql
+   BACKOUT_DATABASE_URL="<production direct URL>" \
+     pnpm migrations:backout-apply 20261023030000_developer_journey_events
    ```
 
-   A failure rolls the whole script back; nothing is half-applied.
-3. Confirm: `DATABASE_URL="<production direct URL>" pnpm migrations:check
-   --database` lists the migration as pending.
-4. Remove the migration from `main` in the revert pull request and record it
-   in `prisma/backed-out-migrations.json` (`"<name>": "<UTC date>, <who>,
-   <why>, <incident or PR>"`); gate 0 allows exactly that removal. The fixed
-   version comes back under a **new** name: a database that applied the old
-   file and was not backed out (a preview, a developer's) would never run a
-   changed file under the old name.
+   It prints the host and database it is about to change (never the
+   password) and asks for the database name to be typed back. It runs exactly
+   the script step 1 printed, with `DATABASE_URL` and `DIRECT_DATABASE_URL`
+   both set to that one URL. **Do not run `prisma db execute --schema
+   prisma/schema.prisma` with only `DATABASE_URL` set**: `schema.prisma` has
+   `directUrl = env("DIRECT_DATABASE_URL")`, and the prisma CLI connects to
+   that instead, so the script would run on whatever `DIRECT_DATABASE_URL`
+   holds (the shell's, or the checkout's `.env`, which `.env.example` points at
+   a local database) and report success while production is unchanged. A
+   failure rolls the whole script back; nothing is half-applied.
+5. Confirm: `DATABASE_URL="<production direct URL>" pnpm migrations:check
+   --database` no longer lists the migration as "applied on this database but
+   not in this checkout" (it does before step 4). This command reads with the
+   Prisma client, which uses `DATABASE_URL` and nothing else.
 
 Data in what the backout drops is lost; each backout says what (for the four
 `backout.sql` files, in their headers). A dropped table or column is not
@@ -431,10 +471,17 @@ achieves, so the decision is made against a measured figure.
    restore; how far back it can go depends on the plan: confirm it, D2).
    Never into the preview project: previews must hold synthetic data only
    (PREVIEW-DB-RUNBOOK).
-3. Point a local checkout at it (never a Vercel environment):
-   `DATABASE_URL=<scratch direct URL> pnpm exec prisma migrate status` must
-   report the schema up to date; `pnpm migrations:check --database` must
-   pass.
+3. Point a local checkout at it (never a Vercel environment), setting **both**
+   variables to the scratch URL, because the prisma CLI connects to
+   `schema.prisma`'s `directUrl` (`DIRECT_DATABASE_URL`) rather than
+   `DATABASE_URL` and would otherwise report on another database:
+
+   ```bash
+   export DATABASE_URL="<scratch direct URL>"
+   export DIRECT_DATABASE_URL="<scratch direct URL>"
+   pnpm exec prisma migrate status    # must report the schema up to date
+   pnpm migrations:check --database   # must pass
+   ```
 4. Prove the data: `pnpm verify:data`, and the row counts of the CoreEdge
    tables that matter most (`Solution`, `Interface`, `ApiAccessGrant`,
    `SolutionClient`, `NorthboundAuditEvent`) against production.
@@ -507,6 +554,7 @@ No application setting. The tools read these on the operator's machine only
 | `COREEDGE_CHECK_AUDIT_DATABASE_URL` | post-deploy check | yes |
 | `COREEDGE_CHECK_CUSTOM_KEY`, `COREEDGE_CHECK_REFUSED_INTERFACE`, `COREEDGE_CHECK_EXPECT_COMMIT`, `COREEDGE_CHECK_PROTECTION_BYPASS` | post-deploy check | no |
 | `REHEARSAL_DATABASE_URL`, `SHADOW_DATABASE_URL` | backout rehearsal | yes, for it |
+| `BACKOUT_DATABASE_URL` | `migrations:backout-apply` (it sets `DATABASE_URL` and `DIRECT_DATABASE_URL` from it for the prisma CLI) | yes, for it |
 | `DATABASE_URL` | `migrations:check --database` | yes, for it |
 
 ## Code
@@ -516,7 +564,8 @@ No application setting. The tools read these on the operator's machine only
 - `scripts/lib/migration-cutoff.json`: the cutoff's migrations and checksums,
   generated once from git (a test compares it with git).
 - `scripts/lib/migration-rehearsal.ts`, `scripts/migration-backout.ts`: the
-  rehearsal and `migrations:backout-sql`.
+  rehearsal, `migrations:backout-sql` and `migrations:backout-apply`
+  (`prismaCliEnv` sets both database variables for every prisma CLI run).
 - `scripts/check-migration-protocol.ts`: `pnpm migrations:check`.
 - `scripts/lib/post-deploy-check.ts`, `scripts/coreedge/post-deploy-check.ts`:
   the post-deploy check; `scripts/lib/redact.ts`: what keeps secrets out of

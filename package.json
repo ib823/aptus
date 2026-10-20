@@ -105,6 +105,7 @@
     "db:check-drift": "bash scripts/check-migration-drift.sh",
     "migrations:check": "tsx scripts/check-migration-protocol.ts",
     "migrations:backout-sql": "tsx scripts/migration-backout.ts sql",
+    "migrations:backout-apply": "tsx scripts/migration-backout.ts apply",
     "migrations:rehearse-backout": "tsx scripts/migration-backout.ts rehearse",
     "release:post-deploy-check": "tsx scripts/coreedge/post-deploy-check.ts",
     "postinstall": "prisma generate",

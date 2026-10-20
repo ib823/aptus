@@ -7,35 +7,45 @@
  *
  * It must pass a correct pair of backouts, and fail, saying which step, when a
  * backout leaves something behind or does not run. CI runs the same function
- * on this repository's whole history (migration-integrity.yml).
+ * on this repository's whole history (migration-integrity.yml). And
+ * applyBackout (`pnpm migrations:backout-apply`) must change the one database
+ * it is given, never the one a stale DIRECT_DATABASE_URL names.
  *
- * Opt-in on TEST_DATABASE_URL. Creates two throwaway databases on that server
- * and drops them after; the test database itself is never touched.
+ * Opt-in on TEST_DATABASE_URL. Creates three throwaway databases on that
+ * server and drops them after; the test database itself is never touched.
  */
 
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PrismaClient } from "@prisma/client";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { rehearseBackouts } from "../../scripts/lib/migration-rehearsal";
+import { applyBackout, rehearseBackouts } from "../../scripts/lib/migration-rehearsal";
+
+const PRISMA = join(process.cwd(), "node_modules", ".bin", "prisma");
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 const SUFFIX = randomBytes(4).toString("hex");
 const DB = `rehearsal_${SUFFIX}`;
 const SHADOW = `rehearsal_shadow_${SUFFIX}`;
+/** A database a stale DIRECT_DATABASE_URL points at: it must never change. */
+const DECOY = `rehearsal_decoy_${SUFFIX}`;
 const urlFor = (db: string) => {
   const u = new URL(TEST_URL ?? "postgresql://unused:unused@localhost:1/unused");
   u.pathname = `/${db}`;
   return u.toString();
 };
 
+// A directUrl, like prisma/schema.prisma: the CLI connects to it rather than
+// to DATABASE_URL, which is what applyBackout has to get right.
 const SCHEMA = `datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model Thing {
@@ -92,7 +102,7 @@ function writeFixture(over: { otherBackout?: string; labelSql?: string } = {}) {
 }
 
 async function freshDatabases() {
-  for (const db of [DB, SHADOW]) {
+  for (const db of [DB, SHADOW, DECOY]) {
     await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
     await admin.$executeRawUnsafe(`CREATE DATABASE "${db}"`);
   }
@@ -108,8 +118,8 @@ const rehearse = (since: string | null = null) =>
     log: (l) => logs.push(l),
   });
 
-async function applied(): Promise<string[]> {
-  const c = new PrismaClient({ datasourceUrl: urlFor(DB) });
+async function applied(db: string = DB): Promise<string[]> {
+  const c = new PrismaClient({ datasourceUrl: urlFor(db) });
   try {
     const [table] = await c.$queryRawUnsafe<{ t: string | null }[]>(`SELECT to_regclass('"_prisma_migrations"')::text AS t`);
     if (!table?.t) return [];
@@ -135,7 +145,7 @@ describe.skipIf(!TEST_URL)("rehearsing every backout on a history-built database
   });
 
   afterAll(async () => {
-    for (const db of [DB, SHADOW]) await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
+    for (const db of [DB, SHADOW, DECOY]) await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
     await admin.$disconnect();
     rmSync(fixture, { recursive: true, force: true });
   });
@@ -176,6 +186,54 @@ describe.skipIf(!TEST_URL)("rehearsing every backout on a history-built database
     const r = rehearse("20990103000000_other");
     expect(r, logs.join("\n")).toMatchObject({ ok: true, backedOut: ["20990103000000_other"] });
   }, 120_000);
+
+  it("applyBackout changes the database it is given, even when DIRECT_DATABASE_URL names another (the runbook's step 6)", async () => {
+    writeFixture();
+    for (const db of [DB, DECOY]) {
+      const r = spawnSync(PRISMA, ["migrate", "deploy", "--schema", join(fixture, "schema.prisma")], {
+        env: { ...process.env, DATABASE_URL: urlFor(db), DIRECT_DATABASE_URL: urlFor(db) },
+        encoding: "utf8",
+      });
+      expect(r.status, r.stderr).toBe(0);
+    }
+    // What an operator's shell, or the checkout's .env, may still hold.
+    vi.stubEnv("DIRECT_DATABASE_URL", urlFor(DECOY));
+    try {
+      const r = applyBackout({
+        schemaPath: join(fixture, "schema.prisma"),
+        databaseUrl: urlFor(DB),
+        name: "20990103000000_other",
+        log: (l) => logs.push(l),
+      });
+      expect(r, logs.join("\n")).toEqual({ ok: true, failure: null });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect({ target: await applied(DB), decoy: await applied(DECOY) }).toEqual({
+      target: ["20990101000000_base", "20990102000000_add_label"],
+      decoy: ["20990101000000_base", "20990102000000_add_label", "20990103000000_other"],
+    });
+    const tableIn = async (db: string) => {
+      const c = new PrismaClient({ datasourceUrl: urlFor(db) });
+      try {
+        const [row] = await c.$queryRawUnsafe<{ t: string | null }[]>(`SELECT to_regclass('"Other"')::text AS t`);
+        return row?.t ?? null;
+      } finally {
+        await c.$disconnect();
+      }
+    };
+    expect({ target: await tableIn(DB), decoy: await tableIn(DECOY) }).toEqual({ target: null, decoy: '"Other"' });
+  }, 120_000);
+
+  it("applyBackout refuses an unknown migration, and one with no backout, before connecting", () => {
+    writeFixture({ labelSql: ADD_LABEL.replace(/-- Backout:[\s\S]*?"label";\n/, "") });
+    const base = { schemaPath: join(fixture, "schema.prisma"), databaseUrl: urlFor(DB), log: (l: string) => logs.push(l) };
+    expect(applyBackout({ ...base, name: "20990109000000_nope" })).toEqual({ ok: false, failure: expect.stringMatching(/^no migration 20990109000000_nope/) });
+    expect(applyBackout({ ...base, name: "20990102000000_add_label" })).toEqual({
+      ok: false,
+      failure: expect.stringMatching(/^20990102000000_add_label: no backout SQL/),
+    });
+  });
 
   it("refuses a migration with no backout before touching the database", async () => {
     writeFixture({ labelSql: ADD_LABEL.replace(/-- Backout:[\s\S]*?"label";\n/, "") });

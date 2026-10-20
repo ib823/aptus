@@ -161,6 +161,20 @@ export interface DestructiveFinding {
 }
 
 /**
+ * The ALTER TABLE in a statement, from where it starts to the statement's
+ * end, or null. It is not always at the start: the repository's hand-written
+ * migrations guard a change in a DO block (`DO $$ BEGIN ALTER TABLE ...;
+ * EXCEPTION WHEN duplicate_column THEN NULL; END $$;`) or behind
+ * `IF NOT EXISTS (...) THEN ALTER TABLE ...`, and `statements` splits only on
+ * ";", so the words before it belong to the block. Cutting there also keeps a
+ * DROP or DEFAULT in an IF's condition out of the rules.
+ */
+function alterTable(stmt: string): string | null {
+  const m = /\bALTER\s+TABLE\b/i.exec(stmt);
+  return m ? stmt.slice(m.index) : null;
+}
+
+/**
  * What the code running during a deploy, or brought back by a rollback,
  * cannot survive. Each rule is a reason in words, because the person reading
  * a red CI line needs the why, not the regex.
@@ -172,7 +186,7 @@ const DESTRUCTIVE_RULES: readonly { readonly rule: string; readonly test: (stmt:
       /\bDROP\s+(TABLE|COLUMN|CONSTRAINT|INDEX|SCHEMA|TYPE|VIEW|MATERIALIZED\s+VIEW|SEQUENCE|DATABASE|FUNCTION|TRIGGER|EXTENSION)\b/i.test(s) ||
       // ALTER TABLE ... DROP "col" (COLUMN is optional) or DROP DEFAULT. Only
       // DROP NOT NULL relaxes a rule and is left alone.
-      (/^ALTER\s+TABLE\b/i.test(s) && /\bDROP\b(?!\s+NOT\s+NULL\b)/i.test(s)),
+      /\bDROP\b(?!\s+NOT\s+NULL\b)/i.test(alterTable(s) ?? ""),
   },
   { rule: "deletes rows", test: (s) => /\bTRUNCATE\b/i.test(s) || /\bDELETE\s+FROM\b/i.test(s) },
   { rule: "renames an object the running code refers to by name", test: (s) => /\bRENAME\b/i.test(s) },
@@ -187,14 +201,23 @@ const DESTRUCTIVE_RULES: readonly { readonly rule: string; readonly test: (stmt:
   {
     rule: "adds a NOT NULL column with no DEFAULT, which the running code's inserts omit",
     test: (s) => {
-      if (!/^ALTER\s+TABLE\b/i.test(s)) return false;
+      const alter = alterTable(s);
+      if (alter === null) return false;
       // One clause per ADD COLUMN; a type such as DECIMAL(10,2) keeps its comma.
-      const clauses = s.split(/,\s*(?=(?:ADD|DROP|ALTER|RENAME)\b)/i);
+      const clauses = alter.split(/,\s*(?=(?:ADD|DROP|ALTER|RENAME)\b)/i);
       return clauses.some(
         (c) =>
           /\bADD\s+(?!CONSTRAINT\b)(?:COLUMN\s+)?/i.test(c) && /\bNOT\s+NULL\b/i.test(c) && !/\bDEFAULT\b/i.test(c),
       );
     },
+  },
+  {
+    // EXECUTE '...' or EXECUTE format(...) runs SQL held in a string, which
+    // executableSql blanks and which is often assembled with || or format(),
+    // so no rule above can read it. A trigger's EXECUTE FUNCTION/PROCEDURE is
+    // not dynamic SQL.
+    rule: "runs dynamic SQL (EXECUTE) this check cannot read: write the statement out, or say why it is safe in a Contract line",
+    test: (s) => /\bEXECUTE\b(?!\s+(?:FUNCTION|PROCEDURE)\b)/i.test(s),
   },
 ];
 

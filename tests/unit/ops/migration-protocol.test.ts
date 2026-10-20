@@ -86,6 +86,46 @@ describe("destructiveStatements: what the running code cannot survive", () => {
     expect(destructiveStatements(sql)).toEqual([]);
   });
 
+  // The repository's hand-written idiom guards a change in a DO block or an
+  // IF; statements() splits only on ";", so the ALTER is not at the start.
+  it.each([
+    [
+      "ADD COLUMN NOT NULL without DEFAULT in a DO block guarded by EXCEPTION WHEN duplicate_column",
+      `DO $$ BEGIN\n  ALTER TABLE "SolutionClient" ADD COLUMN "mustHave" TEXT NOT NULL;\nEXCEPTION WHEN duplicate_column THEN NULL;\nEND $$;`,
+      /no DEFAULT/,
+    ],
+    [
+      "ADD COLUMN NOT NULL without DEFAULT behind IF NOT EXISTS ... THEN",
+      `DO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'A' AND column_name = 'b') THEN\n    ALTER TABLE "A" ADD COLUMN "b" TEXT NOT NULL;\n  END IF;\nEND $$;`,
+      /no DEFAULT/,
+    ],
+    [
+      `ALTER TABLE ... DROP "col" behind IF EXISTS ... THEN`,
+      `DO $$ BEGIN\n  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Interface' AND column_name = 'x') THEN\n    ALTER TABLE "Interface" DROP "x";\n  END IF;\nEND $$;`,
+      /drops/,
+    ],
+    [
+      "ALTER TABLE ... DROP DEFAULT in an ELSE branch",
+      `DO $$ BEGIN\n  IF false THEN\n    NULL;\n  ELSE\n    ALTER TABLE "A" ALTER COLUMN "b" DROP DEFAULT;\n  END IF;\nEND $$;`,
+      /drops/,
+    ],
+    ["dynamic SQL, which this check cannot read", `DO $$ BEGIN\n  EXECUTE 'ALTER TABLE "A" DROP COLUMN "b"';\nEND $$;`, /dynamic SQL/],
+    ["dynamic SQL built with format()", `DO $$ BEGIN\n  EXECUTE format('ALTER TABLE %I DROP COLUMN %I', 'A', 'b');\nEND $$;`, /dynamic SQL/],
+  ])("refuses %s", (_label, sql, rule) => {
+    expect(rules(sql).some((r) => rule.test(r))).toBe(true);
+  });
+
+  it.each([
+    `DO $$ BEGIN\n  ALTER TABLE "A" ADD COLUMN "b" TEXT NOT NULL DEFAULT 'x';\nEXCEPTION WHEN duplicate_column THEN NULL;\nEND $$;`,
+    `DO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'A_b_fkey') THEN\n    ALTER TABLE "A" ADD CONSTRAINT "A_b_fkey" FOREIGN KEY ("b") REFERENCES "B"("id") ON DELETE SET NULL;\n  END IF;\nEND $$;`,
+    // A DROP or a NOT NULL in the guard's condition is not the ALTER's.
+    `DO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM t WHERE note = 'x' AND kind IS NOT NULL) THEN\n    ALTER TABLE "A" ADD COLUMN "b" TEXT;\n  END IF;\nEND $$;`,
+    `CREATE TRIGGER "A_touch" BEFORE UPDATE ON "A" FOR EACH ROW EXECUTE FUNCTION touch();`,
+    `CREATE TRIGGER "A_touch" BEFORE UPDATE ON "A" FOR EACH ROW EXECUTE PROCEDURE touch();`,
+  ])("allows the guarded or trigger form %s", (sql) => {
+    expect(destructiveStatements(sql)).toEqual([]);
+  });
+
   it("reads the reason from a Contract line", () => {
     expect(contractReason(`-- Contract: nothing reads "b" since release 2026-11-01 (#320).\nALTER TABLE "A" DROP COLUMN "b";`)).toBe(
       `nothing reads "b" since release 2026-11-01 (#320).`,
@@ -228,6 +268,16 @@ describe("checkProtocol", () => {
     const r = checkProtocol({ local: [OLD, contract], cutoff, bases: [] });
     expect(r.errors).toEqual([]);
     expect(r.notes).toEqual([expect.stringMatching(/contract migration \(no deployed code reads "b" since #330\.\)/)]);
+  });
+
+  it("refuses a non-additive change hidden in a guarded DO block", () => {
+    const guarded = migration(
+      "20990103000000_guarded",
+      `-- Backout: ALTER TABLE "Old" DROP COLUMN "mustHave";\nDO $$ BEGIN\n  ALTER TABLE "Old" ADD COLUMN "mustHave" TEXT NOT NULL;\nEXCEPTION WHEN duplicate_column THEN NULL;\nEND $$;`,
+    );
+    expect(checkProtocol({ local: [OLD, guarded], cutoff, bases: [] }).errors).toEqual([
+      expect.stringMatching(/^20990103000000_guarded: not additive[\s\S]*no DEFAULT/),
+    ]);
   });
 
   it("names a migration directory with no migration.sql, and a malformed name", () => {

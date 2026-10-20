@@ -56,14 +56,28 @@ interface PrismaRun {
   readonly output: string;
 }
 
-export function rehearseBackouts(opts: RehearsalOptions): RehearsalResult {
-  const migrationsDir = join(dirname(opts.schemaPath), "migrations");
-  const prismaBin = opts.prismaBin ?? join(process.cwd(), "node_modules", ".bin", "prisma");
-  const secrets = [opts.databaseUrl, opts.shadowDatabaseUrl];
-  const env = { ...process.env, DATABASE_URL: opts.databaseUrl, DIRECT_DATABASE_URL: opts.databaseUrl };
+/**
+ * The environment for a prisma CLI command meant for `databaseUrl`, and only
+ * that database.
+ *
+ * schema.prisma declares `directUrl = env("DIRECT_DATABASE_URL")`, and the
+ * CLI (`db execute --schema`, `migrate deploy`, `migrate status`) connects to
+ * the directUrl when there is one, not to DATABASE_URL. Setting DATABASE_URL
+ * alone therefore runs the command on whatever DIRECT_DATABASE_URL holds: the
+ * operator's shell from an earlier task, or the checkout's .env (which the
+ * CLI loads, and which .env.example points at a local database). Both are set
+ * here, explicitly, to the one URL; a variable already in the environment
+ * wins over .env, so the file cannot redirect it either.
+ */
+export function prismaCliEnv(databaseUrl: string): NodeJS.ProcessEnv {
+  return { ...process.env, DATABASE_URL: databaseUrl, DIRECT_DATABASE_URL: databaseUrl };
+}
 
-  const prisma = (args: readonly string[], input?: string): PrismaRun => {
-    const r = spawnSync(prismaBin, args, {
+function prismaRunner(prismaBin: string | undefined, databaseUrl: string, secrets: readonly string[]) {
+  const bin = prismaBin ?? join(process.cwd(), "node_modules", ".bin", "prisma");
+  const env = prismaCliEnv(databaseUrl);
+  return (args: readonly string[], input?: string): PrismaRun => {
+    const r = spawnSync(bin, args, {
       env,
       encoding: "utf8",
       input,
@@ -71,6 +85,44 @@ export function rehearseBackouts(opts: RehearsalOptions): RehearsalResult {
     });
     return { status: r.status, output: redactSecrets(`${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}`, secrets) };
   };
+}
+
+export interface ApplyBackoutOptions {
+  /** schema.prisma; its migrations are the `migrations` directory beside it. */
+  readonly schemaPath: string;
+  /** The one database to change. */
+  readonly databaseUrl: string;
+  readonly name: string;
+  readonly log: (line: string) => void;
+  /** The prisma CLI. Defaults to the repository's own. */
+  readonly prismaBin?: string;
+}
+
+/**
+ * Back one migration out of one database (`pnpm migrations:backout-apply`,
+ * docs/runbooks/coreedge-release.md step 6): exactly the script
+ * `migrations:backout-sql` prints, run by `prisma db execute` with both
+ * DATABASE_URL and DIRECT_DATABASE_URL set to `databaseUrl` (prismaCliEnv).
+ * The script is one transaction, so a failure changes nothing.
+ */
+export function applyBackout(opts: ApplyBackoutOptions): { readonly ok: boolean; readonly failure: string | null } {
+  const migrationsDir = join(dirname(opts.schemaPath), "migrations");
+  const m = readLocalMigrations(migrationsDir).find((x) => x.name === opts.name);
+  if (!m) return { ok: false, failure: `no migration ${opts.name} in ${migrationsDir}` };
+  const parsed = parseBackout(m);
+  if (!parsed.ok) return { ok: false, failure: `${opts.name}: ${parsed.problem}` };
+  const prisma = prismaRunner(opts.prismaBin, opts.databaseUrl, [opts.databaseUrl]);
+  const run = prisma(["db", "execute", "--schema", opts.schemaPath, "--stdin"], backoutScript(opts.name, parsed.backout));
+  if (run.status !== 0) {
+    opts.log(run.output.trim());
+    return { ok: false, failure: `the backout of ${opts.name} failed to run; its transaction changed nothing` };
+  }
+  return { ok: true, failure: null };
+}
+
+export function rehearseBackouts(opts: RehearsalOptions): RehearsalResult {
+  const migrationsDir = join(dirname(opts.schemaPath), "migrations");
+  const prisma = prismaRunner(opts.prismaBin, opts.databaseUrl, [opts.databaseUrl, opts.shadowDatabaseUrl]);
   const fail = (backedOut: string[], step: string, run?: PrismaRun): RehearsalResult => {
     if (run) opts.log(run.output.trim());
     opts.log(`FAIL: ${step}`);
