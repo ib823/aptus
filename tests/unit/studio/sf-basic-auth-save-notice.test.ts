@@ -35,7 +35,15 @@ vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit 
 
 import { POST } from "@/app/api/studio/connections/route";
 
-const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com" };
+// authMethod "session" is what getCurrentUser returns for a signed-in person
+// (lib/auth/session.ts); the P0.12 step-up check refuses anything else.
+const CONSULTANT = {
+  id: "u_1",
+  role: "consultant",
+  organizationId: "org_a",
+  email: "c@abeam.com",
+  authMethod: "session" as const,
+};
 
 function body(over: Record<string, unknown> = {}) {
   return {
@@ -66,6 +74,9 @@ beforeEach(() => {
   mocks.writeConfigAudit.mockResolvedValue(undefined);
   vi.stubEnv("SF_BASIC_AUTH_DELETION_DATE", "");
   vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "");
+  // Step-up (P0.12) is covered by its own tests; off here so its warn-mode
+  // audit rows do not mix with the connection's own audit entry.
+  vi.stubEnv("COREEDGE_STEP_UP", "off");
   // A month before SAP's retirement date — when this shipped.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-20T09:00:00Z"));

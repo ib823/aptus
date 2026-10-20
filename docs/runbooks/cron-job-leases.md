@@ -110,7 +110,7 @@ twice at once (`tests/integration/cron-sweep-idempotency.test.ts`):
 
 ## Deploy and backout
 
-Migration `20261021030000_job_leases` is additive. It creates `JobLease` and
+Migration `20261021070000_job_leases` is additive. It creates `JobLease` and
 adds `CronRunLog.skipped` (default `false`). The code before this release
 never reads either.
 
