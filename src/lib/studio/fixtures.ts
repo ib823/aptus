@@ -130,7 +130,7 @@ export const SCENARIO_STATUS: Record<FixtureScenario, number> = {
 };
 
 /**
- * What the mock says when the run's own sentence is not available — the
+ * What the mock says when the run carries no sentence of its own — the
  * broker's sentence for the commonest cause of each outcome. A capture that
  * carries the run's `detail` uses that instead: it is the sentence the broker
  * sent for this run.

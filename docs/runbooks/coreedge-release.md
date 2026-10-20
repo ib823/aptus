@@ -276,7 +276,7 @@ pnpm release:post-deploy-check
 |---|---|
 | The expected commit is serving | `/api/build` answers 200 and names `COREEDGE_CHECK_EXPECT_COMMIT` |
 | The app reaches its database | `/api/health` answers `healthy` |
-| Discovery lists the canary interfaces as expected | `GET /api/northbound/interfaces` lists the standard interface as a `catalogue` service and the `Z*` one as `custom`, both callable, and the refused one as not callable |
+| Discovery lists the canary interfaces as expected | `GET /api/northbound/interfaces` lists the standard interface as a `catalogue` service and the `Z*` one as `custom`, both with `callable: true`, and the refused one with `callable: false` |
 | One SAP-standard read through the broker | `GET .../<standard>/data?limit=1` answers 200 |
 | One Z* (customer-built) read through the broker | `GET .../<custom>/data?limit=1` answers 200 |
 | A call with no grant is refused | `GET .../<refused>/data?limit=1` answers 403 `FORBIDDEN` (without `COREEDGE_CHECK_REFUSED_INTERFACE`: an unknown id, 404 `NOT_FOUND`) |
