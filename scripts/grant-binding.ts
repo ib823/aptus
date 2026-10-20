@@ -3,9 +3,13 @@
  *
  *   pnpm grants:binding            count, by reason, and how many still authorise
  *                                  calls (live) and were used in the last 7 days
- *   pnpm grants:binding --apply    first re-run the P0.1 backfill: bind each unbound
- *                                  grant that now matches exactly one interface
- *                                  (idempotent; the migration's own statement)
+ *   pnpm grants:binding --apply    first re-run the P0.1 backfill over the grants not
+ *                                  yet checked (those the old code created during the
+ *                                  rollout): bind each to the one interface that
+ *                                  existed when it was raised, or flag it. A grant
+ *                                  already flagged NO_MATCH or AMBIGUOUS is never
+ *                                  auto-bound, whatever was added since: it waits for
+ *                                  re-approval (idempotent; the migration's own statement)
  *   pnpm grants:binding --check    exit 1 while any LIVE unbound grant remains —
  *                                  the precondition for COREEDGE_GRANT_BINDING=strict
  *   --json                         machine-readable report

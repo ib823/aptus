@@ -10,10 +10,13 @@
  * accountability record naming nobody who could still answer for it.
  *
  * THE RULE. An owner id counts only while it resolves to an ACTIVE user of
- * the SAME organization. Two consumers:
+ * the SAME organization. Three consumers:
  *
  *   - The credential gates (issue, rotate, write key, claim link) judge
  *     ownership on live owners, so a departed owner's slot reads as empty.
+ *   - The promotion to ACTIVE in the solutions PATCH, so a bare "Promote to
+ *     ACTIVE" cannot undo the sweep while the departed owner still holds the
+ *     slot (review round 1).
  *   - The nightly sweep (`sweepOwnerLiveness`, riding the northbound-reap
  *     cron and its job lease) drops every ACTIVE app with a slot that has no
  *     live owner to RESTRICTED and audits the drop. RESTRICTED stops no

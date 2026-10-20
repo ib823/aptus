@@ -8,13 +8,17 @@
 --
 -- BACKFILL. Each existing grant is bound to the single interface its old tuple
 -- matches today (same solution, organization, externalId and operation, which
--- is what the broker matched on). A grant matching zero interfaces is marked
--- NO_MATCH and one matching several AMBIGUOUS; both stay unbound and are
--- flagged for re-approval on the Control Tower grants screen and the CoreEdge
--- requests board. The statement is the one `pnpm grants:binding --apply` runs
--- (GRANT_BINDING_BACKFILL_SQL in src/lib/studio/grant-binding.ts; a test keeps
--- the two identical). It is idempotent (only unbound rows are touched) and
--- cannot fail on existing data: it writes only interface ids it has just read.
+-- is what the broker matched on) among those that existed when the request was
+-- raised: an interface added later is not what anybody asked for. A grant
+-- matching zero interfaces is marked NO_MATCH and one matching several
+-- AMBIGUOUS; both stay unbound and are flagged for re-approval on the Control
+-- Tower grants screen and the CoreEdge requests board. The statement is the one
+-- `pnpm grants:binding --apply` runs (GRANT_BINDING_BACKFILL_SQL in
+-- src/lib/studio/grant-binding.ts; a test keeps the two identical). It touches
+-- only rows never classified (every row, here; afterwards only those the old
+-- code creates during the rollout), so a flagged grant is never auto-bound and a
+-- re-run binds nothing new. It cannot fail on existing data: it writes only
+-- interface ids it has just read.
 --
 -- NOTHING STOPS ON DEPLOY. A bound grant authorises exactly what it authorised
 -- before (its one matching interface). An unbound grant keeps the old matching
@@ -54,7 +58,9 @@ WITH "candidates" AS (
    AND i."organizationId" = g."organizationId"
    AND i."externalId" = g."externalId"
    AND i."operation" = g."operation"
+   AND i."createdAt" <= g."createdAt"
   WHERE g."interfaceId" IS NULL
+    AND g."unboundReason" IS NULL
   GROUP BY g."id"
 )
 UPDATE "ApiAccessGrant" AS g

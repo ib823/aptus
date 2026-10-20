@@ -594,45 +594,78 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  const updated = await prisma.interface.update({
-    where: { id: current.id, organizationId },
-    data: {
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(nextStatus !== undefined ? { status: nextStatus } : {}),
-      operation: nextOperation,
-      entitySet: nextEntitySet,
-      // Mode follows the operation: a READ interface is read-mode, anything else
-      // carries the stronger review. Derived, never client-supplied.
-      mode: nextMode,
-      ...(contractChanged ? { version: { increment: 1 } } : {}),
-      ...(serviceChanged
-        ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
-        : {}),
-      ...(verificationReset
-        ? {
-            serviceVerifiedAt: null,
-            serviceVerifiedEnvironment: null,
-            serviceVerifiedEntitySets: Prisma.DbNull,
-            serviceVerifications: Prisma.DbNull,
-          }
-        : {}),
-      // mappingVersion is never written here — see patchSchema.
-    },
-    select: {
-      id: true,
-      name: true,
-      version: true,
-      operation: true,
-      entitySet: true,
-      mode: true,
-      status: true,
-      mappingVersion: true,
-      externalId: true,
-      servicePath: true,
-      odataVersion: true,
-      serviceVerifiedAt: true,
-    },
-  });
+  /*
+   * A COMPARE-AND-SET ON WHAT THE GATES JUDGED (A46, review round 1). The
+   * gates above ran on `current`, read with no lock; the write used to be
+   * unconditional. So PATCH {status: ACTIVE} and PATCH {operation: CREATE}
+   * sent together both read DRAFT/READ: the first passed as a READ promotion,
+   * the second was not gated at all (not ACTIVE, not becoming ACTIVE), and
+   * the two writes merged into an ACTIVE write interface no write gate had
+   * seen, under a PROMOTE row describing a READ. Every field a gate reads is
+   * now in the WHERE, so a PATCH that lands second finds the row changed,
+   * writes nothing and answers 409; the caller re-reads, and its retry is
+   * judged on what the first one wrote.
+   */
+  let updated;
+  try {
+    updated = await prisma.interface.update({
+      where: {
+        id: current.id,
+        organizationId,
+        status: current.status,
+        operation: current.operation,
+        entitySet: current.entitySet,
+        externalId: current.externalId,
+        servicePath: current.servicePath,
+        odataVersion: current.odataVersion,
+        version: current.version,
+      },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(nextStatus !== undefined ? { status: nextStatus } : {}),
+        operation: nextOperation,
+        entitySet: nextEntitySet,
+        // Mode follows the operation: a READ interface is read-mode, anything else
+        // carries the stronger review. Derived, never client-supplied.
+        mode: nextMode,
+        ...(contractChanged ? { version: { increment: 1 } } : {}),
+        ...(serviceChanged
+          ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
+          : {}),
+        ...(verificationReset
+          ? {
+              serviceVerifiedAt: null,
+              serviceVerifiedEnvironment: null,
+              serviceVerifiedEntitySets: Prisma.DbNull,
+              serviceVerifications: Prisma.DbNull,
+            }
+          : {}),
+        // mappingVersion is never written here — see patchSchema.
+      },
+      select: {
+        id: true,
+        name: true,
+        version: true,
+        operation: true,
+        entitySet: true,
+        mode: true,
+        status: true,
+        mappingVersion: true,
+        externalId: true,
+        servicePath: true,
+        odataVersion: true,
+        serviceVerifiedAt: true,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return studioError(
+        "CONFLICT",
+        "This interface was changed by someone else while you were saving. Reload it and make your change again.",
+      );
+    }
+    throw err;
+  }
 
   await writeConfigAudit({
     organizationId,

@@ -129,6 +129,21 @@ async function legacyGrant(solutionId: string, decision = "APPROVED"): Promise<s
   return g.id;
 }
 
+/** Move a grant's request and decision an hour into the past: it predates whatever is added next. */
+async function backdate(grantId: string): Promise<void> {
+  const anHourAgo = new Date(Date.now() - 3_600_000);
+  await prisma.apiAccessGrant.update({
+    where: { id: grantId, organizationId: ORG },
+    data: { createdAt: anHourAgo, decidedAt: anHourAgo },
+  });
+}
+
+const binding = (grantId: string) =>
+  prisma.apiAccessGrant.findFirst({
+    where: { id: grantId, organizationId: ORG },
+    select: { interfaceId: true, sapProduct: true, unboundReason: true },
+  });
+
 const read = (solutionId: string, interfaceId: string) =>
   resolveReadableInterface(SCOPE, solutionId, interfaceId, "PROD");
 
@@ -271,6 +286,80 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
     expect(by.get(singleGrant)).toMatchObject({ interfaceId: singleIface, sapProduct: "s4hana", unboundReason: null });
     expect(by.get(severalGrant)).toMatchObject({ interfaceId: null, sapProduct: null, unboundReason: "AMBIGUOUS" });
     expect(by.get(noneGrant)).toMatchObject({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+  });
+
+  /*
+   * REVIEW ROUND 1. The operator's re-run (`pnpm grants:binding --apply`, step
+   * 1 of "Switching to strict") re-ran the backfill over EVERY unbound row. A
+   * NO_MATCH approval then bound itself to whatever interface had been added
+   * since — on another SAP product — left the re-approval lists, and strict
+   * served it: the A47 extension, made permanent by the runbook.
+   */
+  it("--apply never binds a flagged grant to an interface added later on another product; strict refuses it", async () => {
+    const solutionId = await app();
+    const grantId = await legacyGrant(solutionId);
+    await backdate(grantId);
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "strict");
+    expect(await read(solutionId, onPrem)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+    expect((await listGrantsNeedingReapproval(ORG)).some((r) => r.id === grantId)).toBe(true);
+  });
+
+  it("never binds a grant not yet checked (raised during the rollout) to an interface created after it", async () => {
+    const solutionId = await app();
+    const grantId = await legacyGrant(solutionId);
+    await backdate(grantId);
+    await addInterface(solutionId, "s4hana-onprem");
+
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+  });
+
+  it("a decision never binds a legacy request to an interface added after it was raised", async () => {
+    const solutionId = await app();
+    const pending = await legacyGrant(solutionId, "REQUESTED");
+    await prisma.apiAccessGrant.update({
+      where: { id: pending, organizationId: ORG },
+      data: { decidedById: null, decidedAt: null, createdAt: new Date(Date.now() - 3_600_000) },
+    });
+    await addInterface(solutionId, "s4hana-onprem");
+
+    as(CAROL);
+    const approve = await decide(
+      json({ decision: "APPROVED" }, "POST", `http://localhost/api/coreedge/requests/${pending}/decide`),
+      { params: Promise.resolve({ id: pending }) },
+    );
+    expect(approve.status).toBe(409);
+    expect(await binding(pending)).toMatchObject({ interfaceId: null, sapProduct: null });
+  });
+
+  it("a decision never guesses the interface of a request the backfill flagged", async () => {
+    const solutionId = await app();
+    await addInterface(solutionId, "s4hana");
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    const pending = await legacyGrant(solutionId, "REQUESTED");
+    await prisma.apiAccessGrant.update({
+      where: { id: pending, organizationId: ORG },
+      data: { decidedById: null, decidedAt: null },
+    });
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(pending)).toMatchObject({ unboundReason: "AMBIGUOUS" });
+
+    // One of the two goes; the request may have been for either.
+    await prisma.interface.delete({ where: { id: onPrem, organizationId: ORG } });
+    as(CAROL);
+    const approve = await decide(
+      json({ decision: "APPROVED" }, "POST", `http://localhost/api/coreedge/requests/${pending}/decide`),
+      { params: Promise.resolve({ id: pending }) },
+    );
+    expect(approve.status).toBe(409);
+    expect(await binding(pending)).toMatchObject({ interfaceId: null, unboundReason: "AMBIGUOUS" });
   });
 
   it("an unbound legacy grant keeps working under legacy and records that it was used; strict refuses it", async () => {

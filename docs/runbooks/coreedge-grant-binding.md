@@ -19,7 +19,10 @@ request it settles. The broker serves a bound grant for its own interface only
 to the operation, entity set or service of an interface that stays ACTIVE runs
 the same gates as activating it (entity set present, UPDATE never activated, a
 write holds the full write chain in some environment), and is audited as
-`PROMOTE`. The SAP product is not editable on an interface at all.
+`PROMOTE`. The SAP product is not editable on an interface at all. The save is
+a compare-and-set on the state the gates judged, so two edits sent at once
+cannot merge into an ungated ACTIVE interface: the second answers `409
+CONFLICT` and is made again on what the first wrote.
 
 **Activating a twin connection is a typed 409 (A52).** Studio's "Activate" on a
 connection whose product, environment and SAP client are already served by an
@@ -28,7 +31,7 @@ an empty 500.
 
 **A departed owner is no owner (A69).** An owner slot counts only while it holds
 an active user of the same organization. The credential gates (issue, rotate,
-write key, claim link) judge ownership that way, and a nightly sweep moves every
+write key, claim link) and the promotion to ACTIVE judge ownership that way, and a nightly sweep moves every
 ACTIVE app with a slot no live owner holds to RESTRICTED.
 
 **Races.** Issue, rotate and revoke a key, send a claim link and open one: each
@@ -43,17 +46,23 @@ Nothing that works today stops without an operator choosing it.
 
 - The migration `20261022000000_grant_interface_binding` adds the columns and
   binds each existing grant to the single interface it matched (same solution,
-  service id and operation, which is what the broker matched on). A grant that
-  matched none is marked `NO_MATCH`, one that matched several `AMBIGUOUS`; both
-  stay unbound. A bound grant authorises exactly what it did before.
+  service id and operation, which is what the broker matched on), counting only
+  interfaces that existed when the request was raised. A grant that matched
+  none is marked `NO_MATCH`, one that matched several `AMBIGUOUS`; both stay
+  unbound. A bound grant authorises exactly what it did before.
 - `COREEDGE_GRANT_BINDING` defaults to `legacy`: an unbound grant keeps the old
   matching, and each call it authorises stamps `unboundLastUsedAt` (at most
   hourly per grant) and logs `[grant-binding] an unbound legacy grant authorised a call`.
 - Grants created by the old code during the rollout are unbound with no reason
-  yet. Run `pnpm grants:binding --apply` after the deploy to bind them.
-- A pending request that matches several interfaces can no longer be approved,
-  only rejected (and raised again from its interface). A pending request that
-  matches exactly one is bound when it is decided.
+  yet. Run `pnpm grants:binding --apply` after the deploy to bind them (or flag
+  them). `--apply` never touches a grant already flagged `NO_MATCH` or
+  `AMBIGUOUS`, and never binds a grant to an interface added after it was
+  raised: an interface added later, on another SAP system say, is not what
+  anybody approved. A flagged grant is cleared only by re-approval.
+- A pending request that matches several interfaces, or that the migration
+  flagged, can no longer be approved, only rejected (and raised again from its
+  interface). A pending, unflagged request that matches exactly one interface
+  that existed when it was raised is bound to it when it is decided.
 - On the first night, the owner sweep moves every ACTIVE app whose owner was
   deactivated, deleted or moved to another organization to RESTRICTED, with a
   `ConfigAudit` row (actor `system:owner-liveness`). **RESTRICTED stops no
@@ -74,7 +83,8 @@ person approve it, then revoke the old grant in Control Tower.
 
 ## Switching to strict
 
-1. `pnpm grants:binding --apply` (binds what has become unambiguous; idempotent).
+1. `pnpm grants:binding --apply` (checks the grants the old code created during
+   the rollout; idempotent, and it never binds a flagged grant).
 2. `pnpm grants:binding` shows the counts: unbound by reason, how many are still
    live, and how many were used in the last 7 days.
 3. Re-approve or revoke each live one until `pnpm grants:binding --check` exits 0.
@@ -95,7 +105,10 @@ owner ids stay in their slots; Studio shows them as "no longer in this
 organization".
 
 To recover an app: someone who will answer for it claims the empty slot in Studio
-and promotes the app to ACTIVE again.
+and promotes the app to ACTIVE again. Promotion is judged on live owners too, so
+"Promote to ACTIVE" is refused (`409`, naming the slot) while a departed owner
+still holds a slot, and an edit to an ACTIVE app in that state moves it to
+RESTRICTED at once, as the sweep would.
 
 ## Checking it worked
 

@@ -29,9 +29,10 @@
  *   COREEDGE_GRANT_BINDING=strict — an unbound grant authorises nothing; the
  *     broker answers GRANT_NEEDS_REAPPROVAL.
  *
- * `pnpm grants:binding` counts the unbound grants (and with --apply binds any
- * that have since become unambiguous), so strict is switched on once the count
- * of live, used ones is zero. The runbook is docs/runbooks/coreedge-grant-binding.md.
+ * `pnpm grants:binding` counts the unbound grants (and with --apply binds the
+ * ones the old code created during the rollout; a flagged grant is never
+ * auto-bound), so strict is switched on once the count of live, used ones is
+ * zero. The runbook is docs/runbooks/coreedge-grant-binding.md.
  */
 
 import type { Prisma } from "@prisma/client";
@@ -153,11 +154,14 @@ export type BindingOutcome =
  * The single interface a (solution, externalId, operation) names, if exactly
  * one does. The same rule the migration's backfill applies, so a request
  * raised by an older caller (externalId, no interfaceId) and a pending
- * legacy request are bound exactly as the backfill would have bound them.
+ * legacy request are bound exactly as the backfill would have bound them —
+ * including its time limit: with `raisedAt`, only an interface that existed
+ * when the request was raised counts (review round 1).
  */
 export async function findBinding(
   db: InterfaceLookupDb,
   grant: { organizationId: string; solutionId: string; externalId: string; operation: string },
+  raisedAt?: Date,
 ): Promise<BindingOutcome> {
   const candidates = await db.interface.findMany({
     where: {
@@ -165,6 +169,7 @@ export async function findBinding(
       solutionId: grant.solutionId,
       externalId: grant.externalId,
       operation: grant.operation,
+      ...(raisedAt ? { createdAt: { lte: raisedAt } } : {}),
     },
     select: { id: true, sapProduct: true },
     take: 2,
@@ -178,10 +183,14 @@ export async function findBinding(
 /**
  * The binding a DECISION writes, or why the decision may not be made.
  *
- * A bound request keeps its binding. An unbound one (raised before P0.1, or by
- * a caller that named no interface while two matched) is bound here if
- * exactly one interface matches. Otherwise only a REJECTION may settle it: an
- * approval of an unbound request would be exactly the grant A47 describes.
+ * A bound request keeps its binding. An unbound one (raised by the old code
+ * during the rollout) is bound here if exactly one interface matches that
+ * existed when it was raised: a request is raised from an interface, so one
+ * added since is not what was asked for. Otherwise only a REJECTION may settle
+ * it: an approval of an unbound request would be exactly the grant A47
+ * describes. Nor is a request the backfill flagged (`unboundReason`) bound by
+ * a guess, whatever has changed since: it matched several interfaces, or
+ * none, and only the requester knows which one they meant (review round 1).
  */
 export async function bindingForDecision(
   db: InterfaceLookupDb,
@@ -190,19 +199,23 @@ export async function bindingForDecision(
     solutionId: string;
     externalId: string;
     operation: string;
-    interfaceId?: string | null;
-    sapProduct?: string | null;
+    interfaceId: string | null;
+    sapProduct: string | null;
+    unboundReason: string | null;
+    createdAt: Date;
   },
   next: string,
 ): Promise<
   | { readonly ok: true; readonly binding: { interfaceId: string; sapProduct: string } | null }
   | { readonly ok: false; readonly message: string }
 > {
-  // `!= null`: a row read without the binding selected is unbound, never bound.
-  if (grant.interfaceId != null && grant.sapProduct != null) {
+  if (grant.interfaceId !== null && grant.sapProduct !== null) {
     return { ok: true, binding: { interfaceId: grant.interfaceId, sapProduct: grant.sapProduct } };
   }
-  const found = await findBinding(db, grant);
+  const found: BindingOutcome =
+    grant.unboundReason !== null
+      ? { ok: false, reason: grant.unboundReason === "AMBIGUOUS" ? "AMBIGUOUS" : "NO_MATCH" }
+      : await findBinding(db, grant, grant.createdAt);
   if (found.ok) return { ok: true, binding: { interfaceId: found.interfaceId, sapProduct: found.sapProduct } };
   if (next === "REJECTED") return { ok: true, binding: null };
   return { ok: false, message: UNBOUND_DECISION_REFUSAL[found.reason] };
@@ -225,6 +238,27 @@ export const UNBOUND_GRANT_LABEL: Readonly<Record<UnboundReason | "UNCHECKED", s
   UNCHECKED: "Needs re-approval: not bound to an interface",
 };
 
+/**
+ * Does this grant need re-approval? Unbound, settled as granting, and still
+ * authorising something: not pending (its decision binds it), not rejected or
+ * revoked (flagging those invites a re-request of what a second person
+ * refused), not lapsed. The one predicate every surface that flags it uses —
+ * Control Tower, the CoreEdge requests board (`listGrantsNeedingReapproval`,
+ * the same rule in SQL) and Studio's ledger.
+ */
+export function needsReapproval(
+  grant: { interfaceId: string | null; decision: string; revokedAt: Date | null; expiresAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    grant.interfaceId === null &&
+    grant.decision !== "REQUESTED" &&
+    grant.decision !== "REJECTED" &&
+    grant.revokedAt === null &&
+    (grant.expiresAt === null || grant.expiresAt.getTime() > now.getTime())
+  );
+}
+
 export function unboundGrantLabel(unboundReason: string | null): string {
   return unboundReason === "NO_MATCH" || unboundReason === "AMBIGUOUS"
     ? UNBOUND_GRANT_LABEL[unboundReason]
@@ -238,10 +272,23 @@ export function unboundGrantLabel(unboundReason: string | null): string {
  * same solution, organization, externalId and operation, which is exactly
  * what the broker matched on (the environment comes from the caller's token,
  * not the interface). Zero matches: NO_MATCH; several: AMBIGUOUS; both stay
- * unbound. Idempotent (it touches only unbound rows, and recomputes their
- * reason) and cannot fail on existing data: it writes only ids read from
+ * unbound. Cannot fail on existing data: it writes only ids read from
  * Interface in the same statement. The migration holds a copy of this text;
- * tests/unit/studio/grant-binding.test.ts keeps the two identical.
+ * tests/unit/northbound/grant-binding-broker.test.ts keeps the two identical.
+ *
+ * TWO LIMITS, so the operator's re-run can never widen an approval (review
+ * round 1). It used to re-check every unbound row, so a NO_MATCH approval
+ * bound itself to whatever interface had been added since — on another SAP
+ * product — left the re-approval lists, and strict then served it: A47 again.
+ *
+ *   - Only rows never classified (`unboundReason IS NULL`): a NO_MATCH or
+ *     AMBIGUOUS grant waits for a person to re-approve it, whatever changes
+ *     later. In the migration every row is unclassified, so this is a no-op
+ *     there; afterwards it leaves only the rows the old code created during
+ *     the rollout. So the statement is idempotent: a second run binds nothing.
+ *   - Only an interface that existed when the request was raised
+ *     (`i.createdAt <= g.createdAt`): a request is raised from an interface,
+ *     so one added later is not what anybody asked for, let alone approved.
  */
 export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
   SELECT g."id" AS "grantId",
@@ -254,7 +301,9 @@ export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
    AND i."organizationId" = g."organizationId"
    AND i."externalId" = g."externalId"
    AND i."operation" = g."operation"
+   AND i."createdAt" <= g."createdAt"
   WHERE g."interfaceId" IS NULL
+    AND g."unboundReason" IS NULL
   GROUP BY g."id"
 )
 UPDATE "ApiAccessGrant" AS g

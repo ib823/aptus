@@ -181,12 +181,19 @@ async function state(solutionId: string, grantId: string) {
 describe.skipIf(!process.env.TEST_DATABASE_URL)("own-app across owner-slot changes, against real PostgreSQL", () => {
   beforeAll(async () => {
     await prisma.organization.create({ data: { id: ORG, name: "Own-app test", type: "client" } });
+    // Real, live members: promotion to ACTIVE is judged on live owners (A69).
+    for (const u of [A, B, C]) {
+      await prisma.user.create({
+        data: { id: u.id, email: `${u.id}@abeam.com`, name: u.email, role: "consultant", organizationId: ORG },
+      });
+    }
   });
 
   afterAll(async () => {
     // ConfigAudit has no relation to cascade through, so it goes first, by tenant.
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
+    await prisma.user.deleteMany({ where: { id: { in: [A, B, C].map((u) => u.id) } } });
     await prisma.$disconnect();
   });
 

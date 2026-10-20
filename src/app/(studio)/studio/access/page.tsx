@@ -29,7 +29,7 @@ import {
   highestApprovedEnvironment,
   type GrantEnvironment,
 } from "@/lib/studio/grants";
-import { unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { canMutateStudio } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -92,9 +92,9 @@ export default async function StudioAccessPage() {
     revokedReason: r.revokedReason,
     createdAt: r.createdAt.toISOString(),
     sapProduct: r.sapProduct,
-    // A REQUESTED row is bound by its decision, so only a settled one is flagged.
-    needsReapproval:
-      r.interfaceId === null && r.decision !== "REQUESTED" ? unboundGrantLabel(r.unboundReason) : null,
+    // Only a settled grant that still authorises something, as Control Tower
+    // and the requests board flag it: never a rejection or a revocation.
+    needsReapproval: needsReapproval(r, now) ? unboundGrantLabel(r.unboundReason) : null,
   }));
 
   const highest = highestApprovedEnvironment(

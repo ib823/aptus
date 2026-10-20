@@ -112,6 +112,10 @@ export async function POST(
         externalId: true,
         interfaceId: true,
         sapProduct: true,
+        // A flagged legacy request is never bound by a guess, nor to an
+        // interface added after it was raised (lib/studio/grant-binding.ts).
+        unboundReason: true,
+        createdAt: true,
         // The app's owners, for OWN_APP: an owner may not approve their own app.
         solution: {
           select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },

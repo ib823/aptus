@@ -34,7 +34,7 @@ import { prisma } from "@/lib/db/prisma";
 import { opsLimit, opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { bindingForDecision, unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { bindingForDecision, needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
 import {
   evaluateDecision,
   grantsRead,
@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
               bound: false as const,
               // A pending request is bound by its decision (or the approval is
               // refused), so only a settled, still-live grant needs re-approval.
-              needsReapproval: !revoked && !expired && g.decision !== "REJECTED" && g.decision !== "REQUESTED",
+              needsReapproval: needsReapproval(g, now),
               reason: g.unboundReason,
               label: unboundGrantLabel(g.unboundReason),
               lastUsedAt: g.unboundLastUsedAt ? g.unboundLastUsedAt.toISOString() : null,
@@ -360,6 +360,10 @@ export async function PATCH(request: NextRequest) {
         expiresAt: true,
         interfaceId: true,
         sapProduct: true,
+        // A flagged legacy request is never bound by a guess, nor to an
+        // interface added after it was raised (lib/studio/grant-binding.ts).
+        unboundReason: true,
+        createdAt: true,
         // The app's owners, for OWN_APP: an owner may not approve their own app,
         // and being a platform admin is no more an exemption than for SELF_APPROVAL.
         solution: {
