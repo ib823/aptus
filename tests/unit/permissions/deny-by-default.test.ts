@@ -52,6 +52,7 @@ function user(role: UserRole) {
     mfaVerified: true,
     totpVerified: true,
     hasWebAuthn: false,
+    authMethod: "session" as const,
   };
 }
 

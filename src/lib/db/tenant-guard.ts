@@ -10,10 +10,11 @@
  * THREE MODES, env-controlled via TENANT_SCOPE_GUARD:
  *   throw — a query against a tenant-anchored model with no organizationId in
  *           its where fails loudly. Default outside production.
- *   log   — the violation is logged and the query runs. Default IN production,
- *           as the burn-in: flip to throw once production logs show zero
- *           violations. A legitimate path the burn-down missed should show up
- *           as a log line, never as an outage.
+ *   log   — the violation is logged, counted durably (TenantGuardViolation,
+ *           below) and the query runs. Default IN production, as the burn-in:
+ *           flip to throw once seven days pass with no violation recorded. A
+ *           legitimate path the burn-down missed should show up as a record,
+ *           never as an outage.
  *   off   — the guard does nothing (escape hatch, not a steady state).
  *
  * DELIBERATE CROSS-TENANT READS ARE DECLARED, NOT INFERRED. A platform admin
@@ -127,6 +128,86 @@ function isUnscopedByDesign(model: string, operation: string, args: unknown): bo
   return keys.length === 1 && keys[0] === "tokenHash";
 }
 
+/*
+ * THE BURN-IN IS RECORDED, NOT ONLY LOGGED.
+ *
+ * Log mode exists so that the switch to throw can be made on evidence: zero
+ * violations over seven days. Runtime logs are kept for one to three days, so
+ * a console line cannot be that evidence. Each violation is therefore also
+ * counted durably (TenantGuardViolation, written by the recorder lib/db/prisma
+ * registers, through the UNEXTENDED client so the write cannot itself be
+ * guarded). The runbook's check is a query for rows seen in the last seven
+ * days (docs/runbooks/coreedge-step-up.md).
+ *
+ * SAMPLED, so a hot unscoped path cannot turn the guard into a write per
+ * query: per process, the first violation at a call site is written at once
+ * and later ones are counted and folded into the next write at least a minute
+ * later. The first sighting — the fact the 7-day check needs — is never held
+ * back; a tail count can be lost when an idle instance is frozen. Never
+ * awaited: the query runs on regardless, and a transaction holding the only
+ * pooled connection must not wait on a second one.
+ */
+
+export interface TenantGuardViolationSample {
+  readonly model: string;
+  readonly operation: string;
+  /** Best-effort: the first application frame of the query's stack. */
+  readonly callSite: string;
+  /** Violations at this site since the last write from this process. */
+  readonly count: number;
+}
+
+export type TenantGuardViolationRecorder = (sample: TenantGuardViolationSample) => Promise<void>;
+
+const VIOLATION_FLUSH_MS = 60_000;
+/** Distinct call sites tracked per process; past this they share one bucket. */
+const MAX_TRACKED_SITES = 500;
+
+let violationRecorder: TenantGuardViolationRecorder | null = null;
+const violationSites = new Map<string, { unrecorded: number; lastRecordedAt: number }>();
+
+/** Registered once by lib/db/prisma; null switches recording off (tests). */
+export function setTenantGuardViolationRecorder(recorder: TenantGuardViolationRecorder | null): void {
+  violationRecorder = recorder;
+  violationSites.clear();
+}
+
+/**
+ * The first stack frame outside the guard, Prisma and Node: the code that
+ * issued the query. In a production bundle it is a chunk path, which still
+ * names the route; "unknown" when nothing is left.
+ */
+export function violationCallSite(stack: string | undefined): string {
+  for (const line of (stack ?? "").split("\n").slice(1)) {
+    const frame = /\(?((?:file:\/\/)?\/[^\s()]+?)(?::\d+){0,2}\)?\s*$/.exec(line.trim())?.[1];
+    if (!frame) continue;
+    if (/node_modules|node:internal|\/tenant-guard\.|\/lib\/db\/prisma\./.test(frame)) continue;
+    const appPath = /(?:\/src\/|\/\.next\/server\/).*/.exec(frame)?.[0];
+    return (appPath ?? frame).slice(0, 300);
+  }
+  return "unknown";
+}
+
+function noteViolation(model: string, operation: string): void {
+  const record = violationRecorder;
+  if (!record) return;
+  const tracked = violationSites.size < MAX_TRACKED_SITES;
+  const callSite = tracked ? violationCallSite(new Error().stack) : "overflow";
+  const key = `${model}|${operation}|${callSite}`;
+  const site = violationSites.get(key) ?? { unrecorded: 0, lastRecordedAt: 0 };
+  violationSites.set(key, site);
+  site.unrecorded += 1;
+
+  const now = Date.now();
+  if (now - site.lastRecordedAt < VIOLATION_FLUSH_MS) return;
+  const count = site.unrecorded;
+  site.unrecorded = 0;
+  site.lastRecordedAt = now;
+  void record({ model, operation, callSite, count }).catch((err: unknown) => {
+    console.error("[tenant-scope-guard] failed to record a violation", { model, operation, callSite, err });
+  });
+}
+
 export class MissingTenantScopeError extends Error {
   constructor(model: string, operation: string) {
     super(
@@ -172,6 +253,7 @@ export function tenantScopeGuard() {
               console.error(
                 `[tenant-scope-guard] unscoped ${model}.${operation} permitted in log mode — burn this down, then flip TENANT_SCOPE_GUARD=throw`,
               );
+              noteViolation(model, operation);
             }
           }
           return query(args);

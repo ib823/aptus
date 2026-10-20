@@ -31,6 +31,24 @@ replayed request, a challenge issued to another session, and a challenge from
 the public sign-in options are refused with `400`. Starting a second step-up
 on the same session replaces the first, so only the latest one can complete.
 
+**A sign-in counts once too, and accepts only a sign-in challenge.** A passkey
+sign-in mints a session that counts as stepped up, so it must not accept what a
+step-up refuses. The challenge cookie carries the ceremony it was issued for
+(`signin`, `stepup` or `register`, signed with the challenge), so a captured
+step-up replayed at `/authenticate/verify` is refused. The sign-in route also
+records each challenge it accepts (`WebAuthnChallengeUse`, swept once the
+challenge would have expired), so a captured sign-in cannot be replayed into a
+second session. Synced passkeys report a signature counter of 0, so the counter
+cannot catch either. On the deploy that introduced this, a ceremony started
+before it and finished after it fails once with "Challenge expired or missing";
+trying again works.
+
+**The step-up is rate-limited per person.** `/step-up/options` allows 30 a
+minute and `/step-up/verify` 10 per 5 minutes **per signed-in person**, with a
+loose per-IP backstop (120 a minute), and the middleware keeps both routes out
+of the shared per-IP sign-in bucket. Approvers behind one office egress address
+therefore do not spend each other's allowance.
+
 ## The routes
 
 | Action | Route |
@@ -46,15 +64,29 @@ on the same session replaces the first, so only the latest one can complete.
 | `connection.enable_writes` | `PATCH /api/studio/connections`, only when the change leaves the connection active and write-enabled and it was not before |
 | `passkey.add` | `GET /api/auth/webauthn/register/options` and `POST /api/auth/webauthn/register/verify`, only when the person already has a passkey |
 | `passkey.remove` | `DELETE /api/auth/webauthn/credentials/[credentialId]` |
+| `user.create_privileged` | `POST /api/admin/users`, only when the new account's role can take a governance action (an admin role or `consultant`) |
+| `user.role_change` | `PATCH /api/admin/users/[userId]` with `role` |
+| `user.mfa_reset` | `PATCH /api/admin/users/[userId]` with `resetMfa` |
 
 The passkeys themselves are on the list because the step-up accepts any passkey
 registered to the person. If a stolen session could add its own passkey, it
 could then step up with it. If it could remove the person's passkeys, its own
 would become the first. A **first** passkey has nothing to step up with, so it
 is trust on first use. Instead it is made visible: every passkey added or
-removed writes a `ConfigAudit` row (`entityType = "Passkey"`, `action` `CREATE`
-or `REVOKE`, `entityId` the credential id), and every passkey added emails the
+removed writes an audit row (`entityType = "Passkey"`, `action` `CREATE` or
+`REVOKE`, `entityId` the credential id), and every passkey added emails the
 person (`src/lib/auth/passkey-events.ts`).
+
+Account administration is on the list for the same reason. Without it, a
+stolen platform-admin session could create an approver at an address the
+attacker reads, sign in with the magic link, enrol that account's first passkey
+by trust on first use, step up with it and then decide or revoke grants.
+
+**Where the rows go.** An actor with an organization gets `ConfigAudit` rows. An
+actor with none (a platform admin, or an account an admin created without an
+organization) gets the same rows in `PlatformAudit`, which has no tenant
+column. Before, those were only logged, so the most privileged accounts had no
+durable trail of their passkeys.
 
 Each route asks **after** its own role, tenant and ownership checks, just
 before it writes. A refusal the person cannot fix never costs them a passkey
@@ -72,14 +104,17 @@ or unrecognised value reads as `warn`.
 
 | Mode | No fresh assertion | Banner |
 |---|---|---|
-| `warn` | The action goes ahead. An append-only `ConfigAudit` row records it: `entityType = "StepUp"`, `action = "STEP_UP_MISSING"`, `entityId` is the action name, and `after` holds `targetId`, `reason` (`no_passkey` / `never_asserted` / `stale`) and `passkeyAssertedAt`. | Shown to everyone who can take a governance action. It asks people without a passkey to add one, and offers "Confirm with passkey now" to people who have one. |
+| `warn` | The action goes ahead. An append-only audit row records it with `action = "STEP_UP_MISSING"`, filed under the row acted on (`entityType` and `entityId` of the grant, credential, connection, solution, passkey or user), so it sits beside that row's own entries on the Control Tower trail. A route with no row yet (a first connection, a passkey being added) files it as `entityType = "StepUp"` with the action name as `entityId`. `after` holds `governanceAction`, `targetId`, `reason` (`no_passkey` / `never_asserted` / `stale`) and `passkeyAssertedAt`. The trail can leave these rows out with `GET /api/control-tower/audit?excludeAction=STEP_UP_MISSING`. | Shown to everyone who can take a governance action. It asks people without a passkey to add one, and offers "Confirm with passkey now" to people who have one. |
 | `enforce` | `403` with `error.code = STEP_UP_REQUIRED`. The console opens the passkey dialog and retries. If the person has no passkey, the code is `STEP_UP_ENROLMENT_REQUIRED` and the dialog offers enrolment in place. | Shown only to people with no passkey. |
 | `off` | Nothing is checked or recorded. This is an escape hatch, not a steady state. | None. |
 
 **Personal and CI tokens are refused in every mode, `off` included**
 (`STEP_UP_TOKEN_REFUSED`). A token has no passkey to step up with. Every caller
 is a cookie session today. The token features (P2.11a, P3.2, P3.3) must set
-`SessionUser.authMethod` to their own kind, and the gate then refuses them.
+`SessionUser.authMethod` to their own kind, and the gate then refuses them. The
+gate fails closed: anything other than exactly `"session"` is refused, and the
+field is required on `SessionUser`, so a resolver that forgets it does not
+compile and, if its value arrives cast, is refused anyway.
 
 The three decision routes check the gate inside the transaction that holds the
 Solution row lock, but write the warn-mode row **after** the transaction ends
@@ -104,8 +139,12 @@ the people the approvals depend on.
 
    ```sql
    SELECT "actorId", after->>'reason' AS reason, count(*), max("at") AS last_seen
-   FROM "ConfigAudit"
-   WHERE "entityType" = 'StepUp' AND action = 'STEP_UP_MISSING'
+   FROM (
+     SELECT "actorId", after, "at", action FROM "ConfigAudit"
+     UNION ALL
+     SELECT "actorId", after, "at", action FROM "PlatformAudit"
+   ) rows
+   WHERE action = 'STEP_UP_MISSING'
      AND "at" > now() - interval '7 days'
    GROUP BY 1, 2
    ORDER BY last_seen DESC;
@@ -120,7 +159,11 @@ the people the approvals depend on.
    ```sql
    SELECT "actorId", "entityId" AS credential_id, after->>'firstPasskey' AS first,
           after->>'stepUp' AS step_up, after->>'ipAddress' AS ip, "at"
-   FROM "ConfigAudit"
+   FROM (
+     SELECT "actorId", "entityId", "entityType", action, after, "at" FROM "ConfigAudit"
+     UNION ALL
+     SELECT "actorId", "entityId", "entityType", action, after, "at" FROM "PlatformAudit"
+   ) rows
    WHERE "entityType" = 'Passkey' AND action = 'CREATE'
      AND "at" > now() - interval '7 days'
    ORDER BY "at" DESC;
@@ -136,7 +179,9 @@ the people the approvals depend on.
 
 Set `COREEDGE_STEP_UP=warn` (or delete it) and redeploy. Nothing else changes:
 the columns stay (`Session.passkeyAssertedAt` and `Session.stepUpChallengeHash`,
-both additive and nullable), and warn mode starts recording again.
+both additive and nullable), as do the tables (`WebAuthnChallengeUse`,
+`PlatformAudit`, `TenantGuardViolation`, all additive), and warn mode starts
+recording again.
 
 Use `off` only if the audit writes themselves are a problem. In `off` the gate
 records nothing, but it still refuses tokens.
@@ -160,3 +205,39 @@ enrolment.
 An organization that needs an action taken before that can be done should have
 another eligible approver take it. Lifting `enforce` for everyone is the last
 resort, and it is recorded nowhere except the deploy history.
+
+## The tenant-scope guard: from log to throw (`TENANT_SCOPE_GUARD`)
+
+The other half of P0.12. The guard (`src/lib/db/tenant-guard.ts`) judges every
+query on a tenant-anchored model (Solution, ApiAccessGrant, ConfigAudit,
+SapConnection, SolutionClient, ...): one with no `organizationId` in its
+`where`, outside a declared cross-tenant context, is a violation. `throw`
+refuses it; `log` lets it run. Production defaults to `log` unless
+`TENANT_SCOPE_GUARD` is set.
+
+**Violations are counted durably.** In `log` mode each one is also recorded in
+`TenantGuardViolation`: one row per model, operation and call site (the first
+application stack frame, a bundle path in production), with a running `count`
+and `firstSeenAt` / `lastSeenAt`. Recording is sampled per process (the first
+sighting at once, repeats folded into a write at most once a minute) and never
+blocks the query. Runtime logs are kept for one to three days, so this table,
+not the logs, is the evidence for the switch.
+
+1. **Check the seven days.** Zero rows means zero violations:
+
+   ```sql
+   SELECT model, operation, "callSite", count, "firstSeenAt", "lastSeenAt"
+   FROM "TenantGuardViolation"
+   WHERE "lastSeenAt" > now() - interval '7 days'
+   ORDER BY "lastSeenAt" DESC;
+   ```
+
+   Each row is a path to scope (`src/lib/studio/tenant-scope.ts`) or, if the
+   cross-tenant read is deliberate, to declare with `permitCrossTenantReads`.
+   Fix, deploy, and start the seven days again.
+2. **Also wait for** P0.11's overlap lookup to be registered (roadmap §8.2).
+3. **Switch**: set `TENANT_SCOPE_GUARD=throw` in the Vercel project's Production
+   environment and redeploy. No migration is involved.
+4. **Roll back** by setting it to `log` (or deleting it) and redeploying. A
+   `MissingTenantScopeError` in the logs after the switch names the model and
+   operation to fix.

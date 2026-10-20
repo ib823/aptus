@@ -167,9 +167,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a warn-mode decision on a one-c
       const grant = await prisma.apiAccessGrant.findFirst({ where: { id: grantId, organizationId: ORG } });
       expect(grant?.decision).toBe("APPROVED");
       const missing = await prisma.configAudit.findMany({
-        where: { organizationId: ORG, entityType: "StepUp", action: "STEP_UP_MISSING", actorId: door.person.id },
+        where: { organizationId: ORG, action: "STEP_UP_MISSING", actorId: door.person.id },
       });
-      expect(missing.map((row) => (row.after as { targetId?: string }).targetId)).toContain(grantId);
+      // Filed under the grant decided, beside its DECISION entry.
+      expect(missing).toContainEqual(
+        expect.objectContaining({ entityType: "ApiAccessGrant", entityId: grantId }),
+      );
     },
     30_000,
   );

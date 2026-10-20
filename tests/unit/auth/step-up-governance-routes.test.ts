@@ -411,7 +411,13 @@ const ROUTES: readonly RouteCase[] = [
 
 async function stepUpMissingRows(action: string, targetActor: string) {
   return prisma.configAudit.findMany({
-    where: { organizationId: ORG, entityType: "StepUp", entityId: action, action: "STEP_UP_MISSING", actorId: targetActor },
+    where: {
+      organizationId: ORG,
+      action: "STEP_UP_MISSING",
+      actorId: targetActor,
+      after: { path: ["governanceAction"], equals: action },
+    },
+    orderBy: { at: "asc" },
   });
 }
 
@@ -520,6 +526,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
         mode: "warn",
         reason: "never_asserted",
       });
+      // Filed under the row acted on, which the trail returns (it never
+      // returns `after`), so a reviewer can tie it to that grant, key or
+      // connection. Only a route with no row yet files it as StepUp.
+      const last = rows.at(-1);
+      const targetId = (last?.after as { targetId?: string | null } | undefined)?.targetId;
+      if (targetId) {
+        expect(last?.entityId).toBe(targetId);
+        expect(last?.entityType).not.toBe("StepUp");
+      } else {
+        expect(last).toMatchObject({ entityType: "StepUp", entityId: route.action });
+      }
     });
 
     it.each(["off", "warn", "enforce"])("a personal or CI token is refused with COREEDGE_STEP_UP=%s", async (mode) => {
@@ -564,6 +581,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
     expect(res.status).toBe(200);
     const rows = await stepUpMissingRows("grant.decide", NO_PASSKEY.id);
     expect(rows.at(-1)?.after).toMatchObject({ reason: "no_passkey", targetId: grantId });
+    expect(rows.at(-1)).toMatchObject({ entityType: "ApiAccessGrant", entityId: grantId });
   });
 
   it("a fresh assertion in warn mode records nothing", async () => {

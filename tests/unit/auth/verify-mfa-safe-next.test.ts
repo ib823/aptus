@@ -86,6 +86,7 @@ describe("portal layout MFA gate (smoke)", () => {
       mfaEnabled: false,
       mfaVerified: false,
       hasWebAuthn: true,
+      authMethod: "session" as const,
     };
     expect(isMfaRequired(user)).toBe(true);
   });
@@ -102,6 +103,7 @@ describe("portal layout MFA gate (smoke)", () => {
       mfaEnabled: true,
       mfaVerified: true,
       hasWebAuthn: true,
+      authMethod: "session" as const,
     };
     expect(isMfaRequired(user)).toBe(false);
   });

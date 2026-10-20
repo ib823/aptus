@@ -6,7 +6,7 @@
  * it is the only record of how a solution came to be allowed to touch a client's
  * SAP tenant.
  *
- * APPEND-ONLY BY CONSTRUCTION: this module exposes a write and nothing else.
+ * APPEND-ONLY BY CONSTRUCTION: this module exposes writes and nothing else.
  * There is deliberately no update or delete helper — an audit trail that can be
  * edited is not an audit trail. (`ConfigAudit` rows are removed only by the
  * Organization cascade, when the tenant itself is deleted.)
@@ -30,8 +30,11 @@ export type AuditEntityType =
   | "Connection"
   /**
    * A governance action admitted without a fresh passkey step-up, under
-   * COREEDGE_STEP_UP=warn (lib/auth/step-up.ts). `entityId` is the action's
-   * name (e.g. "grant.decide"); the row acted on is `after.targetId`.
+   * COREEDGE_STEP_UP=warn (lib/auth/step-up.ts), when the route had no row to
+   * name yet (a first connection, a passkey being added). `entityId` is then
+   * the action's name (e.g. "passkey.add"). When there IS a row, the
+   * STEP_UP_MISSING entry is filed under that row's own type and id instead,
+   * beside the entries the action itself writes.
    */
   | "StepUp"
   /**
@@ -41,7 +44,13 @@ export type AuditEntityType =
    * governed: a first passkey needs only the session, and this row is how an
    * enrolment nobody expected is found.
    */
-  | "Passkey";
+  | "Passkey"
+  /**
+   * An account administered by a platform admin (/api/admin/users): created
+   * with a role that can act on governance, given a new role, or its passkeys
+   * reset. `entityId` is the user id. Recorded for a missing step-up.
+   */
+  | "User";
 
 export type AuditAction =
   | "CREATE"
@@ -114,6 +123,40 @@ export async function writeConfigAudit(input: ConfigAuditInput): Promise<void> {
     });
   } catch (err) {
     console.error("[studio-audit] failed to write ConfigAudit entry", {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      action: input.action,
+      err,
+    });
+  }
+}
+
+export type PlatformAuditInput = Omit<ConfigAuditInput, "organizationId" | "before">;
+
+/**
+ * Record a governance event that has NO TENANT to file it under.
+ *
+ * A platform admin, or an account an admin created with no organization, has
+ * no ConfigAudit trail: those rows belong to an organization. These are the
+ * most privileged accounts there are, and their passkey and step-up events
+ * used to reach only the log, including the trust-on-first-use enrolment the
+ * step-up relies on being visible. PlatformAudit is the same append-only
+ * record minus the tenant. Callers with an organization use
+ * `writeConfigAudit`. Best-effort, exactly like it.
+ */
+export async function writePlatformAudit(input: PlatformAuditInput): Promise<void> {
+  try {
+    await prisma.platformAudit.create({
+      data: {
+        actorId: input.actorId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        action: input.action,
+        ...(input.after === undefined ? {} : { after: input.after as never }),
+      },
+    });
+  } catch (err) {
+    console.error("[studio-audit] failed to write PlatformAudit entry", {
       entityType: input.entityType,
       entityId: input.entityId,
       action: input.action,

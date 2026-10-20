@@ -54,8 +54,8 @@ vi.mock("@/lib/db/prisma", () => {
 
 import { PATCH, POST } from "@/app/api/studio/access-grants/route";
 
-const REQUESTER = { id: "u_req", email: "a@abeam.com", role: "consultant", organizationId: "org_a" };
-const APPROVER = { id: "u_app", email: "b@abeam.com", role: "consultant", organizationId: "org_a" };
+const REQUESTER = { id: "u_req", email: "a@abeam.com", role: "consultant", organizationId: "org_a", authMethod: "session" };
+const APPROVER = { id: "u_app", email: "b@abeam.com", role: "consultant", organizationId: "org_a", authMethod: "session" };
 
 function req(body: unknown, method = "POST") {
   return new Request("http://localhost:3003/api/studio/access-grants", {

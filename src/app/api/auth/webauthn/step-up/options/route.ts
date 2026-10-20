@@ -16,6 +16,12 @@
  * NO PASSKEY IS ANSWERED WITH THE ENROLMENT CODE, not with an empty challenge:
  * the console turns it into "add a passkey" rather than a browser prompt that
  * can never succeed.
+ *
+ * RATE-LIMITED PER PERSON, with a loose per-IP backstop. Under enforce every
+ * approver steps up every few minutes, often from one office egress address;
+ * a per-IP limit would let colleagues lock each other out of revoking during
+ * an incident. The caller is signed in, so the person is the natural key
+ * (middleware.ts keeps these routes out of the shared sign-in bucket too).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -29,14 +35,16 @@ import { ERROR_CODES } from "@/types/api";
 
 export const dynamic = "force-dynamic";
 
+function tooMany(resetMs: number): NextResponse {
+  return NextResponse.json(
+    { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
+    { status: 429, headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) } },
+  );
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const rateCheck = await checkRateLimit(`webauthn-step-up:${getClientIp(request.headers)}`, RATE_LIMITS.auth);
-  if (!rateCheck.allowed) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(rateCheck.resetMs / 1000)) } },
-    );
-  }
+  const ipCheck = await checkRateLimit(`webauthn-step-up:ip:${getClientIp(request.headers)}`, RATE_LIMITS.stepUpPerIp);
+  if (!ipCheck.allowed) return tooMany(ipCheck.resetMs);
 
   const token = await getSessionToken();
   const user = token ? await validateSession(token) : null;
@@ -46,6 +54,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 401 },
     );
   }
+
+  const userCheck = await checkRateLimit(`webauthn-step-up:user:${user.id}`, RATE_LIMITS.auth);
+  if (!userCheck.allowed) return tooMany(userCheck.resetMs);
 
   const credentials = await getUserCredentials(user.id);
   if (credentials.length === 0) {
@@ -62,6 +73,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { options, challenge } = await generateAuthenticationChallenge(
     credentials.map((c) => ({ credentialId: c.credentialId, transports: c.transports })),
+    "stepup",
   );
   await issueStepUpChallenge(token, challenge);
 

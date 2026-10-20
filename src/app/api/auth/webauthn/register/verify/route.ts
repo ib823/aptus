@@ -57,7 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     stepUpOutcome = stepUp.outcome;
   }
 
-  const expectedChallenge = await getChallengeFromCookie();
+  const expectedChallenge = await getChallengeFromCookie("register");
   if (!expectedChallenge) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Challenge expired or missing" } },

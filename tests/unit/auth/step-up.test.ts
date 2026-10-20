@@ -11,8 +11,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ writeConfigAudit: vi.fn() }));
-vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit }));
+const mocks = vi.hoisted(() => ({ writeConfigAudit: vi.fn(), writePlatformAudit: vi.fn() }));
+vi.mock("@/lib/studio/audit", () => ({
+  writeConfigAudit: mocks.writeConfigAudit,
+  writePlatformAudit: mocks.writePlatformAudit,
+}));
 
 import {
   canPerformGovernanceActions,
@@ -48,6 +51,8 @@ const CONTEXT = { action: "grant.decide", targetId: "g1", now: NOW } as const;
 beforeEach(() => {
   mocks.writeConfigAudit.mockReset();
   mocks.writeConfigAudit.mockResolvedValue(undefined);
+  mocks.writePlatformAudit.mockReset();
+  mocks.writePlatformAudit.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -154,8 +159,10 @@ describe("requireStepUp", () => {
     expect(mocks.writeConfigAudit).toHaveBeenCalledWith({
       organizationId: "org1",
       actorId: "u1",
-      entityType: "StepUp",
-      entityId: "grant.decide",
+      // Under the grant itself: the trail returns entity and action, never
+      // `after`, so this is what lets a reviewer tie the row to the grant.
+      entityType: "ApiAccessGrant",
+      entityId: "g1",
       action: "STEP_UP_MISSING",
       after: {
         event: "step_up_missing",
@@ -188,15 +195,27 @@ describe("requireStepUp", () => {
     );
   });
 
-  it("warn: with no tenant at all, says so in the log rather than dropping it silently", async () => {
+  it("warn: with no tenant at all, writes the platform-level trail rather than only the log", async () => {
     vi.stubEnv("COREEDGE_STEP_UP", "warn");
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const result = await requireStepUp({ ...USER, organizationId: null }, 300, CONTEXT);
     expect(result.ok).toBe(true);
     expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("step-up missing"),
-      expect.objectContaining({ actorId: "u1", governanceAction: "grant.decide" }),
+    expect(mocks.writePlatformAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "u1",
+        entityType: "ApiAccessGrant",
+        entityId: "g1",
+        action: "STEP_UP_MISSING",
+        after: expect.objectContaining({ governanceAction: "grant.decide" }),
+      }),
+    );
+  });
+
+  it("warn: with no row acted on yet, files the record under the action's name", async () => {
+    vi.stubEnv("COREEDGE_STEP_UP", "warn");
+    await requireStepUp(USER, 300, { action: "passkey.add", now: NOW });
+    expect(mocks.writeConfigAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ entityType: "StepUp", entityId: "passkey.add", action: "STEP_UP_MISSING" }),
     );
   });
 
@@ -216,11 +235,19 @@ describe("requireStepUp", () => {
     },
   );
 
-  it("a SessionUser with no authMethod is the cookie session it has always been", async () => {
-    vi.stubEnv("COREEDGE_STEP_UP", "enforce");
-    const { authMethod: _omitted, ...legacy } = { ...USER, passkeyAssertedAt: secondsAgo(5) };
-    expect(await requireStepUp(legacy, 300, CONTEXT)).toEqual({ ok: true, outcome: "fresh" });
-  });
+  it.each(["off", "warn", "enforce"])(
+    "fails closed: a SessionUser that does not say how it authenticated is refused with COREEDGE_STEP_UP=%s",
+    async (mode) => {
+      vi.stubEnv("COREEDGE_STEP_UP", mode);
+      // A token resolver that spread a user row and forgot the field, its
+      // value cast past the compiler.
+      const { authMethod: _omitted, ...unstated } = { ...USER, passkeyAssertedAt: secondsAgo(5) };
+      const result = await requireStepUp(unstated as SessionUser, 300, CONTEXT);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe("STEP_UP_TOKEN_REFUSED");
+      expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("checkStepUp and recordStepUpMissing — the transaction-safe halves", () => {

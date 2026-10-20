@@ -67,7 +67,7 @@ import { POST as brokerRun } from "@/app/api/studio/test/broker-run/route";
 import { POST as issueWriteKey } from "@/app/api/studio/clients/write-credential/route";
 import { PATCH as changeToken, POST as issueToken } from "@/app/api/studio/clients/route";
 
-const BUILDER = { id: "u_builder", email: "dev@abeam.com", role: "consultant", organizationId: "org_a" };
+const BUILDER = { id: "u_builder", email: "dev@abeam.com", role: "consultant", organizationId: "org_a", authMethod: "session" };
 
 const IFACE = {
   id: "if_1",

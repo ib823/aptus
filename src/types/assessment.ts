@@ -365,8 +365,13 @@ export interface SessionUser {
    * (roadmap P2.11a, P3.2, P3.3) must set its own kind here, and
    * `requireStepUp` refuses those kinds on every governance action in every
    * mode: a token has no passkey to step up with.
+   *
+   * REQUIRED, so every producer has to say which it is. The step-up refuses
+   * anything that is not exactly "session" (fails closed), and a resolver that
+   * forgot the field would otherwise be found only when a governance action
+   * was refused, or, worse, by a reviewer after it was not.
    */
-  authMethod?: "session" | "personal_token" | "ci_token";
+  authMethod: "session" | "personal_token" | "ci_token";
 }
 
 /** V1 status transition rules -- kept for backward compatibility */

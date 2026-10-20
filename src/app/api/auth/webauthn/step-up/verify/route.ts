@@ -20,9 +20,12 @@
  * only a request to the browser, and a captured cookie and body would verify
  * again, on any session of the same person, until the cookie expired. So the
  * options route also records the challenge on the session, and the write that
- * stamps the assertion clears it (`recordStepUpAssertion`). A replay, a
- * challenge issued to another session, and one from the public sign-in
- * options all find nothing to consume.
+ * stamps the assertion clears it (`recordStepUpAssertion`). A replay, and a
+ * challenge issued to another session, find nothing to consume. The purpose
+ * is signed into the cookie as well (lib/auth/webauthn.ts): a sign-in
+ * challenge is refused here, and a captured step-up is refused by the sign-in
+ * route, which would otherwise mint a new session that counts as stepped up —
+ * that route spends each of its own challenges once (`consumeSignInChallenge`).
  *
  * THE TOKEN IS ROTATED afterwards, as `rotateSessionToken` asks of every
  * privilege change: the session now carries more authority than it did, and a
@@ -56,14 +59,22 @@ function failed(message: string, status = 400): NextResponse {
   return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status });
 }
 
+function tooMany(resetMs: number): NextResponse {
+  return NextResponse.json(
+    { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
+    { status: 429, headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) } },
+  );
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const rateCheck = await checkRateLimit(`webauthn-step-up-verify:${getClientIp(request.headers)}`, RATE_LIMITS.mfa);
-  if (!rateCheck.allowed) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(rateCheck.resetMs / 1000)) } },
-    );
-  }
+  // A loose per-IP backstop first; the real limit is per person, below, so
+  // approvers sharing an office egress address do not spend each other's
+  // attempts (see the options route).
+  const ipCheck = await checkRateLimit(
+    `webauthn-step-up-verify:ip:${getClientIp(request.headers)}`,
+    RATE_LIMITS.stepUpPerIp,
+  );
+  if (!ipCheck.allowed) return tooMany(ipCheck.resetMs);
 
   const token = await getSessionToken();
   const user = token ? await validateSession(token) : null;
@@ -74,12 +85,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const userCheck = await checkRateLimit(`webauthn-step-up-verify:user:${user.id}`, RATE_LIMITS.mfa);
+  if (!userCheck.allowed) return tooMany(userCheck.resetMs);
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return failed("Invalid request body");
 
   // The cookie says the server issued this challenge, recently; whether it
   // is still this session's to use is settled when it is consumed, below.
-  const expectedChallenge = await getChallengeFromCookie();
+  const expectedChallenge = await getChallengeFromCookie("stepup");
   if (!expectedChallenge) return failed("Challenge expired or missing");
 
   const answer = parsed.data.response as { id?: unknown; rawId?: unknown };

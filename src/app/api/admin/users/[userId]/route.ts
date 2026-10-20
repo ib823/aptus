@@ -1,7 +1,16 @@
-/** Admin user management: update role/status/MFA, delete user */
+/**
+ * Admin user management: update role/status/MFA, delete user.
+ *
+ * A ROLE CHANGE AND A PASSKEY RESET NEED A FRESH PASSKEY (lib/auth/step-up.ts,
+ * `user.role_change`, `user.mfa_reset`). A stolen admin session that could
+ * promote an account it controls, or clear someone's passkeys so that the next
+ * enrolment is a first one, would get round the step-up on every approval and
+ * key by making a new identity that passes it.
+ */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -58,6 +67,13 @@ export async function PATCH(
 
   // --- Role change ---
   if (role !== undefined) {
+    const stepUp = await requireStepUp(auth.user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "user.role_change",
+      targetId: userId,
+      organizationId: target.organizationId,
+    });
+    if (!stepUp.ok) return stepUp.response;
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { role },
@@ -106,6 +122,13 @@ export async function PATCH(
 
   // --- MFA Reset (clears the user's enrolled passkeys) ---
   if (resetMfa) {
+    const stepUp = await requireStepUp(auth.user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "user.mfa_reset",
+      targetId: userId,
+      organizationId: target.organizationId,
+    });
+    if (!stepUp.ok) return stepUp.response;
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {

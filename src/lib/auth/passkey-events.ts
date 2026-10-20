@@ -9,7 +9,8 @@
  * session can add it: trust on first use. That cannot be closed, only made
  * visible, and this is where it is made visible:
  *
- *   - a ConfigAudit row (`Passkey` / CREATE or REVOKE) per change, append-only
+ *   - an audit row (`Passkey` / CREATE or REVOKE) per change — ConfigAudit, or
+ *     PlatformAudit for an account with no organization — append-only
  *     like every governance record, so "which passkeys did this account gain,
  *     from where, and was it stepped up" has an answer after the fact;
  *   - an email to the person for every passkey added, so an enrolment they did
@@ -24,7 +25,7 @@ import { parseDevice } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
 import { sendEmail } from "@/lib/email/brevo";
 import { passkeyAddedEmail } from "@/lib/email/templates";
-import { writeConfigAudit } from "@/lib/studio/audit";
+import { writeConfigAudit, writePlatformAudit } from "@/lib/studio/audit";
 import type { SessionUser } from "@/types/assessment";
 
 interface PasskeyEventSource {
@@ -34,8 +35,10 @@ interface PasskeyEventSource {
 
 /**
  * Write one Passkey row under the person's tenant. A person with no
- * organization has no tenant to file it under (ConfigAudit rows belong to
- * one), so the event goes to the log instead of disappearing.
+ * organization — a platform admin, or an account an admin created without
+ * one — has no tenant to file it under (ConfigAudit rows belong to one), so it
+ * goes to the platform-level trail. Those are the most privileged accounts
+ * there are; their first-passkey enrolment is exactly what must stay visible.
  */
 async function recordPasskeyAudit(
   user: Pick<SessionUser, "id" | "organizationId">,
@@ -43,23 +46,12 @@ async function recordPasskeyAudit(
   action: "CREATE" | "REVOKE",
   after: Record<string, unknown>,
 ): Promise<void> {
+  const entry = { actorId: user.id, entityType: "Passkey" as const, entityId: credentialId, action, after };
   if (!user.organizationId) {
-    console.warn("[passkey] passkey change with no tenant to record it under", {
-      actorId: user.id,
-      credentialId,
-      action,
-      ...after,
-    });
+    await writePlatformAudit(entry);
     return;
   }
-  await writeConfigAudit({
-    organizationId: user.organizationId,
-    actorId: user.id,
-    entityType: "Passkey",
-    entityId: credentialId,
-    action,
-    after,
-  });
+  await writeConfigAudit({ organizationId: user.organizationId, ...entry });
 }
 
 /**

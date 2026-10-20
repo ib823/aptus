@@ -73,9 +73,9 @@ vi.mock("@/lib/db/prisma", () => {
 import { PATCH } from "@/app/api/control-tower/grants/route";
 import { canMutateStudio } from "@/lib/studio/rbac";
 
-const ADMIN = { id: "u_admin", email: "admin@abeam.test", role: "platform_admin", organizationId: "org_a" };
-const PARTNER_LEAD = { id: "u_pl", email: "pl@abeam.test", role: "partner_lead", organizationId: "org_a" };
-const SUPPORT = { id: "u_s", email: "s@abeam.test", role: "support", organizationId: "org_a" };
+const ADMIN = { id: "u_admin", email: "admin@abeam.test", role: "platform_admin", organizationId: "org_a", authMethod: "session" };
+const PARTNER_LEAD = { id: "u_pl", email: "pl@abeam.test", role: "partner_lead", organizationId: "org_a", authMethod: "session" };
+const SUPPORT = { id: "u_s", email: "s@abeam.test", role: "support", organizationId: "org_a", authMethod: "session" };
 const ADMIN_NO_ORG = { ...ADMIN, organizationId: null };
 
 const FUTURE = new Date("2027-01-01T00:00:00Z");

@@ -71,11 +71,16 @@ import { POST as registerVerify } from "@/app/api/auth/webauthn/register/verify/
 import { POST as stepUpOptions } from "@/app/api/auth/webauthn/step-up/options/route";
 import { POST as stepUpVerify } from "@/app/api/auth/webauthn/step-up/verify/route";
 import { PATCH as studioClientsPatch } from "@/app/api/studio/clients/route";
+import { POST as adminUsersPost } from "@/app/api/admin/users/route";
+import { PATCH as adminUserPatch } from "@/app/api/admin/users/[userId]/route";
 
 const RUN = `pk-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
 const VICTIM = { id: `${RUN}-victim`, email: `${RUN}-victim@abeam.test`, role: "consultant" };
 const NEWCOMER = { id: `${RUN}-new`, email: `${RUN}-new@abeam.test`, role: "consultant" };
+/** A platform admin: no organization, so no ConfigAudit trail of its own. */
+const ADMIN = { id: `${RUN}-admin`, email: `${RUN}-admin@abeam.test`, role: "platform_admin" };
+const madeEmail = (label: string) => `${RUN}-made-${label}@abeam.test`;
 const ORIGIN = "http://localhost:3003";
 const RP_ID = "localhost";
 const CHALLENGE_COOKIE = "webauthn-challenge";
@@ -165,11 +170,20 @@ function req(body: unknown, method = "POST") {
   }) as never;
 }
 
-/** A fresh session for this person, with no passkey assertion on it. */
-async function newSession(userId: string): Promise<string> {
+/**
+ * A fresh session for this person, with no passkey assertion on it. `verified`
+ * stands in for one that passed MFA at sign-in long ago: what an attacker
+ * holding a copy of a working admin cookie has.
+ */
+async function newSession(userId: string, verified = false): Promise<string> {
   const token = randomBytes(32).toString("hex");
   await prisma.session.create({
-    data: { userId, tokenHash: hashSessionToken(token), expiresAt: new Date(Date.now() + 86_400_000) },
+    data: {
+      userId,
+      tokenHash: hashSessionToken(token),
+      expiresAt: new Date(Date.now() + 86_400_000),
+      ...(verified ? { mfaVerified: true, mfaVerifiedAt: new Date(Date.now() - 3_600_000) } : {}),
+    },
   });
   return token;
 }
@@ -248,19 +262,29 @@ async function revokeProdKey(): Promise<number> {
 }
 
 const passkeysOf = (userId: string) => prisma.webAuthnCredential.count({ where: { userId } });
+const sessionsOf = (userId: string) => prisma.session.count({ where: { userId } });
+
+/** An admin creating an account, through the shipped route. */
+function createAccount(label: string, role: string): Promise<Response> {
+  return adminUsersPost(req({ email: madeEmail(label), name: label, role }));
+}
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-up (real WebAuthn, real PostgreSQL)", () => {
   const victimPasskey = authenticator();
+  const adminPasskey = authenticator();
 
   beforeAll(async () => {
     await prisma.organization.create({ data: { id: ORG, name: "Passkey step-up test", type: "client" } });
     for (const person of [VICTIM, NEWCOMER]) {
       await prisma.user.create({ data: { ...person, name: person.role, organizationId: ORG } });
     }
+    await prisma.user.create({ data: { ...ADMIN, name: "Platform admin" } });
     // The victim enrols a passkey on their own session. No passkey yet, so no
     // step-up is asked: first enrolment is trust on first use.
     use(await newSession(VICTIM.id));
     expect((await enrol(victimPasskey)).status).toBe(200);
+    use(await newSession(ADMIN.id));
+    expect((await enrol(adminPasskey)).status).toBe(200);
   });
 
   afterEach(() => {
@@ -269,7 +293,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-
   });
 
   afterAll(async () => {
-    const userIds = [VICTIM.id, NEWCOMER.id];
+    const made = await prisma.user.findMany({ where: { email: { startsWith: `${RUN}-made-` } }, select: { id: true } });
+    const userIds = [VICTIM.id, NEWCOMER.id, ADMIN.id, ...made.map((u) => u.id)];
+    await prisma.verificationToken.deleteMany({ where: { identifier: { startsWith: `${RUN}-made-` } } });
+    await prisma.platformAudit.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.webAuthnCredential.deleteMany({ where: { userId: { in: userIds } } });
@@ -454,5 +481,111 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-
 
     expect((await sessionRow())?.passkeyAssertedAt).not.toBeNull();
     expect(await revokeProdKey()).toBe(200);
+  });
+
+  describe("the sign-in route accepts a sign-in challenge, once", () => {
+    it("a captured step-up replayed at the sign-in route mints no session", async () => {
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      use(await newSession(VICTIM.id));
+      const options = await stepUpOptions(req({}));
+      const { data } = (await options.json()) as { data: { challenge: string } };
+      const capturedCookie = jar.get(CHALLENGE_COOKIE) ?? "";
+      const capturedBody = { response: victimPasskey.assert(data.challenge) };
+      expect((await stepUpVerify(req(capturedBody))).status).toBe(200);
+      const sessions = await sessionsOf(VICTIM.id);
+
+      // The attacker: no session at all, only the captured cookie and body.
+      jar.clear();
+      jar.set(CHALLENGE_COOKIE, capturedCookie);
+      const replay = await authenticateVerify(req(capturedBody));
+      follow(replay);
+
+      expect(replay.status).toBe(400);
+      expect(await sessionsOf(VICTIM.id)).toBe(sessions);
+      expect(jar.get(SESSION_COOKIE_NAME)).toBeUndefined();
+    });
+
+    it("a captured passkey sign-in replayed mints no second session", async () => {
+      jar.clear();
+      const options = await authenticateOptions(req({}));
+      const { data } = (await options.json()) as { data: { challenge: string } };
+      const capturedCookie = jar.get(CHALLENGE_COOKIE) ?? "";
+      const capturedBody = { response: victimPasskey.assert(data.challenge) };
+      expect((await authenticateVerify(req(capturedBody))).status).toBe(200);
+      const sessions = await sessionsOf(VICTIM.id);
+
+      jar.clear();
+      jar.set(CHALLENGE_COOKIE, capturedCookie);
+      const replay = await authenticateVerify(req(capturedBody));
+      follow(replay);
+
+      expect(replay.status).toBe(400);
+      expect(await sessionsOf(VICTIM.id)).toBe(sessions);
+      expect(jar.get(SESSION_COOKIE_NAME)).toBeUndefined();
+    });
+  });
+
+  describe("a stolen admin session cannot mint an identity that passes the step-up", () => {
+    it("enforce: creating an account that can act on governance needs a fresh passkey", async () => {
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      use(await newSession(ADMIN.id, true)); // the attacker's copy, MFA long since passed
+
+      for (const [label, role] of [["admin", "platform_admin"], ["builder", "consultant"]] as const) {
+        const res = await createAccount(`stolen-${label}`, role);
+        expect(res.status).toBe(403);
+        expect(((await res.json()) as { error: { code: string } }).error.code).toBe("STEP_UP_REQUIRED");
+        expect(await prisma.user.count({ where: { email: madeEmail(`stolen-${label}`) } })).toBe(0);
+      }
+
+      // An account that cannot act on governance is created as before.
+      expect((await createAccount("stolen-reader", "process_owner")).status).toBe(201);
+    });
+
+    it("enforce: a role change and a passkey reset need a fresh passkey", async () => {
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      use(await newSession(ADMIN.id, true));
+      const before = await prisma.user.findUniqueOrThrow({ where: { id: VICTIM.id } });
+      const passkeys = await passkeysOf(VICTIM.id);
+      const target = { params: Promise.resolve({ userId: VICTIM.id }) };
+
+      const promote = await adminUserPatch(req({ role: "platform_admin" }, "PATCH"), target);
+      const reset = await adminUserPatch(req({ resetMfa: true }, "PATCH"), target);
+
+      expect(promote.status).toBe(403);
+      expect(reset.status).toBe(403);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: VICTIM.id } })).role).toBe(before.role);
+      expect(await passkeysOf(VICTIM.id)).toBe(passkeys);
+    });
+
+    it("enforce: after the admin steps up, the account is created", async () => {
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      use(await newSession(ADMIN.id, true));
+      expect((await stepUpWith(adminPasskey)).status).toBe(200);
+
+      expect((await createAccount("approved", "consultant")).status).toBe(201);
+    });
+
+    it("warn: the creation goes ahead and is recorded on the platform trail under the new account", async () => {
+      vi.stubEnv("COREEDGE_STEP_UP", "warn");
+      use(await newSession(ADMIN.id, true));
+
+      const res = await createAccount("warned", "platform_admin");
+
+      expect(res.status).toBe(201);
+      const { data } = (await res.json()) as { data: { id: string } };
+      const rows = await prisma.platformAudit.findMany({
+        where: { actorId: ADMIN.id, entityType: "User", entityId: data.id, action: "STEP_UP_MISSING" },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.after).toMatchObject({ governanceAction: "user.create_privileged", reason: "never_asserted" });
+    });
+
+    it("an account with no organization still leaves a durable record of its first passkey", async () => {
+      const rows = await prisma.platformAudit.findMany({
+        where: { actorId: ADMIN.id, entityType: "Passkey", entityId: adminPasskey.id, action: "CREATE" },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.after).toMatchObject({ firstPasskey: true, stepUp: "first_passkey" });
+    });
   });
 });
