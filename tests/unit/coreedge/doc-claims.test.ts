@@ -60,6 +60,36 @@ describe("the repository", () => {
     expect(files).not.toContain("src/lib/coreedge/doc-claims.ts");
   });
 
+  it("reads the Control Tower and Ops API routes, the middleware, and each shipped feature's own module", () => {
+    const files = docClaimsFiles(ROOT);
+    for (const f of [
+      "src/app/api/control-tower/grants/route.ts",
+      "src/app/api/ops/incidents/route.ts",
+      "src/middleware.ts",
+    ]) {
+      expect(files, f).toContain(f);
+    }
+    for (const feature of DOCUMENTED_FEATURES) expect(files, feature.id).toContain(feature.code.file);
+  });
+
+  it("the gap study's executive summary agrees with its Status lines", () => {
+    const study = readFileSync(path.join(ROOT, "docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md"), "utf8");
+    const summary = study.slice(
+      study.indexOf("## 1. Executive summary"),
+      study.indexOf("## 2. How the gap was measured"),
+    );
+    expect(summary.length).toBeGreaterThan(1000);
+    // P0.7: the write-back audits before SAP is called.
+    expect(readFileSync(path.join(ROOT, "src/app/api/sap/tdd/write/route.ts"), "utf8")).toMatch(/beginPlatformAudit/);
+    expect(summary).not.toMatch(/write-back writes no audit row/i);
+    // #307 is merged and deployed (the header says so); only its live verification is owed.
+    expect(summary).not.toMatch(/\*\*Merge and deploy `custom-service-path`/);
+    // P0.10, P0.12 and P0.7 shipped: what remains before a real credential is switching them on.
+    expect(summary).not.toMatch(/KMS envelope encryption \(P0\.10\);\s*\n\s*- MFA step-up/);
+    // P0.1 fixed A46, A47 and A69 (Appendix D).
+    expect(summary).not.toMatch(/\*\*Close the governance holes:\*\* grants not bound to an interface \(A47\)/);
+  });
+
   it("skips only files that tell a reader they are historical", () => {
     const result = scanDocuments(ROOT, docClaimsFiles(ROOT), SHIPPED, IDS);
     expect(result.historical).toEqual(
@@ -208,6 +238,20 @@ describe("sentences that are right are left alone", () => {
   it("wording quoted as a word, not used", () => {
     expect(featureIdsIn("a.md", 'The page marked the broker "planned" after it shipped.')).toEqual([]);
     expect(featureIdsIn("a.md", "The page marked the broker planned after it shipped.")).toEqual(["northbound-broker"]);
+  });
+
+  it("but a status in a table cell is a status, however it is quoted", () => {
+    for (const row of [
+      "| Passkey step-up | `planned` |",
+      "| Passkey step-up | 'planned' |",
+      '| Passkey step-up | "planned" |',
+      "| Passkey step-up | `not yet built` (P0.12) |",
+    ]) {
+      expect(featureIdsIn("a.md", row), row).toEqual(["step-up"]);
+    }
+    expect(featureIdsIn("a.html", "<table><tr><td>Step-up</td><td><code>planned</code></td></tr></table>")).toEqual([
+      "step-up",
+    ]);
   });
 
   it("fenced code, HTML comments, styles and scripts", () => {

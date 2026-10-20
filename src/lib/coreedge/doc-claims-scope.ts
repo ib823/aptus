@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 import { checkDocument, docKind, type MarkerProblem, type StaleClaim } from "./doc-claims";
-import type { DocumentedFeature } from "./shipped-features";
+import { DOCUMENTED_FEATURES, type DocumentedFeature } from "./shipped-features";
 
 /** Directories read whole (recursively), and single files, relative to the repository root. */
 export const DOC_CLAIMS_SCOPE = {
@@ -24,7 +24,10 @@ export const DOC_CLAIMS_SCOPE = {
     "src/app/(control-tower)",
     "src/app/(operations)",
     "src/app/api/coreedge",
+    "src/app/api/control-tower",
     "src/app/api/northbound",
+    "src/app/api/ops",
+    "src/app/api/sap",
     "src/app/api/studio",
     "src/components/coreedge",
     "src/components/studio",
@@ -32,10 +35,19 @@ export const DOC_CLAIMS_SCOPE = {
     "src/lib/coreedge",
     "src/lib/northbound",
     "src/lib/studio",
+    // Where the shipped features live: step-up, rate limits, envelope keys, the write-back audit.
+    "src/lib/auth",
+    "src/lib/security",
+    "src/lib/sap-public",
+    "src/lib/audit",
   ],
-  /** docs/coreedge-*.md at the top of docs/, plus these. */
+  /**
+   * docs/coreedge-*.md at the top of docs/, plus these. Each documented
+   * feature's own module (`code.file` in shipped-features.ts) is read too, so
+   * the comment that explains a shipped feature cannot call it planned.
+   */
   topLevelDocPrefix: "docs/coreedge-",
-  files: ["README.md", "SECURITY.md", "docs/deployment-urls.md"],
+  files: ["README.md", "SECURITY.md", "docs/deployment-urls.md", "src/middleware.ts"],
   /**
    * Never read: this lint's own vocabulary, and the registry, whose cell
    * notes say what is not built on purpose (they are scored, not prose).
@@ -58,7 +70,7 @@ function walk(dir: string): string[] {
 const toPosix = (p: string) => p.split(sep).join("/");
 
 /** Every file in scope, repository-relative with forward slashes, sorted. */
-export function docClaimsFiles(root: string): string[] {
+export function docClaimsFiles(root: string, features: readonly DocumentedFeature[] = DOCUMENTED_FEATURES): string[] {
   const out = new Set<string>();
   for (const dir of DOC_CLAIMS_SCOPE.directories) {
     const full = join(root, dir);
@@ -71,7 +83,9 @@ export function docClaimsFiles(root: string): string[] {
       if (rel.startsWith(DOC_CLAIMS_SCOPE.topLevelDocPrefix) && statSync(join(docs, name)).isFile()) out.add(rel);
     }
   }
-  for (const f of DOC_CLAIMS_SCOPE.files) if (existsSync(join(root, f))) out.add(f);
+  for (const f of [...DOC_CLAIMS_SCOPE.files, ...features.map((feature) => feature.code.file)]) {
+    if (existsSync(join(root, f))) out.add(f);
+  }
   const excluded = new Set<string>(DOC_CLAIMS_SCOPE.exclude);
   return [...out].filter((f) => !excluded.has(f) && docKind(f) !== null && !f.endsWith(".d.ts")).sort();
 }

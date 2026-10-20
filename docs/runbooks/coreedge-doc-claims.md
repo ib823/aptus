@@ -24,7 +24,7 @@ words of **not-built wording**.
 |---|---|---|
 | Shipped features | `src/lib/coreedge/shipped-features.ts` | One row per feature a reader looks for (the broker, step-up, envelope keys, grant binding, key expiry, rate limits, developer sign-up, customer-built services, and more): the capability-registry cells it is part of, the module and exports that implement it, and the words a document uses for it. A feature counts as shipped while the registry scores every one of its cells above none. |
 | Not-built wording | `NOT_BUILT_WORDING` in `src/lib/coreedge/doc-claims.ts` | "planned", "not (yet) built / implemented / shipped / merged / wired / callable / available", "coming soon", "pending merge", "unmerged", "not in production", "still to build", "nothing is callable", "in a future release", "will be built". "A planned rotation" (scheduled) is not counted. |
-| Scope | `DOC_CLAIMS_SCOPE` in `src/lib/coreedge/doc-claims-scope.ts` | `docs/coreedge/**`, `docs/coreedge-*.md`, `docs/runbooks/**`, `docs/adr/**`, `README.md`, `SECURITY.md`, `docs/deployment-urls.md`, and the comments (not the strings) in the CoreEdge code: the Studio, Control Tower, Operations and `/coreedge` pages, their API routes, `src/components/{studio,coreedge,control-tower}`, `src/lib/{coreedge,northbound,studio}`. |
+| Scope | `DOC_CLAIMS_SCOPE` in `src/lib/coreedge/doc-claims-scope.ts` | `docs/coreedge/**`, `docs/coreedge-*.md`, `docs/runbooks/**`, `docs/adr/**`, `README.md`, `SECURITY.md`, `docs/deployment-urls.md`, and the comments (not the strings) in the CoreEdge code: the Studio, Control Tower, Operations and `/coreedge` pages; the API routes under `src/app/api/{coreedge,control-tower,northbound,ops,sap,studio}`; `src/middleware.ts`; `src/components/{studio,coreedge,control-tower}`; `src/lib/{coreedge,northbound,studio,auth,security,sap-public,audit}`; and every shipped feature's own module (`code.file` in `shipped-features.ts`, such as `src/lib/db/tenant-guard.ts`), read whatever directory it sits in. |
 
 It also fails when a feature's module or one of its named exports no longer
 exists, and on a malformed marker (below).
@@ -33,6 +33,12 @@ A sentence is a unit of prose: Markdown paragraphs and list items are split
 into sentences; a table row (Markdown or HTML) is one unit, because a status
 column speaks for its row. Fenced code, HTML comments, `<style>` and `<script>`
 are not prose.
+
+Wording in quotes or backticks in running prose is a word being mentioned, not
+used, and is not counted: a sentence such as 'The page marked the broker
+"planned" after it shipped' passes. In a table
+row it is counted however it is written: `` | Step-up | `planned` | `` and
+`| Step-up | 'planned' |` are statuses.
 
 ## Where it runs
 

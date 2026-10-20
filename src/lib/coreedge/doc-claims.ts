@@ -51,6 +51,8 @@ export interface ProseUnit {
   readonly text: string;
   /** Feature ids an allow marker on this line or the one above exempts. */
   readonly allowed: readonly string[];
+  /** A table row: its cells are statuses, so quoting does not exempt the wording. */
+  readonly row?: boolean;
 }
 
 export interface StaleClaim {
@@ -319,7 +321,7 @@ export function proseUnits(
     // A marker applies to the unit starting on its own line or the next one.
     const allowed = [...new Set(allowByLine.get(u.line) ?? [])];
     const parts = u.row ? [collapse(u.text)] : sentences(u.text);
-    return parts.map((text) => ({ line: u.line, text, allowed }));
+    return parts.map((text) => ({ line: u.line, text, allowed, row: u.row }));
   });
   return { units, problems: [...problems] };
 }
@@ -351,7 +353,10 @@ function isQuoted(text: string, m: { index: number; text: string }): boolean {
 /** The stale claims in one unit: a shipped feature's term near not-built wording. */
 export function staleClaimsIn(unit: ProseUnit, features: readonly DocumentedFeature[], file = ""): StaleClaim[] {
   // Wording in quotes is mentioned, not used: a document discussing the word "planned" is not calling anything planned.
-  const wording = NOT_BUILT_WORDING.flatMap((re) => allMatches(unit.text, re)).filter((w) => !isQuoted(unit.text, w));
+  // Not in a table row: there a cell holding `planned` or 'planned' is the row's status, however it is written.
+  const wording = NOT_BUILT_WORDING.flatMap((re) => allMatches(unit.text, re)).filter(
+    (w) => unit.row === true || !isQuoted(unit.text, w),
+  );
   if (!wording.length) return [];
   const found: StaleClaim[] = [];
   for (const feature of features) {
