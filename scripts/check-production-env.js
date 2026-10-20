@@ -120,8 +120,62 @@ for (const key of REQUIRED_VARS) {
 
 // Warn about recommended vars
 for (const key of RECOMMENDED_VARS) {
+  // P0.10: a deployment that has moved its SAP key into the versioned ring
+  // (SAP_CONNECTION_ENCRYPTION_KEYS) no longer needs the legacy variable.
+  if (key === "SAP_CONNECTION_ENCRYPTION_KEY" && process.env.SAP_CONNECTION_ENCRYPTION_KEYS) continue;
   if (!process.env[key]) {
     console.warn(`[WARN] Missing recommended env var: ${key}`);
+  }
+}
+
+/*
+ * The SAP master-key ring (P0.10), checked on EVERY deploy type.
+ *
+ * A ring the application cannot read fails every connection save — and, once
+ * envelope sealing is on, every connection open — on the first request after
+ * the deploy goes live. Failing the build instead leaves the running
+ * deployment serving. Only the new variables are checked, so a deployment that
+ * sets none of them is unaffected.
+ *
+ * MIRRORS src/lib/sap-public/keys/keyring.ts (this script runs under plain
+ * node and cannot import TypeScript); tests/unit/scripts/check-production-env
+ * pins the same cases.
+ */
+const sapKeyring = process.env.SAP_CONNECTION_ENCRYPTION_KEYS || "";
+const sapActive = (process.env.SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY || "").trim();
+const sapLegacy = (process.env.SAP_CONNECTION_ENCRYPTION_KEY || "").trim();
+if (sapKeyring.trim() || sapActive) {
+  const versions = new Map();
+  for (const raw of sapKeyring.split(",")) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    const sep = entry.indexOf(":");
+    const version = sep > 0 ? entry.slice(0, sep).trim() : "";
+    const hex = sep > 0 ? entry.slice(sep + 1).trim() : "";
+    if (!/^v[1-9][0-9]{0,5}$/.test(version) || !/^[0-9a-fA-F]{64}$/.test(hex) || versions.has(version)) {
+      console.error(
+        `[FAIL] SAP_CONNECTION_ENCRYPTION_KEYS has a malformed or duplicate entry${version ? ` (${version})` : ""}; each entry is "v<N>:<64 hex>".`,
+      );
+      exitCode = 1;
+      continue;
+    }
+    versions.set(version, hex.toLowerCase());
+  }
+  if (sapLegacy) {
+    if (versions.has("v1") && versions.get("v1") !== sapLegacy.toLowerCase()) {
+      console.error(
+        "[FAIL] SAP_CONNECTION_ENCRYPTION_KEY and the v1 entry of SAP_CONNECTION_ENCRYPTION_KEYS are different keys; the legacy key IS v1.",
+      );
+      exitCode = 1;
+    }
+    versions.set("v1", sapLegacy.toLowerCase());
+  }
+  const provider = (process.env.SAP_CONNECTION_KEY_PROVIDER || "env").trim() || "env";
+  if (sapActive && provider === "env" && !versions.has(sapActive)) {
+    console.error(
+      "[FAIL] SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY names a version that is not in SAP_CONNECTION_ENCRYPTION_KEYS — every SAP connection save would fail.",
+    );
+    exitCode = 1;
   }
 }
 

@@ -109,9 +109,11 @@ export default async function StudioConnectionsPage() {
           <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
             <code>SAP_CONNECTION_ENCRYPTION_KEY</code> is not set to a 64-character hex value, so
             connection secrets cannot be sealed and any save would fail. Generate one with{" "}
-            <code>openssl rand -hex 32</code>, set it in the environment, and restart. Do not enter a
-            client&rsquo;s credentials until this banner is gone — nothing can be stored while it is
-            here.
+            <code>openssl rand -hex 32</code>, set it in the environment, and restart. If this
+            deployment uses the versioned key ring instead, check that{" "}
+            <code>SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY</code> names a key in{" "}
+            <code>SAP_CONNECTION_ENCRYPTION_KEYS</code>. Do not enter a client&rsquo;s credentials
+            until this banner is gone — nothing can be stored while it is here.
           </p>
         </section>
       )}

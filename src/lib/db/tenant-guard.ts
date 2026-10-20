@@ -48,6 +48,10 @@ export const TENANT_ANCHORED_MODELS = [
   // the guard could not see it. complete/release address rows by server-derived
   // id (safe), but the model is tenant-anchored and the roster should say so.
   "NorthboundIdempotencyKey",
+  // P0.10: an organization's wrapped data keys. Opening a secret reads exactly
+  // one organization's row; only the key scripts read across tenants, and they
+  // declare it with permitCrossTenantReads.
+  "OrgDataKey",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];

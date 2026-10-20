@@ -765,6 +765,49 @@ model SapConnection {
   @@index([organizationId, isActive])
 }
 
+/// P0.10 envelope encryption — one organization's DATA key, stored only wrapped.
+///
+/// Every sealed SAP secret of an organization in the `ce2` format
+/// (SapConnection.secretsCiphertext, SolutionClient.secretsCiphertext) is
+/// encrypted under that organization's data key; the data key itself is held
+/// here encrypted under a MASTER key that the KeyProvider holds
+/// (src/lib/sap-public/keys). Nothing in this table can decrypt anything on its
+/// own: a database dump without the master key yields wrapped keys and
+/// ciphertext, and nothing else.
+///
+/// ROTATING THE MASTER KEY re-wraps these rows (`pnpm keys:rotate`) and leaves
+/// every sealed blob untouched — that is the point of the envelope. A NEW DATA
+/// KEY (`pnpm keys:rotate --rekey`) adds a row with the next `version`; blobs
+/// name the version they were sealed under (`ce2:<version>:…`), so older rows
+/// stay until `pnpm keys:reseal` has moved every blob forward.
+///
+/// Additive and unused until an operator names an active master key: with only
+/// the legacy SAP_CONNECTION_ENCRYPTION_KEY set no row is ever written here.
+model OrgDataKey {
+  id             String @id @default(cuid())
+  organizationId String
+  /// The data-key generation inside this organization: 1, 2, … Sealed blobs
+  /// carry it, so a blob always says which row opens it.
+  version        Int
+  /// Which KeyProvider wrapped it — "env" or a registered KMS adapter.
+  provider       String @default("env")
+  /// The master key version that wraps it, as the provider names it ("v2", or
+  /// a KMS key-version id). Rewritten by a master rotation.
+  keyVersion     String
+  /// The data key, wrapped (AES-256-GCM under the master key, bound by AAD to
+  /// this organization and version). Never the raw key.
+  wrappedKey     String @db.Text
+
+  createdAt DateTime  @default(now())
+  /// When the wrap was last replaced by a master rotation; null until then.
+  rotatedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, version])
+  @@index([keyVersion])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CoreEdge Developer Studio — the governed design-time spine.
 //
@@ -2883,6 +2926,8 @@ model Organization {
 
   // SAP Operations middleware — per-Organization SAP tenant connections
   sapConnections SapConnection[]
+  // P0.10 envelope encryption — this organization's wrapped data keys
+  orgDataKeys    OrgDataKey[]
 
   // CoreEdge Developer Studio — governed solutions (tenant anchor)
   solutions Solution[]

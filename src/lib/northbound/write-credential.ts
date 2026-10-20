@@ -26,12 +26,8 @@
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import {
-  openSecrets,
-  sealSecrets,
-  solutionClientAad,
-  solutionClientRowAad,
-} from "@/lib/sap-public/connection-crypto";
+import { solutionClientAad, solutionClientRowAad } from "@/lib/sap-public/connection-crypto";
+import { openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
 import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /** Distinct prefix from the read token, so the two are never confused in a log. */
@@ -65,14 +61,14 @@ export async function setWriteCredential(
   });
   if (!client) return false;
 
+  const secretsCiphertext = await sealSecretsForOrg(
+    scope.organizationId,
+    { writeSecret: rawKey },
+    solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
+  );
   await prisma.solutionClient.update({
     where: { id: client.id, organizationId: scope.organizationId },
-    data: {
-      secretsCiphertext: sealSecrets(
-        { writeSecret: rawKey },
-        solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
-      ),
-    },
+    data: { secretsCiphertext },
   });
   return true;
 }
@@ -105,9 +101,12 @@ export async function verifyWriteCredential(
 
   let stored: string | undefined;
   try {
-    stored = openSecrets(
-      client.secretsCiphertext,
-      solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
+    stored = (
+      await openSecretsForOrg(
+        scope.organizationId,
+        client.secretsCiphertext,
+        solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
+      )
     ).writeSecret;
   } catch {
     /*
@@ -123,7 +122,7 @@ export async function verifyWriteCredential(
      * swallowed, because "re-issue the write key" is a fixable answer and a
      * silent 403 is not.
      */
-    if (isLegacySealed(client.secretsCiphertext, scope.organizationId, client.solutionId)) {
+    if (await isLegacySealed(client.secretsCiphertext, scope.organizationId, client.solutionId)) {
       console.warn(
         "[northbound] write key sealed under the pre-AD-11 binding; it is refused and must be re-issued",
         { clientId: client.id, solutionId: client.solutionId },
@@ -144,9 +143,13 @@ export async function verifyWriteCredential(
  * Would this blob have opened under the superseded (organization, solution)
  * binding? Diagnosis only — the value is never read out and never accepted.
  */
-function isLegacySealed(ciphertext: string, organizationId: string, solutionId: string): boolean {
+async function isLegacySealed(
+  ciphertext: string,
+  organizationId: string,
+  solutionId: string,
+): Promise<boolean> {
   try {
-    openSecrets(ciphertext, solutionClientAad(organizationId, solutionId));
+    await openSecretsForOrg(organizationId, ciphertext, solutionClientAad(organizationId, solutionId));
     return true;
   } catch {
     return false;
