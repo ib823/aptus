@@ -1,4 +1,4 @@
--- PlatformAudit: the governance trail of an actor with no tenant.
+-- PlatformGovernanceAudit: the governance trail of an actor with no tenant.
 --
 -- ConfigAudit rows belong to an organization, so the passkey and step-up
 -- events of platform admins and of accounts an admin created without an
@@ -6,10 +6,13 @@
 -- enrolment of a first passkey that the governance step-up relies on being
 -- visible. Same shape as ConfigAudit minus the tenant; append-only.
 --
+-- Not to be confused with PlatformAuditEvent/PlatformAuditOutcome
+-- (20261021000000_platform_audit_event), which hold Workbench writes to SAP.
+--
 -- Additive. The code already deployed neither reads nor writes it.
 
 -- CreateTable
-CREATE TABLE "PlatformAudit" (
+CREATE TABLE "PlatformGovernanceAudit" (
     "id" TEXT NOT NULL,
     "actorId" TEXT NOT NULL,
     "entityType" TEXT NOT NULL,
@@ -18,14 +21,14 @@ CREATE TABLE "PlatformAudit" (
     "after" JSONB,
     "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "PlatformAudit_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "PlatformGovernanceAudit_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE INDEX "PlatformAudit_entityType_entityId_idx" ON "PlatformAudit"("entityType", "entityId");
+CREATE INDEX "PlatformGovernanceAudit_entityType_entityId_idx" ON "PlatformGovernanceAudit"("entityType", "entityId");
 
 -- CreateIndex
-CREATE INDEX "PlatformAudit_actorId_at_idx" ON "PlatformAudit"("actorId", "at");
+CREATE INDEX "PlatformGovernanceAudit_actorId_at_idx" ON "PlatformGovernanceAudit"("actorId", "at");
 
 -- CreateIndex
-CREATE INDEX "PlatformAudit_at_idx" ON "PlatformAudit"("at");
+CREATE INDEX "PlatformGovernanceAudit_at_idx" ON "PlatformGovernanceAudit"("at");

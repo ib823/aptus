@@ -32,7 +32,7 @@ import {
   NO_OUTCOME_RECORDED,
   PENDING_UNRESOLVED_AFTER_MINUTES,
   PLATFORM_AUDIT_OUTCOMES,
-  type PlatformAuditOutcome,
+  type PlatformAuditOutcomeKind,
 } from "@/lib/audit/platform-audit";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
@@ -41,7 +41,7 @@ import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
 
-const OUTCOMES = Object.keys(PLATFORM_AUDIT_OUTCOMES) as PlatformAuditOutcome[];
+const OUTCOMES = Object.keys(PLATFORM_AUDIT_OUTCOMES) as PlatformAuditOutcomeKind[];
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   ]);
 
   const counts = Object.fromEntries(OUTCOMES.map((o, i) => [o, outcomeCounts[i] ?? 0])) as Record<
-    PlatformAuditOutcome,
+    PlatformAuditOutcomeKind,
     number
   >;
 

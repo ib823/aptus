@@ -1215,7 +1215,12 @@ model ConfigAudit {
 /// including the trust-on-first-use enrolment of a first passkey, which the
 /// step-up design depends on being visible. Same shape as ConfigAudit, minus
 /// the tenant, and append-only in the same way (lib/studio/audit.ts).
-model PlatformAudit {
+///
+/// The OTHER tenantless trail is PlatformAuditEvent + PlatformAuditOutcome
+/// (P0.7, lib/audit/platform-audit.ts): every Workbench write to SAP, recorded
+/// fail-closed before SAP is called. What a platform admin did is the union of
+/// the two; neither alone is the whole answer.
+model PlatformGovernanceAudit {
   id      String @id @default(cuid())
   actorId String
 
@@ -1556,6 +1561,12 @@ model NorthboundAuditEvent {
 /// it — the same rule the write ledger applies to `responseBody`. The SHA-256
 /// and the top-level field names are enough to match a row to a payload
 /// someone produces later.
+///
+/// The OTHER tenantless trail is PlatformGovernanceAudit (P0.12,
+/// writePlatformGovernanceAudit in lib/studio/audit.ts): passkey enrolment and
+/// revocation and STEP_UP_MISSING admissions of platform admins and
+/// organization-less accounts. What a platform admin did is the union of the
+/// two; neither alone is the whole answer.
 model PlatformAuditEvent {
   id     String @id @default(cuid())
   /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST

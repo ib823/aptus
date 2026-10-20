@@ -84,9 +84,14 @@ by trust on first use, step up with it and then decide or revoke grants.
 
 **Where the rows go.** An actor with an organization gets `ConfigAudit` rows. An
 actor with none (a platform admin, or an account an admin created without an
-organization) gets the same rows in `PlatformAudit`, which has no tenant
+organization) gets the same rows in `PlatformGovernanceAudit`, which has no tenant
 column. Before, those were only logged, so the most privileged accounts had no
 durable trail of their passkeys.
+
+`PlatformGovernanceAudit` is not the only tenantless trail. Workbench writes to
+SAP by the same platform admins are in `PlatformAuditEvent` and
+`PlatformAuditOutcome` (`docs/runbooks/sap-workbench-write-back.md`). To answer
+"what did this admin do", query both.
 
 Each route asks **after** its own role, tenant and ownership checks, just
 before it writes. A refusal the person cannot fix never costs them a passkey
@@ -142,7 +147,7 @@ the people the approvals depend on.
    FROM (
      SELECT "actorId", after, "at", action FROM "ConfigAudit"
      UNION ALL
-     SELECT "actorId", after, "at", action FROM "PlatformAudit"
+     SELECT "actorId", after, "at", action FROM "PlatformGovernanceAudit"
    ) rows
    WHERE action = 'STEP_UP_MISSING'
      AND "at" > now() - interval '7 days'
@@ -162,7 +167,7 @@ the people the approvals depend on.
    FROM (
      SELECT "actorId", "entityId", "entityType", action, after, "at" FROM "ConfigAudit"
      UNION ALL
-     SELECT "actorId", "entityId", "entityType", action, after, "at" FROM "PlatformAudit"
+     SELECT "actorId", "entityId", "entityType", action, after, "at" FROM "PlatformGovernanceAudit"
    ) rows
    WHERE "entityType" = 'Passkey' AND action = 'CREATE'
      AND "at" > now() - interval '7 days'
@@ -180,7 +185,7 @@ the people the approvals depend on.
 Set `COREEDGE_STEP_UP=warn` (or delete it) and redeploy. Nothing else changes:
 the columns stay (`Session.passkeyAssertedAt` and `Session.stepUpChallengeHash`,
 both additive and nullable), as do the tables (`WebAuthnChallengeUse`,
-`PlatformAudit`, `TenantGuardViolation`, all additive), and warn mode starts
+`PlatformGovernanceAudit`, `TenantGuardViolation`, all additive), and warn mode starts
 recording again.
 
 Use `off` only if the audit writes themselves are a problem. In `off` the gate

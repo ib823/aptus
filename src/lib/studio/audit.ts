@@ -131,7 +131,7 @@ export async function writeConfigAudit(input: ConfigAuditInput): Promise<void> {
   }
 }
 
-export type PlatformAuditInput = Omit<ConfigAuditInput, "organizationId" | "before">;
+export type PlatformGovernanceAuditInput = Omit<ConfigAuditInput, "organizationId" | "before">;
 
 /**
  * Record a governance event that has NO TENANT to file it under.
@@ -140,13 +140,17 @@ export type PlatformAuditInput = Omit<ConfigAuditInput, "organizationId" | "befo
  * no ConfigAudit trail: those rows belong to an organization. These are the
  * most privileged accounts there are, and their passkey and step-up events
  * used to reach only the log, including the trust-on-first-use enrolment the
- * step-up relies on being visible. PlatformAudit is the same append-only
+ * step-up relies on being visible. PlatformGovernanceAudit is the same append-only
  * record minus the tenant. Callers with an organization use
  * `writeConfigAudit`. Best-effort, exactly like it.
+ *
+ * Not for writes to SAP: those must use the fail-closed
+ * `beginPlatformAudit`/`completePlatformAudit` pair in lib/audit/platform-audit.ts,
+ * which records into `PlatformAuditEvent`/`PlatformAuditOutcome`.
  */
-export async function writePlatformAudit(input: PlatformAuditInput): Promise<void> {
+export async function writePlatformGovernanceAudit(input: PlatformGovernanceAuditInput): Promise<void> {
   try {
-    await prisma.platformAudit.create({
+    await prisma.platformGovernanceAudit.create({
       data: {
         actorId: input.actorId,
         entityType: input.entityType,
@@ -156,7 +160,7 @@ export async function writePlatformAudit(input: PlatformAuditInput): Promise<voi
       },
     });
   } catch (err) {
-    console.error("[studio-audit] failed to write PlatformAudit entry", {
+    console.error("[studio-audit] failed to write PlatformGovernanceAudit entry", {
       entityType: input.entityType,
       entityId: input.entityId,
       action: input.action,

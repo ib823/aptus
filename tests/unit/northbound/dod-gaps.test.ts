@@ -177,7 +177,7 @@ describe("#8 · the audit trail is append-only", () => {
     // An audit trail that can be edited is not an audit trail. The property held
     // by construction, but nothing asserted it — so a future `updateAudit`
     // helper would have slipped in unnoticed. The config module has two
-    // writers: ConfigAudit, and PlatformAudit for an actor with no tenant.
+    // writers: ConfigAudit, and PlatformGovernanceAudit for an actor with no tenant.
     for (const [name, src, count] of [["northbound", northbound, 1], ["config", config, 2]] as const) {
       const exported = [...src.matchAll(/export (?:async )?function (\w+)/g)].map((m) => m[1]);
       expect(exported, `${name} audit exports`).toHaveLength(count);
@@ -187,7 +187,7 @@ describe("#8 · the audit trail is append-only", () => {
 
   it("neither module contains an update or delete call on its audit table", () => {
     expect(northbound).not.toMatch(/northboundAuditEvent\s*\.\s*(update|delete|upsert)/);
-    expect(config).not.toMatch(/(configAudit|platformAudit)\s*\.\s*(update|delete|upsert)/);
+    expect(config).not.toMatch(/(configAudit|platformGovernanceAudit)\s*\.\s*(update|delete|upsert)/);
   });
 
   /*
@@ -219,10 +219,10 @@ describe("#8 · the audit trail is append-only", () => {
     const offenders = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        // The platform trails are held to the same rule: P0.12's PlatformAudit is
+        // The platform trails are held to the same rule: P0.12's PlatformGovernanceAudit is
         // append-only, and P0.7's outcome is a second row, never an update of
         // the first.
-        /(configAudit|northboundAuditEvent|platformAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(update|updateMany|upsert)/.test(
+        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(update|updateMany|upsert)/.test(
           readFileSync(f, "utf8"),
         ),
       )
@@ -242,7 +242,7 @@ describe("#8 · the audit trail is append-only", () => {
     const deleters = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        /(configAudit|northboundAuditEvent|platformAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(delete|deleteMany)/.test(
+        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(delete|deleteMany)/.test(
           readFileSync(f, "utf8"),
         ),
       )

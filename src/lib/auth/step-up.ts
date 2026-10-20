@@ -52,7 +52,7 @@
  * step up with it. Creating such an account, changing anyone's role, and
  * resetting someone's passkeys are governance actions too. Their events, like
  * every passkey and step-up event of an account with no organization, go to the
- * platform-level trail (PlatformAudit) rather than only to the log.
+ * platform-level trail (PlatformGovernanceAudit) rather than only to the log.
  *
  * Deliberately not on the list: raising a request (the requester is not the
  * control), the lane re-check and connection test (they read, and are rate
@@ -92,7 +92,7 @@ import { NextResponse } from "next/server";
 
 import { isAdminRole } from "@/lib/auth/permissions";
 import { STEP_UP_CODES, type StepUpCode } from "@/lib/auth/step-up-codes";
-import { type AuditEntityType, writeConfigAudit, writePlatformAudit } from "@/lib/studio/audit";
+import { type AuditEntityType, writeConfigAudit, writePlatformGovernanceAudit } from "@/lib/studio/audit";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import type { SessionUser } from "@/types/assessment";
 
@@ -357,7 +357,7 @@ export async function recordStepUpMissing({ user, maxAgeSeconds, context }: Step
   if (!organizationId) {
     // A platform admin acting on no tenant's row, or administering accounts:
     // the most privileged actor there is has the platform-level trail.
-    await writePlatformAudit(entry);
+    await writePlatformGovernanceAudit(entry);
     return;
   }
 
