@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { toast } from "sonner";
 
 interface Credential {
@@ -77,7 +78,9 @@ export function PasskeyCredentialList() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(
+      // Removing a passkey can need a passkey check first (lib/auth/step-up.ts):
+      // the step-up helper asks for it and retries.
+      const res = await fetchWithStepUp(
         `/api/auth/webauthn/credentials/${deleteTarget.credentialId}`,
         { method: "DELETE" },
       );

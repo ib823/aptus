@@ -13,6 +13,8 @@ import { ConnectionsClient, type StudioConnection } from "@/components/studio/Co
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { isConnectionEncryptionConfigured } from "@/lib/sap-public/connection-crypto";
+import { newSuccessFactorsBasicConnectionNotice } from "@/lib/sap-public/sf-basic-auth-sunset";
+import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { resolveStudioTenants } from "@/lib/studio/tenants";
 
@@ -67,6 +69,20 @@ export default async function StudioConnectionsPage() {
       ? (await resolveStudioTenants(organizationId)).filter((t) => t.source === "environment")
       : [];
 
+  /*
+   * The dated SuccessFactors Basic-auth notice, per product, for the form to show
+   * before a NEW Basic connection is saved. Computed HERE because the sunset
+   * module reads the server clock and SF_BASIC_AUTH_DELETION_DATE, neither of
+   * which the browser has — a client copy would show SAP's default date after an
+   * operator had tracked a change. Products the notice does not apply to are
+   * simply absent.
+   */
+  const basicAuthNotices: Record<string, string> = {};
+  for (const product of Object.keys(PRODUCT_MARKS)) {
+    const notice = newSuccessFactorsBasicConnectionNotice(product, "basic");
+    if (notice) basicAuthNotices[product] = notice;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
@@ -109,9 +125,11 @@ export default async function StudioConnectionsPage() {
           <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
             <code>SAP_CONNECTION_ENCRYPTION_KEY</code> is not set to a 64-character hex value, so
             connection secrets cannot be sealed and any save would fail. Generate one with{" "}
-            <code>openssl rand -hex 32</code>, set it in the environment, and restart. Do not enter a
-            client&rsquo;s credentials until this banner is gone — nothing can be stored while it is
-            here.
+            <code>openssl rand -hex 32</code>, set it in the environment, and restart. If this
+            deployment uses the versioned key ring instead, check that{" "}
+            <code>SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY</code> names a key in{" "}
+            <code>SAP_CONNECTION_ENCRYPTION_KEYS</code>. Do not enter a client&rsquo;s credentials
+            until this banner is gone — nothing can be stored while it is here.
           </p>
         </section>
       )}
@@ -158,7 +176,11 @@ export default async function StudioConnectionsPage() {
         </section>
       ) : null}
 
-      <ConnectionsClient connections={connections} canManage={canMutateStudio(user.role)} />
+      <ConnectionsClient
+        connections={connections}
+        canManage={canMutateStudio(user.role)}
+        basicAuthNotices={basicAuthNotices}
+      />
     </div>
   );
 }

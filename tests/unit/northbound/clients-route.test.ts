@@ -42,7 +42,7 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { PATCH, POST } from "@/app/api/studio/clients/route";
 
-const ISSUER = { id: "u_issuer", email: "a@abeam.com", role: "consultant", organizationId: "org_a" };
+const ISSUER = { id: "u_issuer", email: "a@abeam.com", role: "consultant", organizationId: "org_a", authMethod: "session" };
 const OWNER_ID = "u_owner";
 
 const SOLUTION = {

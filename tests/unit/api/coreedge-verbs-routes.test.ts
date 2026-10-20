@@ -65,8 +65,8 @@ import { POST as sendLink } from "@/app/api/coreedge/keys/claim-link/route";
 import { POST as revoke } from "@/app/api/coreedge/keys/[clientId]/revoke/route";
 import { POST as recheck } from "@/app/api/coreedge/lanes/recheck/route";
 
-const ADMIN = { id: "admin1", role: "platform_admin", organizationId: "org1" };
-const OPERATOR = { id: "op1", role: "support", organizationId: "org1" };
+const ADMIN = { id: "admin1", role: "platform_admin", organizationId: "org1", authMethod: "session" };
+const OPERATOR = { id: "op1", role: "support", organizationId: "org1", authMethod: "session" };
 const FUTURE = new Date("2027-06-01T00:00:00Z");
 
 function req(body: unknown): Request {

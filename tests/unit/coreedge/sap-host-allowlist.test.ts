@@ -54,6 +54,113 @@ describe("suffix matching is anchored", () => {
   });
 });
 
+describe("SuccessFactors API servers (P0.9)", () => {
+  /*
+   * SAP KBA 2215682, "List of SAP SuccessFactors API Servers", as checked on
+   * 2026-10-20: every Production, Preview, SalesDemo and EDR host. Most of them
+   * are on `sapsf.*`, which was missing — so a real SuccessFactors tenant, the
+   * product the SAML-bearer path exists for, could not be connected.
+   */
+  const KBA_2215682_HOSTS = [
+    "api16.sapsf.eu",
+    "api18.sapsf.com",
+    "api18preview.sapsf.com",
+    "api22.sapsf.com",
+    "api22preview.sapsf.com",
+    "api23.sapsf.com",
+    "api23preview.sapsf.com",
+    "api15.sapsf.cn",
+    "api15preview.sapsf.cn",
+    "api012.successfactors.eu",
+    "api12preview.sapsf.eu",
+    "apirot.successfactors.eu",
+    "api40sales.sapsf.com",
+    "api41.sapsf.com",
+    "api41preview.sapsf.com",
+    "api42.sapsf.com",
+    "api42preview.sapsf.com",
+    "api47.sapsf.com",
+    "api47preview.sapsf.com",
+    "api50.sapsf.com",
+    "api50preview.sapsf.com",
+    "api44.sapsf.com",
+    "api44preview.sapsf.com",
+    "api55.sapsf.eu",
+    "api55preview.sapsf.eu",
+    "api2.successfactors.eu",
+    "api2preview.sapsf.eu",
+    "apisalesdemo2.successfactors.eu",
+    "api17.sapsf.com",
+    "api17preview.sapsf.com",
+    "api19.sapsf.com",
+    "api19preview.sapsf.com",
+    "api10.successfactors.com",
+    "api10preview.sapsf.com",
+    "api4.successfactors.com",
+    "api4preview.sapsf.com",
+    "api68sales.successfactors.com",
+    "api8.successfactors.com",
+    "api8preview.sapsf.com",
+    "apisalesdemo8.successfactors.com",
+    "api74.sapsf.eu",
+    "api74preview.sapsf.eu",
+    "api-in10.hr.cloud.sap",
+    "api-in10-preview.hr.cloud.sap",
+    "api-sa20.hr.cloud.sap",
+    "api-sa20-preview.hr.cloud.sap",
+    // EDR (disaster recovery) servers.
+    "api32dr.sapsf.com",
+    "api34dr.successfactors.eu",
+    "api51dr.sapsf.com",
+    "api56dr.sapsf.eu",
+    "api58dr.successfactors.eu",
+    "api61dr.sapsf.com",
+    "api67dr.successfactors.com",
+    "api69dr.successfactors.com",
+    "api71dr.successfactors.com",
+    "api-in11-dr.hr.cloud.sap",
+  ];
+
+  it("admits api17.sapsf.com, the roadmap's named host, with its OData path", () => {
+    const v = checkSapHost("https://api17.sapsf.com/odata/v2/User?$top=1");
+    expect(v).toEqual({ allowed: true, matched: "sapsf.com" });
+  });
+
+  it("admits the EU and China domains", () => {
+    expect(checkSapHost("https://api55.sapsf.eu").allowed).toBe(true);
+    expect(checkSapHost("https://api15.sapsf.cn").allowed).toBe(true);
+  });
+
+  it("admits every API server in SAP's published list", () => {
+    for (const host of KBA_2215682_HOSTS) {
+      expect(checkSapHost(`https://${host}`).allowed, host).toBe(true);
+    }
+  });
+
+  it("matches on a label boundary, not on a string suffix", () => {
+    for (const url of [
+      // Ends with the suffix, but the label before it is not `sapsf`.
+      "https://evil-sapsf.com",
+      "https://api17.evil-sapsf.com",
+      "https://notsapsf.eu",
+      "https://xsapsf.cn",
+      // Starts with the real domain, but the registrable domain is the attacker's.
+      "https://sapsf.com.evil.io",
+      "https://api17.sapsf.com.evil.io",
+      "https://api15.sapsf.cn.attacker.example",
+      // A neighbouring TLD that SAP does not serve from.
+      "https://api17.sapsf.co",
+      "https://api17.sapsf.net",
+    ]) {
+      expect(checkSapHost(url).allowed, url).toBe(false);
+    }
+  });
+
+  it("still refuses http on a SuccessFactors host", () => {
+    expect(checkSapHost("http://api17.sapsf.com").allowed).toBe(false);
+  });
+});
+
 describe("deny still runs first", () => {
   it("refuses localhost, internal names and IP literals whatever the list says", () => {
     // The two are not alternatives. Keeping the deny-list means a future

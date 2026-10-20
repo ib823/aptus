@@ -80,7 +80,8 @@ export async function GET(): Promise<NextResponse> {
     // When the per-connection probe sweep last ran — the history the respec
     // named as the real prerequisite, delivered by the observability phase.
     prisma.cronRunLog.findFirst({
-      where: { job: "connection-probes" },
+      // A skipped invocation (job lease held) probed nothing; it is not the sweep.
+      where: { job: "connection-probes", skipped: false },
       orderBy: { startedAt: "desc" },
       select: { startedAt: true, finishedAt: true, ok: true, summaryJson: true },
     }),

@@ -59,6 +59,18 @@ vi.mock("@/lib/studio/connection-health", async (importOriginal) => ({
   probeConnection: mocks.probeConnection,
 }));
 vi.mock("@/lib/northbound/read", () => ({ readEntitySet: mocks.readEntitySet }));
+// The lease is always granted here; tests/integration/cron-job-leases.test.ts
+// covers a held one against a real database.
+vi.mock("@/lib/ops/job-lease", () => ({
+  JOB_LEASE_TTL_MS: 600_000,
+  acquireJobLease: async () => ({
+    acquired: true,
+    holder: "test-holder",
+    acquiredAt: new Date(),
+    expiresAt: new Date(),
+  }),
+  releaseJobLease: async () => undefined,
+}));
 
 import { GET } from "@/app/api/cron/lane-checks/route";
 

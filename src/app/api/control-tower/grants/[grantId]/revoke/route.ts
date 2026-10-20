@@ -29,13 +29,15 @@
  * with its own actor, timestamp and stated reason. Both survive.
  *
  * Admin-only, same gate as deciding — withdrawing access is at least as
- * consequential as granting it.
+ * consequential as granting it. And the same fresh passkey, once
+ * COREEDGE_STEP_UP is enforce (lib/auth/step-up.ts).
  */
 
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -122,6 +124,18 @@ export async function POST(
       alreadyRevoked: true,
     });
   }
+
+  /*
+   * A FRESH PASSKEY, asked once there is something to withdraw — the no-ops
+   * above cost nobody a prompt (lib/auth/step-up.ts). Withdrawing access is as
+   * consequential as granting it, so it gets the same check.
+   */
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "grant.revoke",
+    targetId: grant.id,
+    organizationId: grant.organizationId,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   const now = new Date();
   const updated = await prisma.apiAccessGrant.update({

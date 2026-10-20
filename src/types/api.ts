@@ -41,4 +41,6 @@ export const ERROR_CODES = {
   AREA_LOCKED: "AREA_LOCKED",
   CONFLICT: "CONFLICT",
   GAPS_NOT_APPROVED: "GAPS_NOT_APPROVED",
+  /** A change to SAP was refused because its audit record could not be written. */
+  AUDIT_UNAVAILABLE: "AUDIT_UNAVAILABLE",
 } as const;

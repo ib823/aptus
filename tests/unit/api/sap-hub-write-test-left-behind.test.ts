@@ -7,20 +7,24 @@
  * refuses that origin before sending anything (so the credentials stay off the
  * internal host), and it does so by throwing SapUrlOriginError. Uncaught in
  * runCapabilityWriteTest, the throw reached the route's outer catch: a bare 502
- * INTERNAL_ERROR, no `created`, no `location`, and no SAP_WRITE_TEST_PERFORMED
- * row — for a record that WAS created in SAP and is still there.
+ * INTERNAL_ERROR, no `created`, no `location`, and no audit row — for a record
+ * that WAS created in SAP and is still there. (The audit was a `logDecision`
+ * then; since P0.7 it is a PlatformAuditEvent written before SAP is called, and
+ * this case is recorded as LEFT_BEHIND.)
  *
  * The real route, the real write-test and the real create/delete; only admin,
- * audit, env/tenant/metadata lookups and `fetch` are stand-ins.
+ * the audit writes, env/tenant/metadata lookups and `fetch` are stand-ins.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as PlatformAudit from "@/lib/audit/platform-audit";
 import type * as Connector from "@/lib/sap-public/tdd-connector";
 
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
-  logDecision: vi.fn(),
+  beginPlatformAudit: vi.fn(async () => ({ id: "pae_1", correlationId: "corr-1" })),
+  completePlatformAudit: vi.fn(),
   getSapTenant: vi.fn(),
 }));
 
@@ -28,7 +32,11 @@ vi.mock("@/lib/auth/admin-guard", () => ({
   requireAdmin: mocks.requireAdmin,
   isAdminError: (r: unknown) => typeof r === "object" && r !== null && "status" in (r as Record<string, unknown>),
 }));
-vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: mocks.logDecision }));
+vi.mock("@/lib/audit/platform-audit", async (importActual) => ({
+  ...(await importActual<typeof PlatformAudit>()),
+  beginPlatformAudit: mocks.beginPlatformAudit,
+  completePlatformAudit: mocks.completePlatformAudit,
+}));
 vi.mock("@/lib/sap-public/tdd-connector", async (importActual) => ({
   ...(await importActual<typeof Connector>()),
   getSapProduct: () => ({ key: "s4hana", label: "S/4", envPrefix: "S4_TDD" }),
@@ -88,7 +96,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.S4_TDD_WRITE_TEST_ENABLED = "true";
   process.env.S4_TDD_WRITE_TEST_ENTITYSETS = "A_BusinessPartner";
-  mocks.requireAdmin.mockResolvedValue({ user: { id: "a", email: "a@b.co", role: "platform_admin" } });
+  mocks.requireAdmin.mockResolvedValue({ user: { id: "a", email: "a@b.co", role: "platform_admin", organizationId: null } });
   mocks.getSapTenant.mockReturnValue({
     key: "TEN1",
     label: "Test Ring",
@@ -124,10 +132,13 @@ describe("a create whose Location names another origin", () => {
   it("audits the create, so the record left behind is on the record", async () => {
     sapAnswers(LOCATION);
     await POST(makeRequest(VALID));
-    expect(mocks.logDecision).toHaveBeenCalledOnce();
-    expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({
-      action: "SAP_WRITE_TEST_PERFORMED",
-      newValue: { created: true, deleted: false, ladder: "writable" },
+    expect(mocks.completePlatformAudit).toHaveBeenCalledOnce();
+    expect(mocks.completePlatformAudit.mock.calls[0]![1]).toMatchObject({
+      outcome: "LEFT_BEHIND",
+      sapStatus: 201,
+      reason: "DELETE_NOT_SENT",
+      // Where the record is, so an operator can find and remove it.
+      detail: { created: true, deleted: false, deleteStatus: null, location: LOCATION },
     });
   });
 

@@ -208,6 +208,13 @@ export const RATE_LIMITS = {
   auth: { limit: 30, windowMs: 60 * 1000 },
   /** MFA verification: 10 attempts per 5 minutes */
   mfa: { limit: 10, windowMs: 5 * 60 * 1000 },
+  /**
+   * Governance step-up ceremonies, per client IP: a backstop only. The step-up
+   * routes need a session and limit each PERSON (mfa, auth); keyed by IP alone,
+   * approvers behind one office egress address would spend each other's
+   * allowance and the eleventh would be locked out of revoking anything.
+   */
+  stepUpPerIp: { limit: 120, windowMs: 60 * 1000 },
   /** API mutations (POST/PUT/DELETE): 120 per minute */
   apiMutation: { limit: 120, windowMs: 60 * 1000 },
   /** API reads: 300 per minute */

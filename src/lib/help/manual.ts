@@ -203,15 +203,22 @@ const PROSE: Record<string, ScreenProse> = {
     ],
   },
   "operations-center/writes": {
-    answers: "Write reservations, and the writes that were refused before one was made.",
+    answers:
+      "Write reservations, and the writes that were refused before one was made — and, for platform admins, every record a person created in SAP from the Workbench.",
     cannotTell: [
       "A single reconciled total. The two panels count different things — row states and audit events — and will not add up.",
+      "What a Workbench write-back contained. Each one is recorded, naming the person, before SAP is called — but only a fingerprint of its payload is kept, never the values.",
     ],
     misreadings: [
       {
         seeing: "A completely empty ledger",
         means:
           "No solution in scope performed a write in this window. Writes are live — a write key issued in Developer Studio against an approved write grant, plus a mandatory Idempotency-Key — so an empty ledger is quiet, not disabled. A write refused at any gate before reservation appears in the audit feed, never here.",
+      },
+      {
+        seeing: 'A Workbench write-back marked "never recorded"',
+        means:
+          "The write was recorded before it was sent to SAP, and its outcome never was — the request died or the outcome could not be saved. SAP may or may not hold the record. Check SAP before anyone repeats it.",
       },
     ],
   },

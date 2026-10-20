@@ -28,6 +28,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { ROLE_LABELS, type UserRole } from "@/types/assessment";
 
 interface AdminUser {
@@ -69,7 +70,8 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
         init.headers = { "Content-Type": "application/json" };
         init.body = JSON.stringify(body);
       }
-      const res = await fetch(`/api/admin/users/${userId}`, init);
+      // A role change or passkey reset may ask for a fresh passkey first.
+      const res = await fetchWithStepUp(`/api/admin/users/${userId}`, init);
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error?.message ?? "Action failed");
@@ -126,7 +128,7 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
   const handleAddUser = useCallback(async (data: { email: string; name: string; role: string }) => {
     setAddUserSubmitting(true);
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await fetchWithStepUp("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: data.email, name: data.name, role: data.role }),

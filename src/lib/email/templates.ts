@@ -333,6 +333,59 @@ export function sessionDisplacedEmail(params: {
   };
 }
 
+// ── Passkey Added Notification ────────────────────────────────────────────
+
+/**
+ * A passkey was added to the account. Sent for every one, because a first
+ * passkey needs nothing but the session to add (lib/auth/passkey-events.ts):
+ * this email is how a person learns that someone holding their session did.
+ */
+export function passkeyAddedEmail(params: {
+  recipientName: string;
+  email: string;
+  passkeyName: string;
+  ipAddress: string;
+  device: string;
+  time: string;
+  reviewUrl: string;
+}): { subject: string; html: string; text: string } {
+  return {
+    subject: `A passkey was added to your ${BRAND_NAME} account`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">A passkey was added to your account</h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Hi ${esc(params.recipientName)},
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        A new passkey was just added to your account (<strong>${esc(params.email)}</strong>). It can sign you in and confirm approvals and key changes.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Passkey</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.passkeyName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">IP address</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.ipAddress)}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Device</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.device)}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">Time</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${esc(params.time)}</td>
+        </tr>
+      </table>
+      ${button(params.reviewUrl, "Review your passkeys")}
+      <p style="margin:0;font-size:13px;color:#dc2626;font-weight:500;">
+        If you didn't add it, remove it and sign out of every session now, then tell your administrator.
+      </p>
+    `),
+    text: `Hi ${params.recipientName},\n\nA new passkey was just added to your account (${params.email}). It can sign you in and confirm approvals and key changes.\n\nPasskey: ${params.passkeyName}\nIP address: ${params.ipAddress}\nDevice: ${params.device}\nTime: ${params.time}\n\nReview your passkeys: ${params.reviewUrl}\n\nIf you didn't add it, remove it and sign out of every session now, then tell your administrator.`,
+  };
+}
+
 // ── Organization Invitation ────────────────────────────────────────────────
 
 export function orgInvitationEmail(params: {

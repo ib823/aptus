@@ -26,12 +26,8 @@ import {
 } from "@/lib/sap-public/api-key-header";
 import { parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/environment";
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
-import {
-  connectionAad,
-  openSecrets,
-  sealSecrets,
-  type SapConnectionSecrets,
-} from "@/lib/sap-public/connection-crypto";
+import { connectionAad, type SapConnectionSecrets } from "@/lib/sap-public/connection-crypto";
+import { openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
 import { ConnectionConfigError, OAuthTokenRequestError } from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
@@ -157,13 +153,26 @@ export async function resolveSapConnections(
     where: { organizationId, product, isActive: true },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map(openConnectionRow);
+  return Promise.all(rows.map(openConnectionRow));
 }
 
 type SapConnectionRow = Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number];
 
-/** One stored row, decrypted and normalized. Throws when the row cannot be opened. */
-function openConnectionRow(r: SapConnectionRow): ResolvedSapConnection {
+/**
+ * One stored row, decrypted and normalized. Rejects when the row cannot be opened.
+ *
+ * Async since P0.10: a `ce2` blob is opened under its organisation's data key,
+ * which may need a database read to unwrap. A legacy blob opens as it always
+ * did, through the same legacy key.
+ */
+async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnection> {
+  // Opened under this row's own AAD, so a ciphertext copied from another
+  // organization's connection cannot be decrypted here.
+  const secrets = await openSecretsForOrg(
+    r.organizationId,
+    r.secretsCiphertext,
+    connectionAad(r.organizationId, r.product, r.key),
+  );
   return {
     source: "db" as const,
     id: r.id,
@@ -173,9 +182,7 @@ function openConnectionRow(r: SapConnectionRow): ResolvedSapConnection {
     label: r.label,
     baseUrl: normalizeBaseUrl(r.baseUrl),
     authType: coerceAuthType(r.authType),
-    // Opened under this row's own AAD, so a ciphertext copied from another
-    // organization's connection cannot be decrypted here.
-    secrets: openSecrets(r.secretsCiphertext, connectionAad(r.organizationId, r.product, r.key)),
+    secrets,
     oauthTokenUrl: r.oauthTokenUrl,
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
@@ -216,7 +223,7 @@ export async function resolveSapConnection(
       orderBy: { createdAt: "asc" },
     });
     const row = rows.find((r) => r.key === key);
-    return row ? openConnectionRow(row) : null;
+    return row ? await openConnectionRow(row) : null;
   }
   const all = await resolveSapConnections(organizationId, product);
   return all[0] ?? null;
@@ -872,8 +879,10 @@ export function normalizeEnvironment(value: string | null | undefined): SapEnvir
 
 export async function upsertSapConnection(input: UpsertSapConnectionInput): Promise<RedactedSapConnection> {
   // Bind the sealed bundle to (org, product, key) so it is worthless on any
-  // other row — see connectionAad.
-  const secretsCiphertext = sealSecrets(
+  // other row — see connectionAad. Sealed in the format the deployment
+  // configures (secret-envelope.ts): legacy until an active master key is named.
+  const secretsCiphertext = await sealSecretsForOrg(
+    input.organizationId,
     input.secrets,
     connectionAad(input.organizationId, input.product, input.key),
   );

@@ -161,6 +161,60 @@ export function successFactorsBasicAuthVerdict(
 }
 
 /**
+ * What to tell someone who is CREATING a SuccessFactors connection on Basic.
+ *
+ * A NOTICE, NEVER A REFUSAL. SAP makes Basic unavailable for new configurations
+ * on the retirement date, so a new Basic connection is the one place to say so
+ * before the work is done twice. But Basic still authenticates until the
+ * deletion date, and that date is tentative: refusing the save would put this
+ * product ahead of SAP's own schedule, which is the bug this module's header
+ * describes. Existing connections get no notice here at all — re-saving one is
+ * how its credentials are rotated, and the runtime guard above already warns on
+ * every call it makes.
+ *
+ * DATED in every phase, so the reader knows how long they have rather than
+ * that something is wrong at some point. Null when the notice does not apply
+ * (another product, another auth type).
+ */
+export function newSuccessFactorsBasicConnectionNotice(
+  product: string | null | undefined,
+  authType: string | null | undefined,
+  now: Date = new Date(),
+  env: EnvLike = process.env,
+): string | null {
+  const verdict = successFactorsBasicAuthVerdict(product, authType, now, "this connection", env);
+  if (verdict.kind === "not-applicable") return null;
+  const deletionIso = resolveDeletionDateIso(env);
+  const instead =
+    `Create it with OAuth SAML bearer instead — register an OAuth2 client under Admin Center → ` +
+    `Manage OAuth2 Client Applications.`;
+
+  switch (verdict.kind) {
+    case "allowed":
+      return (
+        `SAP retires HTTP Basic for SuccessFactors APIs on ${SF_BASIC_AUTH_DEPRECATED_ISO} ` +
+        `(${verdict.daysUntilDeprecated} day(s) from now): from that day it is unsupported and ` +
+        `unavailable for new configurations, and SAP plans to delete it on ` +
+        `${deletionIso} (tentative). A new Basic connection works until then, ` +
+        `but will have to be redone. ${instead}`
+      );
+    case "deprecated":
+      return (
+        `SAP retired HTTP Basic for SuccessFactors APIs on ${SF_BASIC_AUTH_DEPRECATED_ISO}: it is ` +
+        `unsupported and unavailable for new configurations. It still answers until ` +
+        `${deletionIso} (${verdict.daysUntilDeletion} day(s) away — SAP calls this ` +
+        `date tentative), after which this connection is refused on every call. ${instead}`
+      );
+    case "refused":
+      return (
+        `SAP stopped accepting HTTP Basic for SuccessFactors on ${deletionIso}, so ` +
+        `every call on this connection will be refused. ${instead} If SAP has moved this date, ` +
+        `set ${SF_BASIC_AUTH_DELETION_ENV} to the current one.`
+      );
+  }
+}
+
+/**
  * Throw only once SAP has actually deleted Basic; warn on every step before it.
  * Call it where the Authorization header is built, so there is no path that
  * reaches SAP without passing it.

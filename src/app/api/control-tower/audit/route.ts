@@ -28,7 +28,22 @@ export const dynamic = "force-dynamic";
 // ISSUE and ROTATE exist because minting a runtime credential used to be filed
 // as "Solution / UPDATE" — a live SAP token indistinguishable from a rename, and
 // with no entity to filter on when asking what a departing consultant issued.
-const KNOWN_ACTIONS = ["CREATE", "UPDATE", "PROMOTE", "DECISION", "TEST_CONNECT", "ISSUE", "ROTATE", "REVOKE", "ISSUE_WRITE"];
+// STEP_UP_MISSING is the warn-mode record of a governance action taken without
+// a fresh passkey (lib/auth/step-up.ts). It is filed under the row acted on, so
+// it sits beside that row's own entries; naming it here lets the trail filter
+// it in or out instead of showing it verbatim.
+const KNOWN_ACTIONS = [
+  "CREATE",
+  "UPDATE",
+  "PROMOTE",
+  "DECISION",
+  "TEST_CONNECT",
+  "ISSUE",
+  "ROTATE",
+  "REVOKE",
+  "ISSUE_WRITE",
+  "STEP_UP_MISSING",
+];
 
 export async function GET(request: NextRequest) {
   const guard = await requireControlTower();
@@ -39,6 +54,9 @@ export async function GET(request: NextRequest) {
   const limit = opsLimit(params.get("limit"));
   const entityType = params.get("entityType");
   const action = params.get("action");
+  // The opposite of `action`: a reviewer reading the governance changes
+  // themselves can leave the warn-mode STEP_UP_MISSING entries out of the page.
+  const excludeAction = action ? null : params.get("excludeAction");
   const actorId = params.get("actorId");
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
@@ -46,7 +64,7 @@ export async function GET(request: NextRequest) {
   const where = opsWhere(guard.actor, {
     at: { gte: since },
     ...(entityType ? { entityType } : {}),
-    ...(action ? { action } : {}),
+    ...(action ? { action } : excludeAction ? { action: { not: excludeAction } } : {}),
     ...(actorId ? { actorId } : {}),
   });
 
@@ -132,7 +150,7 @@ export async function GET(request: NextRequest) {
     scope: guard.actor.kind,
     counts: { total, byAction: actionCounts, byEntity: entityCounts },
     knownActions: KNOWN_ACTIONS,
-    filters: { entityType, action, actorId },
+    filters: { entityType, action, excludeAction, actorId },
     truncated: total > rows.length,
     provenance: {
       appendOnly:

@@ -100,6 +100,11 @@ const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string
       why: "Appends one row per scheduled-job run. The log is deployment-wide by design.",
     },
     {
+      file: "src/lib/ops/job-lease.ts",
+      models: ["jobLease"],
+      why: "One lease row per scheduled job (P0.18). A job serves every tenant in one run, so its lease has no organization.",
+    },
+    {
       file: "src/app/api/ops/jobs/route.ts",
       models: ["cronRunLog"],
       why: "Reads the job log for the Operations jobs strip. Summaries are aggregate counts and never name a tenant.",
@@ -108,6 +113,11 @@ const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string
       file: "src/app/api/ops/catalogue-health/route.ts",
       models: ["sapHubContent", "cronRunLog"],
       why: "SapHubContent is the deployment-wide catalogue (no organization column — see FRESHNESS-RESPEC.md); the route is platform_admin-gated via requireAdmin rather than tenant-scoped.",
+    },
+    {
+      file: "src/app/api/ops/workbench-writes/route.ts",
+      models: ["platformAuditEvent"],
+      why: "PlatformAuditEvent records Workbench writes to the deployment's own SAP tenant by platform admins (P0.7): it has no organization to scope by, so the route is platform_admin-gated via requireAdmin rather than tenant-scoped.",
     },
   ];
 

@@ -13,6 +13,14 @@ SAP retires it on 2026-11-20 …
 Do it **before 20 November 2026**. Sources disagree on whether Basic stops
 working that day or a year later; treat 20 November as the deadline.
 
+Studio also says so when someone saves a **new** SuccessFactors connection with
+Basic: the form shows a dated warning before Save, and
+`POST /api/studio/connections` returns it as `warning` (the audit row records
+`sfBasicAuthSunsetWarned`). It is a warning only. The save succeeds, existing
+connections are not affected, and there is no setting to change; the dates
+come from `src/lib/sap-public/sf-basic-auth-sunset.ts` and
+`SF_BASIC_AUTH_DELETION_DATE`.
+
 ## What changes
 
 CoreEdge holds the RSA private key from the SuccessFactors OAuth client
@@ -51,8 +59,12 @@ offline generator.
 2. **Write down**:
    - the **API Key** shown for the registered application;
    - your **company id**;
-   - your **API server host**, e.g. `api4.successfactors.com`. This must be the
-     API host, not the UI or login host.
+   - your **API server host**, e.g. `api17.sapsf.com` or
+     `api4.successfactors.com`. This must be the API host, not the UI or login
+     host. Find your data centre's row in SAP's "List of SAP SuccessFactors API
+     Servers" ([KBA 2215682](https://userapps.support.sap.com/sap/support/knowledge/en/2215682)).
+     CoreEdge admits every host in that list (`successfactors.com/.eu`,
+     `sapsf.com/.eu/.cn`, `hr.cloud.sap`) without `SAP_HOST_ALLOWLIST_EXTRA`.
 3. **Choose the user** the tokens are issued for.
    - Use its **user ID**, not its username or e-mail address.
    - The user must be active and allowed to log in.

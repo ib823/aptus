@@ -72,6 +72,7 @@ beforeEach(() => {
     id: "u1",
     role: "consultant",
     organizationId: "org1",
+    authMethod: "session",
   });
   mocks.upsertSapConnection.mockResolvedValue({ id: "c1", key: BODY.key });
   mocks.findFirst.mockResolvedValue(null);

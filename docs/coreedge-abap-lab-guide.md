@@ -248,15 +248,15 @@ Keep them in your secrets manager.
 | `CRON_SECRET` | Required by the production preflight. With it unset, every scheduled job refuses all callers (`src/lib/ops/cron.ts:28-33`). | Yes | From 4.2 |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Required by the production preflight | The token is | Upstash REST endpoint |
 | `PRESALES_CSRF_SECRET` | Required by the production preflight | Yes | From 4.2 |
-| `AUTH_ALLOWED_DOMAINS` | Set it. The example file's values are another organisation's domains (`.env.example:204`). | No | Your email domain |
+| `AUTH_ALLOWED_DOMAINS` | Set it. The example file's values are another organisation's domains (`.env.example:216`). | No | Your email domain |
 | `AUTH_INVITATION_ONLY`, `AUTH_WHITELIST_BYPASS` | Policy settings (section 4.7) | No | `false` and `true` while bootstrapping |
-| `SAP_HOST_ALLOWLIST_EXTRA` | Needed for on-premise or Private Edition hosts. It is missing from `.env.example`. | No | Comma-separated domain suffixes, for example `corp.example.com` |
+| `SAP_HOST_ALLOWLIST_EXTRA` | Needed for on-premise or Private Edition hosts. Not needed for SAP cloud hosts, SuccessFactors `sapsf.*` included. | No | Comma-separated domain suffixes, for example `corp.example.com` |
 | `NORTHBOUND_AUDIT_RETENTION_DAYS` | Optional | No | 7 to 3650. The default is 30. |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Optional | No | Error reporting |
 | `BLOB_READ_WRITE_TOKEN`, `BYOAI_ENCRYPTION_KEY`, AI provider keys | Optional. Used by the presales product. | Yes | Leave them unset for a CoreEdge lab |
 | `WORKBENCH_ONLY`, `WORKBENCH_HOST`, `PORTAL_HOST` | **Leave unset** | No | When unset, Studio, Operations, Control Tower and the admin screens are all reachable on one host |
 | `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN` | **Leave unset** | No | They are then derived from `NEXTAUTH_URL`. The example file sets them to localhost (`.env.example:28-30`). |
-| `S4_TDD_*`, `S4_PRIVATE_TDD_*`, `S4_ONPREM_TDD_*`, `ECC_TDD_*`, `SF_TDD_*`, `ARIBA_*`, and each prefix's `{PREFIX}_TENANT_ENVIRONMENT` and `{PREFIX}_TENANT_CLIENT` | **Leave unset** for a lab | Yes | These define one deployment-wide shared tenant per product, which skips the host allow-list (`.env.example:271-278`; `src/lib/sap-public/tdd-connector.ts:449-542`). Use per-organization connections instead. |
+| `S4_TDD_*`, `S4_PRIVATE_TDD_*`, `S4_ONPREM_TDD_*`, `ECC_TDD_*`, `SF_TDD_*`, `ARIBA_*`, and each prefix's `{PREFIX}_TENANT_ENVIRONMENT` and `{PREFIX}_TENANT_CLIENT` | **Leave unset** for a lab | Yes | These define one deployment-wide shared tenant per product, which skips the host allow-list (`.env.example:295-302`; `src/lib/sap-public/tdd-connector.ts:449-542`). Use per-organization connections instead. |
 | `ENABLE_SIMULATION_BRIDGE`, `ALLOW_SIMULATION_BRIDGE_IN_PROD`, `ALLOW_DEV_SEED_IN_PROD`, `ALLOW_TEST_LOGIN`, `ENABLE_TEST_LOGIN_ENDPOINT`, `ALLOW_TEST_LOGIN_IN_PROD`, `ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST`, `INTERNAL_TEST_DEPLOYMENT` | **Never set** | | These are test backdoors (`scripts/check-production-env.js:63-92`) |
 
 ### 4.4 Database (platform engineer)
@@ -483,10 +483,22 @@ these rules:
   extra list**.
 - Its host is, or ends in, one of these suffixes: `ondemand.com`,
   `hana.ondemand.com`, `s4hana.cloud.sap`, `cloud.sap`, `sap.com`,
-  `successfactors.com`, `successfactors.eu`, `ariba.com`, `sapariba.com`,
+  `successfactors.com`, `successfactors.eu`, `sapsf.com`, `sapsf.eu`,
+  `sapsf.cn`, `hr.cloud.sap`, `ariba.com`, `sapariba.com`,
   `concursolutions.com`, `fieldglass.net`, or a suffix listed in
-  `SAP_HOST_ALLOWLIST_EXTRA` (`src/lib/studio/sap-host-allowlist.ts:41-63`).
+  `SAP_HOST_ALLOWLIST_EXTRA` (`src/lib/studio/sap-host-allowlist.ts`).
   The extra list can add suffixes but cannot switch the check off.
+- Suffixes match on whole DNS labels: `sapsf.com` admits `api17.sapsf.com`
+  but not `evil-sapsf.com` or `sapsf.com.evil.io`.
+- The SuccessFactors suffixes cover every API server in SAP's list
+  ([KBA 2215682](https://userapps.support.sap.com/sap/support/knowledge/en/2215682),
+  "List of SAP SuccessFactors API Servers"), checked on 2026-10-20. Use your
+  data centre's API server as the base URL, for example `https://api17.sapsf.com`.
+
+`SAP_HOST_ALLOWLIST_EXTRA` is a comma-separated list of domain suffixes, for
+example `corp.example.com,sap.acme.net`. Leading dots and spaces are ignored.
+Set it only for systems on your own domain (on-premise, RISE or partner
+hosted), then redeploy; it is documented in `.env.example`.
 
 Nothing resolves DNS when the connection is saved. A DNS name that points at a
 private address is therefore accepted. That is what lets an instance inside your
@@ -657,6 +669,11 @@ Caveats:
   route in Appendix B also still works.
 - Basic auth is allowed with warnings after 2026-11-20 and refused after the
   deletion date (2027-11-12 by default; `SF_BASIC_AUTH_DELETION_DATE` overrides it).
+- Saving a **new** SuccessFactors connection with Basic auth shows a dated
+  warning on the form, before Save, and returns it as `warning` from
+  `POST /api/studio/connections`. The save is not refused. Re-saving an existing
+  connection (same product and key) shows nothing. Use OAuth SAML bearer for a
+  new connection.
 
 ### 5.7 ECC, Ariba and the Business Accelerator Hub sandbox
 
@@ -1553,7 +1570,6 @@ In each case the code is what runs.
 | Topic | The documentation says | The code does |
 |---|---|---|
 | Schema setup | `README.md:24` uses `pnpm db:push`. `README.md:39` calls `pnpm build` "what Vercel runs". | Production runs `prisma migrate deploy` inside `vercel-build` (`vercel.json:3`; `package.json:23`) |
-| `SAP_HOST_ALLOWLIST_EXTRA` | Missing from `.env.example` | Read by `src/lib/studio/sap-host-allowlist.ts:56-63` |
 | Connection environment | The form describes the field as free text | Only SANDBOX, DEV, TEST, PROD and their aliases are accepted |
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
 | Write replays | `docs/coreedge-developer-guide.md:289-291` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`). |

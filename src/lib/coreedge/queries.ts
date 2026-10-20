@@ -425,7 +425,9 @@ function summaryCount(summary: unknown, key: string): number | null {
  */
 export async function lastLaneSweep(): Promise<LaneSweepRun | null> {
   const row = await prisma.cronRunLog.findFirst({
-    where: { job: "lane-checks" },
+    // Not a skipped invocation (job lease held): it checked nothing, and read
+    // as the latest sweep it would blank every count on the board.
+    where: { job: "lane-checks", skipped: false },
     orderBy: { startedAt: "desc" },
     select: { startedAt: true, finishedAt: true, ok: true, summaryJson: true },
   });

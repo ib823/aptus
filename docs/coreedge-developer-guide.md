@@ -337,6 +337,38 @@ That approval is the single human checkpoint for every write your solution makes
 which is why **grant expiry is enforced on every call** — "approved once" must
 not become "approved forever".
 
+## Which SAP hosts a connection may use
+
+A connection's base URL (and OAuth token URL) must be `https://` and its host
+must end, on a whole DNS label, in a domain SAP serves from
+(`src/lib/studio/sap-host-allowlist.ts`). The check runs when the connection is
+saved, before any credential is stored.
+
+- **SAP cloud** — `ondemand.com`, `cloud.sap`, `s4hana.cloud.sap`, `sap.com`,
+  `ariba.com`, `sapariba.com`, `concursolutions.com`, `fieldglass.net`.
+- **SuccessFactors** — `successfactors.com`, `successfactors.eu`, `sapsf.com`,
+  `sapsf.eu`, `sapsf.cn` and `hr.cloud.sap`. Together these cover every API
+  server in SAP's "List of SAP SuccessFactors API Servers"
+  ([KBA 2215682](https://userapps.support.sap.com/sap/support/knowledge/en/2215682),
+  checked 2026-10-20). Use your data centre's API server, for example
+  `https://api17.sapsf.com`, not the web UI host.
+- **Your own domain** (on-premise, RISE, partner hosted) — set
+  `SAP_HOST_ALLOWLIST_EXTRA` to a comma-separated list of suffixes, for example
+  `corp.example.com`, and redeploy. It adds to the list; nothing switches the
+  check off.
+
+Matching is per label: `sapsf.com` admits `api17.sapsf.com`, never
+`evil-sapsf.com` or `sapsf.com.evil.io`. IP addresses, `localhost`, `*.local`
+and `*.internal` are refused whatever the list says.
+
+**SuccessFactors and Basic auth.** SAP retires HTTP Basic for SuccessFactors
+APIs on 2026-11-20 (unsupported, and unavailable for new configurations) and
+deletes it on a tentative 2027-11-12. Saving a **new** SuccessFactors
+connection with Basic shows that, dated, on the form and returns it as
+`warning` from `POST /api/studio/connections`; the save still succeeds, and
+existing connections are not touched. Use OAuth SAML bearer instead
+(`docs/runbooks/successfactors-saml-signing.md`).
+
 ## Credentials
 
 - A client credential is issued **per solution and environment**, from the API

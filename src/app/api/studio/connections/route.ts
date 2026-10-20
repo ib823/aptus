@@ -5,6 +5,9 @@
  *   POST   create or replace a connection, sealing its secrets
  *   PATCH  toggle isActive / writeEnabled — NEVER touches secrets
  *
+ * Saving secrets (POST) and anything that turns writes on (PATCH) need a fresh
+ * passkey once COREEDGE_STEP_UP is enforce (lib/auth/step-up.ts).
+ *
  * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
  * bundle on every write, so a "just rename the label" call that omitted secrets
  * would store an EMPTY bundle and silently break a working connection — the
@@ -32,6 +35,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import {
   isAllowedApiKeyHeader,
@@ -44,6 +48,7 @@ import {
 } from "@/lib/sap-public/environment";
 import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
+import { newSuccessFactorsBasicConnectionNotice } from "@/lib/sap-public/sf-basic-auth-sunset";
 import {
   getConfiguredSapTenants,
   getSapProduct,
@@ -55,6 +60,7 @@ import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import type { SessionUser } from "@/types/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -324,7 +330,8 @@ const patchSchema = z.object({
   writeEnabled: z.boolean().optional(),
 });
 
-type Actor = { userId: string; organizationId: string };
+/** `user` is the whole session user: the step-up gate reads its passkey state. */
+type Actor = { userId: string; organizationId: string; user: SessionUser };
 
 /**
  * The keys of the tenants this deployment configures for a product in env.
@@ -356,7 +363,7 @@ async function requireBuilder(): Promise<{ error: ReturnType<typeof studioError>
   if (lacksStudioTenantScope(user) || !user.organizationId) {
     return { error: studioError("FORBIDDEN", "No organization scope.") };
   }
-  return { userId: user.id, organizationId: user.organizationId };
+  return { userId: user.id, organizationId: user.organizationId, user };
 }
 
 export async function GET() {
@@ -414,7 +421,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireBuilder();
   if ("error" in auth) return auth.error;
-  const { userId, organizationId } = auth;
+  const { userId, organizationId, user } = auth;
 
   const parsed = upsertSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -530,6 +537,18 @@ export async function POST(request: NextRequest) {
    * something a consultant should learn from an API — while the server log
    * carries the real reason and the correlationId ties the two together.
    */
+  /*
+   * A FRESH PASSKEY before a client's SAP credentials are sealed — and before
+   * writes are switched on, which only this path can do (lib/auth/step-up.ts).
+   * Asked after every validation above, so a form with a mistake in it is
+   * refused for the mistake, not for the passkey.
+   */
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "connection.save_secrets",
+    targetId: existing?.id ?? null,
+  });
+  if (!stepUp.ok) return stepUp.response;
+
   let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
   try {
     saved = await upsertSapConnection({
@@ -570,6 +589,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  /*
+   * A NEW SUCCESSFACTORS CONNECTION ON BASIC IS SAVED, AND TOLD WHEN IT ENDS.
+   *
+   * SAP makes Basic unavailable for new SuccessFactors configurations on
+   * 2026-11-20 and deletes it later (tentatively 2027-11-12). The save is NOT
+   * refused: Basic still authenticates until deletion, and refusing would get
+   * ahead of SAP's own schedule. New rows only — re-saving an existing one is
+   * credential rotation, and blocking or nagging it would punish the connection
+   * that is already running. The form shows the same sentence before Save; this
+   * copy is for every other caller of the API, and for the audit trail.
+   */
+  const warning = existing ? null : newSuccessFactorsBasicConnectionNotice(input.product, input.authType);
+
   // Records THAT the credential set was written, never what it is. The whole
   // point of sealing secrets is undone by an audit trail that quotes them.
   await writeConfigAudit({
@@ -586,10 +618,11 @@ export async function POST(request: NextRequest) {
       environment,
       writeEnabled: input.writeEnabled ?? false,
       secretsRotated: true,
+      ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });
 
-  return studioOk({ connection: saved, replaced: Boolean(existing) });
+  return studioOk({ connection: saved, replaced: Boolean(existing), ...(warning ? { warning } : {}) });
 }
 
 /**
@@ -602,7 +635,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireBuilder();
   if ("error" in auth) return auth.error;
-  const { userId, organizationId } = auth;
+  const { userId, organizationId, user } = auth;
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid request.");
@@ -629,6 +662,22 @@ export async function PATCH(request: NextRequest) {
       "VALIDATION_ERROR",
       "Enabling writes requires the write secret. Re-save the connection with it instead.",
     );
+  }
+
+  /*
+   * A FRESH PASSKEY WHEN THIS TURNS WRITES ON. The check above refuses to
+   * enable writes outright, but reactivating a deactivated connection that
+   * still carries writeEnabled turns a write path back on all the same.
+   * Turning things OFF stays one press: it is the direction an incident needs.
+   */
+  const writableBefore = existing.isActive && existing.writeEnabled;
+  const writableAfter = (isActive ?? existing.isActive) && (writeEnabled ?? existing.writeEnabled);
+  if (writableAfter && !writableBefore) {
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "connection.enable_writes",
+      targetId: existing.id,
+    });
+    if (!stepUp.ok) return stepUp.response;
   }
 
   const updated = await prisma.sapConnection.update({

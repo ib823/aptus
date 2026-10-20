@@ -993,7 +993,8 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Solution: add them, checked against SAP's list of SuccessFactors API servers [unverified]. Document `SAP_HOST_ALLOWLIST_EXTRA`.
 - Value: real SuccessFactors tenants can connect.
 - Code: the allow-list and its tests.
-- Acceptance: `api17.sapsf.com` is admitted; `evil-sapsf.com` is refused; a live SAML-bearer read against a SuccessFactors tenant has a correlation id, or, until then, the Studio form refuses new SuccessFactors Basic connections with a dated message.
+- Acceptance: `api17.sapsf.com` is admitted; `evil-sapsf.com` is refused; a live SAML-bearer read against a SuccessFactors tenant has a correlation id, or, until then, the Studio form warns, with a dated message, before a new SuccessFactors Basic connection is saved (existing connections untouched).
+- Decision: warn, do not refuse. Basic still authenticates after 20 November 2026 until SAP deletes it on a tentative 12 November 2027 (`SF_BASIC_AUTH_DELETION_DATE`), so refusing would block working setups. The save succeeds and `POST /api/studio/connections` returns the notice as `warning` (`src/lib/sap-public/sf-basic-auth-sunset.ts`; `docs/runbooks/successfactors-saml-signing.md`).
 
 **P0.10 KMS envelope encryption for SAP secrets.** Size L. Depends on: none.
 - Problem: one raw environment key with no key id, version, rotation or reseal (`src/lib/sap-public/connection-crypto.ts:93-103`). The keystone runbook requires this before real client credentials are stored (`docs/coreedge/SAP-CONNECTION-KEYSTONE-RUNBOOK.md:110-131`).

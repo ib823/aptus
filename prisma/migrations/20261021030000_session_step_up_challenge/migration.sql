@@ -1,0 +1,13 @@
+-- Session: the step-up challenge this session was last issued, as a hash.
+--
+-- The WebAuthn challenge cookie is HMAC-signed and stateless: "deleting" it is
+-- a Set-Cookie the client may ignore, so a captured step-up (cookie plus
+-- assertion) could be replayed onto another session of the same person within
+-- the cookie's five minutes. The step-up options route now records the
+-- challenge here, and the verify route clears it in the same write that stamps
+-- passkeyAssertedAt, so each challenge counts once, on the session it was
+-- issued to.
+--
+-- Additive and nullable. The code already deployed neither reads nor writes
+-- it; existing sessions read null = no step-up outstanding.
+ALTER TABLE "Session" ADD COLUMN     "stepUpChallengeHash" TEXT;

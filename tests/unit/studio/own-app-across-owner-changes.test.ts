@@ -56,9 +56,9 @@ import { PATCH as patchSolution } from "@/app/api/studio/solutions/route";
 
 const RUN = `own-app-${randomUUID()}`;
 const ORG = `${RUN}-org`;
-const A = { id: `${RUN}-a`, email: "a@abeam.com", role: "consultant", organizationId: ORG };
-const B = { id: `${RUN}-b`, email: "b@abeam.com", role: "consultant", organizationId: ORG };
-const C = { id: `${RUN}-c`, email: "c@abeam.com", role: "consultant", organizationId: ORG };
+const A = { id: `${RUN}-a`, email: "a@abeam.com", role: "consultant", organizationId: ORG, authMethod: "session" };
+const B = { id: `${RUN}-b`, email: "b@abeam.com", role: "consultant", organizationId: ORG, authMethod: "session" };
+const C = { id: `${RUN}-c`, email: "c@abeam.com", role: "consultant", organizationId: ORG, authMethod: "session" };
 
 const as = (user: typeof A) => {
   session.user = user;

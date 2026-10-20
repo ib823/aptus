@@ -34,6 +34,8 @@ interface JobRow {
   } | null;
   recentFailures: number;
   runsRecorded: number;
+  /** Duplicate invocations the job lease turned away, among the rows read. */
+  recentSkips: number;
 }
 
 interface JobsPayload {
@@ -97,6 +99,7 @@ export function JobsStrip() {
                   {j.runsRecorded === 0
                     ? "—"
                     : `${count(j.recentFailures)} of last ${count(j.runsRecorded)}`}
+                  {j.recentSkips > 0 ? ` · ${count(j.recentSkips)} duplicate skipped` : ""}
                 </td>
               </tr>
             ))}

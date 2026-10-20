@@ -765,6 +765,54 @@ model SapConnection {
   @@index([organizationId, isActive])
 }
 
+/// P0.10 envelope encryption — one organization's DATA key, stored only wrapped.
+///
+/// Every sealed SAP secret of an organization in the `ce2` format
+/// (SapConnection.secretsCiphertext, SolutionClient.secretsCiphertext) is
+/// encrypted under that organization's data key; the data key itself is held
+/// here encrypted under a MASTER key that the KeyProvider holds
+/// (src/lib/sap-public/keys). Nothing in this table can decrypt anything on its
+/// own: a database dump without the master key yields wrapped keys and
+/// ciphertext, and nothing else.
+///
+/// ROTATING THE MASTER KEY re-wraps these rows (`pnpm keys:rotate`) and leaves
+/// every sealed blob untouched — that is the point of the envelope. A NEW DATA
+/// KEY (`pnpm keys:rotate --rekey`) adds a row with the next `version`; blobs
+/// name the version they were sealed under (`ce2:<version>:…`), so older rows
+/// stay until `pnpm keys:reseal` has moved every blob forward, and then
+/// `pnpm keys:retire` withdraws them (retiredAt) so they open nothing.
+///
+/// Additive and unused until an operator names an active master key: with only
+/// the legacy SAP_CONNECTION_ENCRYPTION_KEY set no row is ever written here.
+model OrgDataKey {
+  id             String @id @default(cuid())
+  organizationId String
+  /// The data-key generation inside this organization: 1, 2, … Sealed blobs
+  /// carry it, so a blob always says which row opens it.
+  version        Int
+  /// Which KeyProvider wrapped it — "env" or a registered KMS adapter.
+  provider       String @default("env")
+  /// The master key version that wraps it, as the provider names it ("v2", or
+  /// a KMS key-version id). Rewritten by a master rotation.
+  keyVersion     String
+  /// The data key, wrapped (AES-256-GCM under the master key, bound by AAD to
+  /// this organization and version). Never the raw key.
+  wrappedKey     String @db.Text
+
+  createdAt DateTime  @default(now())
+  /// When the wrap was last replaced by a master rotation; null until then.
+  rotatedAt DateTime?
+  /// When `pnpm keys:retire` withdrew this version after a rekey; null while
+  /// it may open blobs. A retired key opens nothing, so a leaked old data key
+  /// cannot forge a blob the application accepts. Never the newest version.
+  retiredAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, version])
+  @@index([keyVersion])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CoreEdge Developer Studio — the governed design-time spine.
 //
@@ -1024,8 +1072,35 @@ model CronRunLog {
   ok          Boolean
   /// Job-shaped summary: counts, caps hit, error strings. Never secrets.
   summaryJson Json?
+  /// True for an invocation that found the job's lease held and did no work.
+  /// Recorded so a duplicate invocation is visible, and excluded wherever a
+  /// screen asks "what did the last run find": a skip found nothing.
+  skipped     Boolean @default(false)
 
   @@index([job, startedAt])
+}
+
+/// Who is running a scheduled job right now, and until when (P0.18).
+///
+/// Vercel can deliver one scheduled run more than once, and a slow run can
+/// still be going when another invocation arrives. One row per job, claimed by
+/// one conditional INSERT … ON CONFLICT DO UPDATE (src/lib/ops/job-lease.ts)
+/// and deleted by its holder at the end. A row whose expiresAt has passed
+/// belongs to a run that died without releasing it, and the next claim takes
+/// it over. Not a session advisory lock: production may sit behind a
+/// transaction-mode pooler, where a session lock stays with the pooled
+/// connection, not with the run that took it.
+model JobLease {
+  /// The CronRunLog job name the lease guards, e.g. "lane-checks".
+  job        String   @id
+  /// Opaque per-invocation token. Release compares against it, so a run whose
+  /// lease was taken over cannot release its successor's.
+  holder     String
+  acquiredAt DateTime
+  /// Later than the job's maxDuration lets it run: a live run never loses its
+  /// lease, and a dead one frees the job within minutes, long before the next
+  /// schedule.
+  expiresAt  DateTime
 }
 
 /// Scope request + decision — the governance ledger, ENFORCED AT RUNTIME: the
@@ -1131,6 +1206,60 @@ model ConfigAudit {
 
   @@index([organizationId, entityType, entityId])
   @@index([organizationId, at])
+}
+
+/// The governance trail of an actor with NO TENANT: a platform admin, or an
+/// account an admin created without an organization. ConfigAudit rows belong
+/// to an organization, so the passkey and step-up events of exactly the most
+/// privileged accounts had nowhere durable to go and were only logged —
+/// including the trust-on-first-use enrolment of a first passkey, which the
+/// step-up design depends on being visible. Same shape as ConfigAudit, minus
+/// the tenant, and append-only in the same way (lib/studio/audit.ts).
+///
+/// The OTHER tenantless trail is PlatformAuditEvent + PlatformAuditOutcome
+/// (P0.7, lib/audit/platform-audit.ts): every Workbench write to SAP, recorded
+/// fail-closed before SAP is called. What a platform admin did is the union of
+/// the two; neither alone is the whole answer.
+model PlatformGovernanceAudit {
+  id      String @id @default(cuid())
+  actorId String
+
+  /// As ConfigAudit: "Passkey" | "StepUp" | "User" | ...
+  entityType String
+  entityId   String
+  action     String
+
+  after Json?
+
+  at DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, at])
+  @@index([at])
+}
+
+/// Queries the tenant-scope guard caught with no organizationId while in LOG
+/// mode (lib/db/tenant-guard.ts). The switch to throw mode needs "zero
+/// violations in seven days", and runtime logs are kept for one to three days,
+/// so the evidence has to live here. One row per model, operation and call
+/// site, counted, not one per query: the first occurrence is written at once,
+/// later ones are batched per process, so a hot unscoped path cannot turn the
+/// guard into a write amplifier. Not tenant-anchored, and written through the
+/// unextended client, so recording a violation cannot itself be one.
+model TenantGuardViolation {
+  id        String @id @default(cuid())
+  model     String
+  operation String
+  /// The first application frame of the query's stack, best-effort (a bundle
+  /// path in production), or "unknown".
+  callSite  String
+
+  count       Int      @default(0)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([model, operation, callSite])
+  @@index([lastSeenAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1387,6 +1516,125 @@ model NorthboundAuditEvent {
   /// The retention sweep deletes by age, oldest first. Without this it is a
   /// sequential scan of the whole table on every run.
   @@index([at])
+}
+
+/// A change a PERSON made to a live SAP system from the Workbench, outside the
+/// broker: `POST /api/sap/tdd/write` (create a record) and
+/// `POST /api/sap/tdd/hub-content/write-test` (create, then delete). Roadmap
+/// item P0.7.
+///
+/// WRITTEN BEFORE SAP IS CALLED, AND FAIL-CLOSED. The route inserts this row
+/// first; if the insert fails, nothing is sent to SAP and the caller gets 503.
+/// What happened is recorded afterwards as a separate `PlatformAuditOutcome`
+/// row. Both are inserts — nothing here is ever updated — so the trail stays
+/// append-only like every other audit table. An event with no outcome row is a
+/// write whose result was never recorded (the request died, or the outcome
+/// insert failed), and SAP must be checked, exactly like the write ledger's
+/// "outcome unknown".
+///
+/// A DEDICATED TABLE, NOT A NULLABLE COLUMN ON AN EXISTING ONE. Why not:
+///   - `NorthboundAuditEvent` and `ConfigAudit` are tenant-anchored: every query
+///     must carry an `organizationId` (lib/db/tenant-guard.ts). These writes
+///     have no tenant to name. They target the DEPLOYMENT's own `{PREFIX}_*`
+///     tenant, which no organization owns, and they are made by a
+///     `platform_admin`, who may have no organization at all (the first user
+///     becomes one without). Making `organizationId` nullable there would turn
+///     `where: { organizationId: null }` into a "scoped" query the guard
+///     accepts, and every existing reader would have to learn a third kind of
+///     row.
+///   - `NorthboundAuditEvent` is the broker's call log: the operations board,
+///     usage rollups and incident rules count its rows as broker traffic, and
+///     the retention sweep deletes it by age (northbound/retention.ts). A
+///     Workbench write is neither broker traffic nor something to expire.
+///   - The `-deployment-` sentinel the console reads use
+///     (`DEPLOYMENT_AUDIT_SCOPE`) would invent a tenant id for rows that by
+///     definition have none.
+///   - `DecisionLogEntry` is the assessment trail, and its actor is an email
+///     string rather than a user.
+///
+/// NOT TENANT-ANCHORED, ON PURPOSE. It is deliberately absent from
+/// `TENANT_ANCHORED_MODELS`: there is no tenant to scope it to. Reads are gated
+/// to `platform_admin` instead (`/api/ops/workbench-writes`).
+///
+/// No payload is stored. A record written into SAP can hold personal data, and
+/// an operations screen needs to know THAT a write happened, never what was in
+/// it — the same rule the write ledger applies to `responseBody`. The SHA-256
+/// and the top-level field names are enough to match a row to a payload
+/// someone produces later.
+///
+/// The OTHER tenantless trail is PlatformGovernanceAudit (P0.12,
+/// writePlatformGovernanceAudit in lib/studio/audit.ts): passkey enrolment and
+/// revocation and STEP_UP_MISSING admissions of platform admins and
+/// organization-less accounts. What a platform admin did is the union of the
+/// two; neither alone is the whole answer.
+model PlatformAuditEvent {
+  id     String @id @default(cuid())
+  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST
+  action String
+
+  /// The person. Not a relation: an audit row must outlive the user it names
+  /// (the same reason as `NorthboundAuditEvent.actorUserId`), so the email and
+  /// role are copied as they were at the time.
+  actorUserId         String
+  actorEmail          String
+  actorRole           String
+  /// The actor's organization when they acted, or NULL for a platform admin
+  /// without one. CONTEXT, NOT SCOPE — the write's target belongs to no
+  /// organization either way.
+  actorOrganizationId String?
+
+  /// What was written to. Keys as the deployment configuration names them.
+  product     String
+  tenantKey   String
+  tenantLabel String?
+  serviceKey  String
+  servicePath String?
+  entitySet   String
+
+  /// SHA-256 of the JSON payload, and its top-level field names. Never values.
+  payloadSha256 String
+  payloadFields Json
+
+  /// Quoted back to the caller, so a person can find the row for their write.
+  correlationId String
+
+  at DateTime @default(now())
+
+  /// What happened, once known. Absent = never recorded.
+  result PlatformAuditOutcome?
+
+  @@index([at])
+  @@index([actorUserId, at])
+  /// The id the caller was handed; an operator asked about one write starts here.
+  @@index([correlationId])
+}
+
+/// What a `PlatformAuditEvent` led to, written after SAP answered (or did not).
+///
+/// ONE PER EVENT, ENFORCED BY THE DATABASE. `eventId` is unique, so an outcome
+/// can be written once and a second attempt to say something different fails
+/// on the constraint rather than replacing the first. That is the append-only
+/// rule held by the schema, not by convention.
+model PlatformAuditOutcome {
+  id      String             @id @default(cuid())
+  eventId String             @unique
+  event   PlatformAuditEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND — see
+  /// PLATFORM_AUDIT_OUTCOMES in lib/audit/platform-audit.ts.
+  outcome    String
+  /// The HTTP status SAP answered the create with, when it answered.
+  sapStatus  Int?
+  /// A bounded code: never a host, a URL or the payload.
+  reason     String?
+  /// Outcome detail, e.g. the delete status and Location of a write-test.
+  detail     Json?
+  /// Wall-clock milliseconds of the SAP calls, when any were made.
+  durationMs Int?
+
+  at DateTime @default(now())
+
+  @@index([outcome, at])
 }
 
 /// Idempotency for northbound writes.
@@ -2883,6 +3131,8 @@ model Organization {
 
   // SAP Operations middleware — per-Organization SAP tenant connections
   sapConnections SapConnection[]
+  // P0.10 envelope encryption — this organization's wrapped data keys
+  orgDataKeys    OrgDataKey[]
 
   // CoreEdge Developer Studio — governed solutions (tenant anchor)
   solutions Solution[]
@@ -2906,6 +3156,19 @@ model Session {
   expiresAt     DateTime
   mfaVerified   Boolean   @default(false)
   mfaVerifiedAt DateTime?
+  /// When this session last completed a passkey (WebAuthn) assertion: at
+  /// passkey sign-in, or at a step-up before a governance action. The
+  /// governance routes accept it only while it is fresh (lib/auth/step-up.ts),
+  /// so it is overwritten on every assertion rather than set once like
+  /// mfaVerifiedAt. Null means this session has never asserted a passkey.
+  passkeyAssertedAt DateTime?
+  /// SHA-256 hex of the step-up challenge this session was last issued
+  /// (/api/auth/webauthn/step-up/options). The verify route consumes it in the
+  /// same write that stamps passkeyAssertedAt, so a challenge counts once and
+  /// only on the session it was issued to: the challenge cookie is stateless,
+  /// and deleting it only asks the browser to forget it. Null when none is
+  /// outstanding.
+  stepUpChallengeHash String?
 
   ipAddress         String?
   userAgent         String?
@@ -2942,6 +3205,23 @@ model WebAuthnCredential {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+/// A passkey SIGN-IN challenge that has been used (lib/auth/webauthn-db.ts
+/// `consumeSignInChallenge`). The challenge cookie is HMAC-signed and
+/// stateless, so a captured cookie and assertion would mint a fresh session —
+/// one that counts as stepped up — for as long as the cookie lives. The verify
+/// route inserts the hash here once the signature checks out; the primary key
+/// makes a second use fail. Rows are needed only until the challenge would
+/// have expired, and are swept then.
+model WebAuthnChallengeUse {
+  /// SHA-256 hex of the challenge.
+  challengeHash String   @id
+  usedAt        DateTime @default(now())
+  /// When the challenge would have expired anyway; the row can go after it.
+  expiresAt     DateTime
+
+  @@index([expiresAt])
 }
 
 model MagicLinkToken {

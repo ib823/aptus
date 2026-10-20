@@ -198,6 +198,28 @@ describe("the audit trail stays append-only", () => {
   });
 });
 
+describe("the audit trail and the warn-mode step-up record", () => {
+  beforeEach(() => mocks.getCurrentUser.mockResolvedValue(ADMIN));
+
+  it("names STEP_UP_MISSING as a known action, so it can be shown or filtered on its own", async () => {
+    const body = await (await audit(req("audit"))).json();
+    expect(body.data.knownActions).toContain("STEP_UP_MISSING");
+  });
+
+  it("can leave the step-up record out of the page with excludeAction", async () => {
+    await audit(req("audit?excludeAction=STEP_UP_MISSING"));
+    const where = mocks.auditFindMany.mock.calls[0]?.[0]?.where ?? {};
+    expect(where.action).toEqual({ not: "STEP_UP_MISSING" });
+    expect(where.organizationId).toBe("org_a");
+  });
+
+  it("an explicit action wins over excludeAction", async () => {
+    await audit(req("audit?action=DECISION&excludeAction=STEP_UP_MISSING"));
+    const where = mocks.auditFindMany.mock.calls[0]?.[0]?.where ?? {};
+    expect(where.action).toBe("DECISION");
+  });
+});
+
 describe("the portfolio is honest about what it does not enforce", () => {
   beforeEach(() => mocks.getCurrentUser.mockResolvedValue(ADMIN));
 

@@ -17,12 +17,16 @@
  * so a token minted after retirement would wake up with it, past the gate the
  * write-key route and the claim link both already enforce. Revoke stays open:
  * stopping a credential is never the dangerous direction.
+ *
+ * ISSUE, ROTATE AND REVOKE ALL NEED A FRESH PASSKEY once COREEDGE_STEP_UP is
+ * enforce (lib/auth/step-up.ts), asked after the gates above have passed.
  */
 
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import {
   issueClientToken,
@@ -36,6 +40,7 @@ import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
+import type { SessionUser } from "@/types/assessment";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +89,8 @@ const patchSchema = z.object({
 });
 
 interface Actor {
-  user: { id: string; role: string | null };
+  /** The whole session user: the step-up gate reads its passkey state. */
+  user: SessionUser;
   scope: TenantScope;
 }
 
@@ -102,7 +108,7 @@ async function requireBuilder(): Promise<{ error: ReturnType<typeof studioError>
   }
   const scoped = tenantScopeFor(user);
   if (!scoped.ok) return { error: studioError("FORBIDDEN", "No organization scope.") };
-  return { user: { id: user.id, role: user.role }, scope: scoped.scope };
+  return { user, scope: scoped.scope };
 }
 
 export async function GET() {
@@ -186,6 +192,17 @@ export async function POST(request: NextRequest) {
     select: { id: true, environment: true },
   });
   const replacedExisting = previous !== null;
+
+  /*
+   * A FRESH PASSKEY, asked last: every gate above has passed, so it is the one
+   * thing between this person and a live token (lib/auth/step-up.ts). Named a
+   * rotation when it replaces one, because that is what the audit row will say.
+   */
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: replacedExisting ? "credential.rotate" : "credential.issue",
+    targetId: previous?.id ?? solution.id,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   const issued = await issueClientToken(scope, {
     solutionId: solution.id,
@@ -289,6 +306,16 @@ export async function PATCH(request: NextRequest) {
     // Deliberately NOT SoD-gated: revoking is the safe direction. Requiring a
     // colleague to stop a leaking credential would be a control that costs
     // exactly when you can least afford it.
+    //
+    // A passkey, though: it asks this person, not a colleague, so it costs
+    // seconds — and without it a stolen session could stop every live token
+    // in the tenant.
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "credential.revoke",
+      targetId: clientId,
+    });
+    if (!stepUp.ok) return stepUp.response;
+
     const revoked = await revokeClientToken(scope, clientId);
     if (!revoked) return studioError("NOT_FOUND", "Credential not found.");
 
@@ -351,6 +378,12 @@ export async function PATCH(request: NextRequest) {
       "You own this solution, so you cannot rotate its runtime credential. Ask a colleague to rotate it.",
     );
   }
+
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "credential.rotate",
+    targetId: clientId,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   const rotated = await rotateClientToken(scope, clientId);
   if (!rotated) return studioError("NOT_FOUND", "Credential not found.");
