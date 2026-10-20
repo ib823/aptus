@@ -44,6 +44,7 @@ import {
 } from "@/lib/sap-public/environment";
 import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
+import { newSuccessFactorsBasicConnectionNotice } from "@/lib/sap-public/sf-basic-auth-sunset";
 import {
   getConfiguredSapTenants,
   getSapProduct,
@@ -570,6 +571,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  /*
+   * A NEW SUCCESSFACTORS CONNECTION ON BASIC IS SAVED, AND TOLD WHEN IT ENDS.
+   *
+   * SAP makes Basic unavailable for new SuccessFactors configurations on
+   * 2026-11-20 and deletes it later (tentatively 2027-11-12). The save is NOT
+   * refused: Basic still authenticates until deletion, and refusing would get
+   * ahead of SAP's own schedule. New rows only — re-saving an existing one is
+   * credential rotation, and blocking or nagging it would punish the connection
+   * that is already running. The form shows the same sentence before Save; this
+   * copy is for every other caller of the API, and for the audit trail.
+   */
+  const warning = existing ? null : newSuccessFactorsBasicConnectionNotice(input.product, input.authType);
+
   // Records THAT the credential set was written, never what it is. The whole
   // point of sealing secrets is undone by an audit trail that quotes them.
   await writeConfigAudit({
@@ -586,10 +600,11 @@ export async function POST(request: NextRequest) {
       environment,
       writeEnabled: input.writeEnabled ?? false,
       secretsRotated: true,
+      ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });
 
-  return studioOk({ connection: saved, replaced: Boolean(existing) });
+  return studioOk({ connection: saved, replaced: Boolean(existing), ...(warning ? { warning } : {}) });
 }
 
 /**

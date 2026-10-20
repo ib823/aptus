@@ -13,6 +13,8 @@ import { ConnectionsClient, type StudioConnection } from "@/components/studio/Co
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { isConnectionEncryptionConfigured } from "@/lib/sap-public/connection-crypto";
+import { newSuccessFactorsBasicConnectionNotice } from "@/lib/sap-public/sf-basic-auth-sunset";
+import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { resolveStudioTenants } from "@/lib/studio/tenants";
 
@@ -66,6 +68,20 @@ export default async function StudioConnectionsPage() {
     connections.length === 0
       ? (await resolveStudioTenants(organizationId)).filter((t) => t.source === "environment")
       : [];
+
+  /*
+   * The dated SuccessFactors Basic-auth notice, per product, for the form to show
+   * before a NEW Basic connection is saved. Computed HERE because the sunset
+   * module reads the server clock and SF_BASIC_AUTH_DELETION_DATE, neither of
+   * which the browser has — a client copy would show SAP's default date after an
+   * operator had tracked a change. Products the notice does not apply to are
+   * simply absent.
+   */
+  const basicAuthNotices: Record<string, string> = {};
+  for (const product of Object.keys(PRODUCT_MARKS)) {
+    const notice = newSuccessFactorsBasicConnectionNotice(product, "basic");
+    if (notice) basicAuthNotices[product] = notice;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -158,7 +174,11 @@ export default async function StudioConnectionsPage() {
         </section>
       ) : null}
 
-      <ConnectionsClient connections={connections} canManage={canMutateStudio(user.role)} />
+      <ConnectionsClient
+        connections={connections}
+        canManage={canMutateStudio(user.role)}
+        basicAuthNotices={basicAuthNotices}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   SapHttpError,
 } from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
+import { sanitizeTenantKey } from "./tenant-key";
 
 /**
  * The env tenant's auth types — the SAME four the stored-connection path
@@ -655,19 +656,9 @@ function normalizeBaseUrl(raw: string): string {
   return url.toString().replace(/\/+$/, "");
 }
 
-/**
- * Normalize a tenant key. Exported because a DB-backed connection's key must be
- * normalized the SAME way an env tenant's is: the key is what stored probes are
- * recorded under, so "X5M/100" and "x5m-100" resolving differently would split
- * one tenant's probe history in two.
- */
-export function sanitizeTenantKey(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+// Re-exported: the rule moved to a client-safe module so the Connections form
+// can normalize a key the same way. Every existing importer keeps working.
+export { sanitizeTenantKey };
 
 /**
  * Tenants configured for a product. `prefix` defaults to S4_TDD so the

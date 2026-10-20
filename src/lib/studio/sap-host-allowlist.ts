@@ -44,8 +44,28 @@ export const SAP_HOST_SUFFIXES: readonly string[] = [
   "s4hana.cloud.sap",
   "cloud.sap",
   "sap.com",
+  /*
+   * SUCCESSFACTORS API SERVERS. The two `successfactors.*` entries were the only
+   * SuccessFactors domains here, but SAP serves most data centres' OData APIs
+   * from `sapsf.*` (`api17.sapsf.com` for DC60, `api55.sapsf.eu` for DC55,
+   * `api15.sapsf.cn` for DC30), and every Preview server is on `sapsf.*` even
+   * where Production is still on `successfactors.*`. Without them a real
+   * SuccessFactors tenant could not be connected at all. The newest data
+   * centres (DC80, DC82) use `api-in10.hr.cloud.sap` and `api-sa20.hr.cloud.sap`,
+   * already admitted by `cloud.sap` and named below so the list says so.
+   *
+   * Source: SAP KBA 2215682, "List of SAP SuccessFactors API Servers"
+   * (https://userapps.support.sap.com/sap/support/knowledge/en/2215682), and the
+   * chapter of the same name in SAP's SuccessFactors OData API guide. Checked
+   * 2026-10-20: every Production, Preview, SalesDemo and EDR host in that table
+   * ends in one of these suffixes. The test pins the whole table.
+   */
   "successfactors.com",
   "successfactors.eu",
+  "sapsf.com",
+  "sapsf.eu",
+  "sapsf.cn",
+  "hr.cloud.sap",
   "ariba.com",
   "sapariba.com",
   "concursolutions.com",
