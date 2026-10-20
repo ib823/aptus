@@ -47,6 +47,7 @@ import {
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
+import { isVerifiedForBinding } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
@@ -287,19 +288,30 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   /*
-   * A CUSTOM SERVICE WRITES ONLY ONCE VERIFIED. A catalogue service is a
-   * contract SAP published; a path the customer typed is a claim until the
-   * system has been asked for its description and answered. Verification is
-   * cleared by every change to the path, version or dataset, so this also
-   * stops an edited feed writing somewhere nobody has looked. Refused here —
-   * before the idempotency key is reserved — so nothing reaches SAP and the
-   * key stays free for the retry after Verify.
+   * A CUSTOM SERVICE WRITES ONLY ONCE VERIFIED — HERE. A catalogue service is
+   * a contract SAP published; a path the customer typed is a claim until the
+   * system has been asked for its description and answered. The answer is
+   * about the system that gave it, so the gate is PER ENVIRONMENT and per
+   * binding: this credential's environment must hold a successful verify made
+   * through this very connection, SAP client and host (a DEV verify says
+   * nothing about PROD). Verification is cleared by every change to the path,
+   * version or dataset, so this also stops an edited feed writing somewhere
+   * nobody has looked. Refused here — before the idempotency key is reserved
+   * — so nothing reaches SAP and the key stays free for the retry after Verify.
    */
-  if (resolved!.source === "custom" && iface.serviceVerifiedAt == null) {
+  if (
+    resolved!.source === "custom" &&
+    !isVerifiedForBinding(iface.serviceVerifications, {
+      environment: client.environment,
+      connectionId: connection.id,
+      sapClient: connection.client ?? null,
+      baseUrl: connection.baseUrl,
+    })
+  ) {
     await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",
-      "This data feed's own SAP service has not been verified since it last changed. Verify it in Studio before writing.",
+      `This data feed's own SAP service has not been verified in ${client.environment}, through the connection and SAP client this write uses, since it last changed. Verify it in Studio for ${client.environment} before writing.`,
       400,
       correlationId,
     );

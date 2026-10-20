@@ -10,9 +10,9 @@
  *
  * YOUR OWN API. "Register your own API" creates an interface for a service the
  * customer built (Z*, YY1_*, an ECC Gateway service), named by its service
- * path. Its Source card shows the path and version, edits the path in place,
- * and — for every OData interface — offers Verify, which asks the SAP system
- * for the service's description and lists its datasets.
+ * path. Its Source card shows the path and version, edits both in place, and
+ * — for every OData interface — offers Verify, which asks the SAP system for
+ * the service's description and lists its datasets.
  *
  * On the disabled mapping card: it is shown rather than hidden because the shape
  * of the eventual feature is part of the design, and hiding it would invite
@@ -36,9 +36,19 @@ import {
   type RegisterProductOption,
   type RegisterSolutionOption,
 } from "@/components/studio/RegisterOwnApiDialog";
-import { ServiceVerifyPanel, type VerifyTarget } from "@/components/studio/ServiceVerifyPanel";
+import {
+  ServiceVerifyPanel,
+  type VerifiedEnvironment,
+  type VerifyTarget,
+} from "@/components/studio/ServiceVerifyPanel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
-import { validateServicePath } from "@/lib/sap-public/service-path";
+import {
+  inferODataVersion,
+  isODataVersion,
+  ODATA_VERSIONS,
+  validateServicePath,
+  type ODataVersion,
+} from "@/lib/sap-public/service-path";
 import {
   describeWriteReadiness,
   readyEnvironments,
@@ -86,6 +96,8 @@ export interface StudioInterface {
   serviceVerifiedAt?: string | null;
   serviceVerifiedEnvironment?: string | null;
   serviceVerifiedEntitySets?: readonly string[] | null;
+  /** Your own API: each environment with a current successful verify (the write gate is per environment). */
+  serviceVerifiedEnvironments?: readonly VerifiedEnvironment[];
 }
 
 export type { VerifyTarget, RegisterProductOption, RegisterSolutionOption };
@@ -139,6 +151,9 @@ export function InterfacesClient({
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
   const selectedIsCustom = selected?.servicePath != null && selected.servicePath !== "";
   const selectedIsOData = selected !== null && products.some((p) => p.key === selected.sapProduct);
+  // A live write through your own API: any dataset, path or version change
+  // clears verification and returns it to draft. Every editor says so first.
+  const selectedLiveWrite = selectedIsCustom && selected?.mode === "WRITE" && selected.status === "ACTIVE";
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -249,10 +264,11 @@ export function InterfacesClient({
                 <Row label="Your own service" mono>
                   {canAuthor ? (
                     <ServicePathEditor
-                      key={`${selected.id}:${selected.servicePath}`}
+                      key={`${selected.id}:${selected.servicePath}:${selected.odataVersion}`}
                       value={selected.servicePath ?? ""}
+                      version={isODataVersion(selected.odataVersion) ? selected.odataVersion : null}
                       busy={busy}
-                      onSave={(next) => patch({ id: selected.id, servicePath: next })}
+                      onSave={(change) => patch({ id: selected.id, ...change })}
                     />
                   ) : (
                     selected.servicePath
@@ -275,6 +291,7 @@ export function InterfacesClient({
                   key={selected.id}
                   value={selected.entitySet}
                   suggestion={selected.suggestedEntitySet ?? null}
+                  liveWrite={selectedLiveWrite}
                   busy={busy}
                   onSave={(next) => patch({ id: selected.id, entitySet: next })}
                 />
@@ -293,6 +310,9 @@ export function InterfacesClient({
                   verifiedAt={selected.serviceVerifiedAt ?? null}
                   verifiedEnvironment={selected.serviceVerifiedEnvironment ?? null}
                   verifiedEntitySets={selected.serviceVerifiedEntitySets ?? null}
+                  verifiedEnvironments={selected.serviceVerifiedEnvironments ?? []}
+                  odataVersion={selected.odataVersion ?? null}
+                  liveWrite={selectedLiveWrite}
                   targets={verifyTargets.filter((t) => t.product === selected.sapProduct)}
                   canAuthor={canAuthor}
                 />
@@ -486,6 +506,7 @@ function Td({ children }: { children: React.ReactNode }) {
 function EntitySetEditor({
   value,
   suggestion,
+  liveWrite = false,
   busy,
   onSave,
 }: {
@@ -498,6 +519,12 @@ function EntitySetEditor({
    * description of what to type when one is not.
    */
   suggestion: string | null;
+  /**
+   * Your own API, a WRITE interface that is ACTIVE: a new dataset clears
+   * verification and returns it to draft — writes stop until it is verified
+   * and activated again. Said before the save, as the path editor does.
+   */
+  liveWrite?: boolean;
   busy: boolean;
   onSave: (next: string | null) => void;
 }) {
@@ -549,37 +576,57 @@ function EntitySetEditor({
       {trimmed.length === 0 && value !== null && (
         <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>Saving empty clears it.</span>
       )}
+      {liveWrite && (
+        <span
+          style={{ flexBasis: "100%", fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)", fontFamily: "inherit", maxWidth: 420 }}
+        >
+          This write interface is live. Saving a new dataset clears verification and returns it to draft, so writes
+          stop until it is verified and activated again.
+        </span>
+      )}
     </span>
   );
 }
 
 /**
- * Your own API's service path, editable in place — the EntitySetEditor pattern.
+ * Your own API's service path AND OData version, editable in place — the
+ * EntitySetEditor pattern.
+ *
+ * The version is edited here because Verify's VERSION_MISMATCH tells the
+ * developer to change it, and a read-only version left that advice with no
+ * control to follow it. Typing a new path re-infers the version from it (the
+ * register dialog's rule) until the developer picks one by hand.
  *
  * A new path is a new service: the route bumps the version, clears
  * verification, derives a new grant id (so existing grants, which name the old
- * path, no longer apply) and returns an active WRITE interface to DRAFT. The
- * warning says all of that before the save, because each of those is a
- * consequence somebody else will notice.
+ * path, no longer apply) and returns an active WRITE interface to DRAFT. A new
+ * OData version alone bumps the version, clears verification and returns an
+ * active WRITE interface to draft too, but keeps the grant id — grants stay
+ * attached. The warning says which, before the save, because each of those is
+ * a consequence somebody else will notice.
  */
 function ServicePathEditor({
   value,
+  version,
   busy,
   onSave,
 }: {
   value: string;
+  version: ODataVersion | null;
   busy: boolean;
-  onSave: (next: string) => void;
+  onSave: (change: { servicePath?: string; odataVersion?: ODataVersion }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [draftVersion, setDraftVersion] = useState<ODataVersion>(version ?? inferODataVersion(value));
+  const [versionTouched, setVersionTouched] = useState(false);
 
   if (!editing) {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span>{value}</span>
         <button type="button" style={linkBtn} onClick={() => setEditing(true)}>
-          Change path
+          Change path or version
         </button>
       </span>
     );
@@ -588,12 +635,26 @@ function ServicePathEditor({
   const trimmed = draft.trim();
   const check = validateServicePath(trimmed);
   const normalized = check.ok ? check.path : null;
+  const pathChanged = normalized !== null && normalized !== value;
+  const versionChanged = draftVersion !== version;
+  const change: { servicePath?: string; odataVersion?: ODataVersion } = {
+    ...(pathChanged ? { servicePath: normalized } : {}),
+    ...(versionChanged ? { odataVersion: draftVersion } : {}),
+  };
   return (
     <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <input
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // The register dialog's rule: the path suggests the version until
+            // the developer chooses one.
+            if (!versionTouched) {
+              const next = validateServicePath(e.target.value.trim());
+              if (next.ok) setDraftVersion(inferODataVersion(next.path));
+            }
+          }}
           aria-label="Service path"
           spellCheck={false}
           style={{
@@ -608,15 +669,42 @@ function ServicePathEditor({
             minWidth: 280,
           }}
         />
+        <span role="radiogroup" aria-label="OData version" style={{ display: "inline-flex", gap: 8, fontFamily: "inherit" }}>
+          {ODATA_VERSIONS.map((v) => (
+            <label key={v} style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="radio"
+                name="service-odata-version"
+                value={v}
+                checked={draftVersion === v}
+                onChange={() => {
+                  setDraftVersion(v);
+                  setVersionTouched(true);
+                }}
+              />
+              OData {v}
+            </label>
+          ))}
+        </span>
         <button
           type="button"
           style={linkBtn}
-          disabled={busy || normalized === null || normalized === value}
-          onClick={() => normalized !== null && onSave(normalized)}
+          disabled={busy || normalized === null || (!pathChanged && !versionChanged)}
+          onClick={() => normalized !== null && onSave(change)}
         >
-          Save path
+          Save
         </button>
-        <button type="button" style={linkBtn} disabled={busy} onClick={() => { setDraft(value); setEditing(false); }}>
+        <button
+          type="button"
+          style={linkBtn}
+          disabled={busy}
+          onClick={() => {
+            setDraft(value);
+            setDraftVersion(version ?? inferODataVersion(value));
+            setVersionTouched(false);
+            setEditing(false);
+          }}
+        >
           Cancel
         </button>
       </span>
@@ -624,9 +712,10 @@ function ServicePathEditor({
         <span style={{ fontSize: 11, color: "var(--status-revoked-fg)", fontFamily: "inherit" }}>{check.message}</span>
       )}
       <span style={{ fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)", fontFamily: "inherit", maxWidth: 420 }}>
-        Saving a new path creates a new version, clears verification and detaches existing access grants
-        (they name the old path). An active write interface returns to draft; an active read interface
-        stays active but its calls are refused until a grant for the new path is approved.
+        Saving a new path or OData version creates a new interface version, clears verification, and returns an
+        active write interface to draft. A new path also detaches existing access grants (they name the old
+        path): an active read interface stays active but its calls are refused until a grant for the new path
+        is approved. A version change alone keeps the grants attached.
       </span>
     </span>
   );

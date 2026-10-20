@@ -10,16 +10,19 @@
  *
  * Works for every OData interface. For one carrying its own service path (a
  * Z* RAP service, a YY1_* custom CDS view, an ECC Gateway service) it is the
- * gate: a successful verify is recorded on the interface, and the write route
- * refuses a custom service until one exists for the current contract. For a
+ * gate: a successful verify is recorded on the interface FOR THIS ENVIRONMENT,
+ * with the connection, SAP client and host that answered, and the write route
+ * refuses a custom service in an environment until that environment holds one
+ * for the current contract and the binding the write uses
+ * (service-verifications.ts). Verifying DEV says nothing about PROD. For a
  * catalogue interface it is information only; its runtime does not change.
  *
  * WHAT IT IS NOT. It reads no business records — the same reach as Studio's
  * connection Test, which is why no environment ceiling applies, and why it
  * takes the same tight `sapLive` bucket (isLiveSapTenantRoute). It changes no
- * grant, key or status. A failed verify never clears an earlier success: a
- * timeout must not be able to stop live writes. Only a contract change clears
- * verification (the interfaces PATCH).
+ * grant, key or status. A failed verify never clears an earlier success (in
+ * any environment): a timeout must not be able to stop live writes. Only a
+ * contract change clears verification (the interfaces PATCH).
  *
  * AUDITED TWICE, like the lane re-check: a console-read row in the northbound
  * trail (dryRun, the person named, no row count — metadata is not records), and
@@ -30,6 +33,7 @@
  * broker run does: the screen renders refusals as results, not as errors.
  */
 
+import { Prisma } from "@prisma/client";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -41,6 +45,7 @@ import {
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
 import { recordConsoleRead } from "@/lib/sap-public/console-read-guard";
+import { withServiceVerification } from "@/lib/sap-public/service-verifications";
 import {
   hasCustomService,
   productAcceptsServicePath,
@@ -100,6 +105,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       servicePath: true,
       odataVersion: true,
       entitySet: true,
+      serviceVerifications: true,
     },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
@@ -190,6 +196,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     servicePath: resolved.service.path,
     declaredVersion: isODataVersion(iface.odataVersion) ? iface.odataVersion : null,
     entitySet: iface.entitySet,
+    // SuccessFactors describes one dataset at a time (service-verify.ts).
+    sapProduct: iface.sapProduct,
   });
 
   await recordConsoleRead({
@@ -217,15 +225,49 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
      * is told to verify the new contract rather than having the old answer
      * stamped on it.
      */
-    const { count } = await prisma.interface.updateMany({
-      where: { id: iface.id, organizationId: scope.organizationId, version: iface.version },
-      data: {
-        serviceVerifiedAt: new Date(),
-        serviceVerifiedEnvironment: environment,
-        serviceVerifiedEntitySets: result.entitySets.slice(0, MAX_STORED_ENTITY_SETS),
-      },
-    });
-    if (count === 0) {
+    const verifiedAt = new Date();
+    const entry = {
+      at: verifiedAt.toISOString(),
+      connectionId: connection.id,
+      sapClient: connection.client ?? null,
+      baseUrl: connection.baseUrl,
+    };
+    /*
+     * PER ENVIRONMENT, MERGED WITHOUT LOSING A CONCURRENT ONE. The entry is
+     * added to the environments already verified; the update is guarded on
+     * the value read, so a verify of another environment that landed
+     * meanwhile is re-read and kept rather than overwritten. A version change
+     * ends the loop: the contract it would describe is gone.
+     */
+    let stored = iface.serviceVerifications ?? null;
+    let recorded = false;
+    for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
+      const { count } = await prisma.interface.updateMany({
+        where: {
+          id: iface.id,
+          organizationId: scope.organizationId,
+          version: iface.version,
+          serviceVerifications: stored === null ? { equals: Prisma.DbNull } : { equals: stored },
+        },
+        data: {
+          serviceVerifiedAt: verifiedAt,
+          serviceVerifiedEnvironment: environment,
+          serviceVerifiedEntitySets: result.entitySets.slice(0, MAX_STORED_ENTITY_SETS),
+          serviceVerifications: withServiceVerification(stored, environment, entry) as unknown as Prisma.InputJsonObject,
+        },
+      });
+      if (count > 0) {
+        recorded = true;
+        break;
+      }
+      const now = await prisma.interface.findFirst({
+        where: scopedById(scope, id),
+        select: { version: true, serviceVerifications: true },
+      });
+      if (!now || now.version !== iface.version) break;
+      stored = now.serviceVerifications ?? null;
+    }
+    if (!recorded) {
       status = "CHANGED_DURING_VERIFY";
       verified = false;
     }

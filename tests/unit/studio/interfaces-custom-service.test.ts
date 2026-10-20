@@ -7,8 +7,10 @@
  *   - the path is validated with the shared rule, the version is required,
  *     and non-OData products (Ariba) have no path at all;
  *   - catalogue and custom never convert into each other;
- *   - a service change is a contract change: new version, new id, verification
- *     cleared, an active WRITE interface back to DRAFT;
+ *   - a service change is a contract change: new version, new id (path only),
+ *     verification cleared in every environment, an active WRITE interface
+ *     back to DRAFT — and a dataset change on an active custom WRITE
+ *     interface follows the same rule;
  *   - a custom WRITE interface is activated only once verified;
  *   - none of this touches a catalogue interface.
  */
@@ -239,6 +241,7 @@ describe("PATCH — the service is part of the contract", () => {
       serviceVerifiedAt: null,
       serviceVerifiedEnvironment: null,
       serviceVerifiedEntitySets: Prisma.DbNull,
+      serviceVerifications: Prisma.DbNull,
     });
     const body = (await res.json()) as { data: Record<string, unknown> };
     expect(body.data).toMatchObject({ serviceChanged: true, verificationReset: true, demoted: false, contractChanged: true });
@@ -246,7 +249,24 @@ describe("PATCH — the service is part of the contract", () => {
 
   it("a version change is a service change", async () => {
     await PATCH(req("PATCH", { id: "if_1", odataVersion: "V4" }));
-    expect(updateData()).toMatchObject({ odataVersion: "V4", version: { increment: 1 }, serviceVerifiedAt: null });
+    expect(updateData()).toMatchObject({
+      odataVersion: "V4",
+      version: { increment: 1 },
+      serviceVerifiedAt: null,
+      serviceVerifications: Prisma.DbNull,
+    });
+  });
+
+  it("a version change alone keeps the grant id — grants stay attached (what the guides now say)", async () => {
+    await PATCH(req("PATCH", { id: "if_1", odataVersion: "V4" }));
+    expect(updateData().externalId).toBe(`custom:${PATH}`);
+  });
+
+  it("a version change alone on an ACTIVE WRITE interface returns it to DRAFT", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...CUSTOM, operation: "CREATE", mode: "WRITE", status: "ACTIVE" });
+    const res = await PATCH(req("PATCH", { id: "if_1", odataVersion: "V4" }));
+    expect(res.status).toBe(200);
+    expect(updateData().status).toBe("DRAFT");
   });
 
   it("the same path with a trailing slash is not a change", async () => {
@@ -284,8 +304,33 @@ describe("PATCH — the service is part of the contract", () => {
       version: { increment: 1 },
       serviceVerifiedAt: null,
       serviceVerifiedEntitySets: Prisma.DbNull,
+      serviceVerifications: Prisma.DbNull,
     });
     expect(updateData()).not.toHaveProperty("servicePath");
+  });
+
+  it("an entity-set change on an ACTIVE custom WRITE interface returns it to DRAFT (review round 1)", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...CUSTOM, operation: "CREATE", mode: "WRITE", status: "ACTIVE" });
+    const res = await PATCH(req("PATCH", { id: "if_1", entitySet: "A_Booking" }));
+    expect(res.status).toBe(200);
+    expect(updateData()).toMatchObject({ status: "DRAFT", serviceVerifiedAt: null });
+    const body = (await res.json()) as { data: Record<string, unknown> };
+    expect(body.data).toMatchObject({ demoted: true, verificationReset: true, serviceChanged: false });
+  });
+
+  it("…and cannot be kept ACTIVE by sending status ACTIVE with the new dataset", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...CUSTOM, operation: "CREATE", mode: "WRITE", status: "ACTIVE" });
+    const res = await PATCH(req("PATCH", { id: "if_1", entitySet: "A_Booking", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect(await message(res)).toBe("Change the dataset and activate in two steps: save it, verify it, then activate.");
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+  });
+
+  it("an entity-set change on an ACTIVE custom READ interface keeps it ACTIVE (reads are not gated)", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...CUSTOM, status: "ACTIVE" });
+    const res = await PATCH(req("PATCH", { id: "if_1", entitySet: "A_Booking" }));
+    expect(res.status).toBe(200);
+    expect(updateData()).not.toHaveProperty("status");
   });
 
   it("a bad path is refused with the rule's sentence", async () => {
@@ -311,7 +356,7 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
     writeChainReadyInTest();
     const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
     expect(res.status).toBe(400);
-    expect(await message(res)).toMatch(/^Verify this interface's own SAP service in at least one environment/);
+    expect(await message(res)).toMatch(/^Verify this interface's own SAP service before activating a write interface\. The broker refuses writes in an environment until/);
     expect(mocks.updateInterface).not.toHaveBeenCalled();
   });
 
@@ -320,7 +365,7 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
     writeChainReadyInTest();
     const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE", entitySet: "A_Booking" }));
     expect(res.status).toBe(400);
-    expect(await message(res)).toMatch(/^Verify this interface's own SAP service/);
+    expect(await message(res)).toBe("Change the dataset and activate in two steps: save it, verify it, then activate.");
   });
 
   it("allows it once verified — and the write chain is checked under the derived id", async () => {

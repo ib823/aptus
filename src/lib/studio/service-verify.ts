@@ -16,6 +16,16 @@
  * connection probe makes (fetchMetadataDocument), read in full up to a bound
  * because the entity sets are spread through the document.
  *
+ * SUCCESSFACTORS ASKS ABOUT ONE DATASET. Its service root, /odata/v2, describes
+ * the whole tenant — every standard and custom MDF entity — and that document
+ * is large and slow enough (SAP's own EC performance guidance says so) to run
+ * past the connection timeout or the size bound, so the root could never be
+ * verified and a custom write could never be unlocked. SuccessFactors answers
+ * `{root}/{EntitySet}/$metadata` with the description of that one entity, so
+ * when the interface names its dataset that is what is fetched. The verdict
+ * is the same question — is it OData, which version, is the dataset there —
+ * asked about the part the interface uses.
+ *
  * No prisma here: the route owns persistence and audit; this owns the verdict.
  */
 
@@ -23,6 +33,40 @@ import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
 import { fetchMetadataDocument } from "@/lib/studio/connection-health";
+
+/**
+ * Products whose service root describes the whole tenant, and which answer
+ * `{root}/{EntitySet}/$metadata` for one entity (see the header).
+ */
+const ENTITY_SCOPED_METADATA_PRODUCTS: ReadonlySet<string> = new Set(["successfactors"]);
+
+/**
+ * An entity-set name safe to put in a path segment: an OData simple
+ * identifier. Anything else cannot be a dataset of the service anyway, and is
+ * never joined onto a path — the root description is asked instead.
+ */
+const SIMPLE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+
+/**
+ * Where the description is fetched from: `{servicePath}` (and fetchMetadataDocument
+ * appends `/$metadata`), or, for a product with entity-scoped metadata and a
+ * dataset that is a simple identifier, `{servicePath}/{entitySet}`.
+ */
+export function metadataTarget(input: {
+  sapProduct?: string | null;
+  servicePath: string;
+  entitySet: string | null;
+}): { path: string; scope: "service" | "entitySet" } {
+  if (
+    input.sapProduct != null &&
+    ENTITY_SCOPED_METADATA_PRODUCTS.has(input.sapProduct) &&
+    input.entitySet != null &&
+    SIMPLE_IDENTIFIER.test(input.entitySet)
+  ) {
+    return { path: `${input.servicePath}/${input.entitySet}`, scope: "entitySet" };
+  }
+  return { path: input.servicePath, scope: "service" };
+}
 
 /** A service description larger than this is refused rather than half-read. */
 export const VERIFY_MAX_METADATA_BYTES = 8 * 1024 * 1024;
@@ -89,10 +133,13 @@ export async function verifyServiceMetadata(
     servicePath: string;
     declaredVersion: ODataVersion | null;
     entitySet: string | null;
+    /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
+    sapProduct?: string | null;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<ServiceVerifyResult> {
-  const r = await fetchMetadataDocument(input.connection, input.servicePath, fetchImpl, {
+  const target = metadataTarget(input);
+  const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {
     maxBytes: VERIFY_MAX_METADATA_BYTES,
   });
 
@@ -112,7 +159,9 @@ export async function verifyServiceMetadata(
       verified: false,
       detail:
         status === "NOT_FOUND"
-          ? "The SAP system has no service at this path. Check it against the service binding in ADT (Service URL) or /IWFND/MAINT_SERVICE, and that the service is published."
+          ? target.scope === "entitySet"
+            ? `The SAP system has no dataset called "${input.entitySet}" under this service path. Check the name in the system's OData API Data Dictionary (names are case-sensitive), and the path (/odata/v2).`
+            : "The SAP system has no service at this path. Check it against the service binding in ADT (Service URL) or /IWFND/MAINT_SERVICE, and that the service is published."
           : r.detail,
       entitySets: [],
       detectedODataVersion: null,

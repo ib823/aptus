@@ -54,8 +54,14 @@ export interface AccessibleInterface {
    */
   servicePath: string | null;
   odataVersion: string | null;
-  /** Last successful live $metadata verification; the write route gates on it for a custom service. */
+  /** Last successful live $metadata verification, in any environment (display and activation). */
   serviceVerifiedAt: Date | null;
+  /**
+   * Successful verifications PER ENVIRONMENT (service-verifications.ts). The
+   * write route gates a custom service on the caller's environment's entry,
+   * for the binding the write uses — never on serviceVerifiedAt.
+   */
+  serviceVerifications: unknown;
 }
 
 export type AccessRefusal =
@@ -126,6 +132,7 @@ export async function resolveWritableInterface(
       servicePath: true,
       odataVersion: true,
       serviceVerifiedAt: true,
+      serviceVerifications: true,
     },
   });
 
@@ -237,6 +244,7 @@ export async function resolveWritableInterface(
       servicePath: iface.servicePath ?? null,
       odataVersion: iface.odataVersion ?? null,
       serviceVerifiedAt: iface.serviceVerifiedAt ?? null,
+      serviceVerifications: iface.serviceVerifications ?? null,
     },
   };
 }
@@ -265,6 +273,7 @@ export async function resolveReadableInterface(
       servicePath: true,
       odataVersion: true,
       serviceVerifiedAt: true,
+      serviceVerifications: true,
     },
   });
 
@@ -367,6 +376,7 @@ export async function resolveReadableInterface(
       servicePath: iface.servicePath ?? null,
       odataVersion: iface.odataVersion ?? null,
       serviceVerifiedAt: iface.serviceVerifiedAt ?? null,
+      serviceVerifications: iface.serviceVerifications ?? null,
     },
   };
 }

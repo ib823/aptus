@@ -46,6 +46,7 @@ import {
   ODATA_VERSIONS,
   validateServicePath,
 } from "@/lib/sap-public/service-path";
+import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -264,12 +265,20 @@ export async function GET(request: NextRequest) {
       odataVersion: true,
       serviceVerifiedAt: true,
       serviceVerifiedEnvironment: true,
+      serviceVerifications: true,
       solution: { select: { name: true } },
     },
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  return studioOk({ interfaces });
+  // Per-environment verification, for display: environment, when, client —
+  // never the connection id or host the gate compares against.
+  return studioOk({
+    interfaces: interfaces.map(({ serviceVerifications, ...rest }) => ({
+      ...rest,
+      serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(serviceVerifications),
+    })),
+  });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -398,12 +407,17 @@ export async function PATCH(request: NextRequest) {
   /*
    *   3b. Your own API changes and activates in TWO steps, never one: a new
    *      service is unverified by definition, so "save and go live" would be
-   *      a live interface nobody has looked at.
+   *      a live interface nobody has looked at. The same holds for a WRITE
+   *      interface's dataset: a new dataset is unverified too, and the write
+   *      route refuses it until it is verified again.
    */
-  if (serviceChanged && input.status === "ACTIVE") {
+  const unverifiedWriteContract = isCustom && nextMode === "WRITE" && verificationReset;
+  if ((serviceChanged || unverifiedWriteContract) && input.status === "ACTIVE") {
     return studioError(
       "VALIDATION_ERROR",
-      "Change the service and activate in two steps: save it, verify it, then activate.",
+      serviceChanged
+        ? "Change the service and activate in two steps: save it, verify it, then activate."
+        : "Change the dataset and activate in two steps: save it, verify it, then activate.",
     );
   }
 
@@ -422,7 +436,7 @@ export async function PATCH(request: NextRequest) {
   ) {
     return studioError(
       "VALIDATION_ERROR",
-      "Verify this interface's own SAP service in at least one environment before activating a write interface. The broker refuses writes to an unverified service.",
+      "Verify this interface's own SAP service before activating a write interface. The broker refuses writes in an environment until the service has been verified there, through that environment's connection.",
     );
   }
 
@@ -487,14 +501,17 @@ export async function PATCH(request: NextRequest) {
     serviceChanged;
 
   /*
-   * AN ACTIVE WRITE INTERFACE WHOSE SERVICE MOVED GOES BACK TO DRAFT. It is
-   * unverified now, and its grants named the old path; leaving it ACTIVE
-   * would keep it looking live while every write is refused. A READ
-   * interface stays ACTIVE — its grants detach (the id changed), so calls
-   * answer 403 until a new grant is approved, which is the governance
-   * outcome intended, and Studio says so before the save.
+   * AN ACTIVE WRITE INTERFACE WHOSE CONTRACT WAS UNVERIFIED GOES BACK TO
+   * DRAFT. A new path, version or dataset on your own API clears
+   * verification, and the write route refuses an unverified custom service;
+   * leaving it ACTIVE would keep it looking live while every write is
+   * refused. One rule for all three edits. A READ interface stays ACTIVE —
+   * reads are not gated on verification; on a path change its grants detach
+   * (the id changed), so calls answer 403 until a new grant is approved,
+   * which is the governance outcome intended, and Studio says so before the
+   * save.
    */
-  const demoted = serviceChanged && current.status === "ACTIVE" && nextMode === "WRITE";
+  const demoted = unverifiedWriteContract && current.status === "ACTIVE";
   const nextStatus = input.status ?? (demoted ? "DRAFT" : undefined);
 
   const updated = await prisma.interface.update({
@@ -512,7 +529,12 @@ export async function PATCH(request: NextRequest) {
         ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
         : {}),
       ...(verificationReset
-        ? { serviceVerifiedAt: null, serviceVerifiedEnvironment: null, serviceVerifiedEntitySets: Prisma.DbNull }
+        ? {
+            serviceVerifiedAt: null,
+            serviceVerifiedEnvironment: null,
+            serviceVerifiedEntitySets: Prisma.DbNull,
+            serviceVerifications: Prisma.DbNull,
+          }
         : {}),
       // mappingVersion is never written here — see patchSchema.
     },

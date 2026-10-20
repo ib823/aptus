@@ -8,17 +8,29 @@
  * whether the service exists, whether sign-in worked, which datasets it offers,
  * and whether the interface's dataset is one of them. It reads no business
  * data. For your own API a successful verify is what lets a write interface be
- * activated and written through; for a catalogue service it is information.
+ * activated, and written through IN THAT ENVIRONMENT — the panel lists each
+ * environment verified, because a DEV verify does not open PROD writes; for a
+ * catalogue service it is information.
  *
  * The datasets come back as a picker: choosing one saves it on the interface
  * (a contract change, so verification clears) and verifies again at once, so
  * the developer never has to type an entity-set name SAP already told us.
+ * When the service says it is another OData version than the interface does,
+ * the panel offers to switch the version and verify again — the only other
+ * way out of that answer would be a hand-written API call.
  */
 
 import { useRouter } from "next/navigation";
 import { useCallback, useId, useMemo, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+
+export interface VerifiedEnvironment {
+  environment: string;
+  /** ISO timestamp. */
+  at: string;
+  sapClient: string | null;
+}
 
 export interface VerifyTarget {
   product: string;
@@ -34,6 +46,7 @@ interface VerifyOutcome {
   entitySets: string[];
   entitySet: string | null;
   suggestedEntitySet: string | null;
+  detectedODataVersion?: string | null;
   boundTo: { label: string; environment: string | null; sapClient: string | null } | null;
 }
 
@@ -70,6 +83,9 @@ export function ServiceVerifyPanel({
   verifiedAt,
   verifiedEnvironment,
   verifiedEntitySets,
+  verifiedEnvironments = [],
+  odataVersion = null,
+  liveWrite = false,
   targets,
   canAuthor,
 }: {
@@ -79,6 +95,16 @@ export function ServiceVerifyPanel({
   verifiedAt: string | null;
   verifiedEnvironment: string | null;
   verifiedEntitySets: readonly string[] | null;
+  /** Your own API: each environment with a current successful verify. */
+  verifiedEnvironments?: readonly VerifiedEnvironment[];
+  /** Your own API: the declared OData version (V2 | V4). */
+  odataVersion?: string | null;
+  /**
+   * Your own API, a WRITE interface that is ACTIVE: changing its dataset or
+   * version clears verification and returns it to draft, so writes stop until
+   * it is verified and activated again. Said before the click.
+   */
+  liveWrite?: boolean;
   /** This interface's product's declared connections only. */
   targets: readonly VerifyTarget[];
   canAuthor: boolean;
@@ -120,23 +146,23 @@ export function ServiceVerifyPanel({
     }
   }, [verify, router]);
 
-  /** Save the dataset (which clears verification), then verify the same target again. */
-  const chooseDataset = useCallback(
-    async (name: string) => {
+  /** Save a contract change (which clears verification), then verify the same target again. */
+  const saveAndVerify = useCallback(
+    async (change: Record<string, unknown>, failure: string) => {
       setBusy(true);
       setError(null);
       try {
         const res = await fetch("/api/studio/interfaces", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: interfaceId, entitySet: name }),
+          body: JSON.stringify({ id: interfaceId, ...change }),
         });
         const json = (await res.json()) as { error?: { message?: string } };
-        if (!res.ok) throw new Error(json.error?.message ?? "The dataset could not be saved.");
+        if (!res.ok) throw new Error(json.error?.message ?? failure);
         setOutcome(await verify());
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "The dataset could not be saved.");
+        setError(err instanceof Error ? err.message : failure);
       } finally {
         setBusy(false);
       }
@@ -144,19 +170,48 @@ export function ServiceVerifyPanel({
     [interfaceId, verify, router],
   );
 
+  const chooseDataset = useCallback(
+    (name: string) => saveAndVerify({ entitySet: name }, "The dataset could not be saved."),
+    [saveAndVerify],
+  );
+
+  const switchVersion = useCallback(
+    (version: string) => saveAndVerify({ odataVersion: version }, "The OData version could not be saved."),
+    [saveAndVerify],
+  );
+
   const chip = outcome ? (CHIP[outcome.status] ?? { status: "PROBE_FAILED" as const, label: outcome.status.toLowerCase() }) : null;
   const sets = outcome?.entitySets ?? [];
+  const detected = outcome?.detectedODataVersion ?? null;
+  const canSwitchVersion =
+    canAuthor &&
+    isCustom &&
+    outcome?.status === "VERSION_MISMATCH" &&
+    (detected === "V2" || detected === "V4") &&
+    detected !== odataVersion;
+  const liveWriteWarning = liveWrite ? (
+    <span style={{ ...muted, color: "var(--status-awaiting-fg)" }}>
+      This write interface is live. Changing it clears verification and returns it to draft, so writes stop until it
+      is verified and activated again.
+    </span>
+  ) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, fontFamily: "inherit", fontSize: 13 }}>
       <span style={{ color: "var(--ink-primary)" }}>
         {verifiedAt
-          ? `Verified in ${verifiedEnvironment ?? "an environment"} on ${formatDate(verifiedAt)}` +
+          ? `Last verified in ${verifiedEnvironment ?? "an environment"} on ${formatDate(verifiedAt)}` +
             (verifiedEntitySets ? ` · ${verifiedEntitySets.length} dataset${verifiedEntitySets.length === 1 ? "" : "s"}` : "")
           : "Not verified since it last changed"}
-        {isCustom && !verifiedAt && (
+        {isCustom && (
           <span style={{ ...muted, display: "block" }}>
-            Writes through your own API are refused until it is verified.
+            {verifiedEnvironments.length > 0
+              ? "Writes are allowed only in the environments verified here: " +
+                verifiedEnvironments
+                  .map((v) => `${v.environment}${v.sapClient ? ` (client ${v.sapClient})` : ""}`)
+                  .join(", ") +
+                ". Verify every environment you will write to — a DEV verify does not open PROD."
+              : "Writes through your own API are refused in each environment until it has been verified there."}
           </span>
         )}
       </span>
@@ -207,6 +262,16 @@ export function ServiceVerifyPanel({
               {outcome.boundTo && <span style={muted}>Answered by {outcome.boundTo.label}</span>}
             </span>
             <span style={{ color: "var(--ink-secondary)" }}>{outcome.detail}</span>
+            {canSwitchVersion && (
+              <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+                <span>
+                  <button type="button" style={btn} disabled={busy} onClick={() => void switchVersion(detected!)}>
+                    Switch to {detected} and verify again
+                  </button>
+                </span>
+                {liveWriteWarning}
+              </span>
+            )}
             {canAuthor && outcome.status === "ENTITY_SET_MISSING" && outcome.suggestedEntitySet && (
               <span>
                 <button
@@ -240,6 +305,7 @@ export function ServiceVerifyPanel({
                 >
                   Use this dataset
                 </button>
+                {liveWriteWarning}
               </span>
             )}
           </>

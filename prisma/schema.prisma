@@ -848,6 +848,11 @@ model Interface {
   serviceVerifiedEnvironment String?
   /// Entity-set names the verified $metadata declared (capped at 500).
   serviceVerifiedEntitySets  Json?
+  /// Successful verifications PER ENVIRONMENT: { [env]: { at, connectionId,
+  /// sapClient, baseUrl } } — the binding that answered. The write route
+  /// refuses a custom service unless the caller's environment has one for
+  /// the very binding the write uses. Cleared with the fields above.
+  serviceVerifications       Json?
   /// READ | WRITE (WRITE implies a stronger review path).
   mode       String
 

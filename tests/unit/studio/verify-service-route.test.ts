@@ -9,13 +9,18 @@
  * stubbed global fetch. What these pin:
  *
  *   - an EDMX answer lists its datasets and — only when everything matches —
- *     is recorded on the interface, optimistically on its version;
+ *     is recorded on the interface, optimistically on its version, FOR THE
+ *     ENVIRONMENT ASKED, with the binding that answered, beside (never over)
+ *     the environments already verified;
+ *   - SuccessFactors is asked about the interface's one dataset, not the
+ *     whole tenant's description;
  *   - every way the answer can be wrong is named, and none is recorded;
  *   - the request is the runtime binding's: the connection's host, its client;
  *   - it is audited twice, like the lane re-check;
  *   - it takes the tight live-SAP throttle bucket.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -168,12 +173,55 @@ describe("a service that answers", () => {
     });
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
     const call = mocks.updateMany.mock.calls[0]![0];
-    expect(call.where).toEqual({ id: "if_1", organizationId: "org_a", version: 4 });
+    expect(call.where).toEqual({
+      id: "if_1",
+      organizationId: "org_a",
+      version: 4,
+      serviceVerifications: { equals: Prisma.DbNull },
+    });
     expect(call.data).toMatchObject({
       serviceVerifiedEnvironment: "DEV",
       serviceVerifiedEntitySets: ["A_Travel", "A_Booking"],
     });
     expect(call.data.serviceVerifiedAt).toBeInstanceOf(Date);
+    // Per environment, with the binding that answered (review round 1).
+    expect(call.data.serviceVerifications).toEqual({
+      DEV: { at: call.data.serviceVerifiedAt.toISOString(), connectionId: "conn_dev", sapClient: "100", baseUrl: BASE },
+    });
+  });
+
+  it("adds this environment beside the ones already verified, never over them", async () => {
+    const prod = { at: "2026-10-18T09:00:00.000Z", connectionId: "conn_prd", sapClient: "300", baseUrl: "https://prd" };
+    mocks.findIface.mockResolvedValue(iface({ serviceVerifications: { PROD: prod } }));
+    await verify();
+    const call = mocks.updateMany.mock.calls[0]![0];
+    expect(call.where.serviceVerifications).toEqual({ equals: { PROD: prod } });
+    expect(call.data.serviceVerifications).toEqual({
+      PROD: prod,
+      DEV: expect.objectContaining({ connectionId: "conn_dev", sapClient: "100", baseUrl: BASE }),
+    });
+  });
+
+  it("a verify of another environment that landed meanwhile is re-read and kept", async () => {
+    const sbx = { at: "2026-10-20T01:00:00.000Z", connectionId: "conn_sbx", sapClient: null, baseUrl: "https://sbx" };
+    mocks.findIface
+      .mockResolvedValueOnce(iface())
+      .mockResolvedValueOnce({ version: 4, serviceVerifications: { SANDBOX: sbx } });
+    mocks.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    const d = await data(await verify());
+    expect(d.status).toBe("OK");
+    expect(mocks.updateMany).toHaveBeenCalledTimes(2);
+    const second = mocks.updateMany.mock.calls[1]![0];
+    expect(second.where.serviceVerifications).toEqual({ equals: { SANDBOX: sbx } });
+    expect(Object.keys(second.data.serviceVerifications as object).sort()).toEqual(["DEV", "SANDBOX"]);
+  });
+
+  it("a contract change that landed meanwhile stops the retry", async () => {
+    mocks.findIface.mockResolvedValueOnce(iface()).mockResolvedValueOnce({ version: 5, serviceVerifications: null });
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    const d = await data(await verify());
+    expect(d.status).toBe("CHANGED_DURING_VERIFY");
+    expect(mocks.updateMany).toHaveBeenCalledTimes(1);
   });
 
   it("asks the connection's host for the service's $metadata, with the client after the full path", async () => {
@@ -200,6 +248,71 @@ describe("a service that answers", () => {
     const d = await data(await verify());
     expect(d.serviceSource).toBe("catalogue");
     expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/sap/opu/odata/sap/API_BUSINESS_PARTNER/$metadata?sap-client=100`);
+  });
+});
+
+describe("SuccessFactors: one dataset's description, not the tenant's (review round 1)", () => {
+  const SF_EDMX =
+    '<?xml version="1.0" encoding="utf-8"?>' +
+    '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx">' +
+    '<edmx:DataServices m:DataServiceVersion="2.0" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">' +
+    '<Schema Namespace="SFOData"><EntityType Name="cust_Equipment"/>' +
+    '<EntityContainer Name="EntityContainer" m:IsDefaultEntityContainer="true">' +
+    '<EntitySet Name="cust_Equipment" EntityType="SFOData.cust_Equipment"/>' +
+    "</EntityContainer></Schema></edmx:DataServices></edmx:Edmx>";
+  const sf = (overrides: Record<string, unknown> = {}) =>
+    iface({
+      sapProduct: "successfactors",
+      servicePath: "/odata/v2",
+      externalId: "custom:/odata/v2",
+      odataVersion: "V2",
+      entitySet: "cust_Equipment",
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    mocks.binding.mockResolvedValue({
+      ok: true,
+      connection: { ...CONNECTION, product: "successfactors", client: null },
+      bindingUnverified: false,
+    });
+    fetchMock.mockImplementation(async () => xml(SF_EDMX));
+  });
+
+  it("asks {root}/{EntitySet}/$metadata and verifies the dataset", async () => {
+    mocks.findIface.mockResolvedValue(sf());
+    const d = await data(await verify({ environment: "DEV" }));
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/cust_Equipment/$metadata`);
+    expect(d).toMatchObject({ status: "OK", verified: true, entitySets: ["cust_Equipment"] });
+    expect(mocks.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("a dataset SuccessFactors does not know → NOT_FOUND naming the dataset", async () => {
+    mocks.findIface.mockResolvedValue(sf({ entitySet: "cust_Nope" }));
+    fetchMock.mockImplementation(async () => new Response("", { status: 404 }));
+    const d = await data(await verify({ environment: "DEV" }));
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/cust_Nope/$metadata`);
+    expect(d.status).toBe("NOT_FOUND");
+    expect(d.detail).toContain('no dataset called "cust_Nope"');
+  });
+
+  it("with no dataset yet, the root is asked (the only way to list them)", async () => {
+    mocks.findIface.mockResolvedValue(sf({ entitySet: null }));
+    await verify({ environment: "DEV" });
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/$metadata`);
+  });
+
+  it("a dataset that is not a simple name is never joined onto the path", async () => {
+    mocks.findIface.mockResolvedValue(sf({ entitySet: "../sfapi" }));
+    await verify({ environment: "DEV" });
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/$metadata`);
+  });
+
+  it("S/4HANA still reads the whole service's description", async () => {
+    mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
+    fetchMock.mockImplementation(async () => xml(V2_EDMX));
+    await verify();
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}${PATH}/$metadata?sap-client=100`);
   });
 });
 

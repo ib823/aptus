@@ -21,11 +21,26 @@
  *   - backslashes, whitespace and control characters, which URL parsers and
  *     proxies disagree about;
  *   - `.` and `..` segments, empty segments, and every percent-escape that
- *     decodes to a separator, a dot, a `%` (double encoding) or a control
- *     character — `%2e%2e`, `%2f`, `%5c`, `%3f`, `%23`, `%252e`, `%00`;
+ *     decodes to a separator, a dot, a `;`, a `%` (double encoding) or a
+ *     control character — `%2e%2e`, `%2f`, `%5c`, `%3f`, `%23`, `%3b`,
+ *     `%252e`, `%00`. A segment is judged by its part BEFORE any `;`:
+ *     servlet containers and many proxies strip `;params` before they
+ *     normalise, so `..;` and `..;x=1` are `..` to them, and `;` alone is an
+ *     empty segment;
  *   - anything outside a conservative character set: letters, digits and
- *     `/ _ - . ; = , ( ) ' ~ $`. Matrix parameters (`;v=0002`, `;o=ALIAS`)
- *     are SAP Gateway's own and stay allowed.
+ *     `/ _ - . ; = , ( ) ' ~ $`;
+ *   - SAP ROUTING. The connection and its environment binding decide which
+ *     SAP system and client answer, and every governance check (the grant's
+ *     environment, the audit row, the write gate) reads that binding. Two SAP
+ *     URL features would let a typed path overrule it behind the connection's
+ *     host, where no origin check can see: Gateway matrix parameters
+ *     (`;o=<system alias>`, `;mo`, `;c=`, `;sap-client=`) route a hub to
+ *     another backend or client, and ICF URL mangling (`/sap(bD1lbiZjPTIwMA==)/`,
+ *     a session segment carrying client and language) picks another client.
+ *     So the ONLY matrix parameter allowed is a service version, `;v=` and
+ *     four digits, on the last segment (`/sap/opu/odata/sap/ZX_SRV;v=0002`),
+ *     and `(` / `)` are refused in the first two segments, where ICF reads
+ *     its session segment.
  *
  * And a final backstop: the path is resolved against a dummy origin by the
  * WHATWG parser, and refused unless the parser agrees it is exactly that path
@@ -66,6 +81,8 @@ export type ServicePathRefusal =
   | "ENCODED_FORBIDDEN"
   | "EMPTY_SEGMENT"
   | "DOT_SEGMENT"
+  | "ROUTING_PARAMETER"
+  | "SESSION_SEGMENT"
   | "SYSTEM_RESOURCE"
   | "NOT_NORMALIZED";
 
@@ -92,7 +109,11 @@ export const SERVICE_PATH_MESSAGES: Record<ServicePathRefusal, string> = {
   ENCODED_FORBIDDEN:
     "The service path hides a slash, a dot, a % or another separator behind a %-escape. Enter the path as plain text.",
   EMPTY_SEGMENT: "The service path has an empty part (// or a lone /). Remove the extra slash.",
-  DOT_SEGMENT: "The service path cannot contain . or .. as a part of the path.",
+  DOT_SEGMENT: "The service path cannot contain . or .. as a part of the path, with or without ; after it.",
+  ROUTING_PARAMETER:
+    "The service path carries an SAP routing setting after a ; (such as ;o= for another system or ;c= for another client). The SAP system and client always come from the connection, so only a version suffix such as ;v=0002 at the end is allowed.",
+  SESSION_SEGMENT:
+    "The service path starts with an SAP session part in brackets, such as /sap(…)/, which can choose another SAP client. Enter the plain service path; the client always comes from the connection.",
   SYSTEM_RESOURCE:
     "Enter the service root, without $metadata or any other $ resource. For example /sap/opu/odata/sap/ZUI_TRAVEL_O2.",
   NOT_NORMALIZED: "The service path does not read the same once it is parsed as a URL path. Enter it as plain text.",
@@ -102,8 +123,15 @@ const WHITESPACE_OR_CONTROL = /[\u0000-\u001F\u007F\s\u00A0\u2000-\u200B\u2028\u
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const CHARSET = /^[A-Za-z0-9/_\-.;=,()'~$%]+$/;
 const HEX2 = /^[0-9A-Fa-f]{2}$/;
-/** What a %-escape may decode to: never a separator, a dot, a % or a control. */
-const ESCAPABLE = /^[A-Za-z0-9_\-;=,()'~$]$/;
+/**
+ * What a %-escape may decode to: never a separator, a dot, a `;` (a matrix
+ * parameter in disguise), a % or a control.
+ */
+const ESCAPABLE = /^[A-Za-z0-9_\-=,()'~$]$/;
+/** The one matrix parameter allowed: a Gateway service version, on the last segment. */
+const VERSION_PARAMETER = /^v=\d{4}$/;
+/** ICF reads its session (URL-mangling) segment here: /sap(…)/ or /<alias>/sap(…)/. */
+const SESSION_SEGMENT_DEPTH = 2;
 const BACKSTOP_ORIGIN = "https://service-path.invalid";
 
 function refuse(reason: ServicePathRefusal): ServicePathCheck {
@@ -139,12 +167,24 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
     if (!ESCAPABLE.test(decoded)) return refuse("ENCODED_FORBIDDEN");
   }
 
-  for (const segment of path.slice(1).split("/")) {
-    if (segment === "") return refuse("EMPTY_SEGMENT");
-    if (segment === "." || segment === "..") return refuse("DOT_SEGMENT");
-    // Decoded, so `%24metadata` is refused like `$metadata`. Every escape
-    // that survived the loop above decodes to an allowed character.
-    if (decodeURIComponent(segment).startsWith("$")) return refuse("SYSTEM_RESOURCE");
+  const segments = path.slice(1).split("/");
+  for (const [index, segment] of segments.entries()) {
+    // Decoded, so `%24metadata` is refused like `$metadata` and `%28` like
+    // `(`. Every escape that survived the loop above decodes to an allowed
+    // character, and never to `/` or `;`.
+    const decoded = decodeURIComponent(segment);
+    const semicolon = decoded.indexOf(";");
+    // The segment as a servlet container or proxy sees it: params stripped.
+    const base = semicolon === -1 ? decoded : decoded.slice(0, semicolon);
+    if (base === "") return refuse("EMPTY_SEGMENT");
+    if (base === "." || base === "..") return refuse("DOT_SEGMENT");
+    if (semicolon !== -1) {
+      const params = decoded.slice(semicolon + 1);
+      const last = index === segments.length - 1;
+      if (!last || !VERSION_PARAMETER.test(params)) return refuse("ROUTING_PARAMETER");
+    }
+    if (index < SESSION_SEGMENT_DEPTH && /[()]/.test(decoded)) return refuse("SESSION_SEGMENT");
+    if (base.startsWith("$")) return refuse("SYSTEM_RESOURCE");
   }
 
   let parsed: URL;

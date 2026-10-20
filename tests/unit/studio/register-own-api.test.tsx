@@ -7,6 +7,10 @@
  * validates the path with the API's own rule as it is typed and sends the
  * derived-id request, the Source card shows the path and offers Verify, and
  * Mark ACTIVE on an unverified custom WRITE interface says why it is disabled.
+ * Review round 1: the OData version can be changed from the Source card (and
+ * from Verify's VERSION_MISMATCH answer), the environments verified are
+ * listed because the write gate is per environment, and a live custom WRITE
+ * interface warns before a dataset change stops its writes.
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -128,7 +132,7 @@ describe("an interface on your own API", () => {
       />,
     );
     expect((screen.getByRole("button", { name: "Mark ACTIVE" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText(/Verified in DEV on 2026-10-19 10:00 UTC · 1 dataset/)).toBeTruthy();
+    expect(screen.getByText(/Last verified in DEV on 2026-10-19 10:00 UTC · 1 dataset/)).toBeTruthy();
   });
 
   it("Verify asks the chosen environment and offers the datasets SAP listed", async () => {
@@ -170,5 +174,115 @@ describe("an interface on your own API", () => {
   it("says there is nothing to ask when no connection declares an environment", () => {
     render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} verifyTargets={[]} />);
     expect(screen.getByText(/No connection for this product declares an environment yet/)).toBeTruthy();
+  });
+});
+
+describe("review round 1 — the version, per-environment verification, live-write warnings", () => {
+  function patchAndVerifyFetch(verifyOutcomes: unknown[]) {
+    const outcomes = [...verifyOutcomes];
+    return vi.fn(async (url: string) => {
+      if (url === "/api/studio/interfaces") {
+        return new Response(JSON.stringify({ data: { id: "if_c" } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: outcomes.shift() }), { status: 200 });
+    });
+  }
+
+  it("a new V4 path infers V4, and the version is sent with the path", async () => {
+    const fetchMock = patchAndVerifyFetch([]);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Change path or version" }));
+    const v4 = "/sap/opu/odata4/sap/zui_x_o4/srvd_a2x/sap/zx/0001";
+    fireEvent.change(screen.getByLabelText("Service path"), { target: { value: v4 } });
+    expect((screen.getByRole("radio", { name: "OData V4" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ id: "if_c", servicePath: v4, odataVersion: "V4" });
+  });
+
+  it("the version alone can be changed, and the warning says grants stay attached", async () => {
+    const fetchMock = patchAndVerifyFetch([]);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Change path or version" }));
+    expect(screen.getByText(/A version change alone keeps the grants attached/)).toBeTruthy();
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("radio", { name: "OData V4" }));
+    fireEvent.click(save);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ id: "if_c", odataVersion: "V4" });
+  });
+
+  it("VERSION_MISMATCH offers to switch the version, then verifies again", async () => {
+    const mismatch = {
+      status: "VERSION_MISMATCH",
+      verified: false,
+      detail: "This service describes itself as OData V4, but the interface says V2. Change the version, then verify again.",
+      entitySets: ["Travel"],
+      entitySet: "A_Travel",
+      suggestedEntitySet: null,
+      detectedODataVersion: "V4",
+      boundTo: { label: "ERP DEV", environment: "DEV", sapClient: "100" },
+    };
+    const ok = { ...mismatch, status: "OK", verified: true, detail: "The service answered with its description." };
+    const fetchMock = patchAndVerifyFetch([mismatch, ok]);
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <InterfacesClient
+        interfaces={[CUSTOM]}
+        canAuthor
+        products={PRODUCTS}
+        verifyTargets={[{ product: "s4hana-onprem", environment: "DEV", sapClient: "100", label: "ERP DEV" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    const switchBtn = await screen.findByRole("button", { name: "Switch to V4 and verify again" });
+    fireEvent.click(switchBtn);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls[1]![0]).toBe("/api/studio/interfaces");
+    expect(JSON.parse(String(calls[1]![1].body))).toEqual({ id: "if_c", odataVersion: "V4" });
+    expect(calls[2]![0]).toBe("/api/studio/interfaces/if_c/verify-service");
+  });
+
+  it("lists the environments verified, because writes are allowed only there", () => {
+    render(
+      <InterfacesClient
+        interfaces={[
+          {
+            ...CUSTOM,
+            serviceVerifiedAt: "2026-10-19T10:00:00.000Z",
+            serviceVerifiedEnvironment: "DEV",
+            serviceVerifiedEnvironments: [
+              { environment: "SANDBOX", at: "2026-10-18T10:00:00.000Z", sapClient: null },
+              { environment: "DEV", at: "2026-10-19T10:00:00.000Z", sapClient: "100" },
+            ],
+          },
+        ]}
+        canAuthor
+        products={PRODUCTS}
+      />,
+    );
+    expect(
+      screen.getByText(/Writes are allowed only in the environments verified here: SANDBOX, DEV \(client 100\)\. .*a DEV verify does not open PROD/),
+    ).toBeTruthy();
+  });
+
+  it("a live custom WRITE interface warns before a dataset change stops its writes", () => {
+    render(
+      <InterfacesClient interfaces={[{ ...CUSTOM, status: "ACTIVE" }]} canAuthor products={PRODUCTS} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    expect(screen.getByText(/This write interface is live\. Saving a new dataset clears verification and returns it to draft/)).toBeTruthy();
+  });
+
+  it("a catalogue or draft interface shows no such warning", () => {
+    render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    expect(screen.queryByText(/This write interface is live/)).toBeNull();
   });
 });

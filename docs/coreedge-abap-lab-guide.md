@@ -14,9 +14,13 @@ listed as unknown. It is not presented as fact.
 **Updated on 2026-10-20** for interfaces that carry their own service path
 (branch `custom-service-path`): your own `Z*`, `YY1_*`, ECC Gateway and
 SuccessFactors custom services are now registered by path and verified live
-(sections 2, 5.6, 5.7, 6.1 and exercise 4). Everything said about that feature
-was traced in code and is covered by unit tests; it has **not been run against a
-live tenant**.
+(sections 2, 5.6, 5.7, 6.1 and exercise 4). A review round on the same branch
+then made verification per environment (a DEV verify no longer opens PROD
+writes), refused SAP routing in the path (`;o=`, `/sap(...)/`, `..;`), let
+SuccessFactors verify one dataset instead of the whole tenant, and added the
+OData version control to Studio. Everything said about that feature was traced
+in code and is covered by unit tests; it has **not been run against a live
+tenant**.
 
 **Before you share this repository with anyone, read section 9.** The code is
 proprietary. Copying or hosting it needs the author's written permission.
@@ -119,7 +123,7 @@ not mean every SAP release has been tested end to end.
 | SuccessFactors | In-app SAML-bearer signing exists. The code itself says it has not been verified against a live tenant (`src/lib/sap-public/connection-resolver.ts:646-653`). Discover cannot create an interface the broker can serve. Register your own API with the path `/odata/v2` instead (section 5.6). |
 | S/4HANA on-premise or SAP Cloud ERP Private (RISE) | Only from an instance hosted inside your network. The system needs a DNS name, `SAP_HOST_ALLOWLIST_EXTRA` set, and an HTTPS certificate that Node trusts (section 5.5). |
 | ABAP calling the CoreEdge API | Plain HTTPS with a Bearer header works in principle. No ABAP client has been tested, and the SAP system must be able to reach the CoreEdge host (section 6.2). |
-| Your own OData service (V2 or V4), any product except Ariba | Register it with its service path and OData version, then **Verify** it (section 6.1). Writes through it need a current verification. On-premise and Private systems also need network reachability (section 5.5). Traced in code and covered by unit tests; not run against a live tenant. |
+| Your own OData service (V2 or V4), any product except Ariba | Register it with its service path and OData version, then **Verify** it (section 6.1). Writes through it need a current verification in the environment they write to. On-premise and Private systems also need network reachability (section 5.5). Traced in code and covered by unit tests; not run against a live tenant. |
 
 ### Not available yet
 
@@ -625,8 +629,15 @@ Caveats:
 - **Register your own API instead.** Studio → Interfaces → **Register your own
   API**: product `SuccessFactors`, service path `/odata/v2`, OData version `V2`,
   and the entity set — a standard entity such as `PerPerson`, or one of your
-  custom MDF objects (`cust_*`). Then **Verify** it: the entity sets your
-  tenant's `$metadata` declares are listed, custom MDF objects included.
+  custom MDF objects (`cust_*`). Then **Verify** it. Set the entity set
+  first: with one set, Verify asks for that dataset's own description,
+  `/odata/v2/<EntitySet>/$metadata`, not the whole tenant's
+  (`src/lib/studio/service-verify.ts:41-70`). The tenant-wide `/odata/v2/$metadata`
+  is large and slow (SAP's own Employee Central performance guidance says so)
+  and is likely to end in `TIMEOUT` (10 s by default, 30 s at most) or
+  `METADATA_TOO_LARGE` (8 MB); with no entity set, that is what Verify has to
+  ask. The one-dataset request was traced in code and covered by unit tests,
+  not run against a live tenant.
 - Every custom SuccessFactors interface on `/odata/v2` has the same grant id,
   `custom:/odata/v2`, so one approved grant covers all of that solution's
   interfaces on the root. This is the same per-service grant rule as for
@@ -724,8 +735,9 @@ tenant.**
    *Service URL*; on-premise, `/IWFND/MAINT_SERVICE` shows it too. Keep only the
    part after the host, starting with `/`, without `$metadata` and without
    `?sap-client=…` — CoreEdge adds the SAP client from the connection, after the
-   full path. For example `/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2`. Matrix
-   parameters such as `;v=0002` are kept.
+   full path. For example `/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2`. A version
+   suffix such as `;v=0002` on the last segment is kept; every other matrix
+   parameter is refused (see the rules below).
 2. **Register it.** Studio → Interfaces → **Register your own API**: solution,
    name, product, service path, OData version (set from the path until you
    choose), operation, and optionally the entity set. Or with the API
@@ -744,11 +756,13 @@ tenant.**
    ```
 
    It creates a DRAFT and grants nothing, like **Add to interface**.
-3. **Verify it.** Open the interface, choose the environment (and SAP client)
-   under **Verified**, and press **Verify**
-   (`POST /api/studio/interfaces/<id>/verify-service`,
-   `src/app/api/studio/interfaces/[id]/verify-service/route.ts:68`). It asks the
-   connection a call from that environment would use. Outcomes:
+3. **Verify it in each environment you will write to.** Open the interface,
+   choose the environment (and SAP client) under **Verified**, and press
+   **Verify** (`POST /api/studio/interfaces/<id>/verify-service`,
+   `src/app/api/studio/interfaces/[id]/verify-service/route.ts:73`). It asks the
+   connection a call from that environment would use, and a success is recorded
+   for that environment only. The panel lists the environments verified.
+   Outcomes:
 
    | Shown as | Status | What to do |
    |---|---|---|
@@ -756,8 +770,8 @@ tenant.**
    | no such service | `NOT_FOUND` | Check the path against the binding's Service URL or `/IWFND/MAINT_SERVICE`, and that the service is published. |
    | sign-in refused | `UNAUTHORIZED` | SAP answered 401 or 403, or redirected to a login page: check the communication user, the arrangement and `S_SERVICE`. |
    | dataset not found | `ENTITY_SET_MISSING` | Names are case-sensitive. A near match is offered as *Did you mean …?*. |
-   | version differs | `VERSION_MISMATCH` | The service describes itself as the other OData version. Change it and verify again. |
-   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:28`). Split the service. |
+   | version differs | `VERSION_MISMATCH` | The service describes itself as the other OData version. Press **Switch to V2/V4 and verify again** under the answer, or change it under **Change path or version**. |
+   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:72`). Split the service. |
    | no connection | `BINDING_REFUSED` | No connection declares that environment (or SAP client). Fix it in Connections. |
    | failed, no answer | `ERROR`, `TIMEOUT` | 5xx, a 200 that is not EDMX (often a login page), or no answer in time. |
 
@@ -767,29 +781,49 @@ tenant.**
 **Rules that follow from the design.**
 
 - **The id is derived**: `custom:<path>`
-  (`src/lib/sap-public/service-path.ts:169-171`). Grants name that id, so a
+  (`src/lib/sap-public/service-path.ts:209-211`). Grants name that id, so a
   grant a second person approved for one path never authorises another.
 - **The path is a path on the connection's host and nothing else.** A full URL,
-  `//host`, `.` or `..` segments, empty segments, `?`, `#`, backslashes,
-  whitespace and control characters, `$metadata`, and percent-escapes that
-  decode to any of those (`%2e%2e`, `%2f`, `%252e`) are refused, with a
-  sentence saying what to enter instead (`src/lib/sap-public/service-path.ts:119-166`).
-  Ariba is REST, not OData, and has no path.
-- **Writes need a current verification.** The write route refuses a custom
-  service that has not been verified since it last changed, before the
-  `Idempotency-Key` is reserved and before SAP is called
-  (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:298-305`), and a
-  custom WRITE interface cannot be activated until then
-  (`src/app/api/studio/interfaces/route.ts:416-428`). Reads are not gated.
-- **Changing the path or the version is a new contract.** The version bumps,
-  verification clears, the id changes (existing grants detach; ask for a new
-  one), and an active write interface returns to draft. An active read interface
-  stays active, and its calls answer 403 until the new grant is approved.
-  Changing the dataset also clears verification
-  (`src/app/api/studio/interfaces/route.ts:497-516`).
-- **A failed verify never clears an earlier success**, so a timeout cannot stop
-  live writes. A verify is recorded only if the interface did not change while
-  SAP was answering (`src/app/api/studio/interfaces/[id]/verify-service/route.ts:220-232`).
+  `//host`, `.` or `..` segments (also with parameters, `..;` or `..;x=1`, which
+  servlet containers and proxies read as `..`), empty segments, `?`, `#`,
+  backslashes, whitespace and control characters, `$metadata`, and
+  percent-escapes that decode to any of those or to `;` (`%2e%2e`, `%2f`,
+  `%3b`, `%252e`) are refused, with a sentence saying what to enter instead
+  (`src/lib/sap-public/service-path.ts:147-206`). Ariba is REST, not OData, and
+  has no path.
+- **The path cannot choose the SAP system or client.** The connection and its
+  environment binding decide that, and the grant, the audit row and the write
+  gate all read the binding. A Gateway hub routes `;o=<system alias>` to another
+  backend, and an ICF session segment such as `/sap(bD1lbiZjPTIwMA==)/` carries
+  another client (`c=200`), both behind the connection's host where no origin
+  check sees them. So every matrix parameter except a version suffix on the
+  last segment (`;v=` and four digits) is refused, and `(` or `)` in the first
+  two segments are refused. These are documented SAP behaviours; whether a
+  particular hub honours them was not tested. A path stored before this rule
+  no longer resolves, and its calls answer 400 until the path is corrected.
+- **Writes need a current verification for the caller's environment.** The
+  write route refuses a custom service unless the write credential's
+  environment has a successful verify since the interface last changed, made
+  through the same connection, SAP client and host the write is bound to. It
+  refuses before the `Idempotency-Key` is reserved and before SAP is called
+  (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:302-318`,
+  `src/lib/sap-public/service-verifications.ts:72-85`). Verifying SANDBOX or
+  DEV does not open PROD. A custom WRITE interface cannot be activated until it
+  has been verified in at least one environment
+  (`src/app/api/studio/interfaces/route.ts:424-441`). Reads are not gated.
+- **Changing the path, the version or the dataset is a new contract.** The
+  version bumps, verification clears in every environment, and an active write
+  interface returns to draft; changing one of them and activating in the same
+  request is refused. Only a **path** change produces a new id, so only then do
+  existing grants detach (ask for a new one); an active read interface stays
+  active, and its calls answer 403 until the new grant is approved. After a
+  version or dataset change the grants stay attached
+  (`src/app/api/studio/interfaces/route.ts:407-422,503-540`).
+- **A failed verify never clears an earlier success**, in any environment, so a
+  timeout cannot stop live writes. A verify is recorded only if the interface
+  did not change while SAP was answering; a verify of another environment that
+  lands at the same moment is kept, not overwritten
+  (`src/app/api/studio/interfaces/[id]/verify-service/route.ts:226-273`).
 - **Verify is audited and throttled like the connection Test**: a console-read
   row in the northbound trail and a `TEST_CONNECT` config-audit entry, and the
   tight live-SAP rate-limit bucket (`src/lib/security/rate-limit.ts:292`).
@@ -1383,8 +1417,23 @@ await fetch('/api/studio/interfaces', {
 }).then(r => r.json());
 ```
 
+**Change your own API's OData version** (the **Change path or version** control,
+or **Switch to V2/V4 and verify again** after a `VERSION_MISMATCH`). Any
+`consultant` can run this. The interface version bumps, verification clears and
+an active write interface returns to draft; the grant id is unchanged.
+
+```js
+await fetch('/api/studio/interfaces', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: '<interface id>', odataVersion: 'V4' })
+}).then(r => r.json());
+```
+
 **Verify an interface's service in one environment** (the **Verify** button).
 Any `consultant` can run this; `sapClient` only where the product addresses one.
+Run it for each environment you will write to: a write is refused in an
+environment that has not been verified.
 
 ```js
 await fetch('/api/studio/interfaces/<interface id>/verify-service', {

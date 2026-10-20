@@ -106,7 +106,17 @@ describe("never a fallback", () => {
   });
 
   it("a corrupt stored path → null, not the catalogue", async () => {
-    for (const bad of ["https://evil.example/x", "/a/../b", "/x/", "/x?sap-client=100"]) {
+    for (const bad of [
+      "https://evil.example/x",
+      "/a/../b",
+      "/x/",
+      "/x?sap-client=100",
+      // Stored before review round 1 tightened the rule: SAP routing and
+      // servlet dot-segments now resolve to nothing, never to a call.
+      "/sap/opu/odata/sap/ZX;o=PRD_ALIAS",
+      "/sap(bD1lbiZjPTIwMA==)/opu/odata/sap/ZX",
+      "/sap/opu/odata/sap/ZX/..;",
+    ]) {
       const r = await resolveInterfaceService(product("s4hana"), {
         sapProduct: "s4hana",
         externalId: "API_BUSINESS_PARTNER",

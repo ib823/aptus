@@ -10,7 +10,9 @@
  *      sap-client after the full path — and the idempotency key is bound to
  *      that path, so reusing a key after the path changes is a conflict.
  *   2. An UNVERIFIED custom service is refused before the key is reserved and
- *      before SAP is touched.
+ *      before SAP is touched — and "verified" means verified FOR THIS
+ *      ENVIRONMENT, through the connection, SAP client and host the write is
+ *      bound to. A SANDBOX verify does not open a DEV (or PROD) write.
  *   3. A catalogue interface writes exactly as it always did.
  */
 
@@ -78,6 +80,9 @@ vi.mock("@/lib/northbound/idempotency", async (importOriginal) => ({
 import { POST } from "@/app/api/northbound/interfaces/[id]/data/write/route";
 
 const PATH = "/sap/opu/odata/sap/ZUI_X_O2";
+const DEV_VERIFIED = {
+  DEV: { at: "2026-10-19T10:00:00.000Z", connectionId: "conn_dev", sapClient: "100", baseUrl: BASE },
+};
 
 function iface(overrides: Record<string, unknown> = {}) {
   return {
@@ -93,6 +98,7 @@ function iface(overrides: Record<string, unknown> = {}) {
     servicePath: PATH,
     odataVersion: "V2",
     serviceVerifiedAt: new Date("2026-10-19T10:00:00Z"),
+    serviceVerifications: DEV_VERIFIED,
     ...overrides,
   };
 }
@@ -163,18 +169,70 @@ describe("a verified custom service", () => {
 
 describe("an unverified custom service", () => {
   it("is refused 400 before the key is reserved and before SAP is touched", async () => {
-    mocks.access.mockResolvedValue({ ok: true, iface: iface({ serviceVerifiedAt: null }) });
+    mocks.access.mockResolvedValue({
+      ok: true,
+      iface: iface({ serviceVerifiedAt: null, serviceVerifications: null }),
+    });
     const res = await post();
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");
-    expect(body.error.message).toMatch(/has not been verified since it last changed\. Verify it in Studio/);
+    expect(body.error.message).toMatch(/has not been verified in DEV.*since it last changed\. Verify it in Studio for DEV/);
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
     // …and the refusal is in the trail, against the connection it was bound to.
     expect(mocks.record).toHaveBeenCalledWith(
       expect.objectContaining({ status: 400, externalId: `custom:${PATH}`, connectionId: "conn_dev" }),
     );
+  });
+});
+
+describe("verification is per environment and per binding (review round 1)", () => {
+  async function refused(serviceVerifications: unknown) {
+    mocks.access.mockResolvedValue({ ok: true, iface: iface({ serviceVerifications }) });
+    const res = await post();
+    expect(res.status).toBe(400);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    return res;
+  }
+
+  it("a verify in SANDBOX does not open a DEV write, though serviceVerifiedAt is set", async () => {
+    const res = await refused({
+      SANDBOX: { at: "2026-10-19T10:00:00.000Z", connectionId: "conn_sbx", sapClient: "100", baseUrl: BASE },
+    });
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toContain("not been verified in DEV");
+  });
+
+  it("a DEV verify made through another connection does not count", async () => {
+    await refused({ DEV: { ...DEV_VERIFIED.DEV, connectionId: "conn_other" } });
+  });
+
+  it("a DEV verify made on another SAP client does not count", async () => {
+    await refused({ DEV: { ...DEV_VERIFIED.DEV, sapClient: "200" } });
+  });
+
+  it("a DEV verify made against another host does not count", async () => {
+    await refused({ DEV: { ...DEV_VERIFIED.DEV, baseUrl: "https://erp-old.example.internal:44300" } });
+  });
+
+  it("a malformed entry reads as not verified", async () => {
+    await refused({ DEV: { at: "2026-10-19T10:00:00.000Z" } });
+  });
+
+  it("the matching DEV entry, beside others, opens the DEV write", async () => {
+    mocks.access.mockResolvedValue({
+      ok: true,
+      iface: iface({
+        serviceVerifications: {
+          ...DEV_VERIFIED,
+          PROD: { at: "2026-10-19T11:00:00.000Z", connectionId: "conn_prd", sapClient: "300", baseUrl: "https://prd" },
+        },
+      }),
+    });
+    const res = await post();
+    expect(res.status).toBe(201);
   });
 });
 
@@ -188,6 +246,7 @@ describe("a catalogue write is unchanged", () => {
         servicePath: null,
         odataVersion: null,
         serviceVerifiedAt: null,
+        serviceVerifications: null,
       }),
     });
     const res = await post();

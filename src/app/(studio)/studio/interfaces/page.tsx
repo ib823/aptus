@@ -22,6 +22,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeEnvironment } from "@/lib/sap-public/connection-resolver";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
+import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct, getSapServices, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
@@ -63,6 +64,7 @@ export default async function StudioInterfacesPage({
             serviceVerifiedAt: true,
             serviceVerifiedEnvironment: true,
             serviceVerifiedEntitySets: true,
+            serviceVerifications: true,
             solution: { select: { name: true } },
           },
           orderBy: [{ updatedAt: "desc" }],
@@ -174,6 +176,7 @@ export default async function StudioInterfacesPage({
     odataVersion: r.odataVersion,
     serviceVerifiedAt: r.serviceVerifiedAt ? r.serviceVerifiedAt.toISOString() : null,
     serviceVerifiedEnvironment: r.serviceVerifiedEnvironment,
+    serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(r.serviceVerifications),
     serviceVerifiedEntitySets: Array.isArray(r.serviceVerifiedEntitySets)
       ? r.serviceVerifiedEntitySets.filter((n): n is string => typeof n === "string")
       : null,

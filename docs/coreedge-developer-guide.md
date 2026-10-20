@@ -109,15 +109,25 @@ SAP's catalogue. You register it **by its service path** instead:
    copy it from the service binding in ADT (*Service URL*) or from
    `/IWFND/MAINT_SERVICE`, without `$metadata` and without `?sap-client`
    (CoreEdge adds the client from the connection). It is a path on the
-   connection's own host and nothing else: a full URL, `//host`, `..`, `?`, `#`,
-   backslashes, whitespace and percent-escapes that hide any of those are refused
-   (`src/lib/sap-public/service-path.ts`). Ariba is REST, not OData, and has no
-   path.
-2. **Verify it per environment.** On the interface, **Verify** asks the SAP system
-   for the service's `$metadata` through your organization's connection for the
-   environment you pick — the same binding a call from that environment uses, SAP
-   client included — and lists its datasets. It reads no business data. Pick the
-   dataset from the list (`POST /api/studio/interfaces/<id>/verify-service`).
+   connection's own host and nothing else: a full URL, `//host`, `..` (also
+   `..;`), `?`, `#`, backslashes, whitespace and percent-escapes that hide any of
+   those are refused (`src/lib/sap-public/service-path.ts`). So is SAP routing
+   that would pick another system or client than the connection's: Gateway
+   matrix parameters such as `;o=<system alias>`, `;mo` or `;c=`, and an ICF
+   session segment such as `/sap(bD1lbiZjPTIwMA==)/`. The only matrix parameter
+   kept is a version suffix on the last segment, `;v=0002`. Ariba is REST, not
+   OData, and has no path.
+2. **Verify it in every environment you will write to.** On the interface,
+   **Verify** asks the SAP system for the service's `$metadata` through your
+   organization's connection for the environment you pick — the same binding a
+   call from that environment uses, SAP client included — and lists its datasets.
+   It reads no business data. Pick the dataset from the list
+   (`POST /api/studio/interfaces/<id>/verify-service`). A successful verify is
+   recorded for that environment only, with the connection, SAP client and host
+   that answered. For SuccessFactors, once the interface names its dataset,
+   Verify asks for that one dataset's description
+   (`/odata/v2/<EntitySet>/$metadata`) instead of the whole tenant's, which is
+   large and slow enough to time out.
 3. **Request access and issue keys as normal.** Grants, the two-person rule,
    tokens, the write key, `Idempotency-Key`, rate limits and the audit trail apply
    exactly as they do to catalogue services.
@@ -127,13 +137,21 @@ What is different, and why:
 - **The interface's id is derived**: `custom:<path>`, for example
   `custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2`. Grants name that id, so a grant a
   second person approved for one path can never authorise another.
-- **Writes need a current verification.** The broker refuses a write through your
-  own service until it has been verified since it last changed, and a WRITE
-  interface cannot be activated before that. Reads are not gated.
-- **Changing the path or version is a new contract**: the version bumps,
-  verification clears, the id changes (so existing grants detach and a new one is
-  needed), and an active write interface returns to draft. Changing the dataset
-  also clears verification.
+- **Writes need a current verification in the caller's environment.** The broker
+  refuses a write through your own service unless that environment has been
+  verified since the interface last changed, through the same connection, SAP
+  client and host the write uses. Verifying DEV does not open PROD: verify each
+  environment you write to. A WRITE interface cannot be activated before it has
+  been verified in at least one environment. Reads are not gated.
+- **Changing the path, the version or the dataset is a new contract**: the
+  version bumps, verification clears in every environment, and an active write
+  interface returns to draft (verify again, then activate). Only a **path**
+  change produces a new id, so only then do existing grants detach and a new one
+  is needed; after a version or dataset change the grants stay attached. In
+  Studio the path and the version are edited together under **Change path or
+  version**, and when Verify answers `VERSION_MISMATCH` it offers **Switch to
+  V2/V4 and verify again**. With the API:
+  `PATCH /api/studio/interfaces { "id": "…", "odataVersion": "V4" }`.
 - **Catalogue and custom do not convert.** To move an interface from a catalogue
   service to your own (or back), register a new one.
 
