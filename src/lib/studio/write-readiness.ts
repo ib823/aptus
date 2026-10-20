@@ -59,8 +59,10 @@ export interface WriteReadinessInput {
     revokedAt: Date | string | null;
   }[];
   /**
-   * Your own API only: the environments holding a verification that still
-   * matches their connection (currentlyVerifiedEnvironments). Omitted or
+   * Your own API only: the environments where a live credential's own
+   * binding — environment AND its SAP client, selected the way the write
+   * route selects it — holds a verification that still matches that
+   * connection (verifiedEnvironmentsForCredentials). Omitted or
    * null for a catalogue interface, whose writes are not gated on Verify.
    */
   serviceVerifiedEnvironments?: readonly string[] | null;

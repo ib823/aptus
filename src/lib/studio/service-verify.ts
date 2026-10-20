@@ -22,7 +22,9 @@
  * past the connection timeout or the size bound, so the root could never be
  * verified and a custom write could never be unlocked. SuccessFactors answers
  * `{root}/{EntitySet}/$metadata` with the description of that one entity, so
- * when the interface names its dataset that is what is fetched. The verdict
+ * when the interface names its dataset on that root, that is what is fetched
+ * (its OData V4 services under /odatav4/ are small, per-module, and answer
+ * `$metadata` only at their own root, so they are read whole). The verdict
  * is the same question — is it OData, which version, is the dataset there —
  * asked about the part the interface uses.
  *
@@ -35,10 +37,16 @@ import type { ODataVersion } from "@/lib/sap-public/service-path";
 import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
 
 /**
- * Products whose service root describes the whole tenant, and which answer
- * `{root}/{EntitySet}/$metadata` for one entity (see the header).
+ * The service roots that describe a whole tenant and answer
+ * `{root}/{EntitySet}/$metadata` for one entity (see the header), by product.
+ * The ROOT, not just the product: SuccessFactors' OData V4 services under
+ * /odatav4/ are per-module services with their own small description, and
+ * OData V4 serves `$metadata` only at the service root — asking
+ * `{service}/{EntitySet}/$metadata` there is answered 404, so a V4 service
+ * with its dataset entered could never be verified (review round 3).
+ * Matched case-insensitively, like the path rule's roots.
  */
-const ENTITY_SCOPED_METADATA_PRODUCTS: ReadonlySet<string> = new Set(["successfactors"]);
+const ENTITY_SCOPED_METADATA_ROOTS: ReadonlyMap<string, string> = new Map([["successfactors", "/odata/v2"]]);
 
 /**
  * An entity-set name safe to put in a path segment: an OData simple
@@ -49,17 +57,19 @@ const SIMPLE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 
 /**
  * Where the description is fetched from: `{servicePath}` (and fetchMetadataDocument
- * appends `/$metadata`), or, for a product with entity-scoped metadata and a
- * dataset that is a simple identifier, `{servicePath}/{entitySet}`.
+ * appends `/$metadata`), or, for a product's tenant-wide root that answers
+ * entity-scoped metadata (SuccessFactors /odata/v2) and a dataset that is a
+ * simple identifier, `{servicePath}/{entitySet}`.
  */
 export function metadataTarget(input: {
   sapProduct?: string | null;
   servicePath: string;
   entitySet: string | null;
 }): { path: string; scope: "service" | "entitySet" } {
+  const scopedRoot = input.sapProduct != null ? ENTITY_SCOPED_METADATA_ROOTS.get(input.sapProduct) : undefined;
   if (
-    input.sapProduct != null &&
-    ENTITY_SCOPED_METADATA_PRODUCTS.has(input.sapProduct) &&
+    scopedRoot !== undefined &&
+    input.servicePath.toLowerCase() === scopedRoot &&
     input.entitySet != null &&
     SIMPLE_IDENTIFIER.test(input.entitySet)
   ) {

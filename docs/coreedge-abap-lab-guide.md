@@ -638,7 +638,9 @@ Caveats:
   custom MDF objects (`cust_*`). Then **Verify** it. Set the entity set
   first: with one set, Verify asks for that dataset's own description,
   `/odata/v2/<EntitySet>/$metadata`, not the whole tenant's
-  (`src/lib/studio/service-verify.ts:41-70`). The tenant-wide `/odata/v2/$metadata`
+  (`src/lib/studio/service-verify.ts:49-79`). Only the `/odata/v2` root works
+  this way; an OData V4 service under `/odatav4/` serves its description only
+  at its own root, so Verify reads it whole. The tenant-wide `/odata/v2/$metadata`
   is large and slow (SAP's own Employee Central performance guidance says so)
   and is likely to end in `TIMEOUT` (10 s by default, 30 s at most) or
   `METADATA_TOO_LARGE` (8 MB); with no entity set, that is what Verify has to
@@ -742,7 +744,8 @@ tenant.**
    part after the host, starting with `/`, without `$metadata` and without
    `?sap-client=…` — CoreEdge adds the SAP client from the connection, after the
    full path. For example `/sap/opu/odata/sap/ZUI_LAB_TRAVEL_O2`. A version
-   suffix such as `;v=0002` on the last segment is kept; every other matrix
+   suffix such as `;v=0002` on the last segment is kept (`;v=2` is accepted and
+   stored as `;v=0002`, so both are one grant id); every other matrix
    parameter is refused (see the rules below).
 2. **Register it.** Studio → Interfaces → **Register your own API**: solution,
    name, product, service path, OData version (set from the path until you
@@ -782,7 +785,7 @@ tenant.**
    | sign-in refused | `UNAUTHORIZED` | SAP answered 401 or 403, or redirected to a login page: check the communication user, the arrangement and `S_SERVICE`. |
    | dataset not found | `ENTITY_SET_MISSING` | Names are case-sensitive. A near match is offered as *Did you mean …?*. |
    | version differs | `VERSION_MISMATCH` | The service describes itself as the other OData version. Press **Switch to V2/V4 and verify again** under the answer, or change it under **Change path or version**. |
-   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:72`). Split the service. |
+   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:82`). Split the service. |
    | no connection | `BINDING_REFUSED` | No connection declares that environment (or SAP client). Fix it in Connections. |
    | failed, no answer | `ERROR`, `TIMEOUT` | 5xx, a 200 that is not EDMX (often a login page), or no answer in time. |
 
@@ -792,7 +795,7 @@ tenant.**
 **Rules that follow from the design.**
 
 - **The id is derived**: `custom:<path>`
-  (`src/lib/sap-public/service-path.ts:244-246`). Grants name that id, so a
+  (`src/lib/sap-public/service-path.ts:259-261`). Grants name that id, so a
   grant a second person approved for one path never authorises another.
 - **The path is a path on the connection's host and nothing else.** A full URL,
   `//host`, `.` or `..` segments (also with parameters, `..;` or `..;x=1`, which
@@ -800,11 +803,11 @@ tenant.**
   backslashes, whitespace and control characters, `$metadata`, and
   percent-escapes that decode to any of those or to `;` (`%2e%2e`, `%2f`,
   `%3b`, `%252e`) are refused, with a sentence saying what to enter instead
-  (`src/lib/sap-public/service-path.ts:179-240`). Ariba is REST, not OData, and
+  (`src/lib/sap-public/service-path.ts:184-255`). Ariba is REST, not OData, and
   has no path.
 - **The path must be an OData service.** It has to sit under `/sap/opu/odata/`
   or `/sap/opu/odata4/`, or be SuccessFactors' `/odata/v2` or under `/odatav4/`
-  (`src/lib/sap-public/service-path.ts:134-152`). Reads are not checked against
+  (`src/lib/sap-public/service-path.ts:137-155`). Reads are not checked against
   `$metadata`, and the connection's credentials go with every call, so without
   this rule a path such as `/sap/bc/adt/...`, `/sap/bc/soap/rfc` or a customer
   REST handler would have been called through the broker and its JSON served as
@@ -816,7 +819,7 @@ tenant.**
   backend, and an ICF session segment such as `/sap(bD1lbiZjPTIwMA==)/` carries
   another client (`c=200`), both behind the connection's host where no origin
   check sees them. So every matrix parameter except a version suffix on the
-  last segment (`;v=` and four digits) is refused, and `(` or `)` in the first
+  last segment (`;v=` and one to four digits, stored as four) is refused, and `(` or `)` in the first
   two segments are refused. These are documented SAP behaviours; whether a
   particular hub honours them was not tested. A path stored before this rule
   no longer resolves, and its calls answer 400 until the path is corrected.
@@ -830,10 +833,13 @@ tenant.**
   DEV does not open PROD, and verifying client 200 does not open (or close)
   client 100. A custom WRITE interface is activated only when one environment
   holds a credential with a write key, an approved write grant **and** a
-  verification whose connection has not changed since
-  (`src/app/api/studio/interfaces/route.ts:436-453,505-517`, `src/lib/studio/write-readiness.ts:102-109`).
+  verification of the very connection that credential binds to (its
+  environment and SAP client), unchanged since
+  (`src/app/api/studio/interfaces/route.ts:433-450,501-521`,
+  `src/lib/sap-public/current-connections.ts`, `src/lib/studio/write-readiness.ts:104-111`).
   Verified in SANDBOX with the write chain only in PROD is refused, and the
-  Write chain row shows `service not verified here` for PROD. Reads are not
+  Write chain row shows `service not verified here` for PROD. So is PROD
+  client 100 verified while the PROD credential is bound to client 200. Reads are not
   gated.
 - **Changing the path, the version or the dataset is a new contract.** The
   version bumps, verification clears in every environment, and an active write
@@ -842,7 +848,7 @@ tenant.**
   existing grants detach (ask for a new one); an active read interface stays
   active, and its calls answer 403 until the new grant is approved. After a
   version or dataset change the grants stay attached
-  (`src/app/api/studio/interfaces/route.ts:419-434,528-565`).
+  (`src/app/api/studio/interfaces/route.ts:416-431,532-569`).
 - **A failed verify never clears an earlier success**, in any environment, so a
   timeout cannot stop live writes. A verify is recorded only if the interface
   did not change while SAP was answering; a verify of another environment that
@@ -1277,7 +1283,7 @@ is logged.
 | Limit | Detail |
 |---|---|
 | Reads | Only `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100. CoreEdge sends SAP only `$top` and `$format=json`. There is no `$filter`, `$select`, key lookup, `$expand` or paging, and `?entity=` is ignored (`src/app/api/northbound/interfaces/[id]/data/route.ts:87`; `src/lib/northbound/read.ts:56, 149, 177`). |
-| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:175-177`). |
+| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:177-179`). |
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. The middleware also limits per IP: 300 GET and 120 POST per minute on `/api/*`, shared by every caller behind the same egress IP, with its own 429 shape (section 6.2). |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
@@ -1451,6 +1457,19 @@ await fetch('/api/studio/interfaces', {
   method: 'PATCH',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ id: '<interface id>', odataVersion: 'V4' })
+}).then(r => r.json());
+```
+
+**Choose your own API's dataset** (the **Use this dataset** button, after a
+verify lists the datasets). Verify never saves one. Any `consultant` can run
+this. The interface version bumps, verification clears (verify again) and an
+active write interface returns to draft; the grant id is unchanged.
+
+```js
+await fetch('/api/studio/interfaces', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: '<interface id>', entitySet: '<entity set>' })
 }).then(r => r.json());
 ```
 

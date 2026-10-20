@@ -115,7 +115,8 @@ SAP's catalogue. You register it **by its service path** instead:
    that would pick another system or client than the connection's: Gateway
    matrix parameters such as `;o=<system alias>`, `;mo` or `;c=`, and an ICF
    session segment such as `/sap(bD1lbiZjPTIwMA==)/`. The only matrix parameter
-   kept is a version suffix on the last segment, `;v=0002`. And it must be an
+   kept is a version suffix on the last segment, `;v=0002` (the short form
+   `;v=2` is accepted and stored as `;v=0002`). And it must be an
    OData service: under `/sap/opu/odata/` or `/sap/opu/odata4/` on an ERP or
    S/4HANA system, or `/odata/v2` (exactly) or under `/odatav4/` on
    SuccessFactors. Any other ICF path — `/sap/bc/…`, `/sap/public/…`, a
@@ -127,15 +128,23 @@ SAP's catalogue. You register it **by its service path** instead:
    **Verify** asks the SAP system for the service's `$metadata` through your
    organization's connection for the environment you pick — the same binding a
    call from that environment uses, SAP client included — and lists its datasets.
-   It reads no business data. Pick the dataset from the list
-   (`POST /api/studio/interfaces/<id>/verify-service`). A successful verify is
+   It reads no business data (`POST /api/studio/interfaces/<id>/verify-service`
+   with `{ "environment": "DEV", "sapClient": "100" }`; it never saves a
+   dataset). Save the dataset with **Use this dataset**, or
+   `PATCH /api/studio/interfaces` with `{ "id": "<id>", "entitySet": "<name>" }`,
+   then verify again: a dataset change clears verification. A successful verify is
    recorded for that environment and SAP client only, with the connection and
    host that answered. One system serving two clients in the same environment
    (two connections, client 100 and client 200) keeps two verifications: verify
-   each client you write to, and verifying one never removes the other. For SuccessFactors, once the interface names its dataset,
-   Verify asks for that one dataset's description
-   (`/odata/v2/<EntitySet>/$metadata`) instead of the whole tenant's, which is
-   large and slow enough to time out.
+   each client you write to, and verifying one never removes the other.
+   Activation, and the Write chain row, count an environment as verified only
+   when the connection your credential for it binds to (its environment and
+   SAP client) is the one verified: verifying client 100 does not make PROD
+   ready for a credential bound to client 200. For SuccessFactors on
+   `/odata/v2`, once the interface names its dataset, Verify asks for that one
+   dataset's description (`/odata/v2/<EntitySet>/$metadata`) instead of the
+   whole tenant's, which is large and slow enough to time out. An OData V4
+   service under `/odatav4/` has no per-dataset description and is read whole.
 3. **Request access and issue keys as normal.** Grants, the two-person rule,
    tokens, the write key, `Idempotency-Key`, rate limits and the audit trail apply
    exactly as they do to catalogue services.

@@ -46,11 +46,8 @@ import {
   ODATA_VERSIONS,
   validateServicePath,
 } from "@/lib/sap-public/service-path";
-import { loadCurrentConnections } from "@/lib/sap-public/current-connections";
-import {
-  currentlyVerifiedEnvironments,
-  verifiedEnvironmentsForDisplay,
-} from "@/lib/sap-public/service-verifications";
+import { loadCurrentConnections, verifiedEnvironmentsForCredentials } from "@/lib/sap-public/current-connections";
+import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -478,7 +475,9 @@ export async function PATCH(request: NextRequest) {
     const [liveCredentials, writeKeyHolders, grants, connections] = await Promise.all([
       prisma.solutionClient.findMany({
         where: { organizationId, solutionId: current.solutionId, isActive: true, revokedAt: null },
-        select: { environment: true, expiresAt: true },
+        // sapClient: a write binds by environment AND the credential's client,
+        // so readiness must select the same connection the write would.
+        select: { environment: true, expiresAt: true, sapClient: true },
       }),
       // Which of them carry a write key — a filter on the sealed column,
       // selecting the environment only; the value is never read.
@@ -499,16 +498,21 @@ export async function PATCH(request: NextRequest) {
       isCustom ? loadCurrentConnections(organizationId, current.sapProduct) : Promise.resolve(null),
     ]);
     const withWriteKey = new Set(writeKeyHolders.map((c) => c.environment));
+    const unexpired = liveCredentials.filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime());
     const readiness = writeReadinessByEnvironment({
-      credentials: liveCredentials
-        .filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime())
-        .map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.environment) })),
+      credentials: unexpired.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.environment) })),
       grants,
       // A contract this request changes is verified nowhere (3b refuses it anyway).
+      // Otherwise verified only where a live write credential's OWN binding —
+      // environment AND its SAP client — holds the verification (round 3).
       serviceVerifiedEnvironments: connections
         ? verificationReset
           ? []
-          : currentlyVerifiedEnvironments(current.serviceVerifications, connections)
+          : verifiedEnvironmentsForCredentials(
+              current.serviceVerifications,
+              connections,
+              unexpired.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
+            )
         : null,
       now,
     });

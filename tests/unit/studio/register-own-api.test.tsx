@@ -171,6 +171,45 @@ describe("an interface on your own API", () => {
     expect(screen.getByRole("button", { name: "Use this dataset" })).toBeTruthy();
   });
 
+  it("the dataset picker opens on the interface's own dataset, not the first one listed (review round 3)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              status: "OK",
+              verified: true,
+              detail: "The service answered with its description.",
+              entitySets: ["A_Booking", "A_Travel"],
+              entitySet: "A_Travel",
+              suggestedEntitySet: null,
+              boundTo: { label: "ERP DEV", environment: "DEV", sapClient: "100" },
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    render(
+      <InterfacesClient
+        interfaces={[CUSTOM]}
+        canAuthor
+        products={PRODUCTS}
+        verifyTargets={[{ product: "s4hana-onprem", environment: "DEV", sapClient: "100", label: "ERP DEV" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByText("Answered by ERP DEV");
+    const picker = screen.getByLabelText("Datasets") as HTMLSelectElement;
+    expect(picker.value).toBe("A_Travel");
+    const use = screen.getByRole("button", { name: "Use this dataset" }) as HTMLButtonElement;
+    expect(use.disabled).toBe(true);
+    // Choosing another dataset is still one deliberate change away.
+    fireEvent.change(picker, { target: { value: "A_Booking" } });
+    expect(use.disabled).toBe(false);
+  });
+
   it("says there is nothing to ask when no connection declares an environment", () => {
     render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} verifyTargets={[]} />);
     expect(screen.getByText(/No connection for this product declares an environment yet/)).toBeTruthy();

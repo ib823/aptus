@@ -38,9 +38,12 @@
  *     another backend or client, and ICF URL mangling (`/sap(bD1lbiZjPTIwMA==)/`,
  *     a session segment carrying client and language) picks another client.
  *     So the ONLY matrix parameter allowed is a service version, `;v=` and
- *     four digits, on the last segment (`/sap/opu/odata/sap/ZX_SRV;v=0002`),
+ *     one to four digits, on the last segment (`/sap/opu/odata/sap/ZX_SRV;v=0002`),
  *     and `(` / `)` are refused in the first two segments, where ICF reads
- *     its session segment.
+ *     its session segment. The short form Gateway examples and Fiori
+ *     manifests print (`;v=2`) is the same version, so it is accepted and
+ *     normalized to four digits — one service, one grant identity (review
+ *     round 3).
  *   - ANYTHING THAT IS NOT AN ODATA SERVICE ROOT. The path must sit under
  *     one of the OData handlers SAP systems publish (ODATA_SERVICE_ROOTS):
  *     Gateway's /sap/opu/odata/ and /sap/opu/odata4/, SuccessFactors'
@@ -97,7 +100,7 @@ export type ServicePathRefusal =
   | "NOT_NORMALIZED";
 
 export type ServicePathCheck =
-  /** `path` is normalized: one trailing "/" removed. */
+  /** `path` is normalized: one trailing "/" removed, a `;v=` version written with four digits. */
   | { ok: true; path: string }
   | { ok: false; reason: ServicePathRefusal; message: string };
 
@@ -161,7 +164,9 @@ const HEX2 = /^[0-9A-Fa-f]{2}$/;
  */
 const ESCAPABLE = /^[A-Za-z0-9_\-=,()'~$]$/;
 /** The one matrix parameter allowed: a Gateway service version, on the last segment. */
-const VERSION_PARAMETER = /^v=\d{4}$/;
+const VERSION_PARAMETER = /^v=(\d{1,4})$/;
+/** The width Gateway prints a service version in, and the form stored. */
+const VERSION_DIGITS = 4;
 /** ICF reads its session (URL-mangling) segment here: /sap(…)/ or /<alias>/sap(…)/. */
 const SESSION_SEGMENT_DEPTH = 2;
 const BACKSTOP_ORIGIN = "https://service-path.invalid";
@@ -188,7 +193,7 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
 
   // One trailing slash is how ADT and /IWFND/MAINT_SERVICE often print a
   // service root; `/x/` and `/x` are the same service and the same identity.
-  const path = raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  let path = raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
 
   if (!CHARSET.test(path)) return refuse("DISALLOWED_CHARACTER");
 
@@ -200,6 +205,7 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
   }
 
   const segments = path.slice(1).split("/");
+  let version: string | null = null;
   for (const [index, segment] of segments.entries()) {
     // Decoded, so `%24metadata` is refused like `$metadata` and `%28` like
     // `(`. Every escape that survived the loop above decodes to an allowed
@@ -213,10 +219,19 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
     if (semicolon !== -1) {
       const params = decoded.slice(semicolon + 1);
       const last = index === segments.length - 1;
-      if (!last || !VERSION_PARAMETER.test(params)) return refuse("ROUTING_PARAMETER");
+      const match = last ? VERSION_PARAMETER.exec(params) : null;
+      if (!match) return refuse("ROUTING_PARAMETER");
+      version = match[1]!;
     }
     if (index < SESSION_SEGMENT_DEPTH && /[()]/.test(decoded)) return refuse("SESSION_SEGMENT");
     if (base.startsWith("$")) return refuse("SYSTEM_RESOURCE");
+  }
+
+  // `;v=2` and `;v=0002` are one version: store the four-digit form. Only the
+  // last segment can carry a `;` (checked above), and no escape decodes to one.
+  if (version !== null && version.length < VERSION_DIGITS) {
+    path = `${path.slice(0, path.lastIndexOf(";"))};v=${version.padStart(VERSION_DIGITS, "0")}`;
+    if (path.length > MAX_SERVICE_PATH_LENGTH) return refuse("TOO_LONG");
   }
 
   let parsed: URL;

@@ -95,6 +95,24 @@ function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 
+/**
+ * The dataset the picker opens on. A near match SAP's answer suggests comes
+ * first; otherwise the interface's OWN dataset when the service lists it, so
+ * the picker reads as "this is what you have" and "Use this dataset" starts
+ * disabled. Opening on the first listed name instead turned one click on a
+ * button that looks like "confirm" into a contract change — new version,
+ * verification cleared, a live write interface back to draft (review round 3).
+ */
+export function initialDatasetPick(
+  out: Pick<VerifyOutcome, "entitySets" | "entitySet" | "suggestedEntitySet">,
+  current: string | null,
+): string {
+  if (out.suggestedEntitySet) return out.suggestedEntitySet;
+  const own = current ?? out.entitySet;
+  if (own && out.entitySets.includes(own)) return own;
+  return out.entitySets[0] ?? "";
+}
+
 export function ServiceVerifyPanel({
   interfaceId,
   interfaceVersion,
@@ -162,14 +180,14 @@ export function ServiceVerifyPanel({
     try {
       const out = await verify();
       setOutcome(out);
-      if (out) setPick(out.suggestedEntitySet ?? out.entitySets[0] ?? "");
+      if (out) setPick(initialDatasetPick(out, entitySet));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verify could not run.");
     } finally {
       setBusy(false);
     }
-  }, [verify, router]);
+  }, [verify, router, entitySet]);
 
   /** Save a contract change (which clears verification), then verify the same target again. */
   const saveAndVerify = useCallback(

@@ -175,7 +175,7 @@ export function RegisterOwnApiDialog({
                 ))}
               </select>
               {product === "successfactors" && (
-                <p style={hint}>Usually /odata/v2. Your custom MDF objects (cust_…) are datasets under it. Enter the dataset too: Verify then checks just that one, because the description of the whole tenant is too large to read.</p>
+                <p style={hint}>Usually /odata/v2. Your custom MDF objects (cust_…) are datasets under it. On /odata/v2, enter the dataset too: Verify then checks just that one, because the description of the whole tenant is too large to read. An OData V4 service under /odatav4/ is verified whole.</p>
               )}
               {product === "ecc" && <p style={hint}>Only services activated in NetWeaver Gateway exist.</p>}
             </div>

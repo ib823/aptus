@@ -139,7 +139,8 @@ export interface CurrentConnection {
   baseUrl: string;
 }
 
-function trimTrailingSlashes(url: string): string {
+/** The resolver's baseUrl normalization (normalizeBaseUrl), without a regex. */
+export function trimTrailingSlashes(url: string): string {
   let end = url.length;
   while (end > 0 && url[end - 1] === "/") end--;
   return url.slice(0, end);
@@ -165,21 +166,15 @@ export function entryMatchesConnection(
   );
 }
 
-/**
- * The environments holding at least one verification a write could pass the
- * gate with: an entry whose binding still matches a live connection (or every
- * entry, when no connection list is given).
+/*
+ * There is deliberately no "environments holding a current verification"
+ * helper here any more. "Some PROD entry matches some PROD connection" is not
+ * "a PROD write would pass": a write binds through the credential's own SAP
+ * client, and verifying client 100 says nothing about the client-200
+ * connection that credential uses (review round 3). Readiness asks
+ * verifiedEnvironmentsForCredentials (current-connections.ts), which runs the
+ * write route's own connection selection per credential.
  */
-export function currentlyVerifiedEnvironments(
-  json: unknown,
-  connections?: readonly CurrentConnection[],
-): string[] {
-  const out = new Set<string>();
-  for (const e of Object.values(parseServiceVerifications(json))) {
-    if (!connections || entryMatchesConnection(e, connections)) out.add(e.environment);
-  }
-  return [...out];
-}
 
 const ENVIRONMENT_DISPLAY_ORDER = ["SANDBOX", "DEV", "TEST", "PROD"];
 

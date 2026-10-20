@@ -81,7 +81,8 @@ const REFUSALS: ReadonlyArray<[string, unknown, ServicePathRefusal]> = [
   ["a client parameter", "/sap/opu/odata/sap/ZX;c=200", "ROUTING_PARAMETER"],
   ["a sap-client parameter", "/sap/opu/odata/sap/ZX;sap-client=200", "ROUTING_PARAMETER"],
   ["a version followed by an alias", "/sap/opu/odata/sap/ZX;v=0002;o=PRD", "ROUTING_PARAMETER"],
-  ["a version that is not four digits", "/sap/opu/odata/sap/ZX;v=2", "ROUTING_PARAMETER"],
+  ["a version of more than four digits", "/sap/opu/odata/sap/ZX;v=00002", "ROUTING_PARAMETER"],
+  ["a version with no digits", "/sap/opu/odata/sap/ZX;v=", "ROUTING_PARAMETER"],
   ["a version on a non-final segment", "/sap/opu/odata/sap/ZX;v=0002/more", "ROUTING_PARAMETER"],
   ["an encoded alias key", "/sap/opu/odata/sap/ZX;%6f=PRD", "ROUTING_PARAMETER"],
   ["an ICF session segment", "/sap(bD1lbiZjPTIwMA==)/opu/odata/sap/ZX", "SESSION_SEGMENT"],
@@ -154,6 +155,30 @@ describe("validateServicePath — the shapes SAP prints are accepted", () => {
       path: "/sap/opu/odata/sap/ZUI_X_O2",
     });
     expect(validateServicePath("/odata/v2/")).toEqual({ ok: true, path: "/odata/v2" });
+  });
+
+  it("accepts the short version form Gateway prints (;v=2) and stores it as ;v=0002 — one identity (review round 3)", () => {
+    expect(validateServicePath("/sap/opu/odata/sap/ZTRAVEL_SRV;v=2")).toEqual({
+      ok: true,
+      path: "/sap/opu/odata/sap/ZTRAVEL_SRV;v=0002",
+    });
+    expect(validateServicePath("/sap/opu/odata/IWFND/CATALOGSERVICE;v=2/")).toEqual({
+      ok: true,
+      path: "/sap/opu/odata/IWFND/CATALOGSERVICE;v=0002",
+    });
+    expect(validateServicePath("/sap/opu/odata/sap/ZX;v=12")).toEqual({ ok: true, path: "/sap/opu/odata/sap/ZX;v=0012" });
+    // Normalizing is idempotent: the stored form validates to itself.
+    expect(validateServicePath("/sap/opu/odata/sap/ZTRAVEL_SRV;v=0002")).toEqual({
+      ok: true,
+      path: "/sap/opu/odata/sap/ZTRAVEL_SRV;v=0002",
+    });
+  });
+
+  it("refuses a short version whose four-digit form would pass the length limit", () => {
+    const root = "/sap/opu/odata/sap/";
+    const raw = `${root}${"Z".repeat(180 - root.length - ";v=2".length)};v=2`;
+    expect(raw.length).toBe(180);
+    expect(validateServicePath(raw)).toMatchObject({ ok: false, reason: "TOO_LONG" });
   });
 
   it("accepts the 180-character limit exactly", () => {

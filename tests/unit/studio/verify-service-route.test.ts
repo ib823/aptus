@@ -330,6 +330,21 @@ describe("SuccessFactors: one dataset's description, not the tenant's (review ro
     expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/$metadata`);
   });
 
+  it("an OData V4 service under /odatav4/ is read whole, even with a dataset (V4 has no per-entity $metadata) (review round 3)", async () => {
+    const V4_PATH = "/odatav4/talent/x/Svc.svc/v1";
+    mocks.findIface.mockResolvedValue(
+      sf({ servicePath: V4_PATH, externalId: `custom:${V4_PATH}`, odataVersion: "V4", entitySet: "Things" }),
+    );
+    await verify({ environment: "DEV" });
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}${V4_PATH}/$metadata`);
+  });
+
+  it("the /odata/v2 root is matched without regard to case", async () => {
+    mocks.findIface.mockResolvedValue(sf({ servicePath: "/OData/V2", externalId: "custom:/OData/V2" }));
+    await verify({ environment: "DEV" });
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/OData/V2/cust_Equipment/$metadata`);
+  });
+
   it("S/4HANA still reads the whole service's description", async () => {
     mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
     fetchMock.mockImplementation(async () => xml(V2_EDMX));

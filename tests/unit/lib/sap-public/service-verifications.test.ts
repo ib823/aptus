@@ -9,10 +9,14 @@
  * when the connection that answered has changed since.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+// current-connections.ts loads connections through prisma; the helper under
+// test here is pure and never touches it.
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+
+import { verifiedEnvironmentsForCredentials } from "@/lib/sap-public/current-connections";
 import {
-  currentlyVerifiedEnvironments,
   isVerifiedForBinding,
   parseServiceVerifications,
   verificationKey,
@@ -22,6 +26,8 @@ import {
 
 const DEV = { at: "2026-10-19T10:00:00.000Z", connectionId: "conn_dev", sapClient: "100", baseUrl: "https://dev" };
 const BINDING = { environment: "DEV", connectionId: "conn_dev", sapClient: "100", baseUrl: "https://dev" };
+/** A live DEV write credential bound to client 100: the binding above. */
+const DEV_CREDENTIAL = { environment: "DEV", sapClient: "100" };
 
 /** The stored shape, built the way the verify route builds it. */
 function stored(...entries: Array<[string, typeof DEV | (Omit<typeof DEV, "sapClient"> & { sapClient: string | null })]>) {
@@ -148,7 +154,7 @@ describe("a connection edited after the verify (review round 2)", () => {
   it("an unchanged connection is current (trailing slashes normalized as the resolver does)", () => {
     const json = stored(["DEV", DEV]);
     expect(verifiedEnvironmentsForDisplay(json, [LIVE])[0]?.connectionChanged).toBe(false);
-    expect(currentlyVerifiedEnvironments(json, [LIVE])).toEqual(["DEV"]);
+    expect(verifiedEnvironmentsForCredentials(json, [LIVE], [DEV_CREDENTIAL])).toEqual(["DEV"]);
   });
 
   it.each([
@@ -159,10 +165,47 @@ describe("a connection edited after the verify (review round 2)", () => {
   ])("when %s, the entry is marked changed and opens no environment", (_label, conn) => {
     const json = stored(["DEV", DEV]);
     expect(verifiedEnvironmentsForDisplay(json, [conn])[0]?.connectionChanged).toBe(true);
-    expect(currentlyVerifiedEnvironments(json, [conn])).toEqual([]);
+    expect(verifiedEnvironmentsForCredentials(json, [conn], [DEV_CREDENTIAL])).toEqual([]);
+  });
+});
+
+describe("verifiedEnvironmentsForCredentials — the write gate's question, per credential (review round 3)", () => {
+  /** One PROD system serving two SAP clients, set up as two PROD connections on one host. */
+  const P100 = { id: "conn_p100", environment: "PROD", client: "100", baseUrl: "https://x5m" };
+  const P200 = { id: "conn_p200", environment: "PROD", client: "200", baseUrl: "https://x5m" };
+  const VERIFIED_P100 = { at: DEV.at, connectionId: "conn_p100", sapClient: "100", baseUrl: "https://x5m" };
+
+  it("a verify of client 100 does not make PROD ready for a credential bound to client 200", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    expect(verifiedEnvironmentsForCredentials(json, [P100, P200], [{ environment: "PROD", sapClient: "200" }])).toEqual([]);
+    // ...and the write gate agrees: that credential's binding has no entry.
+    expect(
+      isVerifiedForBinding(json, { environment: "PROD", connectionId: "conn_p200", sapClient: "200", baseUrl: "https://x5m" }),
+    ).toBe(false);
   });
 
-  it("without a connection list, every entry counts (the pure view)", () => {
-    expect(currentlyVerifiedEnvironments(stored(["DEV", DEV], ["PROD", DEV]))).toEqual(["DEV", "PROD"]);
+  it("the same verify does make PROD ready for a credential bound to client 100", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    expect(verifiedEnvironmentsForCredentials(json, [P100, P200], [{ environment: "PROD", sapClient: "100" }])).toEqual([
+      "PROD",
+    ]);
+  });
+
+  it("a credential naming no client cannot bind between two PROD clients (AMBIGUOUS), so it is ready nowhere", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    expect(verifiedEnvironmentsForCredentials(json, [P100, P200], [{ environment: "PROD", sapClient: null }])).toEqual([]);
+  });
+
+  it("a single-client environment selects its one connection for a client-less credential", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    expect(verifiedEnvironmentsForCredentials(json, [P100], [{ environment: "PROD", sapClient: null }])).toEqual(["PROD"]);
+  });
+
+  it("an environment with no credential counts on any current entry (a display hint; readiness still needs a credential)", () => {
+    const json = stored(["PROD", VERIFIED_P100], ["DEV", DEV]);
+    const devConnection = { id: "conn_dev", environment: "DEV", client: "100", baseUrl: "https://dev" };
+    expect(verifiedEnvironmentsForCredentials(json, [P100, devConnection], []).sort()).toEqual(["DEV", "PROD"]);
+    // An entry whose connection has changed is no hint either.
+    expect(verifiedEnvironmentsForCredentials(json, [P100], [])).toEqual(["PROD"]);
   });
 });

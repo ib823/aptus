@@ -22,11 +22,12 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeEnvironment } from "@/lib/sap-public/connection-resolver";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
-import { toCurrentConnection } from "@/lib/sap-public/current-connections";
 import {
-  currentlyVerifiedEnvironments,
-  verifiedEnvironmentsForDisplay,
-} from "@/lib/sap-public/service-verifications";
+  toCurrentConnection,
+  verifiedEnvironmentsForCredentials,
+  type CurrentProductConnection,
+} from "@/lib/sap-public/current-connections";
+import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct, getSapServices, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
@@ -82,7 +83,7 @@ export default async function StudioInterfacesPage({
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId, isActive: true, revokedAt: null },
-          select: { solutionId: true, environment: true, expiresAt: true },
+          select: { solutionId: true, environment: true, expiresAt: true, sapClient: true },
         })
       : Promise.resolve([]),
     organizationId
@@ -142,17 +143,34 @@ export default async function StudioInterfacesPage({
     solutionId: string,
     externalId: string,
     operation: string,
-    /** Your own API: environments with a verification that still matches its connection. */
-    serviceVerifiedEnvironments: readonly string[] | null,
-  ): WriteReadinessRow[] =>
-    writeReadinessByEnvironment({
-      credentials: liveCredentials
-        .filter((c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()))
-        .map((c) => ({ environment: c.environment, hasWriteKey: writeKeyBySolution.has(`${c.solutionId}::${c.environment}`) })),
+    /**
+     * Your own API: its stored verifications and its product's current
+     * connections, or null for a catalogue interface. Readiness asks the
+     * write gate's question per credential — the connection that credential's
+     * environment AND SAP client select — not "verified somewhere in this
+     * environment" (review round 3), the same as the activation gate.
+     */
+    custom: { serviceVerifications: unknown; connections: readonly CurrentProductConnection[] } | null,
+  ): WriteReadinessRow[] => {
+    const credentials = liveCredentials.filter(
+      (c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()),
+    );
+    return writeReadinessByEnvironment({
+      credentials: credentials.map((c) => ({
+        environment: c.environment,
+        hasWriteKey: writeKeyBySolution.has(`${c.solutionId}::${c.environment}`),
+      })),
       grants: writeGrants.filter((g) => g.solutionId === solutionId && g.externalId === externalId && g.operation === operation),
-      serviceVerifiedEnvironments,
+      serviceVerifiedEnvironments: custom
+        ? verifiedEnvironmentsForCredentials(
+            custom.serviceVerifications,
+            custom.connections,
+            credentials.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
+          )
+        : null,
       now,
     });
+  };
 
   /**
    * The entity set the curated registry names for a service, when it names
@@ -205,7 +223,9 @@ export default async function StudioInterfacesPage({
             r.solutionId,
             r.externalId,
             r.operation,
-            r.servicePath ? currentlyVerifiedEnvironments(r.serviceVerifications, connectionsFor(r.sapProduct)) : null,
+            r.servicePath
+              ? { serviceVerifications: r.serviceVerifications, connections: connectionsFor(r.sapProduct) }
+              : null,
           ),
         }),
   }));

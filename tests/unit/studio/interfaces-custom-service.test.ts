@@ -414,6 +414,37 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
     );
   });
 
+  describe("two SAP clients in one environment (review round 3)", () => {
+    const P100 = { id: "conn_p100", product: "s4hana-onprem", environment: "PROD", client: "100", baseUrl: "https://x5m" };
+    const P200 = { id: "conn_p200", product: "s4hana-onprem", environment: "PROD", client: "200", baseUrl: "https://x5m" };
+    const verifiedFor = (connectionId: string, sapClient: string) => ({
+      [`PROD::${sapClient}`]: { environment: "PROD", at: "2026-10-19T10:00:00.000Z", connectionId, sapClient, baseUrl: "https://x5m" },
+    });
+    /** The solution's one PROD credential, bound to client 200, with the full write chain. */
+    function prodCredentialOnClient200() {
+      mocks.findManyClients.mockResolvedValue([{ environment: "PROD", expiresAt: null, sapClient: "200" }]);
+      mocks.findManyGrants.mockResolvedValue([{ environment: "PROD", decision: "APPROVED", expiresAt: null, revokedAt: null }]);
+      mocks.findManyConnections.mockResolvedValue([P100, P200]);
+    }
+
+    it("refuses when only the client the credential does NOT bind to has been verified", async () => {
+      mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p100", "100") });
+      prodCredentialOnClient200();
+      const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+      expect(res.status).toBe(400);
+      expect(await message(res)).toContain("PROD: credential with write key · write grant approved · service not verified here");
+      expect(mocks.updateInterface).not.toHaveBeenCalled();
+    });
+
+    it("allows it once the credential's own client has been verified", async () => {
+      mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p200", "200") });
+      prodCredentialOnClient200();
+      const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+      expect(res.status).toBe(200);
+      expect(updateData().status).toBe("ACTIVE");
+    });
+  });
+
   it("refuses when the connection that answered the verify has since been edited (new host)", async () => {
     mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_TEST });
     mocks.findManyConnections.mockResolvedValue([{ ...TEST_CONNECTION, baseUrl: "https://tst-new" }]);
