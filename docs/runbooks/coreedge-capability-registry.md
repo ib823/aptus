@@ -28,16 +28,24 @@ against the module that holds it by `tests/unit/coreedge/capability-registry.tes
 `docs/coreedge/capability-registry.json`; the simulator
 (`scripts/coreedge/simulate-gap-matrix.mjs`) reads it beside the matrix; and
 `pnpm coreedge:figures` rewrites every table in the gap study between
-`<!-- figures:begin ID -->` and `<!-- figures:end ID -->`.
+`<!-- figures:begin ID -->` and `<!-- figures:end ID -->`, and every figure a
+sentence quotes through an inline block on one line (the `value-*` family, for
+example `value-full-P5`, and whole claims such as section 3.1's supported
+shape). In sections 1 and 3 no coverage figure may be typed into prose
+outside a block: the check fails on one. A figure that is not simulator output
+(a target) or that records a past result (section 3.0) is wrapped in
+`<!-- figures:not-simulated begin -->`/`end -->` or
+`<!-- figures:historical begin -->`/`end -->` and is not checked.
 
 **Hosting is scored.** Network reach is scored per hosting mode (SHARED,
 DEDICATED, SELF_HOSTED, CONNECTOR). The headline is SHARED, the production
 deployment, which reaches neither private networks nor IP-allow-listed systems.
 
 **The governance decision is property-tested.** `pnpm test:property` runs the
-real northbound read and write routes over more than 31,000 generated
+real northbound read and write routes over more than 46,000 generated
 combinations against an oracle written from
-`docs/runbooks/coreedge-governance-decision-table.md`.
+`docs/runbooks/coreedge-governance-decision-table.md`, with another
+organisation's rows beside the caller's in many of them.
 
 ## What CI checks
 
@@ -45,7 +53,7 @@ The Quality Gates job in `.github/workflows/ci.yml` runs, before the unit tests:
 
 | Step | Command | Fails when |
 |---|---|---|
-| CoreEdge capability registry and roadmap figures | `pnpm coreedge:check` | the registry JSON no longer matches the code, or a generated table in the gap study no longer matches the simulator |
+| CoreEdge capability registry and roadmap figures | `pnpm coreedge:check` | the registry JSON no longer matches the code, a generated block in the gap study no longer matches the simulator, or sections 1 and 3 type a coverage figure into prose outside a block |
 | Governance property test | `pnpm test:property` | the broker's answer to any generated case differs from the decision table |
 
 Both also run inside `pnpm test` (`tests/unit/coreedge/capability-registry.test.ts`,
@@ -67,7 +75,9 @@ figures did too:
    cell that moved names the code it rests on (`basis`).
 2. `pnpm coreedge:figures` rewrites the gap study's tables.
 3. Explain each figure that moved in the text around its table (section 3.0 is
-   the model), and re-quote any figure the running text repeats. Commit all three.
+   the model). Figures quoted through blocks move by themselves; read the
+   sentences around them, which may no longer be true. Re-quote any figure the
+   running text of the other sections repeats. Commit all three.
 
 **A registry test failed on a `BROKER_FACTS` value.** The broker changed
 something the registry declares (the read row limit, the write operations,

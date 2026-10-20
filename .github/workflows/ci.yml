@@ -81,8 +81,9 @@ jobs:
 
       # P0.15: CoreEdge's capabilities are scored from the code, and the gap
       # study quotes the simulator. Fails when the generated registry JSON or a
-      # generated table in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is
-      # stale. Plain Node and tsx, no database; a few seconds.
+      # generated block in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is
+      # stale, or when its sections 1 and 3 type a coverage figure into prose
+      # outside a block. Plain Node and tsx, no database; a few seconds.
       - name: CoreEdge capability registry and roadmap figures
         run: pnpm coreedge:check
 

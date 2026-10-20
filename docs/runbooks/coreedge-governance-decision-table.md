@@ -14,7 +14,15 @@ four runbooks and the broker's own modules:
 `tests/property/northbound-governance.property.test.ts` holds an oracle written
 from this table, not from the code, and checks the broker against it on every
 pull request over more than 10,000 generated combinations. When the broker and
-this table disagree, the test fails and names the case. Change this table and the
+this table disagree, the test fails and names the case.
+
+The cases vary every rule below, including the three a tenant or a stale
+record could get around: rows of another organisation that carry this app's,
+this interface's and this product's ids (5.1, stage 6, stage 7: they never
+count, and SAP is called only through the connection the table binds); an
+interface edited onto a legacy grant's tuple before or after its cut-off
+(stage 6); and a custom service verified through another connection or
+against another host under the bound connection's key (stage 8). Change this table and the
 oracle together, in the same pull request as the broker change, and say why.
 
 ## The routes

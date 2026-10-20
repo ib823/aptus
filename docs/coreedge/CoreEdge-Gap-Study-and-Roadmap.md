@@ -5,7 +5,7 @@
 | Date | 20 October 2026 |
 | Code baseline | `main` at `33d0ef86`, which includes audit batch 2 (#306) and is deployed to production at https://ab-workbench.vercel.app |
 | In-flight work | Branch `custom-service-path` (head `eeb711bf` after four review rounds: commits `a4dd83d9`, `9ed76ba4`, then the review fixes `bbc9b3c0`, `ac7501b1`, `6c68d996` and `eeb711bf`), based directly on `33d0ef86`, is merged into PR #307 together with this document. Until #307 merges and is deployed, customer-built `Z*`/`YY1_*` services are **not in production**. Where P1.1 (section 8.3) and section 9.2 cite `bbc9b3c0` as the head or give 41 files, they describe the branch before the last review rounds. |
-| Companion data | **In the repository.** The matrix is `docs/coreedge/gap-matrix.json`. It holds the dimensions, the SAP-feasibility tables, Integration Suite's cells (each with a note), the extended model (section 3.11) and each roadmap phase's `cellUpgrades`, listing the items that deliver each upgrade and why. **CoreEdge's cells are generated from the code** (P0.15): `src/lib/coreedge/capability-registry.ts` writes `docs/coreedge/capability-registry.json` (`pnpm coreedge:registry`). The simulator is `scripts/coreedge/simulate-gap-matrix.mjs` (add `--json` for the full results), and `pnpm coreedge:figures` rewrites every simulated table in this document from its output. CI fails when the registry JSON or any of those tables is stale (`pnpm coreedge:check`). Every coverage count, percentage, lifecycle count and blocker ranking in sections 1-3, 8 and Appendix B is this output, marked **[simulated]**. See Appendix B. |
+| Companion data | **In the repository.** The matrix is `docs/coreedge/gap-matrix.json`. It holds the dimensions, the SAP-feasibility tables, Integration Suite's cells (each with a note), the extended model (section 3.11) and each roadmap phase's `cellUpgrades`, listing the items that deliver each upgrade and why. **CoreEdge's cells are generated from the code** (P0.15): `src/lib/coreedge/capability-registry.ts` writes `docs/coreedge/capability-registry.json` (`pnpm coreedge:registry`). The simulator is `scripts/coreedge/simulate-gap-matrix.mjs` (add `--json` for the full results), and `pnpm coreedge:figures` rewrites every simulated table in this document from its output. CI fails when the registry JSON or any of those tables is stale, or when the prose of sections 1 and 3 types a coverage figure outside a generated block (`pnpm coreedge:check`). Every coverage count, percentage, lifecycle count and blocker ranking in sections 1-3, 8 and Appendix B is this output, marked **[simulated]**. See Appendix B. |
 | Readers | The product owner (not from an SAP background) and the engineers who will build CoreEdge |
 | Status | Research and plan. No code was changed to produce the first version. Since P0.15 the simulated figures are regenerated from the code; section 3.0 explains how they differ from the first version. |
 
@@ -34,7 +34,7 @@ All of them use `src/lib/sap-public/*`. This document uses **CoreEdge** for the 
 
 ### 1.1 Where CoreEdge stands, in numbers
 
-We built every combination of eight dimensions: SAP system, technology, integration pattern, who built the API, network, SAP login method, consumer type and consumer login method. That gives 1,119,744 permutations. Of these, 497,340 are things SAP itself makes possible; these are the **valid scenarios**. We then scored each valid scenario for SAP Integration Suite and for CoreEdge (section 2 explains the method). CoreEdge's scores come from the code itself, through the capability registry (P0.15), for the hosted instance. Every figure in this section is **[simulated]** and regenerated in CI (Appendix B); section 3.0 explains how the figures differ from this document's first version.
+We built every combination of eight dimensions: SAP system, technology, integration pattern, who built the API, network, SAP login method, consumer type and consumer login method. That gives <!-- figures:begin value-permutations -->1,119,744<!-- figures:end value-permutations --> permutations. Of these, <!-- figures:begin value-valid -->497,340<!-- figures:end value-valid --> are things SAP itself makes possible; these are the **valid scenarios**. We then scored each valid scenario for SAP Integration Suite and for CoreEdge (section 2 explains the method). CoreEdge's scores come from the code itself, through the capability registry (P0.15), for the hosted instance. Every figure in this section is **[simulated]** and regenerated in CI (Appendix B); section 3.0 explains how the figures differ from this document's first version.
 
 <!-- figures:begin headline -->
 | Measure | SAP Integration Suite | CoreEdge today (hosted) | CoreEdge after the whole roadmap (P6) |
@@ -55,17 +55,17 @@ Integration Suite is scored full for AI agents on the MCP Gateway path that SAP 
   - a key issued for one environment can never reach another;
   - creates are idempotent (a retried create cannot make a duplicate);
   - every broker call, including refusals, attempts an audit row. Audit writes are not yet fail-closed (a failed insert is logged and swallowed, even after a successful SAP create), and the Workbench write-back writes no audit row at all (P0.7, P3.10).
-- **On breadth, the roadmap takes partial support most of the way, but full support only part of the way.** An earlier draft quoted 3.3% full and 14.8% partial after Phase 6 and concluded that the roadmap barely moves breadth. That draft used phase upgrades that missed many cells the roadmap items deliver. For example, SAP_STANDARD origin was never upgraded although P0.8 and P1.1-P1.4 fix exactly its limits. With every phase's upgrades tied to named items, the conclusion changes:
-  - **Partial support:** 0.3% today, 5.7% after Phase 4, 33.0% after Phase 5 (new protocols and patterns), 53.4% after Phase 6 (user-delegated login and principal propagation). That is more than half of the valid scenarios, against Integration Suite's 93.8%. So the "barely moves breadth" reading no longer holds for partial support.
-  - **Full support:** 6.1% after Phase 6, under a quarter of Integration Suite's 26.9%. So for full support it still largely holds.
+- **On breadth, the roadmap takes partial support most of the way, but full support only part of the way.** An earlier draft quoted <!-- figures:historical begin -->3.3% full and 14.8% partial<!-- figures:historical end --> after Phase 6 and concluded that the roadmap barely moves breadth. That draft used phase upgrades that missed many cells the roadmap items deliver. For example, SAP_STANDARD origin was never upgraded although P0.8 and P1.1-P1.4 fix exactly its limits. With every phase's upgrades tied to named items, the conclusion changes:
+  - <!-- figures:begin breadth-partial -->**Partial support:** 0.3% today, 5.7% after Phase 4, 33.0% after Phase 5 (new protocols and patterns), 53.4% after Phase 6 (user-delegated login and principal propagation). That is more than half of the valid scenarios, against Integration Suite's 93.8%. So the "barely moves breadth" reading no longer holds for partial support.<!-- figures:end breadth-partial -->
+  - <!-- figures:begin breadth-full -->**Full support:** 6.1% after Phase 6, under a quarter of Integration Suite's 26.9%. So for full support it still largely holds.<!-- figures:end breadth-full -->
   - **Why full support stays low:** a single partial cell holds a scenario below full (the min rule), and after Phase 6 some cells are still below full. These are SAML bearer and principal propagation toward RISE, on-premise S/4 and ECC; consumer mTLS, which no roadmap item credits; user-delegated login for most consumer types; and IDoc, file and B2B support (section 3.9).
-  - **CoreEdge should not chase Integration Suite's breadth.** Integration Suite has about 75 named adapters and ten years of B2B/EDI work. The earlier hand estimate of 30-45% full after Phase 5 is **not** supported: the simulator gives 4.9%. It should not be repeated.
-- **On the developer and governance lifecycle, CoreEdge can lead.** After Phase 3, CoreEdge is rated full on 12 of 18 lifecycle stages [simulated], against Integration Suite's 5. That is where "the improved and innovative version of Integration Suite" is realistic: testing before code, contracts and SDKs in every language including ABAP, governance of the connected program before and after it ships, AI agents under the same controls, and continuous proof.
+  - **CoreEdge should not chase Integration Suite's breadth.** Integration Suite has about 75 named adapters and ten years of B2B/EDI work. The earlier hand estimate of <!-- figures:historical begin -->30-45% full after Phase 5<!-- figures:historical end --> is **not** supported: the simulator gives <!-- figures:begin value-full-P5 -->4.9%<!-- figures:end value-full-P5 -->. It should not be repeated.
+- **On the developer and governance lifecycle, CoreEdge can lead.** After Phase 3, CoreEdge is rated full on <!-- figures:begin value-lifecycle-P3 -->12<!-- figures:end value-lifecycle-P3 --> of <!-- figures:begin value-lifecycle-stages -->18<!-- figures:end value-lifecycle-stages --> lifecycle stages [simulated], against Integration Suite's <!-- figures:begin value-lifecycle-IS -->5<!-- figures:end value-lifecycle-IS -->. That is where "the improved and innovative version of Integration Suite" is realistic: testing before code, contracts and SDKs in every language including ABAP, governance of the connected program before and after it ships, AI agents under the same controls, and continuous proof.
 - **B2B/EDI: pair with Integration Suite, or build it natively? This is open decision D3 for the product owner.** The recommendation is to pair: CoreEdge calls Integration Suite as a governed backend for B2B/EDI and the long tail of adapters (P5.10). The trade-off, measured on the simulator:
-  - Pairing already takes the B2B_EDI pattern (43,992 valid scenarios, 8.8%) to 63.8% partial after Phase 6, with 0% full.
-  - Making the B2B pattern natively full for every technology SAP allows (SOAP, REST, IDoc, files) would add 1,500 fully supported scenarios: +0.3 points, from 6.1% to 6.4%, with the B2B row at 3.4% full. The gain is small because the IDoc and file cells it rides on are still partial.
-  - Making the IDoc and file adapters full on every target as well would add 6,060 in total, all of them B2B scenarios: +1.2 points, to 7.3%. That takes the B2B row to 13.8% full, against Integration Suite's 12.5%.
-  - The first variant leaves the partial figure at 53.4%. The second raises it to 55.3% (274,914), because it also makes IDoc on Ariba and BTP services full, and no phase credits those cells.
+  - <!-- figures:begin b2b-pairing -->Pairing already takes the B2B_EDI pattern (43,992 valid scenarios, 8.8%) to 63.8% partial after Phase 6, with 0.0% full.<!-- figures:end b2b-pairing -->
+  - <!-- figures:begin b2b-native -->Making the B2B pattern natively full for every technology SAP allows (SOAP, REST, IDoc, files) would add 1,500 fully supported scenarios: +0.3 points, from 6.1% to 6.4%, with the B2B row at 3.4% full. The gain is small because the IDoc and file cells it rides on are still partial.<!-- figures:end b2b-native -->
+  - <!-- figures:begin b2b-native-adapters -->Making the IDoc and file adapters full on every target as well would add 6,060 in total: +1.2 points, to 7.3%. That takes the B2B row to 13.8% full, against Integration Suite's 12.5%.<!-- figures:end b2b-native-adapters --> All of the gain is B2B scenarios.
+  - <!-- figures:begin b2b-partial -->The first variant leaves the partial figure at 53.4%. The second raises it to 55.3% (274,914), because it also makes IDoc and file cells full that no phase credits.<!-- figures:end b2b-partial --> Among them are IDoc on Ariba and BTP services.
   - So native B2B/EDI (Trading Partner Management, Integration Advisor, AS2, AS4, OFTP2) would buy at most about one point of full coverage. Appendix B shows how to recompute this.
 
 ### 1.2 North star
@@ -91,7 +91,7 @@ The product owner asked for CoreEdge to be seamless. This document makes that a 
 | "Postman before code" | A newcomer builds, asserts and saves a 3-step collection in under 10 minutes |
 | Governed before commit | `coreedge verify` and `can-i-deploy` fail CI on an undeclared operation in the generated client, a raw call to CoreEdge (TS and Python lint), a missing grant or a token in code, with no secret stored in CI; the runtime refuses any call outside the manifest |
 | Every language | TS, Python, Java, .NET and ABAP SDKs pass one shared conformance script |
-| Containment | A stop switch halts 100% of matching calls within 5 seconds |
+| Containment | A stop switch halts <!-- figures:not-simulated begin -->100%<!-- figures:not-simulated end --> of matching calls within 5 seconds |
 | No side doors | A static test proves every route that reaches SAP is governed and audited |
 | Self-host | `docker compose up` reaches a first governed call in 15 minutes or less |
 | SAP upgrades | A breaking change on the TEST system is flagged, naming the affected apps, before PROD is upgraded |
@@ -116,7 +116,7 @@ Durations are **[estimate]** and assume 3-4 engineers; P0 and P1 were re-estimat
 
 ### 1.5 What to do first
 
-1. **Merge and deploy `custom-service-path` under the release protocol** (P1.1, scheduled first; P0.17): PR, green CI, deploy, then verify live on the X5M lab with one `YY1_*` and one `Z*` service. The branch (head `eeb711bf` after four review rounds) is merged into PR #307 alongside this document. It should land before P0.1 and P0.14 move the same route code. It removes the largest blocker that can be closed in a single merge, and the one ABAP teams hit first: 66.5% of valid scenarios (330,840) were held at zero because the API was built by the customer or a partner. On the first version's matrix it lifted partial coverage from 0.2% to 0.8%; with the hosted instance's network scored as it is (caveat 4), the registry measures 0.3% with it in place (section 3.0). The synchronous-only, OData-only and static-key blockers still apply. It scopes grants per path (`custom:<path>`); the cross-product gap (A47: grants match only on solution, path, operation and environment, `src/lib/northbound/access.ts:162-169`, and `ApiAccessGrant` has no product column, `prisma/schema.prisma:1012-1021`) closes with P0.1.
+1. **Merge and deploy `custom-service-path` under the release protocol** (P1.1, scheduled first; P0.17): PR, green CI, deploy, then verify live on the X5M lab with one `YY1_*` and one `Z*` service. The branch (head `eeb711bf` after four review rounds) is merged into PR #307 alongside this document. It should land before P0.1 and P0.14 move the same route code. It removes the largest blocker that can be closed in a single merge, and the one ABAP teams hit first: <!-- figures:historical begin -->66.5% of valid scenarios (330,840) were held at zero because the API was built by the customer or a partner. On the first version's matrix it lifted partial coverage from 0.2% to 0.8%<!-- figures:historical end -->; with the hosted instance's network scored as it is (caveat 4), the registry measures <!-- figures:begin value-partial-Today -->0.3%<!-- figures:end value-partial-Today --> with it in place (section 3.0). The synchronous-only, OData-only and static-key blockers still apply. It scopes grants per path (`custom:<path>`); the cross-product gap (A47: grants match only on solution, path, operation and environment, `src/lib/northbound/access.ts:162-169`, and `ApiAccessGrant` has no product column, `prisma/schema.prisma:1012-1021`) closes with P0.1.
 2. **Before any real client credential is stored:**
    - KMS envelope encryption (P0.10);
    - MFA step-up on approve, issue and revoke (P0.12);
@@ -239,15 +239,18 @@ All figures in this section are **[simulated]**. Every table between `<!-- figur
 
 ### 3.0 What changed from the figures first published (P0.15)
 
-This document was first published with figures from a hand-rated matrix of the code at `33d0ef86`. P0.15 replaced CoreEdge's hand ratings with the registry, and its acceptance asks for every difference from those figures to be explained. Three things moved them, and nothing else did: run with the old matrix's cells, the new simulator reproduces every published figure exactly.
+This section is a record of the change P0.15 made, as of the commit that made it, so its figures are marked historical and `pnpm coreedge:check` does not compare them with the simulator. A later change to the code or the matrix moves the generated tables elsewhere in this document, not this record.
+
+<!-- figures:historical begin -->
+This document was first published with figures from a hand-rated matrix of the code at `33d0ef86`. P0.15 replaced CoreEdge's hand ratings with the registry, and its acceptance asks for every difference from those figures to be explained. Three things moved the scenario figures, and nothing else did: run with the old matrix's cells, the new simulator reproduces every published figure exactly. Three more moved the lifecycle counts (D to F, at the end of this section).
 
 - **A. Code that landed since `33d0ef86`.** Customer-built services (P1.1, #307) are in the code, so the registry scores CUSTOMER_CUSTOM and PARTNER origins, ECC OData V2 and V4, and SuccessFactors OData V4 as partial, where the old matrix said none and credited them only in P0. On its own this takes today's partial coverage from 936 to 3,996 scenarios: the old P0 row.
 - **B. Caveat 4 corrected.** The hosted instance has no fixed egress address and refuses private hosts, so the registry scores SAP_SIDE_IP_ALLOWLIST and PRIVATE_NETWORK as none for it (section 3.10). On its own this takes today's partial coverage from 936 to 360. Together with A: 1,512 (0.3%). From P4 on nothing changes, because P4 makes both cells full. The figures caveat 4 predicted (0.3% after P0 and P1, 1.3% after P2, 1.6% after P3) are what the simulator now reports.
 - **C. Integration Suite re-scored for AI agents (section 3.7).** OAuth for agents is full on the MCP Gateway path [E2, E9, E17]. The AI_AGENT row moves from 0% to 14.3% full, and because agents are a ninth of every slice, every Integration Suite "full" figure rises by one to two points: 126,000 (25.3%) to 133,875 (26.9%) overall. Partial figures do not change.
 
-Lifecycle counts are now out of 18 (section 3.8). The registry also scores GOVERN_AUDIT_COMPLY partial (caveat 9a): Integration Suite goes from 4 of 13 to 5 of 18 stages full, and CoreEdge today from 1 of 13 to 0 of 18.
+Lifecycle counts are now out of 18 (section 3.8). Integration Suite goes from 4 of 13 to 5 of 18 stages full, and CoreEdge today from 1 of 13 to 0 of 18; they moved at every phase, for D to F below.
 
-No "full" figure for CoreEdge changed at any phase, and no figure after P4 changed. The rows of this section that moved by more than 0.1 points are the following. Every Integration Suite "full" figure rose, for reason C, so those rows are summarised in one line.
+No "full" scenario figure for CoreEdge changed at any phase, and no scenario-coverage figure after P4 changed (the lifecycle counts did, below). The rows of this section that moved by more than 0.1 points are the following. Every Integration Suite "full" figure rose, for reason C, so those rows are summarised in one line.
 
 | Row | Column | Published | Now | Why (effect of each change on its own, in points) |
 |---|---|---|---|---|
@@ -265,7 +268,27 @@ No "full" figure for CoreEdge changed at any phase, and no figure after P4 chang
 | network PUBLIC_INTERNET | CoreEdge today partial | 0.2% | 0.8% | A +0.6 |
 | network SAP_SIDE_IP_ALLOWLIST, PRIVATE_NETWORK | CoreEdge today partial | 0.2% | 0.0% | A +0.6, B -0.2: the hosted instance reaches neither |
 
-S4_PRIVATE_RISE and S4_ONPREM stay at 0.4% partial: A raised them and B took the private-network share away again, which is the drop the P0.15 acceptance expected. The roadmap phase rows (section 8.1) moved for B only: partial after P0 and P1 from 3,996 to 1,512, after P2 from 16,872 to 6,384, after P3 from 21,090 to 7,980.
+S4_PRIVATE_RISE and S4_ONPREM stay at 0.4% partial: A raised them and B took the private-network share away again, which is the drop the P0.15 acceptance expected. In the roadmap phase rows (section 8.1) the coverage columns moved for B only: partial after P0 and P1 from 3,996 to 1,512, after P2 from 16,872 to 6,384, after P3 from 21,090 to 7,980.
+
+The lifecycle column of section 8.1 moved at every phase, for three matrix changes that are none of A, B and C:
+- **D. GOVERN_AUDIT_COMPLY is partial until P3.** The old matrix rated it full from today. The registry scores it partial while its holes are open by default (caveat 9a), and a new P3 upgrade (P0.1, P0.12, P3.10) makes it full. So it no longer counts before P3, and counts again from P3.
+- **E. API_VERSIONING is full from P1.** A stage P0.15 added (section 3.8), with a new P1 upgrade (P1.10).
+- **F. PROVIDER_BUILD_TRANSPORT is full from P3.** A stage P0.15 added, with a new P3 upgrade (P1.2, P3.4, P3.8).
+
+The other three added stages never reach full, so they move no count: PERFORMANCE_TEST is partial from P1 (P1.6a), and SUPPORT_INCIDENT (P3.7, P2.13, in P3) and RETIRE (P6.4, in P6) are upgraded to the partial they already have (D14).
+
+| After | Lifecycle stages full, published (of 13) | Now (of 18) | Why |
+|---|---|---|---|
+| Today | 1 | 0 | D: GOVERN_AUDIT_COMPLY no longer counted (-1) |
+| P0 | 2 | 1 | D (-1); SECRETS_KEYS becomes full in both |
+| P1 | 3 | 3 | D (-1) and E (+1); DISCOVER becomes full in both |
+| P2 | 4 | 4 | D (-1) and E (+1); MOCK_TEST_BEFORE_CODE becomes full in both |
+| P3 | 10 | 12 | E (+1) and F (+1). D's upgrade counts GOVERN_AUDIT_COMPLY again, beside the six stages P3 made full before |
+| P4 | 11 | 13 | E and F (+2); SELF_HOST_SETUP becomes full in both |
+| P5 | 12 | 14 | E and F (+2); DESIGN_MAP becomes full in both |
+| P6 | 13 | 15 | E and F (+2); AI_ASSIST becomes full in both. This is why the headline "after the whole roadmap" lifecycle figure moved |
+| Integration Suite | 4 | 5 | API_VERSIONING is full for it [E66, E8]; its other added stages are partial or none |
+<!-- figures:historical end -->
 
 ### 3.1 Overall
 
@@ -275,15 +298,19 @@ S4_PRIVATE_RISE and S4_ONPREM stay at 0.4% partial: A raised them and B took the
 | All valid scenarios (497,340) | 26.9% | 93.8% | 0 (0.0%) | 1,512 (0.3%) | 30,360 (6.1%) | 265,599 (53.4%) |
 <!-- figures:end overall -->
 
+<!-- figures:begin today-partial-shape -->
 The 1,512 scenarios CoreEdge partly supports today all have:
-- technology OData V2 or V4;
+- technology ODATA_V2 or ODATA_V4;
 - pattern SYNC_READ or SYNC_CREATE;
-- target S/4HANA (Public, RISE or on-premise), ECC or SuccessFactors;
-- any origin: SAP-published, customer-built or partner-built (P1.1);
-- network PUBLIC_INTERNET, the only position the hosted instance reaches;
-- consumer login STATIC_BEARER, for any consumer type.
+- target S4_PUBLIC, S4_PRIVATE_RISE, S4_ONPREM, ECC or SUCCESSFACTORS;
+- origin SAP_STANDARD, CUSTOMER_CUSTOM or PARTNER (every origin);
+- network PUBLIC_INTERNET;
+- consumer login STATIC_BEARER, for every consumer type.
 
-These are the only values with non-zero coverage in the per-dimension results. Every other consumer login is scored none for every consumer today, because the broker accepts a static bearer key only (`src/lib/northbound/auth.ts`).
+These are the only values with non-zero partial coverage in the per-dimension results. Every other consumer login (OAUTH_CLIENT_CREDENTIALS, MTLS, USER_DELEGATED_OIDC) is scored none for every consumer type: the broker accepts one consumer login, STATIC_BEARER. The registry's note on each cell says why (`docs/coreedge/capability-registry.json`).
+<!-- figures:end today-partial-shape -->
+
+Customer- and partner-built services count since P1.1, and PUBLIC_INTERNET is the only network position the hosted instance reaches (section 3.10).
 
 ### 3.2 By target
 
@@ -301,7 +328,7 @@ These are the only values with non-zero coverage in the per-dimension results. E
 | NON_SAP_SAAS | 68,040 | 28.3% | 97.2% | 0.0% | 0.0% | 2.0% | 33.9% |
 <!-- figures:end by-target -->
 
-RISE, on-premise and ECC reach 0.4% only over the public internet, which few such systems allow. Their usual position, a private network, is at 0% for the hosted instance (section 3.10).
+RISE, on-premise and ECC reach <!-- figures:begin value-partial-Today-target-S4_ONPREM -->0.4%<!-- figures:end value-partial-Today-target-S4_ONPREM --> only over the public internet, which few such systems allow. Their usual position, a private network, is at <!-- figures:begin value-partial-Today-network-PRIVATE_NETWORK -->0.0%<!-- figures:end value-partial-Today-network-PRIVATE_NETWORK --> for the hosted instance (section 3.10).
 
 ### 3.3 By technology
 
@@ -369,9 +396,9 @@ RISE, on-premise and ECC reach 0.4% only over the public internet, which few suc
 | HUMAN_TESTER | 55,260 | 14.3% | 72.4% | 0.0% | 0.3% | 7.3% | 53.4% |
 <!-- figures:end by-consumer -->
 
-**AI agents.** Integration Suite is now scored full for agents using OAuth, and partial for the other three logins. SAP API Policy §2.2.2 prohibits API use for "interaction or integration with (semi-) autonomous or generative AI systems" except "through and within the limits of SAP-endorsed architectures" [E17], and SAP's July 2026 update calls the MCP Gateway the "Endorsed pathway for Agents to access SAP APIs" [E2, E9]; MCP authorization is OAuth-based [E40]. The edition the MCP Gateway needs is [unverified]: E9 defers availability to SAP Note 2903776, which was not read, and edition gating is not modelled for any other feature either (caveat 1). Whether the gateway accepts an API Management key as an agent's credential was not checked, so the static-key cell stays partial. The re-score raises Integration Suite's AI_AGENT row from 0% to 14.3% full; human testers stay at 14.3% because browser Try Out cannot present a client certificate.
+**AI agents.** Integration Suite is now scored full for agents using OAuth, and partial for the other three logins. SAP API Policy §2.2.2 prohibits API use for "interaction or integration with (semi-) autonomous or generative AI systems" except "through and within the limits of SAP-endorsed architectures" [E17], and SAP's July 2026 update calls the MCP Gateway the "Endorsed pathway for Agents to access SAP APIs" [E2, E9]; MCP authorization is OAuth-based [E40]. The edition the MCP Gateway needs is [unverified]: E9 defers availability to SAP Note 2903776, which was not read, and edition gating is not modelled for any other feature either (caveat 1). Whether the gateway accepts an API Management key as an agent's credential was not checked, so the static-key cell stays partial. The re-score raises Integration Suite's AI_AGENT row from <!-- figures:historical begin -->0%<!-- figures:historical end --> to <!-- figures:begin value-full-IS-consumer-AI_AGENT -->14.3%<!-- figures:end value-full-IS-consumer-AI_AGENT --> full; human testers stay at <!-- figures:begin value-full-IS-consumer-HUMAN_TESTER -->14.3%<!-- figures:end value-full-IS-consumer-HUMAN_TESTER --> because browser Try Out cannot present a client certificate.
 
-**CoreEdge does not lead here.** A CoreEdge runtime MCP straight to SAP (P6.1) would be the restricted route, so P6.1 is blocked until SAP endorses it or the D2 legal reading permits it. The 7.3% full for agents after P6 assumes that P6.1 ships; both P6 upgrades that make agent logins full list P6.1 as a delivering item. Without P6.1, the agent row would stay at its P5 level of 0% full [inferred from the P5 row]. The safer design is to govern agents that call SAP through Integration Suite's MCP Gateway as a backend (P5.10).
+**CoreEdge does not lead here.** A CoreEdge runtime MCP straight to SAP (P6.1) would be the restricted route, so P6.1 is blocked until SAP endorses it or the D2 legal reading permits it. The <!-- figures:begin value-full-P6-consumer-AI_AGENT -->7.3%<!-- figures:end value-full-P6-consumer-AI_AGENT --> full for agents after P6 assumes that P6.1 ships; both P6 upgrades that make agent logins full list P6.1 as a delivering item. Without P6.1, the agent row would stay at its P5 level of <!-- figures:begin value-full-P5-consumer-AI_AGENT -->0.0%<!-- figures:end value-full-P5-consumer-AI_AGENT --> full [inferred from the P5 row]. The safer design is to govern agents that call SAP through Integration Suite's MCP Gateway as a backend (P5.10).
 
 ### 3.8 Lifecycle stages
 
@@ -413,14 +440,14 @@ Scores: 0 = none, 1 = partial, 2 = full. The IS column is the matrix's `lifecycl
 - **SUPPORT_INCIDENT:** partial on both. Integration Suite has monitoring, external logging, Cloud ALM alerting and an SLA [E5, E14, E19, E67]; CoreEdge has stored incidents and a daily probe email. P3.7 adds owner paging, but **no item delivers a public status page or consumer ticket intake**, so it stays partial (D14).
 - **RETIRE:** partial on both. CoreEdge revokes both keys at once, keeps dropped keys, and refuses a RETIRED app at runtime; Integration Suite withdraws API products and revokes keys [E66]. P6.4's evidence packs archive what a retired app did, but **no item deletes fixtures and twin data at retirement**, so it stays partial (D14).
 
-So after the whole roadmap CoreEdge is full on 15 of 18 stages, and the three it misses are the ones no item yet covers.
+<!-- figures:begin lifecycle-summary -->So after the whole roadmap CoreEdge is full on 15 of 18 stages; the 3 it misses (PERFORMANCE_TEST, SUPPORT_INCIDENT, RETIRE) are the ones no roadmap item takes to full.<!-- figures:end lifecycle-summary -->
 
 ### 3.9 The blocking gaps, in plain words
 
 All rankings in this section are the `topBlockers` lists in the simulator's `--json` output (`coreedgeToday.topBlockers`, and `phases[i].topBlockers` after each phase).
 
 **How to read the ranking.** A scenario that is not fully supported is held back by every cell it touches that is below full. The simulator splits each such scenario equally among those cells, so a scenario held back by four cells gives each of them a quarter.
-- **Leverage** is the sum of a cell's shares. It is printed as a number of scenarios and as a percentage of all 497,340 valid scenarios. Because each scenario is shared out, the leverages of all cells add up to the number of scenarios not fully supported.
+- **Leverage** is the sum of a cell's shares. It is printed as a number of scenarios and as a percentage of all <!-- figures:begin value-valid -->497,340<!-- figures:end value-valid --> valid scenarios. Because each scenario is shared out, the leverages of all cells add up to the number of scenarios not fully supported.
 - **Sole** is the number of scenarios where the cell is the only one below full. Fix that cell alone and exactly that many scenarios become fully supported.
 
 So high leverage with a sole of 0 means a cell is part of the problem in many scenarios but never the last thing in the way. A high sole count means fixing the cell pays off at once.
@@ -483,21 +510,25 @@ So high leverage with a sole of 0 means a cell is part of the problem in many sc
 | P6 | 466,980 | sapAuth S4_ONPREM / OAUTH_SAML_BEARER 1.4% (2,160); sapAuth S4_ONPREM / PRINCIPAL_PROPAGATION 1.4% (2,160); sapAuth S4_PRIVATE_RISE / OAUTH_SAML_BEARER 1.4% (2,160); sapAuth S4_PRIVATE_RISE / PRINCIPAL_PROPAGATION 1.4% (2,160); sapAuth ECC / OAUTH_SAML_BEARER 1.4% (1,890) |
 <!-- figures:end blockers-phases -->
 
-Until P4 the network cells dominate: making the IP allow-list cell full alone would add 432 fully supported scenarios after P2 and 648 after P3. From P4 the network is full, and the limits become how CoreEdge logs in to private SAP systems (SAML bearer and principal propagation toward RISE, on-premise and ECC) and how consumers log in. Even after the whole roadmap no single cell is worth more than about 0.4 points (2,160 of 497,340), which is why full coverage climbs slowly: many cells have to be raised together.
+Until P4 the network cells dominate: making the IP allow-list cell full alone would add <!-- figures:begin value-sole-P2-network-SAP_SIDE_IP_ALLOWLIST -->432<!-- figures:end value-sole-P2-network-SAP_SIDE_IP_ALLOWLIST --> fully supported scenarios after P2 and <!-- figures:begin value-sole-P3-network-SAP_SIDE_IP_ALLOWLIST -->648<!-- figures:end value-sole-P3-network-SAP_SIDE_IP_ALLOWLIST --> after P3. From P4 the network is full, and the limits become how CoreEdge logs in to private SAP systems (SAML bearer and principal propagation toward RISE, on-premise and ECC) and how consumers log in. Even after the whole roadmap no ranked cell is worth more than about <!-- figures:begin value-max-sole-points-P6 -->0.4<!-- figures:end value-max-sole-points-P6 --> points (<!-- figures:begin value-max-sole-P6 -->2,160<!-- figures:end value-max-sole-P6 --> of <!-- figures:begin value-valid -->497,340<!-- figures:end value-valid -->), which is why full coverage climbs slowly: many cells have to be raised together.
 
-**The structural gaps behind the cells.** These are the dimension values outside today's supported shape. They overlap, so their shares do not add up. Each row counts the valid scenarios that fall outside the shape on that dimension, using the per-value valid counts from the simulator.
+**The structural gaps behind the cells.** These are the dimension values outside today's supported shape. They overlap, so their shares do not add up. Each row counts the valid scenarios that fall outside the shape on that dimension: those whose value on it has no partial coverage today. The third column is rewritten by `pnpm coreedge:figures`.
 
+<!-- figures:begin structural-gaps -->
 | # | Gap | Valid scenarios outside | Plain explanation | Fixed in |
 |---|---|---|---|---|
 | 1 | Only synchronous read and create | 392,004 (78.8%) | CoreEdge can read a page of rows or create a record. It cannot update, delete, run an action, send a batch, receive an event, run a multi-step flow, let SAP call out, or exchange EDI documents. | P2 (update/delete/batch), P3.9 (SAP calls out), P5 (flows, events, bulk) |
 | 2 | Only OData | 369,036 (74.2%) | OData is SAP's main web API, but S/4HANA also publishes 212 SOAP APIs [R1 §5]. Older systems run on RFC/BAPI (remote function calls into SAP) and IDoc (SAP's business-document messages). CoreEdge speaks none of these. | P5.2-P5.5 |
 | 3 | Reads limited to the first page | every supported scenario | Reads send only `$top` and `$format` and return 100 rows or fewer (`src/lib/northbound/read.ts`). There is no filter, key lookup or paging. This is what holds all three origins, SAP-, customer- and partner-built, at partial now that customer-built services are registered by path (P1.1). | P1.3, P1.4 |
-| 4 | Consumer can only log in with a static key | 373,005 (75.0%): three of the four consumer logins, which never affect validity | A program proves who it is only with a long-lived `ce_` string (`src/lib/northbound/auth.ts`). There is no OAuth, no mTLS and no user-delegated login. ABAP credential stores cannot hold such a header natively. | P2.5, P6.5. P4 mentions mTLS for self-hosted copies, but the matrix does not credit it (caveat 9b) |
-| 5 | Systems CoreEdge has no connector for | 188,280 (37.9%) | Ariba is environment-variable only and not on the broker. Concur, BTP services and non-SAP SaaS have no connector. ECC is reachable by registered path (P1.1), but only over the public internet from the hosted instance. | P5.3 (Ariba, Concur, BTP), P5.10 (SaaS), P4.7 (ECC end to end) |
+| 4 | Consumer can only log in with a static key | 373,005 (75.0%): 3 of the 4 consumer logins, which never affect validity | A program proves who it is only with a long-lived `ce_` string (`src/lib/northbound/auth.ts`). There is no OAuth, no mTLS and no user-delegated login. ABAP credential stores cannot hold such a header natively. | P2.5, P6.5. P4 mentions mTLS for self-hosted copies, but the matrix does not credit it (caveat 9b) |
+| 5 | Systems CoreEdge has no connector for | 187,920 (37.8%) | Ariba is environment-variable only and not on the broker. Concur, BTP services and non-SAP SaaS have no connector. ECC is reachable by registered path (P1.1), but only over the public internet from the hosted instance. | P5.3 (Ariba, Concur, BTP), P5.10 (SaaS), P4.7 (ECC end to end) |
 | 6 | No private-network or IP allow-list reach | 313,308 (63.0%) for the hosted instance | RISE, on-premise and ECC usually sit on private networks, and many SAP systems admit only known addresses. CoreEdge has no agent, no tunnel and no fixed outbound IP. | P4.1-P4.4 |
-| 7 | No X.509 or principal propagation to SAP | 2 of 6 SAP login methods scored none today; SAML bearer partial (SuccessFactors only) | SAP recommends certificates or OAuth over passwords [R1 §3]. CoreEdge has neither certificates nor per-person identity toward SAP (`src/lib/sap-public/connection-resolver.ts`, `SapAuthType`). | P4.3 (X.509); P6.5 (principal propagation, partial) |
+| 7 | No X.509 or principal propagation to SAP | 2 of the 6 SAP login methods scored none on every target today | SAP recommends certificates or OAuth over passwords [R1 §3]. CoreEdge has neither certificates nor per-person identity toward SAP (`src/lib/sap-public/connection-resolver.ts`, `SapAuthType`), and its SAML bearer assertion is built for SuccessFactors only, so that login is partial. | P4.3 (X.509); P6.5 (principal propagation, partial) |
 | 8 | Nothing is "full" | All 1,512 supported scenarios | Even the supported shape is limited: reads are first-page only, and no create (V2 or V4) has been verified live; V4 create is unit-tested only. | P1.4, P1.8 |
 | 9 | No CI or AI at all (lifecycle) | not a scenario count | Nothing checks a developer's code before commit, and no AI help exists. | P2.11, P3.2, P3.3, P6.2 |
+<!-- figures:end structural-gaps -->
+
+Before the column was generated (P0.15 review), row 5 was written by hand as <!-- figures:historical begin -->188,280 (37.9%)<!-- figures:historical end -->, 360 more than the four targets without a connector (Ariba, Concur, BTP services and non-SAP SaaS) add up to; the generated figure is their sum.
 
 ### 3.10 By where CoreEdge runs (hosting)
 
@@ -543,7 +574,7 @@ Permutations 3,628,800; valid scenarios 1,168,272. CoreEdge after P6: 30,360 ful
 | consumer SAP_BUILD | 83,448 | 22.4% | 93.2% | 0.0% | 0.2% |  |  |
 <!-- figures:end extended -->
 
-What it shows: CoreEdge supports none of the six new targets, neither new technology (the broker carries JSON only, so no OData media stream or attachment passes through it) and no mobile app (a long-lived key compiled into a distributed app is a leaked key, and there is no user-delegated login for one to use instead). Go, PHP, CAP and SAP Build reach the same 0.2% partial as every other language, through the static key. Integration Suite reaches the new targets through generic adapters, does not consume data products (Business Data Cloud and Datasphere do), and carries binary payloads only partly.
+What it shows: CoreEdge supports none of the six new targets, neither new technology (the broker carries JSON only, so no OData media stream or attachment passes through it) and no mobile app (a long-lived key compiled into a distributed app is a leaked key, and there is no user-delegated login for one to use instead). Go, PHP, CAP and SAP Build reach the same <!-- figures:begin value-partial-Today-extended-consumer-GO -->0.2%<!-- figures:end value-partial-Today-extended-consumer-GO --> partial as every other language, through the static key. Integration Suite reaches the new targets through generic adapters, does not consume data products (Business Data Cloud and Datasphere do), and carries binary payloads only partly.
 
 ---
 
@@ -1253,9 +1284,9 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - **Delivered (October 2026).**
   - `src/lib/coreedge/capability-registry.ts` scores every CoreEdge cell from the code (section 2.3) and writes `docs/coreedge/capability-registry.json`; `tests/unit/coreedge/capability-registry.test.ts` checks every fact it declares against the module that holds it. The matrix no longer carries a hand-rated `coreedgeToday`.
   - The simulator reads the registry, scores hosting modes (section 3.10) and the extended model (section 3.11), and is checked against a scenario-by-scenario reference (`tests/unit/coreedge/gap-simulator.test.ts`).
-  - `tests/property/northbound-governance.property.test.ts` runs the real read and write routes over more than 31,000 generated combinations and checks each answer, status and refusal reason against an oracle written from `docs/runbooks/coreedge-governance-decision-table.md`.
-  - CI (Quality Gates) runs `pnpm coreedge:check` and `pnpm test:property`; `docs/runbooks/coreedge-capability-registry.md` says how to change a cell.
-  - The figures differ from section 3's first version in three ways, each explained in section 3.0: code landed since `33d0ef86` (P1.1), the caveat 4 correction, and the AI_AGENT re-score. The expected PRIVATE_NETWORK and IP allow-list drops are there; the P1.1 rise was not expected because P1.1 had not merged when the acceptance was written.
+  - `tests/property/northbound-governance.property.test.ts` runs the real read and write routes over more than 46,000 generated combinations and checks each answer, status, refusal reason and bound connection against an oracle written from `docs/runbooks/coreedge-governance-decision-table.md`. The cases include another organisation's grants, connections and interface id beside the caller's, interfaces moved onto a legacy grant's tuple after its cut-off, and verifications made through another connection or host.
+  - CI (Quality Gates) runs `pnpm coreedge:check` and `pnpm test:property`; `docs/runbooks/coreedge-capability-registry.md` says how to change a cell. The check also fails when the prose of sections 1 and 3 types a coverage figure outside a generated block (Appendix B).
+  - The scenario figures differ from section 3's first version in three ways, and the lifecycle counts in three more, each explained in section 3.0: code landed since `33d0ef86` (P1.1), the caveat 4 correction, and the AI_AGENT re-score. The expected PRIVATE_NETWORK and IP allow-list drops are there; the P1.1 rise was not expected because P1.1 had not merged when the acceptance was written.
 
 **P0.16 Make the documents match the code.** Size S. Depends on: P0.15.
 - Problem:
@@ -2181,13 +2212,13 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 
 **To test a "what if":** `simulateAll({ matrix, registry })` is exported, so a short script can load both JSON files, edit a copy and print the result without touching the repository. The figures in this document were made this way:
 - Section 3.0's bridge runs the first version's hand-rated cells, then each change on its own.
-- Section 1.1's native-B2B trade-off adds a phase after P6 that makes `techPattern` X|B2B_EDI full for every tech. The result is +1,500 full, 6.4%. A second variant also makes `targetTech` IDOC and FILE_SFTP full on every target: +6,060 full, 7.3%, with the B2B row at 13.8% full.
+- Section 1.1's native-B2B trade-off adds a phase after P6 that makes `techPattern` X|B2B_EDI full for every tech. A second variant also makes `targetTech` IDOC and FILE_SFTP full on every target. `pnpm coreedge:figures` runs both and writes their figures into section 1.1.
 
 **Checks after any change:**
 - The total must be 1,119,744, and the valid count 497,340, unless the feasibility rule changed.
 - Each consumer type must have exactly valid / 9 scenarios.
 - `problems` must be empty.
-- `pnpm coreedge:check` must pass, and any figure quoted in running text outside the generated blocks must be re-quoted by hand. Never mix the new output with older figures.
+- `pnpm coreedge:check` must pass. It also fails when the prose of sections 1 and 3 types a coverage figure (a percentage, a count such as 1,512, or "N of M") outside a generated block: quote it through a block (a `value-*` block inside a sentence, for example `value-full-P5` or `value-partial-Today-target-ECC`; `render-roadmap-figures.mjs` lists the family), or, when it is not simulator output or records a past result, wrap it in `<!-- figures:not-simulated begin/end -->` or `<!-- figures:historical begin/end -->`. The words around a figure are still a person's to keep true. Figures in other sections are still re-quoted by hand. Never mix the new output with older figures.
 
 ### C. Sources
 

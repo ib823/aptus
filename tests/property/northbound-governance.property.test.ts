@@ -18,13 +18,24 @@
  * nothing from src/: if it reused the broker's predicates, a wrong predicate
  * would agree with itself.
  *
- * THE CASES are generated: four exhaustive grids (credential states, grants
- * and policy, interfaces and connections, the write switches) and a seeded
- * random sample over every factor at once, with several grants and
- * connections per case. More than 10,000 combinations in all, asserted below.
- * For each, the broker's answer (allowed or refused, the HTTP status and the
- * refusal reason) must equal the oracle's, nothing may reach SAP on a refusal,
- * and every refusal after authentication must leave exactly one audit row.
+ * THE CASES are generated: five exhaustive grids (credential states, grants
+ * and policy, interfaces and connections, the write switches, the legacy
+ * cut-off) and a seeded random sample over every factor at once, with several
+ * grants and connections per case. More than 10,000 combinations in all,
+ * asserted below. For each, the broker's answer (allowed or refused, the HTTP
+ * status and the refusal reason) must equal the oracle's, an allowed call must
+ * reach SAP through the connection the oracle binds, nothing may reach SAP on a
+ * refusal, and every refusal after authentication must leave exactly one audit
+ * row.
+ *
+ * A SECOND ORGANISATION. Every lookup the broker makes is tenant-scoped, and a
+ * scope nobody tests is a scope a refactor can drop silently. So a case can
+ * seed another organisation's rows beside the caller's (`foreign`): a grant
+ * and an active connection that carry this app's, this interface's and this
+ * product's ids and differ only in `organizationId`, the worst case, where the
+ * organisation filter is the only thing keeping them out; and an interface can
+ * exist under the requested id in that organisation only (`otherOrg`). The
+ * oracle never counts a foreign row (decision table 5.1 and stage 7).
  */
 
 import { createHash } from "node:crypto";
@@ -60,6 +71,8 @@ const h = vi.hoisted(() => ({
     accessCalled: false,
     rateCalled: false,
     executorCalls: 0,
+    /** The id of the connection SAP was called through, when it was. */
+    connectionId: null as string | null,
     audits: [] as Record<string, unknown>[],
   },
 }));
@@ -135,15 +148,17 @@ vi.mock("@/lib/northbound/idempotency", async (importOriginal) => ({
 }));
 vi.mock("@/lib/northbound/read", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readEntitySet: async () => {
+  readEntitySet: async ({ connection }: { connection: { id: string } }) => {
     h.observed.executorCalls++;
+    h.observed.connectionId = connection.id;
     return { status: "OK", httpStatus: 200, records: [{ id: "1" }], detail: "1 record.", durationMs: 1, failureReason: null };
   },
 }));
 vi.mock("@/lib/northbound/write", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  writeEntitySet: async () => {
+  writeEntitySet: async ({ connection }: { connection: { id: string } }) => {
     h.observed.executorCalls++;
+    h.observed.connectionId = connection.id;
     return {
       status: "CREATED",
       httpStatus: 201,
@@ -199,6 +214,34 @@ const LOOKUPS = ["none", "unknown", "current", "previous", "dropped"] as const;
 const SOLUTION_STATES = ["DRAFT", "ACTIVE", "RESTRICTED", "RETIRED", "MISSING"] as const;
 const RATES = ["allowed", "limited", "unavailable"] as const;
 const BINDINGS = ["this", "thisOtherProduct", "otherInterface", "unboundMatched", "unboundUnstampedMatched", "unboundLater"] as const;
+type Binding = (typeof BINDINGS)[number];
+type UnboundBinding = Extract<Binding, `unbound${string}`>;
+/**
+ * Each unbound grant's legacy cut-off, in hours after the interface was
+ * created: the deploy stamp (`unboundCutoffAt`), or for an unstamped grant its
+ * own creation. `unboundLater` was cut off before the interface existed.
+ */
+const CUTOFF_HOURS: Readonly<Record<UnboundBinding, number>> = {
+  unboundMatched: 2,
+  unboundUnstampedMatched: 1,
+  unboundLater: -1,
+};
+/**
+ * When a PATCH last moved the interface onto the tuple it matches today
+ * (`grantMatchChangedAt`), in hours after its creation: never; a stamp older
+ * than the creation itself; between the two matched cut-offs above; after both.
+ */
+const MATCH_CHANGES = { never: null, beforeCreation: -6, betweenCutoffs: 1.5, afterCutoffs: 3 } as const;
+type MatchChange = keyof typeof MATCH_CHANGES;
+const MATCH_CHANGE_KEYS = Object.keys(MATCH_CHANGES) as MatchChange[];
+/**
+ * What the interface's `serviceVerifications` holds for a connection, under
+ * that connection's own environment::client key: nothing; a verify through
+ * this very connection and host; one made through another connection id; one
+ * made against another host.
+ */
+const VERIFICATIONS = ["none", "matching", "otherConnection", "otherHost"] as const;
+type Verification = (typeof VERIFICATIONS)[number];
 
 interface Credential {
   lookup: (typeof LOOKUPS)[number];
@@ -213,7 +256,7 @@ interface Credential {
   sapClient: string | null;
 }
 interface Grant {
-  binding: (typeof BINDINGS)[number];
+  binding: Binding;
   sameEnv: boolean;
   sameSolution: boolean;
   sameOperation: boolean;
@@ -222,12 +265,14 @@ interface Grant {
   expired: boolean;
 }
 interface Iface {
-  where: "mine" | "otherSolution" | "missing";
+  /** `otherOrg`: an interface with this id exists, in another organisation only. */
+  where: "mine" | "otherSolution" | "otherOrg" | "missing";
   mode: "READ" | "WRITE";
   status: "DRAFT" | "ACTIVE" | "DEPRECATED";
   operation: "READ" | "CREATE" | "UPDATE";
   product: "s4hana" | "bogus";
   custom: boolean;
+  matchChangedAt: MatchChange;
 }
 interface Connection {
   env: Env | null;
@@ -235,8 +280,8 @@ interface Connection {
   writeEnabled: boolean;
   readable: boolean;
   active: boolean;
-  /** The interface's own service was verified in the credential's environment through this connection. */
-  verified: boolean;
+  /** What the interface's service verification holds under this connection's key. */
+  verification: Verification;
 }
 interface Case {
   route: "read" | "write";
@@ -249,6 +294,8 @@ interface Case {
   grants: Grant[];
   mode: "legacy" | "strict";
   connections: Connection[];
+  /** Another organisation's rows sit beside this one's (see the header). */
+  foreign: boolean;
 }
 
 /* ── the oracle, from the decision-table runbook ──────────────────────── */
@@ -257,6 +304,8 @@ interface Decision_ {
   allow: boolean;
   status: number;
   reason: string;
+  /** Allowed only: the index, in `c.connections`, of the connection SAP is called through. */
+  connection?: number;
 }
 const refuse = (status: number, reason: string): Decision_ => ({ allow: false, status, reason });
 
@@ -282,9 +331,10 @@ function expected(c: Case): Decision_ {
   // Stage 4: the idempotency key.
   if (write && !c.idempotencyKey) return refuse(400, "IDEMPOTENCY_KEY_REQUIRED");
 
-  // Stage 5: the interface.
+  // Stage 5: the interface. 5.1 is judged in the credential's organisation
+  // only: an interface under this id in another one is not found.
   const i = c.iface;
-  if (i.where === "missing") return refuse(404, "INTERFACE_NOT_FOUND");
+  if (i.where === "missing" || i.where === "otherOrg") return refuse(404, "INTERFACE_NOT_FOUND");
   if (i.where === "otherSolution") return refuse(404, "NOT_THIS_SOLUTION");
   if (!write) {
     if (i.mode === "WRITE") return refuse(403, "WRITE_NOT_SERVED");
@@ -295,13 +345,19 @@ function expected(c: Case): Decision_ {
     if (i.operation !== "CREATE") return refuse(400, "OPERATION_NOT_SUPPORTED");
   }
 
-  // Stage 6: the grant. Considered: this app, this environment, this service and operation.
+  // Stage 6: the grant. Considered: this organisation (another's grants are
+  // never in c.grants), this app, this environment, this service and operation.
   const considered = c.grants.filter((g) => g.sameSolution && g.sameEnv && g.sameOperation);
+  // The interface has matched since the later of its creation (hour 0) and
+  // its last grant-match edit.
+  const changed = MATCH_CHANGES[i.matchChangedAt];
+  const matchedSince = changed === null ? 0 : Math.max(0, changed);
   const counts = (g: Grant): boolean => {
     if (g.binding === "this") return true;
     if (g.binding === "thisOtherProduct" || g.binding === "otherInterface") return false;
     if (c.mode === "strict") return false;
-    return g.binding === "unboundMatched" || g.binding === "unboundUnstampedMatched";
+    // Legacy: an unbound grant counts only where the interface already matched it at its cut-off.
+    return matchedSince <= CUTOFF_HOURS[g.binding];
   };
   const authorises = (g: Grant): boolean => {
     if (write) {
@@ -320,7 +376,8 @@ function expected(c: Case): Decision_ {
   if (granting.every((g) => g.revoked)) return refuse(403, "GRANT_REVOKED");
   if (!granting.some((g) => !g.revoked && !g.expired)) return refuse(403, "GRANT_EXPIRED");
 
-  // Stage 7: the connection (only active ones count).
+  // Stage 7: the connection (only this organisation's active ones count;
+  // another's are never in c.connections).
   if (i.product === "bogus") return refuse(403, "UNKNOWN_PRODUCT");
   const active = c.connections.filter((x) => x.active);
   if (active.some((x) => !x.readable)) return refuse(403, "CONNECTION_UNREADABLE");
@@ -341,17 +398,20 @@ function expected(c: Case): Decision_ {
     bound = only;
   }
 
-  // Stage 8: the write switches.
+  // Stage 8: the write switches. Verified means a verify made in this
+  // environment through this very connection, SAP client and host.
   if (write) {
     if (!bound.writeEnabled) return refuse(403, "WRITES_DISABLED");
-    if (i.custom && !bound.verified) return refuse(400, "CUSTOM_SERVICE_UNVERIFIED");
+    if (i.custom && bound.verification !== "matching") return refuse(400, "CUSTOM_SERVICE_UNVERIFIED");
   }
-  return { allow: true, status: write ? 201 : 200, reason: "ALLOWED" };
+  return { allow: true, status: write ? 201 : 200, reason: "ALLOWED", connection: c.connections.indexOf(bound) };
 }
 
 /* ── building the world for a case ────────────────────────────────────── */
 
 const ORG = "org_a";
+/** The other organisation of a `foreign` or `otherOrg` case. */
+const ORG_B = "org_b";
 const SOLUTION = "sol_1";
 const IFACE = "if_1";
 const TOKEN = "ce_test_property_token";
@@ -388,14 +448,39 @@ function buildWorld(c: Case): World {
 
   const i = c.iface;
   const externalId = i.custom ? `custom:${CUSTOM_PATH}` : "supplier-invoices";
+  const baseUrlOf = (n: number) => `https://my${n}.s4hana.ondemand.com`;
+  /*
+   * One entry per declared connection, under its own environment::client key,
+   * shaped by its `verification`. Inactive connections first: an inactive and
+   * an active row can share a key, and the active one (the only one that can
+   * bind) is then the entry that stands. Two active rows sharing a key are
+   * AMBIGUOUS, so they never reach the check.
+   */
+  const verifications = c.connections
+    .map((x, n) => ({ x, n }))
+    .filter(({ x }) => x.env !== null && x.verification !== "none")
+    .sort((a, b) => Number(a.x.active) - Number(b.x.active))
+    .map(({ x, n }) => [
+      `${x.env}::${x.client ?? ""}`,
+      {
+        environment: x.env,
+        at: T0.toISOString(),
+        connectionId: x.verification === "otherConnection" ? "conn_elsewhere" : `conn_${n}`,
+        sapClient: x.client,
+        baseUrl: x.verification === "otherHost" ? "https://another-host.s4hana.ondemand.com" : baseUrlOf(n),
+      },
+    ]);
+  const changed = MATCH_CHANGES[i.matchChangedAt];
   const interfaces: Row[] =
     i.where === "missing"
       ? []
       : [
           {
             id: IFACE,
-            organizationId: ORG,
-            solutionId: i.where === "mine" ? SOLUTION : "sol_2",
+            // otherOrg: the id exists, in another organisation, carrying this
+            // app's id (the worst case: only the organisation filter differs).
+            organizationId: i.where === "otherOrg" ? ORG_B : ORG,
+            solutionId: i.where === "otherSolution" ? "sol_2" : SOLUTION,
             name: "Supplier invoices",
             externalId,
             sapProduct: i.product,
@@ -407,17 +492,9 @@ function buildWorld(c: Case): World {
             servicePath: i.custom ? CUSTOM_PATH : null,
             odataVersion: i.custom ? "V2" : null,
             serviceVerifiedAt: null,
-            serviceVerifications: Object.fromEntries(
-              c.connections
-                .map((x, n) => [x, n] as const)
-                .filter(([x]) => x.verified)
-                .map(([x, n]) => [
-                  `${k.env}::${x.client ?? ""}`,
-                  { environment: k.env, at: T0.toISOString(), connectionId: `conn_${n}`, sapClient: x.client, baseUrl: `https://my${n}.s4hana.ondemand.com` },
-                ]),
-            ),
+            serviceVerifications: Object.fromEntries(verifications),
             createdAt: T0,
-            grantMatchChangedAt: null,
+            grantMatchChangedAt: changed === null ? null : at(changed),
           },
         ];
 
@@ -438,19 +515,41 @@ function buildWorld(c: Case): World {
       unboundLastUsedAt: null,
       // Unbound: matched at the cut-off (the deploy stamp, or the grant's own
       // creation when unstamped), or the interface began to match only later.
-      createdAt: g.binding === "unboundUnstampedMatched" ? at(1) : at(-48),
-      unboundCutoffAt: g.binding === "unboundMatched" ? at(2) : g.binding === "unboundLater" ? at(-1) : null,
+      createdAt: g.binding === "unboundUnstampedMatched" ? at(CUTOFF_HOURS.unboundUnstampedMatched) : at(-48),
+      unboundCutoffAt:
+        g.binding === "unboundMatched" || g.binding === "unboundLater" ? at(CUTOFF_HOURS[g.binding]) : null,
     };
   });
+  if (c.foreign) {
+    // Another organisation's approved, live grant, bound to this interface id
+    // on its product, in this app and environment.
+    grants.push({
+      id: "grant_foreign",
+      organizationId: ORG_B,
+      solutionId: SOLUTION,
+      environment: k.env,
+      externalId,
+      operation: i.operation,
+      decision: "APPROVED",
+      revokedAt: null,
+      expiresAt: future(),
+      interfaceId: IFACE,
+      sapProduct: i.product,
+      unboundLastUsedAt: null,
+      createdAt: at(-48),
+      unboundCutoffAt: null,
+    });
+  }
 
+  // A bogus interface product never reaches the binding; keep rows on the real one.
+  const product = i.product === "bogus" ? "s4hana" : i.product;
   const connections: Row[] = c.connections.map((x, n) => ({
     id: `conn_${n}`,
     organizationId: ORG,
-    // A bogus interface product never reaches the binding; keep rows on the real one.
-    product: i.product === "bogus" ? "s4hana" : i.product,
+    product,
     key: `conn-${n}`,
     label: `Connection ${n}`,
-    baseUrl: `https://my${n}.s4hana.ondemand.com`,
+    baseUrl: baseUrlOf(n),
     authType: x.readable ? "basic" : "kerberos",
     secretsCiphertext: "sealed",
     oauthTokenUrl: null,
@@ -462,11 +561,35 @@ function buildWorld(c: Case): World {
     isActive: x.active,
     createdAt: at(n),
   }));
+  if (c.foreign) {
+    // Another organisation's active, readable, write-enabled connection for
+    // exactly this environment and client: the oldest row, listed first.
+    connections.unshift({
+      id: "conn_foreign",
+      organizationId: ORG_B,
+      product,
+      key: "conn-foreign",
+      label: "Another organisation's connection",
+      baseUrl: "https://foreign.s4hana.ondemand.com",
+      authType: "basic",
+      secretsCiphertext: "sealed",
+      oauthTokenUrl: null,
+      writeEnabled: true,
+      apiPath: null,
+      timeoutMs: null,
+      environment: k.env,
+      client: k.sapClient,
+      isActive: true,
+      createdAt: at(-48),
+    });
+  }
 
+  const solutions: Row[] = c.solution === "MISSING" ? [] : [{ id: SOLUTION, organizationId: ORG, status: c.solution }];
+  if (c.foreign) solutions.push({ id: "sol_b", organizationId: ORG_B, status: "ACTIVE" });
   return {
     clients: k.lookup === "current" || k.lookup === "previous" ? [client] : [],
     retired: k.lookup === "dropped" ? [{ tokenHash: TOKEN_HASH, client }] : [],
-    solutions: c.solution === "MISSING" ? [] : [{ id: SOLUTION, organizationId: ORG, status: c.solution }],
+    solutions,
     interfaces,
     grants,
     connections,
@@ -481,6 +604,8 @@ interface Observed {
   reason: string;
   audits: number;
   draftHeader: boolean;
+  /** The id of the connection SAP was called through, or null. */
+  connectionId: string | null;
 }
 
 async function runBroker(c: Case): Promise<Observed> {
@@ -498,6 +623,7 @@ async function runBroker(c: Case): Promise<Observed> {
     accessCalled: false,
     rateCalled: false,
     executorCalls: 0,
+    connectionId: null,
     audits: [],
   };
   vi.stubEnv("COREEDGE_GRANT_BINDING", c.mode);
@@ -529,7 +655,14 @@ async function runBroker(c: Case): Promise<Observed> {
   // when the resolver did run, the two must agree.
   const auditedBinding = (o.audits.at(-1)?.bindingRefusal as string | null | undefined) ?? null;
   if (o.bindingReason !== null && o.bindingReason !== auditedBinding) {
-    return { allow, status: res.status, reason: `AUDIT_DISAGREES_${o.bindingReason}_${auditedBinding}`, audits: o.audits.length, draftHeader: false };
+    return {
+      allow,
+      status: res.status,
+      reason: `AUDIT_DISAGREES_${o.bindingReason}_${auditedBinding}`,
+      audits: o.audits.length,
+      draftHeader: false,
+      connectionId: o.connectionId,
+    };
   }
   // The stage that refused, read from what each stage reported.
   let reason = "ALLOWED";
@@ -548,6 +681,7 @@ async function runBroker(c: Case): Promise<Observed> {
     reason,
     audits: o.audits.length,
     draftHeader: res.headers.get("x-coreedge-interface-status") === "DRAFT",
+    connectionId: o.connectionId,
   };
 }
 
@@ -578,7 +712,7 @@ const GOOD_CONNECTION = (env: Env | null, client: string | null = null): Connect
   writeEnabled: true,
   readable: true,
   active: true,
-  verified: true,
+  verification: "matching",
 });
 
 function baseCase(route: Case["route"]): Case {
@@ -596,10 +730,12 @@ function baseCase(route: Case["route"]): Case {
       operation: route === "write" ? "CREATE" : "READ",
       product: "s4hana",
       custom: false,
+      matchChangedAt: "never",
     },
     grants: [GOOD_GRANT],
     mode: "legacy",
     connections: [GOOD_CONNECTION("TEST")],
+    foreign: false,
   };
 }
 
@@ -666,29 +802,39 @@ const CONNECTION_SETS: ReadonlyArray<(env: Env) => Connection[]> = [
   (e) => [{ ...GOOD_CONNECTION(e), active: false }, GOOD_CONNECTION(e)],
 ];
 
-/** Grid C: every interface shape against every connection estate. */
+/**
+ * Grid C: every interface shape against every connection estate, alone and
+ * beside another organisation's rows.
+ */
 function interfaceGrid(): Case[] {
   const out: Case[] = [];
   for (const route of ROUTES)
-    for (const where of ["mine", "otherSolution", "missing"] as const)
+    for (const where of ["mine", "otherSolution", "otherOrg", "missing"] as const)
       for (const mode of ["READ", "WRITE"] as const)
         for (const status of ["DRAFT", "ACTIVE", "DEPRECATED"] as const)
           for (const operation of ["READ", "CREATE", "UPDATE"] as const)
             for (const product of ["s4hana", "bogus"] as const)
               for (const sapClient of [null, "100"])
-                for (const connections of CONNECTION_SETS) {
-                  const c = baseCase(route);
-                  out.push({
-                    ...c,
-                    cred: { ...LIVE_CRED, sapClient },
-                    iface: { ...c.iface, where, mode, status, operation, product },
-                    connections: connections(LIVE_CRED.env),
-                  });
-                }
+                for (const connections of CONNECTION_SETS)
+                  for (const foreign of bools) {
+                    const c = baseCase(route);
+                    out.push({
+                      ...c,
+                      cred: { ...LIVE_CRED, sapClient },
+                      iface: { ...c.iface, where, mode, status, operation, product },
+                      connections: connections(LIVE_CRED.env),
+                      foreign,
+                    });
+                  }
   return out;
 }
 
-/** Grid D: the write switches, the write key and the idempotency key. */
+/**
+ * Grid D: the write switches, the write key and the idempotency key; and the
+ * verification of a custom service through the bound connection, beside an
+ * inactive connection for the same environment and client that may hold the
+ * entry instead.
+ */
 function writeSwitchGrid(): Case[] {
   const out: Case[] = [];
   for (const route of ROUTES)
@@ -696,18 +842,51 @@ function writeSwitchGrid(): Case[] {
       for (const idempotencyKey of bools)
         for (const writeEnabled of bools)
           for (const custom of bools)
-            for (const verified of bools)
-              for (const rate of RATES) {
-                const c = baseCase(route);
-                out.push({
-                  ...c,
-                  writeKey,
-                  idempotencyKey,
-                  rate,
-                  iface: { ...c.iface, custom },
-                  connections: [{ ...GOOD_CONNECTION("TEST"), writeEnabled, verified }],
-                });
-              }
+            for (const verification of VERIFICATIONS)
+              for (const inactiveBeside of [null, ...VERIFICATIONS])
+                for (const rate of RATES) {
+                  const c = baseCase(route);
+                  const bound: Connection = { ...GOOD_CONNECTION("TEST"), writeEnabled, verification };
+                  out.push({
+                    ...c,
+                    writeKey,
+                    idempotencyKey,
+                    rate,
+                    iface: { ...c.iface, custom },
+                    connections:
+                      inactiveBeside === null
+                        ? [bound]
+                        : [{ ...GOOD_CONNECTION("TEST"), active: false, verification: inactiveBeside }, bound],
+                  });
+                }
+  return out;
+}
+
+/**
+ * Grid E: the legacy cut-off (grant-binding runbook; decision table stage 6).
+ * Every grant binding against every grant-match edit of the interface, under
+ * both modes, every decision, revoked and expired, alone and beside another
+ * organisation's rows.
+ */
+function cutoffGrid(): Case[] {
+  const out: Case[] = [];
+  for (const route of ROUTES)
+    for (const binding of BINDINGS)
+      for (const matchChangedAt of MATCH_CHANGE_KEYS)
+        for (const mode of ["legacy", "strict"] as const)
+          for (const decision of DECISIONS)
+            for (const revoked of bools)
+              for (const expired of bools)
+                for (const foreign of bools) {
+                  const c = baseCase(route);
+                  out.push({
+                    ...c,
+                    mode,
+                    iface: { ...c.iface, matchChangedAt },
+                    grants: [{ ...GOOD_GRANT, binding, decision, revoked, expired }],
+                    foreign,
+                  });
+                }
   return out;
 }
 
@@ -747,7 +926,7 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       writeEnabled: flip(0.8),
       readable: flip(0.95),
       active: flip(0.9),
-      verified: flip(0.7),
+      verification: flip(0.6) ? "matching" : pick(VERIFICATIONS),
     }));
     out.push({
       route: pick(ROUTES),
@@ -766,16 +945,18 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       rate: flip(0.9) ? "allowed" : pick(RATES),
       idempotencyKey: flip(0.9),
       iface: {
-        where: flip(0.9) ? "mine" : pick(["otherSolution", "missing"] as const),
+        where: flip(0.9) ? "mine" : pick(["otherSolution", "otherOrg", "missing"] as const),
         mode: pick(["READ", "WRITE"] as const),
         status: pick(["DRAFT", "ACTIVE", "DEPRECATED"] as const),
         operation: pick(["READ", "CREATE", "UPDATE"] as const),
         product: flip(0.95) ? "s4hana" : "bogus",
         custom: flip(0.3),
+        matchChangedAt: flip(0.6) ? "never" : pick(MATCH_CHANGE_KEYS),
       },
       grants,
       mode: pick(["legacy", "strict"] as const),
       connections,
+      foreign: flip(0.3),
     });
   }
   return out;
@@ -788,6 +969,7 @@ const GRIDS: Array<[string, () => Case[]]> = [
   ["grants and binding policy", grantGrid],
   ["interfaces and connection estates", interfaceGrid],
   ["write switches", writeSwitchGrid],
+  ["the legacy cut-off", cutoffGrid],
   ["random sample over every factor", () => randomCases(12_000)],
 ];
 
@@ -826,6 +1008,10 @@ describe("the broker's governance decision agrees with the decision-table oracle
       if (got.audits !== wantAudits) problems.push(`audit rows ${got.audits}, expected ${wantAudits}`);
       const wantDraft = want.allow && c.route === "read" && c.iface.status === "DRAFT";
       if (got.draftHeader !== wantDraft) problems.push(`draft header ${got.draftHeader}, expected ${wantDraft}`);
+      // SAP is called through the connection the oracle binds, never another
+      // organisation's.
+      const wantConnection = want.allow ? `conn_${want.connection}` : null;
+      if (got.connectionId !== wantConnection) problems.push(`called SAP through ${got.connectionId}, oracle ${wantConnection}`);
       if (problems.length > 0 && failures.length < 5) failures.push(`${problems.join("; ")}\n  case: ${JSON.stringify(c)}`);
       else if (problems.length > 0) failures.push("");
     }
@@ -833,6 +1019,31 @@ describe("the broker's governance decision agrees with the decision-table oracle
     // Not vacuous: the grid reaches both answers.
     expect(reasons.get("ALLOWED") ?? 0).toBeGreaterThan(0);
     expect(reasons.size).toBeGreaterThan(2);
+  });
+
+  it("exercises the second organisation, the grant-match edit and every verification shape", () => {
+    const all = GRIDS.flatMap(([, gen]) => gen());
+    const reached = (pred: (c: Case) => boolean, reason: string) =>
+      all.some((c) => pred(c) && expected(c).reason === reason);
+    // Another organisation's rows sit beside allowed and refused calls alike.
+    expect(reached((c) => c.foreign, "ALLOWED")).toBe(true);
+    for (const reason of ["NO_APPROVED_GRANT", "GRANT_REVOKED", "GRANT_EXPIRED", "NO_CONNECTION", "NO_MATCH_FOR_ENVIRONMENT"]) {
+      expect(reached((c) => c.foreign, reason), reason).toBe(true);
+    }
+    expect(reached((c) => c.iface.where === "otherOrg", "INTERFACE_NOT_FOUND")).toBe(true);
+    // A grant-match edit after the cut-off sets a legacy grant aside; one before it does not.
+    const unboundLegacy = (c: Case, m: MatchChange) =>
+      c.mode === "legacy" && c.iface.matchChangedAt === m && c.grants.some((g) => g.binding === "unboundMatched");
+    expect(reached((c) => unboundLegacy(c, "afterCutoffs"), "GRANT_NEEDS_REAPPROVAL")).toBe(true);
+    expect(reached((c) => unboundLegacy(c, "betweenCutoffs"), "ALLOWED")).toBe(true);
+    expect(reached((c) => unboundLegacy(c, "beforeCreation"), "ALLOWED")).toBe(true);
+    // A custom write through a connection verified some other way is refused.
+    for (const v of ["none", "otherConnection", "otherHost"] as const) {
+      expect(
+        reached((c) => c.route === "write" && c.connections.some((x) => x.active && x.verification === v), "CUSTOM_SERVICE_UNVERIFIED"),
+        v,
+      ).toBe(true);
+    }
   });
 
   it("reaches every refusal reason in the decision table", async () => {

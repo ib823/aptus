@@ -5,8 +5,9 @@
  * - The simulator counts scenarios the way roadmap Appendix B describes,
  *   checked against a slow reference that walks every scenario one at a time.
  * - The roadmap quotes exactly what the simulator produces: every generated
- *   block in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is current. CI
- *   runs the same check as `pnpm coreedge:check`; this makes `pnpm test`
+ *   block in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is current, and
+ *   the prose of sections 1 and 3 types no coverage figure outside a block.
+ *   CI runs the same check as `pnpm coreedge:check`; this makes `pnpm test`
  *   catch it too.
  */
 
@@ -15,7 +16,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DOC_PATH, renderBlocks, renderDocument } from "../../../scripts/coreedge/render-roadmap-figures.mjs";
+import { bareProseFigures, DOC_PATH, renderBlocks, renderDocument } from "../../../scripts/coreedge/render-roadmap-figures.mjs";
 import { loadInputs, simulateAll } from "../../../scripts/coreedge/simulate-gap-matrix.mjs";
 
 type Cell = { row: string; col?: string; status: string };
@@ -148,10 +149,52 @@ describe("the gap simulator", () => {
 describe("the roadmap's simulated figures", () => {
   it("match the simulator (run `pnpm coreedge:figures`)", () => {
     const doc = readFileSync(DOC_PATH, "utf8");
-    const { out, missing } = renderDocument(doc, renderBlocks(results, inputs.matrix));
+    const { out, missing } = renderDocument(doc, renderBlocks(results, inputs.matrix, inputs.registry));
     expect(missing).toEqual([]);
     expect(out === doc, "a figures block in the roadmap is stale").toBe(true);
+    // The section 1.1 what-if runs simulate twice more.
+  }, 30_000);
+
+  it("are never typed into the prose of sections 1 and 3", () => {
+    expect(bareProseFigures(readFileSync(DOC_PATH, "utf8"))).toEqual([]);
   });
+
+  it("catch a figure typed into a checked section, and leave exempt spans and other sections alone", () => {
+    const doc = [
+      "## 1. Summary",
+      "Partial support is 0.3% today, on 1,512 scenarios, and 12 of 18 stages.",
+      "Quoted: <!-- figures:begin value-full-P5 -->4.9%<!-- figures:end value-full-P5 -->.",
+      "Once <!-- figures:historical begin -->3.3% full<!-- figures:historical end -->; a target of <!-- figures:not-simulated begin -->100%<!-- figures:not-simulated end -->.",
+      "## 2. Method",
+      "Typed here: 6.1%.",
+      "## 3. Results",
+      "Typed again: 53.4%.",
+    ].join("\n");
+    expect(bareProseFigures(doc)).toEqual([
+      { line: 2, figure: "0.3%" },
+      { line: 2, figure: "1,512" },
+      { line: 2, figure: "12 of 18" },
+      { line: 8, figure: "53.4%" },
+    ]);
+  });
+
+  it("write section 3.1's supported shape from the cells, not by hand", () => {
+    const shape = (registry: typeof inputs.registry) => {
+      const r = simulateAll({ matrix: inputs.matrix, registry }, { withCellLevels: true });
+      return renderBlocks(r, inputs.matrix, registry, { withWhatIf: false })["today-partial-shape"] as string;
+    };
+    const today = shape(inputs.registry);
+    expect(today).toContain(`The ${results.coreedgeToday.atLeastPartial.toLocaleString("en")} scenarios`);
+    expect(today).toContain("the broker accepts one consumer login, STATIC_BEARER");
+
+    // A northbound token endpoint lands: OAuth client credentials become partial for every consumer.
+    const withOAuth = structuredClone(inputs.registry);
+    for (const c of withOAuth.coreedgeToday.consumerAuth as Cell[]) if (c.col === "OAUTH_CLIENT_CREDENTIALS") c.status = "partial";
+    const after = shape(withOAuth);
+    expect(after).toContain("- consumer login OAUTH_CLIENT_CREDENTIALS, for every consumer type.");
+    expect(after).not.toContain("accepts one consumer login");
+    expect(after).not.toContain(`The ${results.coreedgeToday.atLeastPartial.toLocaleString("en")} scenarios`);
+  }, 30_000);
 
   it("are the document in docs/coreedge", () => {
     expect(path.relative(process.cwd(), DOC_PATH)).toBe(path.join("docs", "coreedge", "CoreEdge-Gap-Study-and-Roadmap.md"));
