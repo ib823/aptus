@@ -25,6 +25,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
+import { noteFirstCall } from "@/lib/coreedge/journey";
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
@@ -462,6 +463,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
   }
   await audit(status, iface.id, iface.externalId, connection, durationMs, undefined, result.failureReason);
+  // The app's first successful call in this environment (P2.12); in memory
+  // after this instance's first, as on the read route.
+  await noteFirstCall({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    environment: connection.environment ?? client.environment,
+    channel: "broker",
+    status,
+  });
   // Same as the read route: the cause meets the correlation id here and only here.
   if (result.failureReason) {
     console.warn("[northbound] upstream write failed", {

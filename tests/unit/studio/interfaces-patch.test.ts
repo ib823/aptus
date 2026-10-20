@@ -15,26 +15,31 @@ const mocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
   findManyClients: vi.fn(),
   findManyGrants: vi.fn(),
+  updateManyInterfaces: vi.fn(),
+  deleteFixtures: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 // Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
 vi.mock("@/lib/db/prisma", async () => {
   const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
-  return {
-    prisma: {
-      interface: {
-        findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
-        update: mocks.updateInterface,
-        findMany: vi.fn().mockResolvedValue([]),
-        create: vi.fn(),
-      },
-      solution: { findFirst: vi.fn() },
-      solutionClient: { findMany: mocks.findManyClients },
-      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
-      configAudit: { create: mocks.createAudit },
+  const prisma: Record<string, unknown> = {
+    interface: {
+      findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
+      update: mocks.updateInterface,
+      updateMany: mocks.updateManyInterfaces,
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
     },
+    solution: { findFirst: vi.fn() },
+    solutionClient: { findMany: mocks.findManyClients },
+    apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+    configAudit: { create: mocks.createAudit },
+    // P0.4: a contract change clears the captures in the update's transaction.
+    mockFixture: { deleteMany: mocks.deleteFixtures },
   };
+  prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
+  return { prisma };
 });
 
 import { PATCH } from "@/app/api/studio/interfaces/route";
@@ -75,6 +80,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getCurrentUser.mockResolvedValue(BUILDER);
   mocks.findFirstInterface.mockResolvedValue(EXISTING);
+  mocks.updateManyInterfaces.mockResolvedValue({ count: 0 });
+  mocks.deleteFixtures.mockResolvedValue({ count: 0 });
   mocks.updateInterface.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: "if_1", version: 1, mappingVersion: null, ...data }),
   );

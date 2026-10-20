@@ -50,6 +50,7 @@ import type { User } from "@prisma/client";
 import { canRegister } from "@/lib/auth/auth-config";
 import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { isAdminRoleName, mapLegacyRole } from "@/lib/auth/role-migration";
+import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { uniqueOrganizationSlug } from "@/lib/org/slug";
 import { checkRateLimit, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
@@ -181,7 +182,7 @@ export async function createDeveloperWorkspaceUser(data: {
   const workspaceName = workspaceNameFor(name);
   const slug = await uniqueOrganizationSlug(`${name}-workspace`);
 
-  return prisma.$transaction(async (tx) => {
+  const user = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({
       data: {
         name: workspaceName,
@@ -206,6 +207,21 @@ export async function createDeveloperWorkspaceUser(data: {
       },
     });
   });
+
+  /*
+   * THE CLOCK FOR TIME TO FIRST CALL STARTS HERE (P2.12): the account and its
+   * workspace exist from this moment. After the transaction, and unable to
+   * fail it: a measurement must never cost anyone their sign-up.
+   */
+  if (user.organizationId) {
+    await recordJourneyEvent({
+      organizationId: user.organizationId,
+      kind: "WORKSPACE_CREATED",
+      actorUserId: user.id,
+      at: user.createdAt,
+    });
+  }
+  return user;
 }
 
 export type SignupEmailLimit =

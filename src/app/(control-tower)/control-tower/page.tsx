@@ -51,6 +51,12 @@ const SCREENS = [
     detail:
       "Every runtime credential, and whether issuing it was accountable — the segregation-of-duties record.",
   },
+  {
+    href: "/control-tower/journey",
+    title: "Time to first call",
+    detail:
+      "How long a new developer takes to a first successful call, and an app to its first real call, against the roadmap's targets — with the wait split into approver, SAP set-up and developer time.",
+  },
 ] as const;
 
 const card: React.CSSProperties = {

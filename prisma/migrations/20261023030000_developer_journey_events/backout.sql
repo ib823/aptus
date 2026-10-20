@@ -1,0 +1,15 @@
+-- Backout for 20261023030000_developer_journey_events (P2.12), written by
+-- P0.17.
+--
+-- In this file, not in migration.sql, because an applied migration is never
+-- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
+--
+-- Run it only after the deployment is rolled back to code before P2.12, which
+-- never reads the table. What it loses: every recorded milestone, so the time
+-- to first call baseline starts again at the roll-forward
+-- (docs/runbooks/coreedge-time-to-first-call.md). Dropping it is never needed
+-- for safety: COREEDGE_JOURNEY_EVENTS=off stops the writes.
+--
+-- Print it with its _prisma_migrations line:
+--   pnpm migrations:backout-sql 20261023030000_developer_journey_events
+DROP TABLE "DeveloperJourneyEvent";

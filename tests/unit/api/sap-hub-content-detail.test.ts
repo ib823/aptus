@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   resolveSapConnection: vi.fn(),
   grantFindMany: vi.fn(),
   auditCreate: vi.fn(),
+  verificationFindMany: vi.fn(),
+  verificationUpsert: vi.fn(),
+  verificationDeleteMany: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -25,6 +28,8 @@ vi.mock("@/lib/db/prisma", () => ({
     scopeItem: { findMany: mocks.findMany },
     apiAccessGrant: { findMany: mocks.grantFindMany },
     northboundAuditEvent: { create: mocks.auditCreate },
+    // P0.8: the V4 address record (a V2 item never reads or writes it).
+    catalogueAddressVerification: { findMany: mocks.verificationFindMany, upsert: mocks.verificationUpsert, deleteMany: mocks.verificationDeleteMany },
   },
 }));
 // A stored connection, resolved without decrypting anything.
@@ -48,7 +53,9 @@ vi.mock("@/lib/sap-public/capability-probe", () => ({ probeService: mocks.probeS
 
 const { GET } = await import("@/app/api/sap/tdd/hub-content/[id]/route");
 
-const PRODUCT = { key: "s4hana", label: "S/4", envPrefix: "S4_TDD" };
+// The edition is what makes the S/4 address rules apply (catalogueAddressFamily,
+// P0.8); the real s4hana product carries it.
+const PRODUCT = { key: "s4hana", label: "S/4", envPrefix: "S4_TDD", edition: "PUBLIC" };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 const API_ITEM = {
   id: "1", contentType: "API", externalId: "API_PO", title: "PO", description: "", packageId: "Proc",
@@ -73,6 +80,9 @@ beforeEach(() => {
   mocks.resolveSapConnection.mockResolvedValue(null);
   mocks.grantFindMany.mockResolvedValue([]);
   mocks.auditCreate.mockResolvedValue({});
+  mocks.verificationFindMany.mockResolvedValue([]);
+  mocks.verificationUpsert.mockResolvedValue({});
+  mocks.verificationDeleteMany.mockResolvedValue({ count: 0 });
 });
 
 describe("GET /api/sap/tdd/hub-content/[id]", () => {
@@ -242,5 +252,107 @@ describe("the detail's live probe takes the console ceiling and leaves a row (A2
     mocks.auditCreate.mockClear();
     await GET(req("product=s4hana&probe=0"), ctx("1"));
     expect(mocks.auditCreate).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * P0.8 — the detail probes a row only at an address of its own, under its own
+ * product's rules, and records what a V4 address answered on THIS system.
+ */
+describe("the detail and the catalogue's addresses (P0.8)", () => {
+  const CONSULTANT = { id: "u1", email: "a@b.co", role: "consultant", organizationId: "org-a" };
+  const DEV_CONNECTION = { id: "conn-dev", key: "x5m-dev", label: "X5M DEV", baseUrl: "https://x5m.example/", environment: "DEV" };
+  const V4_ITEM = { ...API_ITEM, id: "4", externalId: "CE_BANK_0003", apiType: "ODATAV4", rawMetadataJson: null };
+  const DERIVED = "/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003";
+  const onDev = "product=s4hana&tenant=x5m-dev";
+
+  beforeEach(() => {
+    mocks.getCurrentUser.mockResolvedValue(CONSULTANT);
+    mocks.getSapTenant.mockReturnValue(null);
+    mocks.resolveSapConnection.mockResolvedValue(DEV_CONNECTION);
+    mocks.findUnique.mockResolvedValue(V4_ITEM);
+  });
+
+  it("a derived V4 address is 'unverified' (verifiedAt null) until a 200 is recorded", async () => {
+    mocks.probeService.mockResolvedValue({ service: "CE_BANK_0003", exposed: false, status: 403, ladder: "unreachable" });
+    const body = await (await GET(req(onDev), ctx("4"))).json();
+    expect(body.data.address).toEqual({ path: DERIVED, protocol: "ODATAV4", basis: "derived", verifiedAt: null });
+    // A 403 says nothing about whether the path exists: nothing written, nothing removed.
+    expect(mocks.verificationUpsert).not.toHaveBeenCalled();
+    expect(mocks.verificationDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("a live 200 records the proof for this organization's connection, and the address reads verified", async () => {
+    mocks.probeService.mockResolvedValue({ service: "CE_BANK_0003", exposed: true, status: 200, ladder: "readable", entities: [] });
+    const at = new Date("2026-10-20T10:00:00.000Z");
+    mocks.verificationFindMany.mockResolvedValue([
+      { externalId: "CE_BANK_0003", servicePath: DERIVED, verifiedAt: at, connectionId: "conn-dev", baseUrl: "https://x5m.example" },
+    ]);
+    const body = await (await GET(req(onDev), ctx("4"))).json();
+    expect(mocks.verificationUpsert).toHaveBeenCalledOnce();
+    const upsert = mocks.verificationUpsert.mock.calls[0]![0];
+    expect(upsert.where).toEqual({
+      organizationId_product_tenantKey_externalId: {
+        organizationId: "org-a",
+        product: "s4hana",
+        tenantKey: "x5m-dev",
+        externalId: "CE_BANK_0003",
+      },
+    });
+    expect(upsert.create).toMatchObject({
+      servicePath: DERIVED,
+      connectionId: "conn-dev",
+      baseUrl: "https://x5m.example", // normalized
+      verifiedByUserId: "u1",
+      method: "detail-probe",
+    });
+    expect(body.data.address).toEqual({ path: DERIVED, protocol: "ODATAV4", basis: "derived", verifiedAt: at.toISOString() });
+  });
+
+  it("a recorded 200 for another path, connection or host does not verify this address", async () => {
+    mocks.probeService.mockResolvedValue({ service: "CE_BANK_0003", exposed: false, status: 403, ladder: "unreachable" });
+    const at = new Date("2026-10-01T00:00:00.000Z");
+    for (const stale of [
+      { servicePath: "/sap/opu/odata4/sap/ce_bank_0003/srvd_a2x/sap/ce_bank_0003/0001", connectionId: "conn-dev", baseUrl: "https://x5m.example" },
+      { servicePath: DERIVED, connectionId: "conn-other", baseUrl: "https://x5m.example" },
+      { servicePath: DERIVED, connectionId: "conn-dev", baseUrl: "https://elsewhere.example" },
+    ]) {
+      mocks.verificationFindMany.mockResolvedValue([{ externalId: "CE_BANK_0003", verifiedAt: at, ...stale }]);
+      const body = await (await GET(req(onDev), ctx("4"))).json();
+      expect(body.data.address.verifiedAt).toBeNull();
+    }
+  });
+
+  it("a live 404 at the same path withdraws an earlier proof", async () => {
+    mocks.probeService.mockResolvedValue({ service: "CE_BANK_0003", exposed: false, status: 404, ladder: "unreachable" });
+    await GET(req(onDev), ctx("4"));
+    expect(mocks.verificationDeleteMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-a", product: "s4hana", tenantKey: "x5m-dev", externalId: "CE_BANK_0003", servicePath: DERIVED },
+    });
+  });
+
+  it("an anonymous viewer gets the address and no verification at all", async () => {
+    mocks.getCurrentUser.mockResolvedValue(null);
+    mocks.getSapTenant.mockReturnValue(TENANT);
+    const body = await (await GET(req(), ctx("4"))).json();
+    expect(body.data.address).toMatchObject({ basis: "derived", verifiedAt: null });
+    expect(mocks.verificationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("a `sap-s4-*` wrapper row is never probed and has no address", async () => {
+    mocks.findUnique.mockResolvedValue({ ...V4_ITEM, externalId: "sap-s4-CE_RETAILSEASON_0001-v1" });
+    const body = await (await GET(req(onDev), ctx("4"))).json();
+    expect(mocks.probeService).not.toHaveBeenCalled();
+    expect(body.data.status).toBe("NOT_PROBEABLE");
+    expect(body.data.address).toBeNull();
+  });
+
+  it("a SuccessFactors API is not probed at an S/4 path: its address is the /odata/v2 root", async () => {
+    mocks.getSapProduct.mockReturnValue({ key: "successfactors", label: "SuccessFactors", envPrefix: "SF_TDD", edition: null });
+    mocks.findUnique.mockResolvedValue({ ...API_ITEM, externalId: "PLTUserManagement", apiType: "ODATAV2" });
+    const body = await (await GET(req("product=successfactors&tenant=x5m-dev"), ctx("1"))).json();
+    expect(mocks.probeService).not.toHaveBeenCalled();
+    expect(body.data.status).toBe("NOT_PROBEABLE");
+    expect(body.data.address).toEqual({ path: "/odata/v2", protocol: "ODATAV2", basis: "product-root", verifiedAt: null });
   });
 });

@@ -102,6 +102,12 @@ jobs:
       - name: Governance property test
         run: pnpm test:property
 
+      # The starter kit's client.ts is compiled in the developer's repository,
+      # never by the type check above (it is a generated string). This compiles
+      # it under --strict and the stricter flags beside it (P0.4).
+      - name: Generated client compiles under strict
+        run: pnpm check:scaffold-client
+
       - name: Unit tests
         run: pnpm test --run
         env:

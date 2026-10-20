@@ -14,6 +14,7 @@ import {
   HUB_CONTENT_TYPE_META,
   HUB_STATUSES,
   PROBE_MAX_AGE_DAYS,
+  deprecationHint,
   deprecationTooltip,
   type HubContentType,
   type HubStatus,
@@ -58,6 +59,17 @@ interface HubItem {
   probedAt?: string | null;
   /** The stored probe is too old to set a badge — the row is NOT_CHECKED with a memory. */
   probeStale?: boolean;
+  /**
+   * P0.8 — the address CoreEdge would call and how it was obtained; for OData
+   * V4, when a probe of exactly it answered 200 on this system (null =
+   * unverified here). Null when the row has no address (wrapper, SOAP, …).
+   */
+  address?: {
+    path: string;
+    protocol: "ODATAV2" | "ODATAV4";
+    basis: "convention" | "known-binding" | "derived" | "product-root";
+    verifiedAt: string | null;
+  } | null;
 }
 interface HubData {
   note?: string;
@@ -65,7 +77,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; byTypeDeprecated?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean; dataProbeRefusal?: string | null };
+  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; byTypeDeprecated?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probeableV4?: number; probeableV4Verified?: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean; dataProbeRefusal?: string | null };
   catalogueImported: boolean;
   /** The tenant's display LABEL — for captions, never for query params. */
   tenant: string | null;
@@ -117,14 +129,59 @@ function statusHint(status: BadgeStatus): { text: string; color: string } | null
     case "PROBE_FAILED":
       return { text: "probe failed — the attempt errored, re-run it", color: "var(--status-expired-fg)" };
     case "NOT_PROBEABLE":
-      return { text: "not probeable — no OData endpoint (SOAP/async)", color: "var(--ink-muted)" };
+      return {
+        text: "not probeable — no address of its own to check (SOAP/async, an SAP wrapper listing, or a shared root)",
+        color: "var(--ink-muted)",
+      };
     case "NOT_FOUND":
       return { text: "path not found on this tenant", color: "var(--ink-muted)" };
-    case "DEPRECATED":
-      return { text: "deprecated by SAP — build on the successor, not on this", color: "var(--status-revoked-fg)" };
     default:
       return null;
   }
+}
+
+/**
+ * P0.8 — the one-line hint, with the row's own facts where the status needs
+ * them: a DEPRECATED row names SAP's successor in the row itself (or says none
+ * is recorded), never only in the badge's tooltip.
+ */
+function rowHint(status: BadgeStatus, item: Pick<HubItem, "successorExternalId">): { text: string; color: string } | null {
+  if (status === "DEPRECATED") {
+    return { text: deprecationHint(item.successorExternalId), color: "var(--status-revoked-fg)" };
+  }
+  return statusHint(status);
+}
+
+/**
+ * P0.8 — WHETHER A V4 ADDRESS IS KNOWN TO BE RIGHT. SAP does not publish OData
+ * V4 bindings in the Hub catalogue, so every V4 address here but one is
+ * derived from the Hub id, and the one checked against a real system was
+ * wrong. The chip says "verified" only when a probe of exactly this address
+ * answered 200 on the system on screen; until then it says "unverified".
+ * V2 rows get no chip: their address is SAP's fixed naming convention.
+ */
+function AddressChip({ address, tenant }: { address: HubItem["address"]; tenant: string | null }) {
+  if (!address || address.protocol !== "ODATAV4") return null;
+  const verified = Boolean(address.verifiedAt);
+  const title = verified
+    ? `Verified: a probe of ${address.path} answered 200 on ${tenant ?? "this system"} on ${formatDate(address.verifiedAt)}.`
+    : address.basis === "known-binding"
+      ? `Unverified on ${tenant ?? "this system"}: ${address.path} is a binding recorded from SAP documentation, not yet confirmed by a probe here.`
+      : `Unverified: ${address.path} is derived from the Hub id — SAP does not publish V4 bindings, so it stays unverified until a probe of it answers 200 on ${tenant ?? "a system"}.`;
+  return (
+    <span
+      data-testid="address-chip"
+      className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={
+        verified
+          ? { background: "var(--status-signed-bg)", color: "var(--status-signed-fg)" }
+          : { background: "var(--status-awaiting-bg)", color: "var(--status-awaiting-fg)" }
+      }
+      title={title}
+    >
+      {verified ? "address verified" : "address unverified"}
+    </span>
+  );
 }
 
 /** A tiny coverage-tile swatch for the legend: filled = Loaded, outline = Not loaded. */
@@ -574,6 +631,9 @@ export function SapCapabilityCatalogue({
               available={byStatus.AVAILABLE}
               probed={probed}
               probeable={probeable}
+              {...(data?.counts.probeableV4 !== undefined
+                ? { probeableV4: data.counts.probeableV4, probeableV4Verified: data.counts.probeableV4Verified ?? 0 }
+                : {})}
               apiTotal={apiTotal}
               reference={byStatus.REFERENCE}
               deprecated={byStatus.DEPRECATED}
@@ -813,7 +873,7 @@ export function SapCapabilityCatalogue({
                     const expanded = expandedId === item.id;
                     // Detail-probe result (if any) wins over the capped list status.
                     const effStatus: BadgeStatus = probedStatus[item.id] ?? item.status;
-                    const hint = statusHint(effStatus);
+                    const hint = rowHint(effStatus, item);
                     return (
                       <li key={item.id} style={{ borderTop: "1px solid var(--border-default)" }}>
                         <div className="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
@@ -836,6 +896,7 @@ export function SapCapabilityCatalogue({
                                   {item.apiType}
                                 </span>
                               )}
+                              <AddressChip address={item.address ?? null} tenant={data?.tenant ?? null} />
                               {item.itemCount != null && (
                                 <span className="text-xs tabular-nums" style={{ color: "var(--ink-muted)" }}>
                                   {item.itemCount.toLocaleString()} items

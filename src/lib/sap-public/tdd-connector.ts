@@ -66,6 +66,17 @@ export interface SapTenant {
 
 export type SapODataProtocol = "ODATAV2" | "ODATAV4";
 
+/**
+ * Where a catalogue service's address comes from (P0.8):
+ *   convention    — OData V2 at SAP's fixed /sap/opu/odata/sap/<apiId> pattern
+ *   known-binding — an OData V4 binding recorded in this repo with its source
+ *   derived       — an OData V4 address GUESSED from the Hub id; unverified
+ *                   until a probe of it answers 200 on a system
+ *   product-root  — a product that serves every API from one root
+ *                   (SuccessFactors /odata/v2); entity sets tell them apart
+ */
+export type SapServiceAddressBasis = "convention" | "known-binding" | "derived" | "product-root";
+
 /** SAP's published lifecycle for a service, as far as this repo has verified it (2608 WS4). */
 export interface SapServiceLifecycle {
   state: "ACTIVE" | "DEPRECATED";
@@ -94,6 +105,12 @@ export interface SapServiceDefinition {
    * (…/srvd_a2x/sap/purchaseorder/0001 ends in a version), so it is declared.
    */
   hubApiId?: string;
+  /**
+   * P0.8 — how a CATALOGUE service's address was obtained (absent on the
+   * curated services, whose paths this repo has called). See
+   * `catalogueAddress` in hub-content.ts for what each basis promises.
+   */
+  addressBasis?: SapServiceAddressBasis;
   lifecycle?: SapServiceLifecycle;
   /**
    * Operator-facing note about authorisations SAP changed for this service —

@@ -27,6 +27,7 @@ import { createHash, randomBytes } from "crypto";
 
 import type { Prisma } from "@prisma/client";
 
+import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { CLIENT_TOKEN_PREFIX, hashClientToken } from "@/lib/northbound/auth";
 import {
@@ -332,6 +333,17 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
       // worked (P0.11). Null when no live key was replaced.
       previousValidUntil: minted.previousValidUntil,
     },
+  });
+
+  // A lane's first key is a journey milestone however it arrived (P2.12).
+  await recordJourneyEvent({
+    organizationId: link.organizationId,
+    kind: "KEY_ISSUED",
+    solutionId: link.solutionId,
+    environment: link.environment,
+    subjectId: minted.clientId,
+    actorUserId: link.createdById,
+    detail: "claim_link",
   });
 
   return {

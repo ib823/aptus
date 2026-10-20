@@ -65,6 +65,14 @@ export const TENANT_ANCHORED_MODELS = [
   // Written only nested in that row's own scoped update; read only by hash
   // (UNSCOPED_BY_DESIGN below).
   "RetiredClientToken",
+  // P0.8: which catalogue V4 addresses answered 200 on whose system. A
+  // deployment tenant's rows are filed under "-deployment-", so every query
+  // still names an organizationId.
+  "CatalogueAddressVerification",
+  // P2.12: first occurrences on each organization's way to a first call. The
+  // Control Tower read across organizations runs in the ops guard's declared
+  // cross-tenant context; nothing looks a row up by a credential.
+  "DeveloperJourneyEvent",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];

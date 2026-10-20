@@ -47,7 +47,13 @@ describe("the read path", () => {
   });
 
   it("takes the entity set from the interface and nothing else", () => {
-    expect(src).toContain("const entitySet = iface.entitySet;");
+    // Through the definition discovery shares (P0.4, A42), which reads the
+    // interface's own entity set and takes no request input at all.
+    expect(src).toContain("resolveReadDefinition(product!, iface)");
+    expect(src).toContain("const { service, entitySet } = definition;");
+    const definition = flat(read("src/lib/northbound/read-definition.ts"));
+    expect(definition).toContain("entitySet: iface.entitySet");
+    expect(definition).not.toMatch(/searchParams|request/);
   });
 
   it("no longer tells callers to pass one", () => {

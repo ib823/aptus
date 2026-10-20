@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
+import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import {
   isAllowedApiKeyHeader,
@@ -657,6 +658,21 @@ export async function POST(request: NextRequest) {
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });
+
+  /*
+   * SAP-ADMIN SET-UP WAIT STARTS WHEN A CONNECTION IS FIRST SAVED (P2.12),
+   * and ends at its first successful probe. A re-save is credential rotation,
+   * not set-up, so only a new connection is a milestone.
+   */
+  if (!existing) {
+    await recordJourneyEvent({
+      organizationId,
+      kind: "CONNECTION_SAVED",
+      subjectId: saved.id,
+      environment,
+      actorUserId: userId,
+    });
+  }
 
   return studioOk({ connection: saved, replaced: Boolean(existing), ...(warning ? { warning } : {}) });
 }

@@ -26,6 +26,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { recordGrantDecided, recordJourneyEvent } from "@/lib/coreedge/journey";
 import {
   checkStepUp,
   recordStepUpMissing,
@@ -236,6 +237,18 @@ export async function POST(request: NextRequest) {
     after: created,
   });
 
+  // Where time to first real call starts, and where approver wait starts
+  // (P2.12). After the write, and unable to fail it.
+  await recordJourneyEvent({
+    organizationId,
+    kind: "GRANT_REQUESTED",
+    solutionId: solution.id,
+    environment: created.environment,
+    subjectId: created.id,
+    actorUserId: user.id,
+    at: created.createdAt,
+  });
+
   return studioOk(created, 201);
 }
 
@@ -392,6 +405,8 @@ export async function PATCH(request: NextRequest) {
     before: { decision: grant.decision },
     after: updated,
   });
+
+  await recordGrantDecided({ grant, decision: input.decision, decidedAt, deciderId: user.id });
 
   return studioOk(updated);
 }

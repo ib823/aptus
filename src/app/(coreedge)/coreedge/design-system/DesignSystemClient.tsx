@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/coreedge/ConfirmDialog";
 import { DecisionBar } from "@/components/coreedge/DecisionBar";
 import { FieldPicker } from "@/components/coreedge/FieldPicker";
 import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
+import { JourneyTiles } from "../operations/JourneyTiles";
 import { LaneCard } from "@/components/coreedge/LaneCard";
 import { MaskedKey } from "@/components/coreedge/MaskedKey";
 import { NeedsYouRow } from "@/components/coreedge/NeedsYouRow";
@@ -28,6 +29,7 @@ import {
   whyExplanation,
   type WhyCase,
 } from "@/lib/coreedge/copy";
+import { summarizeJourneys, type JourneyEventRow } from "@/lib/coreedge/journey-metrics";
 import {
   APP_STATUSES,
   APP_STATUS_VOCABULARY,
@@ -94,6 +96,61 @@ const SAMPLE_FIELDS = [
   "CreationDate",
   "NetAmount",
 ];
+
+/*
+ * Sample milestones for the time-to-first-call specimen, at a fixed instant so
+ * the page renders the same figures every time.
+ */
+const SPECIMEN_NOW = new Date("2026-10-21T12:00:00Z");
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+function specimenEvent(
+  organizationId: string,
+  kind: JourneyEventRow["kind"],
+  at: number,
+  extra: Partial<JourneyEventRow> = {},
+): JourneyEventRow {
+  return {
+    organizationId,
+    kind,
+    scopeKey: `${kind}:${extra.subjectId ?? extra.solutionId ?? "workspace"}`,
+    solutionId: null,
+    environment: null,
+    subjectId: null,
+    detail: null,
+    at: new Date(at),
+    ...extra,
+  };
+}
+const SPECIMEN_EVENTS: readonly JourneyEventRow[] = [
+  ...[8, 12, 15, 18, 20, 22, 25, 28, 33, 41, 55, 90].flatMap((minutes, i) => {
+    const signedUp = SPECIMEN_NOW.getTime() - (i + 2) * DAY;
+    return [
+      specimenEvent(`ws-${i}`, "WORKSPACE_CREATED", signedUp),
+      specimenEvent(`ws-${i}`, "FIRST_CALL", signedUp + minutes * MINUTE, { environment: "SANDBOX", detail: "console" }),
+    ];
+  }),
+  specimenEvent("ws-open-1", "WORKSPACE_CREATED", SPECIMEN_NOW.getTime() - 3 * DAY),
+  specimenEvent("ws-open-2", "WORKSPACE_CREATED", SPECIMEN_NOW.getTime() - HOUR),
+  specimenEvent("acme", "CONNECTION_SAVED", SPECIMEN_NOW.getTime() - 9 * DAY, { subjectId: "conn-dev", environment: "DEV" }),
+  specimenEvent("acme", "CONNECTION_PROBE_OK", SPECIMEN_NOW.getTime() - 8 * DAY, { subjectId: "conn-dev", environment: "DEV" }),
+  ...[3, 5, 20].flatMap((hoursToCall, i) => {
+    const requested = SPECIMEN_NOW.getTime() - (8 - i) * DAY;
+    const app = { solutionId: `app-${i}`, environment: "DEV" } as const;
+    return [
+      specimenEvent("acme", "GRANT_REQUESTED", requested, { ...app, subjectId: `grant-${i}` }),
+      specimenEvent("acme", "GRANT_DECIDED", requested + (hoursToCall / 2) * HOUR, { ...app, subjectId: `grant-${i}`, detail: "APPROVED" }),
+      specimenEvent("acme", "FIRST_CALL", requested + hoursToCall * HOUR, { ...app, detail: "broker" }),
+    ];
+  }),
+  specimenEvent("acme", "GRANT_REQUESTED", SPECIMEN_NOW.getTime() - 4 * HOUR, {
+    solutionId: "app-waiting",
+    environment: "DEV",
+    subjectId: "grant-waiting",
+  }),
+];
+const JOURNEY_SPECIMEN = summarizeJourneys(SPECIMEN_EVENTS, SPECIMEN_NOW);
 
 const RAIL_PLACES = [
   { href: "/coreedge", label: "Home", short: "Home" },
@@ -490,6 +547,14 @@ export function DesignSystemClient(): ReactNode {
             </li>
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="journey"
+        title="Time to first call"
+        intro="The P2.12 tiles, computed by the real summary from a fixed set of sample milestones: twelve sign-ups that reached a call and two that did not, and four apps on their way to a real system, one still waiting on an approver. The targets and verdicts are the product's own."
+      >
+        <JourneyTiles summary={JOURNEY_SPECIMEN} idPrefix="specimen-journey" />
       </Section>
 
       <Section

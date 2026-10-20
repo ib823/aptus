@@ -8,6 +8,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { deprecationTooltip, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
+import { formatDate } from "@/lib/format/date";
 import { ProcessBlueprintView, type BlueprintStep } from "./ProcessBlueprintView";
 import { CapabilityChips } from "./CapabilityChips";
 
@@ -35,6 +36,13 @@ interface DetailData {
     hubVersion?: string | null;
     successorExternalId?: string | null;
   };
+  /** P0.8 — the address CoreEdge would call; for V4, its proof on this system. */
+  address?: {
+    path: string;
+    protocol: "ODATAV2" | "ODATAV4";
+    basis: "convention" | "known-binding" | "derived" | "product-root";
+    verifiedAt: string | null;
+  } | null;
   status: string;
   ladder: string | null;
   entities: EntityCap[] | null;
@@ -59,6 +67,24 @@ function crud(v: boolean | null): { glyph: string; text: string; color: string }
   if (v === true) return { glyph: "✓", text: "Yes", color: "var(--decision-standard)" };
   if (v === false) return { glyph: "—", text: "No", color: "var(--ink-muted)" };
   return { glyph: "?", text: "Not probed", color: "var(--ink-muted)" };
+}
+
+/**
+ * P0.8 — what the address is and whether it is known to be right here. A V4
+ * address is "verified" only when a probe of exactly it answered 200 on the
+ * system on screen.
+ */
+function addressSentence(address: NonNullable<DetailData["address"]>): string {
+  if (address.protocol === "ODATAV4") {
+    if (address.verifiedAt) return `— verified: answered 200 on this system on ${formatDate(address.verifiedAt)}.`;
+    return address.basis === "known-binding"
+      ? "— unverified here: a binding recorded from SAP documentation, not yet confirmed by a probe of this system."
+      : "— unverified: derived from the Hub id (SAP does not publish V4 bindings) until a probe of it answers 200 on this system.";
+  }
+  if (address.basis === "product-root") {
+    return "— SuccessFactors serves every OData V2 API from this one root; choose the entity set in Studio.";
+  }
+  return "— SAP's naming convention for OData V2 services.";
 }
 
 /** One entity set's live row read — kept per entity so a repeat open is instant. */
@@ -235,6 +261,17 @@ export function CapabilityDetail({
               api.sap.com <ExternalLink className="size-3" />
             </a>
           </div>
+          {data.address && (
+            <p data-testid="address-line" className="text-xs" style={{ color: "var(--ink-secondary)" }}>
+              <span className="font-semibold" style={{ color: "var(--ink-primary)" }}>
+                Address
+              </span>{" "}
+              <code className="rounded-[var(--radius-input)] px-1.5 py-0.5" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-primary)" }}>
+                {data.address.path}
+              </code>{" "}
+              {addressSentence(data.address)}
+            </p>
+          )}
           {data.status === "DEPRECATED" && (
             <p
               data-testid="deprecation-note"

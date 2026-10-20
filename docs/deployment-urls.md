@@ -45,6 +45,10 @@ in sync deliberately. That is a different piece of work, and worth doing only if
 the POC needs a recovery target. Database backups are the more useful thing to
 have first, and they come from the Postgres provider, not from Vercel.
 
+How a release goes out, is checked and is rolled back, and the proposed
+restore drill (its RPO and RTO are still open decisions), are in
+[`docs/runbooks/coreedge-release.md`](runbooks/coreedge-release.md).
+
 ---
 
 ## 3. The canonical host is already configured

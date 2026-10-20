@@ -28,11 +28,14 @@
 
 import type { NextRequest } from "next/server";
 
+import { noteFirstCall } from "@/lib/coreedge/journey";
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
+import { northboundErrorCodeFor } from "@/lib/northbound/read-status";
+import { resolveReadDefinition } from "@/lib/northbound/read-definition";
 import {
   newCorrelationId,
   northboundError,
@@ -45,7 +48,6 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 
 export const dynamic = "force-dynamic";
@@ -168,9 +170,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // `product!` is sound: a null product forces the binding to fail above, so we
   // cannot reach here without one. Same idiom as the write route.
   // The interface's OWN service when it carries one, the catalogue's otherwise —
-  // never a fallback from one to the other (see interface-service.ts).
-  const resolved = await resolveInterfaceService(product!, iface);
-  const service = resolved?.service ?? null;
+  // never a fallback from one to the other (see interface-service.ts). The
+  // same function decides discovery's `callable` (read-definition.ts, A42).
+  const definition = await resolveReadDefinition(product!, iface);
   /*
    * THE GOVERNED ENTITY SET IS THE ONLY SOURCE (audit E16).
    *
@@ -188,8 +190,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    * (`/api/sap/tdd/preview`) is where a builder chooses a set; that is a
    * different surface, with its own environment ceiling and its own audit row.
    */
-  const entitySet = iface.entitySet;
-  if (!service || !entitySet) {
+  if (!definition.ok) {
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -206,17 +207,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     });
     return northboundError(
       "VALIDATION_ERROR",
-      service
+      definition.reason === "NO_ENTITY_SET"
         ? iface.draft
           ? "This data feed is still a draft and names no dataset yet. Set its entity set in Studio and publish it — the dataset is part of the feed's definition, not something a caller may choose."
           : "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose."
-        : iface.servicePath
+        : definition.reason === "SERVICE_PATH_INVALID"
           ? "This interface's own service path is not valid for its product. Fix it in Studio."
           : "The catalogue service for this interface could not be resolved.",
       400,
       correlationId,
     );
   }
+  const { service, entitySet } = definition;
 
   // 4 — read, and report exactly what came back.
   //
@@ -252,6 +254,16 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     connectionEnvironment: connection.environment,
     failureReason: result.failureReason,
   });
+  // The app's first successful call in this environment (P2.12). A set
+  // lookup in memory on every call after this instance's first: no database
+  // round trip is added to the broker's hot path.
+  await noteFirstCall({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    environment: connection.environment ?? client.environment,
+    channel: "broker",
+    status,
+  });
 
   // The one place the cause and the correlation id meet. The client keeps the
   // generic sentence; whoever is quoted that id can now find out what happened.
@@ -264,16 +276,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     });
   }
 
-  if (status >= 400) {
-    const code =
-      result.status === "NEEDS_SETUP"
-        ? "FORBIDDEN"
-        : result.status === "NOT_FOUND"
-          ? "NOT_FOUND"
-          : result.status === "TIMEOUT"
-            ? "UPSTREAM_TIMEOUT"
-            : "UPSTREAM_ERROR";
-    return northboundError(code, result.detail, status, correlationId);
+  if (result.status !== "OK" && result.status !== "EMPTY") {
+    // The one code table, shared with the recorded fixtures (read.ts, A57).
+    return northboundError(northboundErrorCodeFor(result.status), result.detail, status, correlationId);
   }
 
   // 200 for OK *and* EMPTY. An empty resource is a successful read, and the
