@@ -49,7 +49,17 @@ import {
 } from "@/lib/sap-public/secret-envelope";
 
 import { ENV_KEY_PROVIDER, envelopeSealingEnabled, getKeyProvider } from "./key-provider";
-import { ENV_ACTIVE_KEY, KeyringConfigError } from "./keyring";
+import {
+  ENV_ACCEPT_LEGACY_FORMAT,
+  ENV_ACTIVE_KEY,
+  ENV_KEYRING,
+  ENV_LEGACY_KEY,
+  KeyringConfigError,
+  LEGACY_KEY_VERSION,
+  legacyFormatPolicy,
+  preEnvelopeLegacyKeyConfigured,
+  readKeyring,
+} from "./keyring";
 import { clearDataKeyCache, createOrgDataKey, unwrapOrgDataKey } from "./org-data-key";
 
 export type SealedTable = "SapConnection" | "SolutionClient";
@@ -78,12 +88,30 @@ function reasonOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Every sealed blob, in id order, one batch at a time. */
-export async function* sealedRows(batchSize = DEFAULT_BATCH_SIZE): AsyncGenerator<SealedRow[]> {
+/** What every command reads: how many rows at a time, and whose. */
+export interface MaintenanceScope {
+  readonly batchSize?: number;
+  /**
+   * Only these organisations' rows — sealed blobs and data keys alike, so a
+   * rekey mints, a retire withdraws and a verify reports for these alone.
+   * Default: every organisation in the database. `--org` on the command line;
+   * also what keeps a test that shares a database with other rows to its own.
+   */
+  readonly organizationIds?: readonly string[];
+}
+
+/** The `where` fragment a scope adds; nothing for the whole database. */
+function orgFilter(scope: MaintenanceScope): { organizationId?: { in: string[] } } {
+  return scope.organizationIds ? { organizationId: { in: [...scope.organizationIds] } } : {};
+}
+
+/** Every sealed blob in scope, in id order, one batch at a time. */
+export async function* sealedRows(scope: MaintenanceScope = {}): AsyncGenerator<SealedRow[]> {
+  const batchSize = scope.batchSize ?? DEFAULT_BATCH_SIZE;
   let after = "";
   for (;;) {
     const rows = await prisma.sapConnection.findMany({
-      where: { id: { gt: after } },
+      where: { id: { gt: after }, ...orgFilter(scope) },
       orderBy: { id: "asc" },
       take: batchSize,
       select: { id: true, organizationId: true, product: true, key: true, secretsCiphertext: true },
@@ -104,7 +132,7 @@ export async function* sealedRows(batchSize = DEFAULT_BATCH_SIZE): AsyncGenerato
   after = "";
   for (;;) {
     const rows = await prisma.solutionClient.findMany({
-      where: { id: { gt: after }, secretsCiphertext: { not: null } },
+      where: { id: { gt: after }, secretsCiphertext: { not: null }, ...orgFilter(scope) },
       orderBy: { id: "asc" },
       take: batchSize,
       select: { id: true, organizationId: true, solutionId: true, secretsCiphertext: true },
@@ -146,10 +174,11 @@ async function replaceBlob(row: SealedRow, next: string): Promise<boolean> {
   return result.count === 1;
 }
 
-/** The newest data-key version of each organisation, read once per run. */
-async function latestDataKeyVersions(): Promise<Map<string, number>> {
+/** The newest data-key version of each organisation in scope, read once per run. */
+async function latestDataKeyVersions(scope: MaintenanceScope): Promise<Map<string, number>> {
   const rows = await prisma.orgDataKey.groupBy({
     by: ["organizationId"],
+    where: orgFilter(scope),
     _max: { version: true },
   });
   const out = new Map<string, number>();
@@ -159,12 +188,32 @@ async function latestDataKeyVersions(): Promise<Map<string, number>> {
 
 /* ── reseal ─────────────────────────────────────────────────────────────── */
 
-export interface ResealOptions {
+export interface ResealOptions extends MaintenanceScope {
   /** Write. Without it nothing is changed. */
   readonly apply?: boolean;
   /** The format every blob should end in. Default: the deployment's active format. */
   readonly to?: SealedFormat;
-  readonly batchSize?: number;
+}
+
+/**
+ * The rollback gate's own check of the legacy key: is it set the way the code
+ * being rolled back TO will read it?
+ *
+ * Code older than P0.10 reads SAP_CONNECTION_ENCRYPTION_KEY and never the
+ * ring. A deployment that moved its old key into the ring as `v1` and dropped
+ * the variable reseals to legacy and verifies cleanly here — both read `v1`
+ * from the ring — and the rolled-back code then throws on every SAP
+ * connection and write key. So the way back refuses to start (exit 2) until
+ * the variable itself is set, to the same key as `v1` (readKeyring refuses
+ * two different keys under that name).
+ */
+function assertRollbackLegacyKey(): void {
+  if (!preEnvelopeLegacyKeyConfigured()) {
+    throw new KeyringConfigError(
+      `Code older than P0.10 reads ${ENV_LEGACY_KEY} and never ${ENV_KEYRING}. Set ${ENV_LEGACY_KEY} itself to the ${LEGACY_KEY_VERSION} key (64 hex characters) before resealing to legacy or rolling back; without it the rolled-back deployment fails every SAP connection and write key.`,
+    );
+  }
+  readKeyring();
 }
 
 export interface TableCounts {
@@ -204,6 +253,9 @@ function emptyCounts(): TableCounts {
  * on: the running deployment would keep sealing new saves as `ce2` behind the
  * reseal, and the rolled-back code could not open them. Switch sealing off
  * and redeploy first; the ring stays configured so `ce2` blobs still open.
+ * It also refuses, dry run or not, while SAP_CONNECTION_ENCRYPTION_KEY itself
+ * is unset (assertRollbackLegacyKey), and while legacy blobs are refused
+ * outright (SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none).
  *
  * Each new blob is decrypted again and compared with the plaintext before it is
  * written, so a reseal can never replace a working secret with a broken one.
@@ -225,15 +277,23 @@ export async function resealAll(options: ResealOptions = {}): Promise<ResealRepo
       `Resealing to legacy while envelope sealing is on would race the deployment: every save after this run is written as ce2 again. Unset ${ENV_ACTIVE_KEY} and set ${ENV_KEY_PROVIDER} to env (keep SAP_CONNECTION_ENCRYPTION_KEYS so ce2 blobs still open), redeploy, then reseal with the same settings here.`,
     );
   }
+  if (to === "legacy") {
+    assertRollbackLegacyKey();
+    if (legacyFormatPolicy() === "none") {
+      throw new KeyringConfigError(
+        `${ENV_ACCEPT_LEGACY_FORMAT}=none refuses every legacy blob, so a reseal to legacy would leave nothing that opens. Unset it (or set it to bound) with ${ENV_ACTIVE_KEY}, redeploy, then reseal.`,
+      );
+    }
+  }
 
   const tables: Record<SealedTable, TableCounts> = {
     SapConnection: emptyCounts(),
     SolutionClient: emptyCounts(),
   };
   const failures: RowFailure[] = [];
-  const latest = to === "ce2" ? await latestDataKeyVersions() : new Map<string, number>();
+  const latest = to === "ce2" ? await latestDataKeyVersions(options) : new Map<string, number>();
 
-  for await (const batch of sealedRows(options.batchSize)) {
+  for await (const batch of sealedRows(options)) {
     for (const row of batch) {
       const counts = tables[row.table];
       counts.scanned++;
@@ -321,13 +381,23 @@ function emptyVerifyCounts(): VerifyTableCounts {
   return { total: 0, opened: 0, failed: 0, legacyBound: 0, legacyUnbound: 0, ce2ByVersion: {}, onOlderDataKey: 0 };
 }
 
-export interface VerifyOptions {
-  readonly batchSize?: number;
+export interface VerifyOptions extends MaintenanceScope {
   /**
    * Every blob must be in this format; any other is a failure. `legacy` gates
-   * a rollback to code older than P0.10, which cannot open `ce2`.
+   * a rollback to code older than P0.10, which cannot open `ce2` — and so
+   * refuses to run (exit 2) unless SAP_CONNECTION_ENCRYPTION_KEY itself is
+   * set, the only key that code reads (assertRollbackLegacyKey).
    */
   readonly expectFormat?: SealedFormat;
+  /**
+   * Every data key must be wrapped by the active provider and master version;
+   * any other is a failure. Gates removing the previous master version after
+   * `keys:rotate`: an instance of the previous deployment can still wrap an
+   * organisation's first data key under the old version after the rotate has
+   * scanned past it, and only a failing verify stops that version leaving the
+   * ring with the key still under it.
+   */
+  readonly expectActiveMaster?: boolean;
 }
 
 /** The active provider and master version, or null when envelope sealing is off. */
@@ -351,10 +421,16 @@ function activeMaster(): { provider: string; keyVersion: string } | null {
  */
 export async function verifyAll(options: VerifyOptions = {}): Promise<VerifyReport> {
   permitCrossTenantReads("keys:verify: platform key maintenance");
+  if (options.expectFormat === "legacy") assertRollbackLegacyKey();
+  const master = activeMaster();
+  if (options.expectActiveMaster && !master) {
+    throw new KeyringConfigError(
+      `Expecting every data key on the active master key needs one: set ${ENV_ACTIVE_KEY} (or select a KMS provider).`,
+    );
+  }
   clearDataKeyCache();
   const failures: RowFailure[] = [];
-  const master = activeMaster();
-  const latest = await latestDataKeyVersions();
+  const latest = await latestDataKeyVersions(options);
 
   const dataKeys = {
     total: 0,
@@ -364,17 +440,24 @@ export async function verifyAll(options: VerifyOptions = {}): Promise<VerifyRepo
     notOnActiveMaster: 0,
     retired: 0,
   };
-  for await (const row of orgDataKeyRows(options.batchSize)) {
+  for await (const row of orgDataKeyRows(options)) {
     dataKeys.total++;
     if (row.retiredAt) dataKeys.retired++;
     const label = `${row.provider}:${row.keyVersion}`;
     dataKeys.byMasterKey[label] = (dataKeys.byMasterKey[label] ?? 0) + 1;
-    if (master && (row.provider !== master.provider || row.keyVersion !== master.keyVersion)) {
-      dataKeys.notOnActiveMaster++;
-    }
+    const notOnActive = master !== null && (row.provider !== master.provider || row.keyVersion !== master.keyVersion);
+    if (notOnActive) dataKeys.notOnActiveMaster++;
     try {
       await unwrapOrgDataKey(row);
       dataKeys.unwrapped++;
+      if (notOnActive && options.expectActiveMaster) {
+        failures.push({
+          table: "OrgDataKey",
+          id: row.id,
+          organizationId: row.organizationId,
+          reason: `Wrapped by ${label}, not the active ${master.provider}:${master.keyVersion}. Run keys:rotate --apply (again) before removing the master key that wraps it.`,
+        });
+      }
     } catch (err) {
       dataKeys.failed++;
       failures.push({ table: "OrgDataKey", id: row.id, organizationId: row.organizationId, reason: reasonOf(err) });
@@ -385,7 +468,7 @@ export async function verifyAll(options: VerifyOptions = {}): Promise<VerifyRepo
     SapConnection: emptyVerifyCounts(),
     SolutionClient: emptyVerifyCounts(),
   };
-  for await (const batch of sealedRows(options.batchSize)) {
+  for await (const batch of sealedRows(options)) {
     for (const row of batch) {
       const counts = tables[row.table];
       counts.total++;
@@ -422,11 +505,12 @@ export async function verifyAll(options: VerifyOptions = {}): Promise<VerifyRepo
 
 /* ── rotate ─────────────────────────────────────────────────────────────── */
 
-async function* orgDataKeyRows(batchSize = DEFAULT_BATCH_SIZE) {
+async function* orgDataKeyRows(scope: MaintenanceScope) {
+  const batchSize = scope.batchSize ?? DEFAULT_BATCH_SIZE;
   let after = "";
   for (;;) {
     const rows = await prisma.orgDataKey.findMany({
-      where: { id: { gt: after } },
+      where: { id: { gt: after }, ...orgFilter(scope) },
       orderBy: { id: "asc" },
       take: batchSize,
       select: {
@@ -446,7 +530,7 @@ async function* orgDataKeyRows(batchSize = DEFAULT_BATCH_SIZE) {
   }
 }
 
-export interface RotateOptions {
+export interface RotateOptions extends MaintenanceScope {
   readonly apply?: boolean;
   /**
    * Also mint a NEW data key for every organisation that has one, so a
@@ -461,7 +545,6 @@ export interface RotateOptions {
    * `rekeyBefore`), so organisations that run already rekeyed are skipped.
    */
   readonly rekeyBefore?: Date;
-  readonly batchSize?: number;
 }
 
 export interface RotateReport {
@@ -522,7 +605,7 @@ export async function rotateMasterKey(options: RotateOptions = {}): Promise<Rota
   };
   const newestByOrg = new Map<string, { readonly version: number; readonly createdAt: Date }>();
 
-  for await (const row of orgDataKeyRows(options.batchSize)) {
+  for await (const row of orgDataKeyRows(options)) {
     report.scanned++;
     const newest = newestByOrg.get(row.organizationId);
     if (!newest || row.version > newest.version) {
@@ -582,9 +665,8 @@ export async function rotateMasterKey(options: RotateOptions = {}): Promise<Rota
 
 /* ── retire ─────────────────────────────────────────────────────────────── */
 
-export interface RetireOptions {
+export interface RetireOptions extends MaintenanceScope {
   readonly apply?: boolean;
-  readonly batchSize?: number;
 }
 
 export interface RetireReport {
@@ -641,7 +723,7 @@ export async function retireDataKeys(options: RetireOptions = {}): Promise<Retir
 
   // How many sealed blobs still name each (organisation, version).
   const inUse = new Map<string, number>();
-  for await (const batch of sealedRows(options.batchSize)) {
+  for await (const batch of sealedRows(options)) {
     for (const row of batch) {
       try {
         const description = describeSealedBlob(row.blob);
@@ -654,9 +736,9 @@ export async function retireDataKeys(options: RetireOptions = {}): Promise<Retir
     }
   }
 
-  const latest = await latestDataKeyVersions();
+  const latest = await latestDataKeyVersions(options);
   const retiredAt = new Date();
-  for await (const row of orgDataKeyRows(options.batchSize)) {
+  for await (const row of orgDataKeyRows(options)) {
     report.scanned++;
     if (row.version >= (latest.get(row.organizationId) ?? row.version)) {
       report.newest++;

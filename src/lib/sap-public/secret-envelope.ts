@@ -31,10 +31,18 @@
  * solutionClientRowAad) is authenticated with every `ce2` blob exactly as with
  * a legacy one, prefixed by the blob's own header so the version cannot be
  * edited either. A `ce2` blob has no unbound fallback: it was born bound.
+ *
+ * WHICH LEGACY BLOBS STILL OPEN is the operator's other switch,
+ * SAP_CONNECTION_ACCEPT_LEGACY_FORMAT (keyring.ts, legacyFormatPolicy): `any`
+ * by default, as before; `bound` refuses the unbound fallback; `none` refuses
+ * the legacy format outright, so a pre-AAD blob from an old backup cannot be
+ * written over a migrated row and opened there while `v1` stays configured
+ * for a rollback.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 import {
+  decryptBoundSecret,
   decryptSecret,
   openSecrets,
   parseSecrets,
@@ -43,6 +51,12 @@ import {
   type SapConnectionSecrets,
 } from "@/lib/sap-public/connection-crypto";
 import { envelopeSealingEnabled } from "@/lib/sap-public/keys/key-provider";
+import {
+  ENV_ACCEPT_LEGACY_FORMAT,
+  KeyringConfigError,
+  legacyFormatPolicy,
+  legacySealingKeyConfigured,
+} from "@/lib/sap-public/keys/keyring";
 import { dataKeyForOpen, dataKeyForSeal } from "@/lib/sap-public/keys/org-data-key";
 
 export const ENVELOPE_PREFIX = "ce2:";
@@ -154,12 +168,37 @@ export async function decryptEnvelope(
 }
 
 /**
+ * Open a legacy blob as far as SAP_CONNECTION_ACCEPT_LEGACY_FORMAT allows:
+ * with the unbound fallback (`any`), bound only (`bound`), or not at all
+ * (`none`). The refusals say which setting refused, never what the blob holds.
+ */
+function decryptLegacy(blob: string, aad: string): string {
+  const policy = legacyFormatPolicy();
+  if (policy === "none") {
+    throw new Error(
+      `This secret is in the legacy format, which ${ENV_ACCEPT_LEGACY_FORMAT}=none refuses. Re-enter the credential, or set the variable to bound or any and run keys:reseal --apply.`,
+    );
+  }
+  if (policy === "any") return decryptSecret(blob, aad);
+  try {
+    return decryptBoundSecret(blob, aad);
+  } catch (err) {
+    // A missing or malformed legacy key is a configuration answer; keep it.
+    if (!legacySealingKeyConfigured()) throw err;
+    throw new Error(
+      `This legacy secret does not open under its row's binding (sealed before AAD existed, moved from another row, or under another key), and ${ENV_ACCEPT_LEGACY_FORMAT}=bound refuses the unbound fallback.`,
+    );
+  }
+}
+
+/**
  * Decrypt either format. Legacy blobs keep their unbound fallback (see
- * decryptSecret); `ce2` blobs have none.
+ * decryptSecret) unless SAP_CONNECTION_ACCEPT_LEGACY_FORMAT narrows it;
+ * `ce2` blobs have none.
  */
 export async function decryptForOrg(organizationId: string, blob: string, aad: string): Promise<string> {
   if (isEnvelopeBlob(blob)) return decryptEnvelope(organizationId, blob, aad);
-  return decryptSecret(blob, aad);
+  return decryptLegacy(blob, aad);
 }
 
 /** The format the NEXT write produces, as the environment configures it now. */
@@ -171,7 +210,9 @@ export function activeSealFormat(): SealedFormat {
  * Seal a secrets bundle for one organisation's row.
  *
  * `ce2` once envelope sealing is switched on; otherwise the legacy
- * `sealSecrets`, untouched — no database read, no new table.
+ * `sealSecrets`, untouched — no database read, no new table. A legacy seal
+ * is refused while SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none: the blob could
+ * never be opened again.
  */
 export async function sealSecretsForOrg(
   organizationId: string,
@@ -179,7 +220,14 @@ export async function sealSecretsForOrg(
   aad: string,
   format: SealedFormat = activeSealFormat(),
 ): Promise<string> {
-  if (format === "legacy") return sealSecrets(secrets, aad);
+  if (format === "legacy") {
+    if (legacyFormatPolicy() === "none") {
+      throw new KeyringConfigError(
+        `Envelope sealing is off, so this secret would be sealed in the legacy format, which ${ENV_ACCEPT_LEGACY_FORMAT}=none refuses to open. Switch envelope sealing on, or set the variable to bound or any.`,
+      );
+    }
+    return sealSecrets(secrets, aad);
+  }
   return encryptEnvelope(organizationId, JSON.stringify(trimSecrets(secrets)), aad);
 }
 
@@ -190,6 +238,8 @@ export async function openSecretsForOrg(
   aad: string,
 ): Promise<SapConnectionSecrets> {
   if (!blob) return {};
-  if (!isEnvelopeBlob(blob)) return openSecrets(blob, aad);
-  return parseSecrets(await decryptEnvelope(organizationId, blob, aad));
+  if (isEnvelopeBlob(blob)) return parseSecrets(await decryptEnvelope(organizationId, blob, aad));
+  // The default opens a legacy blob exactly as before P0.10.
+  if (legacyFormatPolicy() === "any") return openSecrets(blob, aad);
+  return parseSecrets(decryptLegacy(blob, aad));
 }

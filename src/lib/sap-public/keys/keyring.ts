@@ -169,6 +169,53 @@ export function legacySealingKey(env: Env = process.env): Buffer {
   throw new Error(LEGACY_KEY_MESSAGE);
 }
 
+/**
+ * Is the legacy key set the way code OLDER than P0.10 reads it?
+ *
+ * That code reads `SAP_CONNECTION_ENCRYPTION_KEY` and nothing else — never the
+ * ring — and wants exactly 64 hex characters, untrimmed. legacySealingKey
+ * above falls back to the ring's `v1`, so a deployment that moved its old key
+ * into the ring seals and opens legacy blobs perfectly well here, and a
+ * rollback gate that asked this code would pass; the rolled-back code would
+ * then throw on every SAP connection and write key. The rollback gate asks
+ * this instead.
+ */
+export function preEnvelopeLegacyKeyConfigured(env: Env = process.env): boolean {
+  const hex = env[ENV_LEGACY_KEY];
+  return typeof hex === "string" && HEX_KEY_PATTERN.test(hex);
+}
+
+/**
+ * Which LEGACY-format blobs this deployment still opens.
+ *
+ *   any    (the default) every legacy blob, including one sealed before AAD
+ *          existed, through the unbound fallback — behaviour as before P0.10
+ *   bound  only legacy blobs that open under their own row's binding
+ *   none   no legacy blob at all; only `ce2`
+ *
+ * WHY A SETTING AND NOT "REFUSE ONCE EVERY ROW IS ce2". Once a reseal has
+ * moved every row to `ce2`, an unbound legacy blob from an old backup or dump
+ * still opens on ANY row of ANY organisation — the swap the row binding exists
+ * to stop — for as long as `v1` is configured, and a rollback needs `v1`
+ * configured. Whether migration is finished is something only the operator
+ * knows (a row restored from a backup is legacy again), so it is the
+ * operator's switch, flipped after `keys:verify --expect-format=ce2` passes.
+ *
+ * A value that is not one of the three throws: a typo in a setting that
+ * narrows what opens must not quietly widen it back to `any`.
+ */
+export type LegacyFormatPolicy = "any" | "bound" | "none";
+
+export const ENV_ACCEPT_LEGACY_FORMAT = "SAP_CONNECTION_ACCEPT_LEGACY_FORMAT";
+
+export function legacyFormatPolicy(env: Env = process.env): LegacyFormatPolicy {
+  const raw = env[ENV_ACCEPT_LEGACY_FORMAT];
+  if (!present(raw)) return "any";
+  const value = raw.trim();
+  if (value === "any" || value === "bound" || value === "none") return value;
+  throw new KeyringConfigError(`${ENV_ACCEPT_LEGACY_FORMAT} must be any, bound or none.`);
+}
+
 /** Can a legacy-format blob be sealed or opened? Non-throwing. */
 export function legacySealingKeyConfigured(env: Env = process.env): boolean {
   const hex = env[ENV_LEGACY_KEY];

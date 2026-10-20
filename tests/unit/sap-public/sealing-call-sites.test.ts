@@ -26,7 +26,7 @@ import { stripSource } from "../../helpers/source";
 
 const ROOT = path.resolve(__dirname, "../../..");
 
-const LEGACY_CODEC = /\b(sealSecrets|openSecrets|encryptSecret|decryptSecret)\b/;
+const LEGACY_CODEC = /\b(sealSecrets|openSecrets|encryptSecret|decryptSecret|decryptBoundSecret)\b/;
 const ALLOWED = new Set([
   "src/lib/sap-public/connection-crypto.ts",
   "src/lib/sap-public/secret-envelope.ts",

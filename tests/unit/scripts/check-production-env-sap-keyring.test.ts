@@ -113,6 +113,31 @@ describe("the SAP key ring at deploy time", () => {
     }
   });
 
+  it("passes every legacy-format setting the application knows, with envelope sealing on", () => {
+    for (const value of ["", "any", "bound", "none"]) {
+      const r = run({
+        ...BASE_PROD_ENV,
+        SAP_CONNECTION_ENCRYPTION_KEYS: `v1:${hex()},v2:${hex()}`,
+        SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v2",
+        SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: value,
+      });
+      expect(r.code, r.out).toBe(0);
+      expect(r.out).not.toContain("SAP_CONNECTION_ACCEPT_LEGACY_FORMAT");
+    }
+  });
+
+  it("fails a legacy-format setting the application does not know", () => {
+    const r = run({ ...BASE_PROD_ENV, SAP_CONNECTION_ENCRYPTION_KEY: hex(), SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "NONE" });
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toContain("SAP_CONNECTION_ACCEPT_LEGACY_FORMAT must be any, bound or none");
+  });
+
+  it("fails none while envelope sealing is off — every save would be refused on open", () => {
+    const r = run({ ...BASE_PROD_ENV, SAP_CONNECTION_ENCRYPTION_KEY: hex(), SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "none" });
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toContain("envelope sealing is off");
+  });
+
   it("is checked on a preview deploy too — a broken ring breaks any deploy", () => {
     const r = run({
       ...BASE_PROD_ENV,

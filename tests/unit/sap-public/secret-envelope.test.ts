@@ -73,6 +73,7 @@ const VARS = [
   "SAP_CONNECTION_ENCRYPTION_KEYS",
   "SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY",
   "SAP_CONNECTION_KEY_PROVIDER",
+  "SAP_CONNECTION_ACCEPT_LEGACY_FORMAT",
 ] as const;
 const saved: Partial<Record<(typeof VARS)[number], string | undefined>> = {};
 
@@ -277,5 +278,48 @@ describe("with an active master key — the ce2 envelope", () => {
     expect(isConnectionEncryptionConfigured()).toBe(true);
     setEnv({ SAP_CONNECTION_KEY_PROVIDER: "unregistered-kms" });
     expect(isConnectionEncryptionConfigured()).toBe(false);
+  });
+});
+
+describe("narrowing which legacy blobs open (SAP_CONNECTION_ACCEPT_LEGACY_FORMAT)", () => {
+  const ENVELOPE = {
+    SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
+    SAP_CONNECTION_ENCRYPTION_KEYS: `v2:${V2}`,
+    SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v2",
+  };
+  // A blob from before AAD existed — from an old backup, say — and a bound one.
+  const unbound = () => sealSecrets({ password: "attacker-chosen" });
+  const bound = () => sealSecrets(SECRETS, AAD);
+
+  it("opens an unbound legacy blob on any row by default — the downgrade it closes", async () => {
+    setEnv(ENVELOPE);
+    expect((await openSecretsForOrg("org_b", unbound(), AAD)).password).toBe("attacker-chosen");
+  });
+
+  it("bound: refuses the unbound fallback, still opens a bound legacy blob and ce2", async () => {
+    setEnv({ ...ENVELOPE, SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "bound" });
+    await expect(openSecretsForOrg("org_b", unbound(), AAD)).rejects.toThrow(/=bound refuses the unbound fallback/);
+    expect(await openSecretsForOrg("org_a", bound(), AAD)).toEqual(SECRETS);
+    const ce2 = await sealSecretsForOrg("org_a", SECRETS, AAD);
+    expect(await openSecretsForOrg("org_a", ce2, AAD)).toEqual(SECRETS);
+  });
+
+  it("none: refuses every legacy blob, and still opens ce2 with v1 configured for a rollback", async () => {
+    setEnv({ ...ENVELOPE, SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "none" });
+    await expect(openSecretsForOrg("org_b", unbound(), AAD)).rejects.toThrow(/=none refuses/);
+    await expect(openSecretsForOrg("org_a", bound(), AAD)).rejects.toThrow(/=none refuses/);
+    const ce2 = await sealSecretsForOrg("org_a", SECRETS, AAD);
+    expect(await openSecretsForOrg("org_a", ce2, AAD)).toEqual(SECRETS);
+  });
+
+  it("none without envelope sealing refuses to seal a blob it could never open", async () => {
+    setEnv({ SAP_CONNECTION_ENCRYPTION_KEY: LEGACY, SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "none" });
+    await expect(sealSecretsForOrg("org_a", SECRETS, AAD)).rejects.toThrow(/=none refuses to open/);
+    expect(isConnectionEncryptionConfigured()).toBe(false);
+  });
+
+  it("a value it does not know opens no legacy blob", async () => {
+    setEnv({ ...ENVELOPE, SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "off" });
+    await expect(openSecretsForOrg("org_a", bound(), AAD)).rejects.toThrow(/must be any, bound or none/);
   });
 });

@@ -26,7 +26,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 import { envelopeSealingEnabled, getKeyProvider } from "@/lib/sap-public/keys/key-provider";
-import { legacySealingKey, legacySealingKeyConfigured } from "@/lib/sap-public/keys/keyring";
+import {
+  legacyFormatPolicy,
+  legacySealingKey,
+  legacySealingKeyConfigured,
+} from "@/lib/sap-public/keys/keyring";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -103,13 +107,19 @@ export interface SapConnectionSecrets {
 export function isConnectionEncryptionConfigured(): boolean {
   // Once envelope sealing is switched on, a save writes `ce2`, so the question
   // is whether the key provider can wrap a data key. Until then it is the
-  // legacy key, checked exactly as before.
+  // legacy key, checked exactly as before — unless legacy blobs are refused
+  // outright, in which case a legacy save could never be opened again.
   if (envelopeSealingEnabled()) {
     try {
       return getKeyProvider().isConfigured();
     } catch {
       return false;
     }
+  }
+  try {
+    if (legacyFormatPolicy() === "none") return false;
+  } catch {
+    return false;
   }
   return legacySealingKeyConfigured();
 }
@@ -245,6 +255,17 @@ export function isBoundLegacyBlob(encryptedBase64: string, aad: string): boolean
   } catch {
     return false;
   }
+}
+
+/**
+ * Decrypt a legacy blob under `aad` ONLY — no unbound fallback. Throws on a
+ * blob sealed before AAD existed, as on one sealed for another row.
+ *
+ * For the envelope (secret-envelope.ts) once the operator has narrowed what
+ * legacy blobs open to bound ones (SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=bound).
+ */
+export function decryptBoundSecret(encryptedBase64: string, aad: string): string {
+  return openBlob(encryptedBase64, aad);
 }
 
 /** Only the non-empty string fields — what both formats store. */

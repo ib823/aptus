@@ -14,8 +14,10 @@ import { envelopeSealingEnabled } from "@/lib/sap-public/keys/key-provider";
 import {
   KeyringConfigError,
   LEGACY_KEY_MESSAGE,
+  legacyFormatPolicy,
   legacySealingKey,
   legacySealingKeyConfigured,
+  preEnvelopeLegacyKeyConfigured,
   readKeyring,
 } from "@/lib/sap-public/keys/keyring";
 
@@ -138,5 +140,42 @@ describe("the versioned ring", () => {
     expect(envelopeSealingEnabled({ SAP_CONNECTION_KEY_PROVIDER: "env" })).toBe(false);
     // A ring with no active key is staged, not switched on.
     expect(envelopeSealingEnabled({ SAP_CONNECTION_ENCRYPTION_KEYS: `v1:${hex()}` })).toBe(false);
+  });
+});
+
+describe("the key a rollback needs — what pre-P0.10 code reads", () => {
+  it("is SAP_CONNECTION_ENCRYPTION_KEY itself, never the ring's v1", () => {
+    const old = hex();
+    expect(preEnvelopeLegacyKeyConfigured({ SAP_CONNECTION_ENCRYPTION_KEY: old })).toBe(true);
+    // Moved into the ring and the variable dropped: this code still seals and
+    // opens legacy blobs with it, but the rolled-back code would throw.
+    const moved = { SAP_CONNECTION_ENCRYPTION_KEYS: `v1:${old},v2:${hex()}` };
+    expect(legacySealingKey(moved).toString("hex")).toBe(old);
+    expect(preEnvelopeLegacyKeyConfigured(moved)).toBe(false);
+  });
+
+  it("is 64 hex characters exactly as the old helper read them", () => {
+    expect(preEnvelopeLegacyKeyConfigured({})).toBe(false);
+    expect(preEnvelopeLegacyKeyConfigured({ SAP_CONNECTION_ENCRYPTION_KEY: "" })).toBe(false);
+    expect(preEnvelopeLegacyKeyConfigured({ SAP_CONNECTION_ENCRYPTION_KEY: ` ${hex()}` })).toBe(false);
+    expect(preEnvelopeLegacyKeyConfigured({ SAP_CONNECTION_ENCRYPTION_KEY: "q".repeat(64) })).toBe(false);
+  });
+});
+
+describe("which legacy-format blobs still open", () => {
+  it("is every one by default, as before P0.10", () => {
+    expect(legacyFormatPolicy({})).toBe("any");
+    expect(legacyFormatPolicy({ SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "" })).toBe("any");
+  });
+
+  it("narrows to bound, or none, when the operator says so", () => {
+    expect(legacyFormatPolicy({ SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "bound" })).toBe("bound");
+    expect(legacyFormatPolicy({ SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: " none " })).toBe("none");
+  });
+
+  it("refuses a value it does not know rather than widening back to any", () => {
+    for (const value of ["NONE", "no", "false"]) {
+      expect(() => legacyFormatPolicy({ SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: value })).toThrow(KeyringConfigError);
+    }
   });
 });

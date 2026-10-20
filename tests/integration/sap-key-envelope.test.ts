@@ -19,6 +19,12 @@
  *   - a data-key cache warmed before a database restore neither seals under,
  *     nor fails to open with, a key the database no longer holds.
  *
+ * EVERY MAINTENANCE RUN HERE IS SCOPED to this test's organisations
+ * (`organizationIds`, `--org`). Unscoped, a rekey would mint data keys under
+ * this test's throwaway master keys for every organisation in the database,
+ * and a retire would withdraw theirs; an organisation whose rows this test's
+ * keys cannot open sits beside them to prove nothing reaches it.
+ *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
 import { spawnSync } from "node:child_process";
@@ -56,6 +62,7 @@ const VARS = [
   "SAP_CONNECTION_ENCRYPTION_KEYS",
   "SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY",
   "SAP_CONNECTION_KEY_PROVIDER",
+  "SAP_CONNECTION_ACCEPT_LEGACY_FORMAT",
 ] as const;
 type KeyEnv = Partial<Record<(typeof VARS)[number], string>>;
 
@@ -93,9 +100,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
   const orgA = `org_p010_a_${run}`;
   const orgB = `org_p010_b_${run}`;
   const ORGS = [orgA, orgB];
+  /** Every maintenance run below: this test's organisations, and no other. */
+  const SCOPE = { organizationIds: ORGS };
+  /**
+   * Another tenant in the same database, whose data key is wrapped by a master
+   * key this test never holds — what any real row looks like to this test.
+   */
+  const orgX = `org_p010_x_${run}`;
   const WRITE_KEY = "cew_p010_write_key_value";
   const saved: Record<string, string | undefined> = {};
   let clientId = "";
+
+  /** orgX's data keys and sealed blob, to prove no scoped run touched them. */
+  async function foreignState() {
+    const keys = await prisma.orgDataKey.findMany({ where: { organizationId: orgX }, orderBy: { version: "asc" } });
+    const conns = await prisma.sapConnection.findMany({ where: { organizationId: orgX }, select: { secretsCiphertext: true } });
+    return { keys, conns };
+  }
+  let foreignBefore: Awaited<ReturnType<typeof foreignState>> | null = null;
 
   /** Every sealed blob this test owns, from the database. */
   async function blobs(): Promise<{ table: string; id: string; blob: string }[]> {
@@ -138,20 +160,39 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     expect(await verifyWriteCredential(tenantScopeOf(orgA), clientId, "cew_wrong")).toBe(false);
   }
 
-  /** The report's failures, for this test's rows only. */
-  const ours = <T extends { organizationId: string }>(failures: readonly T[]) =>
-    failures.filter((f) => ORGS.includes(f.organizationId));
-
   beforeAll(async () => {
     for (const k of VARS) saved[k] = process.env[k];
     await prisma.organization.deleteMany({ where: { name: { startsWith: NAME_PREFIX } } });
-    for (const id of ORGS) {
+    for (const id of [...ORGS, orgX]) {
       await prisma.organization.create({ data: { id, name: `${NAME_PREFIX} ${id}`, type: "client" } });
     }
+    // Sealed under a data key this test's ring cannot unwrap: every operation
+    // that reached it would fail on it, mint for it or retire for it.
+    await prisma.orgDataKey.create({
+      data: {
+        organizationId: orgX,
+        version: 1,
+        provider: "env",
+        keyVersion: "v9",
+        wrappedKey: randomBytes(60).toString("base64"),
+      },
+    });
+    await prisma.sapConnection.create({
+      data: {
+        organizationId: orgX,
+        product: "s4hana",
+        key: "prod",
+        label: "S/4",
+        baseUrl: "https://my1-api.s4hana.cloud.sap",
+        authType: "basic",
+        secretsCiphertext: sealWithRawKey(randomBytes(32), 1, "{}", connectionAad(orgX, "s4hana", "prod")),
+      },
+    });
+    foreignBefore = await foreignState();
   });
 
   afterAll(async () => {
-    await prisma.organization.deleteMany({ where: { id: { in: ORGS } } });
+    await prisma.organization.deleteMany({ where: { id: { in: [...ORGS, orgX] } } });
     for (const k of VARS) {
       const v = saved[k];
       if (v === undefined) delete process.env[k];
@@ -201,8 +242,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
   });
 
   it("refuses to reseal to ce2 before an active key is named", async () => {
-    await expect(resealAll({ to: "ce2" })).rejects.toThrow(/ACTIVE_KEY/);
-    await expect(rotateMasterKey()).rejects.toThrow(/active master key/);
+    await expect(resealAll({ ...SCOPE, to: "ce2" })).rejects.toThrow(/ACTIVE_KEY/);
+    await expect(rotateMasterKey(SCOPE)).rejects.toThrow(/active master key/);
   });
 
   it("once an active key is named, new writes carry a key version", async () => {
@@ -228,19 +269,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
 
   it("reseal is a dry run by default: it reports and writes nothing", async () => {
     const before = await blobs();
-    const report = await resealAll();
+    const report = await resealAll(SCOPE);
     expect(report.apply).toBe(false);
     expect(report.to).toBe("ce2");
-    expect(ours(report.failures)).toEqual([]);
-    // Four legacy blobs (three connections, one write key) would move.
-    expect(report.tables.SapConnection.resealed + report.tables.SolutionClient.resealed).toBeGreaterThanOrEqual(4);
+    expect(report.failures).toEqual([]);
+    // Four legacy blobs (two connections, the unbound one, one write key)
+    // would move; the dev connection is already ce2.
+    expect(report.tables.SapConnection.resealed + report.tables.SolutionClient.resealed).toBe(4);
     expect(await blobs()).toEqual(before);
     expect((await dataKeys()).map((k) => k.organizationId)).toEqual([orgA]); // no key minted for B
   });
 
   it("reseal --apply migrates 100% of rows, re-binding the unbound one", async () => {
-    const report = await resealAll({ apply: true });
-    expect(ours(report.failures)).toEqual([]);
+    const report = await resealAll({ ...SCOPE, apply: true });
+    expect(report.failures).toEqual([]);
     const after = await blobs();
     expect(after).toHaveLength(5);
     for (const b of after) expect(describeSealedBlob(b.blob)).toEqual({ format: "ce2", dataKeyVersion: 1 });
@@ -258,16 +300,63 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
 
   it("reseal is idempotent: a second run changes nothing", async () => {
     const before = await blobs();
-    const report = await resealAll({ apply: true });
-    expect(ours(report.failures)).toEqual([]);
+    const report = await resealAll({ ...SCOPE, apply: true });
+    expect(report.failures).toEqual([]);
     expect(await blobs()).toEqual(before);
   });
 
   it("verify passes, with every blob counted by key version", async () => {
-    const report = await verifyAll();
+    const report = await verifyAll(SCOPE);
     expect(report.ok).toBe(true);
-    expect(report.tables.SapConnection.ce2ByVersion["1"]).toBeGreaterThanOrEqual(4);
+    expect(report.tables.SapConnection.ce2ByVersion).toEqual({ "1": 4 });
     expect(report.dataKeys.failed).toBe(0);
+    // The other tenant's row is there, and would fail an unscoped verify.
+    expect((await verifyAll()).failures.map((f) => f.organizationId)).toContain(orgX);
+  });
+
+  it("once migrated, SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none closes the legacy downgrade", async () => {
+    // An attacker with database write access and a pre-AAD blob from an old
+    // backup writes it over org B's migrated row.
+    const victim = await prisma.sapConnection.findFirst({ where: { organizationId: orgB, key: "prod" } });
+    const plant = (secretsCiphertext: string) =>
+      prisma.sapConnection.updateMany({ where: { id: victim!.id, organizationId: orgB }, data: { secretsCiphertext } });
+    await plant(sealSecrets({ username: "u", password: "attacker-chosen" }));
+
+    // By default it opens on any row, and a plain verify still says OK.
+    expect((await resolveSapConnections(orgB, "s4hana"))[0]!.secrets.password).toBe("attacker-chosen");
+    const lax = await verifyAll(SCOPE);
+    expect(lax.ok).toBe(true);
+    expect(lax.tables.SapConnection.legacyUnbound).toBe(1);
+    // --expect-format=ce2, the migration's own gate, does catch it.
+    expect((await verifyAll({ ...SCOPE, expectFormat: "ce2" })).failures.map((f) => f.id)).toEqual([victim!.id]);
+
+    // The hardening step: v1 stays configured (a rollback needs it), legacy
+    // blobs no longer open — in the app, in verify, and in a reseal, which
+    // would otherwise re-bind the planted blob to the victim's row.
+    useKeys({
+      SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
+      SAP_CONNECTION_ENCRYPTION_KEYS: `v2:${V2}`,
+      SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v2",
+      SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "none",
+    });
+    await expect(resolveSapConnections(orgB, "s4hana")).rejects.toThrow(/=none refuses/);
+    const strict = await verifyAll(SCOPE);
+    expect(strict.ok).toBe(false);
+    expect(strict.failures.map((f) => f.id)).toEqual([victim!.id]);
+    const reseal = await resealAll({ ...SCOPE, apply: true });
+    expect(reseal.failures.map((f) => f.id)).toEqual([victim!.id]);
+    expect(describeSealedBlob((await prisma.sapConnection.findFirst({ where: { id: victim!.id } }))!.secretsCiphertext)).toEqual({
+      format: "legacy",
+    });
+
+    await plant(victim!.secretsCiphertext);
+    await everythingOpens();
+    expect((await verifyAll(SCOPE)).ok).toBe(true);
+    useKeys({
+      SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
+      SAP_CONNECTION_ENCRYPTION_KEYS: `v2:${V2}`,
+      SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v2",
+    });
   });
 
   it("rotate re-wraps every data key, and every connection opens with the old keys gone", async () => {
@@ -279,13 +368,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     const blobsBefore = await blobs();
     const keysBefore = await dataKeys();
 
-    const dry = await rotateMasterKey();
-    expect(ours(dry.failures)).toEqual([]);
-    expect(dry.rewrapped).toBeGreaterThanOrEqual(2);
+    // Before the rotate, every data key is still under v2. Everything opens,
+    // so a plain verify passes — and removing v2 now would strand them all;
+    // --expect-active-master is the gate that says so.
+    expect((await verifyAll(SCOPE)).ok).toBe(true);
+    const gate = await verifyAll({ ...SCOPE, expectActiveMaster: true });
+    expect(gate.ok).toBe(false);
+    expect(gate.dataKeys.notOnActiveMaster).toBe(2);
+    expect(gate.failures.map((f) => [f.table, /Wrapped by env:v2, not the active env:v3/.test(f.reason)])).toEqual([
+      ["OrgDataKey", true],
+      ["OrgDataKey", true],
+    ]);
+
+    const dry = await rotateMasterKey(SCOPE);
+    expect(dry.failures).toEqual([]);
+    expect(dry.rewrapped).toBe(2);
     expect(await dataKeys()).toEqual(keysBefore);
 
-    const applied = await rotateMasterKey({ apply: true });
-    expect(ours(applied.failures)).toEqual([]);
+    const applied = await rotateMasterKey({ ...SCOPE, apply: true });
+    expect(applied.failures).toEqual([]);
+    expect((await verifyAll({ ...SCOPE, expectActiveMaster: true })).ok).toBe(true);
     const keysAfter = await dataKeys();
     expect(keysAfter.map((k) => k.keyVersion)).toEqual(["v3", "v3"]);
     expect(keysAfter.every((k) => k.rotatedAt instanceof Date)).toBe(true);
@@ -296,13 +398,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     // v2 retired and the legacy key gone: only v3 remains.
     useKeys({ SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}`, SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v3" });
     await everythingOpens();
-    expect((await verifyAll()).ok).toBe(true);
-    expect((await rotateMasterKey({ apply: true })).current).toBeGreaterThanOrEqual(2);
+    expect((await verifyAll(SCOPE)).ok).toBe(true);
+    expect((await rotateMasterKey({ ...SCOPE, apply: true })).current).toBe(2);
   });
 
   it("rekey + reseal moves every blob onto a new data key", async () => {
-    const rekey = await rotateMasterKey({ apply: true, rekey: true });
-    expect(ours(rekey.failures)).toEqual([]);
+    const rekey = await rotateMasterKey({ ...SCOPE, apply: true, rekey: true });
+    expect(rekey.failures).toEqual([]);
     const afterRekey = [[orgA, 1], [orgA, 2], [orgB, 1], [orgB, 2]].sort();
     expect((await dataKeys()).map((k) => [k.organizationId, k.version])).toEqual(afterRekey);
 
@@ -310,26 +412,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     // organisations it already rekeyed — and neither does its dry run.
     expect(rekey.rekeyBefore).not.toBeNull();
     const resumeFrom = new Date(rekey.rekeyBefore!);
-    const resumedDry = await rotateMasterKey({ rekey: true, rekeyBefore: resumeFrom });
-    expect(resumedDry.alreadyRekeyed).toBeGreaterThanOrEqual(2);
-    const resumed = await rotateMasterKey({ apply: true, rekey: true, rekeyBefore: resumeFrom });
-    expect(ours(resumed.failures)).toEqual([]);
+    const resumedDry = await rotateMasterKey({ ...SCOPE, rekey: true, rekeyBefore: resumeFrom });
+    expect(resumedDry.alreadyRekeyed).toBe(2);
+    const resumed = await rotateMasterKey({ ...SCOPE, apply: true, rekey: true, rekeyBefore: resumeFrom });
+    expect(resumed.failures).toEqual([]);
     expect((await dataKeys()).map((k) => [k.organizationId, k.version])).toEqual(afterRekey);
 
     // Until the reseal, verify flags every blob still on the old data key, and
     // retire refuses to withdraw a version that blobs still name.
-    const before = await verifyAll();
-    expect(before.tables.SapConnection.onOlderDataKey).toBeGreaterThanOrEqual(4);
-    expect(before.tables.SolutionClient.onOlderDataKey).toBeGreaterThanOrEqual(1);
-    const early = await retireDataKeys({ apply: true });
-    expect(ours(early.failures).map((f) => f.organizationId).sort()).toEqual([orgA, orgB].sort());
+    const before = await verifyAll(SCOPE);
+    expect(before.tables.SapConnection.onOlderDataKey).toBe(4);
+    expect(before.tables.SolutionClient.onOlderDataKey).toBe(1);
+    const early = await retireDataKeys({ ...SCOPE, apply: true });
+    expect(early.failures.map((f) => f.organizationId).sort()).toEqual([orgA, orgB].sort());
     expect((await dataKeys()).every((k) => k.retiredAt === null)).toBe(true);
 
-    const report = await resealAll({ apply: true });
-    expect(ours(report.failures)).toEqual([]);
+    const report = await resealAll({ ...SCOPE, apply: true });
+    expect(report.failures).toEqual([]);
     for (const b of await blobs()) expect(describeSealedBlob(b.blob)).toEqual({ format: "ce2", dataKeyVersion: 2 });
     await everythingOpens();
-    const after = await verifyAll();
+    const after = await verifyAll(SCOPE);
     expect(after.tables.SapConnection.onOlderDataKey + after.tables.SolutionClient.onOlderDataKey).toBe(0);
   });
 
@@ -354,32 +456,36 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     expect(await verifyWriteCredential(tenantScopeOf(orgA), clientId, "cew_attacker")).toBe(true);
     await plant(genuine);
 
-    const dry = await retireDataKeys();
-    expect(ours(dry.failures)).toEqual([]);
-    expect(dry.retired).toBeGreaterThanOrEqual(2);
+    const dry = await retireDataKeys(SCOPE);
+    expect(dry.failures).toEqual([]);
+    expect(dry.retired).toBe(2);
     expect((await dataKeys()).every((k) => k.retiredAt === null)).toBe(true);
 
-    const applied = await retireDataKeys({ apply: true });
-    expect(ours(applied.failures)).toEqual([]);
+    const applied = await retireDataKeys({ ...SCOPE, apply: true });
+    expect(applied.failures).toEqual([]);
     expect((await dataKeys()).map((k) => [k.organizationId, k.version, k.retiredAt !== null])).toEqual(
       [[orgA, 1, true], [orgA, 2, false], [orgB, 1, true], [orgB, 2, false]].sort(),
     );
     // Idempotent: a second run finds nothing left to retire.
-    const again = await retireDataKeys({ apply: true });
-    expect(again.alreadyRetired).toBeGreaterThanOrEqual(2);
-    expect(ours(again.failures)).toEqual([]);
+    const again = await retireDataKeys({ ...SCOPE, apply: true });
+    expect(again.alreadyRetired).toBe(2);
+    expect(again.failures).toEqual([]);
 
     await plant(forged);
     clearDataKeyCache();
     expect(await verifyWriteCredential(tenantScopeOf(orgA), clientId, "cew_attacker")).toBe(false);
-    const verify = await verifyAll();
+    const verify = await verifyAll(SCOPE);
     expect(verify.ok).toBe(false);
-    expect(ours(verify.failures).map((f) => [f.id, /retired/.test(f.reason)])).toEqual([[clientId, true]]);
-    expect(verify.dataKeys.retired).toBeGreaterThanOrEqual(2);
+    expect(verify.failures.map((f) => [f.id, /retired/.test(f.reason)])).toEqual([[clientId, true]]);
+    expect(verify.dataKeys.retired).toBe(2);
 
     await plant(genuine);
     await everythingOpens();
-    expect(ours((await verifyAll()).failures)).toEqual([]);
+    expect((await verifyAll(SCOPE)).failures).toEqual([]);
+  });
+
+  it("no scoped run reached the other tenant: no key minted, retired, re-wrapped, or blob rewritten", async () => {
+    expect(await foreignState()).toEqual(foreignBefore);
   });
 
   it("reseal --to legacy is the way back before a rollback — once ce2 writes are switched off", async () => {
@@ -391,16 +497,37 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
     // While the deployment still seals ce2, every save after the reseal would
     // be ce2 again, unreadable by the rolled-back code: refused, nothing written.
     const before = await blobs();
-    await expect(resealAll({ apply: true, to: "legacy" })).rejects.toThrow(/ACTIVE_KEY/);
+    await expect(resealAll({ ...SCOPE, apply: true, to: "legacy" })).rejects.toThrow(/ACTIVE_KEY/);
     expect(await blobs()).toEqual(before);
 
-    // Step 1 of the rollback: active key unset, the ring kept so ce2 still opens.
+    // The old key moved into the ring as v1 and the old variable dropped: this
+    // code seals and opens legacy with it, but code older than P0.10 reads
+    // SAP_CONNECTION_ENCRYPTION_KEY alone and would fail every connection. So
+    // the way back refuses to start — reseal and its verify gate alike.
+    useKeys({ SAP_CONNECTION_ENCRYPTION_KEYS: `v1:${LEGACY},v3:${V3}` });
+    await expect(resealAll({ ...SCOPE, apply: true, to: "legacy" })).rejects.toThrow(
+      /reads SAP_CONNECTION_ENCRYPTION_KEY and never SAP_CONNECTION_ENCRYPTION_KEYS/,
+    );
+    await expect(resealAll({ ...SCOPE, to: "legacy" })).rejects.toThrow(/SAP_CONNECTION_ENCRYPTION_KEY itself/);
+    await expect(verifyAll({ ...SCOPE, expectFormat: "legacy" })).rejects.toThrow(/SAP_CONNECTION_ENCRYPTION_KEY itself/);
+    expect(await blobs()).toEqual(before);
+    // Nor while legacy blobs are refused outright: nothing would open after.
+    useKeys({
+      SAP_CONNECTION_ENCRYPTION_KEY: LEGACY,
+      SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}`,
+      SAP_CONNECTION_ACCEPT_LEGACY_FORMAT: "none",
+    });
+    await expect(resealAll({ ...SCOPE, apply: true, to: "legacy" })).rejects.toThrow(/=none refuses every legacy blob/);
+    expect(await blobs()).toEqual(before);
+
+    // Step 1 of the rollback: active key unset, the ring kept so ce2 still
+    // opens, the legacy variable itself set.
     useKeys({ SAP_CONNECTION_ENCRYPTION_KEY: LEGACY, SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}` });
-    expect(ours((await verifyAll({ expectFormat: "legacy" })).failures).length).toBe(before.length);
-    const report = await resealAll({ apply: true, to: "legacy" });
+    expect((await verifyAll({ ...SCOPE, expectFormat: "legacy" })).failures.length).toBe(before.length);
+    const report = await resealAll({ ...SCOPE, apply: true, to: "legacy" });
     expect(report.to).toBe("legacy");
-    expect(ours(report.failures)).toEqual([]);
-    expect(ours((await verifyAll({ expectFormat: "legacy" })).failures)).toEqual([]);
+    expect(report.failures).toEqual([]);
+    expect((await verifyAll({ ...SCOPE, expectFormat: "legacy" })).failures).toEqual([]);
     const conns = await prisma.sapConnection.findMany({ where: { organizationId: { in: ORGS } } });
     for (const c of conns) {
       // Readable by the pre-P0.10 codec — what a rolled-back deployment runs.
@@ -412,7 +539,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
       SAP_CONNECTION_ENCRYPTION_KEYS: `v3:${V3}`,
       SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY: "v3",
     });
-    expect(ours((await resealAll({ apply: true })).failures)).toEqual([]);
+    expect((await resealAll({ ...SCOPE, apply: true })).failures).toEqual([]);
     await everythingOpens();
   });
 
@@ -429,9 +556,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
         encoding: "utf8",
       });
 
-    const ok = cli("verify");
+    const org = `--org=${orgA},${orgB}`;
+    const ok = cli("verify", org);
     expect(ok.stdout).toContain("VERIFY OK");
     expect(ok.status).toBe(0);
+    expect(cli("verify", "--expect-active-master", "--org", orgA, "--org", orgB).status).toBe(0);
 
     const prod = await prisma.sapConnection.findFirst({ where: { organizationId: orgB, key: "prod" } });
     // Sealed for ANOTHER row: a ciphertext lifted onto this one.
@@ -441,26 +570,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("envelope keys against a real da
       data: { secretsCiphertext: foreign!.secretsCiphertext },
     });
 
-    const report = await verifyAll();
+    const report = await verifyAll(SCOPE);
     expect(report.ok).toBe(false);
     expect(report.failures.map((f) => f.id)).toEqual([prod!.id]);
     expect(JSON.stringify(report)).not.toContain("pw-");
 
-    const failed = cli("verify");
+    const failed = cli("verify", org);
     expect(failed.status).toBe(1);
     expect(failed.stdout).toContain(prod!.id);
     expect(failed.stdout).not.toContain("pw-");
 
     // A reseal reports the row and leaves it alone rather than "fixing" it.
-    const reseal = cli("reseal", "--apply");
+    const reseal = cli("reseal", "--apply", org);
     expect(reseal.status).toBe(1);
 
     expect(cli("verify", "--apply").status).toBe(2);
     expect(cli("rotate", "--to=legacy").status).toBe(2);
     expect(cli("verify", "--rekey-before=2026-01-01T00:00:00Z").status).toBe(2);
     expect(cli("rotate", "--rekey", "--rekey-before=yesterday").status).toBe(2);
+    expect(cli("rotate", "--expect-active-master").status).toBe(2);
+    expect(cli("verify", "--org=").status).toBe(2);
 
-    // Put the row back so a whole-database verify run later sees nothing of ours.
+    // Put the row back, as every test here leaves its rows opening.
     await prisma.sapConnection.updateMany({
       where: { id: prod!.id, organizationId: orgB },
       data: { secretsCiphertext: prod!.secretsCiphertext },

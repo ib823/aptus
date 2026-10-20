@@ -185,29 +185,39 @@ reaches for the legacy codec. **Not covered:** BYOAI provider keys
 | `SAP_CONNECTION_ENCRYPTION_KEYS` | `v1:<64 hex>,v2:<64 hex>` — every master key still needed. A `v1` entry must equal the legacy key if both are set. |
 | `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` | The master version new data keys are wrapped under. **Setting it switches new writes to `ce2`.** |
 | `SAP_CONNECTION_KEY_PROVIDER` | `env` (default) or the name of a registered KMS adapter, exactly (names are lowercase and case-sensitive). A non-env provider also switches writes to `ce2`. |
+| `SAP_CONNECTION_ACCEPT_LEGACY_FORMAT` | Which legacy-format blobs still open: `any` (default — as before, including blobs sealed before AAD existed, through the unbound fallback), `bound` (only blobs bound to their own row) or `none` (no legacy blob; only `ce2`). `none` needs envelope sealing on. |
 
 **Safe default.** With only `SAP_CONNECTION_ENCRYPTION_KEY` set, nothing
 changes: same key, same format, `OrgDataKey` is never read or written. The
 deploy gate (`scripts/check-production-env.js`) fails a build whose ring is
-malformed, whose active key is not in it, or whose
+malformed, whose active key is not in it, whose
 `SAP_CONNECTION_KEY_PROVIDER` names a provider the application does not
-register (`ENV`, or a KMS adapter that has not shipped), so a typo cannot reach
-a running deployment.
+register (`ENV`, or a KMS adapter that has not shipped), or whose
+`SAP_CONNECTION_ACCEPT_LEGACY_FORMAT` is unknown or `none` without an active
+key, so a typo cannot reach a running deployment.
 
-**Rollback.** Code older than P0.10 cannot read `ce2`. To roll a deployment
-back past this change, in this order:
+**Rollback.** Code older than P0.10 cannot read `ce2`, and reads
+`SAP_CONNECTION_ENCRYPTION_KEY` and nothing else — never the ring. To roll a
+deployment back past this change, in this order:
 
 1. **Stop writing `ce2`.** Unset `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` and set
-   `SAP_CONNECTION_KEY_PROVIDER` to `env` (or unset it), keeping
-   `SAP_CONNECTION_ENCRYPTION_KEYS` and the legacy key / `v1`, and redeploy
+   `SAP_CONNECTION_KEY_PROVIDER` to `env` (or unset it), keep
+   `SAP_CONNECTION_ENCRYPTION_KEYS`, **set `SAP_CONNECTION_ENCRYPTION_KEY`
+   itself to `v1`** (a `v1:` entry in the ring is not enough: the rolled-back
+   code would fail every SAP connection and write key), unset
+   `SAP_CONNECTION_ACCEPT_LEGACY_FORMAT` (or set it to `bound`), and redeploy
    the P0.10 code. It now writes legacy and still reads both formats. Skipping
    this step leaves every save made after the reseal in `ce2`, unreadable by
-   the rolled-back code; `keys:reseal --to legacy --apply` refuses to run (exit
-   2) while envelope sealing is still on.
+   the rolled-back code. `keys:reseal --to legacy` and
+   `keys:verify --expect-format=legacy` refuse to run (exit 2) while envelope
+   sealing is still on (reseal with `--apply`), while
+   `SAP_CONNECTION_ENCRYPTION_KEY` is unset, or while legacy blobs are refused
+   (`none`).
 2. `pnpm keys:reseal --to legacy --apply`, with the same settings.
 3. `pnpm keys:verify --expect-format=legacy` — exit 0 means every blob is
-   legacy and opens; exit 1 names any row still in `ce2` or failing.
-4. Roll back.
+   legacy and opens under `SAP_CONNECTION_ENCRYPTION_KEY`; exit 1 names any
+   row still in `ce2` or failing.
+4. Roll back, with `SAP_CONNECTION_ENCRYPTION_KEY` still set.
 
 ### Commands
 
@@ -222,13 +232,15 @@ whose newest key predates the run. Its report prints the cutoff it used; to
 resume a rekey that failed part-way, re-run it with
 `--rekey-before=<that value>` so organisations it already rekeyed are skipped.
 Nothing secret is ever printed. `--json` gives a machine-readable report;
-`--batch-size=<n>` tunes paging.
+`--batch-size=<n>` tunes paging; `--org=<id>[,<id>…]` (repeatable) limits any
+command to those organisations' rows and data keys — a rekey mints, a retire
+withdraws and a verify reports for them alone.
 
 | Command | Does | Exit |
 |---|---|---|
-| `pnpm keys:verify [--expect-format=legacy\|ce2]` | Unwraps every data key and opens every sealed blob, from cold; counts blobs by format and data-key version, flags legacy blobs that are still unbound, data keys not on the active master, retired data keys, and `ce2` blobs still on a data key older than their organisation's newest (warns: reseal, then retire). A blob naming a retired version fails. `--expect-format` also fails every blob not in that format. | 0 all open, 1 any failure |
+| `pnpm keys:verify [--expect-format=legacy\|ce2] [--expect-active-master]` | Unwraps every data key and opens every sealed blob, from cold; counts blobs by format and data-key version, flags legacy blobs that are still unbound, data keys not on the active master, retired data keys, and `ce2` blobs still on a data key older than their organisation's newest (warns: reseal, then retire). A blob naming a retired version fails. `--expect-format` also fails every blob not in that format (`legacy` needs `SAP_CONNECTION_ENCRYPTION_KEY` set, else exit 2). `--expect-active-master` also fails every data key not wrapped by the active provider and master version — the gate for removing an old master version. | 0 all open, 1 any failure |
 | `pnpm keys:rotate [--apply] [--rekey [--rekey-before=<ISO>]]` | Re-wraps every data key under the active provider and master version. `--rekey` also mints a new data-key version for each organisation whose newest key was created before the cutoff (default: now) — then reseal. | 0 / 1 on a failed row |
-| `pnpm keys:reseal [--apply] [--to ce2\|legacy]` | Re-encrypts every blob into the target format: `ce2` under each organisation's newest data key (minting v1 if needed), re-binding unbound legacy blobs; or `legacy` for a rollback (refused with `--apply` while envelope sealing is on). Verifies each new blob before writing it. | 0 / 1 on a failed row |
+| `pnpm keys:reseal [--apply] [--to ce2\|legacy]` | Re-encrypts every blob into the target format: `ce2` under each organisation's newest data key (minting v1 if needed), re-binding unbound legacy blobs; or `legacy` for a rollback (refused with `--apply` while envelope sealing is on, and at all while `SAP_CONNECTION_ENCRYPTION_KEY` is unset or `SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none`). Verifies each new blob before writing it. | 0 / 1 on a failed row |
 | `pnpm keys:retire [--apply]` | Retires (`OrgDataKey.retiredAt`) every data-key version older than its organisation's newest that no sealed blob still names. A retired version opens nothing. Never retires the newest; a version still in use is reported and left open. | 0 / 1 on a version still in use |
 
 Exit code 2 means the command or configuration is wrong; nothing was done.
@@ -243,10 +255,20 @@ Exit code 2 means the command or configuration is wrong; nothing was done.
    `SAP_CONNECTION_ENCRYPTION_KEY` (it is `v1`). Redeploy. New saves are `ce2`.
 3. `pnpm keys:reseal` (dry run) — check `failed 0`. Then
    `pnpm keys:reseal --apply`.
-4. `pnpm keys:verify` → `legacy bound 0, legacy unbound 0`, every blob `ce2`.
-5. Only now may `v1` leave the environment (unset
+4. `pnpm keys:verify --expect-format=ce2` — exit 0: `legacy bound 0, legacy
+   unbound 0`, every blob `ce2`.
+5. **Required: stop accepting the legacy format.** Set
+   `SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none` and redeploy, then
+   `pnpm keys:verify` once more. Until this is set, a legacy blob sealed before
+   AAD existed — from an old backup or dump — written over any migrated row of
+   any organisation opens there, and the next reseal would re-bind it to that
+   row; with `v1` still configured, moving every row to `ce2` does not close
+   that on its own. `none` closes it while `v1` stays configured for a
+   rollback (which sets it back — see Rollback).
+6. Optionally, `v1` may now leave the environment as well (unset
    `SAP_CONNECTION_ENCRYPTION_KEY` and drop any `v1:` entry): no blob needs it.
-   Keep a sealed offline copy for the restore drill's window — see below.
+   Keep a sealed offline copy for the restore drill's window — see below — and
+   for a rollback, which needs it back as `SAP_CONNECTION_ENCRYPTION_KEY`.
 
 ### Procedure: rotate the master key (routine)
 
@@ -254,7 +276,12 @@ Exit code 2 means the command or configuration is wrong; nothing was done.
    `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY="v3"`. Redeploy.
 2. `pnpm keys:rotate` (dry run), then `pnpm keys:rotate --apply`. No sealed
    blob changes; only `OrgDataKey` rows are re-wrapped (`rotatedAt` set).
-3. `pnpm keys:verify` → `not on the active master key 0`.
+3. `pnpm keys:verify --expect-active-master` — **gate step 4 on its exit
+   code**: exit 0 means `not on the active master key 0`. An instance of the
+   previous deployment, still on `v2`, can wrap an organisation's first data
+   key under `v2` after the rotate scanned past it; a plain `keys:verify`
+   exits 0 then too. On exit 1, run `pnpm keys:rotate --apply` again and
+   re-check.
 4. Remove `v2` from the ring and redeploy; run `pnpm keys:verify` once more.
 
 ### Procedure: suspected data-key exposure (rekey)

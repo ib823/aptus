@@ -198,6 +198,24 @@ if (sapProvider && !SAP_KEY_PROVIDERS.includes(sapProvider)) {
   exitCode = 1;
 }
 
+/*
+ * Which legacy-format SAP secrets still open (P0.10), checked on every deploy
+ * type. MIRRORS legacyFormatPolicy in src/lib/sap-public/keys/keyring.ts: a
+ * value the application does not know fails every legacy open, and `none`
+ * without envelope sealing switched on would seal every new save in a format
+ * the same deployment refuses to open.
+ */
+const sapLegacyFormat = (process.env.SAP_CONNECTION_ACCEPT_LEGACY_FORMAT || "").trim();
+if (sapLegacyFormat && !["any", "bound", "none"].includes(sapLegacyFormat)) {
+  console.error("[FAIL] SAP_CONNECTION_ACCEPT_LEGACY_FORMAT must be any, bound or none.");
+  exitCode = 1;
+} else if (sapLegacyFormat === "none" && !sapActive && (!sapProvider || sapProvider === "env")) {
+  console.error(
+    "[FAIL] SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none refuses every legacy-format secret, but envelope sealing is off (no SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY), so every SAP connection save would be legacy — set the active key, or unset this.",
+  );
+  exitCode = 1;
+}
+
 // Flag dangerous vars + enforce prod-only requirements on production deploys.
 if (isProductionDeploy) {
   for (const { key, reason } of DANGEROUS_IN_PRODUCTION) {
