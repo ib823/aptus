@@ -46,7 +46,7 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
@@ -254,7 +254,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
-  const service = await resolveHubService(product!, iface.externalId);
+  // The interface's OWN service when it carries one, the catalogue's otherwise —
+  // never a fallback from one to the other (see interface-service.ts).
+  const resolved = await resolveInterfaceService(product!, iface);
+  const service = resolved?.service ?? null;
   // The governed value, and only it. A caller-supplied `entity` that disagrees is
   // refused rather than ignored (see bodySchema); one that agrees is a harmless
   // restatement and proceeds.
@@ -275,7 +278,28 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       "VALIDATION_ERROR",
       service
         ? "This data feed names no dataset, so there is nowhere to write. Set its entity set in Studio."
-        : "The catalogue service could not be resolved.",
+        : iface.servicePath
+          ? "This interface's own service path is not valid for its product. Fix it in Studio."
+          : "The catalogue service could not be resolved.",
+      400,
+      correlationId,
+    );
+  }
+
+  /*
+   * A CUSTOM SERVICE WRITES ONLY ONCE VERIFIED. A catalogue service is a
+   * contract SAP published; a path the customer typed is a claim until the
+   * system has been asked for its description and answered. Verification is
+   * cleared by every change to the path, version or dataset, so this also
+   * stops an edited feed writing somewhere nobody has looked. Refused here —
+   * before the idempotency key is reserved — so nothing reaches SAP and the
+   * key stays free for the retry after Verify.
+   */
+  if (resolved!.source === "custom" && iface.serviceVerifiedAt == null) {
+    await audit(400, iface.id, iface.externalId, connection);
+    return northboundError(
+      "VALIDATION_ERROR",
+      "This data feed's own SAP service has not been verified since it last changed. Verify it in Studio before writing.",
       400,
       correlationId,
     );

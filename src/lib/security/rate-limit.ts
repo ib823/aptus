@@ -286,6 +286,10 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
     // the generous default API ceiling. Matched by shape because the id is
     // dynamic; anchored at both ends so no other path can slip in.
     /^\/api\/studio\/connections\/[^/]+\/test$/.test(pathname) ||
+    // Studio's per-interface service verification: the same $metadata GET as
+    // the connection test, on the interface's own service path, through the
+    // same client connection. Same amplification, same bucket.
+    /^\/api\/studio\/interfaces\/[^/]+\/verify-service$/.test(pathname) ||
     // The same $metadata probe, fired from the Operations "Probe now" action.
     // Identical upstream call to the Studio test above; it sat in the
     // generous mutation bucket only because it was added later.

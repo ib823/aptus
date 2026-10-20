@@ -22,13 +22,30 @@
  *
  * v1: `mappingVersion` is always null (the mapping engine is v2) and `status` is
  * always DRAFT — an interface never springs into existence already active.
+ *
+ * YOUR OWN API. An interface may carry its own OData `servicePath` (a Z* RAP
+ * service, a YY1_* custom CDS view, an ECC Gateway service) with its
+ * `odataVersion`, instead of naming a catalogue service. Its `externalId` is
+ * then DERIVED — `custom:<path>` — never typed, so a grant approved for one
+ * path can never authorise another. An interface is catalogue or custom for
+ * life: converting between them is refused, because the grants, keys and
+ * history of one say nothing about the other.
  */
 
+import { Prisma } from "@prisma/client";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
+import {
+  customExternalId,
+  isCustomExternalId,
+  MAX_SERVICE_PATH_LENGTH,
+  ODATA_VERSIONS,
+  validateServicePath,
+} from "@/lib/sap-public/service-path";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -42,8 +59,18 @@ import {
 
 const bodySchema = z.object({
   solutionId: z.string().min(1),
-  /** Catalogue apiId of the service being consumed. */
-  externalId: z.string().min(1).max(200),
+  /**
+   * Catalogue apiId of the service being consumed. Omitted for your own API:
+   * there it is derived from `servicePath` (see the header).
+   */
+  externalId: z.string().min(1).max(200).optional(),
+  /**
+   * The customer's OWN service root, a path on the connection's host. Bounded
+   * one past the limit here so an over-long path reaches validateServicePath
+   * and gets its own sentence rather than the generic payload refusal.
+   */
+  servicePath: z.string().max(MAX_SERVICE_PATH_LENGTH + 1).optional(),
+  odataVersion: z.enum(ODATA_VERSIONS).optional(),
   /*
    * EVERY PRODUCT THE CONNECTOR KNOWS, not a hand-kept three. The literal enum
    * ["s4hana","successfactors","ariba"] predated the private-cloud/on-prem/ECC
@@ -68,6 +95,9 @@ const patchSchema = z.object({
   operation: z.enum(["READ", "CREATE", "UPDATE"]).optional(),
   entitySet: z.string().max(200).nullish(),
   status: z.enum(["DRAFT", "ACTIVE", "DEPRECATED"]).optional(),
+  /** Your own API only — see the header. Null is refused, not a way to convert. */
+  servicePath: z.string().max(MAX_SERVICE_PATH_LENGTH + 1).nullish(),
+  odataVersion: z.enum(ODATA_VERSIONS).nullish(),
   // `mappingVersion` is deliberately ABSENT from this schema. Mapping is v2, and
   // the surest way to keep it disabled is to give the API no way to set it —
   // a greyed-out card in the UI is a hint, an unaccepted field is a guarantee.
@@ -100,6 +130,54 @@ export async function POST(request: NextRequest) {
   }
   const input = parsed.data;
 
+  /*
+   * CATALOGUE OR YOUR OWN API — decided here, before anything is looked up.
+   * With a service path the id is derived and the version is required; without
+   * one the request is the catalogue request it always was, and the derived
+   * prefix is reserved so a catalogue interface can never pose as a custom one.
+   */
+  let externalId: string;
+  let servicePath: string | null = null;
+  let odataVersion: (typeof ODATA_VERSIONS)[number] | null = null;
+  if (input.servicePath !== undefined) {
+    if (!productAcceptsServicePath(input.sapProduct)) {
+      const label = getSapProduct(input.sapProduct)?.label ?? input.sapProduct;
+      return studioError("VALIDATION_ERROR", `${label} is not an OData product, so it has no service path.`);
+    }
+    const check = validateServicePath(input.servicePath);
+    if (!check.ok) return studioError("VALIDATION_ERROR", check.message);
+    if (input.odataVersion === undefined) {
+      return studioError("VALIDATION_ERROR", "Choose the OData version of this service (V2 or V4).");
+    }
+    const derived = customExternalId(check.path);
+    if (input.externalId !== undefined && input.externalId !== derived) {
+      return studioError(
+        "VALIDATION_ERROR",
+        "For your own API the id is derived from the service path, so leave externalId out.",
+      );
+    }
+    externalId = derived;
+    servicePath = check.path;
+    odataVersion = input.odataVersion;
+  } else {
+    if (input.odataVersion !== undefined) {
+      return studioError(
+        "VALIDATION_ERROR",
+        "An OData version belongs to your own service path. Send servicePath with it, or leave both out for a catalogue service.",
+      );
+    }
+    if (input.externalId === undefined) {
+      return studioError("VALIDATION_ERROR", "Invalid interface payload.");
+    }
+    if (isCustomExternalId(input.externalId)) {
+      return studioError(
+        "VALIDATION_ERROR",
+        "Ids starting with custom: are reserved for your own APIs. Send servicePath and odataVersion instead.",
+      );
+    }
+    externalId = input.externalId;
+  }
+
   // Re-scope the attacker-supplied solutionId to this tenant. Never trust it.
   const solution = await prisma.solution.findFirst({
     where: { id: input.solutionId, organizationId },
@@ -113,9 +191,11 @@ export async function POST(request: NextRequest) {
       organizationId,
       name: input.name,
       sapProduct: input.sapProduct,
-      externalId: input.externalId,
+      externalId,
       operation: input.operation,
       ...(input.entitySet ? { entitySet: input.entitySet } : {}),
+      // Both or neither — the invariant the resolver relies on.
+      ...(servicePath !== null ? { servicePath, odataVersion } : {}),
       // READ operations are read-mode; CREATE/UPDATE imply the stronger review path.
       mode: input.operation === "READ" ? "READ" : "WRITE",
       status: "DRAFT",
@@ -131,6 +211,8 @@ export async function POST(request: NextRequest) {
       status: true,
       version: true,
       solutionId: true,
+      servicePath: true,
+      odataVersion: true,
     },
   });
 
@@ -178,6 +260,10 @@ export async function GET(request: NextRequest) {
       responseSchema: true,
       solutionId: true,
       updatedAt: true,
+      servicePath: true,
+      odataVersion: true,
+      serviceVerifiedAt: true,
+      serviceVerifiedEnvironment: true,
       solution: { select: { name: true } },
     },
     orderBy: [{ updatedAt: "desc" }],
@@ -217,12 +303,61 @@ export async function PATCH(request: NextRequest) {
       mappingVersion: true,
       solutionId: true,
       externalId: true,
+      sapProduct: true,
+      servicePath: true,
+      odataVersion: true,
+      serviceVerifiedAt: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
 
   const nextOperation = input.operation ?? (current.operation as "READ" | "CREATE" | "UPDATE");
   const nextEntitySet = input.entitySet === undefined ? current.entitySet : (input.entitySet ?? null);
+  const nextMode = nextOperation === "READ" ? "READ" : "WRITE";
+
+  /*
+   * YOUR OWN API: THE SERVICE IS PART OF THE CONTRACT.
+   *
+   * An interface is catalogue or custom for life. Setting a path on a
+   * catalogue interface, or clearing it on a custom one, would carry the
+   * other kind's grants, keys and history across — refused, with the way
+   * forward named.
+   */
+  const isCustom = current.servicePath != null;
+  const touchesService = input.servicePath !== undefined || input.odataVersion !== undefined;
+  if (touchesService && !isCustom) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "This interface uses a catalogue service. To call your own API, register a new interface with its service path.",
+    );
+  }
+  if (isCustom && (input.servicePath === null || input.odataVersion === null)) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "Your own API needs a service path and an OData version; they cannot be cleared. Deprecate the interface instead.",
+    );
+  }
+  let nextServicePath = current.servicePath;
+  if (isCustom && typeof input.servicePath === "string") {
+    const check = validateServicePath(input.servicePath);
+    if (!check.ok) return studioError("VALIDATION_ERROR", check.message);
+    nextServicePath = check.path;
+  }
+  const nextOdataVersion = (isCustom && input.odataVersion) || current.odataVersion;
+  const serviceChanged =
+    isCustom && (nextServicePath !== current.servicePath || nextOdataVersion !== current.odataVersion);
+  // A new path is a new grant identity: grants name `custom:<path>`, so the
+  // old ones detach and a second person approves the new path afresh.
+  const nextExternalId =
+    serviceChanged && nextServicePath !== null ? customExternalId(nextServicePath) : current.externalId;
+  const entitySetChanged = input.entitySet !== undefined && nextEntitySet !== current.entitySet;
+  /*
+   * VERIFICATION DESCRIBES A CONTRACT. Any change to what is called — path,
+   * version, dataset — makes the last verify an answer to a different
+   * question, so it is cleared, and the write route refuses a custom service
+   * until it is verified again.
+   */
+  const verificationReset = serviceChanged || entitySetChanged;
 
   /*
    * ACTIVE IS LOAD-BEARING, SO PROMOTION HAS PRECONDITIONS.
@@ -261,6 +396,37 @@ export async function PATCH(request: NextRequest) {
   }
 
   /*
+   *   3b. Your own API changes and activates in TWO steps, never one: a new
+   *      service is unverified by definition, so "save and go live" would be
+   *      a live interface nobody has looked at.
+   */
+  if (serviceChanged && input.status === "ACTIVE") {
+    return studioError(
+      "VALIDATION_ERROR",
+      "Change the service and activate in two steps: save it, verify it, then activate.",
+    );
+  }
+
+  /*
+   *   3c. A WRITE interface on your own API is activated only once its service
+   *      has been verified, for the contract being activated. The write route
+   *      refuses an unverified custom service on every call; activating one
+   *      would be building toward that wall.
+   */
+  if (
+    input.status === "ACTIVE" &&
+    current.status !== "ACTIVE" &&
+    isCustom &&
+    nextMode === "WRITE" &&
+    (verificationReset || current.serviceVerifiedAt == null)
+  ) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "Verify this interface's own SAP service in at least one environment before activating a write interface. The broker refuses writes to an unverified service.",
+    );
+  }
+
+  /*
    *   4. A WRITE interface needs the FULL write chain in SOME environment
    *      before it is ACTIVE. A write reaches SAP only when, in one
    *      environment, a live credential carries a write key AND a live
@@ -295,7 +461,7 @@ export async function PATCH(request: NextRequest) {
         select: { environment: true },
       }),
       prisma.apiAccessGrant.findMany({
-        where: { organizationId, solutionId: current.solutionId, externalId: current.externalId, operation: nextOperation },
+        where: { organizationId, solutionId: current.solutionId, externalId: nextExternalId, operation: nextOperation },
         select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
       }),
     ]);
@@ -317,19 +483,37 @@ export async function PATCH(request: NextRequest) {
   // an operation change would hide a breaking edit behind an unchanged number.
   const contractChanged =
     (input.operation !== undefined && input.operation !== current.operation) ||
-    (input.entitySet !== undefined && nextEntitySet !== current.entitySet);
+    (input.entitySet !== undefined && nextEntitySet !== current.entitySet) ||
+    serviceChanged;
+
+  /*
+   * AN ACTIVE WRITE INTERFACE WHOSE SERVICE MOVED GOES BACK TO DRAFT. It is
+   * unverified now, and its grants named the old path; leaving it ACTIVE
+   * would keep it looking live while every write is refused. A READ
+   * interface stays ACTIVE — its grants detach (the id changed), so calls
+   * answer 403 until a new grant is approved, which is the governance
+   * outcome intended, and Studio says so before the save.
+   */
+  const demoted = serviceChanged && current.status === "ACTIVE" && nextMode === "WRITE";
+  const nextStatus = input.status ?? (demoted ? "DRAFT" : undefined);
 
   const updated = await prisma.interface.update({
     where: { id: current.id, organizationId },
     data: {
       ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(nextStatus !== undefined ? { status: nextStatus } : {}),
       operation: nextOperation,
       entitySet: nextEntitySet,
       // Mode follows the operation: a READ interface is read-mode, anything else
       // carries the stronger review. Derived, never client-supplied.
-      mode: nextOperation === "READ" ? "READ" : "WRITE",
+      mode: nextMode,
       ...(contractChanged ? { version: { increment: 1 } } : {}),
+      ...(serviceChanged
+        ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
+        : {}),
+      ...(verificationReset
+        ? { serviceVerifiedAt: null, serviceVerifiedEnvironment: null, serviceVerifiedEntitySets: Prisma.DbNull }
+        : {}),
       // mappingVersion is never written here — see patchSchema.
     },
     select: {
@@ -341,6 +525,10 @@ export async function PATCH(request: NextRequest) {
       mode: true,
       status: true,
       mappingVersion: true,
+      externalId: true,
+      servicePath: true,
+      odataVersion: true,
+      serviceVerifiedAt: true,
     },
   });
 
@@ -353,8 +541,8 @@ export async function PATCH(request: NextRequest) {
     // precondition) and gets the PROMOTE verb; everything else is an edit.
     action: input.status === "ACTIVE" && current.status !== "ACTIVE" ? "PROMOTE" : "UPDATE",
     before: current,
-    after: { ...updated, contractChanged },
+    after: { ...updated, contractChanged, serviceChanged, verificationReset, demoted },
   });
 
-  return studioOk({ ...updated, contractChanged });
+  return studioOk({ ...updated, contractChanged, serviceChanged, verificationReset, demoted });
 }

@@ -443,7 +443,7 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
   noSapSystemHere:
     "No SAP system is connected for this environment, so there is nothing to ask. Connect one and the nightly check will cover this lane.",
   feedServiceUnresolved:
-    "CoreEdge cannot resolve the SAP service this feed names for its product, so the broker refuses every call on it and the nightly check has nothing it could honestly ask. Define the feed against a service from the catalogue.",
+    "CoreEdge cannot resolve the SAP service this feed names for its product, so the broker refuses every call on it and the nightly check has nothing it could honestly ask. Define the feed against a service from the catalogue, or register the service's own path in Studio → Interfaces.",
   secretWouldNotOpen:
     "The nightly check reached this SAP system and could not open its stored secret, so no read was attempted. That is ours to fix, not SAP's.",
   notRunYet:

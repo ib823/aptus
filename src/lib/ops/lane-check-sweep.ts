@@ -40,7 +40,7 @@ import {
   resolveSapConnections,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
 
@@ -78,16 +78,48 @@ export interface LaneSweepResult {
  * sweep passed it to `readEntitySet` as `servicePath` directly, so every lane
  * check requested `https://<host>API_BUSINESS_PARTNER/...` — a different
  * hostname — and no lane could ever be proven by the sweep. Resolving through
- * `resolveHubService` means a lane is checked against exactly the path the
- * broker would call, and a feed the broker would refuse is skipped as one.
+ * `resolveInterfaceService` (the feed's own path, else `resolveHubService`)
+ * means a lane is checked against exactly the path the broker would call, and
+ * a feed the broker would refuse is skipped as one.
  *
  * Exported so the lane board asks the same question when it explains a skip
  * (`SweepFacts.feedServiceResolves`): one function, so the two cannot disagree.
  */
-export async function resolveLaneServicePath(product: string, externalId: string): Promise<string | null> {
+export async function resolveLaneServicePath(
+  product: string,
+  externalId: string,
+  /**
+   * The feed's OWN service root, when it carries one. Resolved through the
+   * same `resolveInterfaceService` the broker calls, so a custom feed is
+   * checked on its own path and a catalogue feed exactly as before.
+   */
+  servicePath: string | null = null,
+  odataVersion: string | null = null,
+): Promise<string | null> {
   const sapProduct = getSapProduct(product);
   if (sapProduct === null) return null;
-  return (await resolveHubService(sapProduct, externalId))?.path ?? null;
+  const resolved = await resolveInterfaceService(sapProduct, {
+    sapProduct: product,
+    externalId,
+    servicePath,
+    odataVersion,
+  });
+  return resolved?.service.path ?? null;
+}
+
+/**
+ * One key per distinct service a feed names — product, catalogue id, and the
+ * feed's own path and version. Shared by the sweep's memo and the lane board,
+ * so the two cannot key the same feed differently. Ids now contain `:` (the
+ * `custom:` prefix), so nothing may split this key back apart.
+ */
+export function laneServiceKey(feed: {
+  readonly product: string;
+  readonly externalId: string;
+  readonly servicePath: string | null;
+  readonly odataVersion: string | null;
+}): string {
+  return `${feed.product}::${feed.externalId}::${feed.servicePath ?? ""}::${feed.odataVersion ?? ""}`;
 }
 
 /**
@@ -115,6 +147,9 @@ interface LaneTarget {
   readonly environment: string;
   readonly product: string;
   readonly externalId: string;
+  /** The feed's own service root, or null for a catalogue feed. */
+  readonly servicePath: string | null;
+  readonly odataVersion: string | null;
   /**
    * Non-null by construction. A feed with no entity set has nothing to read, so
    * it is not a checkable lane — see the filter in `laneTargets`.
@@ -143,7 +178,14 @@ async function laneTargets(): Promise<{
         id: true,
         organizationId: true,
         interfaces: {
-          select: { id: true, sapProduct: true, externalId: true, entitySet: true },
+          select: {
+            id: true,
+            sapProduct: true,
+            externalId: true,
+            entitySet: true,
+            servicePath: true,
+            odataVersion: true,
+          },
         },
       },
     }),
@@ -186,6 +228,8 @@ async function laneTargets(): Promise<{
           environment,
           product: feed.sapProduct,
           externalId: feed.externalId,
+          servicePath: feed.servicePath ?? null,
+          odataVersion: feed.odataVersion ?? null,
           entitySet,
         });
       }
@@ -218,14 +262,15 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     byReadStatus: {} as Record<string, number>,
   };
 
-  // One lookup per (product, catalogue id) per run: a feed is checked in up to
-  // four environments, and the service it names is the same in all of them.
+  // One lookup per distinct service per run: a feed is checked in up to four
+  // environments, and the service it names is the same in all of them. Keyed
+  // by the feed's own path too, so two custom feeds never share an answer.
   const servicePaths = new Map<string, Promise<string | null>>();
   const servicePathFor = (t: LaneTarget): Promise<string | null> => {
-    const key = `${t.product}::${t.externalId}`;
+    const key = laneServiceKey(t);
     let path = servicePaths.get(key);
     if (path === undefined) {
-      path = resolveLaneServicePath(t.product, t.externalId);
+      path = resolveLaneServicePath(t.product, t.externalId, t.servicePath, t.odataVersion);
       servicePaths.set(key, path);
     }
     return path;
@@ -316,7 +361,14 @@ export async function recheckOneLane(
   // fleet sweep, this read belongs to the caller's own organization.
   const feed = await prisma.interface.findFirst({
     where: { id: interfaceId, solutionId, organizationId },
-    select: { id: true, sapProduct: true, externalId: true, entitySet: true },
+    select: {
+      id: true,
+      sapProduct: true,
+      externalId: true,
+      entitySet: true,
+      servicePath: true,
+      odataVersion: true,
+    },
   });
   if (feed === null || feed.entitySet === null || feed.entitySet === "") {
     return { ok: false, skipped: "noEntitySet" };
@@ -336,13 +388,20 @@ export async function recheckOneLane(
     environment,
     product: feed.sapProduct,
     externalId: feed.externalId,
+    servicePath: feed.servicePath ?? null,
+    odataVersion: feed.odataVersion ?? null,
     entitySet: feed.entitySet,
   };
 
   const connection = resolved.find((c) => parseLaneEnvironment(c.environment ?? null) === environment);
   if (connection === undefined) return { ok: false, skipped: "noConnection" };
 
-  const servicePath = await resolveLaneServicePath(target.product, target.externalId);
+  const servicePath = await resolveLaneServicePath(
+    target.product,
+    target.externalId,
+    target.servicePath,
+    target.odataVersion,
+  );
   if (servicePath === null) return { ok: false, skipped: "noService" };
 
   const tally = { checked: 0, byReadStatus: {} as Record<string, number> };

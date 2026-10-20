@@ -947,7 +947,7 @@ function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
 
 // Shared with the connection-aware northbound CSRF handshake.
 
-function parseEntitySets(metadataXml: string): SapEntitySet[] {
+export function parseEntitySets(metadataXml: string): SapEntitySet[] {
   const entitySets: SapEntitySet[] = [];
   const re = /<EntitySet\b([^>]*)>/g;
   let match: RegExpExecArray | null;

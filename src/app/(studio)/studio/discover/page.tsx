@@ -61,6 +61,16 @@ export default async function StudioDiscoverPage() {
       {/* The likeliest place to assume CoreEdge builds ABAP: right where an
           ABAP-exposed OData service shows up alongside standard SAP APIs. */}
       <ScopeNote topic="abap" />
+      {/* The catalogue lists what SAP publishes. A service the customer built
+          (Z*, YY1_*, an ECC Gateway service) is never in it, and this is where
+          a developer looks for it first. */}
+      <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
+        Not in the catalogue?{" "}
+        <a href="/studio/interfaces?register=1" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
+          Register your own API
+        </a>{" "}
+        — a Z* RAP service, a YY1_* custom CDS view or an ECC Gateway service, by its service path.
+      </p>
       {activeTenant ? (
         <DiscoverClient
           solutions={solutions}

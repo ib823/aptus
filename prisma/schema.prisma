@@ -812,7 +812,8 @@ model Solution {
   @@index([organizationId])
 }
 
-/// Governed CONFIG referencing a catalogue service — never code.
+/// Governed CONFIG referencing a catalogue service or the customer's own
+/// OData service — never code.
 model Interface {
   id             String @id @default(cuid())
   solutionId     String
@@ -828,11 +829,25 @@ model Interface {
   /// three-product list here once meant no interface could exist for a RISE
   /// or on-premise connection at all.
   sapProduct String
-  /// The catalogue apiId of the service being consumed.
+  /// The catalogue apiId, or `custom:<servicePath>` for the customer's own
+  /// service (derived from servicePath, never typed).
   externalId String
   /// READ | CREATE | UPDATE
   operation  String
   entitySet  String?
+  /// The customer's OWN OData service root, a path on the connection's host
+  /// (e.g. /sap/opu/odata/sap/ZUI_X_O2). Null = a catalogue/curated service
+  /// resolved from externalId. Validated by service-path.ts; never a URL.
+  servicePath  String?
+  /// "V2" | "V4". Set iff servicePath is set.
+  odataVersion String?
+  /// Last SUCCESSFUL live $metadata verification of the current contract.
+  /// Cleared by any change to servicePath / odataVersion / entitySet.
+  serviceVerifiedAt          DateTime?
+  /// SANDBOX | DEV | TEST | PROD: the environment whose binding answered.
+  serviceVerifiedEnvironment String?
+  /// Entity-set names the verified $metadata declared (capped at 500).
+  serviceVerifiedEntitySets  Json?
   /// READ | WRITE (WRITE implies a stronger review path).
   mode       String
 
