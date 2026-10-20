@@ -137,6 +137,11 @@ export interface CurrentConnection {
   environment: string | null;
   client: string | null;
   baseUrl: string;
+  /**
+   * The connection's write switch. Not part of the verification match; the
+   * write readiness reads it (writesDisabledEnvironmentsForCredentials).
+   */
+  writeEnabled?: boolean;
 }
 
 /** The resolver's baseUrl normalization (normalizeBaseUrl), without a regex. */

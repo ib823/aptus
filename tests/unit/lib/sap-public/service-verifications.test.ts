@@ -15,7 +15,10 @@ import { describe, expect, it, vi } from "vitest";
 // test here is pure and never touches it.
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
-import { verifiedEnvironmentsForCredentials } from "@/lib/sap-public/current-connections";
+import {
+  verifiedEnvironmentsForCredentials,
+  writesDisabledEnvironmentsForCredentials,
+} from "@/lib/sap-public/current-connections";
 import {
   isVerifiedForBinding,
   parseServiceVerifications,
@@ -201,11 +204,60 @@ describe("verifiedEnvironmentsForCredentials — the write gate's question, per 
     expect(verifiedEnvironmentsForCredentials(json, [P100], [{ environment: "PROD", sapClient: null }])).toEqual(["PROD"]);
   });
 
+  it("a READ-ONLY credential's environment is judged by its own binding — its write key will be sealed on that row (review round 5)", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    expect(
+      verifiedEnvironmentsForCredentials(json, [P100, P200], [{ environment: "PROD", sapClient: "200", hasWriteKey: false }]),
+    ).toEqual([]);
+    expect(
+      verifiedEnvironmentsForCredentials(json, [P100, P200], [{ environment: "PROD", sapClient: "100", hasWriteKey: false }]),
+    ).toEqual(["PROD"]);
+  });
+
+  it("where a write-key holder exists, only its binding decides (review round 4 still holds)", () => {
+    const json = stored(["PROD", VERIFIED_P100]);
+    const writerOn200 = { environment: "PROD", sapClient: "200", hasWriteKey: true };
+    const readerOn100 = { environment: "PROD", sapClient: "100", hasWriteKey: false };
+    expect(verifiedEnvironmentsForCredentials(json, [P100, P200], [writerOn200, readerOn100])).toEqual([]);
+    expect(
+      verifiedEnvironmentsForCredentials(json, [P100, P200], [{ ...writerOn200, sapClient: "100" }, { ...readerOn100, sapClient: "200" }]),
+    ).toEqual(["PROD"]);
+  });
+
   it("an environment with no credential counts on any current entry (a display hint; readiness still needs a credential)", () => {
     const json = stored(["PROD", VERIFIED_P100], ["DEV", DEV]);
     const devConnection = { id: "conn_dev", environment: "DEV", client: "100", baseUrl: "https://dev" };
     expect(verifiedEnvironmentsForCredentials(json, [P100, devConnection], []).sort()).toEqual(["DEV", "PROD"]);
     // An entry whose connection has changed is no hint either.
     expect(verifiedEnvironmentsForCredentials(json, [P100], [])).toEqual(["PROD"]);
+  });
+});
+
+describe("writesDisabledEnvironmentsForCredentials — the write route's per-connection veto (review round 5)", () => {
+  const P100 = { id: "conn_p100", environment: "PROD", client: "100", baseUrl: "https://x5m", writeEnabled: false };
+  const P200 = { id: "conn_p200", environment: "PROD", client: "200", baseUrl: "https://x5m", writeEnabled: true };
+
+  it("names an environment whose credential binds to a connection with writes disabled", () => {
+    expect(writesDisabledEnvironmentsForCredentials([P100, P200], [{ environment: "PROD", sapClient: "100" }])).toEqual([
+      "PROD",
+    ]);
+    expect(writesDisabledEnvironmentsForCredentials([P100, P200], [{ environment: "PROD", sapClient: "200" }])).toEqual([]);
+  });
+
+  it("names nothing where the binding fails or there is no credential (other halves say so)", () => {
+    expect(writesDisabledEnvironmentsForCredentials([P100, P200], [{ environment: "PROD", sapClient: null }])).toEqual([]);
+    expect(writesDisabledEnvironmentsForCredentials([P100], [])).toEqual([]);
+  });
+
+  it("asks the write-key holder's binding when there is one", () => {
+    expect(
+      writesDisabledEnvironmentsForCredentials(
+        [P100, P200],
+        [
+          { environment: "PROD", sapClient: "200", hasWriteKey: true },
+          { environment: "PROD", sapClient: "100", hasWriteKey: false },
+        ],
+      ),
+    ).toEqual([]);
   });
 });

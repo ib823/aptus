@@ -67,9 +67,11 @@
 export const MAX_SERVICE_PATH_LENGTH = 180;
 
 /**
- * A custom interface's `externalId` is DERIVED: `custom:<path>`. Grants match on
- * externalId, so a grant a second person approved for one path can never
- * silently authorise another — a new path is a new id and needs a new grant.
+ * A custom interface's `externalId` is DERIVED: `custom:<path>`, the path in
+ * its service form (customExternalId: case-folded on the Gateway roots).
+ * Grants match on externalId, so a grant a second person approved for one
+ * service can never silently authorise another — a new service is a new id
+ * and needs a new grant, and another spelling of the same service is not one.
  * Catalogue ids never contain `:` or `/`, so the two cannot collide.
  */
 export const CUSTOM_EXTERNAL_ID_PREFIX = "custom:";
@@ -277,9 +279,62 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
   return { ok: true, path };
 }
 
-/** The derived grant identity of a custom interface. `path` must be validated. */
+/**
+ * The Gateway roots (`/sap/opu/odata/`, `/sap/opu/odata4/`): ICF resolves its
+ * nodes, and Gateway its namespaces and service names, without regard to
+ * case, so every spelling of a path under them that differs only in case is
+ * one service.
+ */
+const CASE_INSENSITIVE_PREFIXES = ["/sap/opu/odata/", "/sap/opu/odata4/"] as const;
+/** Gateway's OData V2 root, where a service called without `;v=` is version 0001. */
+const GATEWAY_V2_PREFIX = "/sap/opu/odata/";
+const GATEWAY_DEFAULT_VERSION = `;v=${"1".padStart(VERSION_DIGITS, "0")}`;
+
+/**
+ * The form of a validated path that names its SERVICE: what the grant
+ * identity is built from, never what is called (the stored path keeps the
+ * developer's spelling for the wire).
+ *
+ * ONE SERVICE, ONE GRANT IDENTITY — ACROSS CASE (review round 5). Round 4
+ * decoded escapes so `%73ap` and `sap` were one id, but `%53ap` decoded to
+ * `Sap`, and `/SAP/OPU/ODATA/SAP/ZX_SRV` was accepted beside
+ * `/sap/opu/odata/sap/ZX_SRV` — the validator matches its roots without
+ * regard to case because ICF does. Each spelling was its own `custom:` id,
+ * and grants match on the id exactly, so a write grant an approver denied or
+ * revoked for one spelling could be requested afresh for another, with no
+ * link to the earlier decision, and then write to the same SAP service.
+ *
+ *   - Under the Gateway roots, the whole path is folded to lower case.
+ *   - On Gateway's V2 root, `;v=0001` is dropped: a Gateway V2 service called
+ *     without a version is version 0001, so the two spellings are one service.
+ *     Any other version stays and is its own service.
+ *   - SuccessFactors' `/odata/v2` is an exact root and folds whole. Under
+ *     `/odatav4/` only the root is folded: what follows is SuccessFactors'
+ *     own routing, not known to ignore case, and folding two different
+ *     services into one id would let one grant authorise both — the worse
+ *     error of the two.
+ */
+function serviceIdentityPath(path: string): string {
+  const lower = path.toLowerCase();
+  if (CASE_INSENSITIVE_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+    return lower.startsWith(GATEWAY_V2_PREFIX) && lower.endsWith(GATEWAY_DEFAULT_VERSION)
+      ? lower.slice(0, -GATEWAY_DEFAULT_VERSION.length)
+      : lower;
+  }
+  for (const { root } of ODATA_SERVICE_ROOTS) {
+    if (lower === root) return root;
+    if (lower.startsWith(`${root}/`)) return `${root}${path.slice(root.length)}`;
+  }
+  return path;
+}
+
+/**
+ * The derived grant identity of a custom interface: `custom:` and the path's
+ * service form (serviceIdentityPath — case-folded on the Gateway roots).
+ * `path` must be validated.
+ */
 export function customExternalId(path: string): string {
-  return `${CUSTOM_EXTERNAL_ID_PREFIX}${path}`;
+  return `${CUSTOM_EXTERNAL_ID_PREFIX}${serviceIdentityPath(path)}`;
 }
 
 export function isCustomExternalId(id: string): boolean {

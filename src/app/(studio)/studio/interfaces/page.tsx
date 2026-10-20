@@ -25,6 +25,7 @@ import { serviceApiId } from "@/lib/sap-public/hub-content";
 import {
   toCurrentConnection,
   verifiedEnvironmentsForCredentials,
+  writesDisabledEnvironmentsForCredentials,
   type CurrentProductConnection,
 } from "@/lib/sap-public/current-connections";
 import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
@@ -114,7 +115,7 @@ export default async function StudioInterfacesPage({
     organizationId
       ? prisma.sapConnection.findMany({
           where: { organizationId, isActive: true },
-          select: { id: true, product: true, label: true, environment: true, client: true, baseUrl: true },
+          select: { id: true, product: true, label: true, environment: true, client: true, baseUrl: true, writeEnabled: true },
           orderBy: { createdAt: "asc" },
         })
       : Promise.resolve([]),
@@ -165,19 +166,23 @@ export default async function StudioInterfacesPage({
     const credentials = liveCredentials.filter(
       (c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()),
     );
+    // Every live credential, with its write key — the same rows the
+    // activation gate passes: a read-only credential's binding is the one its
+    // write key will be sealed onto (review round 5), and where a write-key
+    // holder exists only its binding decides (review round 4).
+    const readinessCredentials = credentials.map((c) => ({
+      environment: c.environment,
+      sapClient: c.sapClient ?? null,
+      hasWriteKey: withWriteKey.has(c.id),
+    }));
     return writeReadinessByEnvironment({
-      credentials: credentials.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.id) })),
+      credentials: readinessCredentials,
       grants: writeGrants.filter((g) => g.solutionId === solutionId && g.externalId === externalId && g.operation === operation),
-      // Only credentials that can write: a read-only credential on a verified
-      // client does not make its environment ready (review round 4).
       serviceVerifiedEnvironments: custom
-        ? verifiedEnvironmentsForCredentials(
-            custom.serviceVerifications,
-            custom.connections,
-            credentials
-              .filter((c) => withWriteKey.has(c.id))
-              .map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
-          )
+        ? verifiedEnvironmentsForCredentials(custom.serviceVerifications, custom.connections, readinessCredentials)
+        : null,
+      writesDisabledEnvironments: custom
+        ? writesDisabledEnvironmentsForCredentials(custom.connections, readinessCredentials)
         : null,
       now,
     });

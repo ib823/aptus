@@ -16,7 +16,10 @@
  * halves: verified in SANDBOX, the chain complete only in PROD, ACTIVE — and
  * every PROD write refused (review round 2). So for a custom interface the
  * caller passes the environments that hold a current verification, and an
- * environment is ready only when it holds one too.
+ * environment is ready only when it holds one too. And the connection that
+ * environment's credential binds to must have writes switched on: the write
+ * route refuses every write through one with writeEnabled=false (review
+ * round 5).
  *
  * This is the pure part: given the rows, say for each environment which
  * halves are present, and whether the chain is complete. The route refuses
@@ -44,6 +47,12 @@ export interface WriteReadinessRow {
   grant: GrantReadiness;
   /** Present only for your own API (a custom service path). */
   service?: ServiceReadiness;
+  /**
+   * Your own API only, and present only when true: the connection this
+   * environment's credential binds to has writes switched off, a veto the
+   * write route enforces whatever the other halves say (review round 5).
+   */
+  writesDisabled?: true;
   /** Every half present: a call in this environment would pass the gates. */
   ready: boolean;
 }
@@ -66,6 +75,13 @@ export interface WriteReadinessInput {
    * null for a catalogue interface, whose writes are not gated on Verify.
    */
   serviceVerifiedEnvironments?: readonly string[] | null;
+  /**
+   * Your own API only: the environments whose credential binds to a
+   * connection with writeEnabled=false (writesDisabledEnvironmentsForCredentials).
+   * The write route refuses every write there ("Writes are not enabled on
+   * this SAP connection"), so such an environment is never ready.
+   */
+  writesDisabledEnvironments?: readonly string[] | null;
   now?: Date;
 }
 
@@ -108,7 +124,15 @@ export function writeReadinessByEnvironment(input: WriteReadinessInput): WriteRe
     const service: ServiceReadiness = input.serviceVerifiedEnvironments.includes(environment)
       ? "verified"
       : "not-verified";
-    return { environment, credential, grant, service, ready: chainReady && service === "verified" };
+    const writesDisabled = input.writesDisabledEnvironments?.includes(environment) === true;
+    return {
+      environment,
+      credential,
+      grant,
+      service,
+      ...(writesDisabled ? { writesDisabled: true as const } : {}),
+      ready: chainReady && service === "verified" && !writesDisabled,
+    };
   });
 }
 
@@ -138,7 +162,8 @@ const SERVICE_WORDS: Record<ServiceReadiness, string> = {
 /** One line per environment, for the Contract card. */
 export function describeWriteReadiness(row: WriteReadinessRow): string {
   const service = row.service ? ` · ${SERVICE_WORDS[row.service]}` : "";
-  return `${row.environment}: ${CREDENTIAL_WORDS[row.credential]} · ${GRANT_WORDS[row.grant]}${service}${row.ready ? " → ready" : ""}`;
+  const writes = row.writesDisabled ? " · writes disabled on the connection" : "";
+  return `${row.environment}: ${CREDENTIAL_WORDS[row.credential]} · ${GRANT_WORDS[row.grant]}${service}${writes}${row.ready ? " → ready" : ""}`;
 }
 
 /**
@@ -153,11 +178,15 @@ export function writeReadinessRefusal(operation: string, rows: readonly WriteRea
     started.length === 0
       ? "No environment has a credential or a write grant yet."
       : started.map(describeWriteReadiness).join("; ") + ".";
+  // The one half no developer action fixes: say who can.
+  const vetoed = rows.some((r) => r.writesDisabled)
+    ? " An administrator enables writes on the connection under Connections."
+    : "";
   return (
     `A ${operation} interface cannot be activated until some environment holds the full write chain — ` +
     "a live credential for that environment carrying a write key, AND a live approved write grant for this capability in it" +
     (custom ? ", AND a verification of this interface's own SAP service through that environment's connection. " : ". ") +
-    `The broker refuses every write that lacks any of them, so activating now would build toward a call that cannot succeed. ${detail} ` +
+    `The broker refuses every write that lacks any of them, so activating now would build toward a call that cannot succeed. ${detail}${vetoed} ` +
     "Get the write grant approved for an environment, issue the write credential for that environment under API Access" +
     (custom ? ", verify the service in that same environment" : "") +
     ", then activate."

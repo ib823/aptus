@@ -35,6 +35,7 @@ const { mocks, BASE } = vi.hoisted(() => ({
     configAudit: vi.fn(),
     record: vi.fn(),
     binding: vi.fn(),
+    authHeaders: vi.fn(),
   },
 }));
 
@@ -49,7 +50,7 @@ vi.mock("@/lib/northbound/audit", () => ({ recordNorthboundCall: mocks.record })
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
   ...(await importOriginal<typeof Resolver>()),
   resolveSapConnectionForEnvironment: mocks.binding,
-  buildAuthHeadersFromConnection: async () => ({ Authorization: "Basic dTpw" }),
+  buildAuthHeadersFromConnection: mocks.authHeaders,
 }));
 vi.mock("@/lib/sap-public/resolve-hub-service", () => ({
   resolveHubService: async () => ({ path: "/sap/opu/odata/sap/API_BUSINESS_PARTNER" }),
@@ -150,6 +151,7 @@ beforeEach(() => {
   mocks.updateMany.mockResolvedValue({ count: 1 });
   mocks.configAudit.mockResolvedValue({ id: "a1" });
   mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
+  mocks.authHeaders.mockResolvedValue({ Authorization: "Basic dTpw" });
   fetchMock = vi.fn(async () => xml(V2_EDMX));
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -323,7 +325,7 @@ describe("SuccessFactors: one dataset's description, not the tenant's (review ro
       expect(d.detail).not.toContain("service binding");
     });
 
-    it("no answer in time → says to enter the dataset", async () => {
+    it("no answer in time from the tenant → says so, and to enter the dataset", async () => {
       mocks.findIface.mockResolvedValue(sf({ entitySet: null }));
       fetchMock.mockImplementation(async () => {
         const err = new Error("aborted");
@@ -332,7 +334,27 @@ describe("SuccessFactors: one dataset's description, not the tenant's (review ro
       });
       const d = await data(await verify({ environment: "DEV" }));
       expect(d.status).toBe("TIMEOUT");
-      expect(d.detail).toMatch(DATASET_NEEDED);
+      expect(d.detail).toMatch(/^The tenant did not respond within \d+ms\. Set the dataset \(for example cust_TravelRequest\)/);
+    });
+
+    /**
+     * A timeout of the CREDENTIAL step (the OAuth token endpoint) never
+     * reached the tenant, so the size of its description is not the cause and
+     * "set the dataset" is the wrong advice: the token endpoint's own sentence
+     * stays (review round 5).
+     */
+    it("no answer in time from the token endpoint → names the token endpoint, not the dataset (review round 5)", async () => {
+      mocks.findIface.mockResolvedValue(sf({ entitySet: null }));
+      mocks.authHeaders.mockImplementation(async () => {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
+      });
+      const d = await data(await verify({ environment: "DEV" }));
+      expect(d.status).toBe("TIMEOUT");
+      expect(d.detail).toMatch(/^The connection's token endpoint did not respond within \d+ms\.$/);
+      expect(d.detail).not.toContain("Set the dataset");
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("a V4 SuccessFactors service asked whole keeps the ordinary answers", async () => {

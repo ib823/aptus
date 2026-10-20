@@ -292,6 +292,12 @@ export interface MetadataDocumentResult extends ConnectionHealthResult {
   truncated: boolean;
   /** A bounded code for the audit row (failure-reason.ts); null on OK. */
   failureReason: string | null;
+  /**
+   * The credential step finished, so the tenant was called. False when the
+   * failure (a TIMEOUT included) was the token endpoint's: what the tenant
+   * would have answered is then unknown (review round 5).
+   */
+  signedIn: boolean;
 }
 
 /**
@@ -338,7 +344,16 @@ export async function fetchMetadataDocument(
     };
     const { res, redirected } = await followSameOrigin(await fetchImpl(url, init), url, init, fetchImpl);
     const { status, detail, body, truncated, failureReason } = await classifyResponse(res, redirected, maxBytes);
-    return { status, httpStatus: res.status, detail, durationMs: Date.now() - started, body, truncated, failureReason };
+    return {
+      status,
+      httpStatus: res.status,
+      detail,
+      durationMs: Date.now() - started,
+      body,
+      truncated,
+      failureReason,
+      signedIn,
+    };
   } catch (err) {
     /*
      * THE ERRORS BUILT TO BE SHOWN ARE SAID OUT LOUD — SuccessFactors' own
@@ -355,12 +370,13 @@ export async function fetchMetadataDocument(
     // the audit row says the tenant was never called.
     const failureReason = signedIn ? failureReasonFromError(err) : credentialStepOutcome(err).failureReason;
     const said = publicCredentialFailure(err);
-    if (said) return { ...said, durationMs: Date.now() - started, body: null, truncated: false, failureReason };
+    if (said) return { ...said, durationMs: Date.now() - started, body: null, truncated: false, failureReason, signedIn };
     const aborted = err instanceof Error && err.name === "AbortError";
     return {
       body: null,
       truncated: false,
       failureReason,
+      signedIn,
       status: aborted ? "TIMEOUT" : "ERROR",
       httpStatus: null,
       // Deliberately generic: the underlying error can carry the host, and in the
