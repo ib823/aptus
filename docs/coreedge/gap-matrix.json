@@ -5553,52 +5553,60 @@
    "goal": "Make today's read and create broker, the Workbench explorer and the governance screens trustworthy before anything is built on them. This phase closes the 33 audit findings still open after batches 1 and 2 (#304, #306), plus the residual problems those batches reported. It also covers KMS, credential hygiene, MFA step-up, in-product onboarding, the Workbench write-back audit gap, catalogue address bugs and the sapsf.* hosts. It extracts the pipeline with no behaviour change and checks the permutation simulator into the repo. Batches 1 and 2 already fixed A00-A13, A20-A28, A31-A37, A39-A41, A48, A49, A53-A55 and A64-A68 (see git log c31a385c and 33d0ef86). Estimate: 5 to 6 weeks for 3 to 4 engineers.",
    "cellUpgrades": [
     {
+     "table": "origin",
+     "row": "CUSTOMER_CUSTOM",
+     "col": "",
+     "status": "partial",
+     "items": "P1.1 (scheduled in P0a)",
+     "reason": "custom-service-path lands in P0a. Z*/YY1_* services are registered by path, verified from $metadata and read through the broker with an audit row. Reads are still $top-only with no filter or paging, so partial."
+    },
+    {
+     "table": "origin",
+     "row": "PARTNER",
+     "col": "",
+     "status": "partial",
+     "items": "P1.1 (scheduled in P0a)",
+     "reason": "Partner APIs are namespaced Gateway/MDF services. The P1.1 service-path guard admits any namespace path, so they are callable on the same terms as Z* (reads are $top-only)."
+    },
+    {
      "table": "lifecycle",
      "row": "SECRETS_KEYS",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P0.10, P0.11",
+     "reason": "KMS envelope encryption with key versions and a rotate/reseal/restore drill, plus consumer key expiry and overlap rotation."
     },
     {
-     "table": "lifecycle",
-     "row": "GOVERN_AUDIT_COMPLY",
-     "col": "",
-     "status": "full"
+     "table": "sapAuth",
+     "row": "SUCCESSFACTORS",
+     "col": "OAUTH_SAML_BEARER",
+     "status": "full",
+     "items": "P0.9",
+     "reason": "Acceptance requires a live SAML-bearer read with a correlation id before 20 Nov 2026. If only the fallback branch (refuse SF Basic) is met, the cell stays partial."
     },
     {
-     "table": "lifecycle",
-     "row": "RUN_MONITOR_ALERT",
-     "col": "",
-     "status": "partial"
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "ODATA_V2",
+     "status": "partial",
+     "items": "P1.1 (scheduled in P0a)",
+     "reason": "ECC Gateway services are registered by service path (the branch covers ECC). They are reachable only the way on-prem is today, from a self-hosted copy inside the network."
     },
     {
-     "table": "lifecycle",
-     "row": "ONBOARDING_TIME_TO_FIRST_CALL",
-     "col": "",
-     "status": "partial"
-    },
-    {
-     "table": "lifecycle",
-     "row": "DISCOVER",
-     "col": "",
-     "status": "partial"
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "ODATA_V4",
+     "status": "partial",
+     "items": "P1.1 (scheduled in P0a)",
+     "reason": "A custom V4 path is accepted, but no item tests ECC V4 (P4.7 tests ECC read and create on V2)."
     },
     {
      "table": "targetTech",
      "row": "SUCCESSFACTORS",
-     "col": "ODATA_V2",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PUBLIC",
      "col": "ODATA_V4",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PUBLIC",
-     "col": "ODATA_V2",
-     "status": "partial"
+     "status": "partial",
+     "items": "P1.1 (scheduled in P0a)",
+     "reason": "The service-path guard admits /odatav4/ paths, but this is never tested on SuccessFactors."
     }
    ]
   },
@@ -5611,127 +5619,81 @@
      "table": "origin",
      "row": "CUSTOMER_CUSTOM",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P1.2, P1.3, P1.4, P1.8",
+     "reason": "Tenant discovery and EDMX registration, compiled contracts, the governed query surface and live create evidence remove the read and discovery limits. Technology limits are carried by the tech cells."
     },
     {
      "table": "origin",
      "row": "PARTNER",
      "col": "",
-     "status": "partial"
+     "status": "full",
+     "items": "P1.2, P1.3, P1.4",
+     "reason": "Same bar as CUSTOMER_CUSTOM. P1.2 lists every tenant Gateway service whatever its origin, and P1.3/P1.4 add contracts, filter and paging. No partner-specific limit remains in OData."
     },
     {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "SYNC_READ",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "SYNC_READ",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "SYNC_CREATE",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "SYNC_CREATE",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PUBLIC",
-     "col": "ODATA_V2",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PUBLIC",
-     "col": "ODATA_V4",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "SUCCESSFACTORS",
-     "col": "ODATA_V2",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PRIVATE_RISE",
-     "col": "ODATA_V2",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PRIVATE_RISE",
-     "col": "ODATA_V4",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_ONPREM",
-     "col": "ODATA_V2",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_ONPREM",
-     "col": "ODATA_V4",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "ECC",
-     "col": "ODATA_V2",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "BTP_SERVICE",
-     "col": "ODATA_V4",
-     "status": "partial"
+     "table": "origin",
+     "row": "SAP_STANDARD",
+     "col": "",
+     "status": "full",
+     "items": "P0.8, P1.1, P1.2, P1.3, P1.4, P1.8",
+     "reason": "Same bar as CUSTOMER_CUSTOM. P0.8 excludes the malformed wrapper rows and labels guessed V4 paths. P1.2 discovers real V2/V4 paths from the tenant, so no Hub seed is needed. P1.3/P1.4 add contracts, filter, key, select and paging, and P1.8 proves create live. SOAP and REST limits sit in the tech cells."
     },
     {
      "table": "lifecycle",
      "row": "DISCOVER",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P0.8, P1.2",
+     "reason": "A truthful catalogue (P0.8) plus per-tenant Gateway discovery, EDMX registration and the SAP_COM checklist (P1.2)."
     },
     {
-     "table": "lifecycle",
-     "row": "MOCK_TEST_BEFORE_CODE",
-     "col": "",
-     "status": "partial"
+     "table": "targetTech",
+     "row": "S4_PUBLIC",
+     "col": "ODATA_V4",
+     "status": "full",
+     "items": "P0.8, P1.1, P1.2, P1.3, P1.4, P1.8",
+     "reason": "Real V4 paths from tenant service groups instead of guesses, contracts, the V4 conformance suite and a live V4 create."
     },
     {
-     "table": "lifecycle",
-     "row": "DESIGN_MAP",
-     "col": "",
-     "status": "partial"
-    },
-    {
-     "table": "sapAuth",
+     "table": "targetTech",
      "row": "SUCCESSFACTORS",
-     "col": "OAUTH_SAML_BEARER",
-     "status": "full"
+     "col": "ODATA_V2",
+     "status": "full",
+     "items": "P0.8, P0.9, P1.1, P1.3, P1.4",
+     "reason": "sapsf hosts admitted, SAML bearer live, SF resolved from Hub ids and MDF by path, plus filter and paging."
     },
     {
-     "table": "sapAuth",
-     "row": "S4_PUBLIC",
-     "col": "BASIC",
-     "status": "full"
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "SYNC_READ",
+     "status": "full",
+     "items": "P1.3, P1.4, P1.5",
+     "reason": "Key lookup, $filter/$select/$expand/$count and signed cursor paging under the query policy, plus field scope. The conformance suite passes on V2 and V4."
     },
     {
-     "table": "sapAuth",
-     "row": "S4_PUBLIC",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "SYNC_CREATE",
+     "status": "full",
+     "items": "P0.3, P1.3, P1.8",
+     "reason": "Creates can be switched on from screens (P0.3), write contracts describe the body (P1.3), and a live create has a correlation id (P1.8)."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "SYNC_READ",
+     "status": "full",
+     "items": "P1.3, P1.4, P1.5",
+     "reason": "Same as V2: real V4 paths, query policy, paging and field scope, with conformance on V4."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "SYNC_CREATE",
+     "status": "full",
+     "items": "P0.3, P1.3, P1.8",
+     "reason": "Live V4 create and draft-enabled RAP POST, each with a correlation id (P1.8)."
     }
    ]
   },
@@ -5741,154 +5703,164 @@
    "goal": "Give every developer persona a governed path:\n- testers get the API Lab;\n- JS/TS, Python, Java and .NET developers get SDKs;\n- ABAP Cloud and on-premise developers get an abapGit SDK and OAuth;\n- low-code makers get a Power Platform connector;\n- coding agents get a read-only Studio MCP.\n\nThis phase also opens update, delete, actions and $batch, about 52k scenarios, tested on the twin first. By the end, the 30-minute time to first call is true for the twin. Estimate: 10 to 12 weeks. Phase 2 can overlap Phase 1 once P1.3 lands.",
    "cellUpgrades": [
     {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "SYNC_UPDATE_DELETE_ACTION",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "SYNC_UPDATE_DELETE_ACTION",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "BULK_BATCH",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "BULK_BATCH",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JS_TS",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "PYTHON",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JAVA",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "DOTNET",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_CLOUD",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_ONPREM",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "LOW_CODE",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "HUMAN_TESTER",
-     "col": "STATIC_BEARER",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "AI_AGENT",
-     "col": "STATIC_BEARER",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JS_TS",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "PYTHON",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JAVA",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "DOTNET",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_CLOUD",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_ONPREM",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "LOW_CODE",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "partial"
-    },
-    {
      "table": "lifecycle",
      "row": "MOCK_TEST_BEFORE_CODE",
      "col": "",
-     "status": "full"
-    },
-    {
-     "table": "lifecycle",
-     "row": "DEVELOP_SDK_CODEGEN",
-     "col": "",
-     "status": "full"
-    },
-    {
-     "table": "lifecycle",
-     "row": "ONBOARDING_TIME_TO_FIRST_CALL",
-     "col": "",
-     "status": "full"
-    },
-    {
-     "table": "lifecycle",
-     "row": "AI_ASSIST",
-     "col": "",
-     "status": "partial"
+     "status": "full",
+     "items": "P1.6a, P1.6b, P2.1, P2.2, P2.3",
+     "reason": "Twin with writes and fault injection, a Lab with assertions and chaining, and Postman/Bruno exports run in CI."
     },
     {
      "table": "lifecycle",
      "row": "CI_PRECOMMIT_GOVERNANCE",
      "col": "",
-     "status": "partial"
+     "status": "partial",
+     "items": "P2.3, P2.6a, P2.11a",
+     "reason": "Consumers can run exported collections (Newman) and the SDK conformance script in their own CI against the twin. There is no manifest, verify step or policy gate yet."
+    },
+    {
+     "table": "lifecycle",
+     "row": "AI_ASSIST",
+     "col": "",
+     "status": "partial",
+     "items": "P2.11, P2.11a",
+     "reason": "Read-and-draft Studio MCP and a grounded failure explainer. No copilot or verified answers yet."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "PYTHON",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "items": "P2.6a, P1.6a, P2.10",
+     "reason": "Python SDK published to PyPI and passing the shared conformance script against the twin, plus the docs portal."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "LOW_CODE",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "items": "P2.8",
+     "reason": "Swagger 2.0 connector with API-key-style security that passes the Power Platform validator, plus a live UiPath import and call."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "HUMAN_TESTER",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "items": "P2.1, P2.2, P2.3, P2.9",
+     "reason": "Lab with writes, assertions, collections and exports, plus a tester role. The 50-row read-only console limit is gone."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JS_TS",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.5, P2.6a",
+     "reason": "RFC 6749 client-credentials endpoint with JWKS, a Node client verified, and token handling in the TS SDK."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "PYTHON",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.5, P2.6a",
+     "reason": "Token endpoint plus token handling and conformance in the Python SDK."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JAVA",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "items": "P2.5",
+     "reason": "The standard endpoint works with any OAuth library, but there is no Java SDK or test until P2.6b."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "DOTNET",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "items": "P2.5",
+     "reason": "The standard endpoint works with any OAuth library, but there is no .NET SDK or test until P2.6b."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "ABAP_ONPREM",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.5, P2.7",
+     "reason": "P2.5's acceptance requires a live call for both ABAP flavours (otherwise the badge holds it at partial), and SM59/OA2C stores the credential natively. No P3 item adds anything, so the old split of partial in P2 and full in P3 had no basis."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "ABAP_CLOUD",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.5, P2.7",
+     "reason": "As ABAP_ONPREM: a communication system with an OAuth client-credentials outbound user, and a live call required by P2.5's acceptance."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "LOW_CODE",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "items": "P2.5",
+     "reason": "The token endpoint exists, but the Power Platform OAuth definition does not support client credentials [E23], and P2.8 deliberately uses API-key style."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "AI_AGENT",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "items": "P2.5",
+     "reason": "An agent runtime can fetch client-credentials tokens and call the northbound API. But there is no runtime MCP or tool surface and no human-confirmed writes, and SAP API Policy 2.2.2 applies."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "HUMAN_TESTER",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P2.9",
+     "reason": "Generic OIDC sign-in, and Lab calls run as the signed-in person. External tools still cannot obtain user-delegated tokens."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "full",
+     "items": "P2.4, P1.6b",
+     "reason": "PATCH/MERGE with ETag, DELETE, actions and deep insert, with a live DEV run for update and one action."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P2.4, P1.4",
+     "reason": "$batch changesets and cursor paging, capped by the 4.5 MB body limit. No bulk jobs yet."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "full",
+     "items": "P2.4, P1.6b",
+     "reason": "PATCH with ETag, DELETE and RAP actions, with a live DEV run for V4 update."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P2.4, P1.4",
+     "reason": "$batch and paging, capped by the 4.5 MB body limit. No bulk jobs yet."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "HUMAN_TESTER",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "partial",
+     "items": "P2.5, P2.2, P2.3",
+     "reason": "No acceptance test gets a token from Postman, Bruno or Newman. P2.3's Newman run reaches the twin, which takes Bearer/Basic test keys, and Lab steps run under the session. The mapper holds JAVA and DOTNET at partial in P2 for the same 'standard endpoint, no test'."
     }
    ]
   },
@@ -5901,61 +5873,105 @@
      "table": "lifecycle",
      "row": "CI_PRECOMMIT_GOVERNANCE",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P3.1, P3.2, P3.3",
+     "reason": "Manifest, CLI verify/plan/can-i-deploy, and OIDC workload identity with no stored secret (A.3 #6)."
+    },
+    {
+     "table": "lifecycle",
+     "row": "DEVELOP_SDK_CODEGEN",
+     "col": "",
+     "status": "full",
+     "items": "P2.6a, P2.7, P2.8, P2.6b",
+     "reason": "P2 ships TS, Python, ABAP and low-code clients. Java and .NET SDKs (P2.6b) land only in P3, which A.3 #7 sets as the bar, so full is P3, not P2 as before."
+    },
+    {
+     "table": "lifecycle",
+     "row": "ONBOARDING_TIME_TO_FIRST_CALL",
+     "col": "",
+     "status": "full",
+     "items": "P0.13, P1.7, P2.12, P2.6b, P3.2",
+     "reason": "A.3 #1 passes in P2 for TS, Python, ABAP, low-code, agents and testers, but for Java and .NET only in P3. Judged on the same bar as DEVELOP_SDK_CODEGEN, so full moves from P2 to P3."
     },
     {
      "table": "lifecycle",
      "row": "DEPLOY_PROMOTE_ENVIRONMENTS",
      "col": "",
-     "status": "full"
-    },
-    {
-     "table": "lifecycle",
-     "row": "SAP_UPGRADE_IMPACT",
-     "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P3.4",
+     "reason": "Immutable releases promoted DEV to TEST to PROD through evidence gates."
     },
     {
      "table": "lifecycle",
      "row": "RUN_MONITOR_ALERT",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P3.7",
+     "reason": "Monitors every 5 minutes, OpenTelemetry, stored incidents and owner alerts."
     },
     {
      "table": "lifecycle",
-     "row": "GOVERN_AUDIT_COMPLY",
+     "row": "SAP_UPGRADE_IMPACT",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P0.8, P3.8",
+     "reason": "Lifecycle data is imported (P0.8). Nightly diff, TEST rehearsal, BREAKING incidents to owners and the can-i-deploy gate (P3.8)."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JAVA",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "items": "P2.6b",
+     "reason": "The Java SDK ships only in P3 (P2.6b). Through P2, Java has only generic HTTPS and openapi-generator, which is today's partial. The old P2 full is over-credited."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "DOTNET",
+     "col": "STATIC_BEARER",
+     "status": "full",
+     "items": "P2.6b",
+     "reason": "The .NET SDK ships only in P3 (P2.6b). The old P2 full is over-credited."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JAVA",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.6b",
+     "reason": "The Java SDK runtime handles tokens and passes conformance."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "DOTNET",
+     "col": "OAUTH_CLIENT_CREDENTIALS",
+     "status": "full",
+     "items": "P2.6b",
+     "reason": "The .NET SDK runtime handles tokens and passes conformance."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "items": "P3.9, P4.1",
+     "reason": "A governed outbound HTTP route can front an external OData service described as OpenAPI. There is no outbound OData contract or query handling."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "items": "P3.9, P4.1",
+     "reason": "A governed outbound HTTP route can front an external OData service. There is no outbound OData contract or query handling."
     },
     {
      "table": "techPattern",
      "row": "REST",
      "col": "SAP_CALLS_OUT",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JS_TS",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "PYTHON",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_CLOUD",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_ONPREM",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
+     "status": "partial",
+     "items": "P3.9, P4.1, P2.5, P2.7",
+     "reason": "Governed outbound routes with egress grants and SSRF-safe dispatch. The external-API twin is deferred to P5.3."
     }
    ]
   },
@@ -5966,141 +5982,139 @@
    "cellUpgrades": [
     {
      "table": "network",
-     "row": "PRIVATE_NETWORK",
-     "col": "",
-     "status": "full"
-    },
-    {
-     "table": "network",
      "row": "SAP_SIDE_IP_ALLOWLIST",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P4.4, P4.2",
+     "reason": "Fixed egress is documented and echoed (P4.4), and the connector dials out from the customer's known IP (P4.2)."
     },
     {
      "table": "network",
-     "row": "PUBLIC_INTERNET",
+     "row": "PRIVATE_NETWORK",
      "col": "",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PRIVATE_RISE",
-     "col": "ODATA_V2",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PRIVATE_RISE",
-     "col": "ODATA_V4",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_ONPREM",
-     "col": "ODATA_V2",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_ONPREM",
-     "col": "ODATA_V4",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "ECC",
-     "col": "ODATA_V2",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_PUBLIC",
-     "col": "X509_MTLS",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_PRIVATE_RISE",
-     "col": "X509_MTLS",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_ONPREM",
-     "col": "X509_MTLS",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "ECC",
-     "col": "X509_MTLS",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_ONPREM",
-     "col": "BASIC",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "ECC",
-     "col": "BASIC",
-     "status": "full"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_PUBLIC",
-     "col": "PRINCIPAL_PROPAGATION",
-     "status": "partial"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_ONPREM",
-     "col": "PRINCIPAL_PROPAGATION",
-     "status": "partial"
-    },
-    {
-     "table": "sapAuth",
-     "row": "S4_PRIVATE_RISE",
-     "col": "PRINCIPAL_PROPAGATION",
-     "status": "partial"
-    },
-    {
-     "table": "sapAuth",
-     "row": "BTP_SERVICE",
-     "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JS_TS",
-     "col": "MTLS",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JAVA",
-     "col": "MTLS",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "DOTNET",
-     "col": "MTLS",
-     "status": "partial"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "ABAP_ONPREM",
-     "col": "MTLS",
-     "status": "partial"
+     "status": "full",
+     "items": "P4.1, P4.2, P4.7",
+     "reason": "Transport dispatcher plus an outbound-only connector and relay with an HA pair. ECC, RISE and on-prem lanes are verified behind the connector."
     },
     {
      "table": "lifecycle",
      "row": "SELF_HOST_SETUP",
      "col": "",
-     "status": "full"
+     "status": "full",
+     "items": "P4.5, P4.5a, P4.8",
+     "reason": "Standalone image, compose/Helm/Terraform and a setup wizard, with 15-minute compose acceptance, a scrubbed distribution and the licence decided."
+    },
+    {
+     "table": "sapAuth",
+     "row": "S4_PUBLIC",
+     "col": "X509_MTLS",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.3",
+     "reason": "Client certificates in the dispatcher and connector, CSR generation and expiry alerts. Certificate login verified against a lab S/4; this is TLS-level and the same path for the whole ABAP stack."
+    },
+    {
+     "table": "sapAuth",
+     "row": "S4_PRIVATE_RISE",
+     "col": "X509_MTLS",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.3",
+     "reason": "As S4_PUBLIC. The certificate is presented by the connector's certificate module."
+    },
+    {
+     "table": "sapAuth",
+     "row": "S4_ONPREM",
+     "col": "X509_MTLS",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.3",
+     "reason": "As S4_PUBLIC. The certificate is presented by the connector's certificate module."
+    },
+    {
+     "table": "sapAuth",
+     "row": "ECC",
+     "col": "X509_MTLS",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.3",
+     "reason": "Same ICM client-certificate login as S/4, presented by the connector."
+    },
+    {
+     "table": "sapAuth",
+     "row": "SUCCESSFACTORS",
+     "col": "X509_MTLS",
+     "status": "partial",
+     "items": "P4.1, P4.3",
+     "reason": "The dispatcher supports client certificates generically, but no acceptance test covers this target."
+    },
+    {
+     "table": "sapAuth",
+     "row": "ARIBA",
+     "col": "X509_MTLS",
+     "status": "partial",
+     "items": "P4.1, P4.3",
+     "reason": "The dispatcher supports client certificates generically, but no acceptance test covers this target."
+    },
+    {
+     "table": "sapAuth",
+     "row": "BTP_SERVICE",
+     "col": "X509_MTLS",
+     "status": "partial",
+     "items": "P4.1, P4.3",
+     "reason": "The dispatcher supports client certificates generically. P4.3 verifies IAS client credentials for BTP, but not certificate login."
+    },
+    {
+     "table": "sapAuth",
+     "row": "NON_SAP_SAAS",
+     "col": "X509_MTLS",
+     "status": "partial",
+     "items": "P4.1, P4.3",
+     "reason": "The dispatcher supports client certificates generically, but no acceptance test covers this target."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "ODATA_V2",
+     "status": "full",
+     "items": "P4.2, P4.7, P1.2",
+     "reason": "ECC read and create verified behind the connector, with discovery."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "ODATA_V2",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.7",
+     "reason": "Reached through the outbound connector, with Lab collections green on private S/4 lanes."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "ODATA_V4",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.7",
+     "reason": "Same path as the on-prem S/4 V4 verified behind the connector."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "ODATA_V2",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.7",
+     "reason": "Verified behind the connector."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "ODATA_V4",
+     "status": "full",
+     "items": "P4.1, P4.2, P4.7",
+     "reason": "On-prem S/4 V4 read, update and delete verified behind the connector."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "ODATA_V4",
+     "status": "full",
+     "items": "P4.2, P4.7, P1.1, P1.4",
+     "reason": "ECC V4 has the same delivery as S4_ONPREM|ODATA_V4: the Gateway /sap/opu/odata4 handler (admitted by P1.1's guard) reached over the connector, with V4 read, update and delete verified by P4.7. The mapper credits S4_PRIVATE_RISE full on the same analogy without a RISE-specific test, and SAP's 7.50+ limit is already in sapFeasibility (partial)."
     }
    ]
   },
@@ -6110,280 +6124,636 @@
    "goal": "Remove the two largest blockers by scenario count: non-OData tech (74.2%) and patterns beyond synchronous OData (78.8%). This phase adds:\n- SOAP, REST (Ariba, Concur, SuccessFactors REST, BTP services), RFC/BAPI, IDoc and file adapters;\n- events with governed webhooks;\n- a durable runtime for async writes, flows and bulk jobs;\n- declarative mapping;\n- Integration Suite as a governed backend for B2B and the long tail.\n\nEvery adapter inherits the grants, policy, containment, audit, twin and Lab built in Phases 0 to 3. Estimate: 16 to 20 weeks, and it can be split by demand.",
    "cellUpgrades": [
     {
-     "table": "techPattern",
-     "row": "SOAP",
-     "col": "SYNC_READ",
-     "status": "full"
+     "table": "lifecycle",
+     "row": "DESIGN_MAP",
+     "col": "",
+     "status": "full",
+     "items": "P1.3, P1.5, P5.8a",
+     "reason": "Contracts and field scope exist from P1, but the mapping card only goes live with Mapping Studio (P5.8a)."
     },
     {
-     "table": "techPattern",
-     "row": "SOAP",
-     "col": "SYNC_CREATE",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "SOAP",
-     "col": "SYNC_UPDATE_DELETE_ACTION",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "SYNC_READ",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "SYNC_CREATE",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "SYNC_UPDATE_DELETE_ACTION",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "RFC_BAPI",
-     "col": "SYNC_READ",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "RFC_BAPI",
-     "col": "SYNC_CREATE",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "RFC_BAPI",
-     "col": "SYNC_UPDATE_DELETE_ACTION",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "IDOC",
-     "col": "SYNC_CREATE",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "IDOC",
-     "col": "EVENT_TO_APP",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "EVENTS",
-     "col": "EVENT_TO_APP",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "EVENT_TO_APP",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "EVENT_TO_APP",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "SAP_CALLS_OUT",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "SOAP",
-     "col": "SAP_CALLS_OUT",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "RFC_BAPI",
-     "col": "SAP_CALLS_OUT",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "A2A_FLOW_WITH_MAPPING",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "A2A_FLOW_WITH_MAPPING",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "A2A_FLOW_WITH_MAPPING",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "SOAP",
-     "col": "A2A_FLOW_WITH_MAPPING",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V2",
-     "col": "BULK_BATCH",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "ODATA_V4",
-     "col": "BULK_BATCH",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "FILE_SFTP",
-     "col": "BULK_BATCH",
-     "status": "full"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "BULK_BATCH",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "IDOC",
-     "col": "B2B_EDI",
-     "status": "partial"
-    },
-    {
-     "table": "techPattern",
-     "row": "REST",
-     "col": "B2B_EDI",
-     "status": "partial"
+     "table": "sapAuth",
+     "row": "ARIBA",
+     "col": "API_KEY",
+     "status": "full",
+     "items": "P5.3, P0.6",
+     "reason": "Stored connections carry OAuth plus apiKey with managed refresh, and the acceptance requires a live call with a correlation id."
     },
     {
      "table": "targetTech",
      "row": "S4_PUBLIC",
      "col": "SOAP",
-     "status": "full"
+     "status": "full",
+     "items": "P5.1, P5.2",
+     "reason": "SOAP adapter and twin, with 3 S/4 SOAP APIs verified live."
     },
     {
      "table": "targetTech",
-     "row": "S4_PUBLIC",
-     "col": "EVENTS",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_PUBLIC",
-     "col": "RFC_BAPI",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "S4_ONPREM",
-     "col": "RFC_BAPI",
-     "status": "full"
+     "row": "SUCCESSFACTORS",
+     "col": "SOAP",
+     "status": "full",
+     "items": "P5.1, P5.2",
+     "reason": "1 SuccessFactors SOAP API verified live."
     },
     {
      "table": "targetTech",
      "row": "S4_PRIVATE_RISE",
-     "col": "RFC_BAPI",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "ECC",
-     "col": "RFC_BAPI",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "ECC",
-     "col": "IDOC",
-     "status": "partial"
+     "col": "SOAP",
+     "status": "partial",
+     "items": "P5.2, P4.2",
+     "reason": "The adapter rides the connector transport, but P5.2's acceptance exercises only S/4 Public and SF SOAP."
     },
     {
      "table": "targetTech",
      "row": "S4_ONPREM",
-     "col": "IDOC",
-     "status": "partial"
+     "col": "SOAP",
+     "status": "partial",
+     "items": "P5.2, P4.2",
+     "reason": "The adapter rides the connector transport, but P5.2's acceptance exercises only S/4 Public and SF SOAP."
     },
     {
      "table": "targetTech",
      "row": "ECC",
-     "col": "FILE_SFTP",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "SUCCESSFACTORS",
      "col": "SOAP",
-     "status": "full"
-    },
-    {
-     "table": "targetTech",
-     "row": "SUCCESSFACTORS",
-     "col": "REST",
-     "status": "partial"
-    },
-    {
-     "table": "targetTech",
-     "row": "ARIBA",
-     "col": "REST",
-     "status": "full"
+     "status": "partial",
+     "items": "P5.2, P4.2",
+     "reason": "The adapter rides the connector transport, but no ECC SOAP test exists."
     },
     {
      "table": "targetTech",
      "row": "ARIBA",
      "col": "SOAP",
-     "status": "partial"
+     "status": "partial",
+     "items": "P5.2, P5.3",
+     "reason": "Generic WSDL adapter with no acceptance test on Ariba."
+    },
+    {
+     "table": "targetTech",
+     "row": "BTP_SERVICE",
+     "col": "SOAP",
+     "status": "partial",
+     "items": "P5.2, P5.3",
+     "reason": "Generic WSDL adapter with no acceptance test on BTP."
+    },
+    {
+     "table": "targetTech",
+     "row": "NON_SAP_SAAS",
+     "col": "SOAP",
+     "status": "partial",
+     "items": "P5.2, P5.10",
+     "reason": "Generic WSDL adapter with no acceptance test on SaaS."
+    },
+    {
+     "table": "targetTech",
+     "row": "ARIBA",
+     "col": "REST",
+     "status": "full",
+     "items": "P5.3, P0.6",
+     "reason": "REST adapter with stored connections and managed OAuth. P5.3's acceptance requires a live call, an SDK and a twin for this target."
     },
     {
      "table": "targetTech",
      "row": "CONCUR",
      "col": "REST",
-     "status": "full"
+     "status": "full",
+     "items": "P5.3",
+     "reason": "REST adapter with a live call, an SDK and a twin for Concur."
     },
     {
      "table": "targetTech",
      "row": "BTP_SERVICE",
      "col": "REST",
-     "status": "full"
+     "status": "full",
+     "items": "P5.3, P5.10",
+     "reason": "REST adapter with a live call, an SDK and a twin for BTP, plus iFlow and API Management endpoints as interfaces."
     },
     {
      "table": "targetTech",
-     "row": "BTP_SERVICE",
-     "col": "ODATA_V4",
-     "status": "full"
+     "row": "SUCCESSFACTORS",
+     "col": "REST",
+     "status": "full",
+     "items": "P5.3",
+     "reason": "P5.3 names SuccessFactors REST and requires a live call, an SDK and a twin. The old P5 partial was under-credited by the same bar as Ariba and Concur."
     },
     {
      "table": "targetTech",
      "row": "NON_SAP_SAAS",
      "col": "REST",
-     "status": "partial"
+     "status": "full",
+     "items": "P5.3, P5.10",
+     "reason": "Managed OAuth and a live call with a correlation id for each of five named SaaS products. No P6 item touches SaaS, so the old P6 full belongs in P5."
     },
     {
-     "table": "origin",
-     "row": "PARTNER",
-     "col": "",
-     "status": "full"
+     "table": "targetTech",
+     "row": "S4_PUBLIC",
+     "col": "REST",
+     "status": "partial",
+     "items": "P5.3",
+     "reason": "The generic OpenAPI-imported REST adapter applies, but no S/4 REST endpoint is named or tested."
     },
     {
-     "table": "lifecycle",
-     "row": "DESIGN_MAP",
-     "col": "",
-     "status": "full"
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "REST",
+     "status": "partial",
+     "items": "P5.3, P4.2",
+     "reason": "The generic REST adapter is reachable over the connector, but nothing is named or tested on this target."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "REST",
+     "status": "partial",
+     "items": "P5.3, P4.2",
+     "reason": "The generic REST adapter is reachable over the connector, but nothing is named or tested on this target."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "REST",
+     "status": "partial",
+     "items": "P5.3, P4.2",
+     "reason": "The generic REST adapter is reachable over the connector, but nothing is named or tested on ECC."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "RFC_BAPI",
+     "status": "full",
+     "items": "P5.4, P4.2",
+     "reason": "BAPI_PO_CREATE1 plus a commit in one session through the connector, audited."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "RFC_BAPI",
+     "status": "full",
+     "items": "P5.4, P4.2",
+     "reason": "BAPI_PO_CREATE1 plus a commit in one session through the connector, audited."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "RFC_BAPI",
+     "status": "full",
+     "items": "P5.4, P4.2",
+     "reason": "BAPI_PO_CREATE1 plus a commit in one session through the connector, audited."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PUBLIC",
+     "col": "IDOC",
+     "status": "partial",
+     "items": "P5.5, P5.7",
+     "reason": "IDoc inbound via SOAP or RFC and outbound via an XML-HTTP port. The acceptance covers one message type, with no IDoc contract and no partner-profile or segment handling."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "IDOC",
+     "status": "partial",
+     "items": "P5.5, P5.7, P4.2",
+     "reason": "Same minimal IDoc path as S4_PUBLIC. The old roadmap omitted this target."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "IDOC",
+     "status": "partial",
+     "items": "P5.5, P5.7, P4.2",
+     "reason": "Same minimal IDoc path: one message type, no IDoc contract or partner profiles."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "IDOC",
+     "status": "partial",
+     "items": "P5.5, P5.7, P4.2",
+     "reason": "Same minimal IDoc path: one message type, no IDoc contract or partner profiles."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PUBLIC",
+     "col": "EVENTS",
+     "status": "full",
+     "items": "P5.7",
+     "reason": "Event Mesh/AEM ingest with signed, governed webhooks. A real SalesOrder.Created event is in the acceptance."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "EVENTS",
+     "status": "full",
+     "items": "P5.7, P4.2",
+     "reason": "Same Event Mesh/AEM ingest path as S/4 Public, with the change-feed synthesiser over the connector as a fallback."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "EVENTS",
+     "status": "full",
+     "items": "P5.7, P4.2",
+     "reason": "Same Event Mesh/AEM ingest path as S/4 Public, with the change-feed synthesiser over the connector as a fallback."
+    },
+    {
+     "table": "targetTech",
+     "row": "BTP_SERVICE",
+     "col": "EVENTS",
+     "status": "full",
+     "items": "P5.7",
+     "reason": "Event Mesh and Advanced Event Mesh are BTP services and are ingested directly."
+    },
+    {
+     "table": "targetTech",
+     "row": "SUCCESSFACTORS",
+     "col": "EVENTS",
+     "status": "partial",
+     "items": "P5.7",
+     "reason": "Ingest is generic Event Mesh/AEM. Intake from SF Intelligent Services is not named or tested."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PUBLIC",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull with checksums and audit, but no file-format contract, twin or Lab. The acceptance only checks that transfers are audited."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_PRIVATE_RISE",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P4.2, P5.9",
+     "reason": "Governed SFTP push and pull over the connector, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "S4_ONPREM",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P4.2, P5.9",
+     "reason": "Governed SFTP push and pull over the connector, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P4.2, P5.9",
+     "reason": "Governed SFTP push and pull over the connector, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "SUCCESSFACTORS",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "ARIBA",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "CONCUR",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "BTP_SERVICE",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "targetTech",
+     "row": "NON_SAP_SAAS",
+     "col": "FILE_SFTP",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "Governed SFTP push and pull, but no file-format contract, twin or Lab."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "BULK_BATCH",
+     "status": "full",
+     "items": "P5.9, P5.6, P4.5",
+     "reason": "Paged extract to storage with signed URLs, chunked batch create, checkpoints and resume under policy budgets."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "full",
+     "items": "P5.8a, P5.8b, P5.6",
+     "reason": "JSONata mapping and flows with per-step grants and saga compensation. The acceptance runs create PO then goods receipt under fault injection."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V2",
+     "col": "EVENT_TO_APP",
+     "status": "partial",
+     "items": "P5.7",
+     "reason": "Synthetic *.Changed events by polling. SAP feasibility for this cell is 'no', so it has no simulation effect."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "BULK_BATCH",
+     "status": "full",
+     "items": "P5.9, P5.6, P4.5",
+     "reason": "Bulk extract and batch jobs with checkpoints and storage under policy budgets."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "full",
+     "items": "P5.8a, P5.8b, P5.6",
+     "reason": "Mapping and compensated flows, as for V2."
+    },
+    {
+     "table": "techPattern",
+     "row": "ODATA_V4",
+     "col": "EVENT_TO_APP",
+     "status": "partial",
+     "items": "P5.7",
+     "reason": "Synthetic *.Changed events by polling. SAP feasibility for this cell is 'no', so it has no simulation effect."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "SYNC_READ",
+     "status": "full",
+     "items": "P5.1, P5.2",
+     "reason": "SOAP adapter on the governed pipeline, with a WSDL contract, a twin and live acceptance."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "SYNC_CREATE",
+     "status": "full",
+     "items": "P5.1, P5.2",
+     "reason": "SOAP adapter on the governed pipeline, with a WSDL contract, a twin and live acceptance."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "full",
+     "items": "P5.1, P5.2",
+     "reason": "SOAP adapter on the governed pipeline, with a WSDL contract, a twin and live acceptance."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "full",
+     "items": "P5.8a, P5.8b, P5.1, P5.2",
+     "reason": "Flows and mapping can call any P5.1 adapter with per-step grants and compensation, and the SOAP adapter is itself full. Rule: A2A is full wherever the tech's synchronous adapter is full."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P5.9, P5.2",
+     "reason": "The bulk runner is generic, but SOAP paging and batching are defined per API, with no $skiptoken/$batch equivalent."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "SYNC_READ",
+     "status": "full",
+     "items": "P5.1, P5.3",
+     "reason": "REST adapter with an OpenAPI contract, a twin and live calls per target."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "SYNC_CREATE",
+     "status": "full",
+     "items": "P5.1, P5.3",
+     "reason": "REST adapter with an OpenAPI contract, a twin and live calls per target."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "full",
+     "items": "P5.1, P5.3",
+     "reason": "REST adapter with an OpenAPI contract, a twin and live calls per target."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "full",
+     "items": "P5.8a, P5.8b, P5.1, P5.3",
+     "reason": "Flows over a full adapter (same rule as SOAP)."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P5.9, P5.3",
+     "reason": "The bulk runner is generic, but REST paging styles vary per API."
+    },
+    {
+     "table": "techPattern",
+     "row": "RFC_BAPI",
+     "col": "SYNC_READ",
+     "status": "full",
+     "items": "P5.1, P5.4",
+     "reason": "RFC adapter with compiled RFC metadata and explicit commit and rollback, verified live."
+    },
+    {
+     "table": "techPattern",
+     "row": "RFC_BAPI",
+     "col": "SYNC_CREATE",
+     "status": "full",
+     "items": "P5.1, P5.4",
+     "reason": "BAPI_PO_CREATE1 plus a commit, audited."
+    },
+    {
+     "table": "techPattern",
+     "row": "RFC_BAPI",
+     "col": "SYNC_UPDATE_DELETE_ACTION",
+     "status": "full",
+     "items": "P5.1, P5.4",
+     "reason": "Same adapter with an explicit commit and rollback session."
+    },
+    {
+     "table": "techPattern",
+     "row": "RFC_BAPI",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "full",
+     "items": "P5.8a, P5.8b, P5.1, P5.4",
+     "reason": "Flows over a full adapter (same rule as SOAP)."
+    },
+    {
+     "table": "techPattern",
+     "row": "RFC_BAPI",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P5.9, P5.4",
+     "reason": "The bulk runner is generic, but RFC has no generic paging, so it is per function."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "SAP_CALLS_OUT",
+     "status": "full",
+     "items": "P5.3, P5.6",
+     "reason": "The OpenAPI-based twin of external APIs (moved from P3.9) and durable retries complete test-before-code."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "items": "P3.9, P5.2",
+     "reason": "An outbound route can carry a SOAP POST, but outbound WSDL contracts and WS-Security are not specified."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "EVENT_TO_APP",
+     "status": "partial",
+     "items": "P5.7",
+     "reason": "Governed webhooks out to apps exist, but intake of SAP-side REST webhooks is not specified (ingest covers Event Mesh, AEM and IDoc)."
+    },
+    {
+     "table": "techPattern",
+     "row": "EVENTS",
+     "col": "EVENT_TO_APP",
+     "status": "full",
+     "items": "P5.7, P5.6",
+     "reason": "Signed CloudEvents webhooks, SUBSCRIBE grants, retries, a DLQ and replay."
+    },
+    {
+     "table": "techPattern",
+     "row": "EVENTS",
+     "col": "SAP_CALLS_OUT",
+     "status": "full",
+     "items": "P5.7, P0.5",
+     "reason": "SAP pushes events to the governed ingest endpoint, which is limited per subscription and answers 202 before queueing."
+    },
+    {
+     "table": "techPattern",
+     "row": "EVENTS",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "items": "P5.7, P5.8b",
+     "reason": "Events and flows both exist, but event-triggered flows are not specified or tested."
+    },
+    {
+     "table": "techPattern",
+     "row": "IDOC",
+     "col": "EVENT_TO_APP",
+     "status": "partial",
+     "items": "P5.5, P5.7",
+     "reason": "Outbound IDoc goes through an XML-HTTP port into event ingress, but this is not in any acceptance test. The old P5 full is over-credited."
+    },
+    {
+     "table": "techPattern",
+     "row": "IDOC",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "items": "P5.5, P5.7",
+     "reason": "Same outbound IDoc path, untested."
+    },
+    {
+     "table": "techPattern",
+     "row": "IDOC",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "items": "P5.5, P5.8a, P5.8b",
+     "reason": "The IDoc adapter is itself partial."
+    },
+    {
+     "table": "techPattern",
+     "row": "IDOC",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P5.5, P5.9",
+     "reason": "IDoc packets are possible, but the IDoc adapter is partial."
+    },
+    {
+     "table": "techPattern",
+     "row": "FILE_SFTP",
+     "col": "SAP_CALLS_OUT",
+     "status": "partial",
+     "items": "P5.5",
+     "reason": "Governed SFTP pull collects SAP-pushed files, but there is no format contract."
+    },
+    {
+     "table": "techPattern",
+     "row": "FILE_SFTP",
+     "col": "A2A_FLOW_WITH_MAPPING",
+     "status": "partial",
+     "items": "P5.5, P5.8a, P5.8b",
+     "reason": "The file adapter has no format contract or twin."
+    },
+    {
+     "table": "techPattern",
+     "row": "IDOC",
+     "col": "B2B_EDI",
+     "status": "partial",
+     "items": "P5.10, P5.5",
+     "reason": "B2B rule: EDI standards, AS2 and trading-partner management are delegated to Integration Suite as a governed backend (P5.10). CoreEdge governs the call into the iFlow, not the EDI exchange end to end, so partial at most."
+    },
+    {
+     "table": "techPattern",
+     "row": "REST",
+     "col": "B2B_EDI",
+     "status": "partial",
+     "items": "P5.10",
+     "reason": "B2B rule: partial at most when B2B is delegated to Integration Suite as a governed backend."
+    },
+    {
+     "table": "techPattern",
+     "row": "SOAP",
+     "col": "B2B_EDI",
+     "status": "partial",
+     "items": "P5.10",
+     "reason": "B2B rule applied consistently. The old roadmap omitted this cell."
+    },
+    {
+     "table": "techPattern",
+     "row": "FILE_SFTP",
+     "col": "B2B_EDI",
+     "status": "partial",
+     "items": "P5.10, P5.5",
+     "reason": "B2B rule applied consistently: SFTP is the transport, and EDI processing stays in Integration Suite."
+    },
+    {
+     "table": "targetTech",
+     "row": "ECC",
+     "col": "EVENTS",
+     "status": "partial",
+     "items": "P5.7, P4.2",
+     "reason": "ECC events come only from P5.7's change-date polling synthesiser. Caveat 2 counts a workaround as partial, and the mapper rates the same synthesiser partial for ODATA_V2/V4|EVENT_TO_APP. The ECC acceptance (a change appears within one polling interval) shows the latency limit rather than removing it."
+    },
+    {
+     "table": "techPattern",
+     "row": "FILE_SFTP",
+     "col": "BULK_BATCH",
+     "status": "partial",
+     "items": "P5.5, P5.9, P4.5",
+     "reason": "P5.5 gives governed SFTP with checksums, but no file-format contract, twin or Lab, and its acceptance only checks that transfers are audited. The mapper uses exactly these limits to hold FILE_SFTP|SAP_CALLS_OUT, FILE_SFTP|A2A and every FILE_SFTP targetTech cell at partial. P5.9's bulk runner is an OData paged extract to storage, not SFTP file bulk."
     }
    ]
   },
@@ -6393,64 +6763,116 @@
    "goal": "Lead where Integration Suite is weakest in the simulation: AI_AGENT consumers (0% full) and AI_ASSIST and GOVERN at 1. This phase turns CoreEdge's governance into continuous, exportable proof:\n- a runtime MCP gateway for agents with human-confirmed writes;\n- a grounded Studio copilot;\n- behavioural anomaly detection with graded auto-containment;\n- an evidence vault with SIEM streaming and evidence packs;\n- end-user acting-for with consent;\n- the Digital Access estimator.\n\nEstimate: 10 to 12 weeks. P6.1 is gated by the SAP API Policy \u00a72.2.2 legal reading.",
    "cellUpgrades": [
     {
+     "table": "lifecycle",
+     "row": "AI_ASSIST",
+     "col": "",
+     "status": "full",
+     "items": "P6.2",
+     "reason": "Grounded Studio copilot: every 'works' claim carries a run id, measured against an evaluation set."
+    },
+    {
+     "table": "sapAuth",
+     "row": "S4_PRIVATE_RISE",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "items": "P6.5, P4.2, P4.3",
+     "reason": "Short-lived user certificates behind the connector (P6.5), but no SAP-side test of a login as the end user. The old P4 credit is wrong because P4.3 defers this to P6.5."
+    },
+    {
+     "table": "sapAuth",
+     "row": "S4_ONPREM",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "items": "P6.5, P4.2, P4.3",
+     "reason": "Short-lived user certificates behind the connector (P6.5), but no SAP-side test of a login as the end user. The old P4 credit is wrong because P4.3 defers this to P6.5."
+    },
+    {
+     "table": "sapAuth",
+     "row": "ECC",
+     "col": "PRINCIPAL_PROPAGATION",
+     "status": "partial",
+     "items": "P6.5, P4.2, P4.3",
+     "reason": "Short-lived user certificates behind the connector (P6.5), but no SAP-side test of a login as the end user."
+    },
+    {
      "table": "consumerAuth",
      "row": "AI_AGENT",
      "col": "OAUTH_CLIENT_CREDENTIALS",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "AI_AGENT",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JS_TS",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "PYTHON",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "JAVA",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "full"
-    },
-    {
-     "table": "consumerAuth",
-     "row": "DOTNET",
-     "col": "USER_DELEGATED_OIDC",
-     "status": "full"
+     "status": "full",
+     "items": "P6.0, P6.1",
+     "reason": "OAuth 2.1 resource server with tools built from live grants, agents as principals, and writes confirmed by a person. Conditional on D2 or SAP endorsement, which gates P6.1."
     },
     {
      "table": "consumerAuth",
      "row": "HUMAN_TESTER",
      "col": "USER_DELEGATED_OIDC",
-     "status": "full"
+     "status": "full",
+     "items": "P6.0, P6.5",
+     "reason": "Authorization code with PKCE for interactive clients, plus sub/act acting-for tokens."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "AI_AGENT",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "full",
+     "items": "P6.0, P6.1, P6.5",
+     "reason": "MCP authorization flow, with the agent acting for a consenting user and writes confirmed by a person. Conditional on D2."
     },
     {
      "table": "consumerAuth",
      "row": "LOW_CODE",
      "col": "USER_DELEGATED_OIDC",
-     "status": "partial"
+     "status": "partial",
+     "items": "P6.0",
+     "reason": "Power Platform custom connectors can use authorization code, but no item updates the P2.8 connector for it or tests it."
     },
     {
-     "table": "lifecycle",
-     "row": "AI_ASSIST",
-     "col": "",
-     "status": "full"
+     "table": "consumerAuth",
+     "row": "ABAP_ONPREM",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5",
+     "reason": "The server side exists, but no ABAP SDK flavour or lab test obtains user-delegated tokens, and OA2C authorization-code or SAML-bearer client flows are unverified."
     },
     {
-     "table": "targetTech",
-     "row": "NON_SAP_SAAS",
-     "col": "REST",
-     "status": "full"
+     "table": "consumerAuth",
+     "row": "ABAP_CLOUD",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5",
+     "reason": "The server side exists, but no ABAP SDK flavour or lab test obtains user-delegated tokens."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JS_TS",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5, P2.6a",
+     "reason": "The P2.6 runtimes handle client-credentials tokens only. No item adds authorization code with PKCE or RFC 8693 exchange to the SDKs, and P6.0's acceptance tests only the MCP inspector. That is the same bar that holds LOW_CODE and ABAP user-delegated at partial and JAVA OAUTH_CC at partial in P2."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "PYTHON",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5, P2.6a",
+     "reason": "As JS_TS: the server side exists (P6.0, P6.5), but no Python SDK support for user-delegated tokens is specified and no test covers it."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "JAVA",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5, P2.6b",
+     "reason": "As JS_TS: P2.6b's runtime covers client credentials only, and no item or test covers user-delegated tokens from Java."
+    },
+    {
+     "table": "consumerAuth",
+     "row": "DOTNET",
+     "col": "USER_DELEGATED_OIDC",
+     "status": "partial",
+     "items": "P6.0, P6.5, P2.6b",
+     "reason": "As JS_TS: P2.6b's runtime covers client credentials only, and no item or test covers user-delegated tokens from .NET."
     }
    ]
   }
