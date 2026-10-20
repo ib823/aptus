@@ -88,6 +88,13 @@ describe("SapAribaExplorer — a malformed ARIBA_* URL (P0.6 review)", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("ARIBA_BASE_URL is not an absolute http(s) URL");
     expect(alert.textContent).not.toContain("realm configuration");
+    // Readable in both themes. text-destructive (#e7000b) on its own 10% tint
+    // measured 3.79:1 under axe in light, below AA's 4.5:1, so the light text
+    // is a darker red; dark keeps its own pair.
+    const classes = alert.className.split(/\s+/);
+    expect(classes).not.toContain("text-destructive");
+    expect(classes).toContain("text-red-800");
+    expect(classes).toContain("dark:text-red-200");
     const run = screen.getByRole("button", { name: /run/i });
     expect((run as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(run);

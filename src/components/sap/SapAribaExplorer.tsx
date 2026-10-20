@@ -197,7 +197,7 @@ export function SapAribaExplorer() {
       {(realmsError || configError) && (
         <div
           role="alert"
-          className="space-y-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200"
+          className="space-y-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-red-800 dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200"
         >
           {configError && (
             <p>
