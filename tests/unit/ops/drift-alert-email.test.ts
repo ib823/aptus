@@ -15,6 +15,7 @@ import type * as ResolverModule from "@/lib/sap-public/connection-resolver";
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   update: vi.fn(),
+  updateMany: vi.fn(),
   createEvent: vi.fn(),
   findAdmins: vi.fn(),
   sendEmail: vi.fn(),
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    sapConnection: { findMany: mocks.findMany, update: mocks.update },
+    sapConnection: { findMany: mocks.findMany, update: mocks.update, updateMany: mocks.updateMany },
     sapConnectionProbeEvent: { create: mocks.createEvent },
     user: { findMany: mocks.findAdmins },
   },
@@ -65,6 +66,8 @@ beforeEach(() => {
     detail: 'SuccessFactors refused the token request (HTTP 401): company "<a href=x>Re-authenticate</a>" is inactive.',
     durationMs: 40,
   });
+  // The status write is a compare-and-set; this one lands on the OK it expected.
+  mocks.updateMany.mockResolvedValue({ count: 1 });
   mocks.findAdmins.mockResolvedValue([{ email: "admin@acme.example" }]);
   mocks.sendEmail.mockResolvedValue(undefined);
 });

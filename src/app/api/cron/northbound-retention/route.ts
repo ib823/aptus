@@ -15,7 +15,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { enforceNorthboundAuditRetention, resolveRetentionDays } from "@/lib/northbound/retention";
-import { authorizeCron, recordCronRun } from "@/lib/ops/cron";
+import { authorizeCron, recordCronRun, runWithCronLease } from "@/lib/ops/cron";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -24,7 +24,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // One run at a time: a duplicate delivery records a skip and does nothing.
+  return runWithCronLease("northbound-retention", enforceRetention);
+}
 
+async function enforceRetention(): Promise<NextResponse> {
   const startedAt = new Date();
   const config = resolveRetentionDays();
   if (!config.ok) {

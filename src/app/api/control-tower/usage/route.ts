@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.cronRunLog.findFirst({
-      where: { job: "coreedge-usage" },
+      // A skipped invocation (job lease held) rolled up nothing; it is not the run.
+      where: { job: "coreedge-usage", skipped: false },
       orderBy: { startedAt: "desc" },
       select: { finishedAt: true, ok: true },
     }),

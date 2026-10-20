@@ -45,11 +45,23 @@ export async function GET() {
   const rows = await prisma.cronRunLog.findMany({
     orderBy: { startedAt: "desc" },
     take: SCHEDULED_JOBS.length * HISTORY_PER_JOB * 2,
-    select: { job: true, startedAt: true, finishedAt: true, ok: true, summaryJson: true },
+    select: { job: true, startedAt: true, finishedAt: true, ok: true, summaryJson: true, skipped: true },
   });
 
+  /*
+   * SKIPS ARE COUNTED, NOT SHOWN AS THE LAST RUN. An invocation that found the
+   * job's lease held did no work, and it finishes BEFORE the run that holds the
+   * lease — so read as "the latest run" it would replace that run's outcome
+   * with a row that found nothing. The history holds real runs; skips are a
+   * count beside it, so a duplicate delivery is visible without hiding the run.
+   */
   const byJob = new Map<string, typeof rows>();
+  const skipsByJob = new Map<string, number>();
   for (const row of rows) {
+    if (row.skipped) {
+      skipsByJob.set(row.job, (skipsByJob.get(row.job) ?? 0) + 1);
+      continue;
+    }
     const list = byJob.get(row.job) ?? [];
     if (list.length < HISTORY_PER_JOB) list.push(row);
     byJob.set(row.job, list);
@@ -76,6 +88,8 @@ export async function GET() {
           : null,
         recentFailures: history.filter((h) => !h.ok).length,
         runsRecorded: history.length,
+        // Duplicate invocations turned away by the job lease, among the rows read.
+        recentSkips: skipsByJob.get(job) ?? 0,
       };
     }),
     provenance: {
