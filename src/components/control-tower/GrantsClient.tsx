@@ -31,6 +31,7 @@ import {
   opsCellStyle,
 } from "@/components/ops/OpsChrome";
 import { count, FeedAsAt, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import {
   Authorises,
   ExpiryRunway,
@@ -328,7 +329,7 @@ function DecideControls({ grant, onDecided }: { grant: Grant; onDecided: () => v
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/control-tower/grants", {
+      const res = await fetchWithStepUp("/api/control-tower/grants", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -439,7 +440,7 @@ function RevokeControl({ grant, onRevoked }: { grant: Grant; onRevoked: () => vo
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/control-tower/grants/${grant.id}/revoke`, {
+      const res = await fetchWithStepUp(`/api/control-tower/grants/${grant.id}/revoke`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),

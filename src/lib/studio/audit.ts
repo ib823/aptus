@@ -27,7 +27,13 @@ export type AuditEntityType =
    * no field to filter on.
    */
   | "ClientCredential"
-  | "Connection";
+  | "Connection"
+  /**
+   * A governance action admitted without a fresh passkey step-up, under
+   * COREEDGE_STEP_UP=warn (lib/auth/step-up.ts). `entityId` is the action's
+   * name (e.g. "grant.decide"); the row acted on is `after.targetId`.
+   */
+  | "StepUp";
 
 export type AuditAction =
   | "CREATE"
@@ -56,7 +62,12 @@ export type AuditAction =
    * ledger, and folding it into the read-token verb would hide the single most
    * consequential issuance the product performs inside the routine one.
    */
-  | "ISSUE_WRITE";
+  | "ISSUE_WRITE"
+  /**
+   * A governance action went ahead with no passkey assertion inside the
+   * step-up window. Recorded only in warn mode; enforce refuses instead.
+   */
+  | "STEP_UP_MISSING";
 
 export interface ConfigAuditInput {
   organizationId: string;

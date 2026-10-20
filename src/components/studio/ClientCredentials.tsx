@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation";
 
 import { useCallback, useMemo, useState } from "react";
 
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
+
 export interface CredentialSummary {
   id: string;
   solutionId: string;
@@ -125,7 +127,7 @@ export function ClientCredentials({
     setError(null);
     setIssued(null);
     try {
-      const res = await fetch("/api/studio/clients", {
+      const res = await fetchWithStepUp("/api/studio/clients", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

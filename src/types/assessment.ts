@@ -352,6 +352,21 @@ export interface SessionUser {
   mfaEnabled: boolean;
   mfaVerified: boolean;
   hasWebAuthn: boolean;
+  /**
+   * When this session last completed a passkey assertion (sign-in or step-up),
+   * or null when it never has. Governance actions read it through
+   * `requireStepUp` (lib/auth/step-up.ts). Optional because only
+   * `validateSession` fills it; an absent value reads as "no assertion".
+   */
+  passkeyAssertedAt?: Date | null;
+  /**
+   * How this caller proved who they are. Every SessionUser today comes from the
+   * session cookie (`validateSession` sets "session"). A personal or CI token
+   * (roadmap P2.11a, P3.2, P3.3) must set its own kind here, and
+   * `requireStepUp` refuses those kinds on every governance action in every
+   * mode: a token has no passkey to step up with.
+   */
+  authMethod?: "session" | "personal_token" | "ci_token";
 }
 
 /** V1 status transition rules -- kept for backward compatibility */

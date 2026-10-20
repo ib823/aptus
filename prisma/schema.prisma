@@ -2906,6 +2906,12 @@ model Session {
   expiresAt     DateTime
   mfaVerified   Boolean   @default(false)
   mfaVerifiedAt DateTime?
+  /// When this session last completed a passkey (WebAuthn) assertion: at
+  /// passkey sign-in, or at a step-up before a governance action. The
+  /// governance routes accept it only while it is fresh (lib/auth/step-up.ts),
+  /// so it is overwritten on every assertion rather than set once like
+  /// mfaVerifiedAt. Null means this session has never asserted a passkey.
+  passkeyAssertedAt DateTime?
 
   ipAddress         String?
   userAgent         String?

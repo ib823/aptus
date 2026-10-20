@@ -11,12 +11,17 @@
  * for a grant the broker refuses. The rules that decide whether a decision may
  * be recorded live in lib/studio/grants.ts, deliberately separate from this
  * transport layer so they can be tested exhaustively.
+ *
+ * A DECISION NEEDS A FRESH PASSKEY once COREEDGE_STEP_UP is enforce
+ * (lib/auth/step-up.ts); raising a request does not, because the requester is
+ * not the control.
  */
 
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -234,6 +239,15 @@ export async function PATCH(request: NextRequest) {
       const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
       return { refusal: studioError(code, verdict.message) };
     }
+
+    // The passkey last, once every rule has passed: it is then the one thing
+    // between this person and the decision (lib/auth/step-up.ts).
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "grant.decide",
+      targetId: grant.id,
+      organizationId,
+    });
+    if (!stepUp.ok) return { refusal: stepUp.response };
 
     /*
      * A COMPARE-AND-SET, not an update. The NOT_PENDING check above read the row

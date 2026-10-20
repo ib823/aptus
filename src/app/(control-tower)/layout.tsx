@@ -28,6 +28,7 @@ import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { GovernanceStepUp } from "@/components/auth/GovernanceStepUp";
 import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessControlTower, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
@@ -89,6 +90,7 @@ export default async function ControlTowerLayout({ children }: { children: React
       roleLabel={roleLabel}
       userEmail={user.email}
     >
+      <GovernanceStepUp user={user} />
       {children}
     </StudioShell>
   );

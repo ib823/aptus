@@ -2,6 +2,8 @@
 
 import { useCallback, useState, useTransition } from "react";
 
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
+
 /**
  * One console verb: press, wait, and say what happened.
  *
@@ -54,7 +56,9 @@ export function useVerb<T = unknown>(path: string, onDone?: () => void): VerbSta
       setData(null);
       void (async () => {
         try {
-          const response = await fetch(path, {
+          // A governance verb may answer "confirm with your passkey"; this asks
+          // and retries, so the refusal below is only ever a real one.
+          const response = await fetchWithStepUp(path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),

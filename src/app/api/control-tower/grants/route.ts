@@ -24,6 +24,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { opsLimit, opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -349,6 +350,15 @@ export async function PATCH(request: NextRequest) {
       const code = verdict.reason === "NOT_PENDING" ? "CONFLICT" : "FORBIDDEN";
       return { refusal: studioError(code, verdict.message) };
     }
+
+    // The passkey last, once every rule has passed (lib/auth/step-up.ts). The
+    // row's own tenant, because a global admin has none of their own.
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "grant.decide",
+      targetId: grant.id,
+      organizationId: grant.organizationId,
+    });
+    if (!stepUp.ok) return { refusal: stepUp.response };
 
     const decidedAt = new Date();
     const settled = await tx.apiAccessGrant.updateMany({

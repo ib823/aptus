@@ -28,6 +28,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { refuseRevokeKey } from "@/lib/coreedge/authz";
 import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { prisma } from "@/lib/db/prisma";
@@ -75,6 +76,19 @@ export async function POST(
       data: { id: existing.id, revokedAt: existing.revokedAt, alreadyRevoked: true },
     });
   }
+
+  /*
+   * A FRESH PASSKEY, even though revoking is the safe direction for the key.
+   * It is not safe for the integration: a stolen session that could revoke
+   * without one could stop every PROD key in the tenant in a minute. Asked
+   * only for a revocation that will actually happen — the already-revoked
+   * answer above costs nobody a prompt.
+   */
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "credential.revoke",
+    targetId: clientId,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   /*
    * `TenantScope` is branded and `tenantScopeOf` is the one place the brand is

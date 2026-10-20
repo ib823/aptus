@@ -116,6 +116,7 @@ export async function validateSession(
       expiresAt: true,
       lastActiveAt: true,
       mfaVerified: true,
+      passkeyAssertedAt: true,
       user: {
         select: {
           id: true,
@@ -158,6 +159,8 @@ export async function validateSession(
     mfaEnabled: session.user.mfaEnabled,
     mfaVerified: session.mfaVerified,
     hasWebAuthn: session.user._count.webauthnCredentials > 0,
+    passkeyAssertedAt: session.passkeyAssertedAt,
+    authMethod: "session",
   };
 }
 
@@ -189,15 +192,42 @@ export async function rotateSessionToken(
 
 /**
  * Mark a session as MFA-verified.
+ *
+ * Its only caller is the passkey sign-in, so the session it marks has just
+ * asserted a passkey too: a governance action in the next few minutes needs no
+ * second prompt.
  */
 export async function markSessionMfaVerified(token: string): Promise<void> {
+  const now = new Date();
   await prisma.session.update({
     where: { tokenHash: hashSessionToken(token) },
     data: {
       mfaVerified: true,
-      mfaVerifiedAt: new Date(),
+      mfaVerifiedAt: now,
+      passkeyAssertedAt: now,
     },
   });
+}
+
+/**
+ * Record a passkey step-up on an existing session.
+ *
+ * Unlike the sign-in above, this does not mint a session: the person is
+ * already signed in and is proving, again and now, that they hold their
+ * passkey. A passkey assertion satisfies MFA, so the session is marked verified
+ * as well. Returns the time recorded.
+ */
+export async function markSessionPasskeyAsserted(token: string): Promise<Date> {
+  const now = new Date();
+  await prisma.session.update({
+    where: { tokenHash: hashSessionToken(token) },
+    data: {
+      mfaVerified: true,
+      mfaVerifiedAt: now,
+      passkeyAssertedAt: now,
+    },
+  });
+  return now;
 }
 
 /**

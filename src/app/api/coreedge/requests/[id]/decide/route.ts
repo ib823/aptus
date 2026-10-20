@@ -18,12 +18,16 @@
  * rule both existing doors follow. An approver who could set the end date in
  * the act of approving could set it to anything, and the request's own stated
  * end date is what the reviewer read before deciding.
+ *
+ * A DECISION NEEDS A FRESH PASSKEY once COREEDGE_STEP_UP is enforce, asked
+ * after every other rule has passed (lib/auth/step-up.ts).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { refuseDecision } from "@/lib/coreedge/authz";
 import { prisma } from "@/lib/db/prisma";
@@ -134,6 +138,18 @@ export async function POST(
     if (!outcome.ok) {
       return { refusal: refused(outcome.message, outcome.reason === "NOT_PENDING" ? 409 : 403) };
     }
+
+    /*
+     * THE PASSKEY LAST, once every rule above has passed — so a person is
+     * asked for it only when it is the one thing between them and the
+     * decision, and a refusal they cannot fix never costs them a prompt first.
+     */
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "grant.decide",
+      targetId: grant.id,
+      organizationId,
+    });
+    if (!stepUp.ok) return { refusal: stepUp.response };
 
     const decidedAt = new Date();
     const settled = await tx.apiAccessGrant.updateMany({
