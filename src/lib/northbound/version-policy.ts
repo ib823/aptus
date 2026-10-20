@@ -21,8 +21,11 @@
  *   - A breaking change ships only as a NEW dated version. The one it
  *     replaces stays served for at least MINIMUM_OVERLAP_MONTHS after the new
  *     one is released and after its deprecation is announced
- *     (`checkRegistry` enforces both, and a unit test runs it on the real
- *     registry), with `Deprecation` (RFC 9745) and `Sunset` (RFC 8594).
+ *     (`checkRegistry` enforces both on the recorded dates, and a unit test
+ *     runs it on the real registry), with `Deprecation` (RFC 9745) and
+ *     `Sunset` (RFC 8594). The announcement date is `announcedOn`, recorded
+ *     by hand: nothing CI can read says when a change deployed, so review
+ *     checks it (an open decision in the roadmap, P1.10).
  *
  * The URL path is a separate, coarser axis: `/api/northbound/v1/*` and the
  * original `/api/northbound/*` are ONE implementation (versioned-route.ts) and
@@ -62,6 +65,15 @@ export interface NorthboundApiVersion {
    * the moment it is set here and deployed: RFC 9745 allows a future date.
    */
   deprecatedOn: string | null;
+  /**
+   * ISO date the deprecation was first published, or null: the day the change
+   * that set deprecatedOn DEPLOYED, which is when callers first see
+   * Deprecation and Sunset. Required with deprecatedOn. The notice the policy
+   * promises is measured from this date as well as from deprecatedOn, because
+   * deprecatedOn may lie in the past (RFC 9745 allows "deprecated since") and
+   * then says nothing about how long callers have been told.
+   */
+  announcedOn: string | null;
   /** ISO date from which the version is refused, or null. Requires deprecatedOn. */
   sunsetOn: string | null;
   /** One line for the changelog. */
@@ -79,6 +91,7 @@ export const NORTHBOUND_API_VERSIONS: readonly NorthboundApiVersion[] = [
     version: "2026-10",
     releasedOn: "2026-10-24",
     deprecatedOn: null,
+    announcedOn: null,
     sunsetOn: null,
     summary:
       "The northbound API as it was served before versioning, named. Nothing a caller sends or receives changed, except the additions listed.",
@@ -138,6 +151,7 @@ export function checkRegistry(
     for (const [field, value] of [
       ["releasedOn", v.releasedOn],
       ["deprecatedOn", v.deprecatedOn],
+      ["announcedOn", v.announcedOn],
       ["sunsetOn", v.sunsetOn],
     ] as const) {
       if (value !== null && Number.isNaN(utcDay(value))) problems.push(`${v.version}: ${field} ${value} is not a date.`);
@@ -150,7 +164,13 @@ export function checkRegistry(
     if (v.sunsetOn !== null && v.deprecatedOn === null) {
       problems.push(`${v.version}: a sunset needs a deprecation announced first.`);
     }
+    if (v.announcedOn !== null && v.deprecatedOn === null) {
+      problems.push(`${v.version}: announcedOn dates a deprecation, and none is set.`);
+    }
     if (v.deprecatedOn === null) return;
+    if (v.announcedOn === null) {
+      problems.push(`${v.version}: a deprecation needs announcedOn, the day callers are first told (the day it deploys).`);
+    }
     const successor = registry[i + 1];
     if (!successor) {
       problems.push(`${v.version}: the newest version cannot be deprecated; there would be nothing to move to.`);
@@ -163,6 +183,11 @@ export function checkRegistry(
     if (utcDay(v.sunsetOn) < addMonthsUtc(v.deprecatedOn, minimumOverlapMonths)) {
       problems.push(
         `${v.version}: sunset ${v.sunsetOn} is less than ${minimumOverlapMonths} months after its deprecation (${v.deprecatedOn}).`,
+      );
+    }
+    if (v.announcedOn !== null && utcDay(v.sunsetOn) < addMonthsUtc(v.announcedOn, minimumOverlapMonths)) {
+      problems.push(
+        `${v.version}: sunset ${v.sunsetOn} is less than ${minimumOverlapMonths} months after its deprecation was announced (${v.announcedOn}).`,
       );
     }
     if (utcDay(v.sunsetOn) < addMonthsUtc(successor.releasedOn, minimumOverlapMonths)) {

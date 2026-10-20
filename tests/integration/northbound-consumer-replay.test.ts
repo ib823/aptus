@@ -39,7 +39,7 @@ import { promisify } from "node:util";
 
 import { NextRequest } from "next/server";
 import ts from "typescript";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -53,6 +53,7 @@ vi.mock("@/lib/db/prisma", async () => {
 import { prisma } from "@/lib/db/prisma";
 import { buildScaffold } from "@/lib/studio/scaffold";
 import { supportedVersions, VERSION_HEADER } from "@/lib/northbound/version-policy";
+import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import {
   removeWorld,
   sapStub,
@@ -74,11 +75,47 @@ const MATRIX = BASES.flatMap((base) => [null, ...SUPPORTED].map((pin) => [base, 
 const realFetch = globalThis.fetch;
 const sap = sapStub(realFetch);
 let world: NorthboundWorld;
-let app: NorthboundApp;
 let server: Server;
 let origin = "";
 /** What the local server adds to every request: the version a pass pins. */
 let pinning: string | null = null;
+
+/*
+ * ONE CREDENTIAL AND ONE ADDRESS PER CELL. Every cell of the matrix replays
+ * the same calls, and the policy lets several dated versions be supported at
+ * once (one a month, each kept at least 6 months), so the matrix grows with
+ * every version. Shared, the calls would add up in the route's per-credential
+ * bucket (RATE_LIMITS.northbound, 60 a minute) and fail with 429 from the
+ * third supported version on, for no reason a caller would meet. Each cell
+ * spends its own buckets, and the last test holds each under the limit.
+ */
+const cellName = (base: string, pin: string | null) => `${base} pinned to ${pin ?? "nothing"}`;
+const cells = new Map<string, { app: NorthboundApp; ip: string }>();
+/** The cell being replayed: its credential, and the address its calls come from. */
+let app: NorthboundApp;
+let ip = "";
+let current = "";
+/** Calls each seeded credential made, by route bucket, and the cells that made them. */
+const spent = new Map<string, { reads: number; writes: number; cells: Set<string> }>();
+
+function useCell(base: string, pin: string | null): void {
+  current = cellName(base, pin);
+  const cell = cells.get(current);
+  if (!cell) throw new Error(`no credential was seeded for ${current}`);
+  ({ app, ip } = cell);
+}
+
+function count(headers: Headers, method: string): void {
+  const auth = headers.get("authorization");
+  const cell = [...cells.values()].find((c) => auth === `Bearer ${c.app.token}`);
+  // A wrong token (exercise 1) is no credential's.
+  if (!cell) return;
+  const use = spent.get(cell.app.clientId) ?? { reads: 0, writes: 0, cells: new Set<string>() };
+  spent.set(cell.app.clientId, use);
+  if (method === "POST") use.writes += 1;
+  else use.reads += 1;
+  use.cells.add(current);
+}
 
 /* ── the local deployment ─────────────────────────────────────────────── */
 
@@ -96,9 +133,10 @@ function startServer(): Promise<void> {
         if (typeof value === "string") headers.set(name, value);
         else if (Array.isArray(value)) headers.set(name, value.join(", "));
       }
-      // Every request arrives from one address; its edge buckets are this suite's.
-      headers.set("x-real-ip", "203.0.113.150");
+      // Every request of a cell arrives from the cell's address; its edge buckets are the cell's.
+      headers.set("x-real-ip", ip);
       if (pinning) headers.set(VERSION_HEADER, pinning);
+      count(headers, req.method ?? "GET");
       const body = req.method === "GET" || req.method === "HEAD" ? null : (await readBody(req)).toString("utf8");
       const response = await serveNorthbound(
         new NextRequest(new URL(req.url ?? "/", origin), { method: req.method ?? "GET", headers, body }),
@@ -278,7 +316,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
     vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", randomBytes(32).toString("hex"));
     vi.stubGlobal("fetch", sap.fetch);
     world = await seedWorld(RUN);
-    app = await seedApp(world, "Travel portal", { tokenPrefix: "ce_test_", expiresAt: new Date(Date.now() + 30 * 86_400_000) });
+    for (const [i, [base, pin]] of MATRIX.entries()) {
+      const seeded = await seedApp(world, `Travel portal ${i + 1}`, {
+        tokenPrefix: "ce_test_",
+        expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      });
+      cells.set(cellName(base, pin), { app: seeded, ip: `203.0.113.${150 + i}` });
+    }
     await startServer();
     kitDir = await mkdtemp(path.join(tmpdir(), "coreedge-kit-"));
   });
@@ -293,6 +337,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
   });
 
   describe.each(MATRIX)("starter kit on %s, pinned to %s", (base, pin) => {
+    beforeEach(() => useCell(base, pin));
+
     it("npm run demo (node demo.mjs) reads the records", async () => {
       pinning = pin;
       const dir = await mkdtemp(path.join(kitDir, "demo-"));
@@ -317,6 +363,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
   describe.each(MATRIX)("ABAP lab-guide samples on %s, pinned to %s", (base, pin) => {
     const served = pin ?? DEFAULT;
     const samples = guideSamples();
+    beforeEach(() => useCell(base, pin));
 
     it.each([...curlSamples(), ...samples.reads].map((s) => [s.source, s] as const))("%s answers as the guide says", async (_, sample) => {
       pinning = null;
@@ -375,5 +422,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
       expect(res.status).toBe(401);
       expect(((await res.json()) as { error: { code: string } }).error.code).toBe("UNAUTHENTICATED");
     });
+  });
+
+  it("gave every cell its own credential, each well under its route buckets", () => {
+    expect(spent.size).toBe(MATRIX.length);
+    for (const use of spent.values()) {
+      expect(use.cells.size).toBe(1);
+      expect(use.reads).toBeGreaterThan(0);
+      expect(use.writes).toBeGreaterThan(0);
+      // Half of each bucket: room for more samples before this suite meets a 429.
+      expect(use.reads).toBeLessThanOrEqual(RATE_LIMITS.northbound.limit / 2);
+      expect(use.writes).toBeLessThanOrEqual(RATE_LIMITS.northbound.limit / 2);
+    }
   });
 });

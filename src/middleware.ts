@@ -381,13 +381,17 @@ async function handleRequest(
 
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
+      // Every edge refusal on a northbound path states the version it would
+      // have been served (P1.10): the machine refusals below, and the per-IP
+      // 429 and limiter 503 that a call with no bearer — or every call, with
+      // COREEDGE_MACHINE_RATE_LIMIT=ip — meets instead.
+      const versionHeaders = isNorthboundPath(pathname)
+        ? edgeVersionHeaders(request.headers.get(VERSION_HEADER))
+        : {};
 
       const machine = await machineRouteLimit(request, pathname, clientIp);
       if (machine) {
         if (!machine.result.allowed) {
-          const versionHeaders = isNorthboundPath(pathname)
-            ? edgeVersionHeaders(request.headers.get(VERSION_HEADER))
-            : {};
           return withObservabilityHeaders(
             machineRefusal(machine.result, machine.by, versionHeaders),
             requestId,
@@ -451,7 +455,9 @@ async function handleRequest(
       // An outage is not throttling (audit A44): the limiter fails closed in
       // production, and the refusal says why — 503, never 429.
       if (isLimiterOutage(result)) {
-        return withObservabilityHeaders(limiterUnavailableResponse(result), requestId, requestStart);
+        const unavailable = limiterUnavailableResponse(result);
+        for (const [name, value] of Object.entries(versionHeaders)) unavailable.headers.set(name, value);
+        return withObservabilityHeaders(unavailable, requestId, requestStart);
       }
 
       if (!result.allowed) {
@@ -468,6 +474,7 @@ async function handleRequest(
               "Content-Type": "application/json",
               "Retry-After": String(Math.ceil(result.resetMs / 1000)),
               "X-RateLimit-Remaining": "0",
+              ...versionHeaders,
             },
           },
         );

@@ -72,7 +72,11 @@ describe("one implementation, two paths", () => {
   });
 
   it.each(original)("v1/%s exports the very function the original path exports", async (rel) => {
-    const [base, v1] = await Promise.all([load(path.join(ROOT, rel)), load(path.join(V1, rel))]);
+    // One after the other: loading both at once races the module cache, and
+    // the v1 file's own import of the original can then evaluate it a second
+    // time, as a different function (a flake, seen about one run in three).
+    const base = await load(path.join(ROOT, rel));
+    const v1 = await load(path.join(V1, rel));
     const methods = METHODS.filter((m) => typeof base[m] === "function");
     expect(methods.length).toBeGreaterThan(0);
     expect(METHODS.filter((m) => typeof v1[m] === "function")).toEqual(methods);
@@ -200,6 +204,34 @@ describe("the edge treats both paths as one API", () => {
     expect(again.headers.get("CoreEdge-Version")).toBe("2026-10");
     // A version the route would refuse is not claimed at the edge.
     expect((await call("/api/northbound/interfaces", ip, key, "1999-01")).headers.get("CoreEdge-Version")).toBeNull();
+  });
+
+  it.each(["/api/northbound/interfaces", "/api/northbound/v1/interfaces"])(
+    "%s: the per-address 429 a call meets with COREEDGE_MACHINE_RATE_LIMIT=ip states the version too",
+    async (p) => {
+      // The documented P0.5 rollback: every machine call takes the per-IP bucket.
+      vi.stubEnv("COREEDGE_MACHINE_RATE_LIMIT", "ip");
+      const ip = p.includes("/v1/") ? "198.51.100.112" : "198.51.100.113";
+      let last: Response | null = null;
+      for (let i = 0; i < RATE_LIMITS.apiRead.limit + 1; i++) last = await call(p, ip, "ce_test_ip_mode_key", "2026-10");
+      expect(last!.status).toBe(429);
+      expect(((await last!.json()) as { error: { code: string } }).error.code).toBe("RATE_LIMIT_EXCEEDED");
+      expect(last!.headers.get("CoreEdge-Version")).toBe("2026-10");
+      // Still not claimed for a version the route would refuse.
+      expect((await call(p, ip, "ce_test_ip_mode_key", "1999-01")).headers.get("CoreEdge-Version")).toBeNull();
+    },
+  );
+
+  it("the per-address 429 for a call with no bearer states the version; off the northbound API it does not", async () => {
+    const anonymous = (p: string, ip: string) =>
+      middleware(new NextRequest(`http://localhost${p}`, { headers: { "x-real-ip": ip } }));
+    let last: Response | null = null;
+    for (let i = 0; i < RATE_LIMITS.apiRead.limit + 1; i++) last = await anonymous("/api/northbound/versions", "198.51.100.114");
+    expect(last!.status).toBe(429);
+    expect(last!.headers.get("CoreEdge-Version")).toBe("2026-10");
+    for (let i = 0; i < RATE_LIMITS.apiRead.limit + 1; i++) last = await anonymous("/api/studio/solutions", "198.51.100.115");
+    expect(last!.status).toBe(429);
+    expect(last!.headers.get("CoreEdge-Version")).toBeNull();
   });
 
   it("admits a call on either path the same way, leaving the version to the route", async () => {

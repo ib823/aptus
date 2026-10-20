@@ -18,6 +18,9 @@ registry disagree on a version or a date.
 - **Released** is the day it became available.
 - **Deprecated** is the day its deprecation takes effect. From the day it is
   announced, every response it serves carries `Deprecation` (RFC 9745).
+- **Announced** is the day the deprecation and its Sunset were published: the
+  day that change deployed, and the day `Deprecation` and `Sunset` first
+  appeared. The 6-month notice is counted from it.
 - **Sunset** is the day it stops being served. Every response it serves
   carries `Sunset` (RFC 8594) from the day that date is announced. From that
   day a request pinned to it gets `400 UNSUPPORTED_VERSION`, and an unpinned
@@ -32,6 +35,7 @@ under it with their date. Breaking changes ship only as a new version.
 
 - Released: 2026-10-24
 - Deprecated: —
+- Announced: —
 - Sunset: —
 - Status: supported, and the default for requests that do not pin a version.
 

@@ -89,5 +89,22 @@ describe("the middleware never answers 429 for an outage", () => {
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("LIMITER_UNAVAILABLE");
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+    // A northbound refusal states the version it would have been served (P1.10).
+    expect(res.headers.get("CoreEdge-Version")).toBe(path.startsWith("/api/northbound/") ? "2026-10" : null);
+  });
+
+  it.each([
+    ["the changelog, which needs no credential", {}],
+    ["a key, with COREEDGE_MACHINE_RATE_LIMIT=ip", { authorization: "Bearer ce_k" }],
+  ] as const)("a northbound 503 for %s states the version", async (_label, headers) => {
+    vi.stubEnv("COREEDGE_MACHINE_RATE_LIMIT", "ip");
+    const { middleware } = await import("@/middleware");
+    for (const p of ["/api/northbound/versions", "/api/northbound/v1/interfaces"]) {
+      const res = await middleware(
+        new NextRequest(`http://localhost${p}`, { headers: { "x-real-ip": "203.0.113.9", ...headers } }),
+      );
+      expect(res.status).toBe(503);
+      expect(res.headers.get("CoreEdge-Version")).toBe("2026-10");
+    }
   });
 });

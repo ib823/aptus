@@ -299,10 +299,14 @@ curl -H "Authorization: Bearer $COREEDGE_TOKEN" \
 - **An unknown or retired version**: `400 UNSUPPORTED_VERSION`, before anything
   else happens. `error.supportedVersions` lists the versions you may send;
   `error.requestedVersion` echoes what you sent. This is the one northbound
-  response with no `CoreEdge-Version` header, because no version served it. (The
-  edge's per-address `429 RATE_LIMIT_EXCEEDED` for a call with no
-  `Authorization` header at all predates the envelope and does not carry it
-  either.)
+  response with no `CoreEdge-Version` header, because no version served it.
+  Every other one carries it, including the edge's refusals that arrive before
+  any route runs: `429 RATE_LIMITED` and `RATE_LIMITED_ADDRESS`, the per-address
+  `429 RATE_LIMIT_EXCEEDED` (a call with no `Authorization` header, or every
+  call while per-credential limits are switched off), and
+  `503 LIMITER_UNAVAILABLE`. When you pinned a version the route would refuse,
+  an edge refusal names none: the `400` is the route's to send once you are
+  within your limits.
 
 **The deprecation policy.**
 
@@ -318,8 +322,13 @@ curl -H "Authorization: Bearer $COREEDGE_TOKEN" \
    (such as the default page size).
 3. **The version it replaces stays served for at least 6 months** after the new
    version is released, and at least 6 months after its own deprecation is
-   announced. CoreEdge's CI refuses a version history that breaks either rule
-   (`src/lib/northbound/version-policy.ts`, `checkRegistry`).
+   announced: the day the change that deprecates it deploys, which is the day
+   you first see `Deprecation` and `Sunset`. CoreEdge's CI refuses a version
+   history whose recorded dates break either rule
+   (`src/lib/northbound/version-policy.ts`, `checkRegistry`). The announcement
+   date is recorded by hand with the change (`announcedOn`, also in the
+   changelog), because nothing CI reads says when a change deployed; CoreEdge's
+   review checks it against the deploy.
 4. **You are told on every response.** From the day a deprecation is announced,
    every response served as that version carries `Deprecation` (RFC 9745, for
    example `Deprecation: @1798761600`), `Sunset` (RFC 8594, the HTTP date it

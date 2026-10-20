@@ -33,10 +33,18 @@ import {
   type NorthboundApiVersion,
 } from "@/lib/northbound/version-policy";
 
-const v = (version: string, releasedOn: string, deprecatedOn: string | null = null, sunsetOn: string | null = null): NorthboundApiVersion => ({
+const v = (
+  version: string,
+  releasedOn: string,
+  deprecatedOn: string | null = null,
+  sunsetOn: string | null = null,
+  // Announced the day it takes effect, unless a test says otherwise.
+  announcedOn: string | null = deprecatedOn,
+): NorthboundApiVersion => ({
   version,
   releasedOn,
   deprecatedOn,
+  announcedOn,
   sunsetOn,
   summary: `Version ${version}.`,
   changes: [],
@@ -73,6 +81,26 @@ describe("checkRegistry refuses a history that breaks the promise", () => {
     expect(problems.join("\n")).toMatch(/deprecated before 2027-04, its replacement, is released/);
     const late = checkRegistry([v("2026-10", "2026-10-24", "2027-04-01", "2027-10-01"), v("2027-05", "2027-05-01")]);
     expect(late.join("\n")).toMatch(/overlaps 2027-05 .* by less than 6 months/);
+  });
+
+  it("a sunset less than six months after callers were first told, though deprecatedOn is dated earlier", () => {
+    // Committed on 2027-04-15 with a deprecation dated back to 2026-10-25: by
+    // deprecatedOn alone this is six months' notice; callers got sixteen days.
+    const backdated = [v("2026-10", "2026-10-24", "2026-10-25", "2027-05-01", "2027-04-15"), v("2026-11", "2026-10-25")];
+    expect(checkRegistry(backdated).join("\n")).toMatch(
+      /sunset 2027-05-01 is less than 6 months after its deprecation was announced \(2027-04-15\)/,
+    );
+    // The same history with no announcement date recorded is refused too.
+    const unrecorded = [v("2026-10", "2026-10-24", "2026-10-25", "2027-05-01", null), v("2026-11", "2026-10-25")];
+    expect(checkRegistry(unrecorded).join("\n")).toMatch(/a deprecation needs announcedOn/);
+    // Announced six months before the sunset, it is accepted.
+    expect(checkRegistry([v("2026-10", "2026-10-24", "2026-10-25", "2027-10-15", "2027-04-15"), v("2026-11", "2026-10-25")])).toEqual([]);
+  });
+
+  it("an announcement date with no deprecation", () => {
+    expect(checkRegistry([v("2026-10", "2026-10-24", null, null, "2027-04-01"), v("2027-04", "2027-04-01")]).join("\n")).toMatch(
+      /announcedOn dates a deprecation, and none is set/,
+    );
   });
 
   it("deprecating the newest version, which leaves nowhere to go", () => {
@@ -198,6 +226,7 @@ describe("the changelog a developer reads agrees with the registry", () => {
     const dash = (d: string | null) => d ?? "—";
     expect(field(section, "Released")).toBe(version.releasedOn);
     expect(field(section, "Deprecated")).toBe(dash(version.deprecatedOn));
+    expect(field(section, "Announced")).toBe(dash(version.announcedOn));
     expect(field(section, "Sunset")).toBe(dash(version.sunsetOn));
   });
 

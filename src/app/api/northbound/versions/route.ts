@@ -51,6 +51,7 @@ async function listVersions() {
         status: versionStatus(v, now),
         releasedOn: v.releasedOn,
         deprecatedOn: v.deprecatedOn,
+        announcedOn: v.announcedOn,
         sunsetOn: v.sunsetOn,
         summary: v.summary,
         changes: v.changes,
