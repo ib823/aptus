@@ -576,3 +576,31 @@ describe("connection health knows the deployment falls back to an env tenant", (
     expect(body.data.provenance.noHealthForFallback).toBeNull();
   });
 });
+
+describe("the upstream-errors incident counts live traffic, not console exploration (A26)", () => {
+  /*
+   * Console reads (/preview, /entities, /operations, the catalogue probes) are
+   * NorthboundAuditEvents with `dryRun: true`. The rule counted every audited
+   * 5xx with no dryRun filter, so a builder clicking Preview on entity sets a
+   * DEV arrangement does not release — audited as 502 at the time — raised
+   * the MAJOR "upstream SAP system is returning errors", whose own severity
+   * reasoning is "sustained failure of LIVE traffic".
+   */
+  it("fifty console 5xx and no live ones raise nothing", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    mocks.auditCount.mockImplementation((args: { where: { status?: { gte?: number }; dryRun?: boolean } }) =>
+      Promise.resolve(args.where.status?.gte === 500 && args.where.dryRun !== false ? 50 : 0),
+    );
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).not.toContain("upstream-errors");
+  });
+
+  it("live 5xx still raise it", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    mocks.auditCount.mockImplementation((args: { where: { status?: { gte?: number } } }) =>
+      Promise.resolve(args.where.status?.gte === 500 ? 50 : 0),
+    );
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).toContain("upstream-errors");
+  });
+});

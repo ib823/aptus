@@ -8,6 +8,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
+import { answeredReadAuditStatus } from "@/lib/sap-public/console-read-failure";
 import {
   deriveReadWrite,
   getConfiguredSapTenants,
@@ -134,7 +136,11 @@ export async function GET(
     const correlationId = newCorrelationId();
     const conn = resolvedTenant?.connection ?? null;
     const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-    const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+    const audit = (
+      status: number,
+      rowCount: number | null,
+      extra: { durationMs?: number; failureReason?: string | null } = {},
+    ) =>
       recordConsoleRead({
         organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
         actorUserId: viewer.id,
@@ -164,15 +170,34 @@ export async function GET(
         const result = await probeService(product.envPrefix, tenant, service);
         // Like /entities: the status SAP gave ($metadata read), how many entity
         // sets it declared, and 502 when it never answered (probeService's 0).
-        await audit(result.status === 0 ? 502 : result.status, result.exposed ? (result.entitySetCount ?? 0) : null, {
+        // A credential CoreEdge could not obtain is not SAP's answer at all: a
+        // setup problem is recorded as the refusal it is, 403, and only a
+        // token endpoint that failed as a 502 (audit A26, A28). SAP's own
+        // answer is recorded as /preview records it: its 401/403/404 as
+        // themselves, anything else — a 429 included, which recorded as itself
+        // raised the 'throttled' incident — as 502 with HTTP_<n>.
+        const answered = !result.credentialError && result.status !== 0;
+        const auditStatus = result.credentialError
+          ? result.credentialError === "refused"
+            ? 403
+            : 502
+          : answered
+            ? answeredReadAuditStatus(result.status === 200, result.status)
+            : 502;
+        await audit(auditStatus, result.exposed ? (result.entitySetCount ?? 0) : null, {
           durationMs: Date.now() - startedAt,
+          failureReason: answered ? failureReasonFromHttp(result.status) : null,
         });
-        probeStatus = result.status;
-        ladder = result.ladder ?? null;
-        entities = result.entities ?? null;
-        metadataFlavor = result.metadataFlavor ?? null;
-        // Same shared derivation as the list — the collapsed chip must match this.
-        if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+        // Never shown as this service's status: the tenant was not asked, so
+        // the stored probe below stands instead, as for a probe that threw.
+        if (!result.credentialError) {
+          probeStatus = result.status;
+          ladder = result.ladder ?? null;
+          entities = result.entities ?? null;
+          metadataFlavor = result.metadataFlavor ?? null;
+          // Same shared derivation as the list — the collapsed chip must match this.
+          if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+        }
       } catch {
         probeStatus = null;
       }

@@ -101,6 +101,10 @@ function audit(over: Row = {}): Row {
     at: new Date(Date.now() - 60_000),
     correlationId: `c${seq}`,
     clientTokenId: "tok_1",
+    // A fresh call, not a same-key replay (those are counted apart).
+    replayed: false,
+    // Set when the request reached SAP; null when it was refused before.
+    durationMs: 120,
     ...over,
   };
 }
@@ -113,11 +117,13 @@ beforeEach(() => {
 
 describe("the write ledger's blocked count holds only refusals", () => {
   it("does not count a successful 201 create as blocked", async () => {
+    // A 504 reached SAP and may have been applied: outcome unknown, not blocked.
     state.audit = [audit({ status: 201 }), audit({ status: 504 })];
 
     const data = await ledger();
 
-    expect(data.fromAudit.blocked).toBe(1);
+    expect(data.fromAudit.blocked).toBe(0);
+    expect(data.fromAudit.outcomeUnknown).toBe(1);
     expect(data.fromAudit.conflicts).toBe(0);
     // The page and the count it is a page of agree, so nothing is "truncated".
     expect(data.auditRows).toHaveLength(1);
@@ -130,7 +136,8 @@ describe("the write ledger's blocked count holds only refusals", () => {
       audit({ status: 201 }),
       audit({ status: 200 }),
       audit({ status: 409 }),
-      audit({ status: 403 }),
+      // Refused before anything was sent: the one kind that is "blocked".
+      audit({ status: 403, durationMs: null }),
       audit({ status: 504 }),
       // Not this ledger's rows: a READ, an old WRITE, another tenant's WRITE.
       audit({ status: 500, operation: "READ" }),
@@ -142,9 +149,11 @@ describe("the write ledger's blocked count holds only refusals", () => {
     const kinds = data.auditRows.map((r: { kind: string }) => r.kind);
 
     expect(data.fromAudit.conflicts).toBe(1);
-    expect(data.fromAudit.blocked).toBe(2);
+    expect(data.fromAudit.blocked).toBe(1);
+    expect(data.fromAudit.outcomeUnknown).toBe(1);
     expect(kinds.filter((k: string) => k === "conflict")).toHaveLength(data.fromAudit.conflicts);
     expect(kinds.filter((k: string) => k === "blocked")).toHaveLength(data.fromAudit.blocked);
+    expect(kinds.filter((k: string) => k === "outcome-unknown")).toHaveLength(data.fromAudit.outcomeUnknown);
     expect(data.provenance.rowsAreAPage.auditRows.of).toBe(data.auditRows.length);
     expect(data.truncated).toBe(false);
   });

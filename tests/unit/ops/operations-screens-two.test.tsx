@@ -28,7 +28,7 @@ function serve(body: unknown) {
 const EMPTY_LEDGER = {
   windowHours: 24,
   reservations: { inFlight: 0, completed: 0, failed: 0, staleReservation: 0, total: 0 },
-  fromAudit: { blocked: 0, conflicts: 0 },
+  fromAudit: { blocked: 0, conflicts: 0, upstreamFailed: 0, outcomeUnknown: 0 },
   truncated: false,
   provenance: {
     sourcesDoNotReconcile: true,
@@ -172,6 +172,31 @@ describe("write ledger — empty by design is a feature, not an apology", () => 
 
     await screen.findByText("No refused writes in this window");
     expect(screen.getByText("No write has reserved a key — by design")).toBeTruthy();
+  });
+
+  it("never labels a write whose outcome is unknown as blocked (audit A06)", async () => {
+    // A 504: the POST timed out and SAP may have committed it. "blocked" told
+    // the operator nothing was written, and the resubmission duplicated it.
+    serve({
+      ...EMPTY_LEDGER,
+      fromAudit: { blocked: 0, conflicts: 0, upstreamFailed: 0, outcomeUnknown: 1 },
+      auditRows: [
+        {
+          id: "e1",
+          at: new Date().toISOString(),
+          solutionId: "sol_1",
+          externalId: "API_BUSINESS_PARTNER",
+          status: 504,
+          kind: "outcome-unknown",
+          correlationId: "corr-1",
+          clientTokenId: "tok_1",
+        },
+      ],
+    });
+    render(<WriteLedgerClient />);
+
+    await screen.findByText("outcome unknown");
+    expect(screen.queryByText("blocked")).toBeNull();
   });
 });
 

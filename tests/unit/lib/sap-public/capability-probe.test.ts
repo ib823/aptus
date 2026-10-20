@@ -15,6 +15,12 @@ import {
   probeTenantCapabilities,
   summarize,
 } from "@/lib/sap-public/capability-probe";
+import {
+  ConnectionConfigError,
+  OAuthTokenRequestError,
+  SapCredentialError,
+  SapHttpError,
+} from "@/lib/sap-public/upstream-failure";
 
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 const SVC = {
@@ -38,15 +44,22 @@ describe("probeService", () => {
     expect(r).toMatchObject({ exposed: true, status: 200, entitySetCount: 2, scenario: "SAP_COM_0057", ladder: "writable", metadataFlavor: "v2" });
   });
 
+  /*
+   * The tenant's answer arrives as a SapHttpError carrying its status. These
+   * rejected with a plain Error("... HTTP 403") and passed because the probe
+   * read the status out of the message — the coupling audit A28 removed, since
+   * the credential step's messages carry "HTTP nnn" too (a token endpoint's 404
+   * became the service's "not activated (not found)").
+   */
   it("403 → not activated (surfaced status, not an error throw)", async () => {
-    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("Metadata request failed: HTTP 403"));
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new SapHttpError("Metadata request failed: HTTP 403", 403));
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.exposed).toBe(false);
     expect(r.status).toBe(403);
   });
 
   it("404 → not activated", async () => {
-    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("Metadata request failed: HTTP 404"));
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new SapHttpError("Metadata request failed: HTTP 404", 404));
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r).toMatchObject({ exposed: false, status: 404 });
   });
@@ -64,6 +77,61 @@ describe("probeService", () => {
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.status).toBe(0);
     expect(r.error).toBe("probe failed");
+  });
+});
+
+/*
+ * AUDIT A28 — "could not authenticate" is not what the service answered.
+ *
+ * A failure of the credential step reached probeService looking like any
+ * other error, and the status was read out of its text: the token endpoint's
+ * "HTTP 404" became this service's NOT_FOUND, a missing {PREFIX}_PASSWORD
+ * became 0 "no response (timeout/network)", on every service at once, with
+ * no request sent to SAP.
+ */
+describe("probeService — a credential that could not be obtained", () => {
+  it("a token endpoint's 404 is not the service's 404", async () => {
+    mocks.inspectSapServiceMetadata.mockRejectedValue(
+      new SapCredentialError(new OAuthTokenRequestError("OAuth token request failed for k: HTTP 404", 404)),
+    );
+    const r = await probeService("S4_TDD", TENANT, SVC);
+    expect(r.status).not.toBe(404);
+    expect(r).toMatchObject({ exposed: false, status: 0, credentialError: "refused" });
+    expect(r.error).toMatch(/token endpoint rejected/);
+  });
+
+  it("a missing deployment variable is a refusal, not 'no response'", async () => {
+    mocks.inspectSapServiceMetadata.mockRejectedValue(
+      new SapCredentialError(new ConnectionConfigError("Missing required env var: S4_TDD_PASSWORD")),
+    );
+    const r = await probeService("S4_TDD", TENANT, SVC);
+    expect(r).toMatchObject({ status: 0, credentialError: "refused" });
+  });
+
+  it("a token endpoint that failed is 'unavailable', still not the service's answer", async () => {
+    mocks.inspectSapServiceMetadata.mockRejectedValue(
+      new SapCredentialError(new OAuthTokenRequestError("OAuth token request failed: HTTP 503", 503)),
+    );
+    const r = await probeService("S4_TDD", TENANT, SVC);
+    expect(r).toMatchObject({ status: 0, credentialError: "unavailable" });
+  });
+
+  it("an error's TEXT no longer asserts a status", async () => {
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("OAuth token request failed for k: HTTP 404"));
+    const r = await probeService("S4_TDD", TENANT, SVC);
+    expect(r.status).toBe(0);
+    expect(r.credentialError).toBeUndefined();
+  });
+
+  it("summarize keys such a row as auth and does not call it not activated", () => {
+    const s = summarize("T", [
+      { service: "a", label: "", scenario: "", exposed: true, status: 200 },
+      { service: "b", label: "", scenario: "", exposed: false, status: 403 },
+      { service: "c", label: "", scenario: "", exposed: false, status: 0, credentialError: "refused" },
+      { service: "d", label: "", scenario: "", exposed: false, status: 0 },
+    ]);
+    expect(s.byStatus).toEqual({ "200": 1, "403": 1, auth: 1, "0": 1 });
+    expect(s.notActivated).toBe(2);
   });
 });
 

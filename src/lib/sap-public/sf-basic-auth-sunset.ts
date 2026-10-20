@@ -40,6 +40,8 @@
  * date; SAP's SuccessFactors API deprecation notice for the retirement milestone.
  */
 
+import { ConnectionConfigError } from "@/lib/sap-public/upstream-failure";
+
 /**
  * SAP's retirement milestone: Basic is deprecated, unsupported and unavailable
  * for new configurations from this day. EXISTING CALLS STILL WORK.
@@ -171,7 +173,10 @@ export function assertSuccessFactorsBasicAuthAllowed(
   env: EnvLike = process.env,
 ): void {
   const verdict = successFactorsBasicAuthVerdict(product, authType, now, label, env);
-  if (verdict.kind === "refused") throw new Error(verdict.reason);
+  // A ConnectionConfigError, so the instructions reach the Test result and the
+  // refusal is routed as a setup problem — the point of refusing here rather
+  // than letting SAP answer 401 — instead of as "SAP unavailable".
+  if (verdict.kind === "refused") throw new ConnectionConfigError(verdict.reason);
   if (verdict.kind === "allowed" || verdict.kind === "deprecated") {
     console.warn(`[sf-basic-auth] ${verdict.warning}`);
   }

@@ -5,7 +5,7 @@
  *
  * THE ENCODING IS THE DESIGN, and it is orthogonal on purpose:
  *
- *   glyph  carries STATE      ✓ observed-good · ✕ observed-bad
+ *   glyph  carries STATE      ✓ observed-good · ◐ observed-mixed · ✕ observed-bad
  *                             ∅ never-observed · — unobservable · ▲ defect
  *   border carries ENDEDNESS  solid = live · dashed = ended, nothing more flows
  *
@@ -95,6 +95,16 @@ const STATE: Record<NodeState, { glyph: string; label: string; fg: string; bg: s
     label: "Observed good",
     fg: "var(--status-signed-fg)",
     bg: "var(--status-signed-bg)",
+  },
+  /*
+   * SOME RECORDED CALLS FAILED, NOT ALL. The colour is the mixed edge's, so a
+   * node and the line into it agree; the glyph is what tells it from a defect.
+   */
+  "observed-mixed": {
+    glyph: "◐",
+    label: "Observed mixed — some calls failed",
+    fg: "var(--status-awaiting-fg)",
+    bg: "var(--status-awaiting-bg)",
   },
   "observed-bad": {
     glyph: "✕",

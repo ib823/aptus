@@ -6,6 +6,10 @@ import { reapExpiredIdempotencyKeys } from "@/lib/northbound/reap";
 import { authorizeCron, recordCronRun } from "@/lib/ops/cron";
 
 export const dynamic = "force-dynamic";
+// The reaper repeats batches for up to REAP_TIME_BUDGET_MS (240 s); without
+// this the platform default would end the function long before the budget,
+// and the run would never be recorded at all.
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // CRON_SECRET, always, compared in constant time — via the ONE shared
@@ -17,7 +21,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const startedAt = new Date();
   const result = await reapExpiredIdempotencyKeys();
-  await recordCronRun("northbound-reap", startedAt, true, {
+  // A run that spent its budget with expired keys still queued fell behind,
+  // and is recorded as not ok rather than as a success with a buried flag.
+  await recordCronRun("northbound-reap", startedAt, !result.moreRemaining, {
     deleted: result.deleted,
     moreRemaining: result.moreRemaining,
   });
@@ -25,8 +31,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({
     data: {
       deleted: result.deleted,
-      // Surfaced rather than swallowed: a run that hit its cap has NOT cleared
-      // the backlog, and reporting "deleted: 5000" alone would read as done.
+      // Surfaced rather than swallowed: a run that stopped on its budget has NOT
+      // cleared the backlog, and reporting "deleted: N" alone would read as done.
       moreRemaining: result.moreRemaining,
       reapedAt: new Date().toISOString(),
     },

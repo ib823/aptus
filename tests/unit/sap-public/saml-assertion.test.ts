@@ -649,8 +649,11 @@ describe("the token exchange signs a fresh assertion when it holds the key", () 
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SamlBearerConfigError);
     expect((error as Error).message).toBe("Connection zvcsf is SAML bearer auth but missing companyId.");
+    // UNAUTHORIZED, not ERROR (audit A20): a field the connection lacks is a
+    // sign-in that could not happen — the platform admin's fix — and ERROR is
+    // "SAP unavailable", the client Basis team's lane, for a tenant never called.
     expect(publicSamlFailure(error)).toEqual({
-      status: "ERROR",
+      status: "UNAUTHORIZED",
       httpStatus: null,
       detail: "This connection is missing companyId. Save it again with that filled in.",
     });

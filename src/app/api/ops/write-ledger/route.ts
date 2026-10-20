@@ -12,21 +12,45 @@
  *
  * NOT row states, and deliberately not presented as filterable ones:
  *   - "replayed"   — a REQUEST-TIME response. A replay re-serves the stored
- *                    outcome without mutating the row; nothing counts it.
+ *                    outcome without mutating the row. Its audit row is
+ *                    marked `replayed`, so it is counted from the audit feed
+ *                    as an event, and never as a second refusal.
  *   - "conflicted" — likewise computed (PAYLOAD_MISMATCH / IN_FLIGHT) and
- *                    returned, never written.
- * Their only persisted trace is a 409 in the audit feed, so they are reported
- * from there, as events.
+ *                    returned, never written. Its only persisted trace is a
+ *                    409 in the audit feed, so it is reported from there.
  *
- * WHY THE COUNTS DRIFT. "Blocked" has two shapes:
- *   1. Refused BEFORE reserving — the write-credential gate. No row is ever
- *      created.
- *   2. Refused AFTER reserving but before SAP — no matching connection, writes
- *      not enabled, no entity set. A row IS created, then deleted when the
- *      reservation is released.
- * Both end at zero rows, but only the second makes the in-flight count fall with
- * nothing having completed. Spelling out the mechanism is what makes the drift
- * comprehensible instead of alarming.
+ * WHY THE COUNTS DRIFT. Every gate the write route has — the write credential,
+ * the throttle, the Idempotency-Key, the interface and its grant, the connection
+ * binding, writes-enabled, the entity set — runs BEFORE a key is reserved. So:
+ *   - a write refused at any gate never reserves a key, and appears only in the
+ *     audit feed;
+ *   - a reservation exists only for a write that passed every gate;
+ *   - a write that was never sent — the credential could not be used, the CSRF
+ *     handshake failed, or SAP declined the POST unprocessed (408/429) — has
+ *     its reservation released (deleted), so it too appears only in the audit
+ *     feed, and the in-flight count can fall with nothing completing;
+ *   - a write SAP may have acted on and refused or failed appears in BOTH
+ *     panels: a `failed` reservation, and an audit event.
+ * Spelling out the mechanism is what makes the drift comprehensible instead of
+ * alarming.
+ *
+ * AND "BLOCKED" MEANS ONLY BEFORE SAP. Every failed write used to be labelled
+ * blocked, including a 504 whose POST timed out and a 502 whose response could
+ * not be read — writes SAP may well have committed. An operator asked whether a
+ * record landed was told it was blocked, told the customer nothing was written,
+ * and the developer resubmitted with a new key: a duplicate in the customer's
+ * ledger, the one outcome this path exists to prevent. The audit row says which
+ * it was — the route stamps `durationMs` only around the upstream call — so:
+ *   blocked          refused at a gate; SAP was never reached
+ *   upstream-failed  SAP answered and refused it (4xx); nothing was written
+ *   outcome-unknown  502/504 — the write MAY have been applied; check SAP
+ *                    before anyone resubmits. Keyed on status, because no
+ *                    gate answers 5xx. A replay re-serves the stored status
+ *                    without a duration, and is not in this feed at all.
+ *                    A 502/504 for a write that was never sent (its key
+ *                    released) lands here too: the row does not record which
+ *                    side of the POST it failed on, so this errs towards
+ *                    checking SAP.
  *
  * THE WRITE PATH IS LIVE. Write-credential issuance shipped
  * (/api/studio/clients/write-credential, owner decision reversing the earlier
@@ -44,6 +68,18 @@ import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
 
+/** What one failed write event was. See "BLOCKED MEANS ONLY BEFORE SAP" above. */
+type WriteEventKind = "conflict" | "blocked" | "upstream-failed" | "outcome-unknown";
+
+function writeEventKind(status: number, durationMs: number | null): WriteEventKind {
+  if (status === 409) return "conflict";
+  // No gate answers 5xx: a 502/504 came from the upstream call (replays are
+  // kept out of this feed), and the record may be in SAP.
+  if (status >= 500) return "outcome-unknown";
+  // `durationMs` is stamped only around the upstream call.
+  return durationMs != null ? "upstream-failed" : "blocked";
+}
+
 export async function GET(request: NextRequest) {
   const guard = await requireOperations();
   if (!guard.ok) return guard.response;
@@ -56,14 +92,29 @@ export async function GET(request: NextRequest) {
 
   // Shared `where`s, so the counts below and the row pages cannot diverge.
   const keyWhere = opsWhere(guard.actor, { createdAt: { gte: since } });
+  // Replays excluded: a same-key retry of a stored failure re-serves it without
+  // calling SAP, and counted here it was one more refusal per retry.
   const failedWriteWhere = opsWhere(guard.actor, {
     operation: "WRITE",
     at: { gte: since },
     status: { gte: 400 },
+    replayed: false,
   });
 
-  const [keys, writeEvents, keyTotal, staleCount, inFlightCount, completedCount, failedCount, conflicts, blocked] =
-    await Promise.all([
+  const [
+    keys,
+    writeEvents,
+    keyTotal,
+    staleCount,
+    inFlightCount,
+    completedCount,
+    failedCount,
+    conflicts,
+    blocked,
+    upstreamFailed,
+    outcomeUnknown,
+    replayed,
+  ] = await Promise.all([
       prisma.northboundIdempotencyKey.findMany({
         where: keyWhere,
         // responseBody is DELIBERATELY not selected: it holds the record created
@@ -89,6 +140,8 @@ export async function GET(request: NextRequest) {
           interfaceId: true,
           externalId: true,
           status: true,
+          // Whether SAP was reached: stamped only around the upstream call.
+          durationMs: true,
           correlationId: true,
           clientTokenId: true,
         },
@@ -115,13 +168,24 @@ export async function GET(request: NextRequest) {
       prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { lt: 400 } } }),
       prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { gte: 400 } } }),
 
+      // The four kinds `writeEventKind` assigns, each with its whole status
+      // range spelled out: spreading `failedWriteWhere` and then setting
+      // `status` REPLACES its `gte: 400`, which is how "blocked" once counted
+      // every non-409 write in the window — the 201s included.
       prisma.northboundAuditEvent.count({ where: { ...failedWriteWhere, status: 409 } }),
-      // Both conditions, restated: the spread REPLACES `failedWriteWhere.status`,
-      // so `{ not: 409 }` alone counted every successful write as blocked.
       prisma.northboundAuditEvent.count({
-        where: { ...failedWriteWhere, status: { gte: 400, not: 409 } },
+        where: { ...failedWriteWhere, status: { gte: 400, lt: 500, not: 409 }, durationMs: null },
+      }),
+      prisma.northboundAuditEvent.count({
+        where: { ...failedWriteWhere, status: { gte: 400, lt: 500, not: 409 }, durationMs: { not: null } },
+      }),
+      prisma.northboundAuditEvent.count({ where: { ...failedWriteWhere, status: { gte: 500 } } }),
+      // Replays, which `failedWriteWhere` leaves out: events, not refusals.
+      prisma.northboundAuditEvent.count({
+        where: opsWhere(guard.actor, { operation: "WRITE", at: { gte: since }, replayed: true }),
       }),
     ]);
+  const auditTotal = conflicts + blocked + upstreamFailed + outcomeUnknown;
 
   return studioOk({
     windowHours: hours,
@@ -136,16 +200,17 @@ export async function GET(request: NextRequest) {
       total: keyTotal,
     },
     // From the audit feed — these are events, not states.
-    fromAudit: { blocked, conflicts },
-    truncated: keyTotal > keys.length || conflicts + blocked > writeEvents.length,
+    fromAudit: { blocked, conflicts, upstreamFailed, outcomeUnknown, replayed },
+    truncated: keyTotal > keys.length || auditTotal > writeEvents.length,
     provenance: {
       // Rendered on the screen, not buried: the two panels above count different
       // things and will not add up.
       sourcesDoNotReconcile: true,
       why: [
-        "a write refused at the credential gate never reserves a key, so it appears only in the audit feed",
-        "a write refused after reserving but before SAP has its reservation deleted, so the in-flight count can fall with nothing completing",
-        "replayed and conflicted are computed at request time and never stored as row state — they are reported from the audit feed as events",
+        "every gate runs before a key is reserved, so a write refused at any of them never reserves one and appears only in the audit feed",
+        "a write that was never sent (the credential or the CSRF handshake failed, or SAP declined it unprocessed) has its reservation deleted, so the in-flight count can fall with nothing completing",
+        "a write SAP may have acted on and refused or failed appears in both: a failed reservation above, and an event in the audit feed",
+        "replayed and conflicted are computed at request time and never stored as row state — they are reported from the audit feed as events, and a replayed failure is not counted as another refusal",
       ],
       emptyByDesign:
         keyTotal === 0
@@ -154,7 +219,7 @@ export async function GET(request: NextRequest) {
       // The counts above are window-wide; these two arrays are pages of it.
       rowsAreAPage: {
         reservationRows: { returned: keys.length, of: keyTotal },
-        auditRows: { returned: writeEvents.length, of: conflicts + blocked },
+        auditRows: { returned: writeEvents.length, of: auditTotal },
         limit,
       },
     },
@@ -181,7 +246,7 @@ export async function GET(request: NextRequest) {
       interfaceId: e.interfaceId,
       externalId: e.externalId,
       status: e.status,
-      kind: e.status === 409 ? "conflict" : "blocked",
+      kind: writeEventKind(e.status, e.durationMs),
       correlationId: e.correlationId,
       clientTokenId: e.clientTokenId,
     })),

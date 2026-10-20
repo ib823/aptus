@@ -2,6 +2,12 @@ import { buildSapUrl, SapUrlOriginError } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+import {
+  ConnectionConfigError,
+  OAuthTokenRequestError,
+  SapCredentialError,
+  SapHttpError,
+} from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
 /**
@@ -773,14 +779,16 @@ function getAuthType(prefix: string): SapAuthType {
   ) {
     return raw;
   }
-  throw new Error(
+  throw new ConnectionConfigError(
     `${prefix}_AUTH_TYPE must be basic, bearer, oauth-client-credentials, or oauth-saml-bearer`,
   );
 }
 
+// A ConnectionConfigError: a variable the deployment lacks is a setup problem
+// raised before anything is sent, never "the tenant did not answer".
 function requiredEnv(prefix: string, name: string): string {
   const value = env(prefix, name);
-  if (!value) throw new Error(`Missing required env var: ${prefix}_${name}`);
+  if (!value) throw new ConnectionConfigError(`Missing required env var: ${prefix}_${name}`);
   return value;
 }
 
@@ -797,9 +805,16 @@ async function fetchOAuthToken(prefix: string): Promise<string> {
     },
     body: new URLSearchParams({ grant_type: "client_credentials" }),
   }, getRequestTimeoutMs(prefix));
-  const json = (await response.json()) as OAuthTokenResponse;
+  // Read defensively, and keep the status as a field — the resolver's reason.
+  const json = ((await response.json().catch(() => null)) ?? {}) as OAuthTokenResponse;
   if (!response.ok || typeof json.access_token !== "string") {
-    throw new Error(`OAuth token request failed: HTTP ${response.status}`);
+    // A refusal names the VARIABLES: this tenant has no stored connection to
+    // save again, and "check the client id" sent the admin looking for one.
+    throw new OAuthTokenRequestError(
+      `OAuth token request failed: HTTP ${response.status}`,
+      response.status,
+      `The token endpoint rejected the deployment's client credentials (HTTP ${response.status}). Check ${prefix}_CLIENT_ID, ${prefix}_CLIENT_SECRET and ${prefix}_OAUTH_TOKEN_URL in the deployment's environment.`,
+    );
   }
   return json.access_token;
 }
@@ -885,8 +900,19 @@ async function authHeaderFor(prefix: string, tenant: SapTenant): Promise<string>
  * is reached only through authHeaderFor, and authHeaderFor only through here.
  */
 async function authHeadersFor(prefix: string, tenant: SapTenant): Promise<Record<string, string>> {
-  if (tenant.authHeaders) return tenant.authHeaders();
-  return { Authorization: await authHeaderFor(prefix, tenant) };
+  try {
+    if (tenant.authHeaders) return await tenant.authHeaders();
+    return { Authorization: await authHeaderFor(prefix, tenant) };
+  } catch (err) {
+    /*
+     * NOT SENT, AND SAID SO (audit A26, A28). Whatever the credential step
+     * threw — a missing {PREFIX}_PASSWORD, a token endpoint's 404, an expired
+     * assertion — used to surface from the request that never left, and its
+     * text was read for "HTTP nnn" as if the service had answered. Wrapped,
+     * the caller can tell "the tenant was not asked" from the tenant's answer.
+     */
+    throw new SapCredentialError(err);
+  }
 }
 
 async function buildAuthHeader(prefix: string): Promise<string> {
@@ -1062,7 +1088,7 @@ export async function inspectSapService(
   }, getRequestTimeoutMs(prefix));
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Metadata request failed: HTTP ${response.status}`);
+    throw new SapHttpError(`Metadata request failed: HTTP ${response.status}`, response.status);
   }
   return { entitySets: parseEntitySets(text) };
 }
@@ -1084,7 +1110,7 @@ export async function inspectSapServiceMetadata(
   }, getRequestTimeoutMs(prefix));
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Metadata request failed: HTTP ${response.status}`);
+    throw new SapHttpError(`Metadata request failed: HTTP ${response.status}`, response.status);
   }
   return {
     entitySets: parseEntitySets(text),
@@ -1163,7 +1189,7 @@ export async function previewSapEntitySet(
   const durationMs = Date.now() - startedAt;
   const text = await response.text();
   if (!response.headers.get("content-type")?.includes("application/json")) {
-    throw new Error(`Preview returned non-JSON response: HTTP ${response.status}`);
+    throw new SapHttpError(`Preview returned non-JSON response: HTTP ${response.status}`, response.status);
   }
 
   const json = JSON.parse(text) as ODataV2Response | ODataV4Response;

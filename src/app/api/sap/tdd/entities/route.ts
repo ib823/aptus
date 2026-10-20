@@ -20,6 +20,7 @@ import {
   unknownTenantMessage,
 } from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
+import { consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import { ERROR_CODES } from "@/types/api";
 
 /** Reject array / duplicate query params (?tenant=a&tenant=b) instead of silently coercing. */
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     externalId: string,
     status: number,
     rowCount: number | null,
-    extra: { durationMs?: number } = {},
+    extra: { durationMs?: number; failureReason?: string | null } = {},
   ) =>
     recordConsoleRead({
       organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
@@ -202,16 +203,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: { entitySets, probes, generatedAt: new Date(at).toISOString(), fromCache: false, correlationId } });
   } catch (error) {
     console.error("[sap/tdd/entities] request failed:", error);
-    await audit(service.key, 502, null, { durationMs: Date.now() - startedAt });
+    /*
+     * SAP's 401 on $metadata is an expired password, not "SAP metadata request
+     * failed", and a credential CoreEdge could not build reached no tenant at
+     * all — both were a 502 response and a 502 audit row (audit A26). The
+     * generic sentence stays for what is genuinely a failure.
+     */
+    const failure = consoleReadFailure(error, "SAP metadata request failed");
+    await audit(service.key, failure.auditStatus, null, {
+      durationMs: Date.now() - startedAt,
+      failureReason: failure.failureReason,
+    });
     return NextResponse.json(
       {
         error: {
-          code: ERROR_CODES.INTERNAL_ERROR,
-          message: "SAP metadata request failed",
+          code: failure.code,
+          message: failure.message,
           correlationId,
         },
       },
-      { status: 502 },
+      { status: failure.status },
     );
   }
 }

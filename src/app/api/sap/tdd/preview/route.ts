@@ -35,6 +35,8 @@ import {
 } from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { ERROR_CODES } from "@/types/api";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -115,7 +117,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // a landscape: there is none to name, and inventing one would be the guess this
   // whole change exists to stop. See DEPLOYMENT_AUDIT_SCOPE for the organization.
   const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
+  const audit = (
+    status: number,
+    rowCount: number | null,
+    extra: { durationMs?: number; failureReason?: string | null } = {},
+  ) =>
     recordConsoleRead({
       organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
       actorUserId: viewer.id,
@@ -167,25 +173,37 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const startedAt = Date.now();
   try {
     const preview = await previewSapEntitySet(product.envPrefix, tenant, service, entity, limit);
-    await audit(preview.ok ? 200 : 502, preview.rows.length, {
+    // The status SAP actually gave (audit A26). A 403 for an entity set the
+    // arrangement does not release is SAP answering correctly, and recording
+    // it as 502 raised the tenant-errors incident against a healthy tenant.
+    // Only its refusals, though: SAP's 429 recorded as 429 raised the
+    // 'throttled' incident instead — see answeredReadAuditStatus.
+    await audit(answeredReadAuditStatus(preview.ok, preview.status), preview.rows.length, {
       durationMs: Date.now() - startedAt,
+      failureReason: failureReasonFromHttp(preview.status),
     });
     return NextResponse.json({ data: { ...preview, correlationId } });
   } catch (error) {
     // Do not reflect the raw connector error to the client — it can carry SAP
     // tenant labels, upstream HTTP status, and topology detail useful for recon.
-    // Log server-side; return a generic message.
+    // Log server-side; return a generic message — or, for a refusal SAP gave
+    // or a credential CoreEdge could not use, the fixed sentence that says
+    // which (see consoleReadFailure).
     console.error("[sap/tdd/preview] request failed:", error);
-    await audit(502, null, { durationMs: Date.now() - startedAt });
+    const failure = consoleReadFailure(error, "SAP preview request failed");
+    await audit(failure.auditStatus, null, {
+      durationMs: Date.now() - startedAt,
+      failureReason: failure.failureReason,
+    });
     return NextResponse.json(
       {
         error: {
-          code: ERROR_CODES.INTERNAL_ERROR,
-          message: "SAP preview request failed",
+          code: failure.code,
+          message: failure.message,
           correlationId,
         },
       },
-      { status: 502 },
+      { status: failure.status },
     );
   }
 }

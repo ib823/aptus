@@ -136,6 +136,9 @@ async function probeActivatedApiIds(
   // collapsed chip matches the expanded detail exactly.
   const capabilities = new Map<string, { read: boolean; write: boolean }>();
   for (const r of results) {
+    // A row whose credential could not be obtained says nothing about the
+    // service (audit A28); left out, the stored outcome stands for it.
+    if (r.credentialError) continue;
     outcomes.set(r.service, r.status);
     if (r.entities && r.entities.length > 0) capabilities.set(r.service, deriveReadWrite(r.entities));
   }

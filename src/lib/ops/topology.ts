@@ -26,7 +26,8 @@
  * know and which is probably false. That is exactly the class of assertion the
  * vocabulary exists to prevent, so:
  *
- *   state:  observed-good | observed-bad | never-observed | unobservable | defect
+ *   state:  observed-good | observed-mixed | observed-bad | never-observed
+ *           | unobservable | defect
  *   ended:  null | { kind, at, carried }
  *
  * `carried` is the load-bearing part: did anything actually run under this
@@ -77,6 +78,7 @@ export type NodeKind =
 
 export type NodeState =
   | "observed-good"
+  | "observed-mixed"
   | "observed-bad"
   | "never-observed"
   | "unobservable"
@@ -194,6 +196,32 @@ export function observeEdge(calls: number, failures: number): EdgeObservation {
   return failures >= calls ? "bad" : "mixed";
 }
 
+/**
+ * A live node's state from what the feed recorded under it — the same two
+ * counts its edges use.
+ *
+ * THIS USED TO READ `calls` ALONE, so any recorded row at all made a grant, a
+ * solution or an interface "observed-good": a PROD grant whose every call was
+ * refused 403 for want of a connection rendered ✓ beside the edge that said
+ * "bad", while the critical binding-refused incident was open about it. That is
+ * health that was not observed, which the vocabulary exists to forbid.
+ *
+ * MIXED IS ITS OWN STATE, for the reason `EdgeObservation` gives for edges. ✓
+ * over a node whose calls partly failed hides the failures; ✕ says nothing got
+ * through. Mapping mixed to ✕ was the second claim, and the routine traffic of a
+ * healthy integration made it on almost every busy node: one 429 among 10,000
+ * served reads, one 409 "Idempotency-Key still in progress" from a client
+ * retrying correctly, one 404 on a mistyped interface id — each turned a working
+ * solution, grant or interface red. ✕ is kept for a node where every recorded
+ * call failed; the edge and the provenance beside a mixed node say how many.
+ */
+export function observedState(calls: number, failures: number): NodeState {
+  const observed = observeEdge(calls, failures);
+  if (observed === "never") return "never-observed";
+  if (observed === "mixed") return "observed-mixed";
+  return observed === "good" ? "observed-good" : "observed-bad";
+}
+
 /* ───────────────────────────── derivation ───────────────────────────── */
 
 /**
@@ -228,6 +256,8 @@ export interface GrantInput {
   revokedReason: string | null;
   /** Calls recorded under this grant in the window. Under-reports; see Ended. */
   recordedCalls: number;
+  /** Of those, the ones that returned 4xx or 5xx. See `observedState`. */
+  recordedFailures: number;
 }
 
 /**
@@ -349,8 +379,14 @@ export function deriveGrant(g: GrantInput, now: Date, since: Date): DerivedGrant
     return { state: "never-observed", ended: null, quiet: false, badge: null };
   }
 
+  /*
+   * A LIVE grant's state is what its calls did. The ended branches above stay
+   * on `carried`: what they answer is whether anything ran before the end, and
+   * a call refused after revocation is the control working, not the grant
+   * failing.
+   */
   return {
-    state: g.recordedCalls > 0 ? "observed-good" : "never-observed",
+    state: observedState(g.recordedCalls, g.recordedFailures),
     ended: null,
     quiet: false,
     badge: null,
@@ -407,6 +443,8 @@ export interface SolutionInput {
   missingOwnerCount: number;
   /** Calls recorded under any grant on this solution, in the window. */
   recordedCalls: number;
+  /** Of those, the ones that returned 4xx or 5xx. See `observedState`. */
+  recordedFailures: number;
   /**
    * Does it hold a live grant conferring PROD access?
    *
@@ -462,7 +500,7 @@ export function deriveSolution(s: SolutionInput): DerivedSolution {
         };
   }
   return {
-    state: s.recordedCalls > 0 ? "observed-good" : "never-observed",
+    state: observedState(s.recordedCalls, s.recordedFailures),
     ended: null,
     quiet: false,
     badge: null,
@@ -551,6 +589,14 @@ export interface AuditSlice {
   environment: string;
   status: number;
   count: number;
+  /**
+   * An idempotent replay: the broker re-served a stored write outcome and
+   * called nothing upstream. The row names the connection the request was
+   * bound to — it got past the binding, and without one it read as a refusal
+   * before any — so this is what keeps it off the connection's tally. Absent
+   * means a fresh call.
+   */
+  replayed?: boolean;
 }
 
 export interface Tally {
@@ -598,6 +644,25 @@ export function grantKey(
   environment: string,
 ): string {
   return `${solutionId}|${externalId}|${operation}|${environment}`.toUpperCase();
+}
+
+/**
+ * An audit row's operation, in the GRANT's vocabulary.
+ *
+ * The two tables name a write differently. The write route records every call
+ * as `WRITE`; the grant that authorised it says `CREATE` (or `UPDATE`). Keyed on
+ * the raw column the two never met, so every write grant reported zero calls —
+ * "never observed" while carrying production writes, and `carried: false` once
+ * revoked, a claim of absence the feed contradicts.
+ *
+ * WRITE MEANS CREATE, because a create is the only write the broker performs:
+ * `resolveWritableInterface` refuses any other operation before a grant is
+ * consulted and authorises a write only by a grant whose operation equals the
+ * interface's, which is CREATE. An UPDATE grant cannot carry traffic today; if
+ * the executor ever learns UPDATE, the write route must record which one it did.
+ */
+export function grantOperationOf(auditOperation: string): string {
+  return auditOperation.toUpperCase() === "WRITE" ? "CREATE" : auditOperation;
 }
 
 /** A pairing key. The separator cannot occur in a cuid or in a grant key. */
@@ -654,7 +719,7 @@ export function attributeCalls(rows: readonly AuditSlice[]): Attribution {
     // one imaginary grant.
     if (row.solutionId === null) continue;
     const solutionId = row.solutionId;
-    const gk = grantKey(solutionId, row.externalId, row.operation, row.environment);
+    const gk = grantKey(solutionId, row.externalId, grantOperationOf(row.operation), row.environment);
 
     add(a.bySolution, solutionId, calls, failures);
     add(a.byGrant, gk, calls, failures);
@@ -666,7 +731,15 @@ export function attributeCalls(rows: readonly AuditSlice[]): Attribution {
       add(a.byInterface, row.interfaceId, calls, failures);
       add(a.byGrantInterface, pairKey(gk, row.interfaceId), calls, failures);
     }
-    if (row.connectionId) {
+    /*
+     * A REPLAY STOPS AT THE BROKER. It reached the credential, the grant and
+     * the interface like any call, and is counted there; it did not go through
+     * the connection to SAP. Counted on it, one 201, one 504 and five same-key
+     * retries of the 504 read as seven calls and six failures through a
+     * connection SAP answered twice — the over-count the replay marker exists
+     * to end.
+     */
+    if (row.connectionId && !row.replayed) {
       add(a.byConnection, row.connectionId, calls, failures);
       // Only a row that names BOTH ends is evidence that these two were wired
       // together on a real call. There is no schema link between an interface
@@ -706,8 +779,10 @@ export function collapseColumn(nodes: TopologyNode[], limit = COLLAPSE_THRESHOLD
     if (n.state === "defect") return 0;
     if (n.ended?.carried) return 1;
     if (n.state === "observed-bad") return 2;
-    if (n.state === "observed-good") return 3;
-    return 4;
+    // Partly failing is worth seeing before wholly healthy.
+    if (n.state === "observed-mixed") return 3;
+    if (n.state === "observed-good") return 4;
+    return 5;
   };
   const sorted = [...nodes].sort((a, b) => rank(a) - rank(b));
   return { kept: sorted.slice(0, limit), collapsedCount: nodes.length - limit };
