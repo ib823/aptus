@@ -29,8 +29,10 @@ For a call that carries `Authorization: Bearer …`:
    gets a fresh credential bucket each time and meets only the backstop below:
    up to 6,000 database lookups a minute per address, where the old per-IP
    bucket allowed 120 writes or 300 reads. With it, such a flood costs at most
-   60 lookups a minute per address; after that, each call costs one Upstash
-   read and nothing else. A key that authenticates never spends it.
+   60 failed keys a minute per address — 120 indexed lookups, because an
+   unknown key is looked up as a current key and then as the key a rotation
+   replaced (P0.11, `src/lib/northbound/auth.ts`); after that, each call costs
+   one Upstash read and nothing else. A key that authenticates never spends it.
    **Trade-off:** while an address is over it, valid keys calling from that
    same address are refused too (the edge cannot tell them apart without the
    lookup). That lasts until the window frees room, and only an address that is

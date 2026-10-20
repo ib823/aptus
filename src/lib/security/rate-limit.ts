@@ -295,6 +295,10 @@ export const RATE_LIMITS = {
    * 401 for a presented key; the edge reads it, without spending, before
    * anything else, and refuses the address once it is empty. A valid key
    * never spends it, so only an address sending failing keys can empty it.
+   *
+   * An unknown key costs TWO indexed lookups since P0.11 (the current key,
+   * then the key a rotation replaced), so 60 failures is 120 queries a minute:
+   * no more than the old per-IP write bucket. Raise this only with that in mind.
    */
   machineAuthFailure: { limit: 60, windowMs: 60 * 1000 },
   /**

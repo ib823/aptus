@@ -34,9 +34,13 @@ const { lookups, valid } = vi.hoisted(() => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     solutionClient: {
-      findUnique: async ({ where }: { where: { tokenHash: string } }) => {
+      // Authentication looks a token up by `tokenHash` and, only on a miss,
+      // by `previousTokenHash` (the rotation overlap, P0.11). Every call is a
+      // database query, so every call is counted.
+      findUnique: async ({ where }: { where: { tokenHash?: string; previousTokenHash?: string } }) => {
         lookups.count++;
-        const id = valid.get(where.tokenHash);
+        // No key in this file was ever rotated, so a previous-key lookup misses.
+        const id = where.tokenHash === undefined ? undefined : valid.get(where.tokenHash);
         return id
           ? {
               id,
@@ -65,6 +69,13 @@ import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import { middleware } from "@/middleware";
 
 const PATH = "/api/northbound/interfaces";
+
+/**
+ * The queries one unknown key costs: the lookup by current key, then the one by
+ * the key a rotation replaced (auth.ts, P0.11). A key that authenticates costs
+ * one, because the second runs only on a miss.
+ */
+const QUERIES_PER_UNKNOWN_KEY = 2;
 
 /** A live credential of its own, so this test's route budget starts full. */
 function validKey(name: string): string {
@@ -101,10 +112,11 @@ describe("random-key floods are capped per address", () => {
       const res = await call(ip, `junk_${i}`);
       statuses.set(res.status, (statuses.get(res.status) ?? 0) + 1);
     }
-    // Before: 1000 lookups (every key was its own fresh edge bucket).
-    expect(lookups.count).toBeLessThanOrEqual(RATE_LIMITS.machineAuthFailure.limit);
-    // Fewer than the old per-IP ceilings let through, for reads or for writes.
-    expect(RATE_LIMITS.machineAuthFailure.limit).toBeLessThanOrEqual(RATE_LIMITS.apiMutation.limit);
+    // Before: 2000 queries (every key was its own fresh edge bucket).
+    const ceiling = RATE_LIMITS.machineAuthFailure.limit * QUERIES_PER_UNKNOWN_KEY;
+    expect(lookups.count).toBeLessThanOrEqual(ceiling);
+    // No more than the old per-IP ceilings let through, for reads or for writes.
+    expect(ceiling).toBeLessThanOrEqual(RATE_LIMITS.apiMutation.limit);
     expect(statuses.get(401)).toBe(RATE_LIMITS.machineAuthFailure.limit);
     expect(statuses.get(429)).toBe(1000 - RATE_LIMITS.machineAuthFailure.limit);
   });
@@ -137,7 +149,7 @@ describe("random-key floods are capped per address", () => {
     // So an unknown key from the same address is still looked up and told 401.
     const before = lookups.count;
     expect((await call(ip, "junk_after_valid")).status).toBe(401);
-    expect(lookups.count).toBe(before + 1);
+    expect(lookups.count).toBe(before + QUERIES_PER_UNKNOWN_KEY);
   });
 
   it("a call with no key is not counted as a failed credential", async () => {
