@@ -79,11 +79,11 @@ export async function POST(
     where: { email: invitation.email },
   });
 
-  // Accepting overwrites an existing account's role. Two cases must never be
-  // overwritten this way (lib/auth/org-invites.ts), now that anyone with a
-  // workspace can send an invitation to any address.
+  // Accepting overwrites an existing account's role and reactivates it. Three
+  // cases must never happen this way (lib/auth/org-invites.ts), now that
+  // anyone with a workspace can send an invitation to any address.
   const acceptRefusal = existingUser
-    ? refuseAcceptForExistingAccount(existingUser.role, invitation.role)
+    ? refuseAcceptForExistingAccount(existingUser.role, invitation.role, existingUser.isActive)
     : null;
   if (acceptRefusal) {
     return NextResponse.json(

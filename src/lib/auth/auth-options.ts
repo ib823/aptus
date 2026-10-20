@@ -84,29 +84,33 @@ async function signupCallerIp(): Promise<string> {
 }
 
 /**
- * Spend the per-address sign-up bucket before a link goes to an address that
- * has no account yet: such a link is a sign-up, and P0.13 limits sign-ups per
- * email as well as per caller address. An existing account's sign-in link is
- * never limited here, so nobody already on the host can be locked out by it.
- * Throws (NextAuth answers EmailSignin) when the address has had its share.
+ * Spend the sign-up buckets before a link goes to an address that has no
+ * account yet WHILE DEVELOPER SIGN-UP IS OPEN: such a link creates a
+ * workspace when clicked, so it is a sign-up, and P0.13 limits sign-ups per
+ * caller address and per email. An existing account's sign-in link is never
+ * limited here, so nobody already on the host can be locked out by it.
+ * Throws (NextAuth answers EmailSignin) when a bucket has had its share.
+ *
+ * OFF, NOTHING IS SPENT (review round 2). The per-email bucket was spent for
+ * every new address whatever the mode, and /api/auth/signup spends the same
+ * bucket for any caller who names an address, so five anonymous requests an
+ * hour kept a new employee's first sign-in link refused on the deployed
+ * default. Off, a new address's link keeps exactly the limits it had.
  */
 async function limitSignupLinks(email: string): Promise<void> {
+  if (!mayCreateDeveloperWorkspace(email).allowed) return;
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
   if (existing) return;
-  // With developer sign-up open this link creates a workspace when clicked,
-  // so it spends the caller's sign-up bucket too, the one /api/auth/signup
-  // spends at the edge (developer-workspace.ts, `checkSignupCallerLimit`).
-  // Off, a new address's link keeps exactly the limits it had.
-  if (mayCreateDeveloperWorkspace(email).allowed) {
-    const caller = await checkSignupCallerLimit(await signupCallerIp());
-    if (!caller.allowed) {
-      console.warn(`[AUTH] sign-up link refused for this caller — ${caller.outage ? "limiter unavailable" : "limited"}`);
-      throw new Error(
-        caller.outage
-          ? "Sign-up limits cannot be checked right now. Try again shortly."
-          : "Too many sign-ups from this network. Try again later.",
-      );
-    }
+  // The caller's bucket is the one /api/auth/signup spends at the edge
+  // (developer-workspace.ts, `checkSignupCallerLimit`).
+  const caller = await checkSignupCallerLimit(await signupCallerIp());
+  if (!caller.allowed) {
+    console.warn(`[AUTH] sign-up link refused for this caller — ${caller.outage ? "limiter unavailable" : "limited"}`);
+    throw new Error(
+      caller.outage
+        ? "Sign-up limits cannot be checked right now. Try again shortly."
+        : "Too many sign-ups from this network. Try again later.",
+    );
   }
   const limit = await checkSignupEmailLimit(email);
   if (!limit.allowed) {

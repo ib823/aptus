@@ -54,13 +54,16 @@ A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employ
 
 > **Actor: Sarah Chen** (Platform Admin)
 
-Sarah is the first user registered on ABeam and is automatically assigned `platform_admin`.
+Sarah signs in to a new instance that has no platform admin. Signing in first
+grants nothing: she claims `platform_admin` at `/coreedge/bootstrap` with the
+instance's one-time `COREEDGE_BOOTSTRAP_TOKEN`
+(`docs/runbooks/developer-onboarding.md`).
 
 ```
-Action:    Register on ABeam platform
-Trigger:   First-user auto-assignment
+Action:    Sign in, then claim the instance at /coreedge/bootstrap
+Trigger:   One-time bootstrap token (COREEDGE_BOOTSTRAP_TOKEN)
 Result:    Sarah becomes platform_admin (hierarchy: 100)
-Audit:     ONBOARDING_STARTED
+Audit:     BOOTSTRAP_ADMIN (PlatformGovernanceAudit), ONBOARDING_STARTED
 ```
 
 Sarah completes her onboarding flow:

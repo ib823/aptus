@@ -31,17 +31,20 @@ Nothing changes for production by default.
 - **What is tighter:**
   - `POST /api/auth/signup` now has its own per-address bucket of 10 an hour
     (`signup:<ip>`), instead of sharing the 30-a-minute sign-in bucket.
-  - Every sign-up is also limited to 5 an hour per email address. This covers
-    `/signup` and a magic link sent to an address that has no account yet. A
-    link sent to an existing account is never limited this way.
+  - `POST /api/auth/signup` is also limited to 5 an hour per email address.
+    With developer sign-up off, a magic link sent from the sign-in page keeps
+    exactly the limits it had: neither sign-up bucket is spent for it, so
+    nobody can lock a new employee out of their first sign-in by draining
+    them. A link sent to an existing account is never limited this way.
   - An invitation can no longer remove a platform admin's role, and a
     developer workspace's invitation can no longer replace another account's
     role.
   - The invite response no longer contains the invitation token. Only the
     invitee's email carries it. Nothing on screen used it.
   - `/coreedge/members` shows the member list only to roles that the
-    member-list API already allowed: admins, `partner_lead`, `client_admin`,
-    `consultant` and `sandbox_developer`.
+    member-list API already allowed: admins, `partner_lead`, `client_admin`
+    and `consultant`, and a `sandbox_developer` in its own developer
+    workspace.
 - **SMTP.** Production uses Brevo on 587, which offers STARTTLS, so mail is
   sent as before. Unlike before, the connection now fails if a relay on 587
   does not offer STARTTLS, so the password is never sent in the clear.
@@ -124,7 +127,8 @@ created in `/admin/users`, as before.
   link's `sendVerificationRequest`), so `POST /api/auth/signin/email` is no
   way around it. A sign-in link for an existing account never spends it. With
   the setting off, nothing spends it except `/api/auth/signup`, as before.
-- 5 an hour per email address, for both ways in.
+- 5 an hour per email address, for both ways in. The sign-in link spends it
+  only while sign-up is open.
 - A limiter outage refuses sign-up with `503 LIMITER_UNAVAILABLE`, failing
   closed.
 - A workspace starts with the trial seat limit of 5. Pending invitations count
@@ -135,6 +139,16 @@ created in `/admin/users`, as before.
   accepted ones. Revoking frees a seat but not a send, so invite-then-revoke
   cannot be used to email an unlimited number of addresses. Past the budget,
   the invite route answers `429`. Administrators are not limited by it.
+- The seat and budget checks and the create run under a lock on the
+  organization's row, so invitations sent at the same moment queue up and
+  cannot together exceed either limit.
+- A sandbox developer's invitation is mailed only to an address that has no
+  account on the host. For any other address the invitation is still created
+  and charged to the seats and the budget, and the answer is the same `201`,
+  so the invite form cannot be used to find out which addresses are
+  registered. Nobody receives the token, so nobody can accept it.
+- An invitation from a developer workspace never reactivates an account an
+  administrator deactivated: accepting it answers `409`.
 
 **To turn it off**, unset `COREEDGE_DEVELOPER_SIGNUP`. Workspaces already
 created keep working. New addresses are then admitted by the registration
@@ -150,18 +164,20 @@ host.
 
 Who may do what is decided in one place, `src/lib/auth/org-invites.ts`:
 
-- **Invite:** a platform admin, in any organization. A `partner_lead`,
-  `client_admin` or `sandbox_developer`, in their own organization only.
+- **Invite:** a platform admin, in any organization. A `partner_lead` or
+  `client_admin`, in their own organization only. A `sandbox_developer`, in
+  its own **developer workspace** only: an organization in which no member
+  and no pending invitee holds any role but `sandbox_developer`. A sandbox
+  developer that a client admin placed in a customer organization invites
+  nobody and sees no member list there.
 - **Read the member list:** the same people, plus a `consultant`. The
   members screen asks the same question. Anyone else sees a sentence that
   says who can see the list.
 - **Which role can be offered:** a sandbox developer can invite only sandbox
   developers. Everyone else is limited by the role hierarchy, as before.
 - **Which invitations can be seen and revoked:** a sandbox developer sees and
-  revokes only sandbox developer invitations. This matters when a client
-  admin invites a sandbox developer into a real customer organization: the
-  developer cannot see or revoke the admins' invitations. Everyone else sees
-  and revokes every invitation in their organization, as before.
+  revokes only sandbox developer invitations, in its own workspace. Everyone
+  else sees and revokes every invitation in their organization, as before.
 - **Accepting:** the token travels only in the invitee's email. The invite
   response does not include it, so an inviter cannot accept on someone
   else's behalf.

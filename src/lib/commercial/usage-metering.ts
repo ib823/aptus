@@ -56,12 +56,21 @@ export async function checkAssessmentLimit(organizationId: string): Promise<{
   };
 }
 
-export async function checkUserLimit(organizationId: string): Promise<{
+/**
+ * `db` lets a caller count inside its own transaction — the invite route
+ * holds the organization's row lock while it counts and creates, and a read
+ * on a second pooled connection there could wait behind the very requests
+ * the lock is queueing.
+ */
+export async function checkUserLimit(
+  organizationId: string,
+  db: Pick<Prisma.TransactionClient, "organization" | "user"> = prisma,
+): Promise<{
   allowed: boolean;
   current: number;
   limit: number;
 }> {
-  const org = await prisma.organization.findUniqueOrThrow({
+  const org = await db.organization.findUniqueOrThrow({
     where: { id: organizationId },
     select: { plan: true, maxPartnerUsers: true },
   });
@@ -69,7 +78,7 @@ export async function checkUserLimit(organizationId: string): Promise<{
   const limits = getPlanLimits(org.plan as PlanTier);
   const effectiveLimit = Math.min(org.maxPartnerUsers, limits.maxPartnerUsers);
 
-  const current = await prisma.user.count({
+  const current = await db.user.count({
     where: { organizationId, isActive: true },
   });
 

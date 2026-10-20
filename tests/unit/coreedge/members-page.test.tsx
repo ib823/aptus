@@ -16,13 +16,16 @@ const mocks = vi.hoisted(() => ({
   user: { id: "u1", role: "viewer", organizationId: "org1", email: "me@org1.test" } as Record<string, unknown>,
   findMembers: vi.fn(),
   findInvitations: vi.fn(),
+  // Members and pending invitees holding a role other than sandbox_developer:
+  // none means the organization is a developer workspace.
+  otherRoles: 0,
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    user: { findMany: mocks.findMembers },
-    orgInvitation: { findMany: mocks.findInvitations },
+    user: { findMany: mocks.findMembers, count: async () => mocks.otherRoles },
+    orgInvitation: { findMany: mocks.findInvitations, count: async () => 0 },
   },
 }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -47,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.findMembers.mockResolvedValue(MEMBERS);
   mocks.findInvitations.mockResolvedValue([]);
+  mocks.otherRoles = 0;
 });
 
 describe("the members screen", () => {
@@ -71,5 +75,21 @@ describe("the members screen", () => {
 
     expect(html).toContain("ada@org1.test");
     expect(mocks.findMembers).toHaveBeenCalledTimes(1);
+  });
+
+  // Review round 2: a sandbox developer's member rights are its developer
+  // workspace's. In a customer's organization it sees no directory and is
+  // offered no invite.
+  it("shows a sandbox developer in a customer's organization no member directory and no invite", async () => {
+    mocks.user = { id: "u1", role: "sandbox_developer", organizationId: "org1", email: "me@org1.test" };
+    mocks.otherRoles = 2;
+
+    const html = await render();
+
+    expect(html).not.toContain("ada@org1.test");
+    expect(mocks.findMembers).not.toHaveBeenCalled();
+    expect(mocks.findInvitations).not.toHaveBeenCalled();
+    expect(html).toMatch(/member list is limited/i);
+    expect(html).toMatch(/Inviting people is limited/);
   });
 });

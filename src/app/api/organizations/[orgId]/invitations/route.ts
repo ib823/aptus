@@ -4,7 +4,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
-import { managedInvitationRole, mayManageInvitation, mayManageOrgMembers } from "@/lib/auth/org-invites";
+import { managedInvitationRole, mayManageInvitation, orgMemberRights } from "@/lib/auth/org-invites";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -30,7 +30,7 @@ export async function GET(
   const { orgId } = await params;
 
   // The people who may invite are the people who see what is pending.
-  if (!mayManageOrgMembers(user, orgId)) {
+  if (!(await orgMemberRights(user, orgId)).manage) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
       { status: 403 },
@@ -78,7 +78,7 @@ export async function DELETE(
 
   const { orgId } = await params;
 
-  if (!mayManageOrgMembers(user, orgId)) {
+  if (!(await orgMemberRights(user, orgId)).manage) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
       { status: 403 },

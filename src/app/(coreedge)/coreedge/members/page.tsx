@@ -4,12 +4,7 @@ import type { ReactNode } from "react";
 
 import { InviteMember } from "@/components/coreedge/actions/InviteMember";
 import { OpsTable } from "@/components/coreedge/OpsTable";
-import {
-  invitableRoles,
-  managedInvitationRole,
-  mayManageOrgMembers,
-  mayViewOrgMembers,
-} from "@/lib/auth/org-invites";
+import { invitableRoles, managedInvitationRole, orgMemberRights } from "@/lib/auth/org-invites";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ROLE_LABELS, type UserRole } from "@/types/assessment";
@@ -67,11 +62,11 @@ export default async function MembersPage(): Promise<ReactNode> {
   }
 
   const organizationId = user.organizationId;
-  const mayInvite = mayManageOrgMembers(user, organizationId);
   // The member directory is asked for exactly as the member-list route asks:
   // this layout renders for every signed-in role, and a viewer here was shown
   // every member's email while GET /api/organizations/[orgId]/users refused it.
-  const mayView = mayViewOrgMembers(user, organizationId);
+  // A sandbox developer has both rights in its own workspace only.
+  const { manage: mayInvite, view: mayView } = await orgMemberRights(user, organizationId);
   const onlyRole = managedInvitationRole(user);
   const now = new Date();
 

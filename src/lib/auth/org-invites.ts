@@ -22,10 +22,19 @@
  * a sandbox developer's sends are also held to a daily budget
  * (`inviteSendBudget`), and it manages sandbox developer invitations only
  * (`managedInvitationRole`).
+ *
+ * …AND ONLY IN A DEVELOPER WORKSPACE (review round 2). The role's member
+ * rights were the role's wherever it sat, so a sandbox developer a client
+ * admin had placed in a customer organization could invite outsiders into it,
+ * and each of them could read the customer's member list and Studio. They are
+ * the WORKSPACE's rights: an organization in which nobody, member or pending
+ * invitee, holds any other role (`isDeveloperWorkspace`). Anywhere else the
+ * role invites nobody and sees no member list, as before P0.13.
  */
 
 import { isAdminRoleName, mapLegacyRole } from "@/lib/auth/role-migration";
 import { canAssignRole } from "@/lib/auth/role-permissions";
+import { prisma } from "@/lib/db/prisma";
 import { ROLE_HIERARCHY, type UserRole } from "@/types/assessment";
 
 interface Member {
@@ -33,29 +42,68 @@ interface Member {
   readonly organizationId: string | null;
 }
 
+/** What the member rules need to know about the organization itself. */
+export interface OrgFacts {
+  /** Nobody in it, member or pending invitee, holds a role but sandbox_developer. */
+  readonly developerWorkspace: boolean;
+}
+
 /** Roles that administer the members of their OWN organization. */
-const ORG_MEMBER_MANAGERS: ReadonlySet<UserRole> = new Set<UserRole>([
-  "partner_lead",
-  "client_admin",
-  "sandbox_developer",
-]);
+const ORG_MEMBER_MANAGERS: ReadonlySet<UserRole> = new Set<UserRole>(["partner_lead", "client_admin"]);
 
 /** Roles that may read their own organization's member list. */
-const ORG_MEMBER_VIEWERS: ReadonlySet<UserRole> = new Set<UserRole>([
-  ...ORG_MEMBER_MANAGERS,
-  "consultant",
-]);
+const ORG_MEMBER_VIEWERS: ReadonlySet<UserRole> = new Set<UserRole>([...ORG_MEMBER_MANAGERS, "consultant"]);
+
+/** Does this member's right depend on whether the organization is a workspace? */
+function holdsWorkspaceRights(user: Member, orgId: string): boolean {
+  return !isAdminRoleName(user.role) && mapLegacyRole(user.role) === "sandbox_developer" && user.organizationId === orgId;
+}
 
 /** Invite into, and revoke the pending invitations of, this organization. */
-export function mayManageOrgMembers(user: Member, orgId: string): boolean {
+export function mayManageOrgMembers(user: Member, orgId: string, org: OrgFacts): boolean {
   if (isAdminRoleName(user.role)) return true;
+  if (holdsWorkspaceRights(user, orgId)) return org.developerWorkspace;
   return ORG_MEMBER_MANAGERS.has(mapLegacyRole(user.role)) && user.organizationId === orgId;
 }
 
 /** Read this organization's member list. */
-export function mayViewOrgMembers(user: Member, orgId: string): boolean {
+export function mayViewOrgMembers(user: Member, orgId: string, org: OrgFacts): boolean {
   if (isAdminRoleName(user.role)) return true;
+  if (holdsWorkspaceRights(user, orgId)) return org.developerWorkspace;
   return ORG_MEMBER_VIEWERS.has(mapLegacyRole(user.role)) && user.organizationId === orgId;
+}
+
+/**
+ * Is this organization a developer workspace?
+ *
+ * There is no column that says so, and none is needed: a workspace is created
+ * with one sandbox developer in it (lib/auth/developer-workspace.ts), and a
+ * sandbox developer can invite only sandbox developers. So an organization in
+ * which some member or pending invitee holds any other role — a customer's,
+ * a partner's — is not one, whatever it once was. A deactivated member counts:
+ * the organization is still theirs.
+ */
+export async function isDeveloperWorkspace(organizationId: string): Promise<boolean> {
+  const [members, invitations] = await Promise.all([
+    prisma.user.count({ where: { organizationId, role: { not: "sandbox_developer" } } }),
+    prisma.orgInvitation.count({ where: { organizationId, status: "pending", role: { not: "sandbox_developer" } } }),
+  ]);
+  return members === 0 && invitations === 0;
+}
+
+/**
+ * This member's rights over this organization's members, reading the
+ * organization only when the answer depends on it (a sandbox developer in its
+ * own organization). What the routes and the members screen ask.
+ */
+export async function orgMemberRights(
+  user: Member,
+  orgId: string,
+): Promise<{ readonly manage: boolean; readonly view: boolean }> {
+  const org: OrgFacts = {
+    developerWorkspace: holdsWorkspaceRights(user, orgId) ? await isDeveloperWorkspace(orgId) : false,
+  };
+  return { manage: mayManageOrgMembers(user, orgId, org), view: mayViewOrgMembers(user, orgId, org) };
 }
 
 /**
@@ -137,14 +185,47 @@ export function mayManageInvitation(user: Member, invitation: { readonly role: s
  *   · a platform administrator is never turned into anything else by an
  *     invitation (an admin changes roles, in /admin/users);
  *   · a developer workspace's invitation (sandbox developer) never replaces
- *     an account's different role.
+ *     an account's different role;
+ *   · a developer workspace's invitation never REACTIVATES a deactivated
+ *     account (review round 2). Accepting sets isActive, and the invitee's own
+ *     mailbox is all it takes, so a peer in the workspace could invite back an
+ *     account a platform admin had deactivated, and its owner accept. Only an
+ *     administrator brings a deactivated account back. A sandbox developer can
+ *     send no other role (`refuseInviteRole`), so the invited role is the
+ *     inviter's too.
  */
-export function refuseAcceptForExistingAccount(existingRole: string, invitedRole: string): string | null {
+export function refuseAcceptForExistingAccount(
+  existingRole: string,
+  invitedRole: string,
+  existingIsActive: boolean,
+): string | null {
   if (isAdminRoleName(existingRole) && !isAdminRoleName(invitedRole)) {
     return "This invitation would remove your platform administrator role, so it cannot be accepted with this account.";
   }
   if (mapLegacyRole(invitedRole) === "sandbox_developer" && mapLegacyRole(existingRole) !== "sandbox_developer") {
     return "This account already has a role on this host, and a developer workspace invitation would replace it. Ask the workspace to invite another address.";
   }
+  if (mapLegacyRole(invitedRole) === "sandbox_developer" && !existingIsActive) {
+    return "This account has been deactivated, and a developer workspace invitation cannot reactivate it. Ask an administrator.";
+  }
   return null;
+}
+
+/**
+ * Should this invitation be MAILED to its address?
+ *
+ * A SANDBOX DEVELOPER'S INVITATION MAILS ONLY AN ADDRESS WITH NO ACCOUNT
+ * (review round 2). The invite route told an administrator "User already
+ * belongs to another organization", and handing that answer to anyone with a
+ * workspace made it an oracle for which addresses are registered on this
+ * host, free of charge because only created invitations spent the budget. So
+ * for a sandbox developer the route answers every address alike — creates the
+ * invitation, spends a seat and a send — and simply does not mail one whose
+ * account it could never move: an account elsewhere, a deactivated one, one
+ * with another role (`refuseAcceptForExistingAccount` would refuse it anyway),
+ * or a member already here. Without the email nobody holds the token, so
+ * nothing can be accepted. Administrators keep the answer they had.
+ */
+export function mailsInvitation(inviterRole: string, addressHasAccount: boolean): boolean {
+  return mapLegacyRole(inviterRole) !== "sandbox_developer" || !addressHasAccount;
 }

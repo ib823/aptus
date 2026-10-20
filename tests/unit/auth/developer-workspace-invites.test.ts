@@ -71,7 +71,7 @@ vi.mock("@/lib/auth/send-magic-link", () => ({ sendMagicLink: async () => ({ sen
 import { prisma } from "@/lib/db/prisma";
 import { hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { DEVELOPER_WORKSPACE_INVITES_PER_DAY } from "@/lib/auth/org-invites";
-import { POST as invite } from "@/app/api/organizations/[orgId]/users/route";
+import { GET as listMembers, POST as invite } from "@/app/api/organizations/[orgId]/users/route";
 import { DELETE as revoke, GET as listInvitations } from "@/app/api/organizations/[orgId]/invitations/route";
 import { POST as accept } from "@/app/api/invitations/[token]/accept/route";
 
@@ -81,7 +81,14 @@ const CUSTOMER = `${RUN}-customer`;
 const DEVELOPER = { id: `${RUN}-dev`, email: `${RUN}-dev@example.test`, role: "sandbox_developer", org: WORKSPACE };
 const EMBEDDED = { id: `${RUN}-embedded`, email: `${RUN}-embedded@example.test`, role: "sandbox_developer", org: CUSTOMER };
 const ADMIN = { id: `${RUN}-admin`, email: `${RUN}-admin@example.test`, role: "client_admin", org: CUSTOMER };
-const PEOPLE = [DEVELOPER, EMBEDDED, ADMIN];
+// A second sandbox developer in the same workspace, whom a platform admin has
+// deactivated (review round 2).
+const BANNED = { id: `${RUN}-banned`, email: `${RUN}-banned@example.test`, role: "sandbox_developer", org: WORKSPACE };
+// A workspace of its own for the concurrency test, so its budget is untouched.
+const RACE_WS = `${RUN}-race`;
+const RACER = { id: `${RUN}-racer`, email: `${RUN}-racer@example.test`, role: "sandbox_developer", org: RACE_WS };
+const PEOPLE = [DEVELOPER, EMBEDDED, ADMIN, BANNED, RACER];
+const ORGS = [WORKSPACE, CUSTOMER, RACE_WS];
 const tokens = new Map<string, string>();
 
 function post(body: unknown) {
@@ -100,9 +107,11 @@ const victim = (n: number | string) => `${RUN}-victim-${n}@victimcorp.test`;
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite rights (real PostgreSQL)", () => {
   beforeAll(async () => {
-    for (const id of [WORKSPACE, CUSTOMER]) {
+    for (const id of ORGS) {
       await prisma.organization.create({
-        data: { id, name: `${RUN} ${id}`, type: "client", orgType: "client", maxPartnerUsers: 50 },
+        // ENTERPRISE, so the plan's seats never decide a test about the budget;
+        // the concurrency test sets its own plan.
+        data: { id, name: `${RUN} ${id}`, type: "client", orgType: "client", maxPartnerUsers: 50, plan: "ENTERPRISE" },
       });
     }
     for (const person of PEOPLE) {
@@ -125,16 +134,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
   });
 
   afterAll(async () => {
-    await prisma.orgInvitation.deleteMany({ where: { organizationId: { in: [WORKSPACE, CUSTOMER] } } });
+    await prisma.orgInvitation.deleteMany({ where: { organizationId: { in: ORGS } } });
     await prisma.session.deleteMany({ where: { userId: { in: PEOPLE.map((p) => p.id) } } });
     await prisma.user.deleteMany({ where: { email: { startsWith: RUN } } });
-    await prisma.organization.deleteMany({ where: { id: { in: [WORKSPACE, CUSTOMER] } } });
+    await prisma.organization.deleteMany({ where: { id: { in: ORGS } } });
     await prisma.$disconnect();
   });
 
   beforeEach(async () => {
     sent.length = 0;
-    await prisma.orgInvitation.deleteMany({ where: { organizationId: { in: [WORKSPACE, CUSTOMER] } } });
+    await prisma.orgInvitation.deleteMany({ where: { organizationId: { in: ORGS } } });
     await prisma.user.deleteMany({ where: { email: { contains: "-victim-" , startsWith: RUN } } });
   });
 
@@ -205,6 +214,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
   });
 
   describe("a sandbox developer in a customer's organization", () => {
+    // Review round 2: invite and member-list rights are a developer
+    // WORKSPACE's, not the role's wherever it sits. A client admin may offer a
+    // contractor the sandbox; that must not let the contractor bring in
+    // outsiders who then read the customer's members and Studio.
     async function adminInvitation(): Promise<string> {
       signInAs(ADMIN);
       const res = await invite(post({ email: victim("new-admin"), role: "client_admin" }), params({ orgId: CUSTOMER }));
@@ -216,13 +229,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
       return row!.id;
     }
 
+    it("cannot invite anyone into it", async () => {
+      signInAs(EMBEDDED);
+      const res = await invite(post({ email: victim("outsider"), role: "sandbox_developer" }), params({ orgId: CUSTOMER }));
+      expect(res.status).toBe(403);
+      expect(await prisma.orgInvitation.count({ where: { organizationId: CUSTOMER } })).toBe(0);
+      expect(sent).toHaveLength(0);
+    });
+
+    it("cannot read its member list", async () => {
+      signInAs(EMBEDDED);
+      const res = await listMembers(new NextRequest("http://localhost/x"), params({ orgId: CUSTOMER }));
+      expect(res.status).toBe(403);
+      expect(await res.text()).not.toContain(ADMIN.email);
+    });
+
     it("does not see the administrators' invitations", async () => {
       await adminInvitation();
       signInAs(EMBEDDED);
       const res = await listInvitations(new NextRequest("http://localhost/x"), params({ orgId: CUSTOMER }));
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { data: { email: string; role: string }[] };
-      expect(body.data.map((i) => i.role)).not.toContain("client_admin");
+      expect(res.status).toBe(403);
+      expect(await res.text()).not.toContain(victim("new-admin"));
     });
 
     it("cannot revoke an administrator's invitation", async () => {
@@ -235,17 +262,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
       expect(row?.status).toBe("pending");
     });
 
-    it("still sees and revokes a sandbox developer invitation", async () => {
-      signInAs(EMBEDDED);
-      await invite(post({ email: victim("peer"), role: "sandbox_developer" }), params({ orgId: CUSTOMER }));
+    it("leaves a developer in its own workspace its rights", async () => {
+      signInAs(DEVELOPER);
+      expect((await invite(post({ email: victim("peer"), role: "sandbox_developer" }), params({ orgId: WORKSPACE }))).status).toBe(201);
+      expect((await listMembers(new NextRequest("http://localhost/x"), params({ orgId: WORKSPACE }))).status).toBe(200);
       const listed = (await (
-        await listInvitations(new NextRequest("http://localhost/x"), params({ orgId: CUSTOMER }))
+        await listInvitations(new NextRequest("http://localhost/x"), params({ orgId: WORKSPACE }))
       ).json()) as { data: { id: string; email: string }[] };
       const peer = listed.data.find((i) => i.email === victim("peer"));
       expect(peer).toBeDefined();
-
-      const url = `http://localhost/api/organizations/${CUSTOMER}/invitations?invitationId=${peer!.id}`;
-      expect((await revoke(new NextRequest(url, { method: "DELETE" }), params({ orgId: CUSTOMER }))).status).toBe(200);
+      const url = `http://localhost/api/organizations/${WORKSPACE}/invitations?invitationId=${peer!.id}`;
+      expect((await revoke(new NextRequest(url, { method: "DELETE" }), params({ orgId: WORKSPACE }))).status).toBe(200);
     });
 
     it("leaves the administrator's own view of every invitation alone", async () => {
@@ -254,6 +281,117 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
       const res = await listInvitations(new NextRequest("http://localhost/x"), params({ orgId: CUSTOMER }));
       const body = (await res.json()) as { data: { role: string }[] };
       expect(body.data.map((i) => i.role)).toContain("client_admin");
+    });
+  });
+
+  describe("an account a platform admin deactivated", () => {
+    // Review round 2: a peer in the same workspace invited the deactivated
+    // account, its owner accepted from their own mailbox with no session, and
+    // accepting wrote isActive: true — a stranger overriding a platform
+    // admin's decision.
+    beforeEach(async () => {
+      await prisma.user.update({ where: { id: BANNED.id }, data: { isActive: false } });
+    });
+
+    it("is not reactivated by a workspace peer's invitation", async () => {
+      signInAs(DEVELOPER);
+      const res = await invite(post({ email: BANNED.email, role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      expect(res.status).toBe(201);
+
+      // Even with the token in hand (the test reads it from the table), the
+      // accept refuses to bring the account back.
+      const row = await prisma.orgInvitation.findFirst({ where: { organizationId: WORKSPACE, email: BANNED.email } });
+      jar.clear();
+      const accepted = await accept(post({}), params({ token: row!.token }));
+      expect(accepted.status).toBe(409);
+      const after = await prisma.user.findUnique({ where: { id: BANNED.id }, select: { isActive: true } });
+      expect(after?.isActive).toBe(false);
+    });
+
+    it("is not mailed the token in the first place", async () => {
+      signInAs(DEVELOPER);
+      await invite(post({ email: BANNED.email, role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      expect(sent.map((m) => m.to.email)).not.toContain(BANNED.email);
+    });
+  });
+
+  describe("probing which addresses are registered", () => {
+    // Review round 2: an address with an account elsewhere answered 400 "User
+    // already belongs to another organization", one without answered 201, and
+    // only the 201s spent the budget — a free, unlimited oracle.
+    const registered = (n: number) => `${RUN}-victim-reg-${n}@bigclient.test`;
+
+    beforeEach(async () => {
+      for (let i = 0; i < 12; i++) {
+        await prisma.user.create({
+          data: { email: registered(i), name: "Registered", role: "client_admin", organizationId: CUSTOMER },
+        });
+      }
+    });
+
+    it("answers a registered address exactly as an unregistered one, and mails neither more than the invitee", async () => {
+      signInAs(DEVELOPER);
+      const known = await invite(post({ email: registered(0), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      const unknown = await invite(post({ email: victim("fresh"), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+
+      expect(known.status).toBe(unknown.status);
+      expect(known.status).toBe(201);
+      const shape = (body: unknown) => JSON.stringify(body, (_k, v: unknown) => (typeof v === "string" ? "s" : v));
+      expect(shape(await known.json())).toBe(shape(await unknown.json()));
+      expect(sent.map((m) => m.to.email)).toEqual([victim("fresh")]);
+      // The registered account is untouched.
+      const user = await prisma.user.findUnique({ where: { email: registered(0) }, select: { organizationId: true } });
+      expect(user?.organizationId).toBe(CUSTOMER);
+    });
+
+    it("charges every probe to the day's budget", async () => {
+      signInAs(DEVELOPER);
+      for (let i = 0; i < DEVELOPER_WORKSPACE_INVITES_PER_DAY; i++) {
+        await invite(post({ email: registered(i), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      }
+      const next = await invite(post({ email: victim("after-probes"), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      expect(next.status).toBe(429);
+    });
+
+    it("leaves an administrator's refusal of another organization's member as it was", async () => {
+      signInAs(ADMIN);
+      const res = await invite(post({ email: DEVELOPER.email, role: "viewer" }), params({ orgId: CUSTOMER }));
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("concurrent invitations", () => {
+    // Review round 2: the seat and budget checks were separate reads with
+    // nothing serialising them, so 25 parallel invites all passed and all sent.
+    async function race(): Promise<number[]> {
+      signInAs(RACER);
+      return Promise.all(
+        Array.from({ length: 25 }, (_, i) =>
+          invite(post({ email: victim(`race-${i}`), role: "sandbox_developer" }), params({ orgId: RACE_WS })).then(
+            (r) => r.status,
+          ),
+        ),
+      );
+    }
+
+    it("send no more than the day's budget however many arrive at once", async () => {
+      await prisma.organization.update({ where: { id: RACE_WS }, data: { plan: "ENTERPRISE" } });
+      const statuses = await race();
+      expect(statuses.filter((s) => s === 201)).toHaveLength(DEVELOPER_WORKSPACE_INVITES_PER_DAY);
+      expect(statuses.filter((s) => s !== 201).every((s) => s === 429)).toBe(true);
+      expect(await prisma.orgInvitation.count({ where: { organizationId: RACE_WS } })).toBe(
+        DEVELOPER_WORKSPACE_INVITES_PER_DAY,
+      );
+      expect(sent).toHaveLength(DEVELOPER_WORKSPACE_INVITES_PER_DAY);
+    });
+
+    it("hold no more pending invitations than the plan has seats", async () => {
+      // TRIAL: five seats, one of them the racer's own.
+      await prisma.organization.update({ where: { id: RACE_WS }, data: { plan: "TRIAL" } });
+      const statuses = await race();
+      expect(statuses.filter((s) => s === 201)).toHaveLength(4);
+      expect(await prisma.orgInvitation.count({ where: { organizationId: RACE_WS, status: "pending" } })).toBe(4);
+      expect(sent).toHaveLength(4);
     });
   });
 });

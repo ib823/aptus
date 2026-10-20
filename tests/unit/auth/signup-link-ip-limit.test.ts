@@ -46,6 +46,7 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => {
 });
 
 import { authOptions } from "@/lib/auth/auth-options";
+import { checkSignupEmailLimit } from "@/lib/auth/developer-workspace";
 
 type Send = (params: { identifier: string; url: string }) => Promise<void>;
 const provider = authOptions.providers[0] as unknown as { options: { sendVerificationRequest: Send } };
@@ -101,5 +102,29 @@ describe("with developer sign-up off — the deployed default", () => {
     mocks.ip = "10.20.0.6";
     for (let i = 0; i < 11; i++) await send({ identifier: fresh(), url: link });
     expect(mocks.keys.some((k) => k.startsWith("signup:"))).toBe(false);
+  });
+
+  // Review round 2: the per-email bucket was spent for every new address in
+  // either mode, and /api/auth/signup spends it for any caller who names an
+  // address — so five anonymous requests an hour kept a new employee's first
+  // sign-in link refused on the deployed default.
+  it("a new address's link spends no per-email bucket, and a drained one does not refuse it", async () => {
+    vi.stubEnv("COREEDGE_DEVELOPER_SIGNUP", "");
+    const newHire = fresh();
+    for (let i = 0; i < 6; i++) await checkSignupEmailLimit(newHire);
+    mocks.keys.length = 0;
+
+    for (let i = 0; i < 6; i++) await expect(send({ identifier: newHire, url: link })).resolves.toBeUndefined();
+    expect(mocks.keys.some((k) => k.startsWith("signup-email:"))).toBe(false);
+  });
+});
+
+describe("the per-email bucket with developer sign-up open", () => {
+  it("still refuses a new address's sixth link within the hour", async () => {
+    vi.stubEnv("COREEDGE_DEVELOPER_SIGNUP", "open");
+    mocks.ip = "10.20.0.7";
+    const address = fresh();
+    for (let i = 0; i < 5; i++) await send({ identifier: address, url: link });
+    await expect(send({ identifier: address, url: link })).rejects.toThrow(/sign-up links for this address/i);
   });
 });
