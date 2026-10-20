@@ -11,7 +11,7 @@
  *
  * ACTIVATED is NEVER inferred — only a live $metadata 200 sets it.
  */
-import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
+import type { SapServiceAddressBasis, SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 
 export type HubContentType =
   | "API"
@@ -83,6 +83,23 @@ export const HUB_STATUSES: HubStatus[] = [
 /** Tooltip for a DEPRECATED badge — names the SAP successor when one is recorded. */
 export function deprecationTooltip(successor: string | null | undefined): string {
   return successor ? `Deprecated by SAP — successor: ${successor}` : "Deprecated by SAP — no successor named yet";
+}
+
+/**
+ * P0.8 — THE LINE EVERY DEPRECATED ROW SHOWS, in the row itself and not only in
+ * a tooltip. The successor was carried on the payload but rendered only as the
+ * badge's `title`, which a touch screen never shows and a reader scanning the
+ * list never sees, so a deprecated API read like any other row with a red pill.
+ *
+ * When SAP names a successor (the row's column, else the committed map) the
+ * line names it. When it does not, the line says so and where to look — it
+ * never invents one: the anonymous Hub feed carries no successor field, and
+ * hub-successors.ts exists to refuse inferring one from a name.
+ */
+export function deprecationHint(successor: string | null | undefined): string {
+  return successor
+    ? `deprecated by SAP — successor: ${successor}; build on it, not on this`
+    : "deprecated by SAP — no successor is recorded; check its api.sap.com page before building on it";
 }
 
 export interface HubContentTypeMeta {
@@ -417,16 +434,109 @@ export function mergeStoredProbe(raw: unknown, tenantKey: string, probe: StoredP
 }
 
 /**
- * Whether an item has a live OData endpoint we can $metadata-probe. Mirror of
- * hubApiToService returning non-null: only API / CDS_VIEW carrying an OData
- * apiType are probeable. SOAP, apiType null, sap-s4-*, and non-runtime types are
- * NOT probeable — there is no endpoint to check, so their status is terminal.
+ * P0.8 — SAP'S `sap-s4-*` WRAPPER LISTINGS HAVE NO ADDRESS OF THEIR OWN.
+ *
+ * The Hub lists some S/4 services under a wrapper id
+ * ("sap-s4-CE_RETAILSEASON_0001-v1") instead of the service's technical name,
+ * and the import gives them an OData apiType like any other row. Building an
+ * address from the wrapper id produces /sap/opu/odata/sap/sap-s4-…-v1 or the
+ * odata4 equivalent — malformed by construction. The comments here and on
+ * classifyApiTypeById said these were not probeable, but nothing checked the
+ * prefix once an apiType was present, so 148 production rows were offered as
+ * probeable and counted as services with an endpoint.
+ *
+ * The wrapped id inside is NOT assumed to be the address either: that would
+ * be another guess, and none of the 362 wrapped ids in the committed snapshot
+ * appears as a row of its own to check it against.
  */
-export function isProbeable(item: { contentType: HubContentType; apiType: string | null }): boolean {
-  return (
-    (item.contentType === "API" || item.contentType === "CDS_VIEW") &&
-    (item.apiType === "ODATAV2" || item.apiType === "ODATAV4")
-  );
+export function isWrapperApiId(externalId: string): boolean {
+  return /^sap-s4-/i.test(externalId.trim());
+}
+
+/**
+ * Which product family's address rules apply to a catalogue row (P0.8).
+ *   s4             — every S/4 edition: per-service addresses
+ *   successfactors — one OData V2 root for every API (SF_ODATA_V2_ROOT)
+ *   none           — ECC, Ariba, anything else: no address is derived
+ * The same split as hubCatalogueScope (dynamic-catalog.ts), kept pure here so
+ * the client-safe status resolver can use it.
+ */
+export type CatalogueAddressFamily = "s4" | "successfactors" | "none";
+
+export function catalogueAddressFamily(product: { key: string; edition: string | null }): CatalogueAddressFamily {
+  if (product.key === "ecc") return "none";
+  if (product.edition) return "s4";
+  if (product.key === "successfactors") return "successfactors";
+  return "none";
+}
+
+/**
+ * SuccessFactors serves every OData V2 API from ONE root, and the entity sets
+ * under it are what tell the APIs apart (tdd-connector's SUCCESSFACTORS_SERVICES
+ * models its curated services the same way).
+ */
+export const SF_ODATA_V2_ROOT = "/odata/v2";
+
+export type CatalogueAddressBasis = SapServiceAddressBasis;
+
+export interface CatalogueAddress {
+  path: string;
+  protocol: "ODATAV2" | "ODATAV4";
+  basis: CatalogueAddressBasis;
+}
+
+/**
+ * THE ONE PLACE A CATALOGUE ROW BECOMES AN ADDRESS, or null when it has none.
+ *
+ *   S/4 OData V2  → /sap/opu/odata/sap/<apiId>             (convention)
+ *   S/4 OData V4  → KNOWN_V4_SERVICE_PATHS[apiId]           (known-binding)
+ *                   else deriveV4Path(apiId)                (derived — a guess)
+ *   SF  OData V2  → /odata/v2                               (product-root)
+ *   wrapper rows, SOAP, REST, events, reference content, SF V4, ECC, Ariba → null
+ *
+ * A V4 address of either basis is "unverified" on a system until a probe of
+ * that exact address answers 200 there (catalogue-address-verification.ts).
+ */
+export function catalogueAddress(
+  item: { contentType: HubContentType; apiType: string | null; externalId: string },
+  family: CatalogueAddressFamily = "s4",
+): CatalogueAddress | null {
+  if (item.contentType !== "API" && item.contentType !== "CDS_VIEW") return null;
+  if (family === "successfactors") {
+    // CDS views and V4 APIs are not under the V2 root; their own roots are not
+    // derivable from a Hub id, so they get no address rather than a guess.
+    if (item.contentType === "API" && item.apiType === "ODATAV2") {
+      return { path: SF_ODATA_V2_ROOT, protocol: "ODATAV2", basis: "product-root" };
+    }
+    return null;
+  }
+  if (family !== "s4") return null;
+  if (isWrapperApiId(item.externalId)) return null;
+  if (item.apiType === "ODATAV2") {
+    return { path: `/sap/opu/odata/sap/${item.externalId}`, protocol: "ODATAV2", basis: "convention" };
+  }
+  if (item.apiType === "ODATAV4") {
+    const known = KNOWN_V4_SERVICE_PATHS[item.externalId];
+    return known
+      ? { path: known, protocol: "ODATAV4", basis: "known-binding" }
+      : { path: deriveV4Path(item.externalId), protocol: "ODATAV4", basis: "derived" };
+  }
+  return null;
+}
+
+/**
+ * Whether an item has a live OData endpoint of ITS OWN that we can
+ * $metadata-probe: an S/4 row with an address (catalogueAddress). SOAP, apiType
+ * null, `sap-s4-*` wrappers and non-runtime types are NOT probeable — there is
+ * no endpoint to check, so their status is terminal. Nor is a SuccessFactors
+ * row: its address is the shared /odata/v2 root, and a 200 from the root says
+ * nothing about one API's entity sets.
+ */
+export function isProbeable(
+  item: { contentType: HubContentType; apiType: string | null; externalId: string },
+  family: CatalogueAddressFamily = "s4",
+): boolean {
+  return family === "s4" && catalogueAddress(item, family) !== null;
 }
 
 /**
@@ -466,6 +576,7 @@ export function httpToRuntimeStatus(http: number | undefined): HubStatus {
 export function resolveHubStatus(
   item: HubItemForStatus,
   probeOutcomes?: Map<string, number>,
+  family: CatalogueAddressFamily = "s4",
 ): HubStatus {
   // 2608 WS3 — SAP's own retirement wins over everything, tenant or not: a
   // deprecated service that still answers 200 must never read as ACTIVATED.
@@ -478,14 +589,18 @@ export function resolveHubStatus(
   // TODO: runtime probe — verify a tenant's event subscription (channel/binding)
   //       and promote from AVAILABLE only on a confirmed subscription.
   if (item.contentType === "EVENT") return "AVAILABLE";
-  // A stored/live probe outcome is authoritative for any runtime item — even a
-  // SOAP row we somehow probed reports its real HTTP result.
+  // P0.8 — a wrapper row's stored outcome is the answer to a MALFORMED address
+  // (Probe-all reached these rows before they were excluded), so it says
+  // nothing about the service and must not set a badge.
+  if (isWrapperApiId(item.externalId)) return "NOT_PROBEABLE";
+  // A stored/live probe outcome is authoritative for any other runtime item —
+  // even a SOAP row we somehow probed reports its real HTTP result.
   const http = probeOutcomes?.get(item.externalId);
   if (http !== undefined) return httpToRuntimeStatus(http);
   // No outcome: distinguish "probeable but not probed yet" (NOT_CHECKED — run
   // Probe-all / open it) from "no OData endpoint at all" (NOT_PROBEABLE —
   // terminal; SOAP/async/null apiType). Never conflate the two.
-  return isProbeable(item) ? "NOT_CHECKED" : "NOT_PROBEABLE";
+  return isProbeable(item, family) ? "NOT_CHECKED" : "NOT_PROBEABLE";
 }
 
 /**
@@ -523,6 +638,11 @@ export function classifyApiTypeById(apiId: string): "ODATAV2" | "ODATAV4" | "SOA
  * services bind under /sap/opu/odata4/sap/<group>/srvd_a2x/sap/<def>/<version>
  * and the Hub apiId doesn't map 1:1, so this is a candidate only — a 404 keeps
  * the row AVAILABLE, only a live 200 makes it ACTIVATED. Never fabricated.
+ *
+ * P0.8: the one V4 address this repo has checked against a real system
+ * (CE_PURCHASEORDER_0001) is NOT what this produces, so a derived address is
+ * labelled "unverified" on every screen until a probe of it answers 200 on the
+ * system in question, and that answer is recorded per connection.
  */
 export function deriveV4Path(externalId: string): string {
   const m = externalId.match(/^(.*?)_(\d+)$/);
@@ -551,32 +671,35 @@ export function serviceApiId(service: Pick<SapServiceDefinition, "path" | "hubAp
 }
 
 /**
- * Derive a probeable OData service from a runtime row, or null if it has no
- * probeable endpoint. OData V2 uses the reliable /sap/opu/odata/sap/<id> path;
- * OData V4 uses a BEST-EFFORT derived path (deriveV4Path) so a tenant-exposed V4
- * service can still reach ACTIVATED on a live 200 (else it stays AVAILABLE).
- * SOAP, events, grouped-CDS package rows, and null-type rows are not probeable.
+ * Derive an OData service from a runtime row, or null if it has no address
+ * (catalogueAddress decides, for the row's product family). OData V2 uses the
+ * reliable /sap/opu/odata/sap/<id> path; OData V4 uses a BEST-EFFORT derived
+ * path (deriveV4Path) so a tenant-exposed V4 service can still reach ACTIVATED
+ * on a live 200 (else it stays AVAILABLE). SOAP, events, grouped-CDS package
+ * rows, null-type rows and `sap-s4-*` wrappers have none. `addressBasis` says
+ * which rule produced the path.
  */
-export function hubApiToService(item: {
-  contentType: HubContentType;
-  apiType: string | null;
-  externalId: string;
-  title: string;
-  packageId: string | null;
-  communicationScenarios: string[];
-}): SapServiceDefinition | null {
-  if (item.contentType !== "API" && item.contentType !== "CDS_VIEW") return null;
-  let path: string | null = null;
-  if (item.apiType === "ODATAV2") path = `/sap/opu/odata/sap/${item.externalId}`;
-  else if (item.apiType === "ODATAV4") path = KNOWN_V4_SERVICE_PATHS[item.externalId] ?? deriveV4Path(item.externalId); // verified, else best-effort
-  if (!path) return null;
+export function hubApiToService(
+  item: {
+    contentType: HubContentType;
+    apiType: string | null;
+    externalId: string;
+    title: string;
+    packageId: string | null;
+    communicationScenarios: string[];
+  },
+  family: CatalogueAddressFamily = "s4",
+): SapServiceDefinition | null {
+  const address = catalogueAddress(item, family);
+  if (!address) return null;
   return {
     key: item.externalId,
     label: item.title,
     scenario: item.communicationScenarios[0] ?? "",
-    path,
+    path: address.path,
     domain: item.packageId ?? "",
-    protocol: item.apiType === "ODATAV2" ? "ODATAV2" : "ODATAV4",
+    protocol: address.protocol,
     hubApiId: item.externalId,
+    addressBasis: address.basis,
   };
 }

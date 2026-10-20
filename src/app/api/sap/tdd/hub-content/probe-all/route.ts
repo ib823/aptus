@@ -34,6 +34,7 @@ import {
 } from "@/lib/sap-public/console-read-guard";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
 import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
+import { addressVerificationScope, recordAddressProbe } from "@/lib/sap-public/catalogue-address-verification";
 import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
@@ -262,17 +263,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // minutes later each row was written back from that copy, erasing whatever
   // other runs had stored on the shared row in the meantime (audit A23). The
   // write below never needs the old value: the database merges into its own.
+  //
+  // P0.8: `sap-s4-*` wrapper rows are excluded at the query AND by isProbeable
+  // below. Their addresses are malformed by construction; probing them filed
+  // a 404 per wrapper under the tenant and counted them as probeable services.
   const rows = await prisma.sapHubContent.findMany({
     where: {
       ...scope.where,
       contentType: { in: ["API", "CDS_VIEW"] },
       apiType: { in: ["ODATAV2", "ODATAV4"] },
-      ...(includeDeprecated ? {} : { NOT: { hubState: "DEPRECATED" } }),
+      AND: [
+        { NOT: { externalId: { startsWith: "sap-s4-", mode: "insensitive" } } },
+        ...(includeDeprecated ? [] : [{ NOT: { hubState: "DEPRECATED" } }]),
+      ],
     },
     select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
   });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).
-  const targets = rows.filter((r) => isProbeable({ contentType: r.contentType as HubContentType, apiType: r.apiType }));
+  const targets = rows.filter((r) =>
+    isProbeable({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }),
+  );
+  /*
+   * P0.8 — WHERE A V4 ADDRESS'S PROOF IS FILED: this tenant, under its owner
+   * (a deployment tenant under "-deployment-"), with the connection and host
+   * that answered, so a later edit of either makes it "unverified" again.
+   */
+  const verificationScope = addressVerificationScope({
+    source: resolved.source,
+    organizationId: auth.user.organizationId ?? null,
+    product: product.key,
+    tenantKey: targetTenantKey,
+    connectionId: resolved.connection?.id ?? null,
+    baseUrl: tenant.baseUrl,
+  });
 
   const at = new Date().toISOString();
   let probed = 0;
@@ -320,6 +343,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // happens to carry the same name. Merged into the row's CURRENT value in
       // one statement, so an entry another run stored a second ago survives.
       await persistStoredProbe(row.id, storageKey, { http: result.status, at, read, write });
+      // A 200 on a V4 address verifies it on this system; a 404 withdraws it.
+      await recordAddressProbe(verificationScope, {
+        service: svc,
+        status: result.status,
+        actorUserId: viewer.id,
+        method: "probe-all",
+        at: new Date(at),
+      });
       probed++;
       const bucket = httpToRuntimeStatus(result.status);
       byOutcome[bucket] = (byOutcome[bucket] ?? 0) + 1;

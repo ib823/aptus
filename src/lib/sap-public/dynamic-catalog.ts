@@ -13,6 +13,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { catalogueAddress } from "@/lib/sap-public/hub-content";
 import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 
 const EDITION_FIELD = {
@@ -134,14 +135,16 @@ export interface DynamicCatalogOpts {
   limit?: number;
 }
 
-/** Map a released API id to its OData service path (V2 stable, V4 best-effort). */
+/**
+ * Map a released API id to its OData service path (V2 stable, V4 best-effort),
+ * by the ONE derivation the catalogue uses (catalogueAddress, P0.8): this kept
+ * its own V4 rule, which kept the version suffix in the service name and
+ * ignored the recorded bindings, and it never refused a `sap-s4-*` wrapper id.
+ */
 function odataPath(apiId: string, apiType: string | null, includeV4: boolean): string | null {
-  if (apiType === "ODATAV2") return `/sap/opu/odata/sap/${apiId}`;
-  if (apiType === "ODATAV4" && includeV4) {
-    // Best-effort only; verify the real service-group path from the tenant catalog.
-    return `/sap/opu/odata4/sap/${apiId.toLowerCase()}/srvd_a2x/sap/${apiId.toLowerCase()}/0001`;
-  }
-  return null; // SOAP / events / design-time content are not OData-probeable
+  if (apiType === "ODATAV4" && !includeV4) return null;
+  // SOAP / events / design-time content / wrappers have no address.
+  return catalogueAddress({ contentType: "API", apiType, externalId: apiId }, "s4")?.path ?? null;
 }
 
 /**
@@ -159,6 +162,9 @@ export async function getDynamicOdataServices(
       [field]: true,
       status: { in: opts.statuses ?? ["Released", "Active"] },
       apiType: { in: includeV4 ? ["ODATAV2", "ODATAV4"] : ["ODATAV2"] },
+      // `sap-s4-*` wrapper rows have no address (P0.8): left out here so they
+      // do not spend the `take` budget only to be dropped below.
+      NOT: { apiId: { startsWith: "sap-s4-", mode: "insensitive" } },
     },
     select: {
       apiId: true,

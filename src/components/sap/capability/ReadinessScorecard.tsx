@@ -77,6 +77,8 @@ export function ReadinessScorecard({
   available,
   probed,
   probeable,
+  probeableV4,
+  probeableV4Verified = 0,
   apiTotal,
   reference,
   deprecated = 0,
@@ -124,6 +126,13 @@ export function ReadinessScorecard({
   available: number;
   probed: number;
   probeable: number;
+  /**
+   * P0.8 — of `probeable`, how many are OData V4 (an address derived from the
+   * Hub id) and how many of those a probe has verified on this system.
+   * Optional: a caller without them shows the line as it was.
+   */
+  probeableV4?: number;
+  probeableV4Verified?: number;
   apiTotal: number;
   reference: number;
   /** 2608 WS3 — deprecated by SAP (Hub State), tenant-independent; never counted as Authorized. */
@@ -215,7 +224,18 @@ export function ReadinessScorecard({
         {HUB_CONTENT_TYPES.length} content types — grouped packages counted by the member count SAP declares, not by
         catalogue rows ·{" "}
         <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> services with an OData endpoint to
-        probe (V2 + best-effort V4)
+        probe{" "}
+        {probeableV4 === undefined ? (
+          "(V2 + best-effort V4)"
+        ) : (
+          <>
+            (V2 at SAP&rsquo;s naming convention; V4 at an address derived from the Hub id —{" "}
+            <strong style={{ color: "var(--ink-secondary)" }}>
+              {(probeableV4 - probeableV4Verified).toLocaleString()} of {probeableV4.toLocaleString()}
+            </strong>{" "}
+            V4 addresses unverified here until a probe answers 200)
+          </>
+        )}
         {aiApis ? <> · <strong style={{ color: "var(--ink-secondary)" }}>{aiApis.toLocaleString()}</strong> AI APIs</> : null} · the
         rest reference
       </p>

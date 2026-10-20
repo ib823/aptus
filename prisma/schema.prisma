@@ -663,6 +663,42 @@ model SapHubContent {
   @@index([catalogueRelease])
 }
 
+/// P0.8 — a catalogue OData V4 address proven on ONE system: a probe of exactly
+/// `servicePath` answered 200 there. Until a row exists (and still describes
+/// the system: same connection, same host, same path), the address is shown
+/// "unverified" — every non-curated V4 address is derived from the Hub id, and
+/// the one this repo checked against a real system was wrong.
+///
+/// Per connection, not on the shared SapHubContent row: that row is global, and
+/// what answers on one organization's system is that organization's
+/// information (see probeStorageKey). A DEPLOYMENT tenant has no organization
+/// and is filed under organizationId "-deployment-", as its console-read audit
+/// rows are. A later 404 for the same path removes the row.
+model CatalogueAddressVerification {
+  id               String   @id @default(cuid())
+  /// The tenant's owner, or "-deployment-" for a deployment ({PREFIX}_*) tenant.
+  organizationId   String
+  /// "s4hana" | "cloud-erp-private" | … — the product the tenant was read as.
+  product          String
+  /// SapConnection.key, or the deployment tenant's key.
+  tenantKey        String
+  /// The SapConnection that answered; null for a deployment tenant.
+  connectionId     String?
+  /// The host that answered, normalized (no trailing slash).
+  baseUrl          String
+  /// SapHubContent.externalId (the Hub apiId).
+  externalId       String
+  servicePath      String
+  verifiedAt       DateTime
+  /// The user whose probe answered 200; never rendered to other viewers.
+  verifiedByUserId String?
+  /// "probe-all" | "detail-probe" | "catalogue-overlay".
+  method           String
+
+  /// Also serves the per-tenant read (its leading columns).
+  @@unique([organizationId, product, tenantKey, externalId])
+}
+
 /// SAP Operations middleware — the multi-tenant keystone.
 ///
 /// One SAP tenant connection OWNED BY an Organization, so the middleware can be

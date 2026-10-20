@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   resolveSapConnection: vi.fn(),
   grantFindMany: vi.fn(),
   auditCreate: vi.fn(),
+  verificationUpsert: vi.fn(),
+  verificationDeleteMany: vi.fn(),
 }));
 
 /*
@@ -52,6 +54,8 @@ vi.mock("@/lib/db/prisma", () => ({
     sapConnection: { findMany: mocks.connectionFindMany },
     apiAccessGrant: { findMany: mocks.grantFindMany },
     northboundAuditEvent: { create: mocks.auditCreate },
+    // P0.8: a V4 address's proof on the probed tenant.
+    catalogueAddressVerification: { upsert: mocks.verificationUpsert, deleteMany: mocks.verificationDeleteMany },
   },
 }));
 /*
@@ -287,19 +291,68 @@ describe("POST /api/sap/tdd/hub-content/probe-all", () => {
   });
 
   it("skips SAP-deprecated rows by default and includes them only on includeDeprecated: true (2608 WS3)", async () => {
+    const SKIP_DEPRECATED = { NOT: { hubState: "DEPRECATED" } };
     await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
     const where = mocks.findMany.mock.calls[0]![0].where;
-    expect(where.NOT).toEqual({ hubState: "DEPRECATED" });
+    expect(where.AND).toContainEqual(SKIP_DEPRECATED);
 
     mocks.findMany.mockClear();
     const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", includeDeprecated: true }));
-    expect(mocks.findMany.mock.calls[0]![0].where.NOT).toBeUndefined();
+    expect(mocks.findMany.mock.calls[0]![0].where.AND).not.toContainEqual(SKIP_DEPRECATED);
     expect((await res.json()).data.includeDeprecated).toBe(true);
 
     // Anything but the literal boolean true stays opted OUT.
     mocks.findMany.mockClear();
     await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", includeDeprecated: "true" }));
-    expect(mocks.findMany.mock.calls[0]![0].where.NOT).toEqual({ hubState: "DEPRECATED" });
+    expect(mocks.findMany.mock.calls[0]![0].where.AND).toContainEqual(SKIP_DEPRECATED);
+  });
+
+  /*
+   * P0.8 — 148 production `sap-s4-*` wrapper rows were probed at malformed
+   * addresses. They are excluded at the query, deprecated or not, and a wrapper
+   * that reaches the worker anyway is not probed.
+   */
+  it("never probes a `sap-s4-*` wrapper row, whatever the deprecation opt-in", async () => {
+    const SKIP_WRAPPERS = { NOT: { externalId: { startsWith: "sap-s4-", mode: "insensitive" } } };
+    for (const includeDeprecated of [false, true]) {
+      mocks.findMany.mockClear();
+      await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", includeDeprecated }));
+      expect(mocks.findMany.mock.calls[0]![0].where.AND).toContainEqual(SKIP_WRAPPERS);
+    }
+
+    mocks.findMany.mockResolvedValue([
+      { id: "w", externalId: "sap-s4-CE_RETAILSEASON_0001-v1", contentType: "API", apiType: "ODATAV4", title: "W", packageId: null, communicationScenarios: [] },
+    ]);
+    mocks.probeService.mockClear();
+    const body = await (await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }))).json();
+    expect(mocks.probeService).not.toHaveBeenCalled();
+    expect(body.data.probed).toBe(0);
+  });
+
+  it("files a V4 address's 200 as its proof on this tenant, and only a V4 address's (P0.8)", async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: "v4", externalId: "CE_BANK_0003", contentType: "API", apiType: "ODATAV4", title: "Bank", packageId: null, communicationScenarios: [] },
+      { id: "v2", externalId: "API_PO", contentType: "API", apiType: "ODATAV2", title: "PO", packageId: null, communicationScenarios: [] },
+    ]);
+    mocks.probeService.mockResolvedValue({ service: "x", exposed: true, status: 200, entities: [] });
+    mocks.verificationUpsert.mockResolvedValue({});
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    expect(mocks.verificationUpsert).toHaveBeenCalledOnce();
+    const upsert = mocks.verificationUpsert.mock.calls[0]![0];
+    // A deployment tenant has no organization: filed where its audit rows are.
+    expect(upsert.where.organizationId_product_tenantKey_externalId).toEqual({
+      organizationId: "-deployment-",
+      product: "s4hana",
+      tenantKey: "default",
+      externalId: "CE_BANK_0003",
+    });
+    expect(upsert.create).toMatchObject({
+      servicePath: "/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003",
+      connectionId: null,
+      baseUrl: "https://x.example",
+      verifiedByUserId: "a",
+      method: "probe-all",
+    });
   });
 
   it("400 on an unknown tenant key", async () => {
