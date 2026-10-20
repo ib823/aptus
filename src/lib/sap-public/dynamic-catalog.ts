@@ -125,6 +125,40 @@ export function hubCatalogueScope(product: {
   };
 }
 
+/**
+ * THE ROWS PROBE ALL CONSIDERS, for an edition scope: API/CDS on OData V2/V4,
+ * never a `sap-s4-*` wrapper, and — unless the caller opts in — never a row
+ * SAP has deprecated. The worker still filters by isProbeable; this is the
+ * query that feeds it, and the list route's "callable" count must agree with
+ * it row for row.
+ *
+ * THE NULL ARM IS THE POINT. `NOT: { hubState: "DEPRECATED" }` alone becomes
+ * `NOT ("hubState" = 'DEPRECATED')`, which PostgreSQL evaluates to NULL — so
+ * the row is dropped — when hubState is NULL. A row with no recorded
+ * lifecycle (one the snapshot does not list, every row while the deploy stamp
+ * is off or has failed, every CDS view) is not deprecated: the list route
+ * counted it as callable, the dialog promised to probe it, and Probe all never
+ * did.
+ */
+const SKIP_DEPRECATED_WHERE: Prisma.SapHubContentWhereInput = {
+  OR: [{ hubState: null }, { NOT: { hubState: "DEPRECATED" } }],
+};
+
+export function probeAllCandidateWhere(
+  scopeWhere: Prisma.SapHubContentWhereInput,
+  opts: { includeDeprecated: boolean },
+): Prisma.SapHubContentWhereInput {
+  return {
+    ...scopeWhere,
+    contentType: { in: ["API", "CDS_VIEW"] },
+    apiType: { in: ["ODATAV2", "ODATAV4"] },
+    AND: [
+      { NOT: { externalId: { startsWith: "sap-s4-", mode: "insensitive" } } },
+      ...(opts.includeDeprecated ? [] : [SKIP_DEPRECATED_WHERE]),
+    ],
+  };
+}
+
 export interface DynamicCatalogOpts {
   edition?: SapEdition;
   /** Lifecycle states to include. Default: current, non-deprecated. */

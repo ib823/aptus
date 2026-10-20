@@ -10,9 +10,13 @@
  * cases someone thought of; this shows they hold for every row SAP publishes.
  *
  *   1. 0 wrapper rows are probeable (and there ARE wrapper rows to test).
- *   2. Every DEPRECATED row shows its successor line — SAP's named successor
+ *   2. Every DEPRECATED row shows a successor LINE — SAP's named successor
  *      where one is recorded, otherwise an explicit "none recorded" — and the
- *      deploy-time stamp marks each of them DEPRECATED.
+ *      deploy-time stamp marks each of them DEPRECATED. This is the roadmap's
+ *      criterion as amended, not as first written ("each shows a successor"):
+ *      SAP names a successor for only a few of them (6 of 61 in production),
+ *      and a "none recorded" line passes here. Naming the rest is an open
+ *      decision in docs/runbooks/coreedge-catalogue-addresses.md.
  *   3. A V4 row's address reads "verified" only after a recorded 200 at that
  *      exact address, on that system.
  */
@@ -94,7 +98,7 @@ describe("P0.8 acceptance over the committed S/4 Public catalogue", () => {
     });
   });
 
-  describe("2. every DEPRECATED row shows its successor", () => {
+  describe("2. every DEPRECATED row shows a successor line (SAP-named where recorded, else 'none recorded')", () => {
     const deprecated = CATALOGUE.filter((r) => r.hubState === "DEPRECATED");
     const stamp = new Map(parseHubLifecycleSnapshot(raw).records.map((r) => [r.externalId, r]));
 

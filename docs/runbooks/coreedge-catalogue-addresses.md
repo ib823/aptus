@@ -197,10 +197,15 @@ next deploy does not re-apply it.
 
 - `pnpm vitest run tests/unit/sap-public/catalogue-addresses-acceptance.test.ts`
   — the acceptance criteria over the committed S/4 Public catalogue: 0 wrapper
-  rows probeable; every DEPRECATED row shows its successor line; a V4 address
-  reads verified only after a recorded 200 at that address on that system.
+  rows probeable; every DEPRECATED row shows its successor line (it names an
+  SAP successor for 6 of the 61 and says "none recorded" for the rest, so the
+  roadmap's successor criterion is met only in part; see Open decisions); a V4
+  address reads verified only after a recorded 200 at that address on that
+  system.
 - `TEST_DATABASE_URL=… pnpm vitest run tests/integration/catalogue-lifecycle-and-addresses.test.ts`
-  — the stamp and the proof record against real PostgreSQL.
+  — the stamp and the proof record against real PostgreSQL, and Probe all's
+  row query: a row with no recorded lifecycle (`hubState` NULL) is selected,
+  and the selection equals the rows the callable count counts.
 - After the first production deploy: the build log's `[apply-hub-lifecycle]`
   lines, then Discover → Deprecated facet shows ~61 S/4 Public APIs, each with a
   successor line, and no `sap-s4-*` row reads "Not checked".

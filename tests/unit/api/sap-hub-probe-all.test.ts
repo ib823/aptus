@@ -291,7 +291,10 @@ describe("POST /api/sap/tdd/hub-content/probe-all", () => {
   });
 
   it("skips SAP-deprecated rows by default and includes them only on includeDeprecated: true (2608 WS3)", async () => {
-    const SKIP_DEPRECATED = { NOT: { hubState: "DEPRECATED" } };
+    // NULL hubState is "no lifecycle recorded", not deprecated: it must be
+    // selected (SQL's NOT (x = 'DEPRECATED') drops NULLs — see the integration
+    // test in catalogue-lifecycle-and-addresses).
+    const SKIP_DEPRECATED = { OR: [{ hubState: null }, { NOT: { hubState: "DEPRECATED" } }] };
     await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
     const where = mocks.findMany.mock.calls[0]![0].where;
     expect(where.AND).toContainEqual(SKIP_DEPRECATED);

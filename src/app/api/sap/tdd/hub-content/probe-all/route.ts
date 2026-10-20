@@ -35,7 +35,7 @@ import {
 import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
 import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
 import { addressVerificationScope, recordAddressProbe } from "@/lib/sap-public/catalogue-address-verification";
-import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
+import { hubCatalogueScope, probeAllCandidateWhere } from "@/lib/sap-public/dynamic-catalog";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
@@ -268,15 +268,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // below. Their addresses are malformed by construction; probing them filed
   // a 404 per wrapper under the tenant and counted them as probeable services.
   const rows = await prisma.sapHubContent.findMany({
-    where: {
-      ...scope.where,
-      contentType: { in: ["API", "CDS_VIEW"] },
-      apiType: { in: ["ODATAV2", "ODATAV4"] },
-      AND: [
-        { NOT: { externalId: { startsWith: "sap-s4-", mode: "insensitive" } } },
-        ...(includeDeprecated ? [] : [{ NOT: { hubState: "DEPRECATED" } }]),
-      ],
-    },
+    where: probeAllCandidateWhere(scope.where, { includeDeprecated }),
     select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
   });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).

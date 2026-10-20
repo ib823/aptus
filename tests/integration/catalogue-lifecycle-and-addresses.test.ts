@@ -39,6 +39,8 @@ import {
   readAddressVerifications,
   recordAddressProbe,
 } from "@/lib/sap-public/catalogue-address-verification";
+import { probeAllCandidateWhere } from "@/lib/sap-public/dynamic-catalog";
+import { isProbeable, type HubContentType } from "@/lib/sap-public/hub-content";
 import { applyHubLifecycle, type HubLifecycleRecord } from "@/lib/sap-public/hub-lifecycle-snapshot";
 
 const RUN = `p08-${randomUUID().slice(0, 8)}`;
@@ -136,6 +138,75 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the deploy-time lifecycle stamp
 
     // B — idempotent.
     expect(await applyHubLifecycle(prisma, records)).toEqual({ apiReferenceRows: 0, hubContentRows: 0 });
+  });
+});
+
+/*
+ * PROBE ALL'S QUERY AND THE "CALLABLE" COUNT AGREE, ROW FOR ROW.
+ *
+ * The list route counts callable rows in JavaScript (`hubState !== "DEPRECATED"
+ * && isProbeable`), where a NULL hubState passes. Probe all selected them in
+ * SQL with `NOT ("hubState" = 'DEPRECATED')`, which is NULL — not true — for a
+ * NULL hubState, so the row was dropped. Rows the snapshot does not list, every
+ * row when the deploy stamp is off or failed, and every CDS view keep a NULL
+ * hubState: each was counted, promised in the dialog, and never probed. A
+ * mocked prisma cannot see three-valued logic, so this runs on PostgreSQL.
+ */
+describe.skipIf(!process.env.TEST_DATABASE_URL)("Probe all's row query, against real PostgreSQL", () => {
+  const PROBE_RUN = `${RUN}-probe`;
+  const pid = (s: string) => `${PROBE_RUN}_${s}`;
+  const rows: Array<{ externalId: string; contentType: HubContentType; apiType: string; hubState: string | null }> = [
+    { externalId: pid("NULL_V2"), contentType: "API", apiType: "ODATAV2", hubState: null },
+    { externalId: pid("NULL_CDS"), contentType: "CDS_VIEW", apiType: "ODATAV2", hubState: null },
+    { externalId: pid("ACTIVE_V2"), contentType: "API", apiType: "ODATAV2", hubState: "ACTIVE" },
+    { externalId: pid("DEPRECATED_V2"), contentType: "API", apiType: "ODATAV2", hubState: "DEPRECATED" },
+  ];
+  const inRun = { externalId: { startsWith: PROBE_RUN } };
+
+  beforeAll(async () => {
+    for (const r of rows) {
+      await prisma.sapHubContent.create({
+        data: {
+          contentType: r.contentType,
+          externalId: r.externalId,
+          title: r.externalId,
+          description: "",
+          status: "Released",
+          hubUrl: "u",
+          apiType: r.apiType,
+          hubState: r.hubState,
+          appliesToPublic: true,
+        },
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await prisma.sapHubContent.deleteMany({ where: inRun });
+  });
+
+  const selected = async (includeDeprecated: boolean) =>
+    (
+      await prisma.sapHubContent.findMany({
+        where: { AND: [probeAllCandidateWhere({ appliesToPublic: true }, { includeDeprecated }), inRun] },
+        select: { externalId: true },
+      })
+    )
+      .map((r) => r.externalId)
+      .sort();
+
+  it("selects a row with no recorded lifecycle, and skips only DEPRECATED ones", async () => {
+    expect(await selected(false)).toEqual([pid("ACTIVE_V2"), pid("NULL_CDS"), pid("NULL_V2")]);
+    expect(await selected(true)).toEqual(rows.map((r) => r.externalId).sort());
+  });
+
+  it("selects exactly the rows the list route counts as callable", async () => {
+    const callable = rows
+      .filter((r) => r.hubState !== "DEPRECATED" && isProbeable(r))
+      .map((r) => r.externalId)
+      .sort();
+    expect(callable).toHaveLength(3);
+    expect(await selected(false)).toEqual(callable);
   });
 });
 
