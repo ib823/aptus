@@ -46,6 +46,12 @@ Further rules:
   window ends the first key.
 - Re-issuing on a lane that holds a live key is a rotation, and so is
   collecting a claim link for one. Both overlap.
+- Except when the re-issue changes the SAP client (`sapClient`). The old key
+  would otherwise read the new client for the whole window, a data container
+  it was never issued for. So it stops at once, as every re-issue did before
+  P0.11, and the response says "the previous token stopped working
+  immediately". Rotate and claim links keep the SAP client, so they always
+  overlap.
 - The ROTATE audit row (`ConfigAudit.after.previousValidUntil`) records when the
   overlap ends, and so do the API response, the claim screen and the Studio
   table.
@@ -173,6 +179,15 @@ deployment never picked up the new key.
     until `previousValidUntil`. That is the overlap its rotation asked for.
   - Keys minted with `ce_live_` or `ce_test_` keep working under the old code,
     because authentication only ever compared hashes.
+  - The old code mints plain `ce_` keys and never writes
+    `SolutionClient.tokenPrefix`. A key it rotates or re-issues on a row that
+    had a `ce_live_` or `ce_test_` key keeps that prefix in the column. After
+    the roll-forward, Operations > Keys, Operations > Tokens, app settings and
+    the Studio table show the key as `ce_live_••••abcd` although it starts
+    `ce_`. Authentication is unaffected. When you match a leaked string, or a
+    scanner hit on the legacy `ce_` pattern, against those screens, match on
+    the environment and the last four characters, or run the tidy-up below
+    first.
 - **Tidy up after a roll-forward (optional).** A row the old code changed can
   still show "previous key works until ..." on the screens until that time,
   even though authentication already refuses the key. To clear those rows:
@@ -183,6 +198,23 @@ deployment never picked up the new key.
   WHERE "previousTokenHash" IS NOT NULL
     AND "overlapForTokenHash" IS DISTINCT FROM "tokenHash";
   ```
+
+  To stop the screens showing a `ce_live_` or `ce_test_` prefix on a key the
+  old code minted, reset the prefix on every row whose key this build cannot
+  vouch for:
+
+  ```sql
+  UPDATE "SolutionClient"
+  SET "tokenPrefix" = 'ce_'
+  WHERE "tokenPrefix" <> 'ce_'
+    AND "overlapForTokenHash" IS DISTINCT FROM "tokenHash";
+  ```
+
+  The database cannot tell which keys the old code minted, so this also
+  resets keys that the new code minted without an overlap (a first issue, or a
+  re-issue after a revocation). That costs only detail: `ce_` begins every
+  key, so a screen showing it is never wrong. The next rotation of each key
+  writes its real prefix again.
 
 - **Schema:** the migration is additive. Leave it in place on a code rollback.
 

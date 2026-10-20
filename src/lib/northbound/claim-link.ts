@@ -39,7 +39,9 @@ import {
   expiryOnRenewal,
   isKeyLive,
   overlapFields,
+  replacedKeyStopsEarly,
   resolveKeyExpiry,
+  rotationOverlapHours,
   tokenPrefixFor,
   type KeyExpiryResolution,
 } from "@/lib/northbound/key-policy";
@@ -155,8 +157,24 @@ export interface ClaimPreview {
    * has none.
    */
   readonly keyExpiresAt: Date | null;
-  /** True when collecting replaces a working key, which then overlaps. */
-  readonly replacesLiveKey: boolean;
+  /**
+   * The working key collecting would replace, or null when there is none.
+   *
+   * What the screen promises about it is worked out here, by the rule the
+   * claim will apply (key-policy.ts), and not from the setting alone: the
+   * window never outlasts the replaced key's own expiry, so "24 hours" for a
+   * key that expires in two was a promise the claim did not keep (review
+   * round 2).
+   */
+  readonly replacedKey: {
+    /** Hours the replaced key keeps working at most; 0 when rotation cuts over at once. */
+    readonly overlapHours: number;
+    /**
+     * When it stops anyway, if that is sooner than `overlapHours` from now —
+     * its own expiry ends the window first. Null otherwise.
+     */
+    readonly stopsAt: Date | null;
+  } | null;
 }
 
 export type ClaimInspection = ClaimPreview | ClaimFailure;
@@ -354,12 +372,17 @@ export async function inspectClaimLink(
   const refusal = refuseLane(link, facts);
   if (refusal !== null) return { ok: false, refusal };
   const expiry = mintedExpiry(link, facts, now);
+  const newExpiresAt = expiry.ok ? expiry.expiresAt : null;
+  const overlapHours = rotationOverlapHours();
   return {
     ok: true,
     environment: link.environment,
     solutionName: facts.solution?.name ?? "",
-    keyExpiresAt: expiry.ok ? expiry.expiresAt : null,
-    replacesLiveKey: facts.client !== null && isKeyLive(facts.client, now),
+    keyExpiresAt: newExpiresAt,
+    replacedKey:
+      facts.client !== null && isKeyLive(facts.client, now)
+        ? { overlapHours, stopsAt: replacedKeyStopsEarly(facts.client, now, newExpiresAt, overlapHours) }
+        : null,
   };
 }
 

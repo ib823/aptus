@@ -246,7 +246,25 @@ describe("the write key is not minted onto a dead credential", () => {
     expect(res.status).toBe(400);
     expect(out.error?.message).toMatch(/no expiry/i);
     expect(out.error?.message).toMatch(/Rotate the credential first/);
+    expect(out.error?.message).toMatch(/keeps working for up to 24 hours/);
     expect(mocks.setWriteCredential).not.toHaveBeenCalled();
+  });
+
+  // Review round 2: the advice read "keeps working for 0 hours ... so nothing
+  // fails" with the overlap switched off, where the rotation cuts over at once.
+  it("does not promise an overlap that is switched off", async () => {
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    try {
+      mocks.findManyClients.mockResolvedValue([{ ...LIVE_TEST_CLIENT, expiresAt: null }]);
+
+      const out = await json(await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body)));
+
+      expect(out.error?.message).toMatch(/Rotate the credential first/);
+      expect(out.error?.message).not.toMatch(/nothing fails|0 hours/);
+      expect(out.error?.message).toMatch(/stops at once/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("an expiry in the future is still live", async () => {

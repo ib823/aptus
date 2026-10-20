@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { MaskedKey } from "@/components/coreedge/MaskedKey";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { formatDate, formatDateTime } from "@/lib/format/date";
+import { rotationOverlapSentence } from "@/lib/northbound/key-policy";
 
 import { ClaimRefused } from "./ClaimRefused";
 
@@ -56,10 +57,28 @@ export interface CollectKeyProps {
   /** When the key would expire if collected now (ISO), or null where it would have none. */
   readonly keyExpiresAt: string | null;
   /**
-   * Hours the key this one replaces keeps working after collection, or 0 when
-   * there is no working key to replace.
+   * The rotation overlap in force, in hours (0 when rotation cuts over at
+   * once) — for the advice about renewing this key later.
    */
   readonly overlapHours: number;
+  /**
+   * The working key collecting replaces, or null when there is none:
+   * `overlapHours` at most, and `stopsAt` (ISO) when its own expiry ends the
+   * window sooner — worked out by the server, by the claim's own rule.
+   */
+  readonly replacedKey: { readonly overlapHours: number; readonly stopsAt: string | null } | null;
+}
+
+/** What collecting does to the key it replaces, in words that cannot overstate it (P0.11). */
+function replacedKeySentence(replacedKey: CollectKeyProps["replacedKey"]): string {
+  if (replacedKey === null) return "";
+  if (replacedKey.stopsAt !== null) {
+    return ` It replaces a key that is still working; that key stops at ${formatDateTime(replacedKey.stopsAt)}, when it expires, so deploy this one before then.`;
+  }
+  if (replacedKey.overlapHours > 0) {
+    return ` It replaces a key that is still working; that key keeps working for up to ${replacedKey.overlapHours} hours after you collect this one, so you can switch without a failed call.`;
+  }
+  return " It replaces a key that is still working; that key stops the moment you collect this one, so deploy this one straight away.";
 }
 
 const optionalString = (v: unknown): boolean => v === undefined || v === null || typeof v === "string";
@@ -85,6 +104,7 @@ export function CollectKey({
   environment,
   keyExpiresAt,
   overlapHours,
+  replacedKey,
 }: CollectKeyProps): ReactNode {
   const [state, setState] = useState<CollectState>({ kind: "ready" });
 
@@ -141,7 +161,7 @@ export function CollectKey({
 
         <p className="max-w-prose text-sm text-ink-soft">
           {key.expiresAt
-            ? `It stops working on ${formatDate(key.expiresAt)}. Before then, ask for a new link or have the key rotated — the old key keeps working for a while after, so nothing fails.`
+            ? `It stops working on ${formatDate(key.expiresAt)}. Before then, ask for a new link or have the key rotated — ${rotationOverlapSentence(overlapHours)}.`
             : "It has no expiry. Revoke it when it is no longer needed."}
         </p>
         {key.previousValidUntil ? (
@@ -174,9 +194,7 @@ export function CollectKey({
         {keyExpiresAt
           ? `It will stop working on ${formatDate(keyExpiresAt)}.`
           : "It will have no expiry."}
-        {overlapHours > 0
-          ? ` It replaces a key that is still working; that key keeps working for ${overlapHours} hours after you collect this one, so you can switch without a failed call.`
-          : ""}
+        {replacedKeySentence(replacedKey)}
       </p>
 
       <button

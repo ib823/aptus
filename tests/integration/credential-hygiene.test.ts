@@ -10,6 +10,8 @@
  *      ROTATE audit row records when the window closes.
  *   3. Revoke kills both hashes at once — the current key and the one still
  *      inside its overlap — and a re-issue afterwards brings neither back.
+ *   3c. A re-issue that re-points the lane at another SAP client gives the
+ *      replaced key no overlap (review round 2).
  *   4. An expired key never shows as live: not to authentication, not on
  *      Operations > Tokens, the Control Tower register or portfolio, the
  *      throttle view, the CoreEdge keys screen or the passport.
@@ -23,6 +25,8 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { NextRequest } from "next/server";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -285,6 +289,72 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("credential hygiene against real
       expect(await authOk(keyB)).toBe(false);
       expect(await authOk(keyC)).toBe(true);
     }
+  });
+
+  // Review round 2: a re-issue counted as a rotation even when it re-pointed
+  // the lane at another SAP client, so the replaced key read the new client
+  // for the whole overlap window.
+  it("3c · a re-issue that changes the SAP client cuts the old key off at once", async () => {
+    const solutionId = await app("Re-pointed");
+    session.user = ISSUER;
+    const issueFor = async (sapClient: string) => {
+      const res = await issueClients(
+        json({ solutionId, label: "PROD key", environment: "PROD", sapClient, expiresAt: inDays(30).toISOString() }, "POST"),
+      );
+      return { status: res.status, body: (await res.json()) as { data?: Record<string, unknown> } };
+    };
+
+    const first = await issueFor("100");
+    const keyA = String(first.body.data?.token);
+    expect(await authenticateClientToken(keyA)).toMatchObject({ ok: true, client: { sapClient: "100" } });
+
+    const second = await issueFor("200");
+    expect(second.status).toBe(201);
+    expect(second.body.data?.previousValidUntil).toBeNull();
+    expect(String(second.body.data?.warning)).toContain("the previous token stopped working immediately");
+    expect((await authenticateClientToken(keyA)).ok).toBe(false);
+    expect(await authenticateClientToken(String(second.body.data?.token))).toMatchObject({
+      ok: true,
+      client: { sapClient: "200" },
+    });
+
+    // The same binding again is a rotation, and overlaps.
+    const third = await issueFor("200");
+    expect(third.body.data?.previousValidUntil).not.toBeNull();
+    expect(await authOk(String(second.body.data?.token))).toBe(true);
+  });
+
+  // Review round 2: the old code re-keys a row without writing tokenPrefix, so
+  // after a roll-forward the screens masked a plain ce_ key as ce_live_. The
+  // runbook's tidy-up is run here as written, limited to this run's rows.
+  it("3d · the runbook's tidy-up stops the screens showing a stale prefix after a rollback", async () => {
+    const solutionId = await app("Rollback prefix");
+    const issued = await issue(solutionId, "PROD", inDays(30));
+    const clientId = String(issued.body.data?.id);
+    const untouched = await issue(await app("Rollback untouched"), "PROD", inDays(30));
+    const untouchedId = String(untouched.body.data?.id);
+    await patch({ clientId: untouchedId, action: "rotate" });
+
+    // Rolled back: the old code re-issues with a plain ce_ token.
+    const legacyKey = `ce_${randomBytes(32).toString("base64url")}`;
+    await prisma.solutionClient.update({
+      where: { id: clientId, organizationId: ORG },
+      data: { tokenHash: hashClientToken(legacyKey), isActive: true, revokedAt: null },
+    });
+    const prefixOf = async (id: string) => (await listKeys(ORG)).find((k) => k.id === id)?.tokenPrefix;
+    expect(await prefixOf(clientId)).toBe("ce_live_");
+
+    const runbook = readFileSync(join(process.cwd(), "docs/runbooks/coreedge-credential-hygiene.md"), "utf8");
+    const tidyUp = [...runbook.matchAll(/```sql\n([\s\S]*?)```/g)]
+      .map((m) => m[1]!.trim())
+      .find((sql) => sql.includes(`SET "tokenPrefix" = 'ce_'`));
+    expect(tidyUp).toBeDefined();
+    await prisma.$executeRawUnsafe(`${tidyUp!.replace(/;\s*$/, "")} AND "organizationId" = '${ORG}'`);
+
+    expect(await prefixOf(clientId)).toBe("ce_");
+    // A key this build rotated keeps its real prefix.
+    expect(await prefixOf(untouchedId)).toBe("ce_live_");
+    expect(await authOk(legacyKey)).toBe(true);
   });
 
   it("4 · an expired key never shows as live, anywhere", async () => {

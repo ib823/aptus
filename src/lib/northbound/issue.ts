@@ -284,6 +284,9 @@ const REPLACED_SELECT = {
   isActive: true,
   revokedAt: true,
   expiresAt: true,
+  // The binding the replaced key was issued for. A re-issue that changes it
+  // gives the old key no overlap: see `issueClientToken`.
+  sapClient: true,
 } as const;
 
 /**
@@ -346,6 +349,18 @@ export async function issueClientToken(
     await closePendingClaimLinks(lane, reason, now, tx);
 
     const previous = await tx.solutionClient.findFirst({ where: lane, select: REPLACED_SELECT });
+    const sapClient = input.sapClient ?? null;
+    /*
+     * A RE-ISSUE THAT RE-POINTS THE LANE IS NOT A ROTATION (review round 2).
+     * The overlap keeps the replaced key resolving to THIS row, and the row is
+     * about to name a different SAP client — so for the whole window the old
+     * key (held by the old deployment, or by whoever leaked it, often the
+     * reason a lane is re-pointed) would read a data container it was never
+     * issued for. Changing the binding cuts the old key off at once, as every
+     * re-issue did before P0.11; the route then says it "stopped working
+     * immediately". Rotate and claim links keep the binding, so they overlap.
+     */
+    const replaced = previous !== null && (previous.sapClient ?? null) === sapClient ? previous : null;
 
     const written = await tx.solutionClient.upsert({
       // Keyed by (organization, solution, environment), never by solution alone.
@@ -368,7 +383,7 @@ export async function issueClientToken(
         tokenHash,
         tokenPrefix: tokenPrefixFor(input.environment),
         environment: input.environment,
-        sapClient: input.sapClient ?? null,
+        sapClient,
         createdById: input.createdById,
         expiresAt,
       },
@@ -376,14 +391,16 @@ export async function issueClientToken(
         label: input.label,
         tokenHash,
         tokenPrefix: tokenPrefixFor(input.environment),
-        // A re-issue over a live key is a rotation, and overlaps like one: the
-        // key it replaces keeps working for the window. Over an ended key it
-        // writes NO_OVERLAP, so a revoked key never comes back for a day.
-        ...overlapFields(previous, now, expiresAt, tokenHash),
+        // A re-issue over a live key with the same binding is a rotation, and
+        // overlaps like one: the key it replaces keeps working for the window.
+        // Over an ended key, or one bound to another SAP client, it writes
+        // NO_OVERLAP, so a revoked key never comes back for a day and an old
+        // key never reads the new client.
+        ...overlapFields(replaced, now, expiresAt, tokenHash),
         // Rotation re-states the binding rather than preserving it: the caller
         // just described the credential it wants, and a silently-kept client
         // from a previous issue would be a binding nobody chose.
-        sapClient: input.sapClient ?? null,
+        sapClient,
         expiresAt,
         // Re-issuing revives a revoked or deactivated credential deliberately:
         // the operator has just asked for a working token.

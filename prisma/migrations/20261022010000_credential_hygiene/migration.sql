@@ -3,7 +3,12 @@
 -- tokenPrefix records which prefix the row's current token was minted with:
 -- `ce_live_` (PROD) or `ce_test_` (every other environment) from P0.11 on.
 -- Every existing row was minted as a plain `ce_` key, which is exactly what
--- the default says, so the column needs no backfill and is never wrong.
+-- the default says, so the column needs no backfill. It can go stale in one
+-- case: after a code rollback, the code before P0.11 re-keys a row (a plain
+-- `ce_` token) without writing this column, so the screens show the old
+-- `ce_live_`/`ce_test_` prefix until the next rotation. Authentication never
+-- reads it. The runbook's Rollback section has the tidy-up
+-- (docs/runbooks/coreedge-credential-hygiene.md).
 --
 -- previousTokenHash and previousValidUntil hold the key a rotation replaced,
 -- for the overlap window. Both start NULL on every row: no existing key has a

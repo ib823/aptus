@@ -238,6 +238,60 @@ export interface ReplacedKey {
   readonly expiresAt: Date | null;
 }
 
+/**
+ * Until when a key replaced at `now` keeps working — the end of the window
+ * `overlapFields` would open — or null when none would open: nothing live is
+ * replaced, the overlap is switched off, or the key ends now anyway.
+ *
+ * Separate from `overlapFields` so a screen can say BEFORE the replacement
+ * what it will leave of the old key (review round 2: the claim screen and
+ * the Studio Rotate button promised the full overlap to a key that expired
+ * sooner). `overlapHours` is passed in, so a browser component can call it
+ * with the server's setting; it defaults to the setting itself.
+ */
+export function replacedKeyValidUntil(
+  replaced: KeyLiveness | null,
+  now: Date,
+  newExpiresAt: Date | null,
+  overlapHours: number = rotationOverlapHours(),
+): Date | null {
+  const overlapMs = overlapHours * HOUR_MS;
+  if (replaced === null || overlapMs <= 0) return null;
+  if (!isKeyLive(replaced, now)) return null;
+
+  let until = now.getTime() + overlapMs;
+  if (replaced.expiresAt != null) until = Math.min(until, replaced.expiresAt.getTime());
+  if (newExpiresAt != null) until = Math.min(until, newExpiresAt.getTime());
+  return until > now.getTime() ? new Date(until) : null;
+}
+
+/**
+ * When a key replaced at `now` would stop SOONER than the full overlap — its
+ * own expiry, or the new key's, ends the window first — else null. What a
+ * screen names instead of "N hours" when the hours would overstate it.
+ */
+export function replacedKeyStopsEarly(
+  replaced: KeyLiveness | null,
+  now: Date,
+  newExpiresAt: Date | null,
+  overlapHours: number = rotationOverlapHours(),
+): Date | null {
+  const until = replacedKeyValidUntil(replaced, now, newExpiresAt, overlapHours);
+  return until !== null && until.getTime() < now.getTime() + overlapHours * HOUR_MS ? until : null;
+}
+
+/**
+ * What a rotation does to the key in use, in words that follow the overlap
+ * setting — so no screen or refusal says "nothing fails" when the operator
+ * has switched the overlap off and the rotation cuts over at once (review
+ * round 2). Pure, so a browser component can call it with the server's value.
+ */
+export function rotationOverlapSentence(overlapHours: number): string {
+  return overlapHours > 0
+    ? `the key it replaces keeps working for up to ${overlapHours} hours, never past its own expiry, so nothing fails while the new one is deployed`
+    : "the key it replaces stops at once, so the new one must be deployed straight away";
+}
+
 export interface OverlapFields {
   readonly previousTokenHash: string | null;
   readonly previousValidUntil: Date | null;
@@ -279,17 +333,11 @@ export function overlapFields(
   newExpiresAt: Date | null,
   newTokenHash: string,
 ): OverlapFields {
-  const overlapMs = rotationOverlapHours() * HOUR_MS;
-  if (replaced === null || overlapMs === 0) return NO_OVERLAP;
-  if (!isKeyLive(replaced, now)) return NO_OVERLAP;
-
-  let until = now.getTime() + overlapMs;
-  if (replaced.expiresAt != null) until = Math.min(until, replaced.expiresAt.getTime());
-  if (newExpiresAt != null) until = Math.min(until, newExpiresAt.getTime());
-  if (until <= now.getTime()) return NO_OVERLAP;
+  const until = replacedKeyValidUntil(replaced, now, newExpiresAt);
+  if (replaced === null || until === null) return NO_OVERLAP;
   return {
     previousTokenHash: replaced.tokenHash,
-    previousValidUntil: new Date(until),
+    previousValidUntil: until,
     overlapForTokenHash: newTokenHash,
   };
 }
@@ -351,8 +399,14 @@ export function liveKeyWhere(now: Date) {
 
 /** What the screens say about a key with no expiry where one is now required. */
 export const NO_EXPIRY_LABEL = "no expiry - set one";
+/*
+ * No promise about the overlap here: this is shown in browser components that
+ * cannot read the setting, and with COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0 the
+ * rotation cuts over at once (review round 2). The rotation's own response
+ * says until when the replaced key works.
+ */
 export const NO_EXPIRY_MEANING =
-  "issued before TEST and PROD keys had to expire. It keeps working; rotate it to give it an expiry — the old key keeps working through the overlap, so nothing fails.";
+  "issued before TEST and PROD keys had to expire. It keeps working; rotate it to give it an expiry, then deploy the new key before the replaced one stops — the rotation says when.";
 
 /**
  * A live TEST or PROD key that never expires: legal, because it predates

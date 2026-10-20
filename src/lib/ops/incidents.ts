@@ -161,7 +161,7 @@ export const INCIDENT_RULES = {
     whyThisSeverity:
       "Nothing is failing yet. It becomes an outage on a known date, which is exactly the kind of thing a console should catch while it is still cheap.",
     remediation:
-      "Rotate the credential in Studio before the expiry. The new key gets a fresh lifetime, and the old one keeps working through the rotation overlap (24 hours by default), so deploying it causes no failed call.",
+      "Rotate the credential in Studio before the expiry. The new key gets a fresh lifetime, and the old one keeps working through the rotation overlap (24 hours by default), so deploying it causes no failed call. Where the overlap is switched off (COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0) the old one stops at once: deploy the new key straight away.",
   },
   undeclaredEnvironment: {
     id: "undeclared-environment",
@@ -206,7 +206,7 @@ export const INCIDENT_RULES = {
     whyThisSeverity:
       "A working token that never lapses is a standing key to a client's SAP system, and it is the exact case 'a credential expires soon' cannot report — that rule needs an expiry to compare against. Major rather than critical because the fix is one action by the builder who already holds it: rotation replaces the token in place, without the fresh request an unbounded grant needs.",
     remediation:
-      "Rotate the credential in Studio: since P0.11 a TEST or PROD key gets an expiry when it is rotated, and the old token keeps working through the rotation overlap (24 hours by default), so nothing fails while the new one is deployed.",
+      "Rotate the credential in Studio: since P0.11 a TEST or PROD key gets an expiry when it is rotated, and the old token keeps working through the rotation overlap (24 hours by default), so nothing fails while the new one is deployed. Where the overlap is switched off (COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0) the old token stops at once: deploy the new one straight away.",
   },
   connectionDrift: {
     id: "connection-drift",

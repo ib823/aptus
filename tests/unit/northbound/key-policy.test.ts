@@ -21,13 +21,17 @@ import {
   lacksRequiredExpiry,
   LEGACY_TOKEN_PREFIX,
   LIVE_TOKEN_PREFIX,
+  NO_EXPIRY_MEANING,
   NO_OVERLAP,
   overlapFields,
   overlapIsOpen,
   overlapStillBound,
+  replacedKeyStopsEarly,
+  replacedKeyValidUntil,
   requiresExpiry,
   resolveKeyExpiry,
   rotationOverlapHours,
+  rotationOverlapSentence,
   storedTokenPrefix,
   TEST_TOKEN_PREFIX,
   tokenPrefixFor,
@@ -276,5 +280,36 @@ describe("is it live? — one answer for every screen", () => {
 
   it("a key inside its expiry is active", () => {
     expect(keyState(base, NOW)).toBe("active");
+  });
+});
+
+// Review round 2: screens promised the full overlap, and "nothing fails",
+// whatever the replaced key's expiry and whatever the overlap setting.
+describe("what a screen may promise about a replaced key", () => {
+  const live = { isActive: true, revokedAt: null, expiresAt: null };
+  const inHours = (n: number) => new Date(NOW.getTime() + n * HOUR);
+
+  it("is the window the rotation would open, by the same rule", () => {
+    expect(replacedKeyValidUntil(live, NOW, null)).toEqual(inHours(24));
+    expect(replacedKeyValidUntil({ ...live, expiresAt: inHours(2) }, NOW, null)).toEqual(inHours(2));
+    expect(replacedKeyValidUntil({ ...live, revokedAt: days(-1) }, NOW, null)).toBeNull();
+    expect(replacedKeyValidUntil(live, NOW, null, 0)).toBeNull();
+    const opened = overlapFields({ ...live, tokenHash: "old", expiresAt: inHours(2) }, NOW, null, "new");
+    expect(opened.previousValidUntil).toEqual(replacedKeyValidUntil({ ...live, expiresAt: inHours(2) }, NOW, null));
+  });
+
+  it("names the stop time only when the key's own expiry ends the window early", () => {
+    expect(replacedKeyStopsEarly({ ...live, expiresAt: inHours(2) }, NOW, null, 24)).toEqual(inHours(2));
+    expect(replacedKeyStopsEarly({ ...live, expiresAt: days(30) }, NOW, null, 24)).toBeNull();
+    expect(replacedKeyStopsEarly(live, NOW, inHours(3), 24)).toEqual(inHours(3));
+    expect(replacedKeyStopsEarly(live, NOW, null, 0)).toBeNull();
+  });
+
+  it("never says nothing fails when the overlap is switched off", () => {
+    expect(rotationOverlapSentence(24)).toMatch(/up to 24 hours, never past its own expiry, so nothing fails/);
+    expect(rotationOverlapSentence(0)).not.toMatch(/nothing fails|keeps working/);
+    expect(rotationOverlapSentence(0)).toMatch(/stops at once/);
+    // Shown by browser components that cannot read the setting.
+    expect(NO_EXPIRY_MEANING).not.toMatch(/nothing fails/);
   });
 });

@@ -1329,7 +1329,9 @@ model SolutionClient {
   /// `ce_live_` for PROD, `ce_test_` for every other environment. Rows minted
   /// before P0.11 read `ce_`, the legacy prefix, which keeps working until the
   /// key expires. Stored so a screen can show the real prefix of a masked key
-  /// without ever holding the key.
+  /// without ever holding the key. Display only: authentication never reads
+  /// it. After a code rollback the code before P0.11 can re-key a row without
+  /// writing it, which leaves it stale (runbook: coreedge-credential-hygiene).
   tokenPrefix String @default("ce_")
   /// ROTATION OVERLAP (P0.11). When a live key is replaced, the hash of the
   /// key it replaced moves here and keeps authenticating until

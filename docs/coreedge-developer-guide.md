@@ -426,7 +426,13 @@ existing connections are not touched. Use OAuth SAML bearer instead
   in a day, the first key stops at the second rotation. A key that had already
   stopped (revoked, deactivated or expired) does not come back for the window.
   Re-issuing for an environment, or collecting a claim link for a lane that
-  already has a working key, is a rotation and overlaps the same way.
+  already has a working key, is a rotation and overlaps the same way. The
+  exception is a re-issue that names a different SAP client: the old key
+  stops at once, so it never reads a client it was not issued for.
+- **The overlap can be switched off.** If your platform team sets the overlap
+  to 0 hours, rotating replaces the key at once. The rotation response says
+  "the previous token stopped working immediately": deploy the new key
+  straight away.
 - **A leak is a revoke, not a rotation.** Revoking ends the current key **and**
   the previous one in the same moment, and keeps the audit history. Then issue
   a new key.

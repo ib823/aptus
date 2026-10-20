@@ -73,7 +73,15 @@ export default async function ClaimPage({
       solutionName={preview.solutionName}
       environment={preview.environment}
       keyExpiresAt={preview.keyExpiresAt?.toISOString() ?? null}
-      overlapHours={preview.replacesLiveKey ? rotationOverlapHours() : 0}
+      overlapHours={rotationOverlapHours()}
+      replacedKey={
+        preview.replacedKey === null
+          ? null
+          : {
+              overlapHours: preview.replacedKey.overlapHours,
+              stopsAt: preview.replacedKey.stopsAt?.toISOString() ?? null,
+            }
+      }
     />
   );
 }

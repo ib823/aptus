@@ -30,8 +30,9 @@
  *      write key is sealed on the same row and lives exactly as long as the
  *      bearer token, so minting one onto a TEST or PROD key issued before
  *      expiry was mandatory would hand out a write key that never ends. The
- *      refusal says to rotate first — the old token keeps working through the
- *      overlap, so that costs nothing. COREEDGE_KEY_EXPIRY=off lifts it.
+ *      refusal says to rotate first, and what the rotation does to the token
+ *      in use: it keeps working through the overlap, or — with the overlap
+ *      switched off — stops at once. COREEDGE_KEY_EXPIRY=off lifts it.
  *   6. a LIVE WRITE grant covers the credential's environment: APPROVED (or
  *      SANDBOX_ONLY in SANDBOX), CREATE/UPDATE, unexpired, unrevoked. A write
  *      key with no live write grant would be a secret that authorises nothing
@@ -62,6 +63,7 @@ import {
   lacksRequiredExpiry,
   liveKeyWhere,
   rotationOverlapHours,
+  rotationOverlapSentence,
 } from "@/lib/northbound/key-policy";
 import { generateWriteCredential, setWriteCredential } from "@/lib/northbound/write-credential";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -204,8 +206,11 @@ export async function POST(request: NextRequest) {
     return studioError(
       "VALIDATION_ERROR",
       `The ${client.environment} credential has no expiry, and a write key sealed on it would never end either. ` +
-        "Rotate the credential first to give it one — the current token keeps working for " +
-        `${rotationOverlapHours()} hours after the rotation, so nothing fails — then issue the write key.`,
+        // The overlap follows the setting: with it switched off the rotation
+        // cuts over at once, and "nothing fails" would send someone to break
+        // their running integration (review round 2).
+        `Rotate the credential first to give it one — ${rotationOverlapSentence(rotationOverlapHours())} — ` +
+        "then issue the write key.",
     );
   }
 

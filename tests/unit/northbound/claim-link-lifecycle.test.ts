@@ -598,3 +598,85 @@ describe("retiring the app closes its links in every environment", () => {
     expect(laneStore.links.every((l) => l.revokedReason === "The app was retired.")).toBe(true);
   });
 });
+
+describe("P0.11 review round 2 · what a replacement leaves of the old key", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  async function issueBound(sapClient: string | null) {
+    return issueClientToken(SCOPE, {
+      solutionId: "sol_1",
+      label: "prod",
+      environment: "PROD",
+      sapClient,
+      createdById: STUDIO_ISSUER,
+      expiresAt: new Date(Date.now() + 60 * DAY),
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("a re-issue that names another SAP client cuts the old key off at once", async () => {
+    moveTo(at(0));
+    const first = await issueBound("100");
+    moveTo(at(1));
+    const second = await issueBound("200");
+
+    expect(second.previousValidUntil).toBeNull();
+    expect(await authenticateClientToken(first.rawToken)).toMatchObject({ ok: false });
+    expect(await authenticateClientToken(second.rawToken)).toMatchObject({ ok: true, client: { sapClient: "200" } });
+  });
+
+  it("a re-issue that keeps the SAP client still overlaps", async () => {
+    moveTo(at(0));
+    const first = await issueBound("100");
+    moveTo(at(1));
+    const second = await issueBound("100");
+
+    expect(second.previousValidUntil).toEqual(new Date(at(1).getTime() + DAY));
+    expect(await authenticateClientToken(first.rawToken)).toMatchObject({ ok: true, client: { sapClient: "100" } });
+  });
+
+  it("the claim screen names when a key that expires inside the window stops, not the full overlap", async () => {
+    moveTo(at(-1));
+    await issueInStudio(new Date(at(0).getTime() + 2 * HOUR));
+    moveTo(at(0));
+    const link = await sendLink();
+
+    const preview = await inspectClaimLink(link);
+    expect(preview).toMatchObject({ ok: true, replacedKey: { overlapHours: 24 } });
+    if (!preview.ok) return;
+    expect(preview.replacedKey?.stopsAt).toEqual(new Date(at(0).getTime() + 2 * HOUR));
+
+    // And the claim keeps exactly that promise.
+    const claimed = await claimKey(link);
+    expect(claimed.ok && claimed.previousValidUntil).toEqual(preview.replacedKey?.stopsAt);
+  });
+
+  it("the claim screen promises the full overlap only to a key that outlives it", async () => {
+    moveTo(at(-1));
+    await issueInStudio(at(30));
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({
+      ok: true,
+      replacedKey: { overlapHours: 24, stopsAt: null },
+    });
+  });
+
+  it("the claim screen says the old key stops at once when the overlap is switched off", async () => {
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    moveTo(at(-1));
+    await issueInStudio(at(30));
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({
+      ok: true,
+      replacedKey: { overlapHours: 0, stopsAt: null },
+    });
+  });
+
+  it("the claim screen names no replaced key on an empty lane", async () => {
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({ ok: true, replacedKey: null });
+  });
+});

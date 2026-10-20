@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
-import { KEY_STATE_LABELS, requiresExpiry, type KeyState } from "@/lib/northbound/key-policy";
+import { KEY_STATE_LABELS, replacedKeyStopsEarly, requiresExpiry, type KeyState } from "@/lib/northbound/key-policy";
 
 export interface CredentialSummary {
   id: string;
@@ -64,6 +64,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** YYYY-MM-DD for a day offset from today, in UTC — the zone the server judges in. */
 function utcDate(offsetDays: number): string {
   return new Date(Date.now() + offsetDays * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * What the Rotate button promises about the key it replaces. The overlap
+ * never outlasts that key's own expiry (key-policy.ts), so a key that expires
+ * inside the window is told when it stops, not "N hours" (review round 2).
+ */
+function rotateTitle(c: CredentialSummary, overlapHours: number): string {
+  if (overlapHours <= 0 || !(c.state === "active" || c.state === "noExpiry")) return "Mint a new key";
+  const stopsAt = replacedKeyStopsEarly(
+    { isActive: true, revokedAt: null, expiresAt: c.expiresAt ? new Date(c.expiresAt) : null },
+    new Date(),
+    null,
+    overlapHours,
+  );
+  return stopsAt !== null
+    ? `Mint a new key; this one keeps working until it expires at ${stopsAt.toLocaleString()}`
+    : `Mint a new key; this one keeps working for ${overlapHours} hours`;
 }
 
 export interface CredentialSolution {
@@ -206,7 +224,7 @@ export function ClientCredentials({
       <p style={{ ...body, marginTop: 8 }}>
         TEST and PROD keys expire, at most {keyPolicy.maxTtlDays} days after they are issued.{" "}
         {keyPolicy.overlapHours > 0
-          ? `Rotating gives the key a new lifetime, and the key it replaces keeps working for ${keyPolicy.overlapHours} hours so you can deploy the new one without a failed call.`
+          ? `Rotating gives the key a new lifetime, and the key it replaces keeps working for up to ${keyPolicy.overlapHours} hours (never past its own expiry) so you can deploy the new one without a failed call.`
           : "Rotating gives the key a new lifetime, and the key it replaces stops at once."}{" "}
         If a key has leaked, revoke it instead — that ends the current and the previous key at once.
       </p>
@@ -401,11 +419,7 @@ export function ClientCredentials({
                           type="button"
                           disabled={busy}
                           onClick={() => call("PATCH", { clientId: c.id, action: "rotate" })}
-                          title={
-                            keyPolicy.overlapHours > 0 && (c.state === "active" || c.state === "noExpiry")
-                              ? `Mint a new key; this one keeps working for ${keyPolicy.overlapHours} hours`
-                              : "Mint a new key"
-                          }
+                          title={rotateTitle(c, keyPolicy.overlapHours)}
                           style={btnSmall}
                         >
                           Rotate
