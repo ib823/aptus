@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { CLIENT_TOKEN_PREFIX, inspectClaimLink } from "@/lib/northbound/claim-link";
+import { inspectClaimLink, tokenPrefixFor } from "@/lib/northbound/claim-link";
+import { rotationOverlapHours } from "@/lib/northbound/key-policy";
 
 import { ClaimRefused } from "./ClaimRefused";
 import { CollectKey } from "./CollectKey";
@@ -66,9 +67,13 @@ export default async function ClaimPage({
   return (
     <CollectKey
       collectPath={`/claim/${encodeURIComponent(token)}/collect`}
-      keyPrefix={CLIENT_TOKEN_PREFIX.replace(/_$/, "")}
+      // `ce_live_` or `ce_test_`, by environment (P0.11) — the prefix the key
+      // will actually carry, so the masked reference afterwards is the real one.
+      keyPrefix={tokenPrefixFor(preview.environment)}
       solutionName={preview.solutionName}
       environment={preview.environment}
+      keyExpiresAt={preview.keyExpiresAt?.toISOString() ?? null}
+      overlapHours={preview.replacesLiveKey ? rotationOverlapHours() : 0}
     />
   );
 }

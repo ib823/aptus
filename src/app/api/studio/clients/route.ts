@@ -26,6 +26,15 @@
  * (A69), and the owner gate is applied twice: here, to refuse before asking
  * for a passkey, and again inside the key write's own transaction, holding
  * the Solution row lock an owner reclaim also takes (lib/northbound/issue.ts).
+ *
+ * KEYS EXPIRE, AND ROTATION OVERLAPS (P0.11, lib/northbound/key-policy.ts). A
+ * TEST or PROD key carries an expiry at most 90 days out by default: a PROD
+ * issue without `expiresAt` is a 400, a TEST one gets the default, and one
+ * past the maximum is a 400. A rotation (PATCH, or a POST over a live key)
+ * may name `expiresAt` and otherwise gets the default lifetime, and the key
+ * it replaces keeps working until `previousValidUntil` — returned, audited on
+ * the ROTATE row, and said in the warning. The expiry is checked before the
+ * passkey is asked for, and again in the key write. Revoke ends both keys.
  */
 
 import type { NextRequest } from "next/server";
@@ -36,6 +45,7 @@ import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import {
   issueClientToken,
+  KeyExpiryRefused,
   KeyIssuerRefused,
   listClients,
   refuseKeyIssuer,
@@ -43,6 +53,7 @@ import {
   rotateClientToken,
   type KeyIssuerRefusal,
 } from "@/lib/northbound/issue";
+import { expiryOnRenewal, resolveKeyExpiry, tokenPrefixFor } from "@/lib/northbound/key-policy";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -128,7 +139,19 @@ const issueSchema = z
 const patchSchema = z.object({
   clientId: z.string().min(1),
   action: z.enum(["rotate", "revoke"]),
+  /**
+   * Rotate only: the new key's expiry. Omitted, a TEST or PROD key gets the
+   * default lifetime and a SANDBOX or DEV key keeps its current one.
+   */
+  expiresAt: z.string().datetime().optional(),
 });
+
+/** What a replaced key's overlap means, in the words every response uses. */
+function overlapSentence(previousValidUntil: Date | null | undefined): string {
+  return previousValidUntil == null
+    ? "the previous token stopped working immediately"
+    : `the previous token keeps working until ${previousValidUntil.toISOString()} so you can deploy this one, and then stops`;
+}
 
 interface Actor {
   /** The whole session user: the step-up gate reads its passkey state. */
@@ -210,6 +233,19 @@ export async function POST(request: NextRequest) {
   const replacedExisting = previous !== null;
 
   /*
+   * THE EXPIRY, before the passkey (P0.11): a PROD key with no expiry, or a
+   * TEST or PROD key past the maximum, is a 400 that names the limit. The
+   * key write applies the same rule again (`issueClientToken`).
+   */
+  const expiry = resolveKeyExpiry({
+    environment: input.environment,
+    requested: input.expiresAt ? new Date(input.expiresAt) : undefined,
+    now: new Date(),
+    purpose: "issue",
+  });
+  if (!expiry.ok) return studioError("VALIDATION_ERROR", expiry.message);
+
+  /*
    * A FRESH PASSKEY, asked last: every gate above has passed, so it is the one
    * thing between this person and a live token (lib/auth/step-up.ts). Named a
    * rotation when it replaces one, because that is what the audit row will say.
@@ -230,13 +266,14 @@ export async function POST(request: NextRequest) {
         environment: input.environment,
         sapClient: input.sapClient ?? null,
         createdById: user.id,
-        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        expiresAt: expiry.expiresAt,
       },
       // Re-applied under the app lock, with the key write (see the header).
       { issuerId: user.id },
     );
   } catch (err) {
     if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal, "issue");
+    if (err instanceof KeyExpiryRefused) return studioError("VALIDATION_ERROR", err.message);
     throw err;
   }
 
@@ -271,6 +308,10 @@ export async function POST(request: NextRequest) {
       label: input.label,
       environment: issued.environment,
       replacedExisting,
+      expiresAt: issued.expiresAt,
+      // The overlap end (P0.11): until when the replaced key still worked.
+      // Null when nothing live was replaced.
+      previousValidUntil: issued.previousValidUntil,
     },
   });
 
@@ -296,19 +337,23 @@ export async function POST(request: NextRequest) {
       label: issued.label,
       environment: issued.environment,
       replaced: replacedExisting,
+      tokenPrefix: tokenPrefixFor(issued.environment),
+      expiresAt: issued.expiresAt,
+      previousValidUntil: issued.previousValidUntil,
       // Shown once. The server keeps only a hash and genuinely cannot show it again.
       token: issued.rawToken,
       // The base sentence is unchanged and asserted by tests — a caller that
       // learned to look for it keeps finding it. The replacement disclosure is
-      // APPENDED, using the same words the dedicated rotate path already uses
-      // ("stopped working immediately"), because two ways of describing one
-      // consequence is how a reader ends up believing they are two things.
+      // APPENDED, using the same words the dedicated rotate path uses
+      // (`overlapSentence`), because two ways of describing one consequence is
+      // how a reader ends up believing they are two things.
       warning:
         "Copy this token now — it is stored only as a hash and cannot be shown again. " +
         "Keep it server-side." +
         (replacedExisting
-          ? ` THIS REPLACED THE EXISTING ${issued.environment} CREDENTIAL FOR THIS SOLUTION: the previous token ` +
-            "stopped working immediately, so anything still using it is failing now. " +
+          ? ` THIS REPLACED THE EXISTING ${issued.environment} CREDENTIAL FOR THIS SOLUTION: ` +
+            `${overlapSentence(issued.previousValidUntil)}` +
+            (issued.previousValidUntil == null ? ", so anything still using it is failing now. " : ". ") +
             "Credentials for other environments are untouched."
           : ""),
     },
@@ -328,6 +373,7 @@ export async function PATCH(request: NextRequest) {
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid request.");
   const { clientId, action } = parsed.data;
+  const requestedExpiry = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined;
 
   if (action === "revoke") {
     // Deliberately NOT SoD-gated: revoking is the safe direction. Requiring a
@@ -367,7 +413,7 @@ export async function PATCH(request: NextRequest) {
   // Rotation mints a working credential, so it carries the same SoD rule as issue.
   const existing = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
-    select: { id: true, solutionId: true },
+    select: { id: true, solutionId: true, environment: true, expiresAt: true },
   });
   if (!existing) return studioError("NOT_FOUND", "Credential not found.");
 
@@ -379,6 +425,15 @@ export async function PATCH(request: NextRequest) {
   const refusal = await refuseKeyIssuer(prisma, scope.organizationId, existing.solutionId, user.id);
   if (refusal !== null) return issuerRefusal(refusal, "rotate");
 
+  // The new key's expiry, before the passkey (P0.11) — re-applied in the write.
+  const expiry = expiryOnRenewal({
+    environment: existing.environment,
+    requested: requestedExpiry,
+    current: existing.expiresAt,
+    now: new Date(),
+  });
+  if (!expiry.ok) return studioError("VALIDATION_ERROR", expiry.message);
+
   const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
     action: "credential.rotate",
     targetId: clientId,
@@ -387,9 +442,15 @@ export async function PATCH(request: NextRequest) {
 
   let rotated: Awaited<ReturnType<typeof rotateClientToken>>;
   try {
-    rotated = await rotateClientToken(scope, clientId, { issuerId: user.id });
+    rotated = await rotateClientToken(
+      scope,
+      clientId,
+      { issuerId: user.id },
+      requestedExpiry === undefined ? {} : { expiresAt: requestedExpiry },
+    );
   } catch (err) {
     if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal, "rotate");
+    if (err instanceof KeyExpiryRefused) return studioError("VALIDATION_ERROR", err.message);
     throw err;
   }
   if (!rotated) return studioError("NOT_FOUND", "Credential not found.");
@@ -403,7 +464,14 @@ export async function PATCH(request: NextRequest) {
     entityType: "ClientCredential",
     entityId: rotated.id,
     action: "ROTATE",
-    after: { event: "client_credential_rotated", clientId: rotated.id, solutionId: rotated.solutionId },
+    after: {
+      event: "client_credential_rotated",
+      clientId: rotated.id,
+      solutionId: rotated.solutionId,
+      expiresAt: rotated.expiresAt,
+      // The overlap end (P0.11): until when the replaced key still works.
+      previousValidUntil: rotated.previousValidUntil,
+    },
   });
 
   return studioOk({
@@ -411,8 +479,15 @@ export async function PATCH(request: NextRequest) {
     solutionId: rotated.solutionId,
     label: rotated.label,
     environment: rotated.environment,
+    tokenPrefix: tokenPrefixFor(rotated.environment),
+    expiresAt: rotated.expiresAt,
+    previousValidUntil: rotated.previousValidUntil,
     token: rotated.rawToken,
     warning:
-      "Copy this token now — the previous one stopped working immediately, and this one is stored only as a hash.",
+      `Copy this token now — ${overlapSentence(rotated.previousValidUntil)}. ` +
+      "This one is stored only as a hash." +
+      (rotated.previousValidUntil != null
+        ? " If you rotated because the old token leaked, revoke instead: that ends both at once."
+        : ""),
   });
 }

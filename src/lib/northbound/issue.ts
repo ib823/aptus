@@ -8,10 +8,21 @@
  * show it again, and a system that *could* would put a working credential in
  * every backup.
  *
- * ROTATION IS A REPLACEMENT, NOT AN EDIT. Rotating overwrites the hash, so the
- * previous token stops authenticating the instant the new one is issued. There
- * is deliberately no grace period where both work: an overlap window is exactly
- * how a leaked credential survives its own rotation.
+ * ROTATION OVERLAPS; REVOCATION DOES NOT (P0.11). Rotating writes a new hash,
+ * and the hash it replaced moves to `previousTokenHash`, which keeps
+ * authenticating for the overlap window (24 hours by default) so a deployment
+ * can pick the new key up without a failed call. It used to cut over at once,
+ * on the reasoning that an overlap is how a leaked key survives its rotation —
+ * but that made every routine rotation an outage, and a leak is answered by
+ * revoking, which ends the current and the previous key in the same write.
+ * Only a key that is live when it is replaced overlaps, and only the
+ * immediately previous one (lib/northbound/key-policy.ts).
+ *
+ * EVERY KEY MINTED HERE EXPIRES WHERE IT MUST (P0.11). A TEST or PROD key is
+ * given an expiry — the issuer's, at most 90 days out by default, or the
+ * default lifetime on a rotation — and a PROD issue without one is refused.
+ * The route checks first so it can answer 400 before asking for a passkey;
+ * the write re-applies the same rule, so no caller can skip it.
  *
  * EVERY KEY CHANGE IS ONE TRANSACTION, LOCKED ON THE APP (P0.1). Issue, rotate
  * and revoke each take the Solution row lock (lib/studio/owner-lock.ts) — the
@@ -28,7 +39,16 @@
 import { randomBytes } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { CLIENT_TOKEN_PREFIX, hashClientToken } from "@/lib/northbound/auth";
+import { hashClientToken } from "@/lib/northbound/auth";
+import {
+  expiryOnRenewal,
+  overlapFields,
+  overlapIsOpen,
+  resolveKeyExpiry,
+  tokenPrefixFor,
+  type KeyExpiryRefusal,
+  type KeyExpiryResolution,
+} from "@/lib/northbound/key-policy";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { refuseCredentialIssuerLive } from "@/lib/studio/owner-liveness";
 import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -59,6 +79,27 @@ export class KeyIssuerRefused extends Error {
     super(`key change refused: ${refusal.reason}`);
     this.name = "KeyIssuerRefused";
   }
+}
+
+/**
+ * Thrown when the key's expiry breaks the policy (key-policy.ts) — inside the
+ * transaction, so nothing commits. `message` is written for the person who
+ * asked, and the routes return it as a 400.
+ */
+export class KeyExpiryRefused extends Error {
+  constructor(
+    readonly refusal: KeyExpiryRefusal,
+    message: string,
+  ) {
+    super(message);
+    this.name = "KeyExpiryRefused";
+  }
+}
+
+/** The resolved expiry, or the throw that aborts the key change. */
+function expiryOrThrow(resolution: KeyExpiryResolution): Date | null {
+  if (!resolution.ok) throw new KeyExpiryRefused(resolution.refusal, resolution.message);
+  return resolution.expiresAt;
 }
 
 /**
@@ -152,18 +193,6 @@ export async function closePendingClaimLinks(
 }
 
 /**
- * Has this stored expiry already passed?
- *
- * Renewal must not carry a lapsed expiry onto the new token: the key would be
- * shown once as working and refused as EXPIRED on its first call, and the only
- * way out was a Studio re-issue. A future expiry is the issuer's decision and
- * is kept.
- */
-export function hasLapsed(expiresAt: Date | null, now: Date): boolean {
-  return expiresAt !== null && expiresAt.getTime() <= now.getTime();
-}
-
-/**
  * Is this credential row one that was ENDED, so writing a token onto it
  * brings it back?
  *
@@ -178,9 +207,14 @@ export function endedCredential(row: { revokedAt: Date | null; isActive: boolean
   return row !== null && (row.revokedAt !== null || !row.isActive);
 }
 
-/** 32 bytes of CSPRNG entropy, base64url, behind a greppable prefix. */
-export function generateClientToken(): string {
-  return `${CLIENT_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+/**
+ * 32 bytes of CSPRNG entropy, base64url, behind a greppable prefix that says
+ * which environment it reaches: `ce_live_` for PROD, `ce_test_` otherwise
+ * (P0.11). The patterns a secret scanner uses for these are in
+ * lib/northbound/secret-patterns.ts.
+ */
+export function generateClientToken(environment: string): string {
+  return `${tokenPrefixFor(environment)}${randomBytes(32).toString("base64url")}`;
 }
 
 export type ClientEnvironment = "SANDBOX" | "DEV" | "TEST" | "PROD";
@@ -192,6 +226,14 @@ export interface IssuedClient {
   environment: string;
   /** The SAP client this credential may read, or null when it names none. */
   sapClient: string | null;
+  /** When the new key stops working; null only where expiry is not mandatory. */
+  expiresAt: Date | null;
+  /**
+   * Until when the key this one REPLACED keeps working (the rotation overlap),
+   * or null when nothing live was replaced — a first issue, or a re-key after
+   * a revocation, which must not bring the revoked key back.
+   */
+  previousValidUntil: Date | null;
   createdAt: Date;
   /** Present ONLY on the response that created or rotated it. Never re-readable. */
   rawToken: string;
@@ -204,12 +246,36 @@ export interface ClientSummary {
   environment: string;
   /** The SAP client this credential may read, or null when it names none. */
   sapClient: string | null;
+  /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
+  tokenPrefix: string;
   isActive: boolean;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
+  /** Until when the replaced key still works; see IssuedClient. */
+  previousValidUntil: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
 }
+
+/** What a key write returns — never the hash, never the sealed write key. */
+const WRITTEN_SELECT = {
+  id: true,
+  solutionId: true,
+  label: true,
+  environment: true,
+  sapClient: true,
+  expiresAt: true,
+  previousValidUntil: true,
+  createdAt: true,
+} as const;
+
+/** What a key change reads about the key it is about to replace. Server-side only. */
+const REPLACED_SELECT = {
+  tokenHash: true,
+  isActive: true,
+  revokedAt: true,
+  expiresAt: true,
+} as const;
 
 /**
  * Issue the runtime credential for a solution IN AN ENVIRONMENT.
@@ -234,6 +300,11 @@ export async function issueClientToken(
      */
     sapClient?: string | null;
     createdById: string;
+    /**
+     * The issuer's choice. Required for PROD, defaulted for TEST, optional for
+     * SANDBOX and DEV, and never more than the maximum (key-policy.ts). A
+     * value the policy refuses throws KeyExpiryRefused, and nothing commits.
+     */
     expiresAt?: Date | null;
   },
   /**
@@ -242,7 +313,7 @@ export async function issueClientToken(
    */
   gate?: { readonly issuerId: string },
 ): Promise<IssuedClient> {
-  const rawToken = generateClientToken();
+  const rawToken = generateClientToken(input.environment);
   const tokenHash = hashClientToken(rawToken);
   const lane = {
     organizationId: scope.organizationId,
@@ -254,14 +325,18 @@ export async function issueClientToken(
   const row = await prisma.$transaction(async (tx) => {
     await lockAndGate(tx, scope.organizationId, input.solutionId, gate?.issuerId);
 
+    const now = new Date();
+    // The issuer chose (or did not choose) this expiry, so the issue rules
+    // apply even when the issue replaces a key: a PROD issue needs one.
+    const expiresAt = expiryOrThrow(
+      resolveKeyExpiry({ environment: input.environment, requested: input.expiresAt, now, purpose: "issue" }),
+    );
+
     // Before the key changes: a link sent against the old key would otherwise
     // replace this one when it is opened.
-    await closePendingClaimLinks(lane, reason, new Date(), tx);
+    await closePendingClaimLinks(lane, reason, now, tx);
 
-    const previous = await tx.solutionClient.findFirst({
-      where: lane,
-      select: { isActive: true, revokedAt: true },
-    });
+    const previous = await tx.solutionClient.findFirst({ where: lane, select: REPLACED_SELECT });
 
     const written = await tx.solutionClient.upsert({
       // Keyed by (organization, solution, environment), never by solution alone.
@@ -282,19 +357,25 @@ export async function issueClientToken(
         solutionId: input.solutionId,
         label: input.label,
         tokenHash,
+        tokenPrefix: tokenPrefixFor(input.environment),
         environment: input.environment,
         sapClient: input.sapClient ?? null,
         createdById: input.createdById,
-        expiresAt: input.expiresAt ?? null,
+        expiresAt,
       },
       update: {
         label: input.label,
         tokenHash,
+        tokenPrefix: tokenPrefixFor(input.environment),
+        // A re-issue over a live key is a rotation, and overlaps like one: the
+        // key it replaces keeps working for the window. Over an ended key it
+        // writes NO_OVERLAP, so a revoked key never comes back for a day.
+        ...overlapFields(previous, now, expiresAt),
         // Rotation re-states the binding rather than preserving it: the caller
         // just described the credential it wants, and a silently-kept client
         // from a previous issue would be a binding nobody chose.
         sapClient: input.sapClient ?? null,
-        expiresAt: input.expiresAt ?? null,
+        expiresAt,
         // Re-issuing revives a revoked or deactivated credential deliberately:
         // the operator has just asked for a working token.
         isActive: true,
@@ -302,7 +383,7 @@ export async function issueClientToken(
         // ...but not the write key that was sealed on it. See `endedCredential`.
         ...(endedCredential(previous) ? { secretsCiphertext: null } : {}),
       },
-      select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
+      select: WRITTEN_SELECT,
     });
 
     // And after, in the same transaction. See `closePendingClaimLinks`.
@@ -314,13 +395,20 @@ export async function issueClientToken(
 }
 
 /**
- * Rotate: mint a new token for an existing client. The old one dies immediately.
+ * Rotate: mint a new token for an existing client.
+ *
+ * The old one keeps working for the overlap window (P0.11) — when it was
+ * live; an ended key stays ended. The new key's expiry is `options.expiresAt`
+ * when the caller chose one, else a fresh default lifetime where expiry is
+ * mandatory (so rotating is how a TEST or PROD key issued before P0.11 gets
+ * one), else the current expiry unless it has passed.
  */
 export async function rotateClientToken(
   scope: TenantScope,
   clientId: string,
   /** The owner gate, re-applied under the app lock — see `issueClientToken`. */
   gate?: { readonly issuerId: string },
+  options: { readonly expiresAt?: Date | null } = {},
 ): Promise<IssuedClient | null> {
   const located = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
@@ -329,23 +417,24 @@ export async function rotateClientToken(
   if (!located) return null;
 
   const now = new Date();
-  const rawToken = generateClientToken();
   const row = await prisma.$transaction(async (tx) => {
     await lockAndGate(tx, scope.organizationId, located.solutionId, gate?.issuerId);
 
     // Re-read under the lock: what the rotation replaces is the row as it is now.
     const existing = await tx.solutionClient.findFirst({
       where: scopedById(scope, clientId),
-      select: {
-        id: true,
-        solutionId: true,
-        environment: true,
-        isActive: true,
-        revokedAt: true,
-        expiresAt: true,
-      },
+      select: { id: true, solutionId: true, environment: true, ...REPLACED_SELECT },
     });
     if (!existing) return null;
+
+    const expiresAt = expiryOrThrow(
+      expiryOnRenewal({
+        environment: existing.environment,
+        requested: options.expiresAt,
+        current: existing.expiresAt,
+        now,
+      }),
+    );
 
     const lane = {
       organizationId: scope.organizationId,
@@ -355,32 +444,41 @@ export async function rotateClientToken(
     const reason = "The key for this environment was rotated.";
     await closePendingClaimLinks(lane, reason, now, tx);
 
+    const rawToken = generateClientToken(existing.environment);
     const written = await tx.solutionClient.update({
       where: { id: existing.id, organizationId: scope.organizationId },
       data: {
         tokenHash: hashClientToken(rawToken),
+        tokenPrefix: tokenPrefixFor(existing.environment),
+        ...overlapFields(existing, now, expiresAt),
         // Rotating an inactive or revoked credential brings it back — that is what
         // "give me a working token" means.
         isActive: true,
         revokedAt: null,
         // A working token cannot carry an expiry that has already passed.
-        ...(hasLapsed(existing.expiresAt, now) ? { expiresAt: null } : {}),
+        expiresAt,
         ...(endedCredential(existing) ? { secretsCiphertext: null } : {}),
       },
-      select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
+      select: WRITTEN_SELECT,
     });
 
     // And after, in the same transaction. See `closePendingClaimLinks`.
     await closePendingClaimLinks(lane, reason, now, tx);
-    return written;
+    return { ...written, rawToken };
   });
-  if (row === null) return null;
 
-  return { ...row, rawToken };
+  return row;
 }
 
 /**
- * Revoke: the credential stops working now.
+ * Revoke: the credential stops working now — the current key AND the key a
+ * rotation replaced, if its overlap window was still open.
+ *
+ * Both die in this one write. Authentication resolves either key to this row
+ * and checks `revokedAt` before anything else, so the previous key is refused
+ * as REVOKED from the moment this commits; `previousValidUntil` is also closed
+ * at `now` so no screen reports an overlap that no longer exists. The hash is
+ * kept, so a call with the old key audits as REVOKED rather than UNKNOWN.
  *
  * The row is KEPT rather than deleted. A revoked client is the only thing that
  * makes its audit history legible afterwards — delete it and the calls it made
@@ -415,7 +513,7 @@ export async function revokeClientToken(
 
     const existing = await tx.solutionClient.findFirst({
       where: scopedById(scope, clientId),
-      select: { id: true, solutionId: true, environment: true },
+      select: { id: true, solutionId: true, environment: true, previousValidUntil: true },
     });
     if (!existing) return null;
 
@@ -429,19 +527,14 @@ export async function revokeClientToken(
 
     const revoked = await tx.solutionClient.update({
       where: { id: existing.id, organizationId: scope.organizationId },
-      data: { isActive: false, revokedAt: now, secretsCiphertext: null },
-      select: {
-        id: true,
-        solutionId: true,
-        label: true,
-        environment: true,
-        sapClient: true,
-        isActive: true,
-        lastUsedAt: true,
-        expiresAt: true,
-        revokedAt: true,
-        createdAt: true,
+      data: {
+        isActive: false,
+        revokedAt: now,
+        secretsCiphertext: null,
+        // An open overlap ends now; a closed one keeps the time it ended.
+        ...(overlapIsOpen(existing.previousValidUntil, now) ? { previousValidUntil: now } : {}),
       },
+      select: CLIENT_SUMMARY_SELECT,
     });
 
     // And after, in the same transaction. See `closePendingClaimLinks`.
@@ -450,22 +543,27 @@ export async function revokeClientToken(
   });
 }
 
+/** The metadata a screen may see. There is no field here that could carry a credential. */
+const CLIENT_SUMMARY_SELECT = {
+  id: true,
+  solutionId: true,
+  label: true,
+  environment: true,
+  sapClient: true,
+  tokenPrefix: true,
+  isActive: true,
+  lastUsedAt: true,
+  expiresAt: true,
+  previousValidUntil: true,
+  revokedAt: true,
+  createdAt: true,
+} as const;
+
 /** Metadata for the UI. There is no field here that could carry a credential. */
 export async function listClients(scope: TenantScope): Promise<ClientSummary[]> {
   return prisma.solutionClient.findMany({
     where: scopedWhere(scope, {}),
-    select: {
-      id: true,
-      solutionId: true,
-      label: true,
-      environment: true,
-      sapClient: true,
-      isActive: true,
-      lastUsedAt: true,
-      expiresAt: true,
-      revokedAt: true,
-      createdAt: true,
-    },
+    select: CLIENT_SUMMARY_SELECT,
     orderBy: { createdAt: "desc" },
   });
 }

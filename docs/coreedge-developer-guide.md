@@ -403,8 +403,35 @@ existing connections are not touched. Use OAuth SAML bearer instead
   browser bundle.
 - The person who **owns** a solution cannot issue its credential; a colleague
   must. Same second-pair-of-eyes rule as approving access.
-- Rotating replaces the token immediately, with no overlap window. Revoking
-  stops it now and keeps the audit history.
+- **The prefix says where a key reaches.** A PROD key starts `ce_live_`; a
+  SANDBOX, DEV or TEST key starts `ce_test_`. Keys issued before these prefixes
+  start with plain `ce_` and keep working until they expire. CoreEdge never
+  reads the prefix to authenticate you, so nothing breaks when your key's
+  prefix changes at its next rotation.
+- **TEST and PROD keys expire.** The issuer chooses the date, up to 90 days
+  ahead. A PROD key cannot be issued without one: the request is refused with
+  400. A TEST key issued without one gets the default of 90 days. SANDBOX and
+  DEV keys may still be issued with no expiry. A TEST or PROD key issued before
+  this rule may have no expiry. It keeps working, and the Studio and the
+  Operations screens show it as **no expiry - set one** until it is rotated.
+  The write key (`cew_`) is stored on the same credential, so it stops when the
+  runtime key does. Studio does not issue a write key on a TEST or PROD key that
+  has no expiry: rotate the key first.
+- **Rotating overlaps.** Rotating mints a new key with a fresh lifetime. The
+  key it replaces keeps working for 24 hours, or until it would have expired if
+  that is sooner. The response, the claim screen and the Studio table show the
+  exact time as `previousValidUntil`. Deploy the new key inside that window and
+  no call fails. Only the immediately previous key overlaps: if you rotate twice
+  in a day, the first key stops at the second rotation. A key that had already
+  stopped (revoked, deactivated or expired) does not come back for the window.
+  Re-issuing for an environment, or collecting a claim link for a lane that
+  already has a working key, is a rotation and overlaps the same way.
+- **A leak is a revoke, not a rotation.** Revoking ends the current key **and**
+  the previous one in the same moment, and keeps the audit history. Then issue
+  a new key.
+- **Scan for leaks.** The patterns that match every CoreEdge credential, for
+  GitHub secret scanning, gitleaks or a log filter, are in
+  `docs/coreedge/secret-scanning.md`.
 
 Every call your application makes is recorded against the credential that made
 it, so a leaked token can be traced to exactly what it touched and revoked

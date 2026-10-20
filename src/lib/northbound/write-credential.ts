@@ -27,6 +27,7 @@ import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
 import { KeyIssuerRefused, refuseKeyIssuer } from "@/lib/northbound/issue";
+import { isKeyLive } from "@/lib/northbound/key-policy";
 import { solutionClientAad, solutionClientRowAad } from "@/lib/sap-public/connection-crypto";
 import { openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
@@ -91,12 +92,13 @@ export async function setWriteCredential(
     }
     // Re-read under the lock: a revocation that landed first ended this
     // credential, and destroyed its write key (A37). Sealing one onto it now
-    // would put the key back on a row nobody can authenticate with.
+    // would put the key back on a row nobody can authenticate with. An
+    // expired credential counts as ended too (P0.11): its token is refused.
     const live = await tx.solutionClient.findFirst({
       where: scopedWhere(scope, { id: client.id, isActive: true, revokedAt: null }),
-      select: { id: true },
+      select: { id: true, isActive: true, revokedAt: true, expiresAt: true },
     });
-    if (live === null) return false;
+    if (live === null || !isKeyLive(live, new Date())) return false;
     await tx.solutionClient.update({
       where: { id: client.id, organizationId: scope.organizationId },
       data: { secretsCiphertext },
@@ -122,14 +124,30 @@ export async function verifyWriteCredential(
    */
   clientId: string,
   presented: string | null,
+  now: Date = new Date(),
 ): Promise<boolean> {
   if (!presented) return false;
 
   const client = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
-    select: { id: true, solutionId: true, secretsCiphertext: true },
+    select: {
+      id: true,
+      solutionId: true,
+      secretsCiphertext: true,
+      isActive: true,
+      revokedAt: true,
+      expiresAt: true,
+    },
   });
   if (!client?.secretsCiphertext) return false;
+  /*
+   * THE WRITE KEY ENDS WHEN ITS CREDENTIAL DOES (P0.11). It is sealed on the
+   * bearer token's own row, so it has no expiry of its own: the row's is its.
+   * The write route authenticates the bearer token first and would already
+   * have refused an expired one; asking again here keeps that true for any
+   * caller that verifies a write key on its own.
+   */
+  if (!isKeyLive(client, now)) return false;
 
   let stored: string | undefined;
   try {

@@ -129,16 +129,49 @@ describe("the collect button", () => {
     vi.unstubAllGlobals();
   });
 
-  function renderButton() {
+  function renderButton(overlapHours = 0) {
     render(
       <CollectKey
         collectPath="/claim/cec_x/collect"
-        keyPrefix="ce"
+        keyPrefix="ce_live_"
         solutionName="Finance accelerator"
         environment="PROD"
+        keyExpiresAt="2027-01-18T09:00:00.000Z"
+        overlapHours={overlapHours}
       />,
     );
   }
+
+  it("says before the press when the key will stop, and that a working key overlaps (P0.11)", () => {
+    renderButton(24);
+    expect(screen.getByText(/It will stop working on/)).toBeInTheDocument();
+    expect(screen.getByText(/keeps working for 24 hours after you collect this one/)).toBeInTheDocument();
+  });
+
+  it("says after the press when the key stops, and until when the replaced key still works", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            rawToken: "ce_live_the_only_copy_abcd",
+            environment: "PROD",
+            solutionName: "Finance accelerator",
+            tail: "abcd",
+            tokenPrefix: "ce_live_",
+            expiresAt: "2027-01-18T09:00:00.000Z",
+            previousValidUntil: "2026-10-21T09:00:00.000Z",
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    renderButton(24);
+    fireEvent.click(screen.getByRole("button", { name: "Collect your key" }));
+
+    await waitFor(() => expect(screen.getByText("ce_live_the_only_copy_abcd")).toBeInTheDocument());
+    expect(screen.getByText(/It stops working on/)).toBeInTheDocument();
+    expect(screen.getByText(/The key this replaces keeps working until/)).toBeInTheDocument();
+  });
 
   it("POSTs only when pressed, then shows the key once", async () => {
     fetchMock.mockResolvedValue(

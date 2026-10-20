@@ -115,7 +115,7 @@ describe("both mint paths carry both gates", () => {
     // act under a different verb, producing an equally usable token.
     const patch = src.slice(src.indexOf("export async function PATCH"));
     expect(patch).toContain("refuseKeyIssuer(");
-    expect(patch).toContain("rotateClientToken(scope, clientId, { issuerId: user.id })");
+    expect(patch).toMatch(/rotateClientToken\(\s*scope,\s*clientId,\s*\{ issuerId: user\.id \}/);
   });
 
   it("rotating fails closed when the solution cannot be resolved", () => {

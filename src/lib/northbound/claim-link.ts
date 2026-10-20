@@ -32,10 +32,17 @@ import { CLIENT_TOKEN_PREFIX, hashClientToken } from "@/lib/northbound/auth";
 import {
   endedCredential,
   generateClientToken,
-  hasLapsed,
   KeyIssuerRefused,
   refuseKeyIssuer,
 } from "@/lib/northbound/issue";
+import {
+  expiryOnRenewal,
+  isKeyLive,
+  overlapFields,
+  resolveKeyExpiry,
+  tokenPrefixFor,
+  type KeyExpiryResolution,
+} from "@/lib/northbound/key-policy";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { isLiveMember, refuseCredentialIssuerLive } from "@/lib/studio/owner-liveness";
@@ -119,6 +126,15 @@ export interface ClaimSuccess {
   readonly solutionName: string;
   /** The last four characters, for the lane's masked reference afterwards. */
   readonly tail: string;
+  /** `ce_live_` or `ce_test_` — the non-secret prefix of the key just minted. */
+  readonly tokenPrefix: string;
+  /** When the key stops working; null only where expiry is not mandatory (P0.11). */
+  readonly expiresAt: Date | null;
+  /**
+   * Until when the key this one replaced keeps working — the rotation
+   * overlap — or null when no live key was replaced.
+   */
+  readonly previousValidUntil: Date | null;
 }
 
 export interface ClaimFailure {
@@ -133,6 +149,14 @@ export interface ClaimPreview {
   readonly ok: true;
   readonly environment: string;
   readonly solutionName: string;
+  /**
+   * When the key would expire if it were collected now — so the person knows
+   * before pressing (P0.11). Null where expiry is not mandatory and the lane
+   * has none.
+   */
+  readonly keyExpiresAt: Date | null;
+  /** True when collecting replaces a working key, which then overlaps. */
+  readonly replacesLiveKey: boolean;
 }
 
 export type ClaimInspection = ClaimPreview | ClaimFailure;
@@ -284,6 +308,10 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
       solutionId: link.solutionId,
       environment: link.environment,
       replacedExisting: minted.replacedExisting,
+      expiresAt: minted.expiresAt,
+      // The overlap end, so the trail says until when the replaced key still
+      // worked (P0.11). Null when no live key was replaced.
+      previousValidUntil: minted.previousValidUntil,
     },
   });
 
@@ -293,6 +321,9 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
     environment: link.environment,
     solutionName: minted.solutionName,
     tail: minted.rawToken.slice(-4),
+    tokenPrefix: tokenPrefixFor(link.environment),
+    expiresAt: minted.expiresAt,
+    previousValidUntil: minted.previousValidUntil,
   };
 }
 
@@ -322,7 +353,14 @@ export async function inspectClaimLink(
   const facts = await readLaneFacts(prisma, link);
   const refusal = refuseLane(link, facts);
   if (refusal !== null) return { ok: false, refusal };
-  return { ok: true, environment: link.environment, solutionName: facts.solution?.name ?? "" };
+  const expiry = mintedExpiry(link, facts, now);
+  return {
+    ok: true,
+    environment: link.environment,
+    solutionName: facts.solution?.name ?? "",
+    keyExpiresAt: expiry.ok ? expiry.expiresAt : null,
+    replacesLiveKey: facts.client !== null && isKeyLive(facts.client, now),
+  };
 }
 
 interface OpenedLink {
@@ -376,6 +414,8 @@ interface LaneFacts {
   /** The key the lane holds now, if any — what claiming would replace. */
   readonly client: {
     readonly createdAt: Date;
+    /** Server-side only: what the overlap carries forward. Never leaves this module. */
+    readonly tokenHash: string;
     readonly isActive: boolean;
     readonly revokedAt: Date | null;
     readonly expiresAt: Date | null;
@@ -406,7 +446,7 @@ async function readLaneFacts(
       solutionId: link.solutionId,
       environment: link.environment,
     },
-    select: { createdAt: true, isActive: true, revokedAt: true, expiresAt: true },
+    select: { createdAt: true, tokenHash: true, isActive: true, revokedAt: true, expiresAt: true },
   });
   // Against the SENDER: they are who issues the key, and owners change — or
   // leave (a departed owner's slot reads as empty).
@@ -455,6 +495,21 @@ interface MintedKey {
   readonly rawToken: string;
   readonly solutionName: string;
   readonly replacedExisting: boolean;
+  readonly expiresAt: Date | null;
+  readonly previousValidUntil: Date | null;
+}
+
+/**
+ * The expiry the claimed key gets (P0.11). Nobody is asked at the claim, so
+ * this is a renewal: TEST and PROD get the default lifetime from the moment
+ * of collection; SANDBOX and DEV keep the lane's current expiry unless it has
+ * passed (audit A48: a renewal must not hand over a key refused on arrival),
+ * and a new lane there gets none.
+ */
+function mintedExpiry(link: OpenedLink, facts: LaneFacts, now: Date): KeyExpiryResolution {
+  return facts.client === null
+    ? resolveKeyExpiry({ environment: link.environment, requested: undefined, now, purpose: "renew" })
+    : expiryOnRenewal({ environment: link.environment, requested: undefined, current: facts.client.expiresAt, now });
 }
 
 /** Write the key onto the lane. Runs inside the claim's transaction, after the compare-and-set. */
@@ -464,9 +519,15 @@ async function mintKey(
   facts: LaneFacts,
   now: Date,
 ): Promise<MintedKey> {
-  const rawToken = generateClientToken();
+  const rawToken = generateClientToken(link.environment);
   const solutionName = facts.solution?.name ?? "";
   const existing = facts.client;
+  const expiry = mintedExpiry(link, facts, now);
+  // Cannot fail — a renewal with nothing requested always resolves — but a
+  // key with no expiry is never the fallback. The claim's catch turns this
+  // into the uniform refusal, and the transaction writes nothing.
+  if (!expiry.ok) throw new Error(`claim refused by the key policy: ${expiry.refusal}`);
+  const expiresAt = expiry.expiresAt;
 
   const client = await tx.solutionClient.upsert({
     where: {
@@ -482,6 +543,8 @@ async function mintKey(
       environment: link.environment,
       label: `${solutionName} · ${link.environment}`,
       tokenHash: hashClientToken(rawToken),
+      tokenPrefix: tokenPrefixFor(link.environment),
+      expiresAt,
       isActive: true,
       /*
        * The person who SENT the link owns the resulting key, not whoever
@@ -496,24 +559,27 @@ async function mintKey(
      * An upsert rather than a create because one key per
      * (solution, environment) is a unique constraint: if a key already
      * exists for this lane, claiming REPLACES it, which is the same
-     * semantics rotation already has. The old token stops working the
-     * instant this returns — there is deliberately no overlap window,
-     * because an overlap is how a leaked credential survives its rotation.
+     * semantics rotation has — including its overlap (P0.11): a key that
+     * was still working keeps working for the window, so collecting a new
+     * key does not break the deployment still holding the old one. A key
+     * that had ended (revoked, deactivated, expired) does not come back.
      */
     update: {
       tokenHash: hashClientToken(rawToken),
+      tokenPrefix: tokenPrefixFor(link.environment),
+      ...overlapFields(existing, now, expiresAt),
       isActive: true,
       revokedAt: null,
       /*
        * "Collect or renew the key" is what an expired lane says, and this is
        * the renewal. Keeping the lapsed expiry handed over a key shown once as
-       * working and refused as EXPIRED on its first call.
+       * working and refused as EXPIRED on its first call (A48).
        */
-      ...(existing !== null && hasLapsed(existing.expiresAt, now) ? { expiresAt: null } : {}),
+      expiresAt,
       // A revived key does not bring the old write key back. See `endedCredential`.
       ...(endedCredential(existing) ? { secretsCiphertext: null } : {}),
     },
-    select: { id: true },
+    select: { id: true, expiresAt: true, previousValidUntil: true },
   });
 
   await tx.keyClaimLink.update({
@@ -521,8 +587,15 @@ async function mintKey(
     data: { claimedClientId: client.id },
   });
 
-  return { clientId: client.id, rawToken, solutionName, replacedExisting: existing !== null };
+  return {
+    clientId: client.id,
+    rawToken,
+    solutionName,
+    replacedExisting: existing !== null,
+    expiresAt: client.expiresAt,
+    previousValidUntil: client.previousValidUntil,
+  };
 }
 
-/** The prefix a key carries, re-exported so the claim screen can mask it. */
-export { CLIENT_TOKEN_PREFIX };
+/** The prefixes a key carries, re-exported so the claim screen can mask it. */
+export { CLIENT_TOKEN_PREFIX, tokenPrefixFor };

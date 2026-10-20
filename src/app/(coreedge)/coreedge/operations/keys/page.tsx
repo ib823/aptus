@@ -13,6 +13,7 @@ import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { KEY_IDLE_MS, keySuggestion, listKeys } from "@/lib/coreedge/queries";
 import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
 import { getCurrentUser } from "@/lib/auth/session";
+import { KEY_STATE_LABELS } from "@/lib/northbound/key-policy";
 
 import { CoreEdgeShell } from "../../CoreEdgeShell";
 
@@ -41,6 +42,11 @@ import { CoreEdgeShell } from "../../CoreEdgeShell";
  * renders a prefix and four characters. A console that could display the value
  * would be a second place the key exists — exactly what the one-time claim link
  * is built to prevent.
+ *
+ * EXPIRY IS SHOWN, AND AN EXPIRED KEY IS NEVER "IN ACTIVE USE" (P0.11). The
+ * Expires column carries the broker's own verdict (`KeyRow.state`): a TEST or
+ * PROD key issued before expiry was required reads "no expiry - set one",
+ * and a key inside its rotation overlap says until when the old one works.
  */
 
 export const metadata: Metadata = { title: "Keys" };
@@ -108,7 +114,7 @@ export default async function KeysPage(): Promise<ReactNode> {
                   {k.appName} ·{" "}
                   {k.environment === null ? k.environmentRaw : ENVIRONMENT_LABELS[k.environment]}
                 </span>
-                <MaskedKey prefix="ce_" tail={k.tail} label={`Key for ${k.appName}`} />
+                <MaskedKey prefix={k.tokenPrefix} tail={k.tail} label={`Key for ${k.appName}`} />
               </span>
             ),
           },
@@ -126,6 +132,28 @@ export default async function KeysPage(): Promise<ReactNode> {
               ) : (
                 (describeAge(k.lastUsedAt, now) ?? "—")
               ),
+          },
+          {
+            key: "expires",
+            header: "Expires",
+            cell: (k) => (
+              <span className="flex flex-col gap-1">
+                <span>
+                  {k.state === "expired"
+                    ? `${GATE_GLYPHS["gate-bad"]} Expired ${k.expiresAt?.toISOString().slice(0, 10) ?? ""}`
+                    : k.state === "noExpiry"
+                      ? `${GATE_GLYPHS["gate-wait"]} ${KEY_STATE_LABELS.noExpiry}`
+                      : k.expiresAt === null
+                        ? "No expiry"
+                        : k.expiresAt.toISOString().slice(0, 10)}
+                </span>
+                {k.previousValidUntil === null ? null : (
+                  <span className="text-xs text-ink-muted">
+                    Previous key works until {k.previousValidUntil.toISOString().slice(0, 16).replace("T", " ")} UTC
+                  </span>
+                )}
+              </span>
+            ),
           },
           {
             key: "suggestion",

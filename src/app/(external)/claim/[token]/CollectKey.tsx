@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { MaskedKey } from "@/components/coreedge/MaskedKey";
 import { StatusChip } from "@/components/coreedge/StatusChip";
+import { formatDate, formatDateTime } from "@/lib/format/date";
 
 import { ClaimRefused } from "./ClaimRefused";
 
@@ -29,6 +30,12 @@ interface CollectedKey {
   readonly environment: string;
   readonly solutionName: string;
   readonly tail: string;
+  /** `ce_live_` or `ce_test_` — the key's own prefix, for the masked reference. */
+  readonly tokenPrefix?: string;
+  /** ISO date the key stops working, or null where it has no expiry (P0.11). */
+  readonly expiresAt?: string | null;
+  /** ISO date the key it replaced stops working — the rotation overlap — or null. */
+  readonly previousValidUntil?: string | null;
 }
 
 type CollectState =
@@ -46,7 +53,16 @@ export interface CollectKeyProps {
   /** What the key is for, from the page's read-only check — names, never a key. */
   readonly solutionName: string;
   readonly environment: string;
+  /** When the key would expire if collected now (ISO), or null where it would have none. */
+  readonly keyExpiresAt: string | null;
+  /**
+   * Hours the key this one replaces keeps working after collection, or 0 when
+   * there is no working key to replace.
+   */
+  readonly overlapHours: number;
 }
+
+const optionalString = (v: unknown): boolean => v === undefined || v === null || typeof v === "string";
 
 function isCollectedKey(value: unknown): value is CollectedKey {
   if (typeof value !== "object" || value === null) return false;
@@ -55,7 +71,10 @@ function isCollectedKey(value: unknown): value is CollectedKey {
     typeof v.rawToken === "string" &&
     typeof v.environment === "string" &&
     typeof v.solutionName === "string" &&
-    typeof v.tail === "string"
+    typeof v.tail === "string" &&
+    optionalString(v.tokenPrefix) &&
+    optionalString(v.expiresAt) &&
+    optionalString(v.previousValidUntil)
   );
 }
 
@@ -64,6 +83,8 @@ export function CollectKey({
   keyPrefix,
   solutionName,
   environment,
+  keyExpiresAt,
+  overlapHours,
 }: CollectKeyProps): ReactNode {
   const [state, setState] = useState<CollectState>({ kind: "ready" });
 
@@ -115,8 +136,20 @@ export function CollectKey({
 
         <div className="flex flex-col gap-2">
           <p className="text-xs text-ink-muted">From now on your lane shows only the reference:</p>
-          <MaskedKey prefix={keyPrefix} tail={key.tail} />
+          <MaskedKey prefix={key.tokenPrefix ?? keyPrefix} tail={key.tail} />
         </div>
+
+        <p className="max-w-prose text-sm text-ink-soft">
+          {key.expiresAt
+            ? `It stops working on ${formatDate(key.expiresAt)}. Before then, ask for a new link or have the key rotated — the old key keeps working for a while after, so nothing fails.`
+            : "It has no expiry. Revoke it when it is no longer needed."}
+        </p>
+        {key.previousValidUntil ? (
+          <p className="max-w-prose text-sm text-ink-soft">
+            The key this replaces keeps working until {formatDateTime(key.previousValidUntil)}, so
+            deploy this one before then.
+          </p>
+        ) : null}
 
         <p className="max-w-prose text-xs text-ink-muted">
           This link is now spent. Opening it again issues nothing.
@@ -136,6 +169,14 @@ export function CollectKey({
       <p className="max-w-prose text-sm text-ink-soft">
         The key is created when you press the button, and shown once. Have somewhere safe to put
         it before you do — it cannot be shown again, not by support and not from a backup.
+      </p>
+      <p className="max-w-prose text-sm text-ink-soft">
+        {keyExpiresAt
+          ? `It will stop working on ${formatDate(keyExpiresAt)}.`
+          : "It will have no expiry."}
+        {overlapHours > 0
+          ? ` It replaces a key that is still working; that key keeps working for ${overlapHours} hours after you collect this one, so you can switch without a failed call.`
+          : ""}
       </p>
 
       <button

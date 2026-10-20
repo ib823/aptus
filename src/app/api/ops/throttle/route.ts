@@ -33,6 +33,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
+import { liveKeyWhere } from "@/lib/northbound/key-policy";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import { THROTTLE_BUCKETS } from "@/lib/ops/throttle";
 import { peekRateLimit, rateLimitBackend, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -47,10 +48,11 @@ export async function GET(request: NextRequest) {
   const hours = opsWindowHours(request.nextUrl.searchParams.get("hours"));
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-  // Only live credentials: a revoked one has no budget worth reporting, and
-  // listing it would imply it could still be called.
+  // Only live credentials: a revoked or expired one has no budget worth
+  // reporting, and listing it would imply it could still be called. Live is
+  // the predicate authentication applies (key-policy.ts, P0.11).
   const credentials = await prisma.solutionClient.findMany({
-    where: opsWhere(guard.actor, { isActive: true, revokedAt: null }),
+    where: opsWhere(guard.actor, liveKeyWhere(new Date())),
     select: {
       id: true,
       solutionId: true,

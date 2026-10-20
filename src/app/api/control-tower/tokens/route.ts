@@ -17,11 +17,17 @@
  * REPLACES the previous token and its environment rather than adding one. The
  * register must never imply concurrent credentials, because an operator who
  * believed that would go looking for tokens to revoke that do not exist.
+ *
+ * EXPIRY IS NOW A CONTROL, NOT A PREFERENCE (P0.11). A TEST or PROD key must
+ * expire, so one that does not is reported as `expiryRequired: true` and
+ * counted in `noRequiredExpiry` — it predates the rule, still works, and
+ * should be rotated. An expired key is `expired`, never `active`.
  */
 
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
+import { keyState, lacksRequiredExpiry, requiresExpiry } from "@/lib/northbound/key-policy";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 import { missingOwners } from "@/lib/studio/solutions";
@@ -74,8 +80,11 @@ export async function GET(_request: NextRequest) {
     const owners = solution
       ? [solution.technicalOwnerId, solution.businessOwnerId, solution.supportOwnerId]
       : [];
-    const revoked = c.revokedAt !== null || !c.isActive;
-    const expired = !revoked && c.expiresAt !== null && c.expiresAt.getTime() <= now.getTime();
+    // The predicate authentication uses (key-policy.ts): an expired key is
+    // never reported as active.
+    const state = keyState(c, now);
+    const revoked = state === "revoked" || state === "inactive";
+    const expired = state === "expired";
 
     return {
       id: c.id,
@@ -85,6 +94,10 @@ export async function GET(_request: NextRequest) {
       label: c.label,
       environment: c.environment,
       state: revoked ? "revoked" : expired ? "expired" : "active",
+      /** True where this environment's keys must expire (TEST, PROD) — P0.11. */
+      expiryRequired: requiresExpiry(c.environment),
+      /** A live key that must expire and does not: "no expiry - set one". */
+      lacksRequiredExpiry: lacksRequiredExpiry(c, now),
       /**
        * Whether the control actually held for THIS credential.
        *
@@ -118,6 +131,8 @@ export async function GET(_request: NextRequest) {
       /** Should always be zero. A non-zero is a control that did not hold. */
       issuedByAnOwner: credentials.filter((c) => c.segregation?.issuerWasAnOwner === true).length,
       neverExpires: credentials.filter((c) => c.expiresAt === null && c.state === "active").length,
+      /** Of those, the TEST and PROD keys — the ones the policy now forbids (P0.11). */
+      noRequiredExpiry: credentials.filter((c) => c.lacksRequiredExpiry).length,
     },
     delegatedActions: [
       {

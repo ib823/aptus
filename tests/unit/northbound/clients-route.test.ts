@@ -9,6 +9,10 @@
  * Revocation deliberately carries no such rule, and there is a test for that
  * too: requiring a colleague to stop a leaking credential is a control that
  * costs you exactly when you can least afford it.
+ *
+ * And the credential-hygiene rules (P0.11): a PROD key without an expiry is a
+ * 400, a TEST or PROD key past the maximum is a 400, and a rotation says
+ * until when the key it replaced keeps working.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,7 +73,10 @@ function req(body: unknown, method = "POST") {
   }) as never;
 }
 
-const VALID = { solutionId: "sol_1", label: "prod client", environment: "PROD" };
+const DAY = 24 * 60 * 60 * 1000;
+/** A PROD key must name its expiry (P0.11); thirty days is inside the maximum. */
+const IN_30_DAYS = new Date(Date.now() + 30 * DAY).toISOString();
+const VALID = { solutionId: "sol_1", label: "prod client", environment: "PROD", expiresAt: IN_30_DAYS };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,9 +87,11 @@ beforeEach(() => {
     id: "client_1",
     solutionId: "sol_1",
     environment: "PROD",
+    tokenHash: "hash_of_the_live_key",
     isActive: true,
     revokedAt: null,
     expiresAt: null,
+    previousValidUntil: null,
   });
   mocks.closeLinks.mockResolvedValue({ count: 0 });
   mocks.upsertClient.mockResolvedValue({
@@ -163,12 +172,40 @@ describe("the response tells the truth about the token", () => {
     expect(json.data.warning.toLowerCase()).toContain("server-side");
   });
 
-  it("says plainly that rotation killed the previous token", async () => {
+  it("says until when the previous token keeps working, and that a leak is a revoke (P0.11)", async () => {
+    const until = new Date(Date.now() + DAY);
     mocks.updateClient.mockResolvedValue({
       id: "client_1",
       solutionId: "sol_1",
       label: "x",
       environment: "PROD",
+      expiresAt: new Date(Date.now() + 90 * DAY),
+      previousValidUntil: until,
+      createdAt: new Date(),
+    });
+    const res = await PATCH(req({ clientId: "client_1", action: "rotate" }, "PATCH"));
+    const json = (await res.json()) as {
+      data: { warning: string; previousValidUntil: string; tokenPrefix: string; token: string };
+    };
+    expect(json.data.warning).toContain(`keeps working until ${until.toISOString()}`);
+    expect(json.data.warning.toLowerCase()).toContain("revoke instead");
+    expect(json.data.previousValidUntil).toBe(until.toISOString());
+    expect(json.data.token.startsWith("ce_live_")).toBe(true);
+    expect(json.data.tokenPrefix).toBe("ce_live_");
+    // The ROTATE audit row records the overlap end.
+    const audit = mocks.createAudit.mock.calls[0]?.[0] as { data: { action: string; after: Record<string, unknown> } };
+    expect(audit.data.action).toBe("ROTATE");
+    expect(audit.data.after.previousValidUntil).toEqual(until);
+  });
+
+  it("says plainly that rotation killed the previous token when nothing overlaps", async () => {
+    mocks.updateClient.mockResolvedValue({
+      id: "client_1",
+      solutionId: "sol_1",
+      label: "x",
+      environment: "PROD",
+      expiresAt: new Date(Date.now() + 90 * DAY),
+      previousValidUntil: null,
       createdAt: new Date(),
     });
     const res = await PATCH(req({ clientId: "client_1", action: "rotate" }, "PATCH"));
@@ -181,6 +218,73 @@ describe("the response tells the truth about the token", () => {
     const json = (await res.json()) as { data: { token: string } };
     const auditArg = JSON.stringify(mocks.createAudit.mock.calls[0]?.[0] ?? {});
     expect(auditArg).not.toContain(json.data.token);
+  });
+});
+
+describe("keys expire (P0.11)", () => {
+  it("refuses a PROD key without an expiry with 400, before minting anything", async () => {
+    const { expiresAt: _omitted, ...withoutExpiry } = VALID;
+    const res = await POST(req(withoutExpiry));
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: { message: string } };
+    expect(json.error.message).toContain("PROD key must have an expiry");
+    expect(mocks.upsertClient).not.toHaveBeenCalled();
+  });
+
+  it("refuses a TEST or PROD expiry past the maximum (90 days by default)", async () => {
+    for (const environment of ["TEST", "PROD"]) {
+      vi.clearAllMocks();
+      mocks.getCurrentUser.mockResolvedValue(ISSUER);
+      mocks.findFirstSolution.mockResolvedValue(SOLUTION);
+      const res = await POST(req({ ...VALID, environment, expiresAt: new Date(Date.now() + 91 * DAY).toISOString() }));
+      expect(res.status, environment).toBe(400);
+      expect(mocks.upsertClient).not.toHaveBeenCalled();
+    }
+  });
+
+  it("refuses an expiry that has already passed", async () => {
+    const res = await POST(req({ ...VALID, expiresAt: new Date(Date.now() - DAY).toISOString() }));
+    expect(res.status).toBe(400);
+  });
+
+  it("gives a TEST key with no expiry the default lifetime, and mints it with the ce_test_ prefix", async () => {
+    mocks.findFirstClient.mockResolvedValue(null);
+    const { expiresAt: _omitted, ...withoutExpiry } = VALID;
+    const res = await POST(req({ ...withoutExpiry, environment: "TEST" }));
+    expect(res.status).toBe(201);
+    const call = mocks.upsertClient.mock.calls[0]?.[0] as { create: { expiresAt: Date; tokenPrefix: string } };
+    expect(Math.abs(call.create.expiresAt.getTime() - (Date.now() + 90 * DAY))).toBeLessThan(60_000);
+    expect(call.create.tokenPrefix).toBe("ce_test_");
+    const json = (await res.json()) as { data: { token: string } };
+    expect(json.data.token.startsWith("ce_test_")).toBe(true);
+  });
+
+  it("honours COREEDGE_KEY_MAX_TTL_DAYS", async () => {
+    vi.stubEnv("COREEDGE_KEY_MAX_TTL_DAYS", "30");
+    try {
+      const res = await POST(req({ ...VALID, expiresAt: new Date(Date.now() + 45 * DAY).toISOString() }));
+      expect(res.status).toBe(400);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("restores the old behaviour under COREEDGE_KEY_EXPIRY=off — the rollback lever", async () => {
+    vi.stubEnv("COREEDGE_KEY_EXPIRY", "off");
+    try {
+      const { expiresAt: _omitted, ...withoutExpiry } = VALID;
+      expect((await POST(req(withoutExpiry))).status).toBe(201);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("refuses a rotation to an expiry past the maximum, before minting", async () => {
+    const res = await PATCH(
+      req({ clientId: "client_1", action: "rotate", expiresAt: new Date(Date.now() + 120 * DAY).toISOString() }, "PATCH"),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.updateClient).not.toHaveBeenCalled();
   });
 });
 

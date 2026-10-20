@@ -19,10 +19,19 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { LEGACY_TOKEN_PREFIX } from "@/lib/northbound/key-policy";
 import { tenantScopeOf, type TenantScope } from "@/lib/studio/tenant-scope";
 
-/** Tokens are prefixed so a leaked string is recognisable in logs and greppable. */
-export const CLIENT_TOKEN_PREFIX = "ce_";
+/**
+ * Tokens are prefixed so a leaked string is recognisable in logs and greppable.
+ *
+ * Every runtime key starts with `ce_`. Since P0.11 a new key carries
+ * `ce_live_` (PROD) or `ce_test_` (every other environment) — see
+ * lib/northbound/key-policy.ts — and a key minted before then carries the
+ * plain `ce_` prefix and keeps working until it expires. Authentication never
+ * reads the prefix: the hash is the lookup, so no prefix is ever refused.
+ */
+export const CLIENT_TOKEN_PREFIX = LEGACY_TOKEN_PREFIX;
 
 export function hashClientToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
@@ -59,6 +68,13 @@ export type ClientAuthFailure =
   | "INACTIVE"
   | "REVOKED"
   | "EXPIRED"
+  /**
+   * The token is the key a rotation replaced, and its overlap window has
+   * closed (P0.11). Reported apart from EXPIRED because the remedy differs:
+   * the credential itself is fine, and the caller only has to deploy the key
+   * it was given at rotation.
+   */
+  | "ROTATED_OUT"
   /**
    * The credential is fine; the SOLUTION it belongs to has been retired.
    *
@@ -113,6 +129,19 @@ export async function checkSolutionRuntime(
   return { ok: true };
 }
 
+/** What authentication reads from the row. Never the hashes, never the sealed write key. */
+const AUTH_SELECT = {
+  id: true,
+  organizationId: true,
+  solutionId: true,
+  environment: true,
+  sapClient: true,
+  isActive: true,
+  revokedAt: true,
+  expiresAt: true,
+  previousValidUntil: true,
+} as const;
+
 /**
  * Resolve a raw bearer token to the client it identifies.
  *
@@ -120,6 +149,16 @@ export async function checkSolutionRuntime(
  * debugged — but the ROUTE deliberately collapses them all into one generic 401
  * for the caller. Telling an attacker "that token existed but is revoked" is a
  * free oracle; telling ourselves is operationally necessary.
+ *
+ * THE ROTATION OVERLAP (P0.11). A token that is not any row's current key may
+ * be the key a rotation replaced: it is looked up by `previousTokenHash`, the
+ * same single indexed equality on a unique column, and accepted while
+ * `previousValidUntil` is in the future. It resolves to the SAME row, so
+ * everything else — revocation, deactivation, the row's own expiry, the
+ * solution gate, and the write key sealed on the row — applies to it exactly
+ * as to the current key. That is what makes "revoke ends both at once" a
+ * property of one `revokedAt` rather than of a second check someone must
+ * remember.
  */
 export async function authenticateClientToken(
   rawToken: string | null,
@@ -127,25 +166,27 @@ export async function authenticateClientToken(
 ): Promise<ClientAuthResult> {
   if (!rawToken) return { ok: false, reason: "NO_TOKEN" };
 
-  const row = await prisma.solutionClient.findUnique({
-    where: { tokenHash: hashClientToken(rawToken) },
-    select: {
-      id: true,
-      organizationId: true,
-      solutionId: true,
-      environment: true,
-      sapClient: true,
-      isActive: true,
-      revokedAt: true,
-      expiresAt: true,
-    },
-  });
+  const tokenHash = hashClientToken(rawToken);
+  let viaPreviousKey = false;
+  let row = await prisma.solutionClient.findUnique({ where: { tokenHash }, select: AUTH_SELECT });
+  if (!row) {
+    // Only on a miss, so a current key costs one lookup as it always did.
+    row = await prisma.solutionClient.findUnique({
+      where: { previousTokenHash: tokenHash },
+      select: AUTH_SELECT,
+    });
+    viaPreviousKey = row !== null;
+  }
 
   if (!row) return { ok: false, reason: "UNKNOWN_TOKEN" };
   // Revocation is checked before "inactive": a revoked token is a security
-  // event worth seeing in the audit as exactly that.
+  // event worth seeing in the audit as exactly that. It is also checked
+  // before the overlap, so a revoked row refuses its previous key as REVOKED.
   if (row.revokedAt !== null) return { ok: false, reason: "REVOKED" };
   if (!row.isActive) return { ok: false, reason: "INACTIVE" };
+  if (viaPreviousKey && (row.previousValidUntil === null || row.previousValidUntil.getTime() <= now.getTime())) {
+    return { ok: false, reason: "ROTATED_OUT" };
+  }
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) {
     return { ok: false, reason: "EXPIRED" };
   }

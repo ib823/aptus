@@ -1,9 +1,9 @@
 /**
  * Issuing, rotating and revoking a runtime credential.
  *
- * The assertions that matter: the raw token is never persisted, rotation kills
- * the old token with no overlap window, and revocation KEEPS the row so the
- * audit stays legible afterwards.
+ * The assertions that matter: the raw token is never persisted, rotation keeps
+ * the old token only for the overlap window (P0.11) and only when it was live,
+ * and revocation KEEPS the row so the audit stays legible afterwards.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -63,6 +63,9 @@ import {
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 const SCOPE = tenantScopeOf("org_a");
+/** A PROD key must name its expiry (P0.11); thirty days is inside the maximum. */
+const EXPIRES = new Date(Date.now() + 30 * 86_400_000);
+const HOUR = 60 * 60 * 1000;
 const ROW = {
   id: "client_1",
   solutionId: "sol_1",
@@ -76,9 +79,11 @@ const LIVE = {
   id: "client_1",
   solutionId: "sol_1",
   environment: "PROD",
+  tokenHash: "hash_of_the_key_being_replaced",
   isActive: true,
   revokedAt: null,
   expiresAt: null,
+  previousValidUntil: null,
 };
 
 beforeEach(() => {
@@ -92,17 +97,24 @@ beforeEach(() => {
 
 describe("token generation", () => {
   it("is prefixed, long, and never repeats", () => {
-    const a = generateClientToken();
-    const b = generateClientToken();
+    const a = generateClientToken("PROD");
+    const b = generateClientToken("PROD");
     expect(a).toMatch(/^ce_/);
     expect(a).not.toBe(b);
-    // 32 bytes base64url ≈ 43 chars, plus the prefix.
-    expect(a.length).toBeGreaterThan(40);
+    // 32 bytes base64url = 43 chars, plus the prefix.
+    expect(a.length).toBe("ce_live_".length + 43);
+  });
+
+  it("says which environment it reaches: ce_live_ for PROD, ce_test_ for the rest (P0.11)", () => {
+    expect(generateClientToken("PROD")).toMatch(/^ce_live_[A-Za-z0-9_-]{43}$/);
+    for (const env of ["SANDBOX", "DEV", "TEST"]) {
+      expect(generateClientToken(env)).toMatch(/^ce_test_[A-Za-z0-9_-]{43}$/);
+    }
   });
 
   it("is URL-safe, so it survives being pasted into a header or env file", () => {
     for (let i = 0; i < 20; i++) {
-      expect(generateClientToken()).toMatch(/^ce_[A-Za-z0-9_-]+$/);
+      expect(generateClientToken(i % 2 === 0 ? "PROD" : "DEV")).toMatch(/^ce_[A-Za-z0-9_-]+$/);
     }
   });
 });
@@ -114,6 +126,7 @@ describe("issuing", () => {
       label: "x",
       environment: "PROD",
       createdById: "u_issuer",
+      expiresAt: EXPIRES,
     });
 
     const call = mocks.upsert.mock.calls[0]?.[0] as {
@@ -132,6 +145,7 @@ describe("issuing", () => {
       label: "x",
       environment: "PROD",
       createdById: "u",
+      expiresAt: EXPIRES,
     });
     expect(issued.rawToken).toMatch(/^ce_/);
   });
@@ -167,6 +181,7 @@ describe("issuing", () => {
       label: "x",
       environment: "PROD",
       createdById: "u",
+      expiresAt: EXPIRES,
     });
     const call = mocks.upsert.mock.calls[0]?.[0] as { where: Record<string, unknown> };
     expect(call.where).toEqual({
@@ -182,9 +197,43 @@ describe("issuing", () => {
       label: "x",
       environment: "PROD",
       createdById: "u",
+      expiresAt: EXPIRES,
     });
     const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
     expect(call.update).not.toHaveProperty("environment");
+  });
+
+  it("records the prefix it minted with, and refuses a PROD key with no expiry (P0.11)", async () => {
+    const issued = await issueClientToken(SCOPE, {
+      solutionId: "sol_1",
+      label: "x",
+      environment: "PROD",
+      createdById: "u",
+      expiresAt: EXPIRES,
+    });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { create: Record<string, unknown>; update: Record<string, unknown> };
+    expect(issued.rawToken.startsWith("ce_live_")).toBe(true);
+    expect(call.create.tokenPrefix).toBe("ce_live_");
+    expect(call.create.expiresAt).toEqual(EXPIRES);
+
+    mocks.upsert.mockClear();
+    await expect(
+      issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
+    ).rejects.toMatchObject({ name: "KeyExpiryRefused", refusal: "missingExpiry" });
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("re-issuing over a LIVE key overlaps like a rotation (P0.11)", async () => {
+    await issueClientToken(SCOPE, {
+      solutionId: "sol_1",
+      label: "x",
+      environment: "PROD",
+      createdById: "u",
+      expiresAt: EXPIRES,
+    });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update.previousTokenHash).toBe(LIVE.tokenHash);
+    expect(call.update.previousValidUntil).toBeInstanceOf(Date);
   });
 
   it("re-issuing revives a revoked credential — that is what the request means", async () => {
@@ -193,6 +242,7 @@ describe("issuing", () => {
       label: "x",
       environment: "PROD",
       createdById: "u",
+      expiresAt: EXPIRES,
     });
     const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
     expect(call.update.isActive).toBe(true);
@@ -205,19 +255,49 @@ describe("rotation", () => {
     mocks.update.mockResolvedValue(ROW);
   });
 
-  it("replaces the hash, so the previous token dies immediately", async () => {
+  it("replaces the hash with the new token's", async () => {
     const rotated = await rotateClientToken(SCOPE, "client_1");
     expect(rotated).not.toBeNull();
     const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.tokenHash).toBe(hashClientToken(rotated!.rawToken));
+    expect(data.tokenPrefix).toBe("ce_live_");
   });
 
-  it("leaves NO overlap window where both tokens work", async () => {
-    // An overlap is exactly how a leaked credential survives its own rotation.
+  it("keeps the replaced LIVE key valid for the overlap window, and no longer (P0.11)", async () => {
+    // Rotation used to cut over at once, so every rotation was an outage for
+    // as long as the deployment took to pick the new key up.
+    const before = Date.now();
     await rotateClientToken(SCOPE, "client_1");
     const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
-    // One hash column, overwritten. No "previousTokenHash", no grace period.
-    expect(Object.keys(data).filter((k) => k.toLowerCase().includes("hash"))).toEqual(["tokenHash"]);
+    expect(data.previousTokenHash).toBe(LIVE.tokenHash);
+    const until = (data.previousValidUntil as Date).getTime();
+    expect(until).toBeGreaterThanOrEqual(before + 24 * HOUR);
+    expect(until).toBeLessThanOrEqual(Date.now() + 24 * HOUR);
+  });
+
+  it("gives an ENDED key no overlap: rotating a revoked key does not revive it for a day", async () => {
+    mocks.findFirst.mockResolvedValue({ ...LIVE, isActive: false, revokedAt: new Date("2026-07-01T00:00:00Z") });
+    await rotateClientToken(SCOPE, "client_1");
+    const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data).toMatchObject({ previousTokenHash: null, previousValidUntil: null });
+  });
+
+  it("honours COREEDGE_KEY_ROTATION_OVERLAP_HOURS, and 0 cuts over at once", async () => {
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    try {
+      await rotateClientToken(SCOPE, "client_1");
+      const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+      expect(data).toMatchObject({ previousTokenHash: null, previousValidUntil: null });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("returns when the replaced key stops, so the caller can say so", async () => {
+    const until = new Date(Date.now() + 24 * HOUR);
+    mocks.update.mockResolvedValue({ ...ROW, expiresAt: EXPIRES, previousValidUntil: until });
+    const rotated = await rotateClientToken(SCOPE, "client_1");
+    expect(rotated?.previousValidUntil).toEqual(until);
   });
 
   it("is scoped — another tenant's credential is not found", async () => {
@@ -234,6 +314,14 @@ describe("rotation", () => {
 });
 
 describe("revocation", () => {
+  it("ends an open overlap at the same moment: the previous key dies with the current one", async () => {
+    mocks.findFirst.mockResolvedValue({ ...LIVE, previousValidUntil: new Date(Date.now() + 20 * HOUR) });
+    await revokeClientToken(SCOPE, "client_1");
+    const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.revokedAt).toBeInstanceOf(Date);
+    expect(data.previousValidUntil).toEqual(data.revokedAt);
+  });
+
   it("deactivates and stamps a revocation time", async () => {
     await revokeClientToken(SCOPE, "client_1");
     const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
@@ -284,7 +372,7 @@ describe("every change to a key closes the lane's pending claim links", () => {
   });
 
   it("issuing closes them, so a link sent earlier cannot replace the new key", async () => {
-    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES });
 
     const close = mocks.closeLinks.mock.calls[0]?.[0] as { where: unknown };
     expect(close.where).toEqual(LANE_LINKS);
@@ -314,7 +402,7 @@ describe("every change to a key closes the lane's pending claim links", () => {
         reason: "A key was issued for this environment.",
         write: mocks.upsert,
         run: () =>
-          issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
+          issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES }),
       },
       {
         reason: "The key for this environment was rotated.",
@@ -348,7 +436,7 @@ describe("every change to a key closes the lane's pending claim links", () => {
     // later, replaced the token its holder had just been shown. Now the close
     // and the write commit together or not at all, and no token is returned.
     const changes = [
-      () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }),
+      () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES }),
       () => rotateClientToken(SCOPE, "client_1"),
       () => revokeClientToken(SCOPE, "client_1"),
     ];
@@ -361,7 +449,7 @@ describe("every change to a key closes the lane's pending claim links", () => {
 
   it("runs the lock, both closes and the write inside ONE transaction, the lock first", async () => {
     const changes = [
-      { write: mocks.upsert, run: () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" }) },
+      { write: mocks.upsert, run: () => issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES }) },
       { write: mocks.update, run: () => rotateClientToken(SCOPE, "client_1") },
       { write: mocks.update, run: () => revokeClientToken(SCOPE, "client_1") },
     ];
@@ -408,8 +496,13 @@ describe("a revoked credential does not keep its write key", () => {
   });
 
   it("re-issuing onto a revoked row clears a write key left from before", async () => {
-    mocks.findFirst.mockResolvedValue({ isActive: false, revokedAt: new Date("2026-07-01T00:00:00Z") });
-    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    mocks.findFirst.mockResolvedValue({
+      tokenHash: "h",
+      isActive: false,
+      revokedAt: new Date("2026-07-01T00:00:00Z"),
+      expiresAt: null,
+    });
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES });
     const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
     expect(call.update).toHaveProperty("secretsCiphertext", null);
   });
@@ -417,8 +510,8 @@ describe("a revoked credential does not keep its write key", () => {
   it("re-issuing a LIVE credential leaves its write key alone", async () => {
     // Rotation of a working key is not a compromise; killing the write key
     // there would break writes nobody asked to stop.
-    mocks.findFirst.mockResolvedValue({ isActive: true, revokedAt: null });
-    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u" });
+    mocks.findFirst.mockResolvedValue({ tokenHash: "h", isActive: true, revokedAt: null, expiresAt: null });
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES });
     const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
     expect(call.update).not.toHaveProperty("secretsCiphertext");
   });
@@ -436,20 +529,45 @@ describe("a revoked credential does not keep its write key", () => {
 });
 
 describe("rotation renews a lapsed expiry", () => {
+  const DEV = { ...LIVE, environment: "DEV" };
+
   beforeEach(() => {
     mocks.update.mockResolvedValue(ROW);
   });
 
-  it("clears an expiry that has already passed, so the new token is not refused on arrival", async () => {
-    mocks.findFirst.mockResolvedValue({ ...LIVE, expiresAt: new Date(Date.now() - 60_000) });
+  it("clears an expiry that has already passed where expiry is optional (DEV), so the new token is not refused on arrival", async () => {
+    mocks.findFirst.mockResolvedValue({ ...DEV, expiresAt: new Date(Date.now() - 60_000) });
     await rotateClientToken(SCOPE, "client_1");
     expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("expiresAt", null);
   });
 
-  it("keeps an expiry still in the future — that is the issuer's decision", async () => {
-    mocks.findFirst.mockResolvedValue({ ...LIVE, expiresAt: new Date(Date.now() + 86_400_000) });
+  it("keeps a DEV expiry still in the future — that is the issuer's decision", async () => {
+    const future = new Date(Date.now() + 86_400_000);
+    mocks.findFirst.mockResolvedValue({ ...DEV, expiresAt: future });
     await rotateClientToken(SCOPE, "client_1");
-    expect(mocks.update.mock.calls[0]?.[0]?.data).not.toHaveProperty("expiresAt");
+    expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("expiresAt", future);
+  });
+
+  it("gives a PROD key a fresh default lifetime — lapsed, future or none (P0.11)", async () => {
+    for (const expiresAt of [new Date(Date.now() - 60_000), new Date(Date.now() + 86_400_000), null]) {
+      mocks.update.mockClear();
+      mocks.findFirst.mockResolvedValue({ ...LIVE, expiresAt });
+      await rotateClientToken(SCOPE, "client_1");
+      const set = (mocks.update.mock.calls[0]?.[0]?.data as { expiresAt: Date }).expiresAt.getTime();
+      expect(Math.abs(set - (Date.now() + 90 * 86_400_000))).toBeLessThan(60_000);
+    }
+  });
+
+  it("takes the caller's expiry, inside the maximum, and refuses one past it", async () => {
+    const chosen = new Date(Date.now() + 10 * 86_400_000);
+    await rotateClientToken(SCOPE, "client_1", undefined, { expiresAt: chosen });
+    expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("expiresAt", chosen);
+
+    mocks.update.mockClear();
+    await expect(
+      rotateClientToken(SCOPE, "client_1", undefined, { expiresAt: new Date(Date.now() + 200 * 86_400_000) }),
+    ).rejects.toMatchObject({ name: "KeyExpiryRefused", refusal: "expiryTooFar" });
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });
 
@@ -473,7 +591,7 @@ describe("the owner gate is re-applied under the lock, with the key write (P0.1)
   const issue = () =>
     issueClientToken(
       SCOPE,
-      { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u_issuer" },
+      { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u_issuer", expiresAt: EXPIRES },
       { issuerId: "u_issuer" },
     );
 

@@ -85,13 +85,17 @@ async function sendLink(environment = "PROD"): Promise<string> {
   return link.rawToken;
 }
 
-async function issueInStudio(expiresAt: Date | null = null) {
+/**
+ * A Studio issue. A PROD key must name its expiry (P0.11), so one is given
+ * unless the test chooses its own: sixty days from whatever "now" is.
+ */
+async function issueInStudio(expiresAt?: Date, environment: "PROD" | "DEV" = "PROD") {
   return issueClientToken(SCOPE, {
     solutionId: "sol_1",
-    label: "prod",
-    environment: "PROD",
+    label: environment.toLowerCase(),
+    environment,
     createdById: STUDIO_ISSUER,
-    expiresAt,
+    expiresAt: expiresAt ?? new Date(Date.now() + 60 * DAY),
   });
 }
 
@@ -442,12 +446,23 @@ describe("A48 · renewing an expired key gives a key that works", () => {
     expect(await authenticateClientToken(rotated!.rawToken)).toMatchObject({ ok: true });
   });
 
-  it("keeps an expiry that has not passed yet", async () => {
+  it("keeps an expiry that has not passed yet, where expiry is not mandatory (DEV)", async () => {
+    moveTo(at(-1));
+    await issueInStudio(at(30), "DEV");
+    moveTo(at(0));
+    expect((await claimKey(await sendLink("DEV"))).ok).toBe(true);
+    expect(laneStore.clients.find((c) => c.environment === "DEV")!.expiresAt).toEqual(at(30));
+  });
+
+  it("gives a PROD key a fresh default lifetime from the claim (P0.11)", async () => {
     moveTo(at(-1));
     await issueInStudio(at(30));
     moveTo(at(0));
-    expect((await claimKey(await sendLink())).ok).toBe(true);
-    expect(lane()!.expiresAt).toEqual(at(30));
+    const result = await claimKey(await sendLink());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(lane()!.expiresAt).toEqual(at(90));
+    expect(result.expiresAt).toEqual(at(90));
   });
 });
 

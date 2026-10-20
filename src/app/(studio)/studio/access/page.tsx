@@ -25,6 +25,14 @@ import {
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
+  defaultKeyExpiry,
+  keyMaxTtlDays,
+  keyState,
+  overlapIsOpen,
+  rotationOverlapHours,
+  storedTokenPrefix,
+} from "@/lib/northbound/key-policy";
+import {
   effectiveDecision,
   highestApprovedEnvironment,
   type GrantEnvironment,
@@ -117,8 +125,13 @@ export default async function StudioAccessPage() {
             // so on a multi-client estate the one column that says WHICH data
             // container a credential addresses was always blank.
             sapClient: true,
+            tokenPrefix: true,
             isActive: true,
             lastUsedAt: true,
+            // P0.11: the table says when each key stops, and until when the
+            // key a rotation replaced still works. Never a hash.
+            expiresAt: true,
+            previousValidUntil: true,
             revokedAt: true,
           },
           orderBy: { createdAt: "desc" },
@@ -211,6 +224,15 @@ export default async function StudioAccessPage() {
     isActive: c.isActive,
     lastUsedAt: c.lastUsedAt ? c.lastUsedAt.toISOString() : null,
     revokedAt: c.revokedAt ? c.revokedAt.toISOString() : null,
+    // Judged here, by the broker's own rule, so the table never calls an
+    // expired key active (P0.11).
+    state: keyState(c, now),
+    tokenPrefix: storedTokenPrefix(c.tokenPrefix),
+    expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
+    previousValidUntil:
+      c.revokedAt === null && c.previousValidUntil !== null && overlapIsOpen(c.previousValidUntil, now)
+        ? c.previousValidUntil.toISOString()
+        : null,
   }));
 
   // Marked here so the UI can explain the SoD rule BEFORE it is hit, rather
@@ -251,6 +273,11 @@ export default async function StudioAccessPage() {
         solutions={credentialSolutions}
         canIssue={canMutateStudio(user.role)}
         connectedEnvironments={connectedEnvironments}
+        keyPolicy={{
+          maxTtlDays: keyMaxTtlDays(),
+          defaultExpiry: defaultKeyExpiry(now).toISOString().slice(0, 10),
+          overlapHours: rotationOverlapHours(),
+        }}
       />
     </div>
   );

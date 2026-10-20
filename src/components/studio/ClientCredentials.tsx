@@ -11,6 +11,14 @@
  * Segregation of duties is enforced server-side. This UI states the rule up
  * front so it reads as governance rather than as an error, and so the owner
  * knows to ask a colleague before they try.
+ *
+ * EXPIRY AND THE ROTATION OVERLAP (P0.11). A TEST or PROD key must expire:
+ * the form pre-fills the default and caps the date at the maximum, and a PROD
+ * key cannot be issued without one. The table shows each key's expiry, flags a
+ * TEST or PROD key issued before that rule as "no expiry - set one", and —
+ * after a rotation — until when the replaced key still works. The state comes
+ * from the server, judged by the broker's own rule, so an expired key never
+ * reads "active" here.
  */
 
 import { useRouter } from "next/navigation";
@@ -18,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
+import { KEY_STATE_LABELS, requiresExpiry, type KeyState } from "@/lib/northbound/key-policy";
 
 export interface CredentialSummary {
   id: string;
@@ -31,6 +40,30 @@ export interface CredentialSummary {
   isActive: boolean;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  /** Judged server-side by the broker's own rule (key-policy.ts). */
+  state: KeyState;
+  /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. */
+  tokenPrefix: string;
+  expiresAt: string | null;
+  /** Until when the key a rotation replaced still works, or null. */
+  previousValidUntil: string | null;
+}
+
+/** The key policy in force, for the form's defaults and limits. */
+export interface CredentialKeyPolicy {
+  /** The longest a TEST or PROD key may live, in days. */
+  maxTtlDays: number;
+  /** The default expiry date (YYYY-MM-DD) for a TEST or PROD key minted today. */
+  defaultExpiry: string;
+  /** How long a replaced key keeps working, in hours; 0 when rotation cuts over at once. */
+  overlapHours: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** YYYY-MM-DD for a day offset from today, in UTC — the zone the server judges in. */
+function utcDate(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * DAY_MS).toISOString().slice(0, 10);
 }
 
 export interface CredentialSolution {
@@ -83,6 +116,7 @@ export function ClientCredentials({
   solutions,
   canIssue,
   connectedEnvironments,
+  keyPolicy,
 }: {
   credentials: readonly CredentialSummary[];
   solutions: readonly CredentialSolution[];
@@ -95,6 +129,7 @@ export function ClientCredentials({
    * failed at every call. Now each option says so before it is chosen.
    */
   connectedEnvironments: readonly string[];
+  keyPolicy: CredentialKeyPolicy;
 }) {
   const router = useRouter();
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
@@ -106,6 +141,14 @@ export function ClientCredentials({
    * credential without it can only ever be refused as AMBIGUOUS.
    */
   const [sapClient, setSapClient] = useState("");
+  /*
+   * The expiry DATE (UTC). Sent as the start of that day, so the default — the
+   * day the maximum lifetime ends — never lands past the maximum. Pre-filled
+   * where an expiry is mandatory, empty (no expiry) elsewhere — so empty for
+   * the SANDBOX the picker starts on; switching environment re-applies that
+   * rule rather than carrying a choice across.
+   */
+  const [expiresOn, setExpiresOn] = useState("");
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ token: string; warning: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +203,13 @@ export function ClientCredentials({
         carrying that solution&apos;s approved access in that environment and nothing more.
         Re-issuing for an environment replaces that environment&apos;s token only.
       </p>
+      <p style={{ ...body, marginTop: 8 }}>
+        TEST and PROD keys expire, at most {keyPolicy.maxTtlDays} days after they are issued.{" "}
+        {keyPolicy.overlapHours > 0
+          ? `Rotating gives the key a new lifetime, and the key it replaces keeps working for ${keyPolicy.overlapHours} hours so you can deploy the new one without a failed call.`
+          : "Rotating gives the key a new lifetime, and the key it replaces stops at once."}{" "}
+        If a key has leaked, revoke it instead — that ends the current and the previous key at once.
+      </p>
 
       {canIssue && solutions.length > 0 && (
         <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -176,7 +226,14 @@ export function ClientCredentials({
           </label>
           <label>
             <span style={labelText}>Environment</span>
-            <select value={environment} onChange={(e) => setEnvironment(e.target.value)} style={field}>
+            <select
+              value={environment}
+              onChange={(e) => {
+                setEnvironment(e.target.value);
+                setExpiresOn(requiresExpiry(e.target.value) ? keyPolicy.defaultExpiry : "");
+              }}
+              style={field}
+            >
               {["SANDBOX", "DEV", "TEST", "PROD"].map((e) => (
                 <option key={e} value={e}>
                   {connectedEnvironments.includes(e) ? e : `${e} — no connection`}
@@ -204,14 +261,39 @@ export function ClientCredentials({
               Only for systems that address one — on-premise and RISE. Leave empty otherwise.
             </span>
           </label>
+          <label>
+            <span style={labelText}>
+              Expires on (UTC){requiresExpiry(environment) ? "" : " — optional"}
+            </span>
+            <input
+              type="date"
+              value={expiresOn}
+              min={utcDate(1)}
+              {...(requiresExpiry(environment) ? { max: utcDate(keyPolicy.maxTtlDays) } : {})}
+              required={environment === "PROD"}
+              onChange={(e) => setExpiresOn(e.target.value)}
+              style={field}
+            />
+            <span style={{ display: "block", marginTop: 4, fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)", maxWidth: 260 }}>
+              {requiresExpiry(environment)
+                ? `${environment} keys must expire, at most ${keyPolicy.maxTtlDays} days from today. The key stops at 00:00 UTC on this day.`
+                : "Leave empty for a key with no expiry."}
+            </span>
+          </label>
           <button
             type="button"
-            disabled={busy || !solutionId || Boolean(selected?.viewerOwns)}
+            disabled={
+              busy ||
+              !solutionId ||
+              Boolean(selected?.viewerOwns) ||
+              (environment === "PROD" && expiresOn.length === 0)
+            }
             onClick={() =>
               call("POST", {
                 solutionId,
                 environment,
                 ...(sapClient ? { sapClient } : {}),
+                ...(expiresOn ? { expiresAt: `${expiresOn}T00:00:00.000Z` } : {}),
                 /*
                  * The label is stored, and is what someone reads back weeks
                  * later to decide whether a credential is the right one. It
@@ -282,6 +364,7 @@ export function ClientCredentials({
                 <Th>Solution</Th>
                 <Th>Env</Th>
                 <Th>State</Th>
+                <Th>Expires</Th>
                 <Th>Last used</Th>
                 {canIssue && <Th>Actions</Th>}
               </tr>
@@ -292,7 +375,23 @@ export function ClientCredentials({
                   <Td>{disambiguate(c.solutionName, c.solutionSlug, ambiguousSolutionNames)}</Td>
                   <Td>{c.sapClient ? `${c.environment}/${c.sapClient}` : c.environment}</Td>
                   <Td>
-                    {c.revokedAt ? "revoked" : c.isActive ? "active" : "inactive"}
+                    <span
+                      style={
+                        c.state === "noExpiry" || c.state === "expired"
+                          ? { color: "var(--status-awaiting-fg)", fontWeight: 600 }
+                          : undefined
+                      }
+                    >
+                      {KEY_STATE_LABELS[c.state]}
+                    </span>
+                  </Td>
+                  <Td>
+                    {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : "no expiry"}
+                    {c.previousValidUntil ? (
+                      <span style={{ ...muted, display: "block" }}>
+                        previous key works until {new Date(c.previousValidUntil).toLocaleString()}
+                      </span>
+                    ) : null}
                   </Td>
                   <Td>{c.lastUsedAt ? new Date(c.lastUsedAt).toLocaleString() : "never used"}</Td>
                   {canIssue && (
@@ -302,6 +401,11 @@ export function ClientCredentials({
                           type="button"
                           disabled={busy}
                           onClick={() => call("PATCH", { clientId: c.id, action: "rotate" })}
+                          title={
+                            keyPolicy.overlapHours > 0 && (c.state === "active" || c.state === "noExpiry")
+                              ? `Mint a new key; this one keeps working for ${keyPolicy.overlapHours} hours`
+                              : "Mint a new key"
+                          }
                           style={btnSmall}
                         >
                           Rotate

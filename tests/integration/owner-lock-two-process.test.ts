@@ -184,6 +184,8 @@ async function prodKey(solutionId: string): Promise<string> {
       tokenHash: hashClientToken(`cek_${randomUUID()}`),
       environment: "PROD",
       createdById: B.id,
+      // PROD keys expire (P0.11); a write key is refused onto one that does not.
+      expiresAt: inDays(30),
     },
     select: { id: true },
   });
@@ -341,7 +343,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("two processes racing on one app
       session.user = A;
       const res = await againstHeldReclaim(solutionId, () =>
         issueInStudio(
-          json({ solutionId, label: "prod", environment: "PROD" }, "POST", "http://localhost/api/studio/clients"),
+          json(
+            // A PROD key must name its expiry (P0.11), or the route refuses
+            // with 400 before the owner gate this test is about.
+            { solutionId, label: "prod", environment: "PROD", expiresAt: inDays(30).toISOString() },
+            "POST",
+            "http://localhost/api/studio/clients",
+          ),
         ),
       );
       expect(await ownedByA(solutionId)).toBe(true);

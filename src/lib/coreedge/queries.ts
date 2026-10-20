@@ -3,6 +3,13 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import {
+  keyState,
+  overlapIsOpen,
+  storedTokenPrefix,
+  type ClientTokenPrefix,
+  type KeyState,
+} from "@/lib/northbound/key-policy";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
 import { unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { productName } from "@/lib/studio/product-marks";
@@ -776,10 +783,22 @@ export const KEY_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
  * first is knowable here. Nothing expires on its own.
  */
 export function keySuggestion(
-  key: { readonly revokedAt: Date | null; readonly lastUsedAt: Date | null },
+  key: {
+    readonly revokedAt: Date | null;
+    readonly lastUsedAt: Date | null;
+    /**
+     * An expired key is not "in active use", whatever its traffic says: it is
+     * refused on every call (P0.11). Optional so a caller that only knows the
+     * traffic still gets the traffic's answer.
+     */
+    readonly expiresAt?: Date | null;
+  },
   now: Date,
 ): string {
   if (key.revokedAt !== null) return "Revoked";
+  if (key.expiresAt != null && key.expiresAt.getTime() <= now.getTime()) {
+    return "Expired · send a new link to renew it";
+  }
   if (key.lastUsedAt === null) return "Never used · nothing depends on it";
   if (now.getTime() - key.lastUsedAt.getTime() > KEY_IDLE_MS) {
     return "Not used in 30 days · ask the owner before revoking";
@@ -917,6 +936,16 @@ export interface KeyRow {
   readonly expiresAt: Date | null;
   /** Last four of the stored label, for recognition. Never the token. */
   readonly tail: string;
+  /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
+  readonly tokenPrefix: ClientTokenPrefix;
+  /**
+   * Whether the key authenticates now, by the broker's own rule (P0.11):
+   * `expired` and `revoked` are never live, and `noExpiry` is a live TEST or
+   * PROD key that must be given an expiry.
+   */
+  readonly state: KeyState;
+  /** Until when the key a rotation replaced still works, while that is still ahead. */
+  readonly previousValidUntil: Date | null;
 }
 
 /**
@@ -927,7 +956,7 @@ export interface KeyRow {
  * would be a second place the key exists, which is the whole thing the
  * one-time claim link is built to avoid.
  */
-export async function listKeys(organizationId: string): Promise<KeyRow[]> {
+export async function listKeys(organizationId: string, now: Date = new Date()): Promise<KeyRow[]> {
   const [clients, solutions] = await Promise.all([
     prisma.solutionClient.findMany({
       where: { organizationId },
@@ -936,10 +965,13 @@ export async function listKeys(organizationId: string): Promise<KeyRow[]> {
         solutionId: true,
         label: true,
         environment: true,
+        tokenPrefix: true,
+        isActive: true,
         createdAt: true,
         lastUsedAt: true,
         revokedAt: true,
         expiresAt: true,
+        previousValidUntil: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -965,6 +997,10 @@ export async function listKeys(organizationId: string): Promise<KeyRow[]> {
       revokedAt: c.revokedAt,
       expiresAt: c.expiresAt,
       tail: c.label.slice(-4),
+      tokenPrefix: storedTokenPrefix(c.tokenPrefix),
+      state: keyState(c, now),
+      previousValidUntil:
+        c.revokedAt === null && overlapIsOpen(c.previousValidUntil, now) ? c.previousValidUntil : null,
     };
   });
 }
@@ -1128,6 +1164,13 @@ export interface PassportRow {
   readonly approvedAt: Date | null;
   readonly accessEnds: Date | null;
   /**
+   * The state of the key this app holds for the row's environment (P0.11),
+   * or `none` when it holds none. An approval is what may leave SAP; the key
+   * is whether anything CAN leave right now — and an expired or revoked key
+   * must never read as live on the one screen a client's CIO trusts.
+   */
+  readonly keyState: KeyState | "none";
+  /**
    * ALWAYS NULL, and deliberately so.
    *
    * X06 shows "12 of 71" for every row, and calls that ratio the fact that
@@ -1151,8 +1194,8 @@ export interface PassportRow {
  * on the screen. X06 is explicit that a CIO who wants something stopped says
  * so and an ABeam reviewer does it with a reason on the record.
  */
-export async function listPassport(organizationId: string): Promise<PassportRow[]> {
-  const [grants, feeds, users] = await Promise.all([
+export async function listPassport(organizationId: string, now: Date = new Date()): Promise<PassportRow[]> {
+  const [grants, feeds, users, keys] = await Promise.all([
     prisma.apiAccessGrant.findMany({
       where: {
         organizationId,
@@ -1166,6 +1209,7 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
         decidedById: true,
         decidedAt: true,
         expiresAt: true,
+        solutionId: true,
         solution: { select: { name: true } },
       },
       orderBy: { decidedAt: "desc" },
@@ -1178,10 +1222,17 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
       where: { organizationId },
       select: { id: true, name: true },
     }),
+    // Metadata only: never the hash, never the sealed write key.
+    prisma.solutionClient.findMany({
+      where: { organizationId },
+      select: { solutionId: true, environment: true, isActive: true, revokedAt: true, expiresAt: true },
+    }),
   ]);
 
   const feedNameByExternalId = new Map(feeds.map((f) => [f.externalId, f.name]));
   const userById = new Map(users.map((u) => [u.id, u.name]));
+  // One key per (app, environment) — AD-11 — so this is a lookup, not a choice.
+  const keyByLane = new Map(keys.map((k) => [`${k.solutionId}::${k.environment}`, keyState(k, now)]));
 
   return grants.map((g) => ({
     appName: g.solution.name,
@@ -1193,6 +1244,7 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
     approvedBy: g.decidedById === null ? null : (userById.get(g.decidedById) ?? null),
     approvedAt: g.decidedAt,
     accessEnds: g.expiresAt,
+    keyState: keyByLane.get(`${g.solutionId}::${g.environment}`) ?? "none",
     fieldsApproved: null,
   }));
 }

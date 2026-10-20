@@ -101,6 +101,11 @@ export class CredentialLaneStore {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          // The database defaults (P0.11): a key minted before prefixes, and
+          // no previous key overlapping.
+          tokenPrefix: "ce_",
+          previousTokenHash: null,
+          previousValidUntil: null,
           createdAt: now,
           updatedAt: now,
           ...create,

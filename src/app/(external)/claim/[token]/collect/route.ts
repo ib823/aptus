@@ -44,6 +44,11 @@ export async function POST(
         environment: result.environment,
         solutionName: result.solutionName,
         tail: result.tail,
+        tokenPrefix: result.tokenPrefix,
+        // P0.11: when the key stops, and until when the key it replaced
+        // still works. Dates, never secrets.
+        expiresAt: result.expiresAt?.toISOString() ?? null,
+        previousValidUntil: result.previousValidUntil?.toISOString() ?? null,
       },
     },
     { headers: NO_STORE },

@@ -121,23 +121,44 @@ function whereHasOrganization(args: unknown): boolean {
 }
 
 /**
- * The ONE query that cannot carry a tenant, and why.
+ * The queries that cannot carry a tenant, and why. Each entry is a model, an
+ * operation AND an exact where-shape; anything wider is a violation.
  *
  * `authenticateClientToken` looks a client up BY ITS TOKEN HASH. There is no
  * organization to scope it to, because the organization is the OUTPUT of this
  * lookup — it is how an unauthenticated bearer token becomes a tenant at all.
  * Safe because `SolutionClient.tokenHash` is `@unique`: it can only return the
  * single row whose hash was presented, and a caller who does not already hold
- * the token learns nothing. Deliberately narrow — model, operation AND the
- * exact where-shape must all match.
+ * the token learns nothing.
+ *
+ * The rotation overlap (P0.11) adds the second lookup of the same kind: a
+ * token that is no row's current key is looked up by `previousTokenHash`,
+ * also `@unique`, for the same reason and with the same guarantee — it finds
+ * only the row whose replaced key was presented. Any other field beside it,
+ * or any other operation on it, is not exempt.
  */
-function isUnscopedByDesign(model: string, operation: string, args: unknown): boolean {
-  if (model !== "SolutionClient" || operation !== "findUnique") return false;
+const UNSCOPED_BY_DESIGN: readonly {
+  readonly model: string;
+  readonly operation: string;
+  readonly whereKey: string;
+}[] = [
+  { model: "SolutionClient", operation: "findUnique", whereKey: "tokenHash" },
+  { model: "SolutionClient", operation: "findUnique", whereKey: "previousTokenHash" },
+];
+
+/** Exported for its unit test; the guard below is its only caller. */
+export function isUnscopedByDesign(model: string, operation: string, args: unknown): boolean {
   if (!args || typeof args !== "object") return false;
   const where = (args as { where?: unknown }).where;
   if (!where || typeof where !== "object") return false;
   const keys = Object.keys(where as Record<string, unknown>);
-  return keys.length === 1 && keys[0] === "tokenHash";
+  if (keys.length !== 1) return false;
+  // An equality on the hash, never a filter: `{ previousTokenHash: { not: null } }`
+  // is not "the row whose key was presented".
+  if (typeof (where as Record<string, unknown>)[keys[0]!] !== "string") return false;
+  return UNSCOPED_BY_DESIGN.some(
+    (entry) => entry.model === model && entry.operation === operation && entry.whereKey === keys[0],
+  );
 }
 
 /*
