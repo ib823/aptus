@@ -492,7 +492,7 @@ So high leverage with a sole of 0 means a cell is part of the problem in many sc
 
 **The ranked cells in plain words.**
 - **network SAP_SIDE_IP_ALLOWLIST and PRIVATE_NETWORK (none):** systems that accept calls only from known IP addresses, and RISE, on-premise S/4 and ECC on private networks. The hosted instance has no fixed outbound IP and refuses private hosts; there is no agent and no tunnel. A self-hosted copy or a dedicated deployment with Static IPs would score partial (section 3.10). Full in P4 (P4.1, P4.2, P4.4, P4.7).
-- **origin SAP_STANDARD, PARTNER, CUSTOMER_CUSTOM (partial):** who built the API. SAP's own APIs resolve through the catalogue, where non-curated V4 paths are guessed and some addresses are malformed; customer- and partner-built services are registered by path (P1.1). All three are held at partial because reads send only `$top`. Full in P1 (P0.8, P1.1-P1.4, P1.8).
+- **origin SAP_STANDARD, PARTNER, CUSTOMER_CUSTOM (partial):** who built the API. SAP's own APIs resolve through the catalogue, where a non-curated V4 path is derived from the API id and reads unverified until a probe of exactly it answers 200 (P0.8; wrapper rows have no address); customer- and partner-built services are registered by path (P1.1). All three are held at partial because reads send only `$top`. Full in P1 (P0.8, P1.1-P1.4, P1.8).
 - **targetTech BTP_SERVICE and NON_SAP_SAAS with SOAP or REST (none):** there is no connector for BTP services or non-SAP SaaS. P5: REST full (P5.3, P5.10), SOAP partial (P5.2).
 - **sapAuth toward BTP_SERVICE, S4_PRIVATE_RISE, S4_ONPREM and ECC:** how CoreEdge logs in to SAP. It signs SAML bearer assertions only for SuccessFactors, has no certificate login, and does not pass the end user's identity through to SAP. X.509 becomes full toward S/4 and ECC in P4 (P4.3); principal propagation partial in P6 (P6.5); SAML bearer outside SuccessFactors is never upgraded (caveat 9c).
 - **consumerAuth (the ABAP rows shown; the same pattern continues for other consumer types below rank 30):** a program proves who it is only with a long-lived `ce_` key. OAuth client credentials become full in P2 (P2.5, P2.7); mTLS is never credited (caveat 9b).
@@ -642,7 +642,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 
 | Capability | Integration Suite | Best of breed | CoreEdge today | Target |
 |---|---|---|---|---|
-| Discover what works on *this* system | Business Accelerator Hub lists SAP's menu, not what is active on the tenant | Backstage catalogue | Catalogue with live probes; ACTIVATED only on a real 200. 148 wrapper rows have malformed addresses; V4 addresses are guessed [R3] | P0.8 fixes; P1.2 tenant discovery plus the SAP admin checklist |
+| Discover what works on *this* system | Business Accelerator Hub lists SAP's menu, not what is active on the tenant | Backstage catalogue | Catalogue with live probes; ACTIVATED only on a real 200. Since P0.8 the 148 wrapper rows have no address and are never probed or counted callable, and a V4 address reads "unverified" until a probe of exactly it answers 200 on the system on screen (`src/lib/sap-public/catalogue-address-verification.ts`); non-curated V4 paths are still derived, not discovered | P1.2 tenant discovery plus the SAP admin checklist |
 | Try before code | Hub "Try Out" against SAP's sandbox or a configured own tenant, for SAP-published APIs only; no `Z*` services, assertions or saved collections [E61, E69]; iFlow simulation: 10 steps, under 100 KB input, no real calls, no Aggregator [E4] | Postman collections and mock servers [E24] | Test Console: read-only, 50 rows or fewer, needs a key and an approved grant first (`src/app/api/studio/test/broker-run/route.ts:62`) | P1.6 Tenant Twin; P2.1-P2.2 API Lab |
 | Assertions and collections | No regression suite; SAP points to partners Figaf and INT4 [E3] | Postman `pm.test`; Pact [E28]; Schemathesis [E29] | `expectation` field stored, never evaluated (`src/app/api/studio/test-cases/route.ts:30`) | P2.1 server-side declarative assertions |
 | Import and export | n/a | Postman v2.1, Bruno [E25] | None | P2.3 |
@@ -678,7 +678,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 | Alerts | Cloud ALM routes to email, Teams, ServiceNow | PagerDuty | One nightly drift email to platform admins (`src/lib/ops/connection-probe-sweep.ts:47-86`) | P3.7: stored incidents, alerts to app owners |
 | Synthetic checks | Cloud ALM health, every 5 minutes | Postman monitors | Nightly connection probe and lane check (`vercel.json:4-29`) | P3.7: monitors every 5 minutes or less |
 | Custom (`Z`) interfaces | Cloud ALM's AIF message monitoring for S/4HANA Cloud: "ODATA/API messages coming from Z-interfaces are, currently, not visualized in CALM" [E19]; broader Cloud ALM coverage of custom APIs [unverified] | n/a | Callable through the broker since P1.1 (#307), with the same audit row per call as catalogue services; no monitor of their own | P3.7: CoreEdge becomes the monitoring layer for customer-built APIs |
-| SAP upgrade impact | Upgrade checks for its own Groovy scripts | Stripe API versioning | None. Production shows no deprecation flags: `hubState` is null on all 954 rows [R3] | P0.8; P3.8 upgrade radar |
+| SAP upgrade impact | Upgrade checks for its own Groovy scripts | Stripe API versioning | SAP's lifecycle state, version and named successor are stamped on every deploy from the committed Hub snapshot (P0.8, `scripts/apply-hub-lifecycle.ts`, `HUB_LIFECYCLE_ON_DEPLOY`); before P0.8 `hubState` was null on all 954 production rows [R3]. Every deprecated row shows a successor line, but only 6 of the 61 name one, and nothing alerts an interface owner | P3.8 upgrade radar |
 
 ### 4.9 Deployment and security
 
@@ -861,7 +861,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 
 | Step | Today | Target |
 |---|---|---|
-| Release and recover | One production deployment and one database; no release or restore runbook (`docs/deployment-urls.md:8,23,43-45`) | Release protocol and timed restore (P0.17) |
+| Release and recover | One production deployment and one database (`docs/deployment-urls.md:8,23,43-45`). The release protocol is written and checked (P0.17, `docs/runbooks/coreedge-release.md`): migration gates, rehearsed backout SQL and a post-deploy check. No timed restore has been run, and the RPO and RTO are not set | A timed restore that meets the RPO and RTO the product owner sets (P0.17) |
 | Keys | One raw environment key | KMS rotation and reseal (P0.10) |
 | Connectors | None | Fleet enrolment and updates (P4.2, P4.5) |
 

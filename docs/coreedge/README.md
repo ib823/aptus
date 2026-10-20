@@ -8,7 +8,8 @@ specify (#142–#156: the keystone, the v1 Studio and the Phase D runtime) were
 built and merged, but not always as written: the specs were corrected during the
 build (below), and much has been built since that they never mention or rule out
 (customer-built services, step-up, envelope keys, grant binding, key expiry,
-per-credential rate limits, developer sign-up). Neither are they a backlog: what
+per-credential rate limits, developer sign-up, contract-stamped fixtures,
+verified catalogue addresses, time-to-first-call measurement). Neither are they a backlog: what
 is still to do lives in the roadmap.
 
 What CoreEdge does today, and does not do:
@@ -19,6 +20,7 @@ What CoreEdge does today, and does not do:
 | What is planned, and in which phase | `CoreEdge-Gap-Study-and-Roadmap.md` |
 | How to use it as a developer | `docs/coreedge-developer-guide.md` |
 | Which security controls are built | `CoreEdge-Security-Architecture.html` (reviewed against the code in P0.16) |
+| How CoreEdge itself is released, rolled back and recovered | `docs/runbooks/coreedge-release.md` (P0.17) |
 
 CI refuses "planned", "not yet built" and similar wording next to a feature the
 registry marks shipped, in these documents and the CoreEdge code's comments

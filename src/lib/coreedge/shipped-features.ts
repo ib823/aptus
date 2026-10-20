@@ -313,6 +313,46 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     code: { file: "src/lib/studio/scaffold.ts", exports: ["buildScaffold"] },
     terms: [/\bstarter[- ]kit\b/i, /\boffline mock\b/i],
   },
+  {
+    id: "contract-stamps",
+    name: "Captures stamped with the contract they were read under",
+    roadmap: "P0.4",
+    cells: ["lifecycle:MOCK_TEST_BEFORE_CODE"],
+    code: { file: "src/lib/studio/contract-provenance.ts", exports: ["artifactState", "partitionFixtures"] },
+    terms: [/\bcontract stamps?\b/i, /\bcontract[- ]stamped\b/i, /\bcontracts:stamp\b/],
+  },
+  {
+    id: "catalogue-addresses",
+    name: "One catalogue address per row, V4 addresses verified per system",
+    roadmap: "P0.8",
+    cells: ["lifecycle:DISCOVER"],
+    code: {
+      file: "src/lib/sap-public/catalogue-address-verification.ts",
+      exports: ["recordAddressProbe", "currentAddressVerification"],
+    },
+    terms: [/\bCatalogueAddressVerification\b/, /\b(?:catalogue )?address verification\b/i],
+  },
+  {
+    id: "hub-lifecycle-stamp",
+    name: "SAP's API lifecycle stamped on deploy from the committed Hub snapshot",
+    roadmap: "P0.8",
+    cells: ["lifecycle:SAP_UPGRADE_IMPACT"],
+    code: { file: "src/lib/sap-public/hub-lifecycle-snapshot.ts", exports: ["applyHubLifecycle", "hubLifecycleOnDeploy"] },
+    terms: [/\bHUB_LIFECYCLE_ON_DEPLOY\b/, /\bapply-hub-lifecycle\b/, /\blifecycle stamp\b/i],
+  },
+  {
+    id: "journey-metrics",
+    name: "Time to first call measured (developer journey events)",
+    roadmap: "P2.12",
+    cells: ["lifecycle:ONBOARDING_TIME_TO_FIRST_CALL"],
+    code: { file: "src/lib/coreedge/journey.ts", exports: ["recordJourneyEvent", "loadJourneySummary"] },
+    terms: [
+      /\bDeveloperJourneyEvent\b/,
+      /\bCOREEDGE_JOURNEY_EVENTS\b/,
+      /\bjourney (?:events?|tiles?)\b/i,
+      /\b(?:TTFC|TTFRC) (?:tiles?|funnel|metrics?)\b/,
+    ],
+  },
 ];
 
 /* ── status, from the registry ────────────────────────────────────────── */

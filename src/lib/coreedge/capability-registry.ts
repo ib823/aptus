@@ -417,22 +417,24 @@ const NOT_ON_BROKER = (tech: Tech): string =>
 /** Limits a target's OData cells carry, beyond what the code flags say. */
 const TARGET_ODATA_LIMITS: Readonly<Partial<Record<string, readonly string[]>>> = {
   "S4_PUBLIC|ODATA_V4": [
-    "Non-curated V4 service paths are guessed (dynamic-catalog.ts), and the curated V4 purchase-order service answered 403 on the demo tenant.",
+    "Non-curated V4 service paths are derived from the API id and read unverified until a probe of that exact path answers 200 (hub-content.ts catalogueAddress; P0.8), and the curated V4 purchase-order service answered 403 on the demo tenant.",
   ],
   "S4_PRIVATE_RISE|ODATA_V2": [
     "Never run end to end: a RISE system is reachable only from a copy inside its network (see network).",
   ],
   "S4_PRIVATE_RISE|ODATA_V4": [
-    "Never run end to end; non-curated V4 paths are guessed (dynamic-catalog.ts).",
+    "Never run end to end; non-curated V4 paths are derived and unverified until a probe answers 200 (hub-content.ts catalogueAddress).",
   ],
   "S4_ONPREM|ODATA_V2": ["Never run end to end: on-premise is reachable only from a copy inside its network."],
-  "S4_ONPREM|ODATA_V4": ["Never run end to end; non-curated V4 paths are guessed (dynamic-catalog.ts)."],
+  "S4_ONPREM|ODATA_V4": [
+    "Never run end to end; non-curated V4 paths are derived and unverified until a probe answers 200 (hub-content.ts catalogueAddress).",
+  ],
   "ECC|ODATA_V2": [
     "ECC ships no service list (tdd-connector.ts), so only services registered by path work; never run end to end.",
   ],
   "ECC|ODATA_V4": ["Services registered by path only; never run end to end."],
   "SUCCESSFACTORS|ODATA_V2": [
-    "Three curated keys plus registered paths; SAML bearer, the login SAP keeps after 20 Nov 2026, is not proven live (P0.9).",
+    "Three curated keys, Hub OData V2 ids at the /odata/v2 root (resolve-hub-service.ts; P0.8) and registered paths; SAML bearer, the login SAP keeps after 20 Nov 2026, is not proven live (P0.9).",
   ],
   "SUCCESSFACTORS|ODATA_V4": ["Registered paths only; no SuccessFactors V4 service has been called."],
 };
@@ -599,7 +601,7 @@ function originCells(facts: CodeFacts): CapabilityCell[] {
       implemented: true,
       basis: ["SAP-published services resolve through the curated list or the Hub catalogue copy (resolve-hub-service.ts)."],
       limits: [
-        "Non-curated V4 paths are guessed and some catalogue rows have malformed addresses (dynamic-catalog.ts, P0.8).",
+        "Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8).",
         readLimit,
       ],
       what: "SAP-published APIs.",
@@ -719,7 +721,9 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
   const stages: Record<LifecycleStage, Judged> = {
     DISCOVER: {
       implemented: true,
-      basis: ["Studio Discover and the Workbench catalogue (dynamic-catalog.ts)."],
+      basis: [
+        "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8).",
+      ],
       limits: ["No discovery from the tenant's own Gateway catalogue (P1.2)."],
     },
     DESIGN_MAP: {
@@ -729,12 +733,17 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
     },
     MOCK_TEST_BEFORE_CODE: {
       implemented: kit.includes("mock.mjs"),
-      basis: ["The starter kit ships a mock server and fixtures (scaffold.ts mock.mjs); the Test Console runs dry reads."],
+      basis: [
+        "The starter kit ships a mock server and fixtures (scaffold.ts mock.mjs); the Test Console runs dry reads.",
+        "Fixtures carry one scenario per broker outcome with the broker's own status, and are published only for the contract they were captured under (fixtures.ts, contract-provenance.ts; P0.4).",
+      ],
       limits: ["No saved collections, assertions or write tests."],
     },
     DEVELOP_SDK_CODEGEN: {
       implemented: kit.includes("client.ts"),
-      basis: ["The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts)."],
+      basis: [
+        "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4).",
+      ],
       limits: ["TypeScript only, reads only."],
     },
     CI_PRECOMMIT_GOVERNANCE: {
@@ -777,8 +786,12 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
     },
     SAP_UPGRADE_IMPACT: {
       implemented: true,
-      basis: ["The catalogue tracks deprecation and recorded successors (hub-successors.ts)."],
-      limits: ["No impact alert to interface owners (P3.8)."],
+      basis: [
+        "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8).",
+      ],
+      limits: [
+        "Most deprecated APIs name no successor (the Hub's Successors field is behind its login), and no impact alert reaches interface owners (P3.8).",
+      ],
     },
     SELF_HOST_SETUP: {
       implemented: true,
@@ -791,7 +804,10 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
     },
     ONBOARDING_TIME_TO_FIRST_CALL: {
       implemented: true,
-      basis: ["Developer workspace sign-up (P0.13, COREEDGE_DEVELOPER_SIGNUP)."],
+      basis: [
+        "Developer workspace sign-up (P0.13, COREEDGE_DEVELOPER_SIGNUP).",
+        "Time to first call and to first real call are measured, median and p90 against A.3 #1 and #2 (journey.ts, journey-metrics.ts; P2.12).",
+      ],
       limits: ["No twin to call first; a real first call waits for a second person's approval and SAP set-up."],
     },
     PROVIDER_BUILD_TRANSPORT: {
