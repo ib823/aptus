@@ -109,6 +109,11 @@ const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string
       models: ["sapHubContent", "cronRunLog"],
       why: "SapHubContent is the deployment-wide catalogue (no organization column — see FRESHNESS-RESPEC.md); the route is platform_admin-gated via requireAdmin rather than tenant-scoped.",
     },
+    {
+      file: "src/app/api/ops/workbench-writes/route.ts",
+      models: ["platformAuditEvent"],
+      why: "PlatformAuditEvent records Workbench writes to the deployment's own SAP tenant by platform admins (P0.7): it has no organization to scope by, so the route is platform_admin-gated via requireAdmin rather than tenant-scoped.",
+    },
   ];
 
 /** Every balanced `select: { … }` in a source file. */

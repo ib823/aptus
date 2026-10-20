@@ -232,7 +232,8 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
             <span>
               <strong>Live write.</strong> Creating a record persists it to the real SAP TDD tenant{" "}
               <strong>{selectedTenant?.label ?? "— no tenant selected"}</strong>
-              {selectedService ? <> · {selectedService.label}</> : null}. This cannot be undone from here.
+              {selectedService ? <> · {selectedService.label}</> : null}. This cannot be undone from here. The
+              write is recorded under your name before it is sent.
             </span>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as PlatformAudit from "@/lib/audit/platform-audit";
 
 const mocks = vi.hoisted(() => ({
   isSapTddWriteEnabled: vi.fn(),
@@ -13,10 +14,14 @@ const mocks = vi.hoisted(() => ({
       ? { key: "s4hana", label: "SAP S/4HANA Cloud", envPrefix: "S4_TDD" }
       : null,
   ),
-  getSapTenant: vi.fn((_prefix: string, v: string) => (v ? { id: v } : null)),
-  getSapService: vi.fn((_product: unknown, v: string) => (v ? { id: v } : null)),
+  getSapTenant: vi.fn((_prefix: string, v: string) => (v ? { key: v, label: `Tenant ${v}` } : null)),
+  getSapService: vi.fn((_product: unknown, v: string) => (v ? { key: v, path: `/sap/opu/odata/sap/${v}` } : null)),
   createSapEntitySetRecord: vi.fn(),
   requireAdmin: vi.fn(),
+  beginPlatformAudit: vi.fn(),
+  completePlatformAudit: vi.fn(),
+  // Every call, in order, so "audited BEFORE SAP" is an assertion, not a hope.
+  calls: [] as string[],
 }));
 
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
@@ -27,6 +32,13 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getSapTenant: mocks.getSapTenant,
   getSapService: mocks.getSapService,
   createSapEntitySetRecord: mocks.createSapEntitySetRecord,
+}));
+
+// The real outcome mapping and 503 response; only the two database writes are stand-ins.
+vi.mock("@/lib/audit/platform-audit", async (importActual) => ({
+  ...(await importActual<typeof PlatformAudit>()),
+  beginPlatformAudit: mocks.beginPlatformAudit,
+  completePlatformAudit: mocks.completePlatformAudit,
 }));
 
 vi.mock("@/lib/auth/admin-guard", () => ({
@@ -49,15 +61,29 @@ function makeRequest(body: unknown): Parameters<typeof POST>[0] {
   return { json: async () => body } as Parameters<typeof POST>[0];
 }
 
+const ADMIN = { id: "admin-1", email: "admin@abeam.test", role: "platform_admin", organizationId: null };
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.calls = [];
   mocks.isSapTddWriteEnabled.mockReturnValue(true);
-  mocks.requireAdmin.mockResolvedValue({ user: { id: "admin-1", role: "platform_admin" } });
-  mocks.createSapEntitySetRecord.mockResolvedValue({ ok: true, status: 201 });
+  mocks.requireAdmin.mockResolvedValue({ user: ADMIN });
+  mocks.createSapEntitySetRecord.mockImplementation(async () => {
+    mocks.calls.push("sap");
+    return { ok: true, status: 201 };
+  });
+  mocks.beginPlatformAudit.mockImplementation(async () => {
+    mocks.calls.push("audit:begin");
+    return { id: "pae_1", correlationId: "corr-1" };
+  });
+  mocks.completePlatformAudit.mockImplementation(async () => {
+    mocks.calls.push("audit:complete");
+  });
 });
 
 afterEach(() => {
   delete process.env.S4_TDD_WRITE_SECRET;
+  vi.restoreAllMocks();
 });
 
 describe("POST /api/sap/tdd/write", () => {
@@ -111,6 +137,93 @@ describe("POST /api/sap/tdd/write", () => {
     const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
     expect(res.status).toBe(200);
     expect(mocks.createSapEntitySetRecord).toHaveBeenCalledOnce();
+  });
+});
+
+/*
+ * P0.7 — the write-back left no audit row at all. These pin the contract: a row
+ * naming the person BEFORE SAP is called, nothing sent if it cannot be written,
+ * and the outcome recorded after.
+ */
+describe("POST /api/sap/tdd/write — audited before SAP is called (P0.7)", () => {
+  beforeEach(() => {
+    process.env.S4_TDD_WRITE_SECRET = "secret-value";
+  });
+
+  it("records the write, naming the person and the target, before the SAP call", async () => {
+    const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(res.status).toBe(200);
+    expect(mocks.calls).toEqual(["audit:begin", "sap", "audit:complete"]);
+    expect(mocks.beginPlatformAudit).toHaveBeenCalledWith({
+      action: "SAP_WORKBENCH_WRITE",
+      actor: { id: "admin-1", email: "admin@abeam.test", role: "platform_admin", organizationId: null },
+      target: {
+        product: "s4hana",
+        tenantKey: "TEN1",
+        tenantLabel: "Tenant TEN1",
+        serviceKey: "SVC1",
+        servicePath: "/sap/opu/odata/sap/SVC1",
+        entitySet: "Customer",
+      },
+      payload: { Name: "Acme" },
+    });
+    // The person is handed the id that finds their row.
+    expect(res.headers.get("x-correlation-id")).toBe("corr-1");
+  });
+
+  it("sends NOTHING to SAP when the audit row cannot be written, and says so (503)", async () => {
+    const { PlatformAuditUnavailableError } = await vi.importActual<typeof PlatformAudit>("@/lib/audit/platform-audit");
+    mocks.beginPlatformAudit.mockRejectedValue(new PlatformAuditUnavailableError(new Error("db down")));
+    const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("AUDIT_UNAVAILABLE");
+    expect(mocks.createSapEntitySetRecord).not.toHaveBeenCalled();
+    expect(mocks.completePlatformAudit).not.toHaveBeenCalled();
+  });
+
+  it("records SUCCEEDED with SAP's status when SAP accepts the create", async () => {
+    await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(mocks.completePlatformAudit).toHaveBeenCalledWith(
+      { id: "pae_1", correlationId: "corr-1" },
+      expect.objectContaining({ outcome: "SUCCEEDED", sapStatus: 201 }),
+    );
+  });
+
+  it("records SAP_REFUSED for a 4xx — SAP answered, nothing was written", async () => {
+    mocks.createSapEntitySetRecord.mockResolvedValue({ ok: false, status: 400 });
+    const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(res.status).toBe(502);
+    expect(mocks.completePlatformAudit.mock.calls[0]![1]).toMatchObject({
+      outcome: "SAP_REFUSED",
+      sapStatus: 400,
+      reason: "HTTP_400",
+    });
+  });
+
+  it("records OUTCOME_UNKNOWN for a 5xx — the write may have been applied", async () => {
+    mocks.createSapEntitySetRecord.mockResolvedValue({ ok: false, status: 504 });
+    await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(mocks.completePlatformAudit.mock.calls[0]![1]).toMatchObject({ outcome: "OUTCOME_UNKNOWN", sapStatus: 504 });
+  });
+
+  it("records OUTCOME_UNKNOWN when the SAP call throws, and still answers 502", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.createSapEntitySetRecord.mockRejectedValue(Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }));
+    const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
+    expect(res.status).toBe(502);
+    expect(res.headers.get("x-correlation-id")).toBe("corr-1");
+    expect(mocks.completePlatformAudit.mock.calls[0]![1]).toMatchObject({
+      outcome: "OUTCOME_UNKNOWN",
+      reason: "ECONNRESET",
+    });
+  });
+
+  it("writes no audit row for a request refused before the target is resolved", async () => {
+    // Refused at the guard: SAP is never in reach, and there is nothing to audit.
+    await POST(makeRequest({ ...VALID_BODY, writeSecret: "wrong" }));
+    await POST(makeRequest({ ...VALID_BODY, entity: "", writeSecret: "secret-value" }));
+    expect(mocks.beginPlatformAudit).not.toHaveBeenCalled();
+    expect(mocks.createSapEntitySetRecord).not.toHaveBeenCalled();
   });
 });
 

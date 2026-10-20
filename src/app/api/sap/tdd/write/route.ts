@@ -1,5 +1,13 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  beginPlatformAudit,
+  completePlatformAudit,
+  outcomeForSapCreate,
+  outcomeForThrown,
+  platformAuditUnavailable,
+  type PlatformAuditHandle,
+} from "@/lib/audit/platform-audit";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import {
   createSapEntitySetRecord,
@@ -126,6 +134,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  /*
+   * THE AUDIT ROW, BEFORE SAP IS CALLED (P0.7). Every guard above has passed
+   * and the target is resolved, so this is the last line before a live system
+   * changes. If the row cannot be written, nothing is sent: 503, and SAP is
+   * untouched. The person is named on the row, and the correlation id comes
+   * back on the response so they can find it.
+   */
+  let audit: PlatformAuditHandle;
+  try {
+    audit = await beginPlatformAudit({
+      action: "SAP_WORKBENCH_WRITE",
+      actor: {
+        id: auth.user.id,
+        email: auth.user.email,
+        role: auth.user.role,
+        organizationId: auth.user.organizationId,
+      },
+      target: {
+        product: product.key,
+        tenantKey: tenant.key,
+        tenantLabel: tenant.label,
+        serviceKey: service.key,
+        servicePath: service.path,
+        entitySet: entity,
+      },
+      payload: body.payload,
+    });
+  } catch {
+    return platformAuditUnavailable();
+  }
+  const headers = { "x-correlation-id": audit.correlationId };
+
+  const startedAt = Date.now();
   try {
     const result = await createSapEntitySetRecord(
       product.envPrefix,
@@ -134,9 +175,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       entity,
       body.payload,
     );
-    return NextResponse.json({ data: result }, { status: result.ok ? 200 : 502 });
+    await completePlatformAudit(audit, { ...outcomeForSapCreate(result), durationMs: Date.now() - startedAt });
+    return NextResponse.json({ data: result }, { status: result.ok ? 200 : 502, headers });
   } catch (error) {
     console.error("[sap/tdd/write] request failed:", error);
+    await completePlatformAudit(audit, { ...outcomeForThrown(error), durationMs: Date.now() - startedAt });
     return NextResponse.json(
       {
         error: {
@@ -144,7 +187,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           message: "SAP write-back request failed",
         },
       },
-      { status: 502 },
+      { status: 502, headers },
     );
   }
 }
