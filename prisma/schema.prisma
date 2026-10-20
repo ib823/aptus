@@ -2912,6 +2912,13 @@ model Session {
   /// so it is overwritten on every assertion rather than set once like
   /// mfaVerifiedAt. Null means this session has never asserted a passkey.
   passkeyAssertedAt DateTime?
+  /// SHA-256 hex of the step-up challenge this session was last issued
+  /// (/api/auth/webauthn/step-up/options). The verify route consumes it in the
+  /// same write that stamps passkeyAssertedAt, so a challenge counts once and
+  /// only on the session it was issued to: the challenge cookie is stateless,
+  /// and deleting it only asks the browser to forget it. Null when none is
+  /// outstanding.
+  stepUpChallengeHash String?
 
   ipAddress         String?
   userAgent         String?

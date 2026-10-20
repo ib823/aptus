@@ -1,13 +1,26 @@
-/** DELETE: Remove a passkey credential. PATCH: Rename a passkey credential. */
+/**
+ * DELETE: Remove a passkey credential. PATCH: Rename a passkey credential.
+ *
+ * REMOVING ONE NEEDS A FRESH STEP-UP once COREEDGE_STEP_UP is enforce
+ * (lib/auth/step-up.ts, `passkey.remove`). Otherwise a stolen session could
+ * delete the person's passkeys and enrol its own as the "first", which needs
+ * no step-up. Someone who has lost every passkey asks an administrator to
+ * reset their MFA (docs/runbooks/coreedge-step-up.md). Each removal is
+ * recorded (lib/auth/passkey-events.ts). Renaming changes nothing the step-up
+ * trusts and stays ungated.
+ */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { recordPasskeyRemoved } from "@/lib/auth/passkey-events";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import {
   deleteCredential,
   renameCredential,
   getUserCredentialCount,
 } from "@/lib/auth/webauthn-db";
 import { prisma } from "@/lib/db/prisma";
+import { getClientIp } from "@/lib/security/rate-limit";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -16,7 +29,7 @@ interface RouteParams {
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteParams,
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -28,6 +41,13 @@ export async function DELETE(
   }
 
   const { credentialId } = await params;
+
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "passkey.remove",
+    targetId: credentialId,
+  });
+  if (!stepUp.ok) return stepUp.response;
+
   const deleted = await deleteCredential(credentialId, user.id);
 
   if (!deleted) {
@@ -45,6 +65,14 @@ export async function DELETE(
       data: { mfaEnabled: false },
     });
   }
+
+  const clientIp = getClientIp(request.headers);
+  await recordPasskeyRemoved(user, credentialId, {
+    remaining,
+    stepUp: stepUp.outcome,
+    ipAddress: clientIp === "unknown" ? null : clientIp,
+    userAgent: request.headers.get("user-agent"),
+  });
 
   return NextResponse.json({ data: { success: true } });
 }

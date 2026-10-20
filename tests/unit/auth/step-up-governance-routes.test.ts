@@ -87,7 +87,7 @@ vi.mock("@/lib/auth/session", async (importOriginal) => {
 });
 
 import { prisma } from "@/lib/db/prisma";
-import { hashSessionToken, markSessionMfaVerified, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { hashSessionToken, markSessionPasskeyAsserted, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { POST as stepUpOptions } from "@/app/api/auth/webauthn/step-up/options/route";
 import { POST as stepUpVerify } from "@/app/api/auth/webauthn/step-up/verify/route";
 import { POST as coreedgeDecide } from "@/app/api/coreedge/requests/[id]/decide/route";
@@ -624,7 +624,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
     vi.stubEnv("COREEDGE_STEP_UP", "enforce");
     const grantId = await grant(await solution());
     // What /api/auth/webauthn/authenticate/verify does to the session it mints.
-    await markSessionMfaVerified(tokens.get(BUILDER.id) ?? "");
+    await markSessionPasskeyAsserted(tokens.get(BUILDER.id) ?? "");
     as(BUILDER);
 
     const res = await studioDecide(post("http://localhost/x", { grantId, decision: "APPROVED" }, "PATCH"));

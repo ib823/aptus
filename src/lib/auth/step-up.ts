@@ -26,6 +26,21 @@
  *   connection.save_secrets  POST  /api/studio/connections
  *   connection.enable_writes PATCH /api/studio/connections      (when it turns writes on)
  *
+ *   passkey.add              GET    /api/auth/webauthn/register/options (beside one)
+ *                            POST   /api/auth/webauthn/register/verify  (beside one)
+ *   passkey.remove           DELETE /api/auth/webauthn/credentials/[credentialId]
+ *
+ * THE PASSKEYS THEMSELVES ARE ON THE LIST because the step-up is only as strong
+ * as the set of passkeys it accepts. A stolen session that could add its own
+ * authenticator could then step up with it, and one that could remove the
+ * person's passkeys could make its own the first. So adding a passkey beside an
+ * existing one, and removing one, need a fresh assertion from a passkey the
+ * person already has. A FIRST passkey cannot: there is nothing to assert with.
+ * That enrolment is trust on first use, made visible instead — every passkey
+ * added or removed is a ConfigAudit row, and every one added is an email to the
+ * person (lib/auth/passkey-events.ts). Enrolling is never itself an assertion:
+ * only a passkey sign-in or a step-up stamps `passkeyAssertedAt`.
+ *
  * Deliberately not on the list: raising a request (the requester is not the
  * control), the lane re-check and connection test (they read, and are rate
  * limited), and collecting a key from a claim link (the recipient holds a
@@ -43,6 +58,15 @@
  *             The rows are the burn-in: switch to enforce when they stop
  *             appearing. The runbook is docs/runbooks/coreedge-step-up.md.
  *   off     — nothing is checked or recorded (escape hatch, not a steady state).
+ *
+ * INSIDE A TRANSACTION, CHECK; RECORD AFTER IT. The decision routes evaluate
+ * the gate while holding the Solution row lock. `checkStepUp` is pure, so it
+ * belongs there; the warn-mode audit row does not. Written on the pooled
+ * client from inside the transaction, it needs a second connection while the
+ * transaction holds one, and with the pool exhausted by decisions queued on
+ * the same lock it waits for itself until every decision times out. Those
+ * routes call `recordStepUpMissing` once the transaction has ended; every
+ * other route calls `requireStepUp`, which does both.
  *
  * TOKENS ARE REFUSED IN EVERY MODE, off included. A personal or CI token has no
  * passkey to step up with, so "allow and record" would mean a token can do
@@ -82,7 +106,9 @@ export type GovernanceAction =
   | "write_key.issue"
   | "claim_link.send"
   | "connection.save_secrets"
-  | "connection.enable_writes";
+  | "connection.enable_writes"
+  | "passkey.add"
+  | "passkey.remove";
 
 /**
  * Tolerance for a timestamp slightly in the future. The assertion time is
@@ -133,13 +159,31 @@ export interface StepUpContext {
   readonly now?: Date;
 }
 
+type StepUpRefusal = { readonly ok: false; readonly code: StepUpCode; readonly response: NextResponse };
+
 export type StepUpResult =
   | {
       readonly ok: true;
       /** fresh: asserted in time. off: not checked. warned: allowed and recorded. */
       readonly outcome: "fresh" | "off" | "warned";
     }
-  | { readonly ok: false; readonly code: StepUpCode; readonly response: NextResponse };
+  | StepUpRefusal;
+
+/** A warn-mode admission not yet recorded: what `recordStepUpMissing` writes. */
+export interface StepUpMissing {
+  readonly user: SessionUser;
+  readonly maxAgeSeconds: number;
+  readonly context: StepUpContext;
+}
+
+/**
+ * The gate's verdict before anything is written. `warned` carries the record
+ * the caller must hand to `recordStepUpMissing`.
+ */
+export type StepUpCheck =
+  | { readonly ok: true; readonly outcome: "fresh" | "off" }
+  | { readonly ok: true; readonly outcome: "warned"; readonly missing: StepUpMissing }
+  | StepUpRefusal;
 
 const REFUSAL_COPY: Record<StepUpCode, string> = {
   STEP_UP_REQUIRED:
@@ -157,7 +201,7 @@ const REFUSAL_COPY: Record<StepUpCode, string> = {
  * message, correlationId, stepUp } }` with 403. The console's step-up helper
  * reads `code`; every existing caller already reads `message`.
  */
-function refusal(code: StepUpCode, context: StepUpContext, maxAgeSeconds: number): StepUpResult {
+function refusal(code: StepUpCode, context: StepUpContext, maxAgeSeconds: number): StepUpRefusal {
   const correlationId = randomUUID();
   return {
     ok: false,
@@ -177,17 +221,33 @@ function refusal(code: StepUpCode, context: StepUpContext, maxAgeSeconds: number
 }
 
 /**
- * Gate a governance action on a fresh passkey assertion.
+ * Gate a governance action on a fresh passkey assertion, recording a warn-mode
+ * admission before it returns.
  *
  * Call it AFTER the route's own role, tenant and ownership checks and
  * immediately BEFORE the write, so that a person is asked for a passkey only
  * when the passkey is the one thing standing between them and the action.
+ * Inside a transaction, use `checkStepUp` and `recordStepUpMissing` instead.
  */
 export async function requireStepUp(
   user: SessionUser,
   maxAgeSeconds: number,
   context: StepUpContext,
 ): Promise<StepUpResult> {
+  const check = checkStepUp(user, maxAgeSeconds, context);
+  if (check.ok && check.outcome === "warned") {
+    await recordStepUpMissing(check.missing);
+    return { ok: true, outcome: "warned" };
+  }
+  return check;
+}
+
+/**
+ * The gate itself, with no I/O, so it is safe inside a transaction. A
+ * `warned` verdict is the caller's to record, with `recordStepUpMissing`, once
+ * the transaction has ended.
+ */
+export function checkStepUp(user: SessionUser, maxAgeSeconds: number, context: StepUpContext): StepUpCheck {
   if (isTokenCaller(user)) return refusal(STEP_UP_CODES.tokenRefused, context, maxAgeSeconds);
 
   const mode = stepUpMode();
@@ -204,24 +264,21 @@ export async function requireStepUp(
     );
   }
 
-  await recordStepUpMissing(user, maxAgeSeconds, context);
-  return { ok: true, outcome: "warned" };
+  return { ok: true, outcome: "warned", missing: { user, maxAgeSeconds, context } };
 }
 
 /**
  * The warn-mode record: who acted, on what, and why no step-up counted.
  *
- * WRITTEN AT ADMISSION, before the route's write. It records what enforce mode
- * would have refused, which is the number the switch to enforce depends on —
- * including the rare admission whose write then loses a race and changes
- * nothing. Best-effort like every ConfigAudit write: a failed audit row must
- * not fail the person's action, and `writeConfigAudit` logs it loudly.
+ * ONE ROW PER ADMISSION. It records what enforce mode would have refused,
+ * which is the number the switch to enforce depends on — including the rare
+ * admission whose write then loses a race and changes nothing. `requireStepUp`
+ * writes it before the route's write; a route that checks inside a
+ * transaction writes it after the transaction, whatever it returned.
+ * Best-effort like every ConfigAudit write: a failed audit row must not fail
+ * the person's action, and `writeConfigAudit` logs it loudly.
  */
-async function recordStepUpMissing(
-  user: SessionUser,
-  maxAgeSeconds: number,
-  context: StepUpContext,
-): Promise<void> {
+export async function recordStepUpMissing({ user, maxAgeSeconds, context }: StepUpMissing): Promise<void> {
   const organizationId = context.organizationId ?? user.organizationId;
   const reason = !user.hasWebAuthn ? "no_passkey" : user.passkeyAssertedAt ? "stale" : "never_asserted";
   const detail = {

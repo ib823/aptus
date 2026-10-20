@@ -33,7 +33,15 @@ export type AuditEntityType =
    * COREEDGE_STEP_UP=warn (lib/auth/step-up.ts). `entityId` is the action's
    * name (e.g. "grant.decide"); the row acted on is `after.targetId`.
    */
-  | "StepUp";
+  | "StepUp"
+  /**
+   * A passkey added (CREATE) to or removed (REVOKE) from a person's account
+   * (lib/auth/passkey-events.ts). `entityId` is the WebAuthn credential id.
+   * The step-up trusts every passkey a person has, so the set is itself
+   * governed: a first passkey needs only the session, and this row is how an
+   * enrolment nobody expected is found.
+   */
+  | "Passkey";
 
 export type AuditAction =
   | "CREATE"

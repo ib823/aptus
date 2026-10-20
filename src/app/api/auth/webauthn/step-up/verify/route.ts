@@ -15,6 +15,15 @@
  * stamping it on this session would let one person's touch authorise another
  * person's approval. So the owner is checked before the signature is.
  *
+ * THE CHALLENGE COUNTS ONCE, ON THIS SESSION. The signed cookie proves the
+ * server issued it and when, but it is stateless: deleting it after reading is
+ * only a request to the browser, and a captured cookie and body would verify
+ * again, on any session of the same person, until the cookie expired. So the
+ * options route also records the challenge on the session, and the write that
+ * stamps the assertion clears it (`recordStepUpAssertion`). A replay, a
+ * challenge issued to another session, and one from the public sign-in
+ * options all find nothing to consume.
+ *
  * THE TOKEN IS ROTATED afterwards, as `rotateSessionToken` asks of every
  * privilege change: the session now carries more authority than it did, and a
  * copy of the old cookie should not inherit it.
@@ -26,7 +35,7 @@ import { z } from "zod";
 import {
   getSessionCookieOptions,
   getSessionToken,
-  markSessionPasskeyAsserted,
+  recordStepUpAssertion,
   rotateSessionToken,
   SESSION_COOKIE_NAME,
   validateSession,
@@ -68,8 +77,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return failed("Invalid request body");
 
-  // One-time: reading the challenge deletes its cookie, so a replayed
-  // assertion finds nothing to verify against.
+  // The cookie says the server issued this challenge, recently; whether it
+  // is still this session's to use is settled when it is consumed, below.
   const expectedChallenge = await getChallengeFromCookie();
   if (!expectedChallenge) return failed("Challenge expired or missing");
 
@@ -104,7 +113,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return failed("Passkey verification failed");
   }
 
-  const assertedAt = await markSessionPasskeyAsserted(token);
+  const assertedAt = await recordStepUpAssertion(token, expectedChallenge);
+  if (!assertedAt) return failed("That passkey check has already been used or has expired. Try again.");
   const rotated = await rotateSessionToken(token);
 
   const response = NextResponse.json({

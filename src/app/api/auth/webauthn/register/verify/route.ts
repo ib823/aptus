@@ -1,11 +1,28 @@
-/** POST: Verify WebAuthn registration response and store credential */
+/**
+ * POST: Verify WebAuthn registration response and store credential.
+ *
+ * REGISTERING IS NOT ASSERTING. It proves only that the caller holds the
+ * session, which a stolen cookie also does, so it never stamps the session as
+ * stepped up (lib/auth/session.ts `markSessionMfaVerified`); the step-up
+ * dialog follows an enrolment with a real assertion.
+ *
+ * A PASSKEY BESIDE AN EXISTING ONE NEEDS A FRESH STEP-UP from one the person
+ * already has (lib/auth/step-up.ts, `passkey.add`), asked before the challenge
+ * is read: a stolen session must not add the authenticator it would then step
+ * up with. A first passkey has nothing to assert with and is trust on first
+ * use. Either way it is recorded and the person is emailed
+ * (lib/auth/passkey-events.ts), so an enrolment they did not make is seen.
+ */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { recordPasskeyAdded } from "@/lib/auth/passkey-events";
 import { getCurrentUser, getSessionToken, markSessionMfaVerified, rotateSessionToken, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { verifyRegistrationResponse, getChallengeFromCookie } from "@/lib/auth/webauthn";
 import { saveCredential } from "@/lib/auth/webauthn-db";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { getClientIp } from "@/lib/security/rate-limit";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -30,6 +47,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
       { status: 400 },
     );
+  }
+
+  const firstPasskey = !user.hasWebAuthn;
+  let stepUpOutcome = "first_passkey";
+  if (!firstPasskey) {
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, { action: "passkey.add" });
+    if (!stepUp.ok) return stepUp.response;
+    stepUpOutcome = stepUp.outcome;
   }
 
   const expectedChallenge = await getChallengeFromCookie();
@@ -59,6 +84,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       parsed.data.deviceName,
     );
 
+    const clientIp = getClientIp(request.headers);
+    await recordPasskeyAdded(
+      user,
+      { credentialId: credential.credentialId, deviceName: credential.deviceName },
+      {
+        firstPasskey,
+        stepUp: stepUpOutcome,
+        ipAddress: clientIp === "unknown" ? null : clientIp,
+        userAgent: request.headers.get("user-agent"),
+      },
+    );
+
     // Mark user as MFA-enabled (passkey is the only second factor)
     await prisma.user.update({
       where: { id: user.id },
@@ -85,7 +122,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    // Passkey registration satisfies MFA — mark session as verified
+    // Passkey registration satisfies MFA — mark session as verified. Not as
+    // stepped up: see the header.
     const token = await getSessionToken();
     if (token) {
       await markSessionMfaVerified(token);

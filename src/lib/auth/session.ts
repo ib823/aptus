@@ -193,29 +193,29 @@ export async function rotateSessionToken(
 /**
  * Mark a session as MFA-verified.
  *
- * Its only caller is the passkey sign-in, so the session it marks has just
- * asserted a passkey too: a governance action in the next few minutes needs no
- * second prompt.
+ * NOT A PASSKEY ASSERTION, and it does not stamp `passkeyAssertedAt`. Passkey
+ * registration calls it too, and registering proves only that the caller holds
+ * the session — which is exactly what a stolen cookie gives an attacker, who
+ * could otherwise enrol an authenticator of their own and count as stepped up
+ * (lib/auth/step-up.ts). Only an assertion records one:
+ * `markSessionPasskeyAsserted` (sign-in) and `recordStepUpAssertion` (step-up).
  */
 export async function markSessionMfaVerified(token: string): Promise<void> {
-  const now = new Date();
   await prisma.session.update({
     where: { tokenHash: hashSessionToken(token) },
     data: {
       mfaVerified: true,
-      mfaVerifiedAt: now,
-      passkeyAssertedAt: now,
+      mfaVerifiedAt: new Date(),
     },
   });
 }
 
 /**
- * Record a passkey step-up on an existing session.
+ * Record a passkey SIGN-IN on the session it just minted.
  *
- * Unlike the sign-in above, this does not mint a session: the person is
- * already signed in and is proving, again and now, that they hold their
- * passkey. A passkey assertion satisfies MFA, so the session is marked verified
- * as well. Returns the time recorded.
+ * The person has asserted a passkey to get this session, so it is MFA-verified
+ * and a governance action in the next few minutes needs no second prompt.
+ * Returns the time recorded.
  */
 export async function markSessionPasskeyAsserted(token: string): Promise<Date> {
   const now = new Date();
@@ -228,6 +228,56 @@ export async function markSessionPasskeyAsserted(token: string): Promise<Date> {
     },
   });
   return now;
+}
+
+function hashChallenge(challenge: string): string {
+  return createHash("sha256").update(challenge).digest("hex");
+}
+
+/**
+ * Remember the step-up challenge just issued to this session, replacing any
+ * earlier one: only the latest step-up a session started can complete.
+ */
+export async function issueStepUpChallenge(token: string, challenge: string): Promise<void> {
+  await prisma.session.update({
+    where: { tokenHash: hashSessionToken(token) },
+    data: { stepUpChallengeHash: hashChallenge(challenge) },
+  });
+}
+
+/**
+ * Record a passkey STEP-UP on an existing session, consuming its challenge.
+ *
+ * Unlike the sign-in above, this does not mint a session: the person is
+ * already signed in and is proving, again and now, that they hold their
+ * passkey. A passkey assertion satisfies MFA, so the session is marked verified
+ * as well.
+ *
+ * ONCE, AND ONLY HERE. The challenge cookie is stateless — deleting it is a
+ * request the client may ignore — so a captured step-up (cookie and body)
+ * would otherwise verify again, on any session of the same person, until the
+ * cookie expired. The challenge must be the one `issueStepUpChallenge` stored
+ * on THIS session, and the write that stamps the assertion clears it, so a
+ * second use, a use on another session, or a challenge minted by the public
+ * sign-in options all match nothing. Returns the time recorded, or null when
+ * the challenge was not this session's outstanding one.
+ */
+export async function recordStepUpAssertion(token: string, challenge: string): Promise<Date | null> {
+  const now = new Date();
+  const stamped = await prisma.session.updateMany({
+    where: {
+      tokenHash: hashSessionToken(token),
+      stepUpChallengeHash: hashChallenge(challenge),
+      isRevoked: false,
+    },
+    data: {
+      stepUpChallengeHash: null,
+      mfaVerified: true,
+      mfaVerifiedAt: now,
+      passkeyAssertedAt: now,
+    },
+  });
+  return stamped.count === 1 ? now : null;
 }
 
 /**

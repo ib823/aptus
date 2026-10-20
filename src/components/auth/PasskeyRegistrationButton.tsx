@@ -6,6 +6,7 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { humanizeWebAuthnError } from "@/lib/errors";
 
 interface PasskeyRegistrationButtonProps {
@@ -18,8 +19,11 @@ export function PasskeyRegistrationButton({ onSuccess }: PasskeyRegistrationButt
   const handleRegister = useCallback(async () => {
     setIsPending(true);
     try {
-      // Step 1: Get registration options
-      const optionsRes = await fetch("/api/auth/webauthn/register/options");
+      // Step 1: Get registration options. Adding a passkey beside an existing
+      // one can need a check with that one first (lib/auth/step-up.ts): the
+      // step-up helper asks for it and retries. Asked here, before the
+      // browser's registration prompt, so verify below finds it fresh.
+      const optionsRes = await fetchWithStepUp("/api/auth/webauthn/register/options");
       if (!optionsRes.ok) {
         toast.error("Failed to start passkey registration. Please try again.");
         return;

@@ -16,7 +16,9 @@ vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit 
 
 import {
   canPerformGovernanceActions,
+  checkStepUp,
   hasFreshStepUp,
+  recordStepUpMissing,
   requireStepUp,
   STEP_UP_MAX_AGE_SECONDS,
   stepUpBannerState,
@@ -218,6 +220,36 @@ describe("requireStepUp", () => {
     vi.stubEnv("COREEDGE_STEP_UP", "enforce");
     const { authMethod: _omitted, ...legacy } = { ...USER, passkeyAssertedAt: secondsAgo(5) };
     expect(await requireStepUp(legacy, 300, CONTEXT)).toEqual({ ok: true, outcome: "fresh" });
+  });
+});
+
+describe("checkStepUp and recordStepUpMissing — the transaction-safe halves", () => {
+  it("checkStepUp writes nothing, even in warn, and hands back what to record", () => {
+    vi.stubEnv("COREEDGE_STEP_UP", "warn");
+    const result = checkStepUp(USER, 300, CONTEXT);
+    expect(result).toMatchObject({ ok: true, outcome: "warned", missing: { user: USER, maxAgeSeconds: 300 } });
+    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+  });
+
+  it("recordStepUpMissing writes the row requireStepUp would have", async () => {
+    vi.stubEnv("COREEDGE_STEP_UP", "warn");
+    const result = checkStepUp(USER, 300, CONTEXT);
+    if (!result.ok || result.outcome !== "warned") throw new Error("expected a warned admission");
+    await recordStepUpMissing(result.missing);
+    await requireStepUp(USER, 300, CONTEXT);
+    const [recorded, required] = mocks.writeConfigAudit.mock.calls.map((c) => c[0] as unknown);
+    expect(recorded).toEqual(required);
+  });
+
+  it("checkStepUp refuses and passes exactly as requireStepUp does", async () => {
+    vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+    expect(checkStepUp(USER, 300, CONTEXT)).toMatchObject({ ok: false, code: "STEP_UP_REQUIRED" });
+    expect(checkStepUp({ ...USER, passkeyAssertedAt: secondsAgo(5) }, 300, CONTEXT)).toEqual({
+      ok: true,
+      outcome: "fresh",
+    });
+    vi.stubEnv("COREEDGE_STEP_UP", "off");
+    expect(checkStepUp(USER, 300, CONTEXT)).toEqual({ ok: true, outcome: "off" });
   });
 });
 

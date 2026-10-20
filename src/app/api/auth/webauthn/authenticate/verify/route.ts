@@ -12,7 +12,7 @@ import {
 } from "@/lib/auth/webauthn-db";
 import {
   createSession,
-  markSessionMfaVerified,
+  markSessionPasskeyAsserted,
   SESSION_COOKIE_NAME,
   getSessionCookieOptions,
 } from "@/lib/auth/session";
@@ -118,8 +118,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       notifySessionDisplaced({ userId: user.id, newIpAddress: ipAddress, newUserAgent: userAgent });
     }
 
-    // Passkey satisfies MFA — mark session as verified immediately
-    await markSessionMfaVerified(token);
+    // Passkey satisfies MFA, and this sign-in IS an assertion: the session is
+    // verified and counts as stepped up for the next few minutes.
+    await markSessionPasskeyAsserted(token);
 
     // Set session cookie and return success
     const response = NextResponse.json({

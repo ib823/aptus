@@ -21,7 +21,12 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
+import {
+  checkStepUp,
+  recordStepUpMissing,
+  STEP_UP_MAX_AGE_SECONDS,
+  type StepUpMissing,
+} from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -191,6 +196,8 @@ export async function PATCH(request: NextRequest) {
    * the same lock (lib/studio/owner-lock.ts), so whichever lands first, the
    * other reads what it wrote and is refused.
    */
+  // A warn-mode admission, recorded once the transaction has ended (below).
+  let stepUpMissing = null as StepUpMissing | null;
   const decided = await prisma.$transaction(async (tx) => {
     await lockSolutionOwnership(tx, { organizationId, solutionId: located.solutionId });
 
@@ -241,13 +248,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     // The passkey last, once every rule has passed: it is then the one thing
-    // between this person and the decision (lib/auth/step-up.ts).
-    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    // between this person and the decision (lib/auth/step-up.ts). Checked
+    // here, recorded after the transaction: the record needs a pooled
+    // connection, and this transaction holds one and the lock.
+    const stepUp = checkStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
       action: "grant.decide",
       targetId: grant.id,
       organizationId,
     });
     if (!stepUp.ok) return { refusal: stepUp.response };
+    if (stepUp.outcome === "warned") stepUpMissing = stepUp.missing;
 
     /*
      * A COMPARE-AND-SET, not an update. The NOT_PENDING check above read the row
@@ -276,6 +286,7 @@ export async function PATCH(request: NextRequest) {
     }
     return { grant, decidedAt };
   });
+  if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
   const { grant, decidedAt } = decided;
 

@@ -27,7 +27,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
+import {
+  checkStepUp,
+  recordStepUpMissing,
+  STEP_UP_MAX_AGE_SECONDS,
+  type StepUpMissing,
+} from "@/lib/auth/step-up";
 import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { refuseDecision } from "@/lib/coreedge/authz";
 import { prisma } from "@/lib/db/prisma";
@@ -86,6 +91,8 @@ export async function POST(
    * owners and the grant are read fresh, so whichever lands first, the other
    * is refused.
    */
+  // A warn-mode admission, recorded once the transaction has ended (below).
+  let stepUpMissing = null as StepUpMissing | null;
   const decided = await prisma.$transaction(async (tx) => {
     await lockSolutionOwnership(tx, { organizationId, solutionId: located.solutionId });
 
@@ -143,13 +150,16 @@ export async function POST(
      * THE PASSKEY LAST, once every rule above has passed — so a person is
      * asked for it only when it is the one thing between them and the
      * decision, and a refusal they cannot fix never costs them a prompt first.
+     * Checked here, recorded after the transaction: the record needs a pooled
+     * connection, and this transaction holds one and the lock.
      */
-    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    const stepUp = checkStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
       action: "grant.decide",
       targetId: grant.id,
       organizationId,
     });
     if (!stepUp.ok) return { refusal: stepUp.response };
+    if (stepUp.outcome === "warned") stepUpMissing = stepUp.missing;
 
     const decidedAt = new Date();
     const settled = await tx.apiAccessGrant.updateMany({
@@ -186,6 +196,7 @@ export async function POST(
     }
     return { grant, decidedAt };
   });
+  if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
   const { grant, decidedAt } = decided;
 
