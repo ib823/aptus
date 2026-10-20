@@ -45,6 +45,8 @@ export class CredentialLaneStore {
   clients: Row[] = [];
   links: Row[] = [];
   audits: Row[] = [];
+  /** RetiredClientToken: the keys a credential row has dropped (P0.11, wave 1a final review). */
+  retired: Row[] = [];
   /**
    * Owner ids that are NOT live members of their organization (deactivated,
    * deleted or moved away). Every other id the modules ask about is treated as
@@ -60,8 +62,25 @@ export class CredentialLaneStore {
     this.clients = [];
     this.links = [];
     this.audits = [];
+    this.retired = [];
     this.departedUsers = new Set();
     this.locks = [];
+  }
+
+  /**
+   * The nested `retiredTokens: { createMany }` a key change writes, recorded
+   * here; the rest of the update is returned to be applied as it is.
+   */
+  private retire(row: Row, data: Row): Row {
+    const { retiredTokens, ...rest } = data as Row & {
+      retiredTokens?: { createMany: { data: Row[]; skipDuplicates?: boolean } };
+    };
+    if (retiredTokens === undefined) return rest;
+    for (const entry of retiredTokens.createMany.data) {
+      if (this.retired.some((r) => r.tokenHash === entry.tokenHash)) continue;
+      this.retired.push({ ...entry, clientId: row.id });
+    }
+    return rest;
   }
 
   /** The Prisma surface the modules under test touch, and nothing else. */
@@ -78,7 +97,7 @@ export class CredentialLaneStore {
       update: async ({ where, data }: { where: Row; data: Row }) => {
         const row = this.clients.find((r) => matches(r, where));
         if (!row) throw new Error("credential-lane-store: update matched no SolutionClient");
-        return apply(row, data);
+        return apply(row, this.retire(row, data));
       },
       upsert: async ({
         where,
@@ -91,7 +110,7 @@ export class CredentialLaneStore {
       }) => {
         const key = where.organizationId_solutionId_environment;
         const row = this.clients.find((r) => matches(r, key));
-        if (row) return apply(row, update);
+        if (row) return apply(row, this.retire(row, update));
         const now = new Date();
         const created: Row = {
           id: `client_${randomUUID()}`,
@@ -113,6 +132,13 @@ export class CredentialLaneStore {
         };
         this.clients.push(created);
         return created;
+      },
+    },
+    retiredClientToken: {
+      findUnique: async ({ where }: { where: { tokenHash: string } }) => {
+        const hit = this.retired.find((r) => r.tokenHash === where.tokenHash);
+        if (!hit) return null;
+        return { client: this.clients.find((c) => c.id === hit.clientId) ?? null };
       },
     },
     keyClaimLink: {

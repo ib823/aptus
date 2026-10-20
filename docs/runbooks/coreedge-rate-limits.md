@@ -30,17 +30,26 @@ For a call that carries `Authorization: Bearer …`:
    gets a fresh credential bucket each time and meets only the backstop below:
    up to 6,000 database lookups a minute per address, where the old per-IP
    bucket allowed 120 writes or 300 reads. With it, such a flood costs at most
-   60 failed keys a minute per address — 120 indexed lookups, because an
-   unknown key is looked up as a current key and then as the key a rotation
-   replaced (P0.11, `src/lib/northbound/auth.ts`); after that, each call costs
-   one Upstash read and nothing else. A key that authenticates never spends it.
+   60 failed keys a minute per address — 180 indexed lookups, because an
+   unknown key is looked up as a current key, then as the key a rotation
+   replaced, then among the keys a credential has dropped (P0.11,
+   `src/lib/northbound/auth.ts`); after that, each call costs one Upstash read
+   and nothing else. Failures sent concurrently can each pass the edge's read
+   before the first is counted, so one window can admit 60 plus however many
+   are in flight at once (still far under the backstop). A key that
+   authenticates never spends it.
    Nor does a **real key that refuses** — expired, its rotation overlap closed
    (`ROTATED_OUT`), revoked, deactivated, or on a retired solution: it is one
    fixed value, so bucket 1 below already bounds its lookups to its own 600 a
    minute, and nobody else's. Counting it here would let one tenant's dead key,
    still retrying behind a shared egress (a BTP NAT range, a vendor's server),
    refuse every other tenant's valid key on that address — and P0.11 makes key
-   expiry and the end of an overlap routine.
+   expiry and the end of an overlap routine. That includes a key its
+   credential has **dropped**: replaced after a revocation (the leaked key, once
+   a new one is issued), pushed out by a second rotation, or rotated with the
+   overlap switched off. Each is recorded (`RetiredClientToken`) and refused as
+   `ROTATED_OUT` (or `REVOKED`), not as an unknown key. Keys dropped before this
+   was deployed were not recorded and still count as unknown.
    **Trade-off:** while an address is over it, valid keys calling from that
    same address are refused too (the edge cannot tell them apart without the
    lookup). That lasts until the window frees room, and only an address that is

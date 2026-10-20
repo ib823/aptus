@@ -332,6 +332,7 @@ export async function PATCH(request: NextRequest) {
       serviceVerifications: true,
       // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
       createdAt: true,
+      grantMatchChangedAt: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
@@ -391,6 +392,19 @@ export async function PATCH(request: NextRequest) {
     (input.operation !== undefined && input.operation !== current.operation) ||
     (input.entitySet !== undefined && nextEntitySet !== current.entitySet) ||
     serviceChanged;
+
+  /*
+   * A NEW GRANT TUPLE IS A NEW INTERFACE, TO A LEGACY GRANT (wave 1a final
+   * review). A grant is matched on (externalId, operation); an unbound legacy
+   * grant is honoured only on an interface that matched it by the P0.1
+   * deploy. That was judged on `createdAt`, so moving an interface created
+   * before the deploy onto an unbound grant's tuple — CREATE to READ, or your
+   * own API to a path an unbound grant names — reached that grant at once, on
+   * a product nobody approved it for. The change is stamped, and the cut-off
+   * is judged on the later of the two (grant-binding.ts, `grantMatchSince`).
+   * The dataset is not part of the tuple, so changing it stamps nothing.
+   */
+  const grantMatchChanged = nextOperation !== current.operation || nextExternalId !== current.externalId;
 
   /*
    * AN ACTIVE WRITE INTERFACE WHOSE CONTRACT WAS UNVERIFIED GOES BACK TO
@@ -522,6 +536,8 @@ export async function PATCH(request: NextRequest) {
       operation: nextOperation,
       sapProduct: current.sapProduct,
       createdAt: current.createdAt,
+      // The contract being promoted matches from this PATCH on, if it moves.
+      grantMatchChangedAt: grantMatchChanged ? now : current.grantMatchChangedAt,
     };
     const [liveCredentials, writeKeyHolders, grants, connections] = await Promise.all([
       prisma.solutionClient.findMany({
@@ -634,6 +650,7 @@ export async function PATCH(request: NextRequest) {
         // carries the stronger review. Derived, never client-supplied.
         mode: nextMode,
         ...(contractChanged ? { version: { increment: 1 } } : {}),
+        ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
         ...(serviceChanged
           ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
           : {}),

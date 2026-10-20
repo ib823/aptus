@@ -42,9 +42,10 @@ vi.mock("@/lib/db/prisma", async () => {
 import { prisma } from "@/lib/db/prisma";
 import { POST as decide } from "@/app/api/coreedge/requests/[id]/decide/route";
 import { POST as raiseRequest } from "@/app/api/studio/access-grants/route";
-import { POST as createInterface } from "@/app/api/studio/interfaces/route";
+import { PATCH as updateInterface, POST as createInterface } from "@/app/api/studio/interfaces/route";
 import { listGrantsNeedingReapproval, listOpenRequests } from "@/lib/coreedge/queries";
 import { resolveReadableInterface } from "@/lib/northbound/access";
+import { customExternalId } from "@/lib/sap-public/service-path";
 import { GRANT_BINDING_BACKFILL_SQL, GRANT_BINDING_CUTOFF_SQL } from "@/lib/studio/grant-binding";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
@@ -88,16 +89,22 @@ async function app(): Promise<string> {
   return s.id;
 }
 
-async function addInterface(solutionId: string, sapProduct: string): Promise<string> {
+async function addInterface(
+  solutionId: string,
+  sapProduct: string,
+  shape: { operation?: string; servicePath?: string } = {},
+): Promise<string> {
   as(BOB);
   const res = await createInterface(
     json(
       {
         solutionId,
         sapProduct,
-        externalId: "API_BUSINESS_PARTNER",
+        ...(shape.servicePath
+          ? { servicePath: shape.servicePath, odataVersion: "V2" }
+          : { externalId: "API_BUSINESS_PARTNER" }),
         name: `Business partners (${sapProduct})`,
-        operation: "READ",
+        operation: shape.operation ?? "READ",
         entitySet: "A_BusinessPartner",
       },
       "POST",
@@ -108,13 +115,22 @@ async function addInterface(solutionId: string, sapProduct: string): Promise<str
   return ((await res.json()) as { data: { id: string } }).data.id;
 }
 
+async function patchInterface(body: Record<string, unknown>): Promise<Response> {
+  as(BOB);
+  return updateInterface(json(body, "PATCH", "http://localhost/api/studio/interfaces"));
+}
+
 /** A legacy grant, written the way every grant was before P0.1: no interface. */
-async function legacyGrant(solutionId: string, decision = "APPROVED"): Promise<string> {
+async function legacyGrant(
+  solutionId: string,
+  decision = "APPROVED",
+  externalId = "API_BUSINESS_PARTNER",
+): Promise<string> {
   const g = await prisma.apiAccessGrant.create({
     data: {
       organizationId: ORG,
       solutionId,
-      externalId: "API_BUSINESS_PARTNER",
+      externalId,
       operation: "READ",
       environment: "PROD",
       justification: "Show partners in the portal.",
@@ -486,6 +502,133 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
     await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
     expect(await binding(grantId)).toMatchObject({ unboundReason: "AMBIGUOUS" });
     expect(await read(solutionId, onPrem)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+  });
+
+  /*
+   * WAVE 1A FINAL REVIEW. The cut-off was judged on Interface.createdAt, which
+   * a PATCH never moves. Adding a new on-premise READ interface for a NO_MATCH
+   * READ grant was refused; switching an on-premise CREATE interface from
+   * before the deploy to READ put it on the same tuple, and legacy served the
+   * grant there at once.
+   */
+  it("legacy never extends an unbound grant to a pre-deploy interface PATCHed onto its operation", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const old = await addInterface(solutionId, "s4hana-onprem", { operation: "CREATE" });
+    const grantId = await legacyGrant(solutionId);
+    await backdate(grantId);
+    await deploy();
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+
+    // The control: a new interface on that tuple is refused.
+    const added = await addInterface(solutionId, "s4hana-onprem");
+    expect(await read(solutionId, added)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+
+    const moved = await patchInterface({ id: old, operation: "READ" });
+    expect(moved.status).toBe(200);
+    expect(await read(solutionId, old)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+  });
+
+  it("legacy never extends an unbound grant to a pre-deploy custom interface PATCHed onto its service path", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const old = await addInterface(solutionId, "s4hana-onprem", { servicePath: "/sap/opu/odata/sap/ZOLD_PARTNER_SRV" });
+    const target = "/sap/opu/odata/sap/ZNEW_PARTNER_SRV";
+    const grantId = await legacyGrant(solutionId, "APPROVED", customExternalId(target));
+    await backdate(grantId);
+    await deploy();
+    expect(await binding(grantId)).toMatchObject({ interfaceId: null, unboundReason: "NO_MATCH" });
+
+    const moved = await patchInterface({ id: old, servicePath: target });
+    expect(moved.status).toBe(200);
+    expect(await read(solutionId, old)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+  });
+
+  it("an interface PATCHed onto the tuple before the deploy keeps the legacy grant it served", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const iface = await addInterface(solutionId, "s4hana-onprem", { operation: "CREATE" });
+    expect((await patchInterface({ id: iface, operation: "READ" })).status).toBe(200);
+    const cloud = await addInterface(solutionId, "s4hana");
+    await legacyGrant(solutionId);
+    await deploy();
+    expect((await read(solutionId, iface)).ok).toBe(true);
+    expect((await read(solutionId, cloud)).ok).toBe(true);
+  });
+
+  /*
+   * WAVE 1A FINAL REVIEW. Round 2's "matches today" rule (AMBIGUOUS when an
+   * interface was added after the grant) exists for grants that carry
+   * traffic. It also caught pending requests, which carry none, and the
+   * decide route refuses to approve a flagged request: raised from the one
+   * interface that existed, it could only be rejected and raised again.
+   */
+  it("the backfill binds a pending request to the one interface it was raised from, whatever was added since", async () => {
+    const solutionId = await app();
+    const cloud = await addInterface(solutionId, "s4hana");
+    await prisma.interface.update({
+      where: { id: cloud, organizationId: ORG },
+      data: { createdAt: new Date(Date.now() - 7_200_000) },
+    });
+    const pending = await legacyGrant(solutionId, "REQUESTED");
+    await prisma.apiAccessGrant.update({
+      where: { id: pending, organizationId: ORG },
+      data: { decidedById: null, decidedAt: null, createdAt: new Date(Date.now() - 3_600_000) },
+    });
+    await addInterface(solutionId, "s4hana-onprem");
+
+    await deploy();
+    expect(await binding(pending)).toEqual({ interfaceId: cloud, sapProduct: "s4hana", unboundReason: null });
+
+    as(CAROL);
+    const approve = await decide(
+      json({ decision: "APPROVED" }, "POST", `http://localhost/api/coreedge/requests/${pending}/decide`),
+      { params: Promise.resolve({ id: pending }) },
+    );
+    expect(approve.status).toBe(200);
+    expect(await binding(pending)).toEqual({ interfaceId: cloud, sapProduct: "s4hana", unboundReason: null });
+  });
+
+  it("the backfill still flags a pending request raised while several interfaces matched, or none", async () => {
+    const several = await app();
+    await addInterface(several, "s4hana");
+    await addInterface(several, "s4hana-onprem");
+    const ambiguous = await legacyGrant(several, "REQUESTED");
+    const none = await app();
+    const unmatched = await legacyGrant(none, "REQUESTED");
+    await backdate(unmatched);
+    await addInterface(none, "s4hana-onprem");
+
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(ambiguous)).toMatchObject({ interfaceId: null, unboundReason: "AMBIGUOUS" });
+    expect(await binding(unmatched)).toMatchObject({ interfaceId: null, unboundReason: "NO_MATCH" });
+  });
+
+  /*
+   * WAVE 1A FINAL REVIEW. unboundCutoffAt is a timestamp without a time zone,
+   * compared with createdAt values Prisma writes in UTC; a bare
+   * CURRENT_TIMESTAMP stored the migrating session's local time instead.
+   */
+  it("stamps the legacy cut-off in UTC whatever the migrating session's time zone", async () => {
+    const solutionId = await app();
+    const grantId = await legacyGrant(solutionId);
+    for (const zone of ["Asia/Kuala_Lumpur", "America/Los_Angeles"]) {
+      await prisma.apiAccessGrant.update({ where: { id: grantId, organizationId: ORG }, data: { unboundCutoffAt: null } });
+      const before = Date.now();
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SET LOCAL TimeZone = '${zone}'`);
+        await tx.$executeRawUnsafe(GRANT_BINDING_CUTOFF_SQL);
+      });
+      const after = Date.now();
+      const row = await prisma.apiAccessGrant.findFirst({
+        where: { id: grantId, organizationId: ORG },
+        select: { unboundCutoffAt: true },
+      });
+      const stamped = row?.unboundCutoffAt?.getTime() ?? Number.NaN;
+      // Within the statement's own second or so, never hours away.
+      expect(stamped).toBeGreaterThanOrEqual(before - 1_000);
+      expect(stamped).toBeLessThanOrEqual(after + 1_000);
+    }
   });
 
   it("names the bound SAP system on the requests board, and never flags a bound grant", async () => {

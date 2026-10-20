@@ -17,7 +17,9 @@
  *
  * ONLY A KEY THAT MATCHES NO ROW (wave 1a integration review). A key whose row
  * is found and refuses — expired at its P0.11 deadline, its rotation overlap
- * closed, revoked, deactivated, on a retired solution — is one fixed value, so
+ * closed, revoked, deactivated, on a retired solution, or dropped from the row
+ * altogether by a re-issue or a second rotation (RetiredClientToken, wave 1a
+ * final review) — is one fixed value, so
  * its own `machine:cred:<hash>` edge bucket already bounds what its lookups
  * cost, and touches nobody else. Counted against the ADDRESS, one tenant's dead
  * key still retrying behind a shared egress refused every other tenant's valid

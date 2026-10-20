@@ -36,6 +36,19 @@ describe("the credential lookups are exempt, exactly", () => {
       ).resolves.toBe("row");
     }
   });
+
+  // Wave 1a final review: the third lookup, of a key a row has dropped.
+  it("RetiredClientToken.findUnique by its hash alone, and nothing wider", async () => {
+    expect(isUnscopedByDesign("RetiredClientToken", "findUnique", { where: { tokenHash: "h" } })).toBe(true);
+    await expect(
+      guard({ model: "RetiredClientToken", operation: "findUnique", args: { where: { tokenHash: "h" } }, query: ok }),
+    ).resolves.toBe("row");
+    expect(isUnscopedByDesign("RetiredClientToken", "findMany", { where: { tokenHash: "h" } })).toBe(false);
+    expect(isUnscopedByDesign("RetiredClientToken", "findUnique", { where: { clientId: "c1" } })).toBe(false);
+    await expect(
+      guard({ model: "RetiredClientToken", operation: "findMany", args: { where: { clientId: "c1" } }, query: ok }),
+    ).rejects.toThrow(MissingTenantScopeError);
+  });
 });
 
 describe("anything wider is not", () => {

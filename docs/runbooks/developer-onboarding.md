@@ -156,9 +156,20 @@ created in `/admin/users`, as before.
 - An invitation from a developer workspace never reactivates an account an
   administrator deactivated: accepting it answers `409`.
 
+- A workspace can invite only an address the host would admit by itself: while
+  sign-up is open, one the developer sign-up rule admits (the domain list, or
+  the registration policy); while it is off, one the registration policy
+  (`canRegister`: `AUTH_INVITATION_ONLY`, `AUTH_ALLOWED_DOMAINS`) admits. Any
+  other address is refused with `403` when the invitation is sent, and an
+  invitation sent earlier cannot create a new account for it when accepted.
+  The answer depends only on the address and the settings, never on whether it
+  has an account. An administrator's invitation is not affected.
+
 **To turn it off**, unset `COREEDGE_DEVELOPER_SIGNUP`. Workspaces already
 created keep working. New addresses are then admitted by the registration
-policy alone, as before.
+policy alone, as before, and that includes the invitations a workspace sends
+or has already sent (`refuseWorkspaceInvitee`,
+`src/lib/auth/developer-workspace.ts`).
 
 ## Invite and member screens on a WORKBENCH_ONLY host
 

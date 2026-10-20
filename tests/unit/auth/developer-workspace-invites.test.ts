@@ -26,7 +26,7 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as RateLimitModule from "@/lib/security/rate-limit";
 
@@ -392,6 +392,72 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a sandbox developer's invite ri
       expect(statuses.filter((s) => s === 201)).toHaveLength(4);
       expect(await prisma.orgInvitation.count({ where: { organizationId: RACE_WS, status: "pending" } })).toBe(4);
       expect(sent).toHaveLength(4);
+    });
+  });
+
+  /*
+   * WAVE 1A FINAL REVIEW. Neither the invite route nor the accept route asked
+   * the sign-up policy, so with sign-up turned off — and AUTH_INVITATION_ONLY
+   * and a domain list set, after abuse — any existing workspace still invited
+   * a stranger, and accepting created an active account for them.
+   */
+  describe("closing sign-up", () => {
+    const closed = () => {
+      vi.stubEnv("COREEDGE_DEVELOPER_SIGNUP", "off");
+      vi.stubEnv("AUTH_INVITATION_ONLY", "true");
+      vi.stubEnv("AUTH_ALLOWED_DOMAINS", "abeam.com");
+    };
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("stops a workspace inviting an address the host would not admit by itself", async () => {
+      closed();
+      signInAs(DEVELOPER);
+      const res = await invite(post({ email: victim("closed"), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      expect(res.status).toBe(403);
+      expect(await prisma.orgInvitation.count({ where: { organizationId: WORKSPACE } })).toBe(0);
+      expect(sent).toHaveLength(0);
+    });
+
+    it("refuses a new account from a workspace invitation sent before sign-up closed", async () => {
+      signInAs(DEVELOPER);
+      const sentBefore = await invite(
+        post({ email: victim("in-flight"), role: "sandbox_developer" }),
+        params({ orgId: WORKSPACE }),
+      );
+      expect(sentBefore.status).toBe(201);
+      const row = await prisma.orgInvitation.findFirst({ where: { organizationId: WORKSPACE, email: victim("in-flight") } });
+
+      closed();
+      jar.clear();
+      const res = await accept(post({}), params({ token: row!.token }));
+      expect(res.status).toBe(403);
+      expect(await prisma.user.findUnique({ where: { email: victim("in-flight") } })).toBeNull();
+    });
+
+    it("holds a workspace to the developer domain list while sign-up is open", async () => {
+      vi.stubEnv("COREEDGE_DEVELOPER_SIGNUP", "open");
+      vi.stubEnv("COREEDGE_DEVELOPER_SIGNUP_DOMAINS", "example.test");
+      vi.stubEnv("AUTH_INVITATION_ONLY", "true");
+      signInAs(DEVELOPER);
+      const outside = await invite(post({ email: victim("outside"), role: "sandbox_developer" }), params({ orgId: WORKSPACE }));
+      expect(outside.status).toBe(403);
+      const inside = await invite(
+        post({ email: `${RUN}-colleague@example.test`, role: "sandbox_developer" }),
+        params({ orgId: WORKSPACE }),
+      );
+      expect(inside.status).toBe(201);
+    });
+
+    it("leaves an administrator's invitation as it was: the way past the registration policy", async () => {
+      closed();
+      signInAs(ADMIN);
+      const res = await invite(post({ email: victim("hired"), role: "sandbox_developer" }), params({ orgId: CUSTOMER }));
+      expect(res.status).toBe(201);
+      const row = await prisma.orgInvitation.findFirst({ where: { organizationId: CUSTOMER, email: victim("hired") } });
+      jar.clear();
+      expect((await accept(post({}), params({ token: row!.token }))).status).toBe(200);
     });
   });
 });

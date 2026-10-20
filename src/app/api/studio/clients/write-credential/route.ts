@@ -27,8 +27,10 @@
  *      can never be presented, because the bearer token it travels with is
  *      already refused.
  *   5b. that credential has an expiry, where one is mandatory (P0.11): the
- *      write key is sealed on the same row and lives exactly as long as the
- *      bearer token, so minting one onto a TEST or PROD key issued before
+ *      write key is sealed on the same row and lives as long as the row's
+ *      credential (a routine rotation renews both: write keys have no overlap,
+ *      so ending one there would make every rotation a write outage), so
+ *      minting one onto a TEST or PROD key issued before
  *      expiry was mandatory would hand out a write key that never ends. The
  *      refusal says to rotate first, and what the rotation does to the token
  *      in use: it keeps working through the overlap, or — with the overlap

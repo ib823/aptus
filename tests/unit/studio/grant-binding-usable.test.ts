@@ -12,12 +12,13 @@ const DEPLOY = new Date("2026-10-22T00:00:00Z");
 const before = (ms: number) => new Date(DEPLOY.getTime() - ms);
 const after = (ms: number) => new Date(DEPLOY.getTime() + ms);
 
-const iface = (createdAt: Date): GrantedInterface => ({
+const iface = (createdAt: Date, grantMatchChangedAt: Date | null = null): GrantedInterface => ({
   id: "if_1",
   externalId: "API_BUSINESS_PARTNER",
   operation: "READ",
   sapProduct: "s4hana-onprem",
   createdAt,
+  grantMatchChangedAt,
 });
 
 const unbound = { interfaceId: null, sapProduct: null, createdAt: before(86_400_000), unboundCutoffAt: DEPLOY };
@@ -41,6 +42,19 @@ describe("isUsableUnder", () => {
     expect(isUsableUnder(unbound, iface(before(60_000)), "legacy")).toBe(true);
     expect(isUsableUnder(unbound, iface(DEPLOY), "legacy")).toBe(true);
     expect(isUsableUnder(unbound, iface(after(1)), "legacy")).toBe(false);
+  });
+
+  /*
+   * WAVE 1A FINAL REVIEW. The cut-off was judged on createdAt alone, so an
+   * interface created before the deploy and PATCHed onto an unbound grant's
+   * tuple after it (CREATE to READ, or a new service path) was honoured as if
+   * it had matched all along.
+   */
+  it("legacy judges when the interface began to match the grant, not when it was created", () => {
+    expect(isUsableUnder(unbound, iface(before(60_000), after(1)), "legacy")).toBe(false);
+    // Moved onto the tuple before the deploy: it matched then, and keeps working.
+    expect(isUsableUnder(unbound, iface(before(60_000), before(1_000)), "legacy")).toBe(true);
+    expect(isUsableUnder(unbound, iface(before(60_000), DEPLOY), "legacy")).toBe(true);
   });
 
   it("strict honours no unbound grant", () => {

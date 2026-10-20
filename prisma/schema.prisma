@@ -914,6 +914,13 @@ model Interface {
   /// DRAFT | ACTIVE | DEPRECATED
   status String @default("DRAFT")
 
+  /// When a PATCH last changed what a grant is matched on (externalId or
+  /// operation); null while it is unchanged since createdAt. An unbound legacy
+  /// grant's cut-off is judged on whichever is later (grant-binding.ts,
+  /// `grantMatchSince`), so moving an old interface onto an unbound grant's
+  /// tuple is "added since the deploy", not a pre-deploy interface.
+  grantMatchChangedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1392,6 +1399,8 @@ model SolutionClient {
   updatedAt   DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Every key this row has dropped from `tokenHash` and `previousTokenHash`.
+  retiredTokens RetiredClientToken[]
 
   /// The upsert key for `issueClientToken`, and it CONTAINS the organization:
   /// the update branch rotates the token hash and revives a revoked
@@ -1401,6 +1410,32 @@ model SolutionClient {
   @@index([organizationId])
   @@index([organizationId, solutionId])
   @@index([tokenHash])
+}
+
+/// The hash of a runtime key its row no longer holds (P0.11, wave 1a final
+/// review): written in the same update that drops it from
+/// `SolutionClient.tokenHash` or `previousTokenHash` — a re-issue after a
+/// revocation, a second rotation, any rotation with the overlap switched off.
+///
+/// WHY. Authentication found such a key nowhere and called it UNKNOWN_TOKEN,
+/// and an unknown key spends its caller ADDRESS's failed-lookup bucket
+/// (`machine-authfail:<ip>`). So a leaked key still retried by a stale
+/// deployment behind a shared egress, after the revoke-then-reissue the
+/// runbook prescribes, locked every other tenant's valid key on that address
+/// out at the edge. Looked up here, it resolves to its row and is refused as
+/// REVOKED or ROTATED_OUT: a real key that refuses, which its own credential
+/// bucket bounds. Never authenticates anything. `@id` because authentication
+/// looks a row up BY it (a narrow isUnscopedByDesign entry in tenant-guard.ts).
+model RetiredClientToken {
+  tokenHash      String   @id
+  clientId       String
+  organizationId String
+  retiredAt      DateTime @default(now())
+
+  client SolutionClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([organizationId])
 }
 
 /// Per-call audit for the northbound broker. APPEND-ONLY: there is no update or

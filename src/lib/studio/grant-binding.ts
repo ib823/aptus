@@ -55,8 +55,33 @@ export interface GrantedInterface {
   readonly externalId: string;
   readonly operation: string;
   readonly sapProduct: string;
-  /** Judged against an unbound grant's legacy cut-off (`isUsableUnder`). */
+  /** Judged against an unbound grant's legacy cut-off (`isUsableUnder`), with the next field. */
   readonly createdAt: Date;
+  /**
+   * When a PATCH last moved the interface onto its current externalId or
+   * operation, or null if it never has. Required, like `createdAt`, so no
+   * caller judges the cut-off on the creation time alone (`grantMatchSince`).
+   */
+  readonly grantMatchChangedAt: Date | null;
+}
+
+/**
+ * Since when the interface has matched the tuple it matches today: its
+ * creation, or the PATCH that last changed its externalId or operation,
+ * whichever is later (wave 1a final review).
+ *
+ * WHY NOT `createdAt` ALONE. The cut-off was judged on when the interface was
+ * created, and the interfaces PATCH can change the operation — or, for your
+ * own API, the service path and so the externalId — of an interface created
+ * long before the deploy. A builder moving an old CREATE interface to READ put
+ * it onto a NO_MATCH READ grant's tuple, and legacy honoured that grant there,
+ * on a product nobody approved it for: A47 by the side door, while adding a
+ * new interface was refused. What matters is when the interface began to
+ * match, and that is the later of the two.
+ */
+export function grantMatchSince(iface: Pick<GrantedInterface, "createdAt" | "grantMatchChangedAt">): Date {
+  const changed = iface.grantMatchChangedAt;
+  return changed != null && changed.getTime() > iface.createdAt.getTime() ? changed : iface.createdAt;
 }
 
 /** The grant fields `isUsableUnder` judges. Required, so a caller cannot forget to select them. */
@@ -101,8 +126,9 @@ export function isBoundTo(
  * May this fetched grant authorise a call on the interface, under the mode?
  *
  * A bound grant: always (it was fetched for its own interface). An unbound
- * one: never under strict. Under legacy, only on an interface that existed by
- * the grant's cut-off (wave 1a integration review): the P0.1 deploy, stamped
+ * one: never under strict. Under legacy, only on an interface that matched
+ * the grant's tuple by its cut-off (wave 1a integration review; since when it
+ * matched, not when it was created: `grantMatchSince`): the P0.1 deploy, stamped
  * by its migration, or for a grant the old code created during the rollout,
  * that grant's own creation. Legacy exists so that no call that worked before
  * the deploy stops; an interface added since carried none, and honouring the
@@ -118,7 +144,7 @@ export function isUsableUnder(
   // Bound to another interface (or this one on another product): never.
   if (grant.interfaceId != null || mode === "strict") return false;
   const cutoff = grant.unboundCutoffAt ?? grant.createdAt;
-  return iface.createdAt.getTime() <= cutoff.getTime();
+  return grantMatchSince(iface).getTime() <= cutoff.getTime();
 }
 
 /** The subset of fetched grants the current mode lets authorise. */
@@ -190,11 +216,13 @@ export type BindingOutcome =
  * The single interface a (solution, externalId, operation) names, if exactly
  * one does, so a request raised by an older caller (externalId, no
  * interfaceId) is bound to the interface it names. With `raisedAt`, for a
- * pending legacy request at its decision, only an interface that existed when
- * the request was raised counts (review round 1): one added since is not what
- * was asked for. Unlike the backfill, which must not narrow a grant that
- * already carries traffic, a pending request carries none, so this limit may
- * pick the one interface it was raised from out of several.
+ * pending legacy request at its decision, only an interface that matched it
+ * when the request was raised counts (review round 1): one added since — or
+ * PATCHed onto its tuple since (`grantMatchSince`) — is not what was asked
+ * for. Unlike the backfill's rule for a decided grant, which must not narrow
+ * one that already carries traffic, a pending request carries none, so this
+ * limit may pick the one interface it was raised from out of several (and the
+ * backfill does the same for a pending row).
  */
 export async function findBinding(
   db: InterfaceLookupDb,
@@ -207,7 +235,12 @@ export async function findBinding(
       solutionId: grant.solutionId,
       externalId: grant.externalId,
       operation: grant.operation,
-      ...(raisedAt ? { createdAt: { lte: raisedAt } } : {}),
+      ...(raisedAt
+        ? {
+            createdAt: { lte: raisedAt },
+            OR: [{ grantMatchChangedAt: null }, { grantMatchChangedAt: { lte: raisedAt } }],
+          }
+        : {}),
     },
     select: { id: true, sapProduct: true },
     take: 2,
@@ -326,20 +359,30 @@ export function unboundGrantLabel(unboundReason: string | null): string {
  *     there; afterwards it leaves only the rows the old code created during
  *     the rollout. So the statement is idempotent: a second run binds nothing.
  *   - A grant is bound only when exactly one interface matches it TODAY and
- *     that one existed when the request was raised (`earlier`): a request is
- *     raised from an interface, so one added later is not what anybody asked
- *     for, let alone approved. The time limit only ever withholds a binding:
- *     a grant that also matches an interface added since is AMBIGUOUS, not
- *     bound to the older one, because the old broker serves it on both and a
- *     binding would stop the newer one's calls on deploy, unflagged (review
- *     round 2). Unbound, legacy keeps every such call working.
+ *     that one matched it when the request was raised (`earlier`, judged on
+ *     `grantMatchSince`): a request is raised from an interface, so one added
+ *     later is not what anybody asked for, let alone approved. The time limit
+ *     only ever withholds a binding: a grant that also matches an interface
+ *     added since is AMBIGUOUS, not bound to the older one, because the old
+ *     broker serves it on both and a binding would stop the newer one's calls
+ *     on deploy, unflagged (review round 2). Unbound, legacy keeps every such
+ *     call working.
+ *   - EXCEPT A PENDING REQUEST (wave 1a final review). Round 2's reason is
+ *     traffic, and a REQUESTED row carries none: the old broker serves only a
+ *     granting decision. Marking it AMBIGUOUS because an interface was added
+ *     after it was raised left it un-approvable (the decide route refuses a
+ *     flagged request), though it was raised from the one interface that
+ *     existed then. So a pending row is bound when exactly ONE interface
+ *     matched it when it was raised, whatever was added since — the rule its
+ *     decision applies (`findBinding` with `raisedAt`); several then is
+ *     AMBIGUOUS, none NO_MATCH.
  */
 export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
   SELECT g."id" AS "grantId",
          COUNT(i."id") AS "matches",
-         COUNT(i."id") FILTER (WHERE i."createdAt" <= g."createdAt") AS "earlier",
-         MIN(i."id") AS "interfaceId",
-         MIN(i."sapProduct") AS "sapProduct"
+         COUNT(i."id") FILTER (WHERE COALESCE(i."grantMatchChangedAt", i."createdAt") <= g."createdAt") AS "earlier",
+         MIN(i."id") FILTER (WHERE COALESCE(i."grantMatchChangedAt", i."createdAt") <= g."createdAt") AS "interfaceId",
+         MIN(i."sapProduct") FILTER (WHERE COALESCE(i."grantMatchChangedAt", i."createdAt") <= g."createdAt") AS "sapProduct"
   FROM "ApiAccessGrant" g
   LEFT JOIN "Interface" i
     ON i."solutionId" = g."solutionId"
@@ -351,11 +394,13 @@ export const GRANT_BINDING_BACKFILL_SQL = `WITH "candidates" AS (
   GROUP BY g."id"
 )
 UPDATE "ApiAccessGrant" AS g
-SET "interfaceId" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."interfaceId" ELSE NULL END,
-    "sapProduct" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."sapProduct" ELSE NULL END,
+SET "interfaceId" = CASE WHEN c."earlier" = 1 AND (c."matches" = 1 OR g."decision" = 'REQUESTED') THEN c."interfaceId" ELSE NULL END,
+    "sapProduct" = CASE WHEN c."earlier" = 1 AND (c."matches" = 1 OR g."decision" = 'REQUESTED') THEN c."sapProduct" ELSE NULL END,
     "unboundReason" = CASE
+      WHEN c."earlier" = 1 AND (c."matches" = 1 OR g."decision" = 'REQUESTED') THEN NULL
+      WHEN g."decision" = 'REQUESTED' AND c."earlier" > 1 THEN 'AMBIGUOUS'
+      WHEN g."decision" = 'REQUESTED' THEN 'NO_MATCH'
       WHEN c."matches" > 1 THEN 'AMBIGUOUS'
-      WHEN c."matches" = 1 AND c."earlier" = 1 THEN NULL
       ELSE 'NO_MATCH'
     END
 FROM "candidates" AS c
@@ -374,5 +419,13 @@ WHERE g."id" = c."grantId";`;
  * stays unstamped, and its own createdAt stands in: it was raised from an
  * interface that existed by then. Idempotent: a stamped row is never moved.
  * The migration holds a copy of this text; the same test keeps them identical.
+ *
+ * IN UTC (wave 1a final review). The column is a `timestamp` without a time
+ * zone, and every createdAt it is compared with is written by Prisma in UTC.
+ * A bare CURRENT_TIMESTAMP is stored as the session's local wall-clock time,
+ * so a migrating role with TimeZone=Asia/Kuala_Lumpur put the cut-off eight
+ * hours after the deploy (honouring unbound grants on interfaces added in
+ * those hours: A47), and a zone west of UTC put it before the deploy
+ * (refusing calls that worked: the migration's "nothing stops on deploy").
  */
-export const GRANT_BINDING_CUTOFF_SQL = `UPDATE "ApiAccessGrant" SET "unboundCutoffAt" = CURRENT_TIMESTAMP WHERE "interfaceId" IS NULL AND "unboundCutoffAt" IS NULL;`;
+export const GRANT_BINDING_CUTOFF_SQL = `UPDATE "ApiAccessGrant" SET "unboundCutoffAt" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') WHERE "interfaceId" IS NULL AND "unboundCutoffAt" IS NULL;`;

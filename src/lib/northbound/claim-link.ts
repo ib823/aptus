@@ -39,6 +39,7 @@ import {
   expiryOnRenewal,
   isKeyLive,
   overlapFields,
+  retiredKeysWrite,
   replacedKeyStopsEarly,
   resolveKeyExpiry,
   rotationOverlapHours,
@@ -439,6 +440,8 @@ interface LaneFacts {
     readonly createdAt: Date;
     /** Server-side only: what the overlap carries forward. Never leaves this module. */
     readonly tokenHash: string;
+    /** Server-side only: the key a replacement pushes out, recorded as retired. */
+    readonly previousTokenHash: string | null;
     readonly isActive: boolean;
     readonly revokedAt: Date | null;
     readonly expiresAt: Date | null;
@@ -469,7 +472,14 @@ async function readLaneFacts(
       solutionId: link.solutionId,
       environment: link.environment,
     },
-    select: { createdAt: true, tokenHash: true, isActive: true, revokedAt: true, expiresAt: true },
+    select: {
+      createdAt: true,
+      tokenHash: true,
+      previousTokenHash: true,
+      isActive: true,
+      revokedAt: true,
+      expiresAt: true,
+    },
   });
   // Against the SENDER: they are who issues the key, and owners change — or
   // leave (a departed owner's slot reads as empty).
@@ -552,6 +562,7 @@ async function mintKey(
   // into the uniform refusal, and the transaction writes nothing.
   if (!expiry.ok) throw new Error(`claim refused by the key policy: ${expiry.refusal}`);
   const expiresAt = expiry.expiresAt;
+  const overlap = overlapFields(existing, now, expiresAt, tokenHash);
 
   const client = await tx.solutionClient.upsert({
     where: {
@@ -591,7 +602,9 @@ async function mintKey(
     update: {
       tokenHash,
       tokenPrefix: tokenPrefixFor(link.environment),
-      ...overlapFields(existing, now, expiresAt, tokenHash),
+      ...overlap,
+      // The keys the row drops stay known, so they refuse as dead keys (key-policy.ts).
+      ...retiredKeysWrite(link.organizationId, existing, overlap, now),
       isActive: true,
       revokedAt: null,
       /*

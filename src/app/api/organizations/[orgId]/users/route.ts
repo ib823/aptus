@@ -4,6 +4,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 import { getCurrentUser } from "@/lib/auth/session";
+import { refuseWorkspaceInvitee } from "@/lib/auth/developer-workspace";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import {
@@ -153,6 +154,16 @@ export async function POST(
   if (roleRefusal) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: roleRefusal } },
+      { status: 403 },
+    );
+  }
+
+  // A developer workspace admits only an address the host would admit by
+  // itself: closing sign-up closes its invitations too (developer-workspace.ts).
+  const inviteeRefusal = refuseWorkspaceInvitee(user.role, targetRole, parsed.data.email);
+  if (inviteeRefusal) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: inviteeRefusal } },
       { status: 403 },
     );
   }

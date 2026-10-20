@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
         odataVersion: true,
         // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
         createdAt: true,
+        grantMatchChangedAt: true,
       },
       orderBy: { name: "asc" },
     }),

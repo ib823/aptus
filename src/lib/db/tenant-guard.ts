@@ -61,6 +61,10 @@ export const TENANT_ANCHORED_MODELS = [
   // one organization's row; only the key scripts read across tenants, and they
   // declare it with permitCrossTenantReads.
   "OrgDataKey",
+  // P0.11 (wave 1a final review): the keys a SolutionClient row has dropped.
+  // Written only nested in that row's own scoped update; read only by hash
+  // (UNSCOPED_BY_DESIGN below).
+  "RetiredClientToken",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];
@@ -136,6 +140,11 @@ function whereHasOrganization(args: unknown): boolean {
  * also `@unique`, for the same reason and with the same guarantee — it finds
  * only the row whose replaced key was presented. Any other field beside it,
  * or any other operation on it, is not exempt.
+ *
+ * A key the row has dropped altogether (RetiredClientToken, wave 1a final
+ * review) is the third lookup of the same kind, by its `@id` hash, on a miss
+ * of both: it finds only the record of the key presented, and that record
+ * only ever refuses.
  */
 const UNSCOPED_BY_DESIGN: readonly {
   readonly model: string;
@@ -144,6 +153,7 @@ const UNSCOPED_BY_DESIGN: readonly {
 }[] = [
   { model: "SolutionClient", operation: "findUnique", whereKey: "tokenHash" },
   { model: "SolutionClient", operation: "findUnique", whereKey: "previousTokenHash" },
+  { model: "RetiredClientToken", operation: "findUnique", whereKey: "tokenHash" },
 ];
 
 /** Exported for its unit test; the guard below is its only caller. */

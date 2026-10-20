@@ -61,6 +61,14 @@ vi.mock("@/lib/db/prisma", () => ({
       },
       update: async () => ({}),
     },
+    // The third lookup, only when both above miss: the keys a row has dropped
+    // (RetiredClientToken, wave 1a final review). None in this file.
+    retiredClientToken: {
+      findUnique: async () => {
+        lookups.count++;
+        return null;
+      },
+    },
     solution: { findFirst: async () => ({ status: "ACTIVE" }) },
     interface: { findMany: async () => [] },
     apiAccessGrant: { findMany: async () => [] },
@@ -77,10 +85,11 @@ const PATH = "/api/northbound/interfaces";
 
 /**
  * The queries one unknown key costs: the lookup by current key, then the one by
- * the key a rotation replaced (auth.ts, P0.11). A key that authenticates costs
- * one, because the second runs only on a miss.
+ * the key a rotation replaced, then the one by the keys a row has dropped
+ * (auth.ts, P0.11). A key that authenticates costs one, because the others run
+ * only on a miss.
  */
-const QUERIES_PER_UNKNOWN_KEY = 2;
+const QUERIES_PER_UNKNOWN_KEY = 3;
 
 /** A live credential of its own, so this test's route budget starts full. */
 function validKey(name: string): string {
@@ -127,8 +136,8 @@ describe("random-key floods are capped per address", () => {
     // Before: 2000 queries (every key was its own fresh edge bucket).
     const ceiling = RATE_LIMITS.machineAuthFailure.limit * QUERIES_PER_UNKNOWN_KEY;
     expect(lookups.count).toBeLessThanOrEqual(ceiling);
-    // No more than the old per-IP ceilings let through, for reads or for writes.
-    expect(ceiling).toBeLessThanOrEqual(RATE_LIMITS.apiMutation.limit);
+    // Under what the old per-IP read bucket let through (rate-limit.ts).
+    expect(ceiling).toBeLessThanOrEqual(RATE_LIMITS.apiRead.limit);
     expect(statuses.get(401)).toBe(RATE_LIMITS.machineAuthFailure.limit);
     expect(statuses.get(429)).toBe(1000 - RATE_LIMITS.machineAuthFailure.limit);
   });

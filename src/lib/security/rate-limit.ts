@@ -296,9 +296,18 @@ export const RATE_LIMITS = {
    * anything else, and refuses the address once it is empty. A valid key
    * never spends it, so only an address sending failing keys can empty it.
    *
-   * An unknown key costs TWO indexed lookups since P0.11 (the current key,
-   * then the key a rotation replaced), so 60 failures is 120 queries a minute:
-   * no more than the old per-IP write bucket. Raise this only with that in mind.
+   * An unknown key costs THREE indexed lookups since P0.11 (the current key,
+   * the key a rotation replaced, then the keys a row has dropped:
+   * RetiredClientToken), so 60 failures is 180 queries a minute: under the old
+   * per-IP read bucket (300). Raise this only with that in mind.
+   *
+   * The edge reads this bucket and the route spends it after its lookups, so
+   * failures sent CONCURRENTLY from one address can each pass the read before
+   * any has been counted: a window admits 60 plus however many are in flight
+   * at once, still under the backstop. Closing that needs an atomic
+   * reserve-and-refund the sliding-window limiter does not offer; spending
+   * before the lookup without one would charge valid keys, the shared-egress
+   * lockout this bucket was narrowed to avoid.
    */
   machineAuthFailure: { limit: 60, windowMs: 60 * 1000 },
   /**

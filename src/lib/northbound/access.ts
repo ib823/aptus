@@ -225,6 +225,7 @@ export async function resolveWritableInterface(
       serviceVerifications: true,
       // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
       createdAt: true,
+      grantMatchChangedAt: true,
     },
   });
 
@@ -369,6 +370,7 @@ export async function resolveReadableInterface(
       serviceVerifications: true,
       // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
       createdAt: true,
+      grantMatchChangedAt: true,
     },
   });
 

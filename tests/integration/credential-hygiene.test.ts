@@ -51,6 +51,9 @@ import { GET as opsTokens } from "@/app/api/ops/tokens/route";
 import { PATCH as patchClients, POST as issueClients } from "@/app/api/studio/clients/route";
 import { keySuggestion, listKeys, listPassport } from "@/lib/coreedge/queries";
 import { authenticateClientToken, hashClientToken } from "@/lib/northbound/auth";
+import { machineAuthFailureKey, noteFailedCredential } from "@/lib/northbound/auth-failures";
+import { peekRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { middleware } from "@/middleware";
 
 const RUN = `p011-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -322,6 +325,77 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("credential hygiene against real
     const third = await issueFor("200");
     expect(third.body.data?.previousValidUntil).not.toBeNull();
     expect(await authOk(String(second.body.data?.token))).toBe(true);
+  });
+
+  /*
+   * Wave 1a final review. A key its row had DROPPED — replaced after a
+   * revocation (the runbook's answer to a leak), pushed out by a second
+   * rotation, or rotated with the overlap off — matched no row and read as
+   * UNKNOWN_TOKEN, which spends the caller ADDRESS's failed-lookup bucket. A
+   * stale deployment or the holder of the leaked key, retrying behind a
+   * shared egress, then had every other tenant's valid key on that address
+   * refused at the edge.
+   */
+  it("3e · a key its row dropped is refused as a known dead key, and never locks out its address", async () => {
+    const leakedApp = await app("Leaked");
+    const first = await issue(leakedApp, "PROD", inDays(30));
+    const leaked = String(first.body.data?.token);
+    const clientId = String(first.body.data?.id);
+    expect((await patch({ clientId, action: "revoke" })).status).toBe(200);
+    expect(await authenticateClientToken(leaked)).toEqual({ ok: false, reason: "REVOKED" });
+    expect((await issue(leakedApp, "PROD", inDays(30))).status).toBe(201);
+    expect(await authenticateClientToken(leaked)).toEqual({ ok: false, reason: "ROTATED_OUT" });
+
+    // Rotated twice: the first key has left both columns.
+    const twiceApp = await app("Twice rotated");
+    const a = await issue(twiceApp, "TEST", inDays(30));
+    const keyA = String(a.body.data?.token);
+    const twiceId = String(a.body.data?.id);
+    await patch({ clientId: twiceId, action: "rotate" });
+    await patch({ clientId: twiceId, action: "rotate" });
+    expect(await authenticateClientToken(keyA)).toEqual({ ok: false, reason: "ROTATED_OUT" });
+
+    // The overlap switched off: the replaced key drops at once.
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    const offApp = await app("No overlap");
+    const o = await issue(offApp, "TEST", inDays(30));
+    const keyO = String(o.body.data?.token);
+    await patch({ clientId: String(o.body.data?.id), action: "rotate" });
+    expect(await authenticateClientToken(keyO)).toEqual({ ok: false, reason: "ROTATED_OUT" });
+    vi.unstubAllEnvs();
+    vi.stubEnv("COREEDGE_STEP_UP", "off");
+
+    // The leaked key retried from a shared egress spends nothing of the address…
+    const ip = "198.51.100.77";
+    const headers = new Headers({ "x-real-ip": ip });
+    for (let i = 0; i < RATE_LIMITS.machineAuthFailure.limit + 10; i++) {
+      const result = await authenticateClientToken(leaked);
+      await noteFailedCredential(headers, leaked, result.ok ? "UNKNOWN_TOKEN" : result.reason);
+    }
+    const left = await peekRateLimit(machineAuthFailureKey(ip), RATE_LIMITS.machineAuthFailure);
+    expect(left?.remaining).toBe(RATE_LIMITS.machineAuthFailure.limit);
+
+    // …so another tenant's valid key from that address passes the edge.
+    const otherApp = await app("Other tenant's app");
+    const valid = String((await issue(otherApp, "TEST", inDays(30))).body.data?.token);
+    const edge = await middleware(
+      new NextRequest("http://localhost/api/northbound/interfaces", {
+        headers: { "x-real-ip": ip, authorization: `Bearer ${valid}` },
+      }),
+    );
+    expect(edge.headers.get("x-middleware-next")).toBe("1");
+
+    // Only the hashes are kept, under their own credential, and they authenticate nothing.
+    const retired = await prisma.retiredClientToken.findMany({
+      where: { organizationId: ORG, clientId: { in: [clientId, twiceId] } },
+      select: { tokenHash: true, clientId: true },
+    });
+    expect(retired).toEqual(
+      expect.arrayContaining([
+        { tokenHash: hashClientToken(leaked), clientId },
+        { tokenHash: hashClientToken(keyA), clientId: twiceId },
+      ]),
+    );
   });
 
   // Review round 2: the old code re-keys a row without writing tokenPrefix, so

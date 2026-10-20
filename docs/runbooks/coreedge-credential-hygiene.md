@@ -20,9 +20,14 @@ default (`COREEDGE_KEY_MAX_TTL_DAYS`):
   for the default lifetime. A rotation may name its own `expiresAt` instead.
 - SANDBOX and DEV keys may still have no expiry. Renewing one keeps its expiry
   unless that date has passed (audit A48).
-- The write key has no expiry of its own; it stops when its runtime key stops.
+- The write key has no expiry of its own; it stops when its credential stops.
   Renewing an expired key (rotate, re-issue or claim link) destroys the old
   write key, as renewing a revoked one does. Issue a new write key afterwards.
+  Renewing a key that is still live (a routine rotation) keeps the write key
+  working, so writes do not fail across the rotation, and that write key then
+  lives as long as the renewed credential. Write keys have no overlap window,
+  so replace one on its own schedule (issuing a new write key stops the old one
+  at once), and revoke the credential if a `cew_` value has leaked.
   `POST /api/studio/clients/write-credential` refuses to issue a write key on a
   TEST or PROD key that has no expiry, and tells the person to rotate first.
 
@@ -154,7 +159,11 @@ deployment never picked up the new key.
    > API Access. That ends the current key, the previous key, and the write key
    on the row.
 2. Issue a new key, or send a claim link, for the lane. A key replaced after a
-   revocation gets no overlap.
+   revocation gets no overlap. The leaked key's hash is kept
+   (`RetiredClientToken`), so calls still made with it are logged as
+   `ROTATED_OUT` against its credential rather than as an unknown key, and do
+   not spend the caller address's failed-lookup budget
+   (`docs/runbooks/coreedge-rate-limits.md`).
 3. If the leak was a write key (`cew_`), step 1 has already destroyed it. Issue
    a new write key once the new runtime key is in place.
 

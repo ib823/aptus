@@ -54,15 +54,22 @@ Nothing that works today stops without an operator choosing it.
   them is older than the grant (the old broker serves it on all of them); one
   that matches none, or only an interface added after it, `NO_MATCH`. Both stay
   unbound and keep the old matching under `legacy`. So a bound grant authorises
-  exactly what it did before: the one interface it ever matched.
+  exactly what it did before: the one interface it ever matched. A pending
+  request carries no traffic, so the "matches today" rule does not apply to it:
+  it is bound to the one interface that matched it when it was raised, even if
+  another was added since, and stays approvable.
 - `COREEDGE_GRANT_BINDING` defaults to `legacy`: an unbound grant keeps the old
   matching, and each call it authorises stamps `unboundLastUsedAt` (at most
   hourly per grant) and logs `[grant-binding] an unbound legacy grant authorised a call`.
 - **Only on interfaces that existed at the deploy.** The migration stamps every
-  grant it leaves unbound with the deploy time (`unboundCutoffAt`). Under
-  `legacy` an unbound grant is honoured only on an interface created by then; a
-  grant the old code created during the rollout (never stamped: `--apply` does
-  not stamp) uses its own creation time instead. An interface added after the
+  grant it leaves unbound with the deploy time, in UTC (`unboundCutoffAt`). Under
+  `legacy` an unbound grant is honoured only on an interface that matched it by
+  then; a grant the old code created during the rollout (never stamped:
+  `--apply` does not stamp) uses its own creation time instead. "Matched by
+  then" counts from the interface's creation or from the last Studio edit that
+  changed its operation or service path (`Interface.grantMatchChangedAt`),
+  whichever is later, so editing an old interface onto an unbound grant's
+  service and operation is treated like adding a new one. An interface added after the
   deploy carried no traffic before it, so this stops nothing that worked; it
   stops an old approval from reaching a new interface, on another SAP system
   say, which is exactly A47. A call there is refused with the re-approval

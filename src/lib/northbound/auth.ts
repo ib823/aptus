@@ -188,6 +188,28 @@ export async function authenticateClientToken(
     previousKeyBound = previous !== null && overlapStillBound(previous);
     row = previous;
   }
+  if (!row) {
+    /*
+     * A KEY THE ROW HAS DROPPED (wave 1a final review): replaced after a
+     * revocation, pushed out by a second rotation, or rotated with the
+     * overlap off. It resolves to its row only to be refused — REVOKED or
+     * INACTIVE if the row is, ROTATED_OUT otherwise, never authenticated —
+     * so it is a real key that refuses, bounded by its own edge bucket, and
+     * not an UNKNOWN_TOKEN spending its caller ADDRESS's failed-lookup
+     * bucket, where one tenant's dead key behind a shared egress locked out
+     * every other tenant's valid key (auth-failures.ts). Only on a miss of
+     * both lookups above, so a live key costs what it did.
+     */
+    const retired = await prisma.retiredClientToken.findUnique({
+      where: { tokenHash },
+      select: { client: { select: AUTH_SELECT } },
+    });
+    if (retired) {
+      viaPreviousKey = true;
+      previousKeyBound = false;
+      row = retired.client;
+    }
+  }
 
   if (!row) return { ok: false, reason: "UNKNOWN_TOKEN" };
   // Revocation is checked before "inactive": a revoked token is a security

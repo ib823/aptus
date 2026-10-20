@@ -12,11 +12,13 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   update: vi.fn(),
   findSolution: vi.fn(),
+  findRetired: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     solutionClient: { findUnique: mocks.findUnique, update: mocks.update },
+    retiredClientToken: { findUnique: mocks.findRetired },
     solution: { findFirst: mocks.findSolution },
   },
 }));
@@ -47,6 +49,7 @@ beforeEach(() => {
   mocks.findUnique.mockResolvedValue(LIVE_ROW);
   mocks.update.mockResolvedValue({});
   mocks.findSolution.mockResolvedValue({ status: "ACTIVE" });
+  mocks.findRetired.mockResolvedValue(null);
 });
 
 /*
@@ -148,6 +151,17 @@ describe("what must not authenticate", () => {
     const r = await authenticateClientToken("ce_nope", NOW);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("UNKNOWN_TOKEN");
+  });
+
+  // Wave 1a final review: a key its row dropped is a dead REAL key, not an
+  // unknown one, so it never spends its caller address's failed-lookup bucket.
+  it("refuses a key its row has dropped as the dead key it is, never as unknown and never as valid", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.findRetired.mockResolvedValue({ client: LIVE_ROW });
+    expect(await authenticateClientToken("ce_dropped", NOW)).toEqual({ ok: false, reason: "ROTATED_OUT" });
+    expect(mocks.findRetired.mock.calls[0]?.[0]?.where).toEqual({ tokenHash: hashClientToken("ce_dropped") });
+    mocks.findRetired.mockResolvedValue({ client: { ...LIVE_ROW, revokedAt: PAST, isActive: false } });
+    expect(await authenticateClientToken("ce_dropped", NOW)).toEqual({ ok: false, reason: "REVOKED" });
   });
 
   it("rejects a REVOKED token", async () => {

@@ -46,6 +46,7 @@ import {
   overlapFields,
   overlapIsOpen,
   resolveKeyExpiry,
+  retiredKeysWrite,
   tokenPrefixFor,
   type KeyExpiryRefusal,
   type KeyExpiryResolution,
@@ -281,6 +282,8 @@ const WRITTEN_SELECT = {
 /** What a key change reads about the key it is about to replace. Server-side only. */
 const REPLACED_SELECT = {
   tokenHash: true,
+  // The key the change pushes out of the overlap slot, recorded as retired.
+  previousTokenHash: true,
   isActive: true,
   revokedAt: true,
   expiresAt: true,
@@ -361,6 +364,7 @@ export async function issueClientToken(
      * immediately". Rotate and claim links keep the binding, so they overlap.
      */
     const replaced = previous !== null && (previous.sapClient ?? null) === sapClient ? previous : null;
+    const overlap = overlapFields(replaced, now, expiresAt, tokenHash);
 
     const written = await tx.solutionClient.upsert({
       // Keyed by (organization, solution, environment), never by solution alone.
@@ -396,7 +400,10 @@ export async function issueClientToken(
         // Over an ended key, or one bound to another SAP client, it writes
         // NO_OVERLAP, so a revoked key never comes back for a day and an old
         // key never reads the new client.
-        ...overlapFields(replaced, now, expiresAt, tokenHash),
+        ...overlap,
+        // Every key the row drops is recorded, binding change or not, so a
+        // call with it is refused as the dead key it is (key-policy.ts).
+        ...retiredKeysWrite(scope.organizationId, previous, overlap, now),
         // Rotation re-states the binding rather than preserving it: the caller
         // just described the credential it wants, and a silently-kept client
         // from a previous issue would be a binding nobody chose.
@@ -472,12 +479,14 @@ export async function rotateClientToken(
 
     const rawToken = generateClientToken(existing.environment);
     const tokenHash = hashClientToken(rawToken);
+    const overlap = overlapFields(existing, now, expiresAt, tokenHash);
     const written = await tx.solutionClient.update({
       where: { id: existing.id, organizationId: scope.organizationId },
       data: {
         tokenHash,
         tokenPrefix: tokenPrefixFor(existing.environment),
-        ...overlapFields(existing, now, expiresAt, tokenHash),
+        ...overlap,
+        ...retiredKeysWrite(scope.organizationId, existing, overlap, now),
         // Rotating an inactive or revoked credential brings it back — that is what
         // "give me a working token" means.
         isActive: true,
@@ -505,7 +514,10 @@ export async function rotateClientToken(
  * and checks `revokedAt` before anything else, so the previous key is refused
  * as REVOKED from the moment this commits; `previousValidUntil` is also closed
  * at `now` so no screen reports an overlap that no longer exists. The hash is
- * kept, so a call with the old key audits as REVOKED rather than UNKNOWN.
+ * kept, so a call with the old key audits as REVOKED rather than UNKNOWN; once
+ * a re-issue replaces it, it is recorded as retired (RetiredClientToken), and
+ * a call with it is still refused as a known key, ROTATED_OUT, never spending
+ * its caller address's failed-lookup bucket.
  *
  * The row is KEPT rather than deleted. A revoked client is the only thing that
  * makes its audit history legible afterwards — delete it and the calls it made

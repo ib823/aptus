@@ -342,6 +342,54 @@ export function overlapFields(
   };
 }
 
+/**
+ * The key hashes a key change DROPS from the row: the current key when it
+ * does not move to `previousTokenHash` (nothing live was replaced, the overlap
+ * is off, or the binding changed), and the previous key the change pushes out.
+ *
+ * Recorded in RetiredClientToken in the same update (`retiredKeysWrite`), so a
+ * call with one still resolves to its row and is refused as REVOKED or
+ * ROTATED_OUT, never as UNKNOWN_TOKEN (wave 1a final review). An unknown key
+ * spends its caller address's failed-lookup bucket; a dead real key retried
+ * behind a shared egress — the leaked key after the runbook's revoke-then-
+ * reissue, a deployment two rotations behind — then locked every other
+ * tenant's valid key on that address out at the edge.
+ */
+export function retiredHashes(
+  replaced: { readonly tokenHash: string; readonly previousTokenHash?: string | null } | null,
+  written: OverlapFields,
+): string[] {
+  if (replaced === null) return [];
+  const dropped = new Set<string>();
+  if (written.previousTokenHash !== replaced.tokenHash) dropped.add(replaced.tokenHash);
+  const previous = replaced.previousTokenHash ?? null;
+  if (previous !== null && previous !== written.previousTokenHash) dropped.add(previous);
+  return [...dropped];
+}
+
+/**
+ * The nested write that records `retiredHashes` on the row being updated, or
+ * nothing when the change drops no key. Spread into the same update as the
+ * overlap fields, so the record and the key change commit together.
+ */
+export function retiredKeysWrite(
+  organizationId: string,
+  replaced: { readonly tokenHash: string; readonly previousTokenHash?: string | null } | null,
+  written: OverlapFields,
+  now: Date,
+): { retiredTokens?: Prisma.RetiredClientTokenUpdateManyWithoutClientNestedInput } {
+  const hashes = retiredHashes(replaced, written);
+  if (hashes.length === 0) return {};
+  return {
+    retiredTokens: {
+      createMany: {
+        data: hashes.map((tokenHash) => ({ tokenHash, organizationId, retiredAt: now })),
+        skipDuplicates: true,
+      },
+    },
+  };
+}
+
 /** Is the previous key still inside its overlap window? */
 export function overlapIsOpen(previousValidUntil: Date | null | undefined, now: Date): boolean {
   return previousValidUntil instanceof Date && previousValidUntil.getTime() > now.getTime();

@@ -49,6 +49,7 @@ import type { User } from "@prisma/client";
 
 import { canRegister } from "@/lib/auth/auth-config";
 import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
+import { isAdminRoleName, mapLegacyRole } from "@/lib/auth/role-migration";
 import { prisma } from "@/lib/db/prisma";
 import { uniqueOrganizationSlug } from "@/lib/org/slug";
 import { checkRateLimit, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
@@ -89,6 +90,52 @@ export function mayCreateDeveloperWorkspace(
   if (domains.length === 0 || domains.includes(domain)) return { allowed: true };
   if (canRegister(email).allowed) return { allowed: true };
   return { allowed: false, reason: "Developer sign-up is not open to this email domain." };
+}
+
+/**
+ * Why a developer workspace may not bring THIS address in, or null when it may
+ * (wave 1a final review).
+ *
+ * THE OFF SWITCH DID NOT REACH INVITATIONS. A sandbox developer's invitation,
+ * accepted, creates an account for an address nobody else vetted, and neither
+ * the invite route nor the accept route asked the sign-up policy. So an
+ * operator who closed sign-up after abuse (and set AUTH_INVITATION_ONLY or a
+ * domain list) still had every existing workspace admitting strangers, and
+ * while sign-up was open its domain list did not bind invitations either.
+ *
+ * An invitation from a workspace now admits only an address the host would
+ * admit by itself: while sign-up is open, the developer sign-up rule
+ * (`mayCreateDeveloperWorkspace`); while it is off, the registration policy
+ * alone (`canRegister`), as the runbook says. Asked when the invitation is
+ * sent, and again when one sent earlier is accepted for a new account, so
+ * closing sign-up also stops what was already in flight. An administrator's
+ * invitation — of any role, a sandbox developer included — is untouched: it
+ * has always been the way past the registration policy. `inviterRole` is null
+ * when the inviter's account is gone, which is read as a workspace's.
+ *
+ * Depends only on the address and the settings, never on whether the address
+ * has an account, so the refusal is no oracle for which addresses exist.
+ */
+export function refuseWorkspaceInvitee(
+  inviterRole: string | null,
+  invitedRole: string,
+  email: string,
+  env: EnvVars = process.env,
+): string | null {
+  if (mapLegacyRole(invitedRole) !== "sandbox_developer") return null;
+  if (inviterRole !== null && (isAdminRoleName(inviterRole) || mapLegacyRole(inviterRole) !== "sandbox_developer")) {
+    return null;
+  }
+  if (developerSignupMode(env) === "open") {
+    const verdict = mayCreateDeveloperWorkspace(email, env);
+    return verdict.allowed
+      ? null
+      : `${verdict.reason ?? "Developer sign-up is not open to this address."} A developer workspace can only invite addresses that could sign up themselves.`;
+  }
+  const verdict = canRegister(email);
+  return verdict.allowed
+    ? null
+    : "Developer sign-up is closed on this host, and this address could not register by itself, so a developer workspace cannot invite it.";
 }
 
 /** Where a developer lands after signing in. Discover is the first minute. */
