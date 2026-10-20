@@ -35,6 +35,7 @@ import {
 } from "@/lib/auth/step-up";
 import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { refuseDecision } from "@/lib/coreedge/authz";
+import { recordGrantDecided } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { bindingForDecision } from "@/lib/studio/grant-binding";
@@ -239,6 +240,9 @@ export async function POST(
     // `decidedIn` is what tells an auditor which door a decision came through.
     after: { ...updated, decidedIn: "coreedge" },
   });
+
+  // Ends this request's approver wait on the time-to-first-call board (P2.12).
+  await recordGrantDecided({ grant, decision: parsed.data.decision, decidedAt, deciderId: user.id });
 
   return NextResponse.json({ data: updated });
 }

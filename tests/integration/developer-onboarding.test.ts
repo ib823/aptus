@@ -30,6 +30,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type * as NextAuthModule from "next-auth";
 import type * as RateLimitModule from "@/lib/security/rate-limit";
+import type * as TddConnectorModule from "@/lib/sap-public/tdd-connector";
 
 const SECRET = "developer-onboarding-test-secret-0123456789";
 
@@ -76,6 +77,16 @@ vi.mock("@/lib/email/brevo", () => ({
   sendEmailToMany: async () => ({ sent: 0, failed: [] }),
 }));
 
+/*
+ * SAP's side of a sandbox read (P2.12): the preview route, its tenant
+ * resolution and its audit row are real; only the request to the API Hub
+ * sandbox is answered here, because tests never reach a live SAP system.
+ */
+vi.mock("@/lib/sap-public/tdd-connector", async (importOriginal) => ({
+  ...(await importOriginal<typeof TddConnectorModule>()),
+  previewSapEntitySet: async () => ({ ok: true, status: 200, rows: [{ PurchaseOrder: "4500000001" }], columns: [] }),
+}));
+
 vi.mock("next-auth", async (importOriginal) => {
   const real = await importOriginal<typeof NextAuthModule>();
   const { decode } = await import("next-auth/jwt");
@@ -99,6 +110,8 @@ import { POST as signup } from "@/app/api/auth/signup/route";
 import { GET as bridge } from "@/app/api/auth/bridge/route";
 import { GET as listMembers, POST as invite } from "@/app/api/organizations/[orgId]/users/route";
 import { POST as acceptInvitation } from "@/app/api/invitations/[token]/accept/route";
+import { GET as preview } from "@/app/api/sap/tdd/preview/route";
+import { loadJourneySummary } from "@/lib/coreedge/journey";
 
 /*
  * NextAuth's request handler, the one its [...nextauth] route wraps. The
@@ -215,6 +228,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a developer onboards on the sha
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.verificationToken.deleteMany({ where: { identifier: { startsWith: RUN } } });
     if (workspaceId) await prisma.orgInvitation.deleteMany({ where: { organizationId: workspaceId } });
+    if (workspaceId) await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: workspaceId } });
     await prisma.decisionLogEntry.deleteMany({ where: { actor: { startsWith: RUN } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     if (workspaceId) await prisma.organization.deleteMany({ where: { id: workspaceId } });
@@ -239,6 +253,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a developer onboards on the sha
     expect(account?.organizationId).toBeTruthy();
     workspaceId = account!.organizationId!;
     developerSession = jar.get(SESSION_COOKIE_NAME)!;
+
+    // Time to first call starts at the moment the workspace exists (P2.12).
+    const started = await prisma.developerJourneyEvent.findMany({ where: { organizationId: workspaceId } });
+    expect(started).toEqual([
+      expect.objectContaining({ kind: "WORKSPACE_CREATED", scopeKey: "workspace", actorUserId: account!.id }),
+    ]);
+    expect(started[0]!.at.getTime()).toBe(account!.createdAt.getTime());
   });
 
   it("3. Studio admits the developer and Discover opens on the sandbox tenant only", async () => {
@@ -310,6 +331,39 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a developer onboards on the sha
     expect(res.status).toBe(200);
     const emails = ((await res.json()) as { data: { email: string }[] }).data.map((u) => u.email).sort();
     expect(emails).toEqual([COLLEAGUE_EMAIL, DEV_EMAIL].sort());
+  });
+
+  it("6b. the developer's first sandbox read ends time to first call, once", async () => {
+    jar.clear();
+    jar.set(SESSION_COOKIE_NAME, developerSession);
+    const read = async () =>
+      preview(
+        new NextRequest(
+          "http://localhost/api/sap/tdd/preview?product=s4hana&tenant=hub&service=purchase-orders&entity=A_PurchaseOrder",
+        ),
+      );
+
+    expect((await read()).status).toBe(200);
+    expect((await read()).status).toBe(200);
+    // The real system the host also declares is refused to a sandbox
+    // developer, and is not a call.
+    const refused = await preview(
+      new NextRequest(
+        "http://localhost/api/sap/tdd/preview?product=s4hana&tenant=tdd&service=purchase-orders&entity=A_PurchaseOrder",
+      ),
+    );
+    expect(refused.status).toBe(403);
+
+    const calls = await prisma.developerJourneyEvent.findMany({
+      where: { organizationId: workspaceId, kind: "FIRST_CALL" },
+    });
+    expect(calls).toEqual([
+      expect.objectContaining({ scopeKey: "call:console:SANDBOX", environment: "SANDBOX", detail: "console" }),
+    ]);
+
+    const summary = await loadJourneySummary(workspaceId);
+    expect(summary.ttfc).toMatchObject({ completed: 1, open: 0, stats: { n: 1 }, verdict: "tooFew" });
+    expect(summary.ttfc.stats.median).toBeGreaterThanOrEqual(0);
   });
 
   /*

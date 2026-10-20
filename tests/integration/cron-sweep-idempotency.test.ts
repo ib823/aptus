@@ -101,6 +101,7 @@ vi.mock("@sentry/nextjs", () => ({ captureMessage: mocks.captureMessage }));
 import { prisma } from "@/lib/db/prisma";
 import { checkAndExpireTrials } from "@/lib/commercial/trial-manager";
 import { sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
+import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 
 // Opt in explicitly; never fall back to an application's DATABASE_URL.
 describe.skipIf(!process.env.TEST_DATABASE_URL)("cron sweeps run twice at once, with no lease", () => {
@@ -224,6 +225,41 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cron sweeps run twice at once, 
         select: { lastValidationStatus: true },
       });
       expect(stored?.lastValidationStatus).toBe("UNAUTHORIZED");
+    });
+
+    it("records a connection's first good probe once, however many sweeps and instances see it (P2.12)", async () => {
+      const organizationId = await org({ subscriptionStatus: "ACTIVE", trialEndsAt: null });
+      const key = `journey-${run}`;
+      const connection = await prisma.sapConnection.create({
+        data: {
+          organizationId,
+          product: "s4hana",
+          key,
+          label: "Acme S/4 TEST",
+          baseUrl: "https://sap.example",
+          authType: "basic",
+          secretsCiphertext: "sealed",
+          environment: "TEST",
+          isActive: true,
+          lastValidationStatus: "UNAUTHORIZED",
+        },
+        select: { id: true },
+      });
+      mocks.resolveSapConnections.mockImplementation(async (o: string) => (o === organizationId ? [{ id: connection.id, key }] : []));
+      mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "OK", durationMs: 5 });
+
+      await Promise.all([sweepConnectionProbes(), sweepConnectionProbes()]);
+      const first = await prisma.developerJourneyEvent.findMany({ where: { organizationId, kind: "CONNECTION_PROBE_OK" } });
+      // A fresh instance remembers nothing; the table still keeps the first.
+      forgetRecordedJourneyMilestones();
+      await sweepConnectionProbes();
+      const after = await prisma.developerJourneyEvent.findMany({ where: { organizationId, kind: "CONNECTION_PROBE_OK" } });
+
+      expect(first).toEqual([
+        expect.objectContaining({ scopeKey: `connection:${connection.id}`, subjectId: connection.id, environment: "TEST" }),
+      ]);
+      expect(after).toHaveLength(1);
+      expect(after[0]!.at.getTime()).toBe(first[0]!.at.getTime());
     });
   });
 });

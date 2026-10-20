@@ -995,6 +995,60 @@ model SapConnectionProbeEvent {
   @@index([connectionId, at])
 }
 
+/// P2.12 — one milestone on a developer's way to a first call, FIRST
+/// OCCURRENCE ONLY.
+///
+/// The time-to-first-call tiles (TTFC: workspace created -> first successful
+/// sandbox or broker call; TTFRC: first real-environment grant request ->
+/// first successful broker call on a real tenant) are computed from these rows
+/// and nothing else (src/lib/coreedge/journey.ts). Each milestone is written
+/// once per `scopeKey`: the unique key below makes a repeat an
+/// `ON CONFLICT DO NOTHING`, so the first time is the one kept, and a retry, a
+/// second instance or another run of the probe sweep cannot move it.
+///
+/// `scopeKey` names what the milestone is the first OF:
+///   workspace                          WORKSPACE_CREATED
+///   solution:<solutionId>              INTERFACE_REGISTERED
+///   grant:<grantId>                    GRANT_REQUESTED, GRANT_DECIDED
+///   key:<solutionId>:<environment>     KEY_ISSUED
+///   connection:<connectionId>          CONNECTION_SAVED, CONNECTION_PROBE_OK
+///   call:<solutionId|console>:<env>    FIRST_CALL
+///
+/// Tenant-anchored (TENANT_ANCHORED_MODELS). Never looked up by a credential,
+/// so it needs no isUnscopedByDesign entry. No backfill: rows start at the
+/// deploy that added the table (docs/runbooks/coreedge-time-to-first-call.md).
+model DeveloperJourneyEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// WORKSPACE_CREATED | INTERFACE_REGISTERED | GRANT_REQUESTED |
+  /// GRANT_DECIDED | KEY_ISSUED | CONNECTION_SAVED | CONNECTION_PROBE_OK |
+  /// FIRST_CALL
+  kind           String
+  /// What this is the first occurrence of; see the table above.
+  scopeKey       String
+  /// The app (Solution) the milestone belongs to, when one does.
+  solutionId     String?
+  /// SANDBOX | DEV | TEST | PROD, when the milestone has one.
+  environment    String?
+  /// The grant, connection, interface or credential row it is about.
+  subjectId      String?
+  /// Who caused it, when a person did. Not a relation: it must outlive the user.
+  actorUserId    String?
+  /// A bounded qualifier: the decision for GRANT_DECIDED, the channel
+  /// ("broker" | "test-console" | "console") for FIRST_CALL.
+  detail         String?
+  /// When it happened: the domain fact's own time (a grant's createdAt, a
+  /// decision's decidedAt), not when this row was written.
+  at             DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, scopeKey])
+  @@index([organizationId, at])
+  @@index([at])
+}
+
 /// One scheduled-job run — the record that a sweep happened at all. Cron
 /// outcomes used to live only in the HTTP response nobody stored, so "did the
 /// reaper run last night?" and "did the probe sweep hit its cap?" had no
@@ -3279,6 +3333,9 @@ model Organization {
 
   // CoreEdge Developer Studio — governed solutions (tenant anchor)
   solutions Solution[]
+
+  // P2.12 — the developer journey (time to first call), first occurrences only
+  developerJourneyEvents DeveloperJourneyEvent[]
 
   // CoreEdge runtime — per-solution client identities
   solutionClients SolutionClient[]

@@ -35,6 +35,8 @@ import {
   unknownTenantMessage,
 } from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
+import { noteFirstCall } from "@/lib/coreedge/journey";
+import { parseSapEnvironment } from "@/lib/sap-public/environment";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
 import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
@@ -190,10 +192,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // it as 502 raised the tenant-errors incident against a healthy tenant.
     // Only its refusals, though: SAP's 429 recorded as 429 raised the
     // 'throttled' incident instead — see answeredReadAuditStatus.
-    await audit(answeredReadAuditStatus(preview.ok, preview.status), preview.rows.length, {
+    const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
+    await audit(auditStatus, preview.rows.length, {
       durationMs: Date.now() - startedAt,
       failureReason: failureReasonFromHttp(preview.status),
     });
+    /*
+     * A SANDBOX READ IS A FIRST CALL (P2.12): it is the first call a sandbox
+     * developer can make at all, so time to first call ends here for them. A
+     * console read of a real system is a person looking, not an app calling,
+     * and is not a milestone.
+     */
+    const readEnvironment = conn ? conn.environment : parseSapEnvironment(tenant.environment);
+    if (viewer.organizationId && readEnvironment === "SANDBOX") {
+      await noteFirstCall({
+        organizationId: viewer.organizationId,
+        solutionId: null,
+        environment: readEnvironment,
+        channel: "console",
+        status: auditStatus,
+        actorUserId: viewer.id,
+      });
+    }
     return NextResponse.json({ data: { ...preview, correlationId } });
   } catch (error) {
     // Do not reflect the raw connector error to the client — it can carry SAP

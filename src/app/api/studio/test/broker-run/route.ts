@@ -24,6 +24,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { noteFirstCall } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth";
@@ -335,6 +336,16 @@ export async function POST(request: NextRequest) {
      * deployed app recorded its code. The data route's own field and log line.
      */
     failureReason: result.failureReason,
+  });
+  // A passing run is the app's first governed call in this environment as
+  // much as the deployed app's would be (P2.12): same pipeline, same key.
+  await noteFirstCall({
+    organizationId: scope.organizationId,
+    solutionId: iface.solutionId,
+    environment: connection.environment ?? client.environment,
+    channel: "test-console",
+    status: httpStatus,
+    actorUserId: user.id,
   });
   if (result.failureReason) {
     console.warn("[studio] broker-run read failed", {

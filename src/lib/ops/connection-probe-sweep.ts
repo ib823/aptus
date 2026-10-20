@@ -21,6 +21,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { sendEmail } from "@/lib/email/brevo";
@@ -214,6 +215,14 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
             source: "cron",
           },
         });
+        // First good probe ends SAP set-up wait (P2.12). Guarded per process,
+        // so a healthy connection costs one no-op insert per instance, ever.
+        await noteConnectionProbe({
+          organizationId,
+          connectionId: row.id,
+          environment: row.environment,
+          status: probe.status,
+        });
 
         if (isDriftTransition(previous, probe.status)) {
           result.transitions.push({ connectionId: row.id, from: previous, to: probe.status });
@@ -302,6 +311,12 @@ export async function probeOneConnection(
       durationMs: probe.durationMs,
       source,
     },
+  });
+  await noteConnectionProbe({
+    organizationId,
+    connectionId: row.id,
+    environment: row.environment,
+    status: probe.status,
   });
   return { outcome: "probed", status: probe.status, detail: probe.detail };
 }

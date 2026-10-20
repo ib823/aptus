@@ -24,6 +24,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { recordGrantDecided } from "@/lib/coreedge/journey";
 import {
   checkStepUp,
   recordStepUpMissing,
@@ -483,6 +484,9 @@ export async function PATCH(request: NextRequest) {
       decidedIn: "control-tower",
     },
   });
+
+  // Ends this request's approver wait on the time-to-first-call board (P2.12).
+  await recordGrantDecided({ grant, decision: input.decision, decidedAt, deciderId: user.id });
 
   return studioOk({
     id: updated.id,

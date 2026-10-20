@@ -37,6 +37,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
 import {
@@ -231,6 +232,16 @@ export async function POST(request: NextRequest) {
     entityId: created.id,
     action: "CREATE",
     after: created,
+  });
+
+  // The app's first interface is a journey milestone (P2.12); later ones are
+  // no-ops. Never fails the registration.
+  await recordJourneyEvent({
+    organizationId,
+    kind: "INTERFACE_REGISTERED",
+    solutionId: solution.id,
+    subjectId: created.id,
+    actorUserId: user.id,
   });
 
   return studioOk(created, 201);

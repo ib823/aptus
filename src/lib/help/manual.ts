@@ -366,6 +366,28 @@ const PROSE: Record<string, ScreenProse> = {
       },
     ],
   },
+
+  "control-tower/journey": {
+    answers:
+      "How long a new developer workspace takes to its first successful call, and an app to its first successful call on a real system, as median and 90th percentile against the roadmap's targets (30 minutes; one business day), with the wait for a real call split into approver, SAP set-up and developer time.",
+    cannotTell: [
+      "Anything before this measure was deployed. There is no backfill: a journey counts only from milestones recorded since.",
+      "Which language or tool a developer used. The consumer type is not recorded, so every first call is judged against 30 minutes, including ABAP on-premise, whose target is 60.",
+      "SAP set-up that happened before a connection was saved in CoreEdge. Waiting for credentials from SAP Basis before the first save counts as developer time.",
+    ],
+    misreadings: [
+      {
+        seeing: "\"at least\" before a median",
+        means:
+          "Some journeys are still open and are counted at their time so far. They can only make the figure larger, so it is a floor until they finish.",
+      },
+      {
+        seeing: "Too few to judge",
+        means:
+          "Fewer than ten journeys in the window. The figures are shown, and the target is not judged until there are ten.",
+      },
+    ],
+  },
 };
 
 export type ManualWorkspace = StudioWorkspace | WorkbenchWorkspace;

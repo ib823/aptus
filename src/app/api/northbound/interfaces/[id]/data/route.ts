@@ -28,6 +28,7 @@
 
 import type { NextRequest } from "next/server";
 
+import { noteFirstCall } from "@/lib/coreedge/journey";
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
@@ -252,6 +253,16 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     // unverified binding: the connection never declared its landscape.
     connectionEnvironment: connection.environment,
     failureReason: result.failureReason,
+  });
+  // The app's first successful call in this environment (P2.12). A set
+  // lookup in memory on every call after this instance's first: no database
+  // round trip is added to the broker's hot path.
+  await noteFirstCall({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    environment: connection.environment ?? client.environment,
+    channel: "broker",
+    status,
   });
 
   // The one place the cause and the correlation id meet. The client keeps the

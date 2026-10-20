@@ -171,3 +171,46 @@ test.describe("CoreEdge · the PR-6 screens", () => {
     });
   }
 });
+
+/**
+ * P2.12 · time to first call, in both themes.
+ *
+ * The CoreEdge board's tiles are covered by the design-system scan above:
+ * that page renders them, computed from sample milestones, so every figure,
+ * target and verdict chip is on it in both themes. (The seeded E2E users have
+ * no organization, so /coreedge/operations would render its "not attached"
+ * branch and scan no tile.)
+ *
+ * Control Tower's screen is scanned here, SCOPED TO THE PAGE'S OWN CONTENT
+ * (`main[data-studio-main]`). The Studio shell around it fails color-contrast
+ * in dark today on every Control Tower screen, /control-tower/usage included:
+ * in `.dark` the rail's --brand-navy becomes a light blue (#8bbcef) under
+ * white text, 1.99:1, and the top bar's tenant chip is 1.66:1. That is the
+ * shell's defect, not this screen's, and it is tracked separately; a
+ * whole-page scan here would fail on it whatever this screen renders.
+ */
+const JOURNEY_ROUTE = "/control-tower/journey";
+
+test.describe("Control Tower · time to first call", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`${JOURNEY_ROUTE} has no serious or critical violations in ${theme}`, async ({ page }) => {
+      if (theme === "dark") {
+        // Seeded before navigation, for the reason the design-system scan gives.
+        await page.addInitScript(() => {
+          window.localStorage.setItem("theme", "dark");
+        });
+      }
+      await page.goto(JOURNEY_ROUTE);
+      await page.waitForLoadState("load");
+      await expect(page.getByRole("heading", { name: "Time to first real call" })).toBeVisible();
+      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+
+      const results = await new AxeBuilder({ page })
+        .include("main[data-studio-main]")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      expect(report(violations)).toBe("");
+    });
+  }
+});
