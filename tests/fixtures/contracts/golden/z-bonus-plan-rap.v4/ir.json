@@ -1,0 +1,190 @@
+{
+  "complexTypes": [],
+  "container": "com.example.zbonusplan.Container",
+  "edmxVersion": "4.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "creatable": true,
+        "deletable": true,
+        "updatable": true
+      },
+      "entityType": "com.example.zbonusplan.BonusPlanType",
+      "name": "BonusPlan",
+      "navigationBindings": [
+        {
+          "path": "_Targets",
+          "target": "BonusTarget"
+        }
+      ]
+    },
+    {
+      "capabilities": {},
+      "entityType": "com.example.zbonusplan.BonusTargetType",
+      "name": "BonusTarget",
+      "navigationBindings": [
+        {
+          "path": "_Plan",
+          "target": "BonusPlan"
+        }
+      ]
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "PlanUUID"
+      ],
+      "label": "Bonus Plan",
+      "name": "BonusPlanType",
+      "navigations": [
+        {
+          "collection": true,
+          "containsTarget": true,
+          "name": "_Targets",
+          "partner": "_Plan",
+          "target": "com.example.zbonusplan.BonusTargetType"
+        }
+      ],
+      "personalData": {
+        "entitySemantics": "DataSubjectDetails"
+      },
+      "properties": [
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "name": "PlanUUID",
+          "nullable": false,
+          "type": "Edm.Guid"
+        },
+        {
+          "maxLength": 40,
+          "name": "PlanName",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Employee",
+          "maxLength": 12,
+          "name": "Employee",
+          "nullable": false,
+          "personalData": {
+            "fieldSemantics": "DataSubjectID",
+            "isPotentiallyPersonal": true
+          },
+          "type": "Edm.String"
+        },
+        {
+          "name": "TargetAmount",
+          "nullable": false,
+          "personalData": {
+            "isPotentiallySensitive": true
+          },
+          "precision": 15,
+          "scale": 2,
+          "type": "Edm.Decimal"
+        },
+        {
+          "maxLength": 5,
+          "name": "Currency",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "name": "ValidFrom",
+          "nullable": false,
+          "type": "Edm.Date"
+        },
+        {
+          "name": "ValidTo",
+          "nullable": true,
+          "type": "Edm.Date"
+        },
+        {
+          "maxLength": "max",
+          "name": "Notes",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "name": "LocalLastChangedAt",
+          "nullable": true,
+          "precision": 7,
+          "type": "Edm.DateTimeOffset"
+        }
+      ],
+      "qualifiedName": "com.example.zbonusplan.BonusPlanType"
+    },
+    {
+      "key": [
+        "PlanUUID",
+        "TargetNo"
+      ],
+      "name": "BonusTargetType",
+      "navigations": [
+        {
+          "collection": false,
+          "name": "_Plan",
+          "nullable": false,
+          "partner": "_Targets",
+          "target": "com.example.zbonusplan.BonusPlanType"
+        }
+      ],
+      "properties": [
+        {
+          "name": "PlanUUID",
+          "nullable": false,
+          "type": "Edm.Guid"
+        },
+        {
+          "name": "TargetNo",
+          "nullable": false,
+          "type": "Edm.Int32"
+        },
+        {
+          "maxLength": 80,
+          "name": "Description",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "name": "Weight",
+          "nullable": false,
+          "precision": 5,
+          "scale": 2,
+          "type": "Edm.Decimal"
+        }
+      ],
+      "qualifiedName": "com.example.zbonusplan.BonusTargetType"
+    }
+  ],
+  "enumTypes": [],
+  "irVersion": 1,
+  "namespaces": [
+    "com.example.zbonusplan"
+  ],
+  "odataVersion": "V4",
+  "operations": [
+    {
+      "bindingType": "com.example.zbonusplan.BonusPlanType",
+      "bound": true,
+      "kind": "action",
+      "name": "Approve",
+      "parameters": [
+        {
+          "name": "_it",
+          "nullable": false,
+          "type": "com.example.zbonusplan.BonusPlanType"
+        }
+      ],
+      "returnType": {
+        "nullable": false,
+        "type": "com.example.zbonusplan.BonusPlanType"
+      }
+    }
+  ]
+}

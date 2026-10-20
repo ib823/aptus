@@ -1,0 +1,142 @@
+{
+  "complexTypes": [],
+  "container": "ZTRAVEL_BOOKING_SRV.ZTRAVEL_BOOKING_SRV_Entities",
+  "dataServiceVersion": "2.0",
+  "edmxVersion": "1.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "addressable": true,
+        "pageable": false
+      },
+      "entityType": "ZTRAVEL_BOOKING_SRV.Booking",
+      "name": "BookingSet"
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "TravelId",
+        "BookingId"
+      ],
+      "name": "Booking",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "Travel ID",
+          "maxLength": 8,
+          "name": "TravelId",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": false
+          },
+          "label": "Booking ID",
+          "maxLength": 4,
+          "name": "BookingId",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Customer",
+          "maxLength": 6,
+          "name": "CustomerId",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Airline",
+          "maxLength": 3,
+          "name": "CarrierId",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "displayFormat": "Date",
+          "label": "Flight Date",
+          "name": "FlightDate",
+          "nullable": false,
+          "precision": 7,
+          "type": "Edm.DateTime"
+        },
+        {
+          "label": "Price",
+          "name": "FlightPrice",
+          "nullable": true,
+          "precision": 16,
+          "scale": 3,
+          "type": "Edm.Decimal"
+        },
+        {
+          "label": "Currency",
+          "maxLength": 5,
+          "name": "CurrencyCode",
+          "nullable": true,
+          "semantics": "currency-code",
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "updatable": true
+          },
+          "label": "Status",
+          "maxLength": 1,
+          "name": "BookingStatus",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Seats",
+          "name": "SeatCount",
+          "nullable": true,
+          "type": "Edm.Byte"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "updatable": false
+          },
+          "label": "Changed At",
+          "name": "ChangedAt",
+          "nullable": true,
+          "precision": 7,
+          "type": "Edm.DateTimeOffset"
+        }
+      ],
+      "qualifiedName": "ZTRAVEL_BOOKING_SRV.Booking"
+    }
+  ],
+  "enumTypes": [],
+  "irVersion": 1,
+  "namespaces": [
+    "ZTRAVEL_BOOKING_SRV"
+  ],
+  "odataVersion": "V2",
+  "operations": [
+    {
+      "entitySet": "BookingSet",
+      "httpMethod": "POST",
+      "kind": "action",
+      "name": "CancelBooking",
+      "parameters": [
+        {
+          "mode": "In",
+          "name": "TravelId",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "mode": "In",
+          "name": "BookingId",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "returnType": {
+        "type": "ZTRAVEL_BOOKING_SRV.Booking"
+      }
+    }
+  ]
+}

@@ -6,17 +6,31 @@
  * integration edge and hands over a contract. There is no in-browser editor and
  * there never should be.
  *
- * v1 renders TEMPLATES from the interface's stored config. It is deliberately not
- * a codegen engine: real generation from a live $metadata document is a later
- * phase, and the honest thing is to produce something small and accurate rather
- * than something elaborate and approximately right. Every artifact says which it
- * is, in the file itself, so nobody mistakes a template for a guarantee.
+ * THE CONTRACT IS COMPILED, WHEN IT CAN BE (P1.3). openapi.json (3.1) and
+ * openapi-3.0.json (3.0.3) come from the Contract Compiler
+ * (lib/contracts/openapi.ts): the record, request and key schemas are
+ * compiled from the service's own description when a verify has recorded one
+ * (a ContractSnapshot), inferred from captured rows when only those exist,
+ * and stated as unknown otherwise. The interface's operation decides the
+ * paths: a read interface gets the read, a create interface the write with
+ * its body. Every artifact says which source it came from, in the file
+ * itself, so nobody mistakes a template for a guarantee.
  *
  * Pure functions: no I/O, no framework, fully testable.
  */
 
+import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
+import { toTypeName } from "@/lib/contracts/names";
+import {
+  buildNorthboundOpenApi,
+  type ContractForDoc,
+  type OpenApiVersion,
+  type SampledSchema,
+} from "@/lib/contracts/openapi";
 import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
 import { FIXTURE_SCENARIOS, stripFixtureEnvelope } from "@/lib/studio/fixtures";
+
+export { toTypeName };
 
 export interface ScaffoldInterface {
   id: string;
@@ -40,226 +54,153 @@ export interface ScaffoldInterface {
    * files, so "not captured" is not mistaken for "nobody ever ran it".
    */
   withheldSchemaNote?: string;
+  /**
+   * READ | WRITE. Omitted, it follows the operation as the interfaces route
+   * derives it: READ reads, anything else writes.
+   */
+  mode?: string;
+  status?: string;
+  /**
+   * The interface's CURRENT compiled contract (P1.3) — a snapshot whose
+   * service and dataset match the interface now (contracts/snapshot.ts).
+   * A METADATA one describes the record precisely and gives a write its
+   * body; a SAMPLED one is the captured schema again, with a version.
+   */
+  compiled?: {
+    semver: string;
+    snapshotId: string;
+    contentHash: string;
+    compiledAt: string;
+    contract: InterfaceContract;
+  };
+  /** Approved, live grants on this interface, for the document's grant notes. */
+  grants?: readonly { operation: string; environment: string }[];
 }
 
-/** A conservative identifier for generated TypeScript. */
-export function toTypeName(raw: string): string {
-  const cleaned = raw
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join("");
-  const safe = /^[0-9]/.test(cleaned) ? `X${cleaned}` : cleaned;
-  return safe.length > 0 ? safe : "CoreEdgeResource";
+/** The mode the interfaces route derives from the operation, when none is given. */
+function modeOf(iface: ScaffoldInterface): string {
+  return iface.mode ?? (iface.operation === "READ" ? "READ" : "WRITE");
+}
+
+/** Which of the three sources the record's shape comes from. */
+function contractForDoc(iface: ScaffoldInterface): ContractForDoc {
+  if (iface.compiled && iface.compiled.contract.source === "METADATA") {
+    return {
+      source: "metadata",
+      contract: iface.compiled.contract,
+      semver: iface.compiled.semver,
+      snapshotId: iface.compiled.snapshotId,
+      contentHash: iface.compiled.contentHash,
+      compiledAt: iface.compiled.compiledAt,
+    };
+  }
+  // A captured schema is emitted as the served rows can satisfy it (it carries
+  // its own provenance in `x-captured`; one captured before the envelope was
+  // stripped is reconciled first — see servedResponseSchema).
+  const served = servedResponseSchema(iface.responseSchema);
+  if (isCapturedSchema(served)) return { source: "sampled", schema: served as unknown as SampledSchema };
+  return iface.withheldSchemaNote ? { source: "none", note: iface.withheldSchemaNote } : { source: "none" };
 }
 
 /**
- * OpenAPI 3.1 for this interface as the NORTHBOUND API exposes it.
+ * OpenAPI for this interface as the NORTHBOUND API exposes it — 3.1.0 by
+ * default (openapi.json), 3.0.3 on request (openapi-3.0.json, for generators
+ * that do not read 3.1 yet).
  *
  * It describes the CoreEdge endpoint the developer's app will call — not SAP's
  * own API. That is the whole value: they code against a stable contract we own,
  * rather than against a tenant-specific SAP surface.
  *
- * All four honest states are documented as responses. An OpenAPI that only
- * describes the happy path teaches consumers to treat everything else as a
- * crash, which is exactly the confusion the honest-status contract exists to
- * prevent.
+ * Every honest state is documented as a response, with every error code the
+ * broker can send at it. An OpenAPI that only describes the happy path teaches
+ * consumers to treat everything else as a crash, which is exactly the
+ * confusion the honest-status contract exists to prevent.
  */
-export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreedge.example/api/northbound"): string {
-  const typeName = toTypeName(iface.entitySet ?? iface.name);
-  const doc = {
-    openapi: "3.1.0",
-    info: {
-      title: `${safeName(iface.name)} — CoreEdge northbound`,
-      version: `1.${iface.version}.0`,
-      description: [
-        `Contract for the CoreEdge interface "${safeName(iface.name)}" (${iface.externalId}) of solution "${safeName(iface.solutionName)}".`,
-        "",
-        "Generated by CoreEdge Developer Studio from the interface's governed configuration.",
-        "This describes the CoreEdge northbound endpoint your application calls — not SAP's own API.",
-        "",
-        "Honest status: an empty result is a 200 with an empty array and MUST be treated as",
-        "'no records', which is different from 'not set up' (403) and from an error (5xx).",
-      ].join("\n"),
-    },
-    servers: [{ url: baseUrl }],
-    security: [{ bearerAuth: [] }],
-    paths: {
-      [`/interfaces/${iface.id}/data`]: {
-        get: {
-          operationId: `read${typeName}`,
-          summary: `Read ${safeName(iface.entitySet ?? iface.name)}`,
-          parameters: [
-            {
-              name: "limit",
-              in: "query",
-              required: false,
-              schema: { type: "integer", minimum: 1, maximum: 100, default: 10 },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Records, or an empty array meaning 'no records' — not an error.",
-              headers: {
-                "x-correlation-id": {
-                  description: "Quote this when raising a support request; it identifies the audit row for this call.",
-                  schema: { type: "string" },
-                },
-                "x-coreedge-interface-status": {
-                  description:
-                    "Present, with the value DRAFT, when the interface is still a draft in Developer Studio. A draft is served — premature is not wrong — but its contract may still change. Absent once the interface is ACTIVE.",
-                  schema: { type: "string", enum: ["DRAFT"] },
-                },
-              },
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["data"],
-                    properties: {
-                      data: {
-                        type: "object",
-                        // Every field the broker sends on a 200, named. `empty`
-                        // is the one that tells a successful read of nothing
-                        // apart from a failure, and it was not in the contract.
-                        required: ["records", "count", "empty", "note", "interface"],
-                        properties: {
-                          records: { type: "array", items: { $ref: `#/components/schemas/${typeName}` } },
-                          count: { type: "integer", description: "records.length." },
-                          empty: {
-                            type: "boolean",
-                            description: "True when the service answered successfully and had nothing to return. This is data, not a failure.",
-                          },
-                          note: { type: "string", description: "A one-line, human-readable account of what came back." },
-                          interface: {
-                            type: "object",
-                            required: ["id", "name", "version"],
-                            properties: {
-                              id: { type: "string" },
-                              name: { type: "string" },
-                              version: { type: "integer", description: "The governed contract version that served this call." },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description:
-                "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry.",
-              content: errorContent(),
-            },
-            "401": { description: "Missing, revoked or expired client token.", content: errorContent() },
-            "403": {
-              description:
-                "Not set up: no approved access grant for this interface in this environment, or the communication arrangement is missing.",
-              content: errorContent(),
-            },
-            "404": {
-              description:
-                "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry.",
-              content: errorContent(),
-            },
-            "429": { description: "Rate limited — this endpoint reaches a live SAP tenant.", content: errorContent() },
-            "5XX": {
-              description:
-                "The tenant or the broker failed: 502 UPSTREAM_ERROR, 504 UPSTREAM_TIMEOUT, or 503 when the broker's rate limiter is unavailable. Distinct from an empty result; retrying may help.",
-              content: errorContent(),
-            },
-          },
-        },
+export function buildOpenApi(
+  iface: ScaffoldInterface,
+  baseUrl = "https://coreedge.example/api/northbound",
+  version: OpenApiVersion = "3.1.0",
+): string {
+  const contract = contractForDoc(iface);
+  const source =
+    contract.source === "metadata"
+      ? `The record shape is COMPILED from the service's own description ($metadata), contract version ${contract.semver}.`
+      : contract.source === "sampled"
+        ? "The record shape is INFERRED from rows this tenant returned (the service's description has not been compiled)."
+        : "The record shape is not described yet: verify the service, or capture a schema in the Test Console, and regenerate.";
+  const doc = buildNorthboundOpenApi({
+    version,
+    baseUrl,
+    title: `${safeName(iface.name)} — CoreEdge northbound`,
+    infoVersion: `1.${iface.version}.0`,
+    description: [
+      `Contract for the CoreEdge interface "${safeName(iface.name)}" (${iface.externalId}) of solution "${safeName(iface.solutionName)}".`,
+      "",
+      "Generated by CoreEdge Developer Studio from the interface's governed configuration.",
+      "This describes the CoreEdge northbound endpoint your application calls — not SAP's own API.",
+      source,
+      "",
+      "Honest status: an empty result is a 200 with an empty array and MUST be treated as",
+      "'no records', which is different from 'not set up' (403) and from an error (5xx).",
+    ].join("\n"),
+    interfaces: [
+      {
+        id: iface.id,
+        name: iface.name,
+        externalId: iface.externalId,
+        sapProduct: iface.sapProduct,
+        operation: iface.operation,
+        mode: modeOf(iface),
+        entitySet: iface.entitySet,
+        version: iface.version,
+        ...(iface.status ? { status: iface.status } : {}),
+        contract,
+        ...(iface.grants ? { grants: iface.grants } : {}),
       },
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          description: "Per-solution client token issued in Developer Studio.",
-        },
-      },
-      schemas: {
-        // Precise WHEN WE HAVE SEEN THE DATA, open when we have not. A captured
-        // schema describes fields this tenant actually returned; without one the
-        // document says so rather than describing fields nobody has observed,
-        // because a confident lie inside a contract file is worse than a gap.
-        [typeName]: describeRecord(iface.responseSchema, iface.withheldSchemaNote),
-        Error: {
-          type: "object",
-          required: ["error"],
-          properties: {
-            error: {
-              type: "object",
-              required: ["code", "message", "correlationId"],
-              properties: {
-                code: { type: "string" },
-                message: { type: "string" },
-                correlationId: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    },
-  };
+    ],
+    safe: safeName,
+  });
   return JSON.stringify(doc, null, 2);
 }
 
-function errorContent() {
-  return { "application/json": { schema: { $ref: "#/components/schemas/Error" } } };
-}
-
 /**
- * The record schema: what this tenant actually returned, or an honest blank.
- *
- * A captured schema is emitted as the served rows can satisfy it (it already
- * carries its own provenance in `x-captured`; one captured before the envelope
- * was stripped is reconciled first — see servedResponseSchema). Without one,
- * the document keeps `additionalProperties: true` and states plainly that no
- * run has happened — a reader can then tell the difference between "this
- * entity has no fields" and "nobody has looked yet".
+ * A compiled property as TypeScript: the WIRE type (see json-schema.ts — a V2
+ * Int64, Decimal or date arrives as a string).
  */
-function describeRecord(stored: unknown, withheldNote?: string): Record<string, unknown> {
-  const responseSchema = servedResponseSchema(stored);
-  if (isCapturedSchema(responseSchema)) {
-    return {
-      ...responseSchema,
-      properties: Object.fromEntries(
-        Object.entries(responseSchema.properties).map(([name, prop]) => [name, toOpenApi31Property(prop)]),
-      ),
-      description:
-        "Fields observed in a live response from this tenant. Additional fields may exist on records outside the sample.",
-    };
+function tsTypeOfCompiled(p: IrProperty, contract: InterfaceContract): string {
+  const v = contract.odataVersion;
+  let base: string;
+  if (contract.complexTypes.some((t) => t.qualifiedName === p.type)) base = "Record<string, unknown>";
+  else if (contract.enumTypes.some((t) => t.qualifiedName === p.type)) {
+    const en = contract.enumTypes.find((t) => t.qualifiedName === p.type)!;
+    base = en.isFlags ? "string" : en.members.map((m) => JSON.stringify(m.name)).join(" | ") || "string";
+  } else {
+    switch (p.type) {
+      case "Edm.Boolean":
+        base = "boolean";
+        break;
+      case "Edm.Byte":
+      case "Edm.SByte":
+      case "Edm.Int16":
+      case "Edm.Int32":
+        base = "number";
+        break;
+      case "Edm.Int64":
+      case "Edm.Decimal":
+      case "Edm.Double":
+      case "Edm.Single":
+        base = v === "V2" ? "string" : "number";
+        break;
+      case "Edm.Untyped":
+      case "Edm.PrimitiveType":
+        base = "unknown";
+        break;
+      default:
+        base = p.type.startsWith("Edm.Geo") ? "Record<string, unknown>" : p.type.startsWith("Edm.") ? "string" : "unknown";
+    }
   }
-  return {
-    type: "object",
-    description: withheldNote
-      ? `No captured response describes this contract, so its fields are not described. ${withheldNote}`
-      : "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
-    additionalProperties: true,
-  };
-}
-
-/**
- * THE DOCUMENT SAYS 3.1.0, SO IT MUST SPEAK 3.1. The captured schema records a
- * null it saw as `nullable: true` — the OpenAPI 3.0 keyword, which 3.1 dropped
- * for JSON Schema's `type: [T, "null"]`. Generators reading a 3.1 document
- * ignore `nullable` silently, so every nullable date came out untyped in the
- * developer's client. The stored form is unchanged (the TypeScript emitter
- * reads it); the translation happens here, at the sink that claims 3.1.
- */
-function toOpenApi31Property(prop: { type?: string; format?: string; nullable?: boolean }): Record<string, unknown> {
-  const { nullable, type, ...rest } = prop;
-  if (!nullable) return type ? { ...rest, type } : rest;
-  // No consistent type observed AND a null: the value may be anything or null.
-  // JSON Schema has no way to say "unknown-or-null" narrower than no type at
-  // all, so the null is recorded in the description rather than invented.
-  if (!type) return { ...rest, description: "Observed as null in the sample; no consistent type otherwise." };
-  return { ...rest, type: [type, "null"] };
+  if (p.collection) return `${base.includes("|") ? `(${base})` : base}[]`;
+  return p.nullable ? `${base} | null` : base;
 }
 
 /** Map a captured JSON-schema type to its TypeScript equivalent. */
@@ -290,7 +231,22 @@ function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
  * field should get a value, not a type error. Optional markers follow the
  * schema as served, as openapi.json does (see servedResponseSchema).
  */
-function buildRecordBody(stored: unknown): string {
+function buildRecordBody(stored: unknown, compiled?: InterfaceContract): string {
+  if (compiled && compiled.source === "METADATA") {
+    // Compiled: every property the service declares. The key is always sent;
+    // anything else may be left out by a $select, so it is optional. The
+    // index signature stays for a customer's extension fields, which arrive
+    // before the next compile does.
+    const key = new Set(compiled.entityType.key);
+    const lines = compiled.entityType.properties.map((p) => {
+      const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.name) ? p.name : JSON.stringify(p.name);
+      const doc = p.label ? `  /** ${safeComment(p.label.replace(/\s+/g, " "))} */\n` : "";
+      return `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled)};`;
+    });
+    lines.push("  /** Fields the compiled description does not name (extension fields added since). */");
+    lines.push("  [field: string]: unknown;");
+    return lines.join("\n");
+  }
   const responseSchema = servedResponseSchema(stored);
   if (!isCapturedSchema(responseSchema)) {
     return "  [field: string]: unknown;";
@@ -332,7 +288,14 @@ export function buildTypeScriptClient(
    * fields, once a schema had been captured. The sentence was true the day it
    * was written and the capture feature did not update it.
    */
-  const shapeNote = isCapturedSchema(iface.responseSchema)
+  const compiled = iface.compiled?.contract.source === "METADATA" ? iface.compiled : undefined;
+  const shapeNote = compiled
+    ? ` * The record type below was COMPILED from the service's own description
+ * ($metadata), contract version ${safeComment(compiled.semver)} (${safeComment(compiled.compiledAt)}). Its
+ * types are the wire types: an OData V2 Int64, Decimal or date arrives as a
+ * string. The key fields are always present; every other field is optional,
+ * because a query may leave it out.`
+    : isCapturedSchema(iface.responseSchema)
     ? ` * The record type below was CAPTURED from ${iface.responseSchema["x-captured"].sampleSize} live row${
         iface.responseSchema["x-captured"].sampleSize === 1 ? "" : "s"
       } this tenant returned
@@ -361,7 +324,7 @@ ${shapeNote}
 
 /** A record as this tenant exposes it. */
 export interface ${typeName} {
-${buildRecordBody(iface.responseSchema)}
+${buildRecordBody(iface.responseSchema, compiled?.contract)}
 }
 
 /** The error envelope every CoreEdge endpoint returns. */
@@ -536,6 +499,7 @@ Your database, your framework, your language: untouched by any of this.
 | File | What it is |
 |---|---|
 | \`openapi.json\` | OpenAPI 3.1 for the northbound endpoint. **This is the portable artifact** — generate a client in any language from it. |
+| \`openapi-3.0.json\` | The same contract in OpenAPI 3.0.3, for generators that do not read 3.1 yet. |
 | \`client.ts\` | A small typed TypeScript client, if that is your stack. |
 | \`demo.mjs\` | A runnable read. Proves the loop end to end. |
 | \`mock.mjs\` + \`fixtures.json\` | An offline CoreEdge, serving responses recorded from real runs. No dependencies. |
@@ -602,7 +566,13 @@ way an integration lies to its users.
 
 - Service: ${inlineCode(iface.externalId)} (${safeName(iface.sapProduct)})
 - Operation: ${safeName(iface.operation)}${iface.entitySet ? `\n- Entity set: ${inlineCode(iface.entitySet)}` : ""}
-- Contract version: v${iface.version}
+- Contract version: v${iface.version}${
+    iface.compiled?.contract.source === "METADATA"
+      ? `\n- Record shape: compiled from the service's own description, contract ${inlineCode(iface.compiled.semver)}`
+      : isCapturedSchema(iface.responseSchema)
+        ? "\n- Record shape: inferred from captured rows (verify the service to compile it from its description)"
+        : "\n- Record shape: not described yet (verify the service, or capture a schema in the Test Console)"
+  }
 `;
 }
 
@@ -718,7 +688,7 @@ function buildFixturesJson(
  * Angle brackets and ampersand only: this must stay readable. A name is still a
  * name after it goes through here.
  */
-function safeName(value: string): string {
+export function safeName(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -1074,6 +1044,7 @@ export function buildScaffold(
   return [
     { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl, withheld) },
     { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
+    { path: "openapi-3.0.json", contents: buildOpenApi(iface, baseUrl, "3.0.3") },
     { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
     { path: ".env.example", contents: buildEnvExample(baseUrl) },
     { path: ".gitignore", contents: buildGitignore() },

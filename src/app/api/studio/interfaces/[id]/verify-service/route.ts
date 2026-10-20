@@ -31,6 +31,14 @@
  *
  * Every outcome is HTTP 200 with the outcome in the data, as the Test Console's
  * broker run does: the screen renders refusals as results, not as errors.
+ *
+ * THE CONTRACT IS COMPILED HERE (P1.3). A verify that succeeds has just read
+ * the whole description, so this is where it becomes the interface's
+ * recorded contract: a ContractSnapshot when the contract is new, and — for a
+ * write interface — the request schema of the body it sends. Never on a
+ * broker call, and never at the verify's expense: a description the compiler
+ * cannot read, or a snapshot that cannot be written, is reported in
+ * `contract` and the verify's verdict stands (lib/contracts/record.ts).
  */
 
 import { Prisma } from "@prisma/client";
@@ -55,6 +63,7 @@ import { isODataVersion } from "@/lib/sap-public/service-path";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { MAX_STORED_ENTITY_SETS, verifyServiceMetadata } from "@/lib/studio/service-verify";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
@@ -106,6 +115,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       odataVersion: true,
       entitySet: true,
       serviceVerifications: true,
+      operation: true,
+      mode: true,
     },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
@@ -186,6 +197,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       boundTo: null,
       bindingRefusal: binding.reason,
       interfaceVersion: iface.version,
+      contract: null,
       correlationId,
     });
   }
@@ -273,6 +285,18 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }
   }
 
+  // Only a verified answer about THIS contract becomes its recorded contract.
+  const contract: ContractOutcome | null = verified
+    ? await recordVerifiedContract({
+        scope,
+        iface,
+        compiled: result.compiled,
+        environment,
+        connectionId: connection.id,
+        actorId: user.id,
+      })
+    : null;
+
   await writeConfigAudit({
     organizationId: scope.organizationId,
     actorId: user.id,
@@ -291,6 +315,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       verified,
       interfaceVersion: iface.version,
       entitySetCount: result.entitySets.length,
+      ...(contract
+        ? {
+            contract:
+              "semver" in contract
+                ? { status: contract.status, snapshotId: contract.snapshotId, semver: contract.semver, bump: contract.bump }
+                : { status: contract.status },
+          }
+        : {}),
     },
   });
 
@@ -317,6 +349,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       bindingUnverified: binding.bindingUnverified,
     },
     interfaceVersion: iface.version,
+    // Additive (P1.3): what became of the compiled contract; null when the
+    // verify did not succeed, so nothing was compiled into one.
+    contract,
     correlationId,
   });
 }

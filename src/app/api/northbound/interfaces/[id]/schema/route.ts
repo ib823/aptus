@@ -17,6 +17,15 @@
  * current version and entity set (contract-provenance.ts), and otherwise says
  * which of the three it is: never captured, captured under an earlier
  * contract, or of a contract that cannot be established.
+ *
+ * THE COMPILED CONTRACT, ADDITIVELY (P1.3). `contract` says where this
+ * interface's contract came from — the service's own description
+ * ("metadata"), sampled rows ("sampled") or nowhere yet ("none") — with its
+ * semantic version and its JSON Schemas (record, create, update, key). It is
+ * read from the snapshot recorded at verification time; nothing is compiled
+ * here. `requestSchema`, null until now because nothing wrote it, is the
+ * compiled body of a write interface's write, served while it describes the
+ * current contract. Every field that was here before means what it meant.
  */
 
 import type { NextRequest } from "next/server";
@@ -39,6 +48,10 @@ import {
   withheldArtifactNote,
 } from "@/lib/studio/contract-provenance";
 import { scopedById } from "@/lib/studio/tenant-scope";
+import { standaloneSchemas } from "@/lib/contracts/json-schema";
+import { toTypeName } from "@/lib/contracts/names";
+import { currentRequestSchema } from "@/lib/contracts/record";
+import { currentContractSnapshot } from "@/lib/contracts/snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +130,28 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   const schemaState = responseSchemaState(iface.responseSchema, iface);
+  const snapshot = await currentContractSnapshot(client.scope, iface);
+  const contract = snapshot
+    ? {
+        source: snapshot.source === "METADATA" ? ("metadata" as const) : ("sampled" as const),
+        semver: snapshot.semver,
+        snapshotId: snapshot.id,
+        contentHash: snapshot.contentHash,
+        odataVersion: snapshot.odataVersion,
+        compiledAt: snapshot.createdAt.toISOString(),
+        schemas: standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet)),
+      }
+    : {
+        // No snapshot: the captured schema (responseSchema, above) is all
+        // there is, or nothing is.
+        source: schemaState === "current" ? ("sampled" as const) : ("none" as const),
+        semver: null,
+        snapshotId: null,
+        contentHash: null,
+        odataVersion: null,
+        compiledAt: null,
+        schemas: null,
+      };
 
   await recordNorthboundCall({
     organizationId: client.organizationId,
@@ -141,7 +176,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       entitySet: iface.entitySet,
       mode: iface.mode,
       version: iface.version,
-      requestSchema: iface.requestSchema,
+      // The compiled write body, while it describes THIS contract (P1.3).
+      requestSchema: currentRequestSchema(iface.requestSchema, iface),
       // Of THIS contract only, and as the served rows can satisfy it: a schema
       // captured before the broker stripped SAP's envelope still requires V2's
       // deferred navigations, which no served row carries (servedResponseSchema).
@@ -156,6 +192,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       ...(schemaState === "stale" || schemaState === "unverified"
         ? { schemaNote: withheldArtifactNote(schemaState, iface) }
         : {}),
+      // Additive (P1.3): the compiled contract and where it came from.
+      contract,
     },
     correlationId,
   );

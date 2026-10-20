@@ -62,6 +62,26 @@ openapi-generator-cli generate -i openapi.json -g java    -o ./client
 Your database, ORM, test framework, and deployment target are not CoreEdge's
 business and it does not try to make them so.
 
+**Verify the service and the contract is compiled from SAP's own description.**
+When an interface's service has been verified in Studio, the kit's record type,
+the create body and the key are compiled from the service's `$metadata` — every
+field with its OData type, length, precision, label and personal-data
+annotation — and carry a semantic version that only moves when the contract
+does (removed or newly required fields are a major version, added optional
+ones a minor, labels and annotations a patch). Before a verify, the shape comes
+from captured rows, and before a capture it is stated as unknown. The kit ships
+the same contract twice: `openapi.json` (OpenAPI 3.1) and `openapi-3.0.json`
+(3.0.3, for generators that do not read 3.1 yet). The whole solution's document
+is under Solutions → Functional → Northbound contract, and
+`GET /interfaces/{id}/schema` adds `contract` (its source, version and JSON
+Schemas) and, for a write interface, `requestSchema`, the body a write sends.
+
+The documents describe the wire format: on an OData V2 service an `Int64`,
+`Decimal` or date arrives as a string (`"/Date(1717171717000)/"`), on V4 as a
+number or an RFC 3339 string. Only the operations CoreEdge serves are drawn as
+paths; `x-coreedge-interfaces[].operations` says which others the service
+allows and when CoreEdge will serve them.
+
 ### Testing offline
 
 ```bash

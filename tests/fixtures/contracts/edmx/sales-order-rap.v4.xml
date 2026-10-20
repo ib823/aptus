@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.3 golden set). Modelled on the SHAPE of an
+  S/4HANA OData V4 service built with RAP (SAP__ aliases, Capabilities records
+  on the container, bound actions, PersonalData terms); every name and value is
+  invented. It is not, and is not copied from, any SAP $metadata document.
+-->
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Org.OData.Core.V1.xml">
+    <edmx:Include Namespace="Org.OData.Core.V1" Alias="SAP__core"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Org.OData.Capabilities.V1.xml">
+    <edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="SAP__capabilities"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/com.sap.vocabularies.Common.v1.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.Common.v1" Alias="SAP__common"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/com.sap.vocabularies.PersonalData.v1.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.PersonalData.v1" Alias="SAP__PersonalData"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/com.sap.vocabularies.UI.v1.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.UI.v1" Alias="SAP__UI"/>
+  </edmx:Reference>
+  <edmx:DataServices>
+    <Schema Namespace="com.example.salesorder" Alias="SAP__self" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EnumType Name="OverallStatus" UnderlyingType="Edm.Byte">
+        <Member Name="Open" Value="0"/>
+        <Member Name="InProcess" Value="1"/>
+        <Member Name="Completed" Value="2"/>
+      </EnumType>
+      <TypeDefinition Name="DocumentNumber" UnderlyingType="Edm.String" MaxLength="10"/>
+      <ComplexType Name="Money">
+        <Property Name="Amount" Type="Edm.Decimal" Precision="15" Scale="2"/>
+        <Property Name="Currency" Type="Edm.String" MaxLength="3"/>
+      </ComplexType>
+      <EntityType Name="SalesOrderType">
+        <Key>
+          <PropertyRef Name="SalesOrder"/>
+        </Key>
+        <Property Name="SalesOrder" Type="SAP__self.DocumentNumber" Nullable="false"/>
+        <Property Name="SalesOrderUUID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="SalesOrderType" Type="Edm.String" Nullable="false" MaxLength="4"/>
+        <Property Name="SoldToParty" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="PurchaseOrderByCustomer" Type="Edm.String" Nullable="false" MaxLength="35"/>
+        <Property Name="RequestedDeliveryDate" Type="Edm.Date"/>
+        <Property Name="TotalNetAmount" Type="Edm.Decimal" Nullable="false" Precision="16" Scale="3"/>
+        <Property Name="NetValue" Type="SAP__self.Money"/>
+        <Property Name="Status" Type="SAP__self.OverallStatus" Nullable="false"/>
+        <Property Name="ItemCount" Type="Edm.Int64" Nullable="false"/>
+        <Property Name="Tags" Type="Collection(Edm.String)" MaxLength="20"/>
+        <Property Name="ContactEmail" Type="Edm.String" MaxLength="241"/>
+        <Property Name="CreatedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="DeliveryTime" Type="Edm.TimeOfDay" Precision="0"/>
+        <Property Name="LastChangedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <NavigationProperty Name="_Item" Type="Collection(SAP__self.SalesOrderItemType)" Partner="_SalesOrder" ContainsTarget="true"/>
+        <NavigationProperty Name="_SoldToParty" Type="SAP__self.CustomerType" Nullable="false">
+          <ReferentialConstraint Property="SoldToParty" ReferencedProperty="Customer"/>
+        </NavigationProperty>
+      </EntityType>
+      <EntityType Name="SalesOrderItemType">
+        <Key>
+          <PropertyRef Name="SalesOrder"/>
+          <PropertyRef Name="SalesOrderItem"/>
+        </Key>
+        <Property Name="SalesOrder" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="SalesOrderItem" Type="Edm.String" Nullable="false" MaxLength="6"/>
+        <Property Name="Material" Type="Edm.String" Nullable="false" MaxLength="40"/>
+        <Property Name="RequestedQuantity" Type="Edm.Decimal" Nullable="false" Precision="15" Scale="3"/>
+        <NavigationProperty Name="_SalesOrder" Type="SAP__self.SalesOrderType" Nullable="false" Partner="_Item"/>
+      </EntityType>
+      <EntityType Name="CustomerType">
+        <Key>
+          <PropertyRef Name="Customer"/>
+        </Key>
+        <Property Name="Customer" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="CustomerName" Type="Edm.String" Nullable="false" MaxLength="80"/>
+      </EntityType>
+      <Action Name="Release" IsBound="true">
+        <Parameter Name="_it" Type="SAP__self.SalesOrderType" Nullable="false"/>
+        <ReturnType Type="SAP__self.SalesOrderType" Nullable="false"/>
+      </Action>
+      <Action Name="SetDeliveryBlock" IsBound="true">
+        <Parameter Name="_it" Type="SAP__self.SalesOrderType" Nullable="false"/>
+        <Parameter Name="BlockReason" Type="Edm.String" Nullable="false" MaxLength="2"/>
+        <ReturnType Type="SAP__self.SalesOrderType" Nullable="false"/>
+      </Action>
+      <Function Name="GetOpenItemCount" IsBound="true">
+        <Parameter Name="_it" Type="Collection(SAP__self.SalesOrderType)" Nullable="false"/>
+        <ReturnType Type="Edm.Int32" Nullable="false"/>
+      </Function>
+      <Action Name="RecalculateAll">
+        <ReturnType Type="Collection(SAP__self.SalesOrderType)" Nullable="false"/>
+      </Action>
+      <EntityContainer Name="Container">
+        <EntitySet Name="SalesOrder" EntityType="SAP__self.SalesOrderType">
+          <NavigationPropertyBinding Path="_Item" Target="SalesOrderItem"/>
+          <NavigationPropertyBinding Path="_SoldToParty" Target="Customer"/>
+        </EntitySet>
+        <EntitySet Name="SalesOrderItem" EntityType="SAP__self.SalesOrderItemType">
+          <NavigationPropertyBinding Path="_SalesOrder" Target="SalesOrder"/>
+        </EntitySet>
+        <EntitySet Name="Customer" EntityType="SAP__self.CustomerType"/>
+        <ActionImport Name="RecalculateAll" Action="SAP__self.RecalculateAll" EntitySet="SalesOrder"/>
+      </EntityContainer>
+      <Annotations Target="SAP__self.Container/SalesOrder">
+        <Annotation Term="SAP__common.Label" String="Sales Order"/>
+        <Annotation Term="SAP__capabilities.SearchRestrictions">
+          <Record>
+            <PropertyValue Property="Searchable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.InsertRestrictions">
+          <Record>
+            <PropertyValue Property="Insertable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.UpdateRestrictions">
+          <Record>
+            <PropertyValue Property="Updatable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.DeleteRestrictions">
+          <Record>
+            <PropertyValue Property="Deletable" Bool="false"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.FilterRestrictions">
+          <Record>
+            <PropertyValue Property="Filterable" Bool="true"/>
+            <PropertyValue Property="NonFilterableProperties">
+              <Collection>
+                <PropertyPath>ContactEmail</PropertyPath>
+                <PropertyPath>Tags</PropertyPath>
+              </Collection>
+            </PropertyValue>
+            <PropertyValue Property="RequiredProperties">
+              <Collection/>
+            </PropertyValue>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.SortRestrictions">
+          <Record>
+            <PropertyValue Property="NonSortableProperties">
+              <Collection>
+                <PropertyPath>Tags</PropertyPath>
+              </Collection>
+            </PropertyValue>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.TopSupported" Bool="true"/>
+        <Annotation Term="SAP__capabilities.SkipSupported" Bool="true"/>
+        <Annotation Term="SAP__capabilities.CountRestrictions">
+          <Record>
+            <PropertyValue Property="Countable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.SelectSupport">
+          <Record>
+            <PropertyValue Property="Supported" Bool="true"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="SAP__self.Container/Customer">
+        <Annotation Term="SAP__capabilities.InsertRestrictions">
+          <Record>
+            <PropertyValue Property="Insertable" Bool="false"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.UpdateRestrictions">
+          <Record>
+            <PropertyValue Property="Updatable" Bool="false"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.DeleteRestrictions">
+          <Record>
+            <PropertyValue Property="Deletable" Bool="false"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType">
+        <Annotation Term="SAP__common.Label" String="Sales Order"/>
+        <Annotation Term="SAP__UI.HeaderInfo">
+          <Record>
+            <PropertyValue Property="TypeName" String="Sales Order"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/SalesOrder">
+        <Annotation Term="SAP__common.Label" String="Sales Order"/>
+        <Annotation Term="SAP__core.Computed"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/SalesOrderUUID">
+        <Annotation Term="SAP__core.Computed" Bool="true"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/SalesOrderType">
+        <Annotation Term="SAP__common.Label" String="Sales Document Type"/>
+        <Annotation Term="SAP__core.Immutable"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/SoldToParty">
+        <Annotation Term="SAP__common.Label" String="Sold-to Party"/>
+        <Annotation Term="SAP__common.QuickInfo" String="Customer who orders"/>
+        <Annotation Term="SAP__common.FieldControl" EnumMember="SAP__common.FieldControlType/Mandatory"/>
+        <Annotation Term="SAP__PersonalData.FieldSemantics" EnumMember="SAP__PersonalData.FieldSemanticsType/DataSubjectID"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/PurchaseOrderByCustomer">
+        <Annotation Term="SAP__common.FieldControl" EnumMember="SAP__common.FieldControlType/Mandatory"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/ContactEmail">
+        <Annotation Term="SAP__common.Label" String="Contact E-Mail"/>
+        <Annotation Term="SAP__PersonalData.IsPotentiallyPersonal" Bool="true"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/CreatedAt">
+        <Annotation Term="SAP__core.Computed"/>
+      </Annotations>
+      <Annotations Target="SAP__self.SalesOrderType/LastChangedAt">
+        <Annotation Term="SAP__core.Computed"/>
+        <Annotation Term="SAP__common.Label" String="Changed At" Qualifier="Short"/>
+      </Annotations>
+      <Annotations Target="SAP__self.Money/Amount">
+        <Annotation Term="SAP__common.Label" String="Amount"/>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

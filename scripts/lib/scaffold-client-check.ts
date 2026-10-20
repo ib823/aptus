@@ -20,6 +20,9 @@ import { join } from "node:path";
 
 import ts from "typescript";
 
+import { compileContract } from "@/lib/contracts/compile";
+import type { InterfaceContract } from "@/lib/contracts/ir";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildTypeScriptClient, type ScaffoldInterface } from "@/lib/studio/scaffold";
 import { inferResponseSchema, type CapturedSchema } from "@/lib/studio/schema-capture";
 
@@ -65,6 +68,43 @@ const LEGACY_SCHEMA: CapturedSchema = {
   "x-captured": { sampleSize: 20, capturedAt: "2026-07-01T00:00:00.000Z", note: "legacy" },
 };
 
+/**
+ * Compiled contracts (P1.3): every type mapping the emitter has, names that
+ * need quoting, a label carrying a comment terminator, enums and complex types.
+ */
+const COMPILED_V2 =
+  '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:sap="http://www.sap.com/Protocols/SAPData">' +
+  '<edmx:DataServices><Schema Namespace="CHK" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">' +
+  '<EntityType Name="T"><Key><PropertyRef Name="BusinessPartner"/></Key>' +
+  '<Property Name="BusinessPartner" Type="Edm.String" Nullable="false" sap:label="Partner */ x"/>' +
+  '<Property Name="Amount" Type="Edm.Decimal" Precision="15" Scale="2"/><Property Name="Big" Type="Edm.Int64"/>' +
+  '<Property Name="Count" Type="Edm.Int32" Nullable="false"/><Property Name="Blocked" Type="Edm.Boolean"/>' +
+  '<Property Name="CreatedAt" Type="Edm.DateTime"/><Property Name="At" Type="Edm.Time"/><Property Name="Id" Type="Edm.Guid"/>' +
+  '<Property Name="Weird-Name" Type="Edm.String"/><Property Name="Rate" Type="Edm.Double"/></EntityType>' +
+  '<EntityContainer Name="C"><EntitySet Name="A_BusinessPartner" EntityType="CHK.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+
+const COMPILED_V4 =
+  '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+  '<Schema Namespace="chk" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+  '<EnumType Name="Status"><Member Name="Open"/><Member Name="Closed"/></EnumType>' +
+  '<EnumType Name="Flags" IsFlags="true"><Member Name="A" Value="1"/></EnumType>' +
+  '<ComplexType Name="Money"><Property Name="Amount" Type="Edm.Decimal"/></ComplexType>' +
+  '<EntityType Name="T"><Key><PropertyRef Name="BusinessPartner"/></Key>' +
+  '<Property Name="BusinessPartner" Type="Edm.String" Nullable="false"/><Property Name="Status" Type="chk.Status"/>' +
+  '<Property Name="Flags" Type="chk.Flags"/><Property Name="Net" Type="chk.Money"/><Property Name="Tags" Type="Collection(Edm.String)"/>' +
+  '<Property Name="States" Type="Collection(chk.Status)"/><Property Name="Big" Type="Edm.Int64"/><Property Name="On" Type="Edm.Date"/>' +
+  '<Property Name="Any" Type="Edm.Untyped"/><Property Name="1stField" Type="Edm.String"/></EntityType>' +
+  '<EntityContainer Name="C"><EntitySet Name="A_BusinessPartner" EntityType="chk.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+
+function compiled(xml: string): NonNullable<ScaffoldInterface["compiled"]> {
+  const r = compileContract(xml);
+  if (!r.ok) throw new Error(`scaffold-client-check: ${r.detail}`);
+  const s = sliceForEntitySet(r.ir, "A_BusinessPartner");
+  if (!s.ok) throw new Error(`scaffold-client-check: ${s.detail}`);
+  const contract: InterfaceContract = s.contract;
+  return { semver: "1.0.0", snapshotId: "snap_check", contentHash: "0".repeat(64), compiledAt: "2026-10-20T00:00:00.000Z", contract };
+}
+
 /** The interfaces whose generated client must compile. */
 export function clientVariants(): { name: string; source: string }[] {
   const captured = inferResponseSchema(sampleRows(25), new Date("2026-10-01T00:00:00.000Z"), {
@@ -89,6 +129,8 @@ export function clientVariants(): { name: string; source: string }[] {
       }),
     },
     { name: "no entity set", source: buildTypeScriptClient({ ...BASE, entitySet: null }) },
+    { name: "compiled contract, V2", source: buildTypeScriptClient({ ...BASE, compiled: compiled(COMPILED_V2) }) },
+    { name: "compiled contract, V4", source: buildTypeScriptClient({ ...BASE, compiled: compiled(COMPILED_V4) }) },
   ];
 }
 

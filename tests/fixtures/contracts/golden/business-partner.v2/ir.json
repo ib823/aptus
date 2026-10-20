@@ -1,0 +1,331 @@
+{
+  "complexTypes": [],
+  "container": "API_PARTNER_DEMO.API_PARTNER_DEMO_Entities",
+  "dataServiceVersion": "2.0",
+  "edmxVersion": "1.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "deletable": false
+      },
+      "entityType": "API_PARTNER_DEMO.A_PartnerType",
+      "label": "Business Partner",
+      "name": "A_Partner"
+    },
+    {
+      "capabilities": {},
+      "entityType": "API_PARTNER_DEMO.A_PartnerAddressType",
+      "name": "A_PartnerAddress"
+    },
+    {
+      "capabilities": {
+        "creatable": false,
+        "deletable": false
+      },
+      "entityType": "API_PARTNER_DEMO.A_CustomerType",
+      "name": "A_Customer"
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "Partner"
+      ],
+      "label": "Business Partner",
+      "name": "A_PartnerType",
+      "navigations": [
+        {
+          "collection": true,
+          "name": "to_Address",
+          "target": "API_PARTNER_DEMO.A_PartnerAddressType"
+        },
+        {
+          "collection": false,
+          "name": "to_Customer",
+          "nullable": true,
+          "target": "API_PARTNER_DEMO.A_CustomerType"
+        }
+      ],
+      "personalData": {
+        "dataSubjectRole": "Business Partner",
+        "entitySemantics": "DataSubject"
+      },
+      "properties": [
+        {
+          "displayFormat": "UpperCase",
+          "label": "Business Partner",
+          "maxLength": 10,
+          "name": "Partner",
+          "nullable": false,
+          "personalData": {
+            "fieldSemantics": "DataSubjectID"
+          },
+          "quickInfo": "Business Partner Number",
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "updatable": false
+          },
+          "label": "BP Category",
+          "maxLength": 1,
+          "name": "PartnerCategory",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "updatable": false
+          },
+          "label": "Name",
+          "maxLength": 81,
+          "name": "PartnerFullName",
+          "nullable": true,
+          "semantics": "name",
+          "type": "Edm.String"
+        },
+        {
+          "label": "First Name",
+          "maxLength": 40,
+          "name": "FirstName",
+          "nullable": true,
+          "personalData": {
+            "isPotentiallyPersonal": true
+          },
+          "semantics": "givenname",
+          "type": "Edm.String"
+        },
+        {
+          "label": "Last Name",
+          "maxLength": 40,
+          "name": "LastName",
+          "nullable": true,
+          "personalData": {
+            "isPotentiallyPersonal": true
+          },
+          "semantics": "familyname",
+          "type": "Edm.String"
+        },
+        {
+          "displayFormat": "Date",
+          "label": "Date of Birth",
+          "name": "BirthDate",
+          "nullable": true,
+          "personalData": {
+            "isPotentiallySensitive": true
+          },
+          "precision": 0,
+          "type": "Edm.DateTime"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "filterable": false,
+            "updatable": false
+          },
+          "label": "BP GUID",
+          "name": "PartnerUUID",
+          "nullable": true,
+          "type": "Edm.Guid"
+        },
+        {
+          "label": "Central Block",
+          "name": "IsBlocked",
+          "nullable": false,
+          "type": "Edm.Boolean"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "updatable": false
+          },
+          "displayFormat": "Date",
+          "label": "Created On",
+          "name": "CreationDate",
+          "nullable": true,
+          "precision": 0,
+          "type": "Edm.DateTime"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "updatable": false
+          },
+          "label": "Created At",
+          "name": "CreationTime",
+          "nullable": true,
+          "precision": 0,
+          "type": "Edm.Time"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "sortable": true,
+            "updatable": false
+          },
+          "label": "Changed On",
+          "name": "LastChangeDateTime",
+          "nullable": true,
+          "precision": 7,
+          "type": "Edm.DateTimeOffset"
+        },
+        {
+          "label": "Credit Limit",
+          "name": "CreditLimit",
+          "nullable": true,
+          "precision": 15,
+          "scale": 2,
+          "type": "Edm.Decimal"
+        },
+        {
+          "label": "Currency",
+          "maxLength": 5,
+          "name": "Currency",
+          "nullable": true,
+          "semantics": "currency-code",
+          "type": "Edm.String"
+        },
+        {
+          "label": "Employees",
+          "name": "EmployeeCount",
+          "nullable": true,
+          "type": "Edm.Int32"
+        },
+        {
+          "capabilities": {
+            "filterable": false,
+            "sortable": false
+          },
+          "label": "External Reference",
+          "name": "ExternalRef",
+          "nullable": true,
+          "type": "Edm.Int64"
+        }
+      ],
+      "qualifiedName": "API_PARTNER_DEMO.A_PartnerType"
+    },
+    {
+      "key": [
+        "Partner",
+        "AddressID"
+      ],
+      "label": "Business Partner Address",
+      "name": "A_PartnerAddressType",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "Business Partner",
+          "maxLength": 10,
+          "name": "Partner",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Address Number",
+          "maxLength": 10,
+          "name": "AddressID",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "City",
+          "maxLength": 40,
+          "name": "CityName",
+          "nullable": true,
+          "semantics": "city",
+          "type": "Edm.String"
+        },
+        {
+          "label": "Street",
+          "maxLength": 60,
+          "name": "StreetName",
+          "nullable": true,
+          "semantics": "street",
+          "type": "Edm.String"
+        },
+        {
+          "label": "Country",
+          "maxLength": 3,
+          "name": "Country",
+          "nullable": true,
+          "semantics": "country",
+          "type": "Edm.String"
+        },
+        {
+          "label": "E-Mail Address",
+          "maxLength": 241,
+          "name": "EmailAddress",
+          "nullable": true,
+          "semantics": "email",
+          "type": "Edm.String"
+        }
+      ],
+      "qualifiedName": "API_PARTNER_DEMO.A_PartnerAddressType"
+    },
+    {
+      "key": [
+        "Customer"
+      ],
+      "label": "Customer",
+      "name": "A_CustomerType",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "Customer",
+          "maxLength": 10,
+          "name": "Customer",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Name of Customer",
+          "maxLength": 80,
+          "name": "CustomerName",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Deletion Flag",
+          "name": "DeletionIndicator",
+          "nullable": true,
+          "type": "Edm.Boolean"
+        }
+      ],
+      "qualifiedName": "API_PARTNER_DEMO.A_CustomerType"
+    }
+  ],
+  "enumTypes": [],
+  "irVersion": 1,
+  "namespaces": [
+    "API_PARTNER_DEMO"
+  ],
+  "odataVersion": "V2",
+  "operations": [
+    {
+      "entitySet": "A_Partner",
+      "httpMethod": "POST",
+      "kind": "action",
+      "label": "Block Business Partner",
+      "name": "BlockPartner",
+      "parameters": [
+        {
+          "mode": "In",
+          "name": "Partner",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "mode": "In",
+          "name": "Reason",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "returnType": {
+        "type": "API_PARTNER_DEMO.A_PartnerType"
+      }
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+/**
+ * The structural diff between two versions of an interface's contract, and the
+ * semantic-version bump it implies.
+ *
+ * THE RULES (a consumer's view: would code written against the old contract
+ * still be right against the new one?):
+ *
+ *   MAJOR — something a consumer relied on is gone or tighter:
+ *     the dataset or key changed; a property, navigation, operation, enum
+ *     member or parameter removed (a rename is a removal plus an addition); a
+ *     type changed; a property became mandatory on create, or a mandatory one
+ *     was added (required-added); nullability changed either way (a reader's
+ *     generated types are non-null, or a writer's null is now refused); a
+ *     length, precision or scale got smaller; a capability withdrawn (no
+ *     longer creatable, updatable, deletable, filterable, sortable,
+ *     addressable, pageable, …) or a filter newly required; a property became
+ *     computed or immutable.
+ *   MINOR — something was added or loosened: an optional property,
+ *     navigation, operation, enum member or optional parameter added; a
+ *     length, precision or scale grew; a capability granted.
+ *   PATCH — only what the contract SAYS about itself changed: labels, quick
+ *     info, semantics, display formats, PersonalData annotations, default
+ *     values, partners, bindings, an entity type's own name.
+ *
+ * A change of SOURCE (sampled rows ↔ $metadata) compares what both can say —
+ * property names — and is major when a property disappears, minor otherwise:
+ * the two descriptions are not comparable field by field, and pretending they
+ * were would turn every first $metadata compile into a "type change".
+ */
+
+import { canonicalJson } from "@/lib/contracts/canonical";
+import type {
+  InterfaceContract,
+  IrEntitySetCapabilities,
+  IrNavigation,
+  IrOperation,
+  IrProperty,
+  IrPropertyCapabilities,
+} from "@/lib/contracts/ir";
+
+export type Bump = "major" | "minor" | "patch";
+
+export interface ContractChange {
+  bump: Bump;
+  /** Where: "property:BirthDate", "entitySet", "operation:Release", … */
+  at: string;
+  /** One plain sentence. */
+  change: string;
+}
+
+export interface ContractDiff {
+  /** null when nothing a consumer can see changed. */
+  bump: Bump | null;
+  changes: ContractChange[];
+}
+
+const RANK: Record<Bump, number> = { patch: 1, minor: 2, major: 3 };
+
+/**
+ * Canonical, so key order never reads as a change: a snapshot read back from
+ * the database is JSONB, which does not keep the order its keys were written in.
+ */
+const canon = (v: unknown): string => canonicalJson(v);
+
+export function diffContracts(prev: InterfaceContract, next: InterfaceContract): ContractDiff {
+  const changes: ContractChange[] = [];
+  const add = (bump: Bump, at: string, change: string) => changes.push({ bump, at, change });
+
+  if (prev.entitySet.name !== next.entitySet.name) {
+    add("major", "entitySet", `The dataset changed from ${prev.entitySet.name} to ${next.entitySet.name}.`);
+  }
+  if (prev.odataVersion !== next.odataVersion) {
+    add("major", "odataVersion", `The service changed from OData ${prev.odataVersion} to ${next.odataVersion}.`);
+  }
+
+  if (prev.source !== next.source) {
+    const nextNames = new Set(next.entityType.properties.map((p) => p.name));
+    for (const p of prev.entityType.properties) {
+      if (!nextNames.has(p.name)) add("major", `property:${p.name}`, `${p.name} is no longer described.`);
+    }
+    add(
+      "minor",
+      "source",
+      next.source === "METADATA"
+        ? "The contract is now compiled from the service's own description instead of sampled rows."
+        : "The contract is now inferred from sampled rows; the service's description could not be read.",
+    );
+    return finish(changes);
+  }
+
+  // Entity set and type.
+  diffSetCapabilities(prev.entitySet.capabilities, next.entitySet.capabilities, add);
+  if ((prev.entitySet.label ?? "") !== (next.entitySet.label ?? "")) add("patch", "entitySet", "The dataset's label changed.");
+  if (canon(prev.entitySet.navigationBindings ?? []) !== canon(next.entitySet.navigationBindings ?? [])) {
+    add("patch", "entitySet", "The dataset's navigation bindings changed.");
+  }
+  if (prev.entityType.qualifiedName !== next.entityType.qualifiedName) {
+    add("patch", "entityType", `The entity type is now called ${next.entityType.qualifiedName}.`);
+  }
+  if ((prev.entityType.label ?? "") !== (next.entityType.label ?? "")) add("patch", "entityType", "The entity type's label changed.");
+  if (canon(prev.entityType.personalData ?? {}) !== canon(next.entityType.personalData ?? {})) {
+    add("patch", "entityType", "The entity type's personal-data annotations changed.");
+  }
+  if (prev.entityType.key.join(",") !== next.entityType.key.join(",")) {
+    add("major", "key", `The key changed from (${prev.entityType.key.join(", ")}) to (${next.entityType.key.join(", ")}).`);
+  }
+  if (prev.entityType.openType !== next.entityType.openType) add("minor", "entityType", "The entity type's openness changed.");
+
+  diffProperties("property", prev.entityType.properties, next.entityType.properties, add);
+  diffNavigations(prev.entityType.navigations, next.entityType.navigations, add);
+
+  // Reachable complex and enum types.
+  const prevComplex = new Map(prev.complexTypes.map((t) => [t.qualifiedName, t]));
+  for (const t of next.complexTypes) {
+    const before = prevComplex.get(t.qualifiedName);
+    if (before) diffProperties(`complexType:${t.name}`, before.properties, t.properties, add);
+  }
+  const prevEnum = new Map(prev.enumTypes.map((t) => [t.qualifiedName, t]));
+  for (const t of next.enumTypes) {
+    const before = prevEnum.get(t.qualifiedName);
+    if (!before) continue;
+    const now = new Map(t.members.map((m) => [m.name, m.value]));
+    for (const m of before.members) {
+      if (!now.has(m.name)) add("major", `enumType:${t.name}`, `The value ${m.name} was removed.`);
+      else if (now.get(m.name) !== m.value) add("major", `enumType:${t.name}`, `The value ${m.name} changed its number.`);
+    }
+    const then = new Set(before.members.map((m) => m.name));
+    for (const m of t.members) if (!then.has(m.name)) add("minor", `enumType:${t.name}`, `The value ${m.name} was added.`);
+  }
+
+  diffOperations(prev.operations, next.operations, add);
+  return finish(changes);
+}
+
+function finish(changes: ContractChange[]): ContractDiff {
+  let bump: Bump | null = null;
+  for (const c of changes) if (bump === null || RANK[c.bump] > RANK[bump]) bump = c.bump;
+  return { bump, changes };
+}
+
+type Add = (bump: Bump, at: string, change: string) => void;
+
+/** Treat "not stated" as allowed: V2's rule for an omitted sap: flag, and the V4 default. */
+function allowed(v: boolean | undefined): boolean {
+  return v !== false;
+}
+
+function diffSetCapabilities(prev: IrEntitySetCapabilities, next: IrEntitySetCapabilities, add: Add): void {
+  const flags: (keyof IrEntitySetCapabilities)[] = [
+    "creatable",
+    "updatable",
+    "deletable",
+    "addressable",
+    "pageable",
+    "topSupported",
+    "skipSupported",
+    "countable",
+    "searchable",
+    "filterable",
+    "sortable",
+    "selectSupported",
+    "expandable",
+  ];
+  for (const f of flags) {
+    const a = prev[f] as boolean | undefined;
+    const b = next[f] as boolean | undefined;
+    if (a === b) continue;
+    if (allowed(a) && !allowed(b)) add("major", "entitySet", `The dataset is no longer ${f}.`);
+    else if (!allowed(a) && allowed(b)) add("minor", "entitySet", `The dataset is now ${f}.`);
+    else add("patch", "entitySet", `The dataset's ${f} flag is now stated differently.`);
+  }
+  if (prev.requiresFilter !== true && next.requiresFilter === true) add("major", "entitySet", "Reading the dataset now requires a filter.");
+  if (prev.requiresFilter === true && next.requiresFilter !== true) add("minor", "entitySet", "Reading the dataset no longer requires a filter.");
+}
+
+function compareFacet(
+  at: string,
+  what: string,
+  a: number | string | undefined,
+  b: number | string | undefined,
+  add: Add,
+): void {
+  if (a === b) return;
+  // "max", "variable", "floating" and an absent facet are unbounded.
+  const num = (v: number | string | undefined) => (typeof v === "number" ? v : Number.POSITIVE_INFINITY);
+  if (num(b) < num(a)) add("major", at, `${what} shrank from ${a ?? "unbounded"} to ${b ?? "unbounded"}.`);
+  else if (num(b) > num(a)) add("minor", at, `${what} grew from ${a ?? "unbounded"} to ${b ?? "unbounded"}.`);
+  else add("patch", at, `${what} is now stated as ${b ?? "unbounded"}.`);
+}
+
+function diffPropertyCapabilities(at: string, a: IrPropertyCapabilities = {}, b: IrPropertyCapabilities = {}, add: Add): void {
+  for (const f of ["creatable", "updatable", "filterable", "sortable"] as const) {
+    if (allowed(a[f]) && !allowed(b[f])) add("major", at, `It is no longer ${f}.`);
+    else if (!allowed(a[f]) && allowed(b[f])) add("minor", at, `It is now ${f}.`);
+  }
+  for (const f of ["computed", "immutable", "requiredInFilter"] as const) {
+    if (a[f] !== true && b[f] === true) add("major", at, `It is now ${f === "requiredInFilter" ? "required in every filter" : f}.`);
+    else if (a[f] === true && b[f] !== true) add("minor", at, `It is no longer ${f === "requiredInFilter" ? "required in every filter" : f}.`);
+  }
+  if (a.mandatory !== true && b.mandatory === true) add("major", at, "It must now be sent on create.");
+  else if (a.mandatory === true && b.mandatory !== true) add("minor", at, "It no longer has to be sent on create.");
+}
+
+function diffProperties(scope: string, prev: readonly IrProperty[], next: readonly IrProperty[], add: Add): void {
+  const before = new Map(prev.map((p) => [p.name, p]));
+  const after = new Map(next.map((p) => [p.name, p]));
+  for (const [name, a] of before) {
+    const at = `${scope}:${name}`;
+    const b = after.get(name);
+    if (!b) {
+      add("major", at, `${name} was removed.`);
+      continue;
+    }
+    if (a.type !== b.type || (a.collection ?? false) !== (b.collection ?? false)) {
+      add("major", at, `Its type changed from ${typeLabel(a)} to ${typeLabel(b)}.`);
+    }
+    if (a.nullable !== b.nullable) {
+      add("major", at, b.nullable ? "It may now be null." : "It may no longer be null.");
+    }
+    compareFacet(at, "Its maximum length", a.maxLength, b.maxLength, add);
+    compareFacet(at, "Its precision", a.precision, b.precision, add);
+    compareFacet(at, "Its scale", a.scale, b.scale, add);
+    diffPropertyCapabilities(at, a.capabilities, b.capabilities, add);
+    for (const f of ["label", "quickInfo", "semantics", "displayFormat", "defaultValue"] as const) {
+      if ((a[f] ?? "") !== (b[f] ?? "")) add("patch", at, `Its ${f} changed.`);
+    }
+    if ((a.fixedLength ?? false) !== (b.fixedLength ?? false)) add("patch", at, "Its fixed-length flag changed.");
+    if (canon(a.personalData ?? {}) !== canon(b.personalData ?? {})) {
+      add("patch", at, "Its personal-data annotations changed.");
+    }
+  }
+  for (const [name, b] of after) {
+    if (before.has(name)) continue;
+    if (b.capabilities?.mandatory === true) add("major", `${scope}:${name}`, `${name} was added and must be sent on create.`);
+    else add("minor", `${scope}:${name}`, `${name} was added.`);
+  }
+}
+
+function typeLabel(p: IrProperty): string {
+  return p.collection ? `Collection(${p.type})` : p.type;
+}
+
+function diffNavigations(prev: readonly IrNavigation[], next: readonly IrNavigation[], add: Add): void {
+  const after = new Map(next.map((n) => [n.name, n]));
+  for (const a of prev) {
+    const at = `navigation:${a.name}`;
+    const b = after.get(a.name);
+    if (!b) add("major", at, `${a.name} was removed.`);
+    else if (a.target !== b.target || a.collection !== b.collection) add("major", at, "Its target or cardinality changed.");
+    else if (
+      (a.nullable ?? null) !== (b.nullable ?? null) ||
+      (a.partner ?? "") !== (b.partner ?? "") ||
+      (a.containsTarget ?? false) !== (b.containsTarget ?? false) ||
+      canon(a.referentialConstraints ?? []) !== canon(b.referentialConstraints ?? [])
+    ) {
+      add("patch", at, "Its partner, containment or constraints changed.");
+    }
+  }
+  const before = new Set(prev.map((n) => n.name));
+  for (const b of next) if (!before.has(b.name)) add("minor", `navigation:${b.name}`, `${b.name} was added.`);
+}
+
+function diffOperations(prev: readonly IrOperation[], next: readonly IrOperation[], add: Add): void {
+  const after = new Map(next.map((o) => [o.name, o]));
+  for (const a of prev) {
+    const at = `operation:${a.name}`;
+    const b = after.get(a.name);
+    if (!b) {
+      add("major", at, `${a.name} was removed.`);
+      continue;
+    }
+    if (a.kind !== b.kind || (a.httpMethod ?? "") !== (b.httpMethod ?? "") || (a.bound ?? false) !== (b.bound ?? false)) {
+      add("major", at, "How it is invoked changed.");
+    }
+    if (canon(a.returnType ?? null) !== canon(b.returnType ?? null)) add("major", at, "Its result changed.");
+    const params = new Map(b.parameters.map((p) => [p.name, p]));
+    for (const p of a.parameters) {
+      const q = params.get(p.name);
+      if (!q) add("major", at, `Its parameter ${p.name} was removed.`);
+      else if (p.type !== q.type || (p.collection ?? false) !== (q.collection ?? false)) add("major", at, `Its parameter ${p.name} changed type.`);
+      else if (p.nullable && !q.nullable) add("major", at, `Its parameter ${p.name} is now required.`);
+    }
+    const had = new Set(a.parameters.map((p) => p.name));
+    for (const q of b.parameters) {
+      if (had.has(q.name)) continue;
+      add(q.nullable ? "minor" : "major", at, `It gained the ${q.nullable ? "optional" : "required"} parameter ${q.name}.`);
+    }
+    if ((a.label ?? "") !== (b.label ?? "")) add("patch", at, "Its label changed.");
+  }
+  const before = new Set(prev.map((o) => o.name));
+  for (const b of next) if (!before.has(b.name)) add("minor", `operation:${b.name}`, `${b.name} was added.`);
+}
+
+/** "1.4.2" + "minor" → "1.5.0"; the first version is 1.0.0. An unreadable previous version reads as 0.0.0. */
+export function nextSemver(previous: string | null, bump: Bump): string {
+  if (previous === null) return "1.0.0";
+  const parts = previous.split(".").map((n) => Number.parseInt(n, 10));
+  const [major, minor, patch] = parts.length === 3 && parts.every((n) => Number.isInteger(n) && n >= 0) ? parts : [0, 0, 0];
+  if (bump === "major") return `${major! + 1}.0.0`;
+  if (bump === "minor") return `${major}.${minor! + 1}.0`;
+  return `${major}.${minor}.${patch! + 1}`;
+}
+
+/** "1.4.2" → [1, 4, 2]; for ordering and the database's unique key. */
+export function semverParts(v: string): [number, number, number] {
+  const parts = v.split(".").map((n) => Number.parseInt(n, 10));
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}

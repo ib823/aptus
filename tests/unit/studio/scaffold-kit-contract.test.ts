@@ -94,13 +94,20 @@ describe("R8 — the contract says exactly what the broker sends", () => {
   const doc = JSON.parse(buildOpenApi(IFACE)) as {
     paths: Record<string, { get: { responses: Record<string, { headers?: Record<string, unknown>; content?: unknown }> } }>;
   };
+  // The compiled document names shared parts once and refers to them (P1.3).
+  const resolve = <T,>(node: T): T => {
+    const ref = (node as { $ref?: string } | null)?.$ref;
+    if (!ref) return node;
+    return resolve(ref.slice(2).split("/").reduce<unknown>((at, key) => (at as Record<string, unknown>)[key], doc) as T);
+  };
   const get = doc.paths["/interfaces/if_po/data"]!.get;
   const ok = get.responses["200"]!;
 
   it("the 200 body names records, count, empty, note and interface — all required", () => {
-    const data = (ok.content as { "application/json": { schema: { properties: { data: { required: string[]; properties: Record<string, unknown> } } } } })[
-      "application/json"
-    ].schema.properties.data;
+    const schema = resolve((ok.content as { "application/json": { schema: unknown } })["application/json"].schema) as {
+      properties: { data: { required: string[]; properties: Record<string, unknown> } };
+    };
+    const data = schema.properties.data;
     expect(data.required.sort()).toEqual(["count", "empty", "interface", "note", "records"]);
     expect(Object.keys(data.properties).sort()).toEqual(["count", "empty", "interface", "note", "records"]);
   });
@@ -108,11 +115,12 @@ describe("R8 — the contract says exactly what the broker sends", () => {
   it("documents the DRAFT header and the correlation id on the 200", () => {
     expect(ok.headers).toHaveProperty("x-coreedge-interface-status");
     expect(ok.headers).toHaveProperty("x-correlation-id");
-    expect(JSON.stringify(ok.headers!["x-coreedge-interface-status"])).toContain("DRAFT");
+    expect(JSON.stringify(resolve(ok.headers!["x-coreedge-interface-status"]))).toContain("DRAFT");
   });
 
   it("documents 400 and 404 beside the states it already documented", () => {
-    expect(Object.keys(get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "429", "5XX"]);
+    // 502, 503 and 504 now each say which code they carry; 5XX is the rest.
+    expect(Object.keys(get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "429", "502", "503", "504", "5XX"]);
     expect(JSON.stringify(get.responses["400"])).toMatch(/no entity set/);
     expect(JSON.stringify(get.responses["404"])).toMatch(/does not belong to the solution|No interface with this id/);
   });

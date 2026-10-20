@@ -1,0 +1,95 @@
+{
+  "complexTypes": [],
+  "container": "YY1_SALESBONUS_CDS.YY1_SALESBONUS_CDS_Entities",
+  "dataServiceVersion": "2.0",
+  "edmxVersion": "1.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "creatable": false,
+        "deletable": false,
+        "requiredFilterProperties": [
+          "FiscalYear"
+        ],
+        "requiresFilter": true,
+        "searchable": true,
+        "updatable": false
+      },
+      "entityType": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType",
+      "label": "Sales Bonus per Employee",
+      "name": "YY1_SALESBONUS"
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "SalesEmployee",
+        "FiscalYear"
+      ],
+      "label": "Sales Bonus",
+      "name": "YY1_SALESBONUSType",
+      "navigations": [],
+      "properties": [
+        {
+          "displayFormat": "UpperCase",
+          "label": "Sales Employee",
+          "maxLength": 10,
+          "name": "SalesEmployee",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "displayFormat": "NonNegative",
+          "label": "Fiscal Year",
+          "maxLength": 4,
+          "name": "FiscalYear",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Employee Name",
+          "maxLength": 80,
+          "name": "SalesEmployeeName",
+          "nullable": true,
+          "personalData": {
+            "isPotentiallyPersonal": true
+          },
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "filterable": false
+          },
+          "label": "Bonus",
+          "name": "BonusAmount",
+          "nullable": true,
+          "precision": 23,
+          "scale": 3,
+          "type": "Edm.Decimal"
+        },
+        {
+          "label": "Currency",
+          "maxLength": 5,
+          "name": "Currency",
+          "nullable": true,
+          "semantics": "currency-code",
+          "type": "Edm.String"
+        },
+        {
+          "label": "Rate",
+          "name": "BonusRate",
+          "nullable": true,
+          "type": "Edm.Double"
+        }
+      ],
+      "qualifiedName": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType"
+    }
+  ],
+  "enumTypes": [],
+  "irVersion": 1,
+  "namespaces": [
+    "YY1_SALESBONUS_CDS"
+  ],
+  "odataVersion": "V2",
+  "operations": []
+}

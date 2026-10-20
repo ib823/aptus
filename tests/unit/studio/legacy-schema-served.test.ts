@@ -47,7 +47,10 @@ vi.mock("@/lib/security/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   RATE_LIMITS: { northbound: {} },
 }));
-vi.mock("@/lib/db/prisma", () => ({ prisma: { interface: { findFirst } } }));
+vi.mock("@/lib/db/prisma", () => ({
+  // No compiled contract (P1.3): the captured schema is all there is.
+  prisma: { interface: { findFirst }, contractSnapshot: { findMany: async () => [] } },
+}));
 
 import { GET as getSchema } from "@/app/api/northbound/interfaces/[id]/schema/route";
 

@@ -1,0 +1,214 @@
+{
+  "json-schema-2020-12": {
+    "create": null,
+    "key": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one YY1_SALESBONUS record.",
+      "properties": {
+        "FiscalYear": {
+          "maxLength": 4,
+          "title": "Fiscal Year",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-sap-display-format": "NonNegative"
+        },
+        "SalesEmployee": {
+          "maxLength": 10,
+          "title": "Sales Employee",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-sap-display-format": "UpperCase"
+        }
+      },
+      "required": [
+        "SalesEmployee",
+        "FiscalYear"
+      ],
+      "title": "Sales Bonus per Employee (key)",
+      "type": "object"
+    },
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A YY1_SALESBONUS record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "BonusAmount": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Bonus",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 23,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "BonusRate": {
+          "format": "double",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Rate",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Double"
+        },
+        "Currency": {
+          "maxLength": 5,
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "FiscalYear": {
+          "maxLength": 4,
+          "title": "Fiscal Year",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-sap-display-format": "NonNegative"
+        },
+        "SalesEmployee": {
+          "maxLength": 10,
+          "title": "Sales Employee",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-sap-display-format": "UpperCase"
+        },
+        "SalesEmployeeName": {
+          "maxLength": 80,
+          "title": "Employee Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          }
+        }
+      },
+      "required": [
+        "SalesEmployee",
+        "FiscalYear"
+      ],
+      "title": "Sales Bonus per Employee",
+      "type": "object",
+      "x-odata-entity-set": "YY1_SALESBONUS",
+      "x-odata-entity-type": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType",
+      "x-odata-key": [
+        "SalesEmployee",
+        "FiscalYear"
+      ]
+    },
+    "update": null
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": null,
+      "key": "YY1SALESBONUS_Key",
+      "record": "YY1SALESBONUS",
+      "update": null
+    },
+    "schemas": {
+      "YY1SALESBONUS": {
+        "additionalProperties": true,
+        "description": "A YY1_SALESBONUS record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "BonusAmount": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Bonus",
+            "type": "string",
+            "x-odata-precision": 23,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "BonusRate": {
+            "format": "double",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Rate",
+            "type": "string",
+            "x-odata-type": "Edm.Double"
+          },
+          "Currency": {
+            "maxLength": 5,
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "FiscalYear": {
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          },
+          "SalesEmployee": {
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          },
+          "SalesEmployeeName": {
+            "maxLength": 80,
+            "nullable": true,
+            "title": "Employee Name",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "title": "Sales Bonus per Employee",
+        "type": "object",
+        "x-odata-entity-set": "YY1_SALESBONUS",
+        "x-odata-entity-type": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType",
+        "x-odata-key": [
+          "SalesEmployee",
+          "FiscalYear"
+        ]
+      },
+      "YY1SALESBONUS_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one YY1_SALESBONUS record.",
+        "properties": {
+          "FiscalYear": {
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          },
+          "SalesEmployee": {
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "title": "Sales Bonus per Employee (key)",
+        "type": "object"
+      }
+    }
+  }
+}

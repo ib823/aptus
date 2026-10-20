@@ -65,6 +65,10 @@ export const TENANT_ANCHORED_MODELS = [
   // Written only nested in that row's own scoped update; read only by hash
   // (UNSCOPED_BY_DESIGN below).
   "RetiredClientToken",
+  // P1.3: an interface's compiled contracts. Every read and write names the
+  // organization (lib/contracts/snapshot.ts); no lookup is by credential, so
+  // nothing here is unscoped by design.
+  "ContractSnapshot",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];
