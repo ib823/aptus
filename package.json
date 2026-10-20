@@ -50,6 +50,7 @@
     "coreedge:registry": "tsx scripts/coreedge/generate-capability-registry.ts",
     "coreedge:figures": "node scripts/coreedge/render-roadmap-figures.mjs",
     "coreedge:check": "tsx scripts/coreedge/generate-capability-registry.ts --check && node scripts/coreedge/render-roadmap-figures.mjs --check",
+    "coreedge:doc-claims": "tsx scripts/coreedge/check-doc-claims.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts tests/e2e/accessibility.coreedge.auth.spec.ts --project=unauthenticated --project=authenticated",
     "test:ci": "vitest run && pnpm test:e2e:chromium",
     "test:full": "vitest run && playwright test",

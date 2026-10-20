@@ -144,7 +144,8 @@ not mean every SAP release has been tested end to end.
   with `POST /api/admin/organizations`. Whether a stranger can sign up there
   depends on that host's registration policy and on `COREEDGE_DEVELOPER_SIGNUP`
   (section 3).
-- A KMS-backed SAP credential key, and key rotation.
+- A KMS-backed SAP credential key. Versioned, rotatable master keys and a re-seal
+  tool exist (P0.10), but the master key is still an environment variable.
 - Writes in the Test Console. Write, discovery and schema calls in the starter kit. An ABAP starter kit.
 
 ---
@@ -226,10 +227,14 @@ Keep them in your secrets manager.
 
 `SAP_CONNECTION_ENCRYPTION_KEY` needs extra care:
 
-- **Back it up together with the database, and never change it once
-  connections exist.** There is no rotation or re-seal tool. With a different
-  key, every stored SAP connection and every write key becomes unreadable
-  (`src/lib/sap-public/connection-crypto.ts:95-103`).
+- **Back it up together with the database, and never simply replace it once
+  connections exist.** With a different key, every stored SAP connection and
+  every write key becomes unreadable (`src/lib/sap-public/connection-crypto.ts`).
+  Changing it is a procedure: since P0.10 the master keys are versioned
+  (`SAP_CONNECTION_ENCRYPTION_KEYS`, `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY`) and
+  `pnpm keys:rotate`, `keys:reseal` and `keys:verify` move the sealed rows
+  (`docs/coreedge/SAP-CONNECTION-KEYSTONE-RUNBOOK.md`, "Procedure: rotate the
+  master key").
 - The key is a plain environment variable. The repository's own runbook says
   that is acceptable for a proof of concept but is not the bar for storing a
   customer's production SAP credentials
@@ -1214,8 +1219,13 @@ The examples assume three people:
 3. Log the HTTP status and `x-correlation-id` for every call.
 4. Provoke and handle the failure cases:
    - Developer B, who is not an owner, rotates the credential in API Access. An
-     owner of the solution cannot (`src/app/api/studio/clients/route.ts:349-352`).
-     The old token must now give 401. Put the new token in your secret store.
+     owner of the solution cannot (`src/app/api/studio/clients/route.ts`).
+     Put the new token in your secret store. The old token keeps working until
+     the rotation overlap closes (24 hours by default; the rotation response
+     gives the time as `previousValidUntil`), then gives 401. To see the 401 at
+     once, run the lab with `COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0`, or revoke
+     the credential (which ends the current and the previous token) and issue a
+     new one.
    - Let the grant expire, or have the platform owner revoke it in Control
      Tower. The call must now give 403. A decided grant cannot be decided again
      (`src/lib/studio/grants.ts:167-173`), so Developer A then requests a new
@@ -1321,10 +1331,10 @@ is logged.
 | Reads | Only `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100. CoreEdge sends SAP only `$top` and `$format=json`. There is no `$filter`, `$select`, key lookup, `$expand` or paging, and `?entity=` is ignored (`src/app/api/northbound/interfaces/[id]/data/route.ts:87`; `src/lib/northbound/read.ts:56, 149, 177`). |
 | Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:177-179`). |
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
-| Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. The middleware also limits per IP: 300 GET and 120 POST per minute on `/api/*`, shared by every caller behind the same egress IP, with its own 429 shape (section 6.2). |
+| Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. On `/api/northbound` the middleware also limits each credential (600 a minute) and each calling address (6,000 a minute, and 60 failed key lookups a minute), answered `RATE_LIMITED_ADDRESS` (section 6.2). A call with no `Authorization` header, and every other `/api/*` route, keeps the per-IP limit of 300 GET and 120 POST a minute. |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
 | Contracts | `requestSchema` is never written, so a write interface has no request contract. |
-| Tokens | A read token issued without an expiry never expires. Grants must have one. |
+| Tokens | A SANDBOX or DEV token issued without an expiry never expires. A TEST or PROD token issued since P0.11 always has one, 90 days at most by default, and a PROD issue without one is refused; an older TEST or PROD token may have none and is shown as "no expiry - set one". Grants must have one. |
 
 ### Product gaps that matter most for an ABAP team
 
@@ -1342,7 +1352,7 @@ is logged.
 9. A screen to create organizations while `WORKBENCH_ONLY` is set. Inviting
    users there is at `/coreedge/members`; creating an organization is
    `POST /api/admin/organizations` (`docs/runbooks/developer-onboarding.md`).
-10. A KMS-backed key with versioning and rotation.
+10. A KMS-backed key. Versioning and rotation exist (P0.10).
 
 ### Who to ask
 
@@ -1580,14 +1590,16 @@ await fetch('/api/admin/organizations/<orgId>/plan', {
 
 In each case the code is what runs.
 
+Two rows were resolved in roadmap item P0.16 by correcting the documents: the
+write-replay rule in `docs/coreedge-developer-guide.md` and the status of
+`docs/coreedge-sap-target-expansion-spec.md`.
+
 | Topic | The documentation says | The code does |
 |---|---|---|
 | Schema setup | `README.md:24` uses `pnpm db:push`. `README.md:39` calls `pnpm build` "what Vercel runs". | Production runs `prisma migrate deploy` inside `vercel-build` (`vercel.json:3`; `package.json:23`) |
 | Connection environment | The form describes the field as free text | Only SANDBOX, DEV, TEST, PROD and their aliases are accepted |
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
-| Write replays | `docs/coreedge-developer-guide.md:289-291` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`). |
 | Read options | The design mock lists `$top`, `$skip`, `$filter` and `$select` | Only `limit` is read |
 | Starter kit OpenAPI | Its 400 description says "pass ?entity=" (`src/lib/studio/scaffold.ts:146`) | `?entity=` is ignored |
-| Target expansion spec | `docs/coreedge-sap-target-expansion-spec.md` says nothing in it has been applied, and that SAML bearer and CSRF are missing | Private, on-premise and ECC products, SAP-client addressing, SAML bearer and CSRF all exist |
 | `SAP_CONTENT_RELEASE`, `EMAIL_SERVER`, `DEFAULT_AI_PROVIDER` | `.env.example` gives defaults of 2602, "alternative to SMTP" and anthropic | The code defaults to 2608, always sends mail through `SMTP_*`, and falls back to OpenAI |
 | Catalogue rebuild | The button warns that rows SAP no longer publishes disappear | The rebuild route contains no delete |

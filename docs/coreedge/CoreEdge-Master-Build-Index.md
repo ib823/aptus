@@ -1,5 +1,11 @@
 # CoreEdge — Master Build Index (PR-0 → Studio → Phase D)
 
+<!-- doc-claims: historical -->
+> **Historical build specification.** Kept for provenance (`docs/coreedge/README.md`): it
+> says what was to be built, as the team understood it then, not what CoreEdge does today.
+> For today, see `docs/coreedge/capability-registry.json` (scored from the code), the roadmap
+> (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`) and `docs/coreedge-developer-guide.md`.
+
 **One control sheet for the whole build.** It orders every PR across the three bibles into a single
 end-to-end sequence, states the model tier and prerequisites for each, and marks the two hard STOP gates.
 It is an **index, not a spec** — each PR's authority is its own bible section (cited). Attach this alongside

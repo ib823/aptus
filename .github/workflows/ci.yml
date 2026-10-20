@@ -87,6 +87,14 @@ jobs:
       - name: CoreEdge capability registry and roadmap figures
         run: pnpm coreedge:check
 
+      # P0.16: the CoreEdge documents (and the CoreEdge code's comments) may not
+      # call a feature the capability registry marks shipped "planned", "not
+      # yet built", "coming soon" and the like. Also fails when a feature's code
+      # anchor in src/lib/coreedge/shipped-features.ts is gone. No database; a
+      # second or two. See docs/runbooks/coreedge-doc-claims.md.
+      - name: CoreEdge documents match the code
+        run: pnpm coreedge:doc-claims
+
       # The broker's governance decision against the decision-table oracle
       # (docs/runbooks/coreedge-governance-decision-table.md), over more than
       # 10,000 generated cases. In-memory, no database; a few seconds. It runs

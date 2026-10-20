@@ -4,7 +4,8 @@
 |---|---|
 | Date | 20 October 2026 |
 | Code baseline | `main` at `33d0ef86`, which includes audit batch 2 (#306) and is deployed to production at https://ab-workbench.vercel.app |
-| In-flight work | Branch `custom-service-path` (head `eeb711bf` after four review rounds: commits `a4dd83d9`, `9ed76ba4`, then the review fixes `bbc9b3c0`, `ac7501b1`, `6c68d996` and `eeb711bf`), based directly on `33d0ef86`, is merged into PR #307 together with this document. Until #307 merges and is deployed, customer-built `Z*`/`YY1_*` services are **not in production**. Where P1.1 (section 8.3) and section 9.2 cite `bbc9b3c0` as the head or give 41 files, they describe the branch before the last review rounds. |
+| In-flight work | Branch `custom-service-path` (head `eeb711bf` after four review rounds: commits `a4dd83d9`, `9ed76ba4`, then the review fixes `bbc9b3c0`, `ac7501b1`, `6c68d996` and `eeb711bf`), based directly on `33d0ef86`, was merged as PR #307 together with this document and is in production. Where P1.1 (section 8.3) and section 9.2 cite `bbc9b3c0` as the head or give 41 files, they describe the branch before the last review rounds. |
+| Delivered since the baseline | P1.1 (#307); Phase 0a (#308: P0.7, P0.9's hosts and Basic warning, P0.10, P0.12, P0.18); Phase 0b wave 1a (PR #310: P0.1, P0.5, P0.11, P0.13); P0.15; P0.16. Each of those items in section 8 carries a **Status** line: what shipped, and the default of any setting that switches it. The problem statements in section 8 describe the code at `33d0ef86` and are kept as written. The "CoreEdge today" columns of section 4 and the "Today" column of section 6 were brought up to date in P0.16, citing paths without line numbers. |
 | Companion data | **In the repository.** The matrix is `docs/coreedge/gap-matrix.json`. It holds the dimensions, the SAP-feasibility tables, Integration Suite's cells (each with a note), the extended model (section 3.11) and each roadmap phase's `cellUpgrades`, listing the items that deliver each upgrade and why. **CoreEdge's cells are generated from the code** (P0.15): `src/lib/coreedge/capability-registry.ts` writes `docs/coreedge/capability-registry.json` (`pnpm coreedge:registry`). The simulator is `scripts/coreedge/simulate-gap-matrix.mjs` (add `--json` for the full results), and `pnpm coreedge:figures` rewrites every simulated table in this document from its output. CI fails when the registry JSON or any of those tables is stale, or when the prose of sections 1 and 3 types a coverage figure outside a generated block (`pnpm coreedge:check`). Every coverage count, percentage, lifecycle count and blocker ranking in sections 1-3, 8 and Appendix B is this output, marked **[simulated]**. See Appendix B. |
 | Readers | The product owner (not from an SAP background) and the engineers who will build CoreEdge |
 | Status | Research and plan. No code was changed to produce the first version. Since P0.15 the simulated figures are regenerated from the code; section 3.0 explains how they differ from the first version. |
@@ -586,7 +587,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 
 | Capability | Integration Suite | Best of breed | CoreEdge today | Target |
 |---|---|---|---|---|
-| SAP cloud systems on the internet | Yes, through receiver adapters [E1] | Yes | Yes, for S/4HANA Cloud Public and SuccessFactors. `sapsf.*` API hosts are missing from the allow-list (`src/lib/studio/sap-host-allowlist.ts:41-53`) | P0.9 adds `sapsf.*` |
+| SAP cloud systems on the internet | Yes, through receiver adapters [E1] | Yes | Yes, for S/4HANA Cloud Public and SuccessFactors; every SuccessFactors API host (`sapsf.*` included) is on the allow-list since P0.9 (`src/lib/studio/sap-host-allowlist.ts`) | Kept |
 | Private networks (RISE, on-premise, ECC) | Cloud Connector (reverse-invoke agent, serves BTP subaccounts only) [E12]; Edge Integration Cell (customer-run Kubernetes) [E11] | Workato on-prem agent: outbound-only, mTLS [E34]; Cloudflare Tunnel [E35] | None. IP literals and `.local`/`.internal` hosts refused (`connection-url-guard.ts:15-33`) | P4.2 CoreEdge Connector: one container, outbound 443, access list held by the customer |
 | Fixed outbound IP | Fixed per BTP region | Static IPs or NAT | None configured in product; production setting unknown [unverified] | P4.4: Vercel Static IPs or Secure Compute [E47, E48], self-host NAT, egress echo |
 | Outbound proxy and custom CA | Supported on Edge Integration Cell | Standard | None; plain `fetch` (`tdd-connector.ts:614-627`) | P4.1 transport layer |
@@ -616,7 +617,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 | Create | Yes | Stripe-style idempotency [E27] | Yes: write key plus mandatory Idempotency-Key, 24-hour replay (`src/lib/northbound/idempotency.ts:33`). Create works in code; not verified live for V2 or V4 (V4 unit-tested only) [R1 §7] | P1.8 live verification of V2 and V4 create |
 | Update and delete with ETag | Yes | Standard | Refused; UPDATE can never be activated (`src/app/api/studio/interfaces/route.ts:259-261`) | P2.4 |
 | Actions, function imports, deep insert, `$batch` | Yes | n/a | None | P2.4 |
-| Customer-built `Z*`/`YY1_*` services | Any endpoint | n/a | Refused (`resolve-hub-service.ts:15-40`); built on branch `custom-service-path` | P1.1 |
+| Customer-built `Z*`/`YY1_*` services | Any endpoint | n/a | Registered by service path and verified from `$metadata` per environment, then read and created through the broker like catalogue services (P1.1, #307; `src/lib/sap-public/service-path.ts`, `interface-service.ts`). No such call is recorded against a live tenant | P1.2 discovery from the tenant's catalogue; P1.8 live verification |
 | Bulk extraction and batch create | Splitter, Aggregator, JMS | n/a | None | P5.9, with budgets under SAP API Policy §2.1 [E17] |
 
 ### 4.4 Mapping and flows
@@ -656,14 +657,14 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 | Capability | Integration Suite | Best of breed | CoreEdge today | Target |
 |---|---|---|---|---|
 | Two-person approval with mandatory expiry | No built-in rule; external approval routing only [E16] | Kong approvals [E31] | **Yes**, stronger: requester and owners cannot approve; every grant must have an expiry (`src/lib/studio/grants.ts:166-286`) | Kept; plus MFA step-up (P0.12) |
-| Grant scope | Product and app | MuleSoft contracts | Not bound to an interface or SAP product (A47, open) | P0.1 |
-| Program identity | API key, OAuth, client certificate service keys | Stripe test/live and restricted keys [E26]; OIDC workload identity [E55] | Static `ce_` key, hashed, shown once; runtime keys, including those holding a write key, may never expire (`src/app/api/studio/clients/route.ts:66,196`; `src/lib/northbound/issue.ts:229,238`); rotation has no overlap | P0.11; P2.5 OAuth; P3.3 workload identity; P4 mTLS |
+| Grant scope | Product and app | MuleSoft contracts | One interface on one SAP product (P0.1, `src/lib/studio/grant-binding.ts`). A grant approved before P0.1 that matched no interface or several is flagged for re-approval and keeps its old matching while `COREEDGE_GRANT_BINDING` is `legacy`, the default | `strict` once `pnpm grants:binding --check` passes |
+| Program identity | API key, OAuth, client certificate service keys | Stripe test/live and restricted keys [E26]; OIDC workload identity [E55] | Static key, hashed, shown once, prefixed `ce_live_` (PROD) or `ce_test_`; TEST and PROD keys expire (90 days at most by default) and rotation overlaps for 24 hours (P0.11, `src/lib/northbound/key-policy.ts`); keys issued earlier may still have no expiry and are flagged | P2.5 OAuth; P3.3 workload identity; P4 mTLS |
 | Policies | 31 prebuilt: quota, spike arrest, IP access control, threat protection, schema validation [E8] | Apigee [E32], Azure APIM [E33] | Fixed 60 calls a minute per key (`src/lib/security/rate-limit.ts:234`) | P3.5 policy packs with shadow replay |
 | Stop switch | Undeploy or revoke per artifact | Per-app kill switch | Per object only: revoke key, revoke grant, retire app, deactivate connection | P3.6 scoped FREEZE, READ_ONLY, THROTTLE |
 | Before-commit governance | Git sync (import, pull and push from the tenant) for iFlows only, GitHub cloud only, PAT per operation [E6, E2]; the CI/CD service's documented flow still uses zip exports [E7] | Pact can-i-deploy [E28]; Spectral lint; MuleSoft API governance [E42] | None | P3.1-P3.3 manifest, CLI, CI identity |
 | Promotion gates | Transport via CTS+ or Cloud TMS | Pact record-deployment | Report only; PROD not gated on TEST (`src/lib/studio/grants.ts:288-296`) | P3.4 |
 | Audit | Message logs 30 days; access logs [E5] | n/a | Per-call row including refusals; retention 7-3,650 days (`src/lib/northbound/retention.ts:57-66`); append-only enforced by a test only; audit writes are best-effort on every path: a failed insert is logged and swallowed (`audit.ts:136-144`), including after a successful SAP create (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:342-394`); no export | P3.10 hash chain, export; P6.4 SIEM |
-| Self-service developer portal | Developer Hub: products, subscriptions, monetization [E66] | Kong Dev Portal [E31] | Onboarding needs API calls or database edits [R2] | P0.13; P2.9; P2.10 |
+| Self-service developer portal | Developer Hub: products, subscriptions, monetization [E66] | Kong Dev Portal [E31] | A developer workspace sign-up with Discover, the catalogue and SANDBOX tenants only (P0.13, `src/lib/auth/developer-workspace.ts`), off unless `COREEDGE_DEVELOPER_SIGNUP=open`; no product pages or subscriptions | P2.9; P2.10 |
 | SAP licensing (Digital Access) | No insight | n/a | Usage counts calls, rows and writes, not document types | P6.6 estimator |
 | SAP API Policy guardrails | n/a | n/a | Catalogue-only resolution matches §1.2 by accident | P3.5 SAP API Controls pack [E17] |
 | Per-person identity and consent | Principal propagation via Cloud Connector | RFC 8693 acting-for [E52] | One communication user per connection for every app: one active connection per organisation, product, environment and client (`SapConnection_active_binding_tuple`, `prisma/schema.prisma:744-753`) | P3.11 (one SAP communication user per app, and a tenant ceiling); P6.5 (per person) |
@@ -676,7 +677,7 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 | External export | Splunk, JSON or OTLP, one target at a time, set up via API call [E14] | Vercel drains | None | P3.10 export; P6.4 SIEM streaming |
 | Alerts | Cloud ALM routes to email, Teams, ServiceNow | PagerDuty | One nightly drift email to platform admins (`src/lib/ops/connection-probe-sweep.ts:47-86`) | P3.7: stored incidents, alerts to app owners |
 | Synthetic checks | Cloud ALM health, every 5 minutes | Postman monitors | Nightly connection probe and lane check (`vercel.json:4-29`) | P3.7: monitors every 5 minutes or less |
-| Custom (`Z`) interfaces | Cloud ALM's AIF message monitoring for S/4HANA Cloud: "ODATA/API messages coming from Z-interfaces are, currently, not visualized in CALM" [E19]; broader Cloud ALM coverage of custom APIs [unverified] | n/a | Not callable yet | P1.1 then P3.7: CoreEdge becomes the monitoring layer for customer-built APIs |
+| Custom (`Z`) interfaces | Cloud ALM's AIF message monitoring for S/4HANA Cloud: "ODATA/API messages coming from Z-interfaces are, currently, not visualized in CALM" [E19]; broader Cloud ALM coverage of custom APIs [unverified] | n/a | Callable through the broker since P1.1 (#307), with the same audit row per call as catalogue services; no monitor of their own | P3.7: CoreEdge becomes the monitoring layer for customer-built APIs |
 | SAP upgrade impact | Upgrade checks for its own Groovy scripts | Stripe API versioning | None. Production shows no deprecation flags: `hubState` is null on all 954 rows [R3] | P0.8; P3.8 upgrade radar |
 
 ### 4.9 Deployment and security
@@ -684,11 +685,11 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 | Capability | Integration Suite | Best of breed | CoreEdge today | Target |
 |---|---|---|---|---|
 | Hosting | SaaS on BTP Cloud Foundry, plus the customer-managed Edge Integration Cell runtime on Kubernetes (FSD §3.10) [E1, E11] | Container or Helm | Vercel only: build steps exist only in `vercel-build` (`package.json:22-23`); no Dockerfile; no `output: 'standalone'` (`next.config.ts`) | P4.5 container image, compose, Helm, Terraform |
-| Secret custody | Keystore with SAP key renewal, 8 credential types [E1] | KMS envelope encryption | AES-256-GCM with per-row binding, but the key is one raw environment variable with no version (`src/lib/sap-public/connection-crypto.ts:93-103`) | P0.10 KMS |
-| Staff sign-in | SAP IAS, BTP roles | OIDC, SAML, SCIM | Magic link to enrol, then optional passkey (WebAuthn) sign-in, which also satisfies MFA (`src/app/api/auth/webauthn/authenticate/verify/route.ts:113-122`; `src/lib/auth/permissions.ts:354-371`). No OIDC or SAML SSO (settings stored, unused). The first user becomes platform admin (`src/lib/auth/auth-options.ts:24-25`). Whether the passkey login screen is reachable under `WORKBENCH_ONLY` is [unverified] | P0.13; P2.9; P4.6 |
-| MFA on governance actions | BTP | Step-up | Not checked on the `/coreedge` layout or the CoreEdge API routes; the Studio and Control Tower layouts do check it [R-coreedge-today, from reading the code, not run] | P0.12 |
-| Tenant isolation | Separate tenants | Postgres row-level security | Guard defaults to "log" in production (`src/lib/db/tenant-guard.ts:93-98`) | P0.12 throw mode |
-| HA and DR | Multi-AZ; 99.95% SLA per SAP's April 2026 monthly update [E67], a non-binding deck; the contractual SLA is per the BTP Supplement [unverified] | n/a | Breaker and token caches are per instance; crons have no lease | P0.18; P4.5 |
+| Secret custody | Keystore with SAP key renewal, 8 credential types [E1] | KMS envelope encryption | AES-256-GCM with per-row binding, under per-organisation data keys and versioned, rotatable master keys (P0.10, `src/lib/sap-public/secret-envelope.ts`; off until `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` is set). The only key provider is `env`, so the master key is an environment variable | A cloud KMS provider (which one is open) |
+| Staff sign-in | SAP IAS, BTP roles | OIDC, SAML, SCIM | Magic link to enrol, then optional passkey (WebAuthn) sign-in, which also satisfies MFA (`src/app/api/auth/webauthn/authenticate/verify/route.ts:113-122`; `src/lib/auth/permissions.ts:354-371`). No OIDC or SAML SSO (settings stored, unused). The first platform admin of a new instance is claimed with a one-time bootstrap token, not by signing in first (P0.13, `src/lib/auth/bootstrap.ts`). Whether the passkey login screen is reachable under `WORKBENCH_ONLY` is [unverified] | P0.13; P2.9; P4.6 |
+| MFA on governance actions | BTP | Step-up | Every governance route calls `requireStepUp` (P0.12, `src/lib/auth/step-up.ts`): a passkey assertion from the last 5 minutes. `COREEDGE_STEP_UP` defaults to `warn`, which lets the action through and records a `STEP_UP_MISSING` audit row | `enforce` once approvers have passkeys and `WEBAUTHN_RP_ID` is settled |
+| Tenant isolation | Separate tenants | Postgres row-level security | Guard defaults to "log" in production (`src/lib/db/tenant-guard.ts`); each violation is counted in `TenantGuardViolation` (P0.12) | `throw` after seven days with no violation recorded |
+| HA and DR | Multi-AZ; 99.95% SLA per SAP's April 2026 monthly update [E67], a non-binding deck; the contractual SLA is per the BTP Supplement [unverified] | n/a | Breaker and token caches are per instance; every cron runs inside a `JobLease` row (P0.18, `src/lib/ops/job-lease.ts`) | P4.5 |
 | Licence for other teams | n/a | n/a | Proprietary, all rights reserved (`LICENSE:8-14`) | P4.8 decision (taken in Phase 0) |
 
 ### 4.10 AI
@@ -829,9 +830,9 @@ Each table compares Integration Suite (IS), the best-of-breed tools, CoreEdge to
 
 | Step | Today | Target |
 |---|---|---|
-| Build | A RAP or `YY1_` service in ADT or the key-user apps; CoreEdge cannot call it on `main` [R1 §3 Point 6] | Same tools |
+| Build | A RAP or `YY1_` service in ADT or the key-user apps; CoreEdge calls it once it is registered by path (P1.1, #307) | Same tools |
 | Expose | Add it to a custom communication scenario | Same; the checklist names the scenario (P2.10) |
-| Register and verify | Only on branch `custom-service-path` | Register (P1.1); verify per environment (`Interface.serviceVerifications`, `bbc9b3c0`) |
+| Register and verify | Register by path and verify per environment (P1.1, `Interface.serviceVerifications`); the path is typed, not discovered | Discovery from the tenant's catalogue (P1.2) |
 | Contract and twin | Schema from sampled rows | Twin from its `$metadata` (P1.3, P1.6) |
 | Transport | Not tracked | DEV -> TEST -> PROD, re-verified on each, with a P3.4 gate "service verified on the target environment"; contract diffs on the `Z` service (P3.8) |
 
@@ -873,10 +874,10 @@ The product owner asked that "the external program connected is also being contr
 | Verb | What it means | Today (evidence) | Gap | Target |
 |---|---|---|---|---|
 | **Identify** | Know which program is calling, which build it is, and on whose behalf | One static `ce_` key per solution per environment (`src/lib/northbound/auth.ts:25-37`; unique per org, solution and environment in `prisma/schema.prisma:1128-1160`) | No proof of possession; no build identity; no end user; no source IP in audit | Manifest (P3.1); OAuth with `private_key_jwt` (P2.5); CI workload identity (P3.3); build header (P3.1); acting-for `sub`/`act` (P6.5); source IP in audit (P3.10); DPoP-bound tokens for proof of possession (P2.5) |
-| **Approve** | A second person decides on evidence, for a limited time | Two-person rule, mandatory expiry, write checklist, owners cannot issue their own keys (`src/lib/studio/grants.ts:166-286`; `src/app/api/studio/clients/route.ts:156-176`) | Not bound to interface or product (A47); departed owners count (A69); no MFA step-up; PROD not gated on TEST | P0.1, P0.12; promotion gates on evidence (P3.4); quarterly recertification (P6.4) |
+| **Approve** | A second person decides on evidence, for a limited time | Two-person rule, mandatory expiry, write checklist, owners cannot issue their own keys (`src/lib/studio/grants.ts:166-286`; `src/app/api/studio/clients/route.ts:156-176`) | Grants approved before P0.1 keep their old matching while `COREEDGE_GRANT_BINDING` is `legacy` (the default); step-up only warns while `COREEDGE_STEP_UP` is `warn` (the default); PROD not gated on TEST | Switch both to refuse (`strict`, `enforce`); promotion gates on evidence (P3.4); quarterly recertification (P6.4) |
 | **Contain** | Limit what the program can do and stop it at once | 60 calls a minute per key; revoke key or grant; retire app (`src/lib/security/rate-limit.ts:234`) | No quotas, budgets, field scope, IP ranges or time windows; no scoped stop switch; breaker not wired | Field grants (P1.5); policy packs (P3.5); FREEZE, READ_ONLY and THROTTLE by scope with dual control (P3.6); graded automatic response (P6.3) |
 | **Monitor** | See behaviour and tell the owners | Audit row per call; 10 incident rules computed when a page loads; nightly lane checks | No stored incidents; alerts go only to platform admins; no traces | Monitors, OpenTelemetry, owner alerts (P3.7); behavioural baselines (P6.3) |
-| **Prove** | Show an auditor what was allowed, by whom, and what happened | ConfigAudit and NorthboundAuditEvent; retention configurable | Append-only by test only; no hash chain, export or SIEM; audit writes best-effort on every path (`audit.ts:136-144`), including after a successful SAP create; Workbench write-back unaudited | Hash chain plus daily anchors, export, fail-closed writes (P3.10); SIEM, evidence packs, access reviews (P6.4) |
+| **Prove** | Show an auditor what was allowed, by whom, and what happened | ConfigAudit and NorthboundAuditEvent; retention configurable | Append-only by test only; no hash chain, export or SIEM; audit writes best-effort on every broker path (`audit.ts`), including after a successful SAP create. Workbench write-backs are audited fail-closed before SAP is called (P0.7) | Hash chain plus daily anchors, export, fail-closed writes (P3.10); SIEM, evidence packs, access reviews (P6.4) |
 
 **A program's life under governance (target).**
 1. The team commits `coreedge.yaml`. It declares the interfaces, fields, operations, budgets, networks and whether the program is an AI agent.
@@ -943,17 +944,17 @@ SAP's 2018 Digital Access paper [E18] says middleware does not count as an SAP a
 | Component | Builds on | First change |
 |---|---|---|
 | Pipeline | The inline sequence in `src/app/api/northbound/interfaces/[id]/data/route.ts:52-227`, repeated in `data/write/route.ts` and `src/app/api/studio/test/broker-run/route.ts` | P0.14 extracts it with no behaviour change |
-| Service registry | Branch `custom-service-path`: `interface-service.ts`, `service-path.ts`, the verify-service route | P1.1 |
+| Service registry | `interface-service.ts`, `service-path.ts`, the verify-service route (P1.1, merged in #307) | P1.2 adds discovery from the tenant's catalogue |
 | Transports | The `fetchImpl` parameter that already exists; `sapFetch` (`tdd-connector.ts:614-628`) and `ariba-connector.ts` bypass it | P0.14 adds a minimal `Transport` and `SapConnection.transport` (direct, twin); P4.1 adds the dispatcher, the connector and the console paths |
-| Grants | `ApiAccessGrant` (`prisma/schema.prisma:1012-1047`) | Adds `interfaceId`, `sapProduct` (P0.1), then `fieldScope`, `manifestVersionId`, `direction` |
-| Keys | `src/lib/sap-public/connection-crypto.ts:93-103` | P0.10 KeyProvider (encrypt, sign, JWKS) |
+| Grants | `ApiAccessGrant` (`prisma/schema.prisma`), bound to `interfaceId` and `sapProduct` since P0.1 | Adds `fieldScope`, `manifestVersionId`, `direction` |
+| Keys | `src/lib/sap-public/connection-crypto.ts`, and since P0.10 `secret-envelope.ts` and the `KeyProvider` (`src/lib/sap-public/keys/`), whose only provider is `env` | A cloud KMS provider; `sign` and JWKS for P1.4, P2.5 and P3.10 |
 | Policy | `src/lib/security/rate-limit.ts`, `src/lib/studio/data-class.ts`, `src/lib/northbound/access.ts` | P3.5 TypeScript evaluator; Cedar only after a latency benchmark |
 | Lab | `TestCase`, `MockFixture`, `broker-run/route.ts`, `src/lib/ops/lane-check-sweep.ts` | P2.1 |
 | Unused modules already built | `circuit-breaker.ts`, `src/lib/sap-public/rotation.ts`, `src/lib/coreedge/correlation-lookup.ts`, `src/lib/coreedge/service-health.ts`: none is imported outside its tests | P0.14 wires them |
 
 ### 7.3 Design principles
 
-1. **One governed pipeline, no side doors.** Every entry point runs the same ordered steps and writes the same evidence. An entry point that cannot use the pipeline does not ship. Today the Workbench write-back writes no audit row (`src/app/api/sap/tdd/write/route.ts`; fixed by P0.7). Workbench console routes also reach SAP outside the pipeline: preview, entities, operations, capabilities and the catalogue probes write a console audit row (`src/lib/sap-public/console-read-guard.ts`), while `/api/sap/tdd/catalog`, `hub-content/seed`, `hub-content/write-test`, `/api/sap/ariba/catalog` and `/api/sap/ariba/call` import the SAP connectors and write none [whether each makes a live call was not checked] (P0.7, P0.14b).
+1. **One governed pipeline, no side doors.** Every entry point runs the same ordered steps and writes the same evidence. An entry point that cannot use the pipeline does not ship. Until P0.7 the Workbench write-back wrote no audit row (`src/app/api/sap/tdd/write/route.ts`); it now writes one before SAP is called. Workbench console routes also reach SAP outside the pipeline: preview, entities, operations, capabilities and the catalogue probes write a console audit row (`src/lib/sap-public/console-read-guard.ts`), while `/api/sap/tdd/catalog`, `hub-content/seed`, `hub-content/write-test`, `/api/sap/ariba/catalog` and `/api/sap/ariba/call` import the SAP connectors and write none [whether each makes a live call was not checked] (P0.7, P0.14b).
 2. **Free to play, governed to ship.** The twin needs no grant. DEV, TEST and PROD keep the two-person rule. Twin results are labelled TWIN and never count as evidence.
 3. **One contract, many projections.** SAP's service description is compiled once. OpenAPI, SDKs, twin, docs, assertions, field policy, MCP tools and upgrade diffs are generated from it.
 4. **Declare, then enforce only what was declared.** CI, the CLI and AI may request and attach evidence; only people decide.
@@ -1077,6 +1078,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - Twin-environment Activate returns a typed 409.
   - A deactivated owner moves the app to RESTRICTED within one sweep.
   - A two-process race test never ends with an owner-approved grant.
+- Status: shipped in Phase 0b (PR #310). `ApiAccessGrant` carries `interfaceId` and `sapProduct`, backfilled; a grant that matched no interface or several is flagged for re-approval. `COREEDGE_GRANT_BINDING` defaults to `legacy` (an unbound grant keeps its old matching on the interfaces that existed at the deploy); switch to `strict` once `pnpm grants:binding --check` exits 0. Contract changes to an ACTIVE interface re-run the gates and are audited as PROMOTE; twin Activate is a typed 409; a nightly sweep moves an app with no live owner to RESTRICTED. Operator steps: `docs/runbooks/coreedge-grant-binding.md`.
 
 **P0.2 One authorisation predicate for lanes and broker (A14-A19, A50, A60, A70).** Size M. Depends on: P0.1, P1.1.
 - Problem: the lane board can say "Live" while the broker refuses every call.
@@ -1136,6 +1138,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - A table-driven test of token-endpoint answer × auth type × path checks status, reason and retry advice against the developer guide's retry table.
   - A flooding key cannot throttle another key.
 - Decision: machine routes are keyed at the edge by a hash of the presented bearer (600 a minute) and then a per-IP backstop (6,000 a minute) that only a key its own bucket admitted can spend; an address whose presented keys fail to authenticate more than 60 times a minute is refused at the edge before any lookup (`machine-authfail:<ip>`), so made-up keys cannot buy more database lookups than the old per-IP bucket allowed; refusals by the address say `429 RATE_LIMITED_ADDRESS`, distinct from a credential's `429 RATE_LIMITED`; a call with no bearer, and every browser route, keep the old per-IP buckets. `COREEDGE_MACHINE_RATE_LIMIT=ip` restores the old keying as a rollback. A limiter outage still fails closed on every route class, as today, but answers `503 LIMITER_UNAVAILABLE` with `Retry-After` instead of 429, and is audited 503 with that reason, which the throttle view and both incident rules leave out. Token-endpoint reasons are now one `TOKEN_*` vocabulary for both auth types; rows written before keep their old codes (`docs/runbooks/coreedge-rate-limits.md`).
+- Status: shipped in Phase 0b (PR #310), as the decision above. `COREEDGE_MACHINE_RATE_LIMIT` defaults to `credential` (`ip` is the rollback); a limiter outage answers `503 LIMITER_UNAVAILABLE`; token-endpoint failures share one `TOKEN_*` vocabulary (`src/lib/sap-public/upstream-failure.ts`). Operator steps: `docs/runbooks/coreedge-rate-limits.md`.
 
 **P0.6 Make Ariba truthful (A71-A75).** Size S. Depends on: none.
 - Problem:
@@ -1162,6 +1165,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Value: the last side doors that change SAP data are closed.
 - Code: both routes, `src/lib/sap-public/tdd-connector.ts:1236-1268`, `src/lib/northbound/audit.ts`, Prisma, a new static test.
 - Acceptance: every write-back and write-test is audited before the SAP call; the static test fails for an unaudited new route; production shows the route disabled unless `S4_TDD_WRITE_ENABLED` is deliberately set.
+- Status: shipped in Phase 0a (#308). Both routes write a `PlatformAuditEvent` naming the person before SAP is called, and refuse the write when it cannot be recorded; a static test covers every route that imports the SAP write helpers. No setting was added: `{PREFIX}_WRITE_ENABLED` stays the one switch. Whether `S4_TDD_WRITE_ENABLED` is unset in production is an operator check (`docs/runbooks/sap-workbench-write-back.md`).
 
 **P0.8 Fix catalogue addresses and lifecycle data.** Size M. Depends on: none.
 - Problem:
@@ -1185,6 +1189,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Code: the allow-list and its tests.
 - Acceptance: `api17.sapsf.com` is admitted; `evil-sapsf.com` is refused; a live SAML-bearer read against a SuccessFactors tenant has a correlation id, or, until then, the Studio form warns, with a dated message, before a new SuccessFactors Basic connection is saved (existing connections untouched).
 - Decision: warn, do not refuse. Basic still authenticates after 20 November 2026 until SAP deletes it on a tentative 12 November 2027 (`SF_BASIC_AUTH_DELETION_DATE`), so refusing would block working setups. The save succeeds and `POST /api/studio/connections` returns the notice as `warning` (`src/lib/sap-public/sf-basic-auth-sunset.ts`; `docs/runbooks/successfactors-saml-signing.md`).
+- Status: partly shipped in Phase 0a (#308). The SuccessFactors API hosts are on the allow-list and a new SuccessFactors connection saved with Basic gets the dated warning. The live SAML bearer run against a tenant is still owed (`docs/runbooks/successfactors-saml-signing.md`).
 
 **P0.10 KMS envelope encryption for SAP secrets.** Size L. Depends on: none.
 - Problem: one raw environment key with no key id, version, rotation or reseal (`src/lib/sap-public/connection-crypto.ts:93-103`). The keystone runbook requires this before real client credentials are stored (`docs/coreedge/SAP-CONNECTION-KEYSTONE-RUNBOOK.md:110-131`).
@@ -1200,6 +1205,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - Every blob carries a key version; reseal migrates 100% of rows.
   - Every connection opens after a rotation; the restore drill passes.
   - With no KMS configured, the env provider behaves as today.
+- Status: shipped in Phase 0a (#308), without a cloud KMS. Per-organisation data keys in `OrgDataKey`, the `ce2` format, a master-key ring (`SAP_CONNECTION_ENCRYPTION_KEYS`, off until `SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY` is set), `pnpm keys:rotate`, `reseal`, `verify` and `retire`, and a restore drill (`docs/coreedge/SAP-KEY-RESTORE-DRILL.md`). The `KeyProvider` declares `sign`, `verify` and JWKS, but the only provider built in is `env`, which refuses them; which cloud KMS to plug in is open.
 
 **P0.11 Credential hygiene.** Size M. Depends on: none.
 - Problem: runtime keys, including those holding a write key, may never expire (`src/app/api/studio/clients/route.ts:66,196`; `src/lib/northbound/issue.ts:229,238`; the write key is sealed on the same `SolutionClient` row); rotation cuts over at once; one prefix covers test and live.
@@ -1228,6 +1234,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Acceptance:
   - An end-to-end test per route gets 403 without a fresh assertion.
   - 0 recorded guard violations in 7 days before throw mode.
+- Status: shipped in Phase 0a (#308). Every governance route calls `requireStepUp` (`src/lib/auth/step-up.ts`). `COREEDGE_STEP_UP` defaults to `warn`: the action goes ahead and a `STEP_UP_MISSING` audit row records it; `enforce` refuses with `403 STEP_UP_REQUIRED`. Guard violations are counted in `TenantGuardViolation`; production stays in log mode until an operator switches it after seven clean days. Operator steps: `docs/runbooks/coreedge-step-up.md`.
 
 **P0.13 Self-service developer onboarding on the shared host.** Size M. Depends on: P0.12.
 - Problem:
@@ -1247,6 +1254,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Code: `src/lib/auth/auth-options.ts`, `src/app/api/auth/signup/route.ts`, `src/app/api/admin/*`, `src/middleware.ts:70-141`, `src/lib/routing/workbench-paths.ts`, `src/lib/email/brevo.ts`.
 - Acceptance: on production, a new email address reaches Discover and invites a colleague with no database access; a stranger cannot claim a fresh instance.
 - Decision: open sign-up is a setting, `COREEDGE_DEVELOPER_SIGNUP=open` (default off: `/signup` and magic-link sign-in admit and create exactly what they did, and a typo reads as off), with an optional domain list (`COREEDGE_DEVELOPER_SIGNUP_DOMAINS`). Open, a new person's first clicked sign-in link (from `/signup/developer` or the sign-in page) creates their own organization and a new, narrowest role, `sandbox_developer`, in one transaction; nothing is written before the click. The role opens Studio to read (Discover, the catalogue) and live-reads SANDBOX tenants only, the deployment's own tenant included, so the API Hub sandbox is declared as a SANDBOX deployment tenant; it is false for every governance gate (decide or request access, issue/rotate/revoke a key, claim links, write keys, connections at any environment, apps, feeds, account and organization administration) and invites sandbox developers only, with pending invitations counted as seats. Sign-up is limited to 10 an hour per caller address and 5 an hour per email address. Members and invitations live at `/coreedge/members`, reachable under `WORKBENCH_ONLY`. `POST /api/admin/organizations` is platform-admin only with step-up `org.create` and a `PlatformGovernanceAudit` row. The first platform admin is claimed at `/coreedge/bootstrap` with `COREEDGE_BOOTSTRAP_TOKEN` (32+ characters, constant-time, single use by recorded hash, every attempt audited, step-up `platform.bootstrap`, refused whenever an active admin exists); nobody is made admin by signing in first. SMTP: 465 is implicit TLS, every other port must STARTTLS (`docs/runbooks/developer-onboarding.md`).
+- Status: shipped in Phase 0b (PR #310), as the decision above. `COREEDGE_DEVELOPER_SIGNUP` defaults to `off`. Operator steps: `docs/runbooks/developer-onboarding.md`.
 
 **P0.14 Extract the governed pipeline and wire the modules already built.** Size L. Depends on: P0.1, P0.5, P1.1.
 - Problem: the check sequence is hand-copied across the read, write and broker-run routes and console reads. Four tested modules are not imported anywhere. Most Workbench console routes reach SAP outside it (P0.14b).
@@ -1299,6 +1307,10 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Value: developers and auditors read documents that are true.
 - Code: those files and the lint.
 - Acceptance: the lint is green; the manual review is recorded.
+- **Delivered (October 2026).**
+  - Corrected: `docs/coreedge/README.md` (historical, not "all BUILT", with pointers to where today's state lives); Phase D §7 (a dated correction: customer-built services needed P1.1); the `DiscoverClient.tsx` header; `CoreEdge-Security-Architecture.html` (every control re-checked against the code at `f65730f1`, with a "built, lenient by default" status for step-up, grant binding, the tenant guard and envelope keys); `docs/coreedge-sap-target-expansion-spec.md` (a table of what was applied); the developer guide's "does not do" list and write-replay rule; the keystone runbook's status; this document's header, section 4 and 6 "today" columns, Appendix D, and a Status line on each delivered item.
+  - The lint: `src/lib/coreedge/shipped-features.ts` names the features a document mentions, each tied to capability-registry cells and to the module that implements it; `pnpm coreedge:doc-claims` (CI, Quality Gates) refuses not-built wording within 12 words of a shipped feature in the CoreEdge documents and code comments. `tests/unit/coreedge/doc-claims.test.ts` runs it inside `pnpm test`. Operator notes: `docs/runbooks/coreedge-doc-claims.md`.
+  - The manual review (which documents, what changed) is recorded in the pull request notes.
 
 **P0.17 CoreEdge release protocol and recovery.** Size S. Depends on: none.
 - Problem: the "protocol" that P1.1 and section 1.5 rely on exists only as one sentence. There is one production deployment and one shared database (`docs/deployment-urls.md:8,23`); a standby "would be a separate Vercel project" and backups come from the Postgres provider (`:43-45`). There is no release, rollback or restore runbook, no staging instance with its own data, and no RPO or RTO.
@@ -1309,6 +1321,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Problem: Vercel can invoke the same scheduled run more than once, and a long run can overlap the next [E74]. The six crons in `vercel.json:4-29` take no lock; `src/lib/ops/cron.ts` has only `authorizeCron` and `recordCronRun`.
 - Solution: a `JobLease` row (job, holder, expiresAt) claimed with a conditional UPDATE, or `pg_try_advisory_xact_lock` inside the job's transaction (session-level advisory locks are unreliable behind a transaction-mode pooler). Every sweep is made safe to run twice. P3.7 and P4.5 reuse it.
 - Acceptance: two concurrent invocations of each cron do the work once.
+- Status: shipped in Phase 0a (#308). Every cron runs inside a `JobLease` row claimed with one conditional insert and released by its holder, with a 10-minute TTL; no advisory locks (`src/lib/ops/job-lease.ts`, `docs/runbooks/cron-job-leases.md`).
 
 **P0.19 Database budget per governed call.** Size S-M. Depends on: none.
 - Problem: the documented pool is `connection_limit=5` per instance (`.env.example:2-3`), and later items add database work to every call: decision-log rows (P3.5), manifest lookups (P3.1), the audit outbox and chain (P3.10) and twin queries (P1.6). The production Postgres provider and pooler are [unverified].
@@ -1348,6 +1361,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - Catalogue interfaces resolve unchanged.
   - The Workbench explorer (`/sap-explorer`, `/api/sap/tdd/entities`, `/api/sap/tdd/preview`, which on the branch still call the catalogue-only `resolveHubService` at `entities/route.ts:90` and `preview/route.ts:76`) lists and previews a registered `Z*`/`YY1_*` service through the same resolver as the broker, or says "registered in Studio: open it there" instead of "not found".
   - Released under `docs/runbooks/coreedge-release.md` (P0.17); backout SQL for both migrations tested on the preview database; post-deploy checklist recorded.
+- Status: shipped in #307 and in production. No `Z*` or `YY1_*` call has been recorded against a live tenant yet, so the live verification on X5M is still owed.
 
 **P1.2 Tenant service discovery and registration from EDMX.** Size M. Depends on: P1.1.
 - Problem: Discover knows only SAP's catalogue, and nothing works until the SAP communication arrangement exists. A communication arrangement is the SAP-side switch that enables a bundle of APIs, called a communication scenario (`SAP_COM_xxxx`), for one external system and login.
@@ -2319,7 +2333,9 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 
 **Fixed in P0.1** (Phase 0b): A46, A47, A52, A69, with the batch-1 residual races (owner lock on every key change and claim link; key write and link close in one transaction). Operator steps: `docs/runbooks/coreedge-grant-binding.md`.
 
-**Open (33)**, each assigned to a roadmap item:
+**Fixed in P0.5** (Phase 0b): A43 and A44. Operator steps: `docs/runbooks/coreedge-rate-limits.md`.
+
+**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1 and P0.5 have since fixed six of them, so 27 remain open:
 
 | Findings | Subject | Item |
 |---|---|---|
@@ -2327,13 +2343,13 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 | A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 |
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 |
-| A43, A44 | Rate-limit attribution | P0.5 |
+| A43, A44 | Rate-limit attribution | P0.5 (fixed) |
 | A71, A72, A73, A74, A75 | Ariba configuration and errors | P0.6 |
 
 **Not in the original 76, found during this study:**
-- No MFA check on the `/coreedge` layout or the CoreEdge API routes (inferred from code, not run).
-- The tenant-scope guard defaults to log in production unless `TENANT_SCOPE_GUARD` is set (`src/lib/db/tenant-guard.ts:93-98`); the production value is [unverified].
-- Audit writes are swallowed on every path, including after a successful SAP create (`src/lib/northbound/audit.ts:136-144`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:342-394`).
-- The Workbench `hub-content/write-test` route creates and deletes SAP records with only a best-effort `logDecision` (`src/app/api/sap/tdd/hub-content/write-test/route.ts:124-137`).
+- No MFA check on the `/coreedge` layout or the CoreEdge API routes (inferred from code, not run). **Fixed in P0.12:** every governance route calls `requireStepUp`; `COREEDGE_STEP_UP` defaults to `warn`.
+- The tenant-scope guard defaults to log in production unless `TENANT_SCOPE_GUARD` is set (`src/lib/db/tenant-guard.ts:93-98`); the production value is [unverified]. **Still the default.** P0.12 records each violation in `TenantGuardViolation`; switching to throw after seven clean days is an operator step.
+- Audit writes are swallowed on every path, including after a successful SAP create (`src/lib/northbound/audit.ts:136-144`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:342-394`). **Still open** (P3.10).
+- The Workbench `hub-content/write-test` route creates and deletes SAP records with only a best-effort `logDecision` (`src/app/api/sap/tdd/hub-content/write-test/route.ts:124-137`). **Fixed in P0.7:** both write-back routes write a `PlatformAuditEvent` before SAP is called.
 
 The first two are covered by P0.12, the third by P3.10, and the fourth by P0.7.

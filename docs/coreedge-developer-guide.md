@@ -210,7 +210,9 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 - **No in-browser editing.** The scaffold produces downloads; there is no
   workspace, no terminal, no deploy button.
 - **No updates to existing records.** Writes create; see *Writing to SAP*.
-- **No services outside SAP's published catalogue.** See *If you write ABAP*.
+- **No discovery of the tenant's own services.** A service outside SAP's published
+  catalogue (your `Z*` or `YY1_*`) is registered by its path, not found for you:
+  see *Your own services* (P1.2 adds discovery from the tenant's own catalogue).
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -359,9 +361,18 @@ So: **reuse the same key when you retry.** The rules are:
 | Same key, still in flight | `409` with `Retry-After` — one intent, one write. Retry with the same key after `Retry-After` to get the outcome |
 | Key older than 24h | Treated as a fresh request |
 
-Failures are recorded too. If a write was refused with a `403`, retrying the same
-key returns that same `403` rather than re-attempting something the tenant has
-already declined.
+Failures SAP answered are recorded too. If SAP itself refused a write (a `401`
+or `403` from SAP), retrying the same key returns that same answer for 24 hours
+rather than re-sending something the tenant has already declined: fix the SAP
+side, then write again under a **new** key (SAP refused, so nothing was created).
+Two kinds of failure are never recorded, so the same key works on the retry:
+
+- **CoreEdge's own refusals** (the write key, the grant, the connection binding,
+  writes disabled on the connection, your own service not verified in this
+  environment). They happen before the key is reserved.
+- **A write that was never sent**: the connection's credential could not be
+  used, the CSRF handshake failed, or SAP answered `408` or `429`. The key is
+  released.
 
 The destination includes the environment, SAP client, connection, service,
 entity set, and interface version. Rotating a token for the same destination
