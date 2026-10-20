@@ -78,6 +78,24 @@ export function metadataTarget(input: {
   return { path: input.servicePath, scope: "service" };
 }
 
+/**
+ * A tenant-wide root asked whole because no (usable) dataset was entered:
+ * SuccessFactors /odata/v2 with an empty entity set. Its description is the
+ * whole tenant, so the read usually runs out of time or past the size limit,
+ * and "ask for a smaller service" cannot apply. The answer then says the one
+ * thing that helps: enter the dataset (review round 4).
+ */
+function isTenantWideRootAskedWhole(
+  input: { sapProduct?: string | null; servicePath: string },
+  scope: "service" | "entitySet",
+): boolean {
+  const scopedRoot = input.sapProduct != null ? ENTITY_SCOPED_METADATA_ROOTS.get(input.sapProduct) : undefined;
+  return scope === "service" && scopedRoot !== undefined && input.servicePath.toLowerCase() === scopedRoot;
+}
+
+export const DATASET_NEEDED_DETAIL =
+  "Set the dataset (for example cust_TravelRequest) on the interface, then verify again: on /odata/v2 SuccessFactors describes one dataset at a time, and the description of the whole tenant is too large to read.";
+
 /** A service description larger than this is refused rather than half-read. */
 export const VERIFY_MAX_METADATA_BYTES = 8 * 1024 * 1024;
 /** How many entity-set names are stored on the interface after a verify. */
@@ -160,6 +178,7 @@ export async function verifyServiceMetadata(
   fetchImpl: typeof fetch = fetch,
 ): Promise<ServiceVerifyResult> {
   const target = metadataTarget(input);
+  const datasetNeeded = isTenantWideRootAskedWhole(input, target.scope);
   const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {
     maxBytes: VERIFY_MAX_METADATA_BYTES,
   });
@@ -183,7 +202,9 @@ export async function verifyServiceMetadata(
           ? target.scope === "entitySet"
             ? `The SAP system has no dataset called "${input.entitySet}" under this service path. Check the name in the system's OData API Data Dictionary (names are case-sensitive), and the path (/odata/v2).`
             : "The SAP system has no service at this path. Check it against the service binding in ADT (Service URL) or /IWFND/MAINT_SERVICE, and that the service is published."
-          : r.detail,
+          : status === "TIMEOUT" && datasetNeeded
+            ? DATASET_NEEDED_DETAIL
+            : r.detail,
       entitySets: [],
       detectedODataVersion: null,
       suggestedEntitySet: null,
@@ -196,7 +217,9 @@ export async function verifyServiceMetadata(
       ...base,
       status: "METADATA_TOO_LARGE",
       verified: false,
-      detail: `The service description is larger than ${VERIFY_MAX_METADATA_BYTES / (1024 * 1024)} MB, so it was not read in full and the datasets cannot be listed. Ask for a smaller service (one service binding per business object).`,
+      detail: datasetNeeded
+        ? DATASET_NEEDED_DETAIL
+        : `The service description is larger than ${VERIFY_MAX_METADATA_BYTES / (1024 * 1024)} MB, so it was not read in full and the datasets cannot be listed. Ask for a smaller service (one service binding per business object).`,
       entitySets: [],
       detectedODataVersion: edmxODataVersion(r.body),
       suggestedEntitySet: null,

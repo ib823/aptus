@@ -83,13 +83,15 @@ export default async function StudioInterfacesPage({
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId, isActive: true, revokedAt: null },
-          select: { solutionId: true, environment: true, expiresAt: true, sapClient: true },
+          select: { id: true, solutionId: true, environment: true, expiresAt: true, sapClient: true },
         })
       : Promise.resolve([]),
+    // By id: the credential holding the write key is the one whose binding
+    // must be verified, the same join the activation gate makes (review round 4).
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId, isActive: true, revokedAt: null, NOT: { secretsCiphertext: null } },
-          select: { solutionId: true, environment: true },
+          select: { id: true },
         })
       : Promise.resolve([]),
     organizationId
@@ -135,10 +137,18 @@ export default async function StudioInterfacesPage({
   const currentConnections = connectionRows.map(toCurrentConnection);
   const connectionsFor = (product: string) => currentConnections.filter((c) => c.product === product);
 
-  const products = SAP_ODATA_PRODUCTS.map((p) => ({ key: p.key, label: p.label, addressesClient: p.addressesClient }));
+  // `connected`: a declared connection exists for the product (a Verify
+  // target), so an interface on it can bind. The product is fixed at
+  // registration, so the dialog opens on a connected one (review round 4).
+  const products = SAP_ODATA_PRODUCTS.map((p) => ({
+    key: p.key,
+    label: p.label,
+    addressesClient: p.addressesClient,
+    connected: verifyTargets.some((t) => t.product === p.key),
+  }));
 
   const now = new Date();
-  const writeKeyBySolution = new Set(writeKeyHolders.map((c) => `${c.solutionId}::${c.environment}`));
+  const withWriteKey = new Set(writeKeyHolders.map((c) => c.id));
   const writeReadinessFor = (
     solutionId: string,
     externalId: string,
@@ -156,16 +166,17 @@ export default async function StudioInterfacesPage({
       (c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()),
     );
     return writeReadinessByEnvironment({
-      credentials: credentials.map((c) => ({
-        environment: c.environment,
-        hasWriteKey: writeKeyBySolution.has(`${c.solutionId}::${c.environment}`),
-      })),
+      credentials: credentials.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.id) })),
       grants: writeGrants.filter((g) => g.solutionId === solutionId && g.externalId === externalId && g.operation === operation),
+      // Only credentials that can write: a read-only credential on a verified
+      // client does not make its environment ready (review round 4).
       serviceVerifiedEnvironments: custom
         ? verifiedEnvironmentsForCredentials(
             custom.serviceVerifications,
             custom.connections,
-            credentials.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
+            credentials
+              .filter((c) => withWriteKey.has(c.id))
+              .map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
           )
         : null,
       now,

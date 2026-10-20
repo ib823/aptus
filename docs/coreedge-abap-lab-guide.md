@@ -644,8 +644,12 @@ Caveats:
   is large and slow (SAP's own Employee Central performance guidance says so)
   and is likely to end in `TIMEOUT` (10 s by default, 30 s at most) or
   `METADATA_TOO_LARGE` (8 MB); with no entity set, that is what Verify has to
-  ask. The one-dataset request was traced in code and covered by unit tests,
-  not run against a live tenant.
+  ask, and those two answers then say to set the dataset and verify again
+  (`src/lib/studio/service-verify.ts:81-97`). The path is `/odata/v2` itself: a
+  URL such as `/odata/v2/cust_TravelRequest` is refused with a sentence saying
+  to enter `/odata/v2` as the path and `cust_TravelRequest` as the entity set.
+  The one-dataset request was traced in code and covered by unit tests, not
+  run against a live tenant.
 - Every custom SuccessFactors interface on `/odata/v2` has the same grant id,
   `custom:/odata/v2`, so one approved grant covers all of that solution's
   interfaces on the root. This is the same per-service grant rule as for
@@ -785,7 +789,7 @@ tenant.**
    | sign-in refused | `UNAUTHORIZED` | SAP answered 401 or 403, or redirected to a login page: check the communication user, the arrangement and `S_SERVICE`. |
    | dataset not found | `ENTITY_SET_MISSING` | Names are case-sensitive. A near match is offered as *Did you mean …?*. |
    | version differs | `VERSION_MISMATCH` | The service describes itself as the other OData version. Press **Switch to V2/V4 and verify again** under the answer, or change it under **Change path or version**. |
-   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:82`). Split the service. |
+   | too large | `METADATA_TOO_LARGE` | The description is over 8 MB (`src/lib/studio/service-verify.ts:100`). Split the service. On SuccessFactors `/odata/v2` with no entity set, the answer says to set the dataset instead. |
    | no connection | `BINDING_REFUSED` | No connection declares that environment (or SAP client). Fix it in Connections. |
    | failed, no answer | `ERROR`, `TIMEOUT` | 5xx, a 200 that is not EDMX (often a login page), or no answer in time. |
 
@@ -795,19 +799,22 @@ tenant.**
 **Rules that follow from the design.**
 
 - **The id is derived**: `custom:<path>`
-  (`src/lib/sap-public/service-path.ts:259-261`). Grants name that id, so a
+  (`src/lib/sap-public/service-path.ts:281-283`). Grants name that id, so a
   grant a second person approved for one path never authorises another.
 - **The path is a path on the connection's host and nothing else.** A full URL,
   `//host`, `.` or `..` segments (also with parameters, `..;` or `..;x=1`, which
   servlet containers and proxies read as `..`), empty segments, `?`, `#`,
   backslashes, whitespace and control characters, `$metadata`, and
   percent-escapes that decode to any of those or to `;` (`%2e%2e`, `%2f`,
-  `%3b`, `%252e`) are refused, with a sentence saying what to enter instead
-  (`src/lib/sap-public/service-path.ts:184-255`). Ariba is REST, not OData, and
+  `%3b`, `%252e`) are refused, with a sentence saying what to enter instead.
+  Every other percent-escape is decoded and the path stored as plain text, so
+  `%73ap`, `Z%28X%29` or `;v=%30002` give the same path, and the same id, as
+  `sap`, `Z(X)` and `;v=0002`
+  (`src/lib/sap-public/service-path.ts:197-277`). Ariba is REST, not OData, and
   has no path.
 - **The path must be an OData service.** It has to sit under `/sap/opu/odata/`
   or `/sap/opu/odata4/`, or be SuccessFactors' `/odata/v2` or under `/odatav4/`
-  (`src/lib/sap-public/service-path.ts:137-155`). Reads are not checked against
+  (`src/lib/sap-public/service-path.ts:142-168`). Reads are not checked against
   `$metadata`, and the connection's credentials go with every call, so without
   this rule a path such as `/sap/bc/adt/...`, `/sap/bc/soap/rfc` or a customer
   REST handler would have been called through the broker and its JSON served as
@@ -835,7 +842,7 @@ tenant.**
   holds a credential with a write key, an approved write grant **and** a
   verification of the very connection that credential binds to (its
   environment and SAP client), unchanged since
-  (`src/app/api/studio/interfaces/route.ts:433-450,501-521`,
+  (`src/app/api/studio/interfaces/route.ts:433-450,503-528`,
   `src/lib/sap-public/current-connections.ts`, `src/lib/studio/write-readiness.ts:104-111`).
   Verified in SANDBOX with the write chain only in PROD is refused, and the
   Write chain row shows `service not verified here` for PROD. So is PROD
@@ -848,7 +855,7 @@ tenant.**
   existing grants detach (ask for a new one); an active read interface stays
   active, and its calls answer 403 until the new grant is approved. After a
   version or dataset change the grants stay attached
-  (`src/app/api/studio/interfaces/route.ts:416-431,532-569`).
+  (`src/app/api/studio/interfaces/route.ts:416-431,539-576`).
 - **A failed verify never clears an earlier success**, in any environment, so a
   timeout cannot stop live writes. A verify is recorded only if the interface
   did not change while SAP was answering; a verify of another environment that

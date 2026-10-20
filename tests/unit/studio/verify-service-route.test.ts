@@ -309,6 +309,42 @@ describe("SuccessFactors: one dataset's description, not the tenant's (review ro
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
   });
 
+  describe("no dataset entered: the whole tenant is asked (review round 4)", () => {
+    const DATASET_NEEDED = /^Set the dataset \(for example cust_TravelRequest\) on the interface, then verify again/;
+
+    it("too large → says to enter the dataset, not ABAP advice", async () => {
+      mocks.findIface.mockResolvedValue(sf({ entitySet: null }));
+      const padding = "<!--" + "x".repeat(VERIFY_MAX_METADATA_BYTES) + "-->";
+      fetchMock.mockImplementation(async () => xml(SF_EDMX.replace("</Schema>", `${padding}</Schema>`)));
+      const d = await data(await verify({ environment: "DEV" }));
+      expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/odata/v2/$metadata`);
+      expect(d.status).toBe("METADATA_TOO_LARGE");
+      expect(d.detail).toMatch(DATASET_NEEDED);
+      expect(d.detail).not.toContain("service binding");
+    });
+
+    it("no answer in time → says to enter the dataset", async () => {
+      mocks.findIface.mockResolvedValue(sf({ entitySet: null }));
+      fetchMock.mockImplementation(async () => {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
+      });
+      const d = await data(await verify({ environment: "DEV" }));
+      expect(d.status).toBe("TIMEOUT");
+      expect(d.detail).toMatch(DATASET_NEEDED);
+    });
+
+    it("a V4 SuccessFactors service asked whole keeps the ordinary answers", async () => {
+      mocks.findIface.mockResolvedValue(sf({ servicePath: "/odatav4/talent/learning/Course.svc/v1", entitySet: null }));
+      const padding = "<!--" + "x".repeat(VERIFY_MAX_METADATA_BYTES) + "-->";
+      fetchMock.mockImplementation(async () => xml(SF_EDMX.replace("</Schema>", `${padding}</Schema>`)));
+      const d = await data(await verify({ environment: "DEV" }));
+      expect(d.status).toBe("METADATA_TOO_LARGE");
+      expect(d.detail).not.toMatch(DATASET_NEEDED);
+    });
+  });
+
   it("a dataset SuccessFactors does not know → NOT_FOUND naming the dataset", async () => {
     mocks.findIface.mockResolvedValue(sf({ entitySet: "cust_Nope" }));
     fetchMock.mockImplementation(async () => new Response("", { status: 404 }));

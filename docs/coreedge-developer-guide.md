@@ -111,7 +111,8 @@ SAP's catalogue. You register it **by its service path** instead:
    (CoreEdge adds the client from the connection). It is a path on the
    connection's own host and nothing else: a full URL, `//host`, `..` (also
    `..;`), `?`, `#`, backslashes, whitespace and percent-escapes that hide any of
-   those are refused (`src/lib/sap-public/service-path.ts`). So is SAP routing
+   those are refused (`src/lib/sap-public/service-path.ts`); any other escape is
+   decoded and the path stored as plain text, so one service has one id. So is SAP routing
    that would pick another system or client than the connection's: Gateway
    matrix parameters such as `;o=<system alias>`, `;mo` or `;c=`, and an ICF
    session segment such as `/sap(bD1lbiZjPTIwMA==)/`. The only matrix parameter

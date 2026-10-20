@@ -436,6 +436,40 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
       expect(mocks.updateInterface).not.toHaveBeenCalled();
     });
 
+    /**
+     * Two PROD credentials: A carries the write key and binds to client 100;
+     * B is read-only and binds to client 200. The write-key query answers by
+     * its own filter (NOT secretsCiphertext null), as Prisma would.
+     */
+    function writeKeyOnClient100ReadOnlyOnClient200() {
+      const live = [
+        { id: "cl_a", environment: "PROD", expiresAt: null, sapClient: "100" },
+        { id: "cl_b", environment: "PROD", expiresAt: null, sapClient: "200" },
+      ];
+      mocks.findManyClients.mockImplementation((args: { where: Record<string, unknown> }) =>
+        Promise.resolve(args.where.NOT ? [{ id: "cl_a" }] : live),
+      );
+      mocks.findManyGrants.mockResolvedValue([{ environment: "PROD", decision: "APPROVED", expiresAt: null, revokedAt: null }]);
+      mocks.findManyConnections.mockResolvedValue([P100, P200]);
+    }
+
+    it("refuses when only a READ-ONLY credential's client is verified and the write key binds elsewhere (review round 4)", async () => {
+      mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p200", "200") });
+      writeKeyOnClient100ReadOnlyOnClient200();
+      const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+      expect(res.status).toBe(400);
+      expect(await message(res)).toContain("PROD: credential with write key · write grant approved · service not verified here");
+      expect(mocks.updateInterface).not.toHaveBeenCalled();
+    });
+
+    it("allows it once the WRITE-KEY credential's own client is verified (review round 4)", async () => {
+      mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p100", "100") });
+      writeKeyOnClient100ReadOnlyOnClient200();
+      const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+      expect(res.status).toBe(200);
+      expect(updateData().status).toBe("ACTIVE");
+    });
+
     it("allows it once the credential's own client has been verified", async () => {
       mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: verifiedFor("conn_p200", "200") });
       prodCredentialOnClient200();

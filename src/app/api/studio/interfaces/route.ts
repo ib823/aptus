@@ -477,10 +477,12 @@ export async function PATCH(request: NextRequest) {
         where: { organizationId, solutionId: current.solutionId, isActive: true, revokedAt: null },
         // sapClient: a write binds by environment AND the credential's client,
         // so readiness must select the same connection the write would.
-        select: { environment: true, expiresAt: true, sapClient: true },
+        select: { id: true, environment: true, expiresAt: true, sapClient: true },
       }),
       // Which of them carry a write key — a filter on the sealed column,
-      // selecting the environment only; the value is never read.
+      // selecting the id only; the value is never read. By id, not by
+      // environment: the credential that writes is the one whose binding
+      // must be verified (review round 4).
       prisma.solutionClient.findMany({
         where: {
           organizationId,
@@ -489,7 +491,7 @@ export async function PATCH(request: NextRequest) {
           revokedAt: null,
           NOT: { secretsCiphertext: null },
         },
-        select: { environment: true },
+        select: { id: true },
       }),
       prisma.apiAccessGrant.findMany({
         where: { organizationId, solutionId: current.solutionId, externalId: nextExternalId, operation: nextOperation },
@@ -497,21 +499,26 @@ export async function PATCH(request: NextRequest) {
       }),
       isCustom ? loadCurrentConnections(organizationId, current.sapProduct) : Promise.resolve(null),
     ]);
-    const withWriteKey = new Set(writeKeyHolders.map((c) => c.environment));
+    const withWriteKey = new Set(writeKeyHolders.map((c) => c.id));
     const unexpired = liveCredentials.filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime());
+    const writers = unexpired.filter((c) => withWriteKey.has(c.id));
     const readiness = writeReadinessByEnvironment({
-      credentials: unexpired.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.environment) })),
+      credentials: unexpired.map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.id) })),
       grants,
       // A contract this request changes is verified nowhere (3b refuses it anyway).
-      // Otherwise verified only where a live write credential's OWN binding —
+      // Otherwise verified only where a live WRITE credential's own binding —
       // environment AND its SAP client — holds the verification (round 3).
+      // Only credentials with a write key are asked: a read-only credential
+      // on a verified client cannot write, so it must not mark its
+      // environment verified beside a write key whose client is not
+      // (review round 4).
       serviceVerifiedEnvironments: connections
         ? verificationReset
           ? []
           : verifiedEnvironmentsForCredentials(
               current.serviceVerifications,
               connections,
-              unexpired.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
+              writers.map((c) => ({ environment: c.environment, sapClient: c.sapClient ?? null })),
             )
         : null,
       now,

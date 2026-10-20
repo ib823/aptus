@@ -210,9 +210,51 @@ describe("an interface on your own API", () => {
     expect(use.disabled).toBe(false);
   });
 
-  it("says there is nothing to ask when no connection declares an environment", () => {
+  it("says there is nothing to ask when no connection declares an environment — naming the product, and the way out (review round 4)", () => {
     render(<InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} verifyTargets={[]} />);
-    expect(screen.getByText(/No connection for this product declares an environment yet/)).toBeTruthy();
+    const text = screen.getByText(/No connection for SAP S\/4HANA \(on-premise\) declares an environment yet/).textContent ?? "";
+    expect(text).toContain("this interface was registered under the wrong one");
+    expect(text).toContain("register it again under the product your connection is for");
+  });
+});
+
+describe("review round 4 — the product is chosen once, so it starts on a connected one", () => {
+  const CONNECTED_ONPREM = PRODUCTS.map((p) => ({ ...p, connected: p.key === "s4hana-onprem" }));
+
+  it("opens on the first product with a connection, and marks the others", () => {
+    render(<InterfacesClient interfaces={[]} canAuthor openRegister solutions={SOLUTIONS} products={CONNECTED_ONPREM} />);
+    const select = screen.getByLabelText("SAP product") as HTMLSelectElement;
+    expect(select.value).toBe("s4hana-onprem");
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels).toEqual(["S/4HANA Cloud — no connection", "SAP S/4HANA (on-premise)", "SuccessFactors — no connection"]);
+    expect(screen.queryByText(/has no connection for/)).toBeNull();
+  });
+
+  it("warns, before saving, when the chosen product has no connection", () => {
+    render(<InterfacesClient interfaces={[]} canAuthor openRegister solutions={SOLUTIONS} products={CONNECTED_ONPREM} />);
+    fireEvent.change(screen.getByLabelText("SAP product"), { target: { value: "s4hana" } });
+    expect(screen.getByText(/Your organization has no connection for S\/4HANA Cloud that declares an environment/)).toBeTruthy();
+    expect(screen.getByText(/it cannot be changed after registering/)).toBeTruthy();
+  });
+
+  it("with no connection at all, opens on the first product as before", () => {
+    const none = PRODUCTS.map((p) => ({ ...p, connected: false }));
+    render(<InterfacesClient interfaces={[]} canAuthor openRegister solutions={SOLUTIONS} products={none} />);
+    expect((screen.getByLabelText("SAP product") as HTMLSelectElement).value).toBe("s4hana");
+  });
+
+  it("SuccessFactors /odata/v2: the dataset hint says it is needed, not optional", () => {
+    render(<InterfacesClient interfaces={[]} canAuthor openRegister solutions={SOLUTIONS} products={PRODUCTS} />);
+    fireEvent.change(screen.getByLabelText("SAP product"), { target: { value: "successfactors" } });
+    fireEvent.change(screen.getByLabelText("Service path"), { target: { value: "/odata/v2" } });
+    expect(screen.getByText(/^Needed on \/odata\/v2: enter the dataset/)).toBeTruthy();
+    expect(screen.queryByText(/^Optional\. After saving, use Verify/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Service path"), { target: { value: "/odata/v2/cust_TravelRequest" } });
+    expect(screen.getByText(/Enter \/odata\/v2 as the service path, and the last part/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Service path"), { target: { value: "/odatav4/talent/learning/Course.svc/v1" } });
+    expect(screen.getByText(/^Optional\. After saving, use Verify/)).toBeTruthy();
   });
 });
 

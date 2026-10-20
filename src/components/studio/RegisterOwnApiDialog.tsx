@@ -31,6 +31,27 @@ export interface RegisterProductOption {
   key: string;
   label: string;
   addressesClient: boolean;
+  /**
+   * Some active connection for this product declares an environment, so an
+   * interface on it can be bound and verified. Omitted: not known (treated as
+   * connected). The product cannot be changed after registering, so the
+   * dialog opens on a connected one and marks the rest (review round 4).
+   */
+  connected?: boolean;
+}
+
+/** The product the dialog opens on: the first one with a connection, else the first. */
+export function defaultRegisterProduct(products: readonly RegisterProductOption[]): string {
+  return (products.find((p) => p.connected !== false) ?? products[0])?.key ?? "";
+}
+
+/**
+ * SuccessFactors' tenant-wide V2 root describes one dataset at a time, so on
+ * it the dataset is needed in practice (service-verify.ts metadataTarget).
+ */
+function needsDatasetToVerify(product: string, path: string): boolean {
+  // An empty path counts: /odata/v2 is what the field suggests for SuccessFactors.
+  return product === "successfactors" && (path === "" || path.toLowerCase() === "/odata/v2");
 }
 
 type SubmitState = { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
@@ -50,7 +71,7 @@ export function RegisterOwnApiDialog({
   const ids = useId();
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
   const [name, setName] = useState("");
-  const [product, setProduct] = useState(products[0]?.key ?? "");
+  const [product, setProduct] = useState(() => defaultRegisterProduct(products));
   const [servicePath, setServicePath] = useState("");
   const [version, setVersion] = useState<ODataVersion>("V2");
   const [versionTouched, setVersionTouched] = useState(false);
@@ -170,10 +191,17 @@ export function RegisterOwnApiDialog({
               <select id={`${ids}-product`} value={product} onChange={(e) => setProduct(e.target.value)} style={field}>
                 {products.map((p) => (
                   <option key={p.key} value={p.key}>
-                    {p.label}
+                    {p.connected === false ? `${p.label} — no connection` : p.label}
                   </option>
                 ))}
               </select>
+              {selectedProduct?.connected === false && (
+                <p style={{ ...hint, color: "var(--status-revoked-fg)" }}>
+                  Your organization has no connection for {selectedProduct.label} that declares an environment, so
+                  CoreEdge could not call this interface. Choose the product your connection is for: it cannot be
+                  changed after registering.
+                </p>
+              )}
               {product === "successfactors" && (
                 <p style={hint}>Usually /odata/v2. Your custom MDF objects (cust_…) are datasets under it. On /odata/v2, enter the dataset too: Verify then checks just that one, because the description of the whole tenant is too large to read. An OData V4 service under /odatav4/ is verified whole.</p>
               )}
@@ -251,7 +279,11 @@ export function RegisterOwnApiDialog({
                 maxLength={200}
                 style={{ ...field, fontFamily: "var(--font-mono, ui-monospace), monospace", fontSize: 13 }}
               />
-              <p style={hint}>Optional. After saving, use Verify to list the datasets this service offers and pick one.</p>
+              <p style={hint}>
+                {needsDatasetToVerify(product, pathCheck.ok ? pathCheck.path : trimmedPath)
+                  ? "Needed on /odata/v2: enter the dataset, for example your custom MDF object cust_TravelRequest. SuccessFactors describes one dataset at a time here, so Verify checks that one; the whole tenant is too large to list."
+                  : "Optional. After saving, use Verify to list the datasets this service offers and pick one."}
+              </p>
             </div>
 
             {selectedProduct?.addressesClient && (

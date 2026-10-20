@@ -102,7 +102,8 @@ const REFUSALS: ReadonlyArray<[string, unknown, ServicePathRefusal]> = [
   ["the Gateway root alone", "/sap/opu/odata", "NOT_ODATA_ROOT"],
   ["the Gateway V4 root alone", "/sap/opu/odata4/", "NOT_ODATA_ROOT"],
   ["a look-alike root", "/sap/opu/odataX/sap/ZX", "NOT_ODATA_ROOT"],
-  ["SuccessFactors below its root", "/odata/v2/User", "NOT_ODATA_ROOT"],
+  ["SuccessFactors below its root (a dataset typed into the path)", "/odata/v2/User", "DATASET_IN_PATH"],
+  ["…in any case", "/ODATA/V2/cust_TravelRequest", "DATASET_IN_PATH"],
   ["a bare one-segment path", "/a", "NOT_ODATA_ROOT"],
 ];
 
@@ -139,7 +140,7 @@ const ACCEPTED = [
   "/sap/opu/odata/sap/YY1_SALESORDERX_CDS",
   "/sap/opu/odata/sap/ZX_SRV;v=0002",
   "/sap/opu/odata/SAP/ZX_SRV;v=0001",
-  "/sap/opu/odata/sap/Z%28X%29",
+  "/sap/opu/odata/sap/Z(X)",
   "/SAP/OPU/ODATA/SAP/ZX_SRV",
   "/odatav4/talent/learning/Course.svc/v1",
 ];
@@ -155,6 +156,30 @@ describe("validateServicePath — the shapes SAP prints are accepted", () => {
       path: "/sap/opu/odata/sap/ZUI_X_O2",
     });
     expect(validateServicePath("/odata/v2/")).toEqual({ ok: true, path: "/odata/v2" });
+  });
+
+  it("stores one spelling: every %-escape is decoded, so one service has one id (review round 4)", () => {
+    const cases: Array<[string, string]> = [
+      ["/sap/opu/odata/sap/ZX;v=%30002", "/sap/opu/odata/sap/ZX;v=0002"],
+      ["/sap/opu/odata/sap/ZX;v=0002", "/sap/opu/odata/sap/ZX;v=0002"],
+      ["/sap/opu/odata/sap/ZX;%76=2", "/sap/opu/odata/sap/ZX;v=0002"],
+      ["/sap/opu/odata/sap/ZX;v%3d2", "/sap/opu/odata/sap/ZX;v=0002"],
+      ["/sap/opu/odata/sap/ZX;v=%32", "/sap/opu/odata/sap/ZX;v=0002"],
+      ["/sap/opu/odata/%73ap/ZX", "/sap/opu/odata/sap/ZX"],
+      ["/sap/opu/odata/sap/Z%28X%29", "/sap/opu/odata/sap/Z(X)"],
+      ["/sap/opu/odata/sap/Z%5fX", "/sap/opu/odata/sap/Z_X"],
+    ];
+    for (const [raw, stored] of cases) {
+      expect(validateServicePath(raw), raw).toEqual({ ok: true, path: stored });
+      // The stored form validates to itself, so a stored row stays usable.
+      expect(validateServicePath(stored), stored).toEqual({ ok: true, path: stored });
+    }
+  });
+
+  it("decoding opens no refusal: an escaped dot, ; or routing key is still refused", () => {
+    expect(validateServicePath("/sap/opu/odata/sap/ZX;v=%2e2")).toMatchObject({ ok: false, reason: "ENCODED_FORBIDDEN" });
+    expect(validateServicePath("/sap/opu/odata/sap/ZX%3bv=2")).toMatchObject({ ok: false, reason: "ENCODED_FORBIDDEN" });
+    expect(validateServicePath("/sap/opu/odata/sap/ZX;%6f=PRD")).toMatchObject({ ok: false, reason: "ROUTING_PARAMETER" });
   });
 
   it("accepts the short version form Gateway prints (;v=2) and stores it as ;v=0002 — one identity (review round 3)", () => {

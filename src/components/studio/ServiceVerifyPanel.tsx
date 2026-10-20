@@ -126,6 +126,7 @@ export function ServiceVerifyPanel({
   liveWrite = false,
   targets,
   canAuthor,
+  productLabel,
 }: {
   interfaceId: string;
   /**
@@ -151,6 +152,8 @@ export function ServiceVerifyPanel({
   /** This interface's product's declared connections only. */
   targets: readonly VerifyTarget[];
   canAuthor: boolean;
+  /** The interface's product, named when no connection for it can be asked. */
+  productLabel?: string | undefined;
 }) {
   const router = useRouter();
   const ids = useId();
@@ -277,11 +280,14 @@ export function ServiceVerifyPanel({
 
       {targets.length === 0 ? (
         <span style={muted}>
-          No connection for this product declares an environment yet. Set one in{" "}
+          No connection for {productLabel ?? "this product"} declares an environment yet, so this interface cannot
+          be verified or called. Set one up in{" "}
           <a href="/studio/connections" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
             Connections
           </a>
           .
+          {isCustom &&
+            " If your connection is for another SAP product, this interface was registered under the wrong one. The product cannot be changed, so register it again under the product your connection is for."}
         </span>
       ) : (
         canAuthor && (

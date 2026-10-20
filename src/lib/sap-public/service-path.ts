@@ -23,7 +23,9 @@
  *   - `.` and `..` segments, empty segments, and every percent-escape that
  *     decodes to a separator, a dot, a `;`, a `%` (double encoding) or a
  *     control character — `%2e%2e`, `%2f`, `%5c`, `%3f`, `%23`, `%3b`,
- *     `%252e`, `%00`. A segment is judged by its part BEFORE any `;`:
+ *     `%252e`, `%00`. Every other escape is decoded and the path stored as
+ *     plain text, so one service has one spelling and one grant identity
+ *     (review round 4). A segment is judged by its part BEFORE any `;`:
  *     servlet containers and many proxies strip `;params` before they
  *     normalise, so `..;` and `..;x=1` are `..` to them, and `;` alone is an
  *     empty segment;
@@ -97,10 +99,11 @@ export type ServicePathRefusal =
   | "SESSION_SEGMENT"
   | "SYSTEM_RESOURCE"
   | "NOT_ODATA_ROOT"
+  | "DATASET_IN_PATH"
   | "NOT_NORMALIZED";
 
 export type ServicePathCheck =
-  /** `path` is normalized: one trailing "/" removed, a `;v=` version written with four digits. */
+  /** `path` is normalized: %-escapes decoded, one trailing "/" removed, a `;v=` version written with four digits. */
   | { ok: true; path: string }
   | { ok: false; reason: ServicePathRefusal; message: string };
 
@@ -131,6 +134,8 @@ export const SERVICE_PATH_MESSAGES: Record<ServicePathRefusal, string> = {
     "Enter the service root, without $metadata or any other $ resource. For example /sap/opu/odata/sap/ZUI_TRAVEL_O2.",
   NOT_ODATA_ROOT:
     "The service path must be an OData service: under /sap/opu/odata/ or /sap/opu/odata4/ on an SAP ERP or S/4HANA system (for example /sap/opu/odata/sap/ZUI_TRAVEL_O2), or /odata/v2 or under /odatav4/ on SuccessFactors.",
+  DATASET_IN_PATH:
+    "On SuccessFactors the service path is /odata/v2 itself. Enter /odata/v2 as the service path, and the last part (for example cust_TravelRequest) as the entity set.",
   NOT_NORMALIZED: "The service path does not read the same once it is parsed as a URL path. Enter it as plain text.",
 };
 
@@ -146,6 +151,14 @@ export const ODATA_SERVICE_ROOTS: ReadonlyArray<{ root: string; kind: "prefix" |
   { root: "/odata/v2", kind: "exact" },
   { root: "/odatav4", kind: "prefix" },
 ];
+
+/**
+ * SuccessFactors' V2 root is one service for the whole tenant, so the URL a
+ * developer tested in Postman (`/odata/v2/cust_TravelRequest`) is that root
+ * plus a dataset. Refused with a sentence that says where each part goes,
+ * not the generic "must be an OData service" (review round 4).
+ */
+const SUCCESSFACTORS_V2_ROOT = "/odata/v2";
 
 function isUnderODataRoot(path: string): boolean {
   const lower = path.toLowerCase();
@@ -204,13 +217,19 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
     if (!ESCAPABLE.test(decoded)) return refuse("ENCODED_FORBIDDEN");
   }
 
+  // ONE SPELLING, ONE IDENTITY (review round 4). Every escape that survived
+  // the loop above decodes to a character the path may carry as plain text,
+  // and never to `/`, `;`, `.` or `%`, so decoding changes no segment
+  // boundary. Storing the decoded form makes `%73ap` and `sap`, `%28` and `(`,
+  // `;v=%30002` and `;v=0002` one path and one `custom:` id; without it the
+  // same service had a grant identity per spelling. Everything below judges
+  // the decoded path, so `%24metadata` is refused like `$metadata` and `%28`
+  // like `(`.
+  path = decodeURIComponent(path);
+
   const segments = path.slice(1).split("/");
   let version: string | null = null;
-  for (const [index, segment] of segments.entries()) {
-    // Decoded, so `%24metadata` is refused like `$metadata` and `%28` like
-    // `(`. Every escape that survived the loop above decodes to an allowed
-    // character, and never to `/` or `;`.
-    const decoded = decodeURIComponent(segment);
+  for (const [index, decoded] of segments.entries()) {
     const semicolon = decoded.indexOf(";");
     // The segment as a servlet container or proxy sees it: params stripped.
     const base = semicolon === -1 ? decoded : decoded.slice(0, semicolon);
@@ -228,7 +247,8 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
   }
 
   // `;v=2` and `;v=0002` are one version: store the four-digit form. Only the
-  // last segment can carry a `;` (checked above), and no escape decodes to one.
+  // last segment can carry a `;` (checked above), and the path is decoded, so
+  // the parameter is already plain `v=` and digits.
   if (version !== null && version.length < VERSION_DIGITS) {
     path = `${path.slice(0, path.lastIndexOf(";"))};v=${version.padStart(VERSION_DIGITS, "0")}`;
     if (path.length > MAX_SERVICE_PATH_LENGTH) return refuse("TOO_LONG");
@@ -250,7 +270,9 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
   }
 
   // Last, so every structural refusal above keeps its own, more precise, reason.
-  if (!isUnderODataRoot(path)) return refuse("NOT_ODATA_ROOT");
+  if (!isUnderODataRoot(path)) {
+    return refuse(path.toLowerCase().startsWith(`${SUCCESSFACTORS_V2_ROOT}/`) ? "DATASET_IN_PATH" : "NOT_ODATA_ROOT");
+  }
 
   return { ok: true, path };
 }

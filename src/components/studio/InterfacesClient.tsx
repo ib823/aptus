@@ -316,6 +316,7 @@ export function InterfacesClient({
                   liveWrite={selectedLiveWrite}
                   targets={verifyTargets.filter((t) => t.product === selected.sapProduct)}
                   canAuthor={canAuthor}
+                  productLabel={products.find((p) => p.key === selected.sapProduct)?.label}
                 />
               </Row>
             )}
