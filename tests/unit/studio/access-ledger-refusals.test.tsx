@@ -144,3 +144,38 @@ describe("read-only on a write row", () => {
     expect(read.queryByText(/Read-only can't narrow a write request/)).toBeNull();
   });
 });
+
+/*
+ * REVIEW ROUND 1 (P0.1, A47). The ledger flagged every unbound settled row as
+ * "Needs re-approval", a rejection or a revocation included, inviting a
+ * builder to re-request what a second person deliberately refused. It now
+ * flags exactly what Control Tower and the CoreEdge requests board flag: an
+ * unbound grant that still authorises something.
+ */
+describe("the re-approval flag on an unbound legacy grant", () => {
+  const unbound = (externalId: string, over: Record<string, unknown>) => ({
+    ...grant(externalId, "READ", OTHERS),
+    decision: "APPROVED",
+    decidedById: "u_colleague2",
+    decidedAt: new Date("2026-10-02T00:00:00Z"),
+    interfaceId: null,
+    sapProduct: null,
+    unboundReason: "NO_MATCH",
+    ...over,
+  });
+
+  it("is shown on a live approval only, never on a rejected, revoked or lapsed one", async () => {
+    grantRows.mockResolvedValue([
+      unbound("API_LIVE", {}),
+      unbound("API_REJECTED", { decision: "REJECTED" }),
+      unbound("API_REVOKED", { revokedAt: new Date("2026-10-03T00:00:00Z"), revokedReason: "No longer needed." }),
+      unbound("API_LAPSED", { expiresAt: new Date(Date.now() - 86_400_000) }),
+    ]);
+    await renderLedger();
+
+    expect(within(row("API_LIVE")).getByText(/Needs re-approval/)).toBeTruthy();
+    for (const id of ["API_REJECTED", "API_REVOKED", "API_LAPSED"]) {
+      expect(within(row(id)).queryByText(/Needs re-approval/), id).toBeNull();
+    }
+  });
+});

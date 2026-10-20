@@ -36,9 +36,10 @@ import {
   type OpsTone,
 } from "@/components/ops/OpsChrome";
 import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
-import { formatDate } from "@/lib/format/date";
+import { formatDate, formatDateTime } from "@/lib/format/date";
+import { NO_EXPIRY_LABEL, NO_EXPIRY_MEANING } from "@/lib/northbound/key-policy";
 
-type CredentialState = "active" | "expiring-soon" | "expired" | "revoked";
+type CredentialState = "active" | "expiring-soon" | "no-expiry" | "expired" | "revoked";
 
 interface Credential {
   id: string;
@@ -47,9 +48,13 @@ interface Credential {
   solutionStatus: string | null;
   label: string;
   environment: string;
+  /** The key's non-secret prefix; absent from an older payload. */
+  tokenPrefix?: string;
   state: CredentialState;
   lastObservedUseAt: string | null;
   expiresAt: string | null;
+  /** Until when the key a rotation replaced still works (P0.11), or null. */
+  previousValidUntil?: string | null;
   revokedAt: string | null;
   createdAt: string;
 }
@@ -61,6 +66,8 @@ interface TokensPayload {
     revoked: number;
     expired: number;
     expiringSoon: number;
+    /** Live TEST or PROD keys with no expiry (P0.11); absent from an older payload. */
+    noExpiry?: number;
     neverObservedInUse: number;
     withWriteCredential: number;
   };
@@ -81,6 +88,8 @@ const STATE: Record<CredentialState, { tone: OpsTone; label: string; meaning: st
     label: "expiring soon",
     meaning: "inside the expiry runway — rotation is the only remedy",
   },
+  // Live, and flagged: it predates mandatory expiry for TEST and PROD (P0.11).
+  "no-expiry": { tone: "attention", label: NO_EXPIRY_LABEL, meaning: NO_EXPIRY_MEANING },
   expired: { tone: "muted", label: "expired", meaning: "stopped working on purpose, on a known date" },
   revoked: { tone: "bad", label: "revoked", meaning: "deliberately withdrawn" },
 };
@@ -139,6 +148,12 @@ function TokensBody({ data }: { data: TokensPayload }) {
           label="Expiring soon"
           value={count(counts.expiringSoon)}
           tone={counts.expiringSoon > 0 ? "attention" : "default"}
+        />
+        <Stat
+          label="No expiry"
+          value={count(counts.noExpiry ?? 0)}
+          tone={(counts.noExpiry ?? 0) > 0 ? "attention" : "default"}
+          basis="TEST or PROD, issued before expiry was required — rotate to set one"
         />
         <Stat
           label="Revoked"
@@ -207,7 +222,12 @@ function TokensBody({ data }: { data: TokensPayload }) {
                 )}
               </td>
               <td style={opsMonoStyle}>
-                {c.expiresAt ? formatDate(c.expiresAt) : "no expiry"}
+                {c.expiresAt ? formatDate(c.expiresAt) : c.state === "no-expiry" ? NO_EXPIRY_LABEL : "no expiry"}
+                {c.previousValidUntil ? (
+                  <div style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
+                    previous key works until {formatDateTime(c.previousValidUntil)}
+                  </div>
+                ) : null}
               </td>
             </tr>
           ))}

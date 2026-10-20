@@ -67,6 +67,8 @@ therefore do not spend each other's allowance.
 | `user.create_privileged` | `POST /api/admin/users`, only when the new account's role can take a governance action (an admin role or `consultant`) |
 | `user.role_change` | `PATCH /api/admin/users/[userId]` with `role` |
 | `user.mfa_reset` | `PATCH /api/admin/users/[userId]` with `resetMfa` |
+| `org.create` | `POST /api/admin/organizations` (P0.13) |
+| `platform.bootstrap` | `POST /api/auth/bootstrap-admin`, after the bootstrap token has been checked (P0.13; see `docs/runbooks/developer-onboarding.md`) |
 
 The passkeys themselves are on the list because the step-up accepts any passkey
 registered to the person. If a stolen session could add its own passkey, it

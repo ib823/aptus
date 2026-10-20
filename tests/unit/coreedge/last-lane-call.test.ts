@@ -22,6 +22,7 @@ interface Row {
   environment: string;
   externalId: string;
   dryRun: boolean;
+  replayed: boolean;
   status: number;
   correlationId: string;
   at: Date;
@@ -89,6 +90,7 @@ const call = (over: Partial<Row>): Row => ({
   environment: "PROD",
   externalId: "API_BUSINESS_PARTNER",
   dryRun: false,
+  replayed: false,
   status: 200,
   correlationId: "c",
   at: new Date("2026-10-19T11:00:00.000Z"),
@@ -129,6 +131,14 @@ describe("lastLaneCall", () => {
       call({ externalId: "-schema-", status: 200, correlationId: "corr-schema", at: new Date("2026-10-19T12:01:00.000Z") }),
     ];
     expect((await lastLaneCall("org_a", "sol_1", "if_1", "PROD"))?.correlationId).toBe("corr-data-502");
+  });
+
+  it("quotes the call that reached SAP, not a later same-key replay of it (P0.5)", async () => {
+    db.rows = [
+      call({ status: 504, correlationId: "corr-original", at: new Date("2026-10-19T11:59:00.000Z") }),
+      call({ status: 504, replayed: true, correlationId: "corr-replay", at: new Date("2026-10-19T12:01:00.000Z") }),
+    ];
+    expect((await lastLaneCall("org_a", "sol_1", "if_1", "PROD"))?.correlationId).toBe("corr-original");
   });
 
   it("still never quotes a dry run", async () => {

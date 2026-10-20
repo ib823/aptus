@@ -22,6 +22,7 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 import { DATA_CLASS_VALUES } from "@/lib/studio/data-class";
 import { effectiveDecision, isGranting } from "@/lib/studio/grants";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
+import { liveOwnership } from "@/lib/studio/owner-liveness";
 import {
   OWNER_CLAIM_BY_DECIDER,
   OWNER_RELEASE_WHILE_PENDING,
@@ -301,17 +302,37 @@ export async function PATCH(request: NextRequest) {
     // Promoting into ACTIVE from anywhere else must satisfy the gate outright —
     // refused, not silently downgraded, because a promotion that quietly did not
     // happen is worse than one that was clearly declined.
+    /*
+     * ACTIVE IS JUDGED ON LIVE OWNERS (P0.1, A69, review round 1). The nightly
+     * sweep drops an app whose slot holds a departed owner to RESTRICTED; this
+     * gate judged the raw ids, so one "Promote to ACTIVE" from anyone undid the
+     * sweep with the departed owner still in the slot. A slot held by someone
+     * deactivated or gone from the organization counts as empty here, as it
+     * does for the sweep and the credential gates (lib/studio/owner-liveness.ts).
+     * Read under the row lock, like everything else this save decides on.
+     */
+    const ending = requestedStatus === "ACTIVE" ? await liveOwnership(tx, organizationId, nextOwnership) : null;
+    const accountable = ending?.live ?? nextOwnership;
+    const departedNote =
+      ending !== null && ending.departed.length > 0
+        ? " A slot whose owner has been deactivated or has left the organization counts as empty: someone who can still answer for the app must claim it."
+        : "";
+
+    // Promoting into ACTIVE from anywhere else must satisfy the gate outright —
+    // refused, not silently downgraded, because a promotion that quietly did not
+    // happen is worse than one that was clearly declined.
     const isPromotion = requestedStatus === "ACTIVE" && currentStatus !== "ACTIVE";
     if (isPromotion) {
-      const verdict = evaluatePromotion(nextOwnership);
-      if (!verdict.ok) return { refusal: studioError("CONFLICT", verdict.reason) };
+      const verdict = evaluatePromotion(accountable);
+      if (!verdict.ok) return { refusal: studioError("CONFLICT", verdict.reason + departedNote) };
     }
 
     // An ALREADY-active solution that just lost an owner is a different case: the
     // caller is not promoting, they are orphaning. Drop it rather than refuse,
-    // so the record can never sit ACTIVE with nobody accountable.
-    const resolution = isOrphaningAnActiveSolution(currentStatus, requestedStatus, nextOwnership)
-      ? resolveStatusOnSave(requestedStatus, nextOwnership)
+    // so the record can never sit ACTIVE with nobody accountable — a departed
+    // owner's slot included, as the nightly sweep would.
+    const resolution = isOrphaningAnActiveSolution(currentStatus, requestedStatus, accountable)
+      ? resolveStatusOnSave(requestedStatus, accountable)
       : { status: requestedStatus, autoDropped: false as const };
 
     /*

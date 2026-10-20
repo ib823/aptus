@@ -12,12 +12,19 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
-import { newCorrelationId, northboundError, northboundOk, unauthenticated } from "@/lib/northbound/respond";
+import {
+  newCorrelationId,
+  northboundOk,
+  northboundThrottleRefusal,
+  unauthenticated,
+} from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
 import { customServiceDefinition } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { grantsUsableUnder, isBoundTo, type GrantedInterface } from "@/lib/studio/grant-binding";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
@@ -26,9 +33,13 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const correlationId = newCorrelationId();
 
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
+    // A key matching no row spends the address's failed-lookup budget, which
+    // the edge reads first; a real key that refuses is bounded by its own.
+    await noteFailedCredential(request.headers, bearer, auth.reason);
     return unauthenticated(correlationId);
   }
   const client = auth.client;
@@ -45,6 +56,8 @@ export async function GET(request: NextRequest) {
    */
   const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
+    // 429 for this credential's own use, 503 when the limiter is down (A44).
+    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -52,12 +65,13 @@ export async function GET(request: NextRequest) {
       operation: "READ",
       externalId: "-discovery-",
       environment: client.environment,
-      status: 429,
+      status: refusal.status,
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      failureReason: refusal.failureReason,
     });
-    return northboundError("RATE_LIMITED", "Too many requests. Slow down and retry.", 429, correlationId);
+    return refusal.response;
   }
 
   const [interfaces, grants] = await Promise.all([
@@ -75,6 +89,8 @@ export async function GET(request: NextRequest) {
         status: true,
         servicePath: true,
         odataVersion: true,
+        // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+        createdAt: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -83,7 +99,17 @@ export async function GET(request: NextRequest) {
         solutionId: client.solutionId,
         environment: client.environment,
       }),
-      select: { externalId: true, operation: true, decision: true, expiresAt: true, revokedAt: true },
+      select: {
+        externalId: true,
+        operation: true,
+        decision: true,
+        expiresAt: true,
+        revokedAt: true,
+        interfaceId: true,
+        sapProduct: true,
+        createdAt: true,
+        unboundCutoffAt: true,
+      },
     }),
   ]);
 
@@ -109,19 +135,30 @@ export async function GET(request: NextRequest) {
   // `callable` outright a few lines down, so a read predicate is the whole of
   // what this set can ever decide. If that exclusion is ever relaxed, this must
   // branch on `isWriteOperation(g.operation)` at the same time.
+  //
+  // And with BINDING (P0.1, A47): a grant counts for the one interface it is
+  // bound to, on its product — or, while COREEDGE_GRANT_BINDING is legacy, an
+  // unbound grant counts on the old tuple for an interface that existed by its
+  // cut-off. `grantsUsableUnder` is the same call access.ts makes.
   const environment = client.environment as GrantEnvironment;
-  const liveGrants = new Set(
-    grants
-      .filter(
-        (g) =>
-          grantsRead(g.decision as GrantDecision, environment) &&
-          // `== null` to match access.ts exactly — an unselected field must not
-          // read as revoked. Same predicate, same nullishness, or they drift.
-          g.revokedAt == null &&
-          (g.expiresAt === null || g.expiresAt.getTime() > now),
-      )
-      .map((g) => `${g.externalId}::${g.operation}`),
+  const liveReadGrants = grants.filter(
+    (g) =>
+      grantsRead(g.decision as GrantDecision, environment) &&
+      // `== null` to match access.ts exactly — an unselected field must not
+      // read as revoked. Same predicate, same nullishness, or they drift.
+      g.revokedAt == null &&
+      (g.expiresAt === null || g.expiresAt.getTime() > now),
   );
+  const hasLiveGrant = (i: GrantedInterface) =>
+    grantsUsableUnder(
+      liveReadGrants.filter(
+        (g) =>
+          g.externalId === i.externalId &&
+          g.operation === i.operation &&
+          (g.interfaceId == null || isBoundTo(g, i)),
+      ),
+      i,
+    ).length > 0;
 
   /*
    * Discovery is audited like the data routes — a 200 — but with a NULL
@@ -169,7 +206,7 @@ export async function GET(request: NextRequest) {
         callable:
           i.mode !== "WRITE" &&
           i.status !== "DEPRECATED" &&
-          liveGrants.has(`${i.externalId}::${i.operation}`) &&
+          hasLiveGrant(i) &&
           (i.servicePath == null ||
             customServiceDefinition(getSapProduct(i.sapProduct) ?? { key: "" }, i) !== null),
         // Which kind of service this is, and its version when the interface

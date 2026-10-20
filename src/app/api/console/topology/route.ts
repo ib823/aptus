@@ -180,11 +180,13 @@ export async function GET(request: NextRequest) {
         "operation",
         "environment",
         "status",
-        // Apart, so a replay can be kept off the connection: SAP was not
-        // called. See AuditSlice.replayed.
+        // Kept as a column so attributeCalls can still tell a replay apart if
+        // one ever reaches it; the where below already leaves them out.
         "replayed",
       ],
-      where: opsWhere(actor, { at: { gte: since }, dryRun: false }),
+      // NOR ARE REPLAYS (P0.5): a same-key retry re-serves a stored outcome
+      // and asks nothing of the grant, the interface or SAP again.
+      where: opsWhere(actor, { at: { gte: since }, dryRun: false, replayed: false }),
       _count: { _all: true },
     }),
   ]);

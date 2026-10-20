@@ -2,16 +2,11 @@
 
 import nodemailer from "nodemailer";
 
+import { smtpConnectionOptions } from "@/lib/email/smtp-options";
+
+// Implicit TLS on 465, STARTTLS required on any other port (smtp-options.ts).
 function getTransport() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST ?? "smtp-relay.brevo.com",
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: false, // STARTTLS on port 587
-    auth: {
-      user: process.env.SMTP_USER ?? "",
-      pass: process.env.SMTP_PASS ?? "",
-    },
-  });
+  return nodemailer.createTransport(smtpConnectionOptions());
 }
 
 const DEFAULT_FROM = `"${process.env.EMAIL_SENDER_NAME ?? "ABeam Workbench"}" <${process.env.EMAIL_FROM ?? "no-reply@brevo.com"}>`;

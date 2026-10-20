@@ -1,7 +1,26 @@
 /** Middleware: Bridge NextAuth JWT sessions + API rate limiting */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
+import { machineAuthFailureKey } from "@/lib/northbound/auth-failures";
+import { extractBearer } from "@/lib/northbound/bearer";
+import {
+  checkRateLimit,
+  getClientIp,
+  isLiveSapTenantRoute,
+  isMachineApiRoute,
+  machineCredentialKey,
+  machineRateLimitMode,
+  peekRateLimit,
+  RATE_LIMITS,
+  type RateLimitResult,
+} from "@/lib/security/rate-limit";
+import {
+  isLimiterOutage,
+  limiterUnavailableResponse,
+  LIMITER_UNAVAILABLE_MESSAGE,
+  retryAfterSeconds,
+} from "@/lib/security/rate-limit-response";
 import { getCspWithNonce } from "@/lib/pwa/security-headers";
 // The Workbench route allow-list lives in lib so it can be tested. Anything
 // missing from it is redirected away before auth or RBAC ever run.
@@ -76,6 +95,108 @@ const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
  * split above: use WORKBENCH_ONLY when there is exactly one host and it
  * should present only the Workbench. */
 const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
+
+/**
+ * The edge limit for an authenticated MACHINE route (audit A43, P0.5), or null
+ * when the request takes the ordinary per-IP API buckets instead.
+ *
+ * WHY NOT THE IP. Every /api/* call used to spend `api:<method>:<ip>`, so one
+ * credential looping from a vendor's server spent the whole address's
+ * allowance, and every other customer's credential behind that egress was
+ * refused here — before its own route, with no correlation id and no audit
+ * row — though its own budget was untouched. A machine call carrying a bearer
+ * is now counted against THAT credential (a hash of it; the route still
+ * authenticates it), and then against a high per-address backstop that only a
+ * flood of random keys can reach.
+ *
+ * THE ORDER IS THE ISOLATION. The backstop is checked only once the
+ * credential's own bucket admitted the call, so a runaway key — refused at its
+ * own ceiling — spends at most that ceiling of its address's backstop.
+ *
+ * A machine call with NO bearer is not a credential at all; it keeps the
+ * per-IP bucket it always had (and the route answers it 401).
+ *
+ * MADE-UP KEYS ARE BOUNDED BY THE ADDRESS, FIRST. A new junk bearer on every
+ * call is a new credential bucket every time, so neither bucket above holds a
+ * client that cannot authenticate: each call it sent cost the route a database
+ * lookup, 6,000 a minute per address where the per-IP bucket allowed 120. The
+ * route counts every key that matched no row in `machine-authfail:<ip>`
+ * (northbound/auth-failures.ts); it is read here, without spending it, before
+ * anything else, and once it is empty the address is refused until the window
+ * frees room. A key whose lookups succeed never spends it, and neither does a
+ * real key that refuses (expired, rotated out, revoked): its own bucket below
+ * bounds it, so it cannot lock other tenants' keys off a shared egress. Read as unknown
+ * (the limiter cannot be asked), it refuses nothing: the buckets below then
+ * answer the outage.
+ */
+async function machineRouteLimit(
+  request: NextRequest,
+  pathname: string,
+  clientIp: string,
+): Promise<{ result: RateLimitResult; by: MachineRefusalBy } | null> {
+  if (!isMachineApiRoute(pathname) || machineRateLimitMode() !== "credential") return null;
+  const bearer = extractBearer(request.headers.get("authorization"));
+  if (!bearer) return null;
+  const failures = await peekRateLimit(machineAuthFailureKey(clientIp), RATE_LIMITS.machineAuthFailure);
+  if (failures && failures.remaining <= 0) {
+    // The peek has no reset time; a full window is the longest it can be.
+    const resetMs = RATE_LIMITS.machineAuthFailure.windowMs;
+    return { result: { allowed: false, remaining: 0, resetMs, reason: "limited" }, by: "failed-credentials" };
+  }
+  const own = await checkRateLimit(await machineCredentialKey(bearer), RATE_LIMITS.machineCredential);
+  if (!own.allowed) return { result: own, by: "credential" };
+  const backstop = await checkRateLimit(`machine-ip:${clientIp}`, RATE_LIMITS.machineIpBackstop);
+  if (!backstop.allowed) return { result: backstop, by: "address" };
+  return { result: { ...own, remaining: Math.min(own.remaining, backstop.remaining) }, by: "credential" };
+}
+
+/** Whose limit refused a machine call at the edge. */
+type MachineRefusalBy = "credential" | "address" | "failed-credentials";
+
+const MACHINE_REFUSAL_MESSAGES: Record<MachineRefusalBy, string> = {
+  credential: "Too many requests for this client credential.",
+  address: "Too many requests from this address.",
+  "failed-credentials":
+    "Too many requests with an unrecognised client credential from this address. Calls from this address are refused until the window frees room.",
+};
+
+/**
+ * A machine route's refusal, in the broker's own envelope (respond.ts): the
+ * caller is an application that branches on `error.code` and quotes the
+ * correlation id, so it gets both, from the edge as from the route. Nothing is
+ * audited here — middleware has no database — and the id says as much to
+ * whoever looks it up and finds no row: the call never reached the broker.
+ *
+ * TWO CODES, BECAUSE THE ADVICE DIFFERS. RATE_LIMITED is this credential's own
+ * budget: the caller backs off that key. RATE_LIMITED_ADDRESS is the caller's
+ * ADDRESS — the backstop, or the failed-lookup bucket — which another key, or
+ * another tenant on a shared egress, may have spent; backing off a key that
+ * never used its budget does not help, and the developer guide says so.
+ */
+function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResponse {
+  const correlationId = crypto.randomUUID();
+  const outage = isLimiterOutage(result);
+  return NextResponse.json(
+    {
+      error: outage
+        ? { code: "LIMITER_UNAVAILABLE", message: LIMITER_UNAVAILABLE_MESSAGE, correlationId }
+        : {
+            code: by === "credential" ? "RATE_LIMITED" : "RATE_LIMITED_ADDRESS",
+            message: MACHINE_REFUSAL_MESSAGES[by],
+            correlationId,
+          },
+    },
+    {
+      status: outage ? 503 : 429,
+      headers: {
+        "x-correlation-id": correlationId,
+        "cache-control": "no-store",
+        "Retry-After": retryAfterSeconds(result),
+        "X-RateLimit-Remaining": "0",
+      },
+    },
+  );
+}
 
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
@@ -249,12 +370,33 @@ async function handleRequest(
 
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
+
+      const machine = await machineRouteLimit(request, pathname, clientIp);
+      if (machine) {
+        if (!machine.result.allowed) {
+          return withObservabilityHeaders(machineRefusal(machine.result, machine.by), requestId, requestStart);
+        }
+        const response = NextResponse.next({ request: { headers: requestHeaders } });
+        response.headers.set("X-RateLimit-Remaining", String(machine.result.remaining));
+        return withObservabilityHeaders(response, requestId, requestStart);
+      }
+
       // The governance step-up is not a sign-in: its caller already holds a
       // session, and its routes limit each person themselves. In the shared
       // per-IP sign-in bucket, approvers behind one office address would
       // spend each other's allowance; they fall through to the mutation one.
       const isStepUp = pathname.startsWith("/api/auth/webauthn/step-up/");
       const isAuthMutation = pathname.startsWith("/api/auth") && !isStepUp;
+      // Sign-up (P0.13) is an auth mutation with a much tighter budget of its
+      // own: each one sends an email from this host's domain and, with
+      // developer sign-up open, can create an organization. Per address here;
+      // the route adds a per-email bucket the edge cannot key (it has no body).
+      // Only while developer sign-up is OPEN (wave 1a integration review):
+      // off, the only sign-up is the partner trial, which predates P0.13 and
+      // keeps the shared auth bucket it had, so an office registering a dozen
+      // partners from one address is not refused on deploy.
+      const isSignup =
+        pathname === "/api/auth/signup" && request.method === "POST" && developerSignupMode() === "open";
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
       // Expensive live-SAP routes get their own tight bucket so they can't
       // amplify load onto the SAP tenant. The universal "show the data" surface
@@ -266,6 +408,8 @@ async function handleRequest(
       // endpoints use method-based limits.
       const config = isSapLive
         ? RATE_LIMITS.sapLive
+        : isSignup
+        ? RATE_LIMITS.signupPerIp
         : isAuthMutation
         ? RATE_LIMITS.auth
         : isReportRoute
@@ -276,6 +420,8 @@ async function handleRequest(
 
       const key = isSapLive
         ? `sap-live:${clientIp}`
+        : isSignup
+        ? `signup:${clientIp}`
         : isAuthMutation
         ? `auth:${clientIp}`
         : isReportRoute
@@ -283,6 +429,12 @@ async function handleRequest(
           : `api:${request.method}:${clientIp}`;
 
       const result = await checkRateLimit(key, config);
+
+      // An outage is not throttling (audit A44): the limiter fails closed in
+      // production, and the refusal says why — 503, never 429.
+      if (isLimiterOutage(result)) {
+        return withObservabilityHeaders(limiterUnavailableResponse(result), requestId, requestStart);
+      }
 
       if (!result.allowed) {
         const rateLimitResponse = new NextResponse(

@@ -42,8 +42,9 @@
 import { prisma } from "@/lib/db/prisma";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { newCorrelationId } from "@/lib/northbound/respond";
-import { allowsUngrantedRead, type SapEnvironment } from "@/lib/sap-public/environment";
+import { allowsUngrantedRead, parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/environment";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
+import { isSandboxDeveloper } from "@/lib/studio/rbac";
 
 /**
  * The organization a console read is recorded under when the reader has none.
@@ -72,7 +73,9 @@ export type ConsoleReadRefusal =
   /** The system declares TEST/PROD (or nothing) and no live grant covers it. */
   | "NO_APPROVED_GRANT"
   /** The system has not declared its landscape, so no ceiling can be applied. */
-  | "UNDECLARED_ENVIRONMENT";
+  | "UNDECLARED_ENVIRONMENT"
+  /** A sandbox developer (P0.13) reading anything but a SANDBOX system. */
+  | "SANDBOX_ONLY";
 
 export interface ConsoleReadDecision {
   allowed: boolean;
@@ -107,7 +110,46 @@ export function consoleReadRefusalMessage(
         "whether reading it is safe. Set the environment on the connection in Studio — a system " +
         "that might be production is treated as production."
       );
+    case "SANDBOX_ONLY":
+      return (
+        `A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this ` +
+        `host provides. This system is declared ${environment ?? "(undeclared)"}. Pick a Sandbox ` +
+        `tenant, or ask an administrator of your organization for a role that can request access.`
+      );
   }
+}
+
+/**
+ * The sandbox developer's ceiling (roadmap P0.13): SANDBOX, and nothing above it.
+ *
+ * WIDER THAN `decideConsoleRead` IN ONE RESPECT, ON PURPOSE. That guard exempts
+ * the deployment's own `{PREFIX}_*` tenant, because no organization owns it and
+ * a builder exploring it needs no grant. A sandbox developer is whoever signed
+ * up on the shared host, so the deployment tenant is exactly what must be
+ * capped for them: on a host whose env tenant is a real S/4HANA system, an open
+ * sign-up must not become a live read of it. The tenant counts as SANDBOX only
+ * when it says so (`environment: "SANDBOX"` in `*_TENANTS_JSON`, or
+ * `*_TENANT_ENVIRONMENT`); undeclared is refused, as it is everywhere else.
+ *
+ * Every other role is answered `allowed` here and keeps its own rules.
+ */
+export function decideSandboxDeveloperRead(
+  role: string | null | undefined,
+  read: {
+    readonly tenant: { readonly environment?: string };
+    readonly connection: { readonly environment: SapEnvironment | null } | null;
+  },
+): ConsoleReadDecision {
+  if (!isSandboxDeveloper(role)) return { allowed: true, refusal: null, message: null };
+  const environment = read.connection
+    ? read.connection.environment
+    : parseSapEnvironment(read.tenant.environment);
+  if (environment === "SANDBOX") return { allowed: true, refusal: null, message: null };
+  return {
+    allowed: false,
+    refusal: "SANDBOX_ONLY",
+    message: consoleReadRefusalMessage("SANDBOX_ONLY", environment),
+  };
 }
 
 /**

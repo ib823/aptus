@@ -33,6 +33,9 @@
  *   user.create_privileged   POST  /api/admin/users          (a role that can act on governance)
  *   user.role_change         PATCH /api/admin/users/[userId] (role)
  *   user.mfa_reset           PATCH /api/admin/users/[userId] (resetMfa)
+ *   org.create               POST  /api/admin/organizations  (P0.13)
+ *   platform.bootstrap       POST  /api/auth/bootstrap-admin (P0.13: claiming the
+ *                                  first platform admin with the bootstrap token)
  *
  * THE PASSKEYS THEMSELVES ARE ON THE LIST because the step-up is only as strong
  * as the set of passkeys it accepts. A stolen session that could add its own
@@ -124,7 +127,9 @@ export type GovernanceAction =
   | "passkey.remove"
   | "user.create_privileged"
   | "user.role_change"
-  | "user.mfa_reset";
+  | "user.mfa_reset"
+  | "org.create"
+  | "platform.bootstrap";
 
 /**
  * The audit entity a governance action's `targetId` names, so a warn-mode
@@ -147,6 +152,8 @@ const TARGET_ENTITY: Record<GovernanceAction, AuditEntityType> = {
   "user.create_privileged": "User",
   "user.role_change": "User",
   "user.mfa_reset": "User",
+  "org.create": "Organization",
+  "platform.bootstrap": "User",
 };
 
 /**
@@ -239,7 +246,7 @@ const REFUSAL_COPY: Record<StepUpCode, string> = {
     "then try again. Nothing has changed.",
   STEP_UP_TOKEN_REFUSED:
     "A personal or CI token cannot approve access, issue, rotate or revoke a key, send a claim " +
-    "link, change a connection's secrets or writes, or administer accounts. Sign in as yourself and " +
+    "link, change a connection's secrets or writes, or administer accounts or organizations. Sign in as yourself and " +
     "confirm with your passkey.",
 };
 

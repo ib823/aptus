@@ -14,6 +14,7 @@
  */
 
 import { Wordmark } from '@/components/brand/Wordmark';
+import { developerSignupMode } from '@/lib/auth/developer-workspace';
 import { WorkbenchLoginForm } from './WorkbenchLoginForm';
 
 export const dynamic = 'force-dynamic';
@@ -85,6 +86,17 @@ export default async function WorkbenchLoginPage({ searchParams }: PageProps) {
         </p>
 
         <WorkbenchLoginForm initialError={initialError} />
+
+        {/* Only when COREEDGE_DEVELOPER_SIGNUP=open (P0.13): the way in for a
+            developer with no invitation. Off, nothing new is offered here. */}
+        {developerSignupMode() === 'open' ? (
+          <p style={{ fontSize: 14, color: '#5A5A5A', marginTop: 16, textAlign: 'center' }}>
+            New here?{' '}
+            <a href="/signup/developer" style={{ color: '#1A1A1A', fontWeight: 600, textDecoration: 'underline' }}>
+              Create a developer workspace
+            </a>
+          </p>
+        ) : null}
 
         <div style={{ fontSize: 12, color: '#888780', marginTop: 24, textAlign: 'center' }}>
           For ABeam consultants. By signing in you agree to use ABeam Workbench in line with the engagement policies your team has set.

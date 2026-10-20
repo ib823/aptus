@@ -16,11 +16,18 @@
  * pair, so re-issuing for an environment replaces its token rather than
  * accumulating, while a second environment adds a row beside it. The response
  * reports the count so a screen cannot imply more concurrency than that.
+ *
+ * P0.11: a live TEST or PROD key with no expiry is its own state,
+ * `no-expiry`, shown as "no expiry - set one" — it predates mandatory expiry,
+ * still works, and needs a rotation. An expired key is `expired` and is never
+ * counted as active. A key inside its rotation overlap says until when the key
+ * it replaced still works (`previousValidUntil`).
  */
 
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
+import { keyState, overlapIsOpen, storedTokenPrefix } from "@/lib/northbound/key-policy";
 import { opsWhere, requireOperations } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 
@@ -46,13 +53,16 @@ export async function GET(request: NextRequest) {
         solutionId: true,
         label: true,
         environment: true,
+        tokenPrefix: true,
         isActive: true,
         lastUsedAt: true,
         expiresAt: true,
+        previousValidUntil: true,
         revokedAt: true,
         createdAt: true,
-        // secretsCiphertext holds the write credential; tokenHash holds the read
-        // one. Neither is selected, here or anywhere reachable from a client.
+        // secretsCiphertext holds the write credential; tokenHash and
+        // previousTokenHash hold read ones. None is selected, here or anywhere
+        // reachable from a client.
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -97,19 +107,35 @@ export async function GET(request: NextRequest) {
   });
   const solutionById = new Map(solutions.map((s) => [s.id, s]));
 
+  /** One state per row, from the predicate authentication itself uses. */
+  const stateOf = (r: (typeof rows)[number]) => {
+    const state = keyState(r, now);
+    if (state === "revoked" || state === "inactive") return "revoked" as const;
+    if (state === "expired") return "expired" as const;
+    if (state === "noExpiry") return "no-expiry" as const;
+    return r.expiresAt !== null && r.expiresAt.getTime() <= soon.getTime()
+      ? ("expiring-soon" as const)
+      : ("active" as const);
+  };
+
   let active = 0;
   let expired = 0;
   let expiringSoon = 0;
+  let noExpiry = 0;
   let neverUsed = 0;
 
   for (const r of rows) {
     // A revoked row only appears here with `includeRevoked=1`; it is counted by
     // its own query either way, so it is skipped rather than double-counted.
-    if (r.revokedAt !== null || !r.isActive) continue;
-    if (r.expiresAt !== null && r.expiresAt.getTime() <= now.getTime()) expired++;
+    const state = stateOf(r);
+    if (state === "revoked") continue;
+    if (state === "expired") expired++;
     else {
+      // Live: it authenticates. A key with no expiry where one is required
+      // still works, so it is active AND flagged.
       active++;
-      if (r.expiresAt !== null && r.expiresAt.getTime() <= soon.getTime()) expiringSoon++;
+      if (state === "expiring-soon") expiringSoon++;
+      if (state === "no-expiry") noExpiry++;
     }
     if (r.lastUsedAt === null) neverUsed++;
   }
@@ -124,6 +150,8 @@ export async function GET(request: NextRequest) {
       revoked,
       expired,
       expiringSoon,
+      /** Live TEST or PROD keys issued before expiry was mandatory (P0.11). */
+      noExpiry,
       neverObservedInUse: neverUsed,
       withWriteCredential,
     },
@@ -147,16 +175,19 @@ export async function GET(request: NextRequest) {
       solutionStatus: solutionById.get(r.solutionId)?.status ?? null,
       label: r.label,
       environment: r.environment,
-      state:
-        r.revokedAt !== null || !r.isActive
-          ? "revoked"
-          : r.expiresAt !== null && r.expiresAt.getTime() <= now.getTime()
-            ? "expired"
-            : r.expiresAt !== null && r.expiresAt.getTime() <= soon.getTime()
-              ? "expiring-soon"
-              : "active",
+      /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
+      tokenPrefix: storedTokenPrefix(r.tokenPrefix),
+      state: stateOf(r),
       lastObservedUseAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
       expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+      /**
+       * Until when the key a rotation replaced still works, while that window
+       * is open on a live key; null otherwise.
+       */
+      previousValidUntil:
+        stateOf(r) !== "revoked" && r.previousValidUntil !== null && overlapIsOpen(r.previousValidUntil, now)
+          ? r.previousValidUntil.toISOString()
+          : null,
       revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     })),

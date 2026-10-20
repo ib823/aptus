@@ -47,7 +47,9 @@ export default async function AppSettingsPage({
   const settings = await getAppSettings(user.organizationId, app);
   if (settings === null) notFound();
 
-  const liveKeys = settings.keys.filter((k) => k.revokedAt === null);
+  // Live by the broker's own rule (P0.11): an expired key stops nothing on
+  // retirement, because it already stopped.
+  const liveKeys = settings.keys.filter((k) => k.state === "active" || k.state === "noExpiry");
 
   return (
     <CoreEdgeShell
@@ -81,7 +83,7 @@ export default async function AppSettingsPage({
                         ? k.environmentRaw
                         : ENVIRONMENT_LABELS[k.environment]}
                     </span>
-                    <MaskedKey prefix="ce_" tail={k.tail} label={`Key for ${settings.name}`} />
+                    <MaskedKey prefix={k.tokenPrefix} tail={k.tail} label={`Key for ${settings.name}`} />
                   </li>
                 ))}
               </ul>

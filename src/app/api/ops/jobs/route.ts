@@ -31,6 +31,8 @@ const SCHEDULED_JOBS = [
   // Rides the analytics slot (daily-only cron plan); records its own runs.
   { job: "coreedge-usage", schedule: "daily 03:00 UTC, after analytics" },
   { job: "northbound-reap", schedule: "daily 03:30 UTC" },
+  // Rides the reap slot and its lease (P0.1); records its own runs.
+  { job: "owner-liveness", schedule: "daily 03:30 UTC, after northbound-reap" },
   { job: "connection-probes", schedule: "daily 04:00 UTC" },
 ] as const;
 

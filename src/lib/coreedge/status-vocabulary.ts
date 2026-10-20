@@ -20,6 +20,8 @@
  * for a transient." A lane keeps its last known status while a re-check runs.
  */
 
+import type { KeyState } from "@/lib/northbound/key-policy";
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * Tokens and glyphs
  * ────────────────────────────────────────────────────────────────────────── */
@@ -48,6 +50,19 @@ export const GATE_GLYPHS: Readonly<Record<GateToken, string>> = {
   "gate-wait": "…",
   "gate-bad": "✕",
   "gate-off": "–",
+};
+
+/**
+ * The glyph beside a key's state (P0.11), so a key that cannot authenticate
+ * never carries the mark a live one does. Labels: KEY_STATE_LABELS.
+ */
+export const KEY_STATE_GATES: Readonly<Record<KeyState | "none", GateToken>> = {
+  active: "gate-ok",
+  noExpiry: "gate-wait",
+  expired: "gate-bad",
+  revoked: "gate-bad",
+  inactive: "gate-off",
+  none: "gate-off",
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────

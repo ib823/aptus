@@ -38,8 +38,8 @@ import { CLAIM_LINK_COPY, DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { createClaimLink } from "@/lib/northbound/claim-link";
+import { KeyIssuerRefused, refuseKeyIssuer, type KeyIssuerRefusal } from "@/lib/northbound/issue";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { refuseCredentialIssuer } from "@/lib/studio/solutions";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,20 @@ const bodySchema = z.object({
 
 function refused(message: string, status: number): NextResponse {
   return NextResponse.json({ error: { message } }, { status });
+}
+
+/** The owner gate's refusal, in the lane page's own sentences. */
+function issuerRefused(refusal: KeyIssuerRefusal): NextResponse {
+  switch (refusal.reason) {
+    case "solutionGone":
+      return refused("No such app.", 404);
+    case "solutionRetired":
+      return refused(CLAIM_LINK_COPY.appRetired, 409);
+    case "ownersMissing":
+      return refused(CLAIM_LINK_COPY.appNeedsOwners, 409);
+    case "issuerIsOwner":
+      return refused(CLAIM_LINK_COPY.ownAppKey, 403);
+  }
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -86,9 +100,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Owners first, then the sender is none of them — the order Studio uses, and
   // for its reason: on an unowned app the second check passes for everyone.
-  const issuer = refuseCredentialIssuer(solution, user.id);
-  if (issuer === "ownersMissing") return refused(CLAIM_LINK_COPY.appNeedsOwners, 409);
-  if (issuer === "issuerIsOwner") return refused(CLAIM_LINK_COPY.ownAppKey, 403);
+  // On LIVE owners (P0.1, A69): a slot whose owner left counts as empty. The
+  // same gate runs again inside createClaimLink, under the app lock.
+  const issuer = await refuseKeyIssuer(prisma, user.organizationId, solutionId, user.id);
+  if (issuer !== null) return issuerRefused(issuer);
 
   // An issuance, so a fresh passkey too — asked last, once the link would
   // otherwise be sent (lib/auth/step-up.ts).
@@ -98,12 +113,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   });
   if (!stepUp.ok) return stepUp.response;
 
-  const link = await createClaimLink({
-    organizationId: user.organizationId,
-    solutionId,
-    environment,
-    createdById: user.id,
-  });
+  let link: Awaited<ReturnType<typeof createClaimLink>>;
+  try {
+    link = await createClaimLink({
+      organizationId: user.organizationId,
+      solutionId,
+      environment,
+      createdById: user.id,
+    });
+  } catch (err) {
+    if (err instanceof KeyIssuerRefused) return issuerRefused(err.refusal);
+    throw err;
+  }
 
   await writeConfigAudit({
     organizationId: user.organizationId,

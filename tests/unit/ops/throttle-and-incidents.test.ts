@@ -207,8 +207,15 @@ describe("the throttle endpoint is honest about which buckets it can see", () =>
     // fabrication, and a convincing one.
     const data = await body();
     const edge = data.buckets.filter((b: { keyedBy: string }) => b.keyedBy === "client IP");
-    expect(edge.length).toBe(2);
+    // The browser read and write buckets, and the machine routes' backstop.
+    expect(edge.length).toBe(3);
     for (const b of edge) expect(b.observable).toBe(false);
+
+    // The edge's per-credential bucket is keyed by whatever was presented, so
+    // it cannot be enumerated from the credential table either (A43).
+    const presented = data.buckets.filter((b: { keyedBy: string }) => b.keyedBy === "presented credential");
+    expect(presented.length).toBe(1);
+    expect(presented[0].observable).toBe(false);
 
     const perCredential = data.buckets.filter((b: { keyedBy: string }) => b.keyedBy === "credential");
     expect(perCredential.length).toBe(2);

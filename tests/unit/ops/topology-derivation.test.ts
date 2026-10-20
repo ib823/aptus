@@ -404,13 +404,14 @@ describe("call attribution pairs both ends, and never repeats one end's total", 
   });
 
   /*
-   * A REPLAY CALLED NOTHING BEYOND THE BROKER. Its row names the connection the
-   * request was bound to, so as not to read as a refusal before any binding —
-   * and attributed like a fresh call, one 201, one 504 and five same-key
-   * retries of the 504 drew seven calls and six failures through a connection
-   * SAP answered twice.
+   * A REPLAY IS NOT TRAFFIC (roadmap P0.5). Its row names the connection the
+   * request was bound to, so as not to read as a refusal before any binding.
+   * It was kept off the connection and counted everywhere else, so one SAP
+   * 504 retried five times was six failures on the credential, the grant and
+   * the interface — an edge "mostly failing" off one upstream answer — where
+   * the lane board, usage and incidents already counted it once.
    */
-  it("routes a replay to the broker's side of the graph, never through the connection", () => {
+  it("leaves a replay out of every tally, the connection's and the broker's side alike", () => {
     const write = { operation: "WRITE" };
     const a = attributeCalls([
       slice({ ...write, status: 201, count: 1 }),
@@ -420,9 +421,17 @@ describe("call attribution pairs both ends, and never repeats one end's total", 
 
     expect(a.byConnection.get("conn1")).toEqual({ calls: 2, failures: 1 });
     expect(tallyOf(a.byInterfaceConnection, pairKey("if1", "conn1"))).toEqual({ calls: 2, failures: 1 });
-    // The broker did answer every retry, along the credential's and the grant's edges.
-    expect(a.byInterface.get("if1")).toEqual({ calls: 7, failures: 6 });
-    expect(tallyOf(a.byCredentialSolution, pairKey("tok1", "sol1"))).toEqual({ calls: 7, failures: 6 });
+    expect(a.byInterface.get("if1")).toEqual({ calls: 2, failures: 1 });
+    expect(a.bySolution.get("sol1")).toEqual({ calls: 2, failures: 1 });
+    expect(tallyOf(a.byCredentialSolution, pairKey("tok1", "sol1"))).toEqual({ calls: 2, failures: 1 });
+    const gk = grantKey("sol1", "API_BUSINESS_PARTNER", "CREATE", "PROD");
+    expect(tallyOf(a.byGrant, gk)).toEqual({ calls: 2, failures: 1 });
+  });
+
+  it("a grant used only by replays is not observed at all", () => {
+    const a = attributeCalls([slice({ operation: "WRITE", status: 201, count: 3, replayed: true })]);
+    expect(a.byGrant.size).toBe(0);
+    expect(a.byCredential.size).toBe(0);
   });
 
   it("treats 5xx as a failure and 3xx as not one", () => {

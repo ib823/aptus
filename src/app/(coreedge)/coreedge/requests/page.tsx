@@ -8,7 +8,7 @@ import { EMPTY_STATES } from "@/lib/coreedge/copy";
 import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
-import { listOpenRequests } from "@/lib/coreedge/queries";
+import { listGrantsNeedingReapproval, listOpenRequests } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
 import { CoreEdgeShell } from "../CoreEdgeShell";
@@ -20,6 +20,10 @@ import { CoreEdgeShell } from "../CoreEdgeShell";
  * marked. Hiding them would leave a builder unable to see that their own request
  * exists or how long it has been waiting; marking them is what stops someone
  * opening one expecting to act.
+ *
+ * Below the queue: approved access that NEEDS RE-APPROVAL (P0.1, A47) — legacy
+ * grants bound to no single interface, so one approval reaches every SAP system
+ * offering the same service. Listed here because this is where approvers look.
  */
 
 export const metadata: Metadata = { title: "Requests" };
@@ -38,7 +42,10 @@ export default async function RequestsList(): Promise<ReactNode> {
   }
 
   const now = new Date();
-  const requests = await listOpenRequests(user.organizationId);
+  const [requests, reapprovals] = await Promise.all([
+    listOpenRequests(user.organizationId),
+    listGrantsNeedingReapproval(user.organizationId, now),
+  ]);
 
   return (
     <CoreEdgeShell
@@ -109,6 +116,41 @@ export default async function RequestsList(): Promise<ReactNode> {
           },
         ]}
       />
+      {reapprovals.length === 0 ? null : (
+        <section className="mt-8 space-y-3" aria-labelledby="needs-reapproval">
+          <h2 id="needs-reapproval" className="text-sm font-medium text-ink">
+            Approved access that needs re-approval ({reapprovals.length})
+          </h2>
+          <p className="max-w-prose text-sm text-ink-soft">
+            Each of these was approved before an approval named the one interface it covers, and it
+            matches none or several of its app&apos;s interfaces, so it reaches every SAP system that
+            offers the same service. It keeps working until this deployment switches to strict
+            binding. Ask for a new request from the interface it is for, approve that, then revoke
+            the old grant in Control Tower.
+          </p>
+          <OpsTable
+            caption="Approved access that needs re-approval"
+            legend={<span>Most recently used first · last used is when it last authorised a call</span>}
+            rows={reapprovals}
+            rowKey={(r) => r.id}
+            columns={[
+              { key: "app", header: "App", cell: (r) => r.appName },
+              { key: "feed", header: "Data feed", cell: (r) => r.feedLabel },
+              {
+                key: "env",
+                header: "Environment",
+                cell: (r) => (r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment]),
+              },
+              { key: "why", header: "Why", cell: (r) => r.reason },
+              {
+                key: "used",
+                header: "Last used",
+                cell: (r) => (r.lastUsedAt === null ? "not since binding" : (describeAge(r.lastUsedAt, now) ?? "just now")),
+              },
+            ]}
+          />
+        </section>
+      )}
     </CoreEdgeShell>
   );
 }

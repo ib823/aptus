@@ -3,7 +3,16 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import {
+  keyState,
+  overlapIsOpen,
+  storedTokenPrefix,
+  type ClientTokenPrefix,
+  type KeyState,
+} from "@/lib/northbound/key-policy";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import { unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { productName } from "@/lib/studio/product-marks";
 import type { GrantOperation } from "@/lib/studio/grants";
 
 import {
@@ -16,7 +25,7 @@ import {
   type ProbeFacts,
   type ReadFacts,
 } from "./lanes";
-import { LANE_ENVIRONMENTS } from "./lanes";
+import { isLaneCheckedApp, LANE_ENVIRONMENTS } from "./lanes";
 
 /**
  * Reading lanes out of the models that already hold the facts.
@@ -342,12 +351,13 @@ export async function listLanes(
           /*
            * WHETHER A CHECK WAS EVER COMING. These two mirror the filters in
            * `laneTargets()` (src/lib/ops/lane-check-sweep.ts) exactly: ACTIVE
-           * apps only, feeds that name an entity set only. They change no
-           * status — only the words a lane uses when it has no age to show,
-           * so "never checked" stops meaning six different things at once.
+           * and RESTRICTED apps only (isLaneCheckedApp), feeds that name an
+           * entity set only. They change no status — only the words a lane
+           * uses when it has no age to show, so "never checked" stops meaning
+           * six different things at once.
            */
           sweep: {
-            appIsActive: solution.status === "ACTIVE",
+            appIsActive: isLaneCheckedApp(solution.status),
             feedHasDataset: feed.entitySet !== null && feed.entitySet !== "",
             feedServiceResolves: resolvableServices.has(
               laneServiceKey({
@@ -498,6 +508,16 @@ export interface RequestRow {
 }
 
 /**
+ * "API_BUSINESS_PARTNER · READ · SAP S/4HANA Cloud": the product too once the
+ * request is bound to an interface (P0.1), because one approval now covers
+ * exactly one SAP system and the reviewer should see which.
+ */
+function requestFeedLabel(g: { externalId: string; operation: string; sapProduct: string | null }): string {
+  const base = `${g.externalId} · ${g.operation}`;
+  return g.sapProduct ? `${base} · ${productName(g.sapProduct)}` : base;
+}
+
+/**
  * Access requests awaiting a decision, newest first.
  *
  * `requestedById` is returned so the review screen can refuse self-approval
@@ -517,6 +537,8 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
       requestedById: true,
       createdAt: true,
       expiresAt: true,
+      // The SAP system the request is bound to (P0.1), named on the feed.
+      sapProduct: true,
       solution: {
         select: {
           id: true,
@@ -548,7 +570,7 @@ export async function listOpenRequests(organizationId: string): Promise<RequestR
     appId: g.solution.id,
     appName: g.solution.name,
     appSlug: g.solution.slug,
-    feedLabel: `${g.externalId} · ${g.operation}`,
+    feedLabel: requestFeedLabel(g),
     operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
@@ -580,6 +602,8 @@ export async function getRequest(
       requestedById: true,
       createdAt: true,
       expiresAt: true,
+      // The SAP system the request is bound to (P0.1), named on the feed.
+      sapProduct: true,
       solution: {
         select: {
           id: true,
@@ -607,7 +631,7 @@ export async function getRequest(
     appId: g.solution.id,
     appName: g.solution.name,
     appSlug: g.solution.slug,
-    feedLabel: `${g.externalId} · ${g.operation}`,
+    feedLabel: requestFeedLabel(g),
     operation: g.operation,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
@@ -619,6 +643,68 @@ export async function getRequest(
     createdAt: g.createdAt,
     expiresAt: g.expiresAt,
   };
+}
+
+/** A live legacy grant bound to no interface (P0.1, A47): it needs re-approval. */
+export interface ReapprovalRow {
+  readonly id: string;
+  readonly appName: string;
+  readonly feedLabel: string;
+  readonly environment: LaneEnvironment | null;
+  readonly environmentRaw: string;
+  /** Why the backfill could not bind it, in an approver's words. */
+  readonly reason: string;
+  /** When it last authorised a call; null when it has not since P0.1. */
+  readonly lastUsedAt: Date | null;
+  readonly expiresAt: Date | null;
+}
+
+/**
+ * Settled grants that still authorise something but are bound to no
+ * interface, most recently used first.
+ *
+ * WHY ON THE REQUESTS BOARD. This is where approvers look. Each of these was
+ * approved before a grant named the one interface it covers, and matches none
+ * or several of its app's interfaces — so one approval reaches every SAP
+ * system that offers the same service. They keep working until
+ * COREEDGE_GRANT_BINDING is strict; the remedy is a fresh request from the
+ * interface, decided like any other.
+ */
+export async function listGrantsNeedingReapproval(
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<ReapprovalRow[]> {
+  const grants = await prisma.apiAccessGrant.findMany({
+    where: {
+      organizationId,
+      interfaceId: null,
+      revokedAt: null,
+      decision: { notIn: ["REQUESTED", "REJECTED"] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    select: {
+      id: true,
+      externalId: true,
+      operation: true,
+      environment: true,
+      unboundReason: true,
+      unboundLastUsedAt: true,
+      expiresAt: true,
+      solution: { select: { name: true } },
+    },
+    orderBy: [{ unboundLastUsedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: 200,
+  });
+  return grants.map((g) => ({
+    id: g.id,
+    appName: g.solution.name,
+    feedLabel: `${g.externalId} · ${g.operation}`,
+    environment: parseLaneEnvironment(g.environment),
+    environmentRaw: g.environment,
+    reason: unboundGrantLabel(g.unboundReason),
+    lastUsedAt: g.unboundLastUsedAt,
+    expiresAt: g.expiresAt,
+  }));
 }
 
 export interface SapSystemRow {
@@ -698,10 +784,22 @@ export const KEY_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
  * first is knowable here. Nothing expires on its own.
  */
 export function keySuggestion(
-  key: { readonly revokedAt: Date | null; readonly lastUsedAt: Date | null },
+  key: {
+    readonly revokedAt: Date | null;
+    readonly lastUsedAt: Date | null;
+    /**
+     * An expired key is not "in active use", whatever its traffic says: it is
+     * refused on every call (P0.11). Optional so a caller that only knows the
+     * traffic still gets the traffic's answer.
+     */
+    readonly expiresAt?: Date | null;
+  },
   now: Date,
 ): string {
   if (key.revokedAt !== null) return "Revoked";
+  if (key.expiresAt != null && key.expiresAt.getTime() <= now.getTime()) {
+    return "Expired · send a new link to renew it";
+  }
   if (key.lastUsedAt === null) return "Never used · nothing depends on it";
   if (now.getTime() - key.lastUsedAt.getTime() > KEY_IDLE_MS) {
     return "Not used in 30 days · ask the owner before revoking";
@@ -839,6 +937,16 @@ export interface KeyRow {
   readonly expiresAt: Date | null;
   /** Last four of the stored label, for recognition. Never the token. */
   readonly tail: string;
+  /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
+  readonly tokenPrefix: ClientTokenPrefix;
+  /**
+   * Whether the key authenticates now, by the broker's own rule (P0.11):
+   * `expired` and `revoked` are never live, and `noExpiry` is a live TEST or
+   * PROD key that must be given an expiry.
+   */
+  readonly state: KeyState;
+  /** Until when the key a rotation replaced still works, while that is still ahead. */
+  readonly previousValidUntil: Date | null;
 }
 
 /**
@@ -849,7 +957,7 @@ export interface KeyRow {
  * would be a second place the key exists, which is the whole thing the
  * one-time claim link is built to avoid.
  */
-export async function listKeys(organizationId: string): Promise<KeyRow[]> {
+export async function listKeys(organizationId: string, now: Date = new Date()): Promise<KeyRow[]> {
   const [clients, solutions] = await Promise.all([
     prisma.solutionClient.findMany({
       where: { organizationId },
@@ -858,10 +966,13 @@ export async function listKeys(organizationId: string): Promise<KeyRow[]> {
         solutionId: true,
         label: true,
         environment: true,
+        tokenPrefix: true,
+        isActive: true,
         createdAt: true,
         lastUsedAt: true,
         revokedAt: true,
         expiresAt: true,
+        previousValidUntil: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -887,6 +998,10 @@ export async function listKeys(organizationId: string): Promise<KeyRow[]> {
       revokedAt: c.revokedAt,
       expiresAt: c.expiresAt,
       tail: c.label.slice(-4),
+      tokenPrefix: storedTokenPrefix(c.tokenPrefix),
+      state: keyState(c, now),
+      previousValidUntil:
+        c.revokedAt === null && overlapIsOpen(c.previousValidUntil, now) ? c.previousValidUntil : null,
     };
   });
 }
@@ -1050,6 +1165,13 @@ export interface PassportRow {
   readonly approvedAt: Date | null;
   readonly accessEnds: Date | null;
   /**
+   * The state of the key this app holds for the row's environment (P0.11),
+   * or `none` when it holds none. An approval is what may leave SAP; the key
+   * is whether anything CAN leave right now — and an expired or revoked key
+   * must never read as live on the one screen a client's CIO trusts.
+   */
+  readonly keyState: KeyState | "none";
+  /**
    * ALWAYS NULL, and deliberately so.
    *
    * X06 shows "12 of 71" for every row, and calls that ratio the fact that
@@ -1073,8 +1195,8 @@ export interface PassportRow {
  * on the screen. X06 is explicit that a CIO who wants something stopped says
  * so and an ABeam reviewer does it with a reason on the record.
  */
-export async function listPassport(organizationId: string): Promise<PassportRow[]> {
-  const [grants, feeds, users] = await Promise.all([
+export async function listPassport(organizationId: string, now: Date = new Date()): Promise<PassportRow[]> {
+  const [grants, feeds, users, keys] = await Promise.all([
     prisma.apiAccessGrant.findMany({
       where: {
         organizationId,
@@ -1088,6 +1210,7 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
         decidedById: true,
         decidedAt: true,
         expiresAt: true,
+        solutionId: true,
         solution: { select: { name: true } },
       },
       orderBy: { decidedAt: "desc" },
@@ -1100,10 +1223,17 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
       where: { organizationId },
       select: { id: true, name: true },
     }),
+    // Metadata only: never the hash, never the sealed write key.
+    prisma.solutionClient.findMany({
+      where: { organizationId },
+      select: { solutionId: true, environment: true, isActive: true, revokedAt: true, expiresAt: true },
+    }),
   ]);
 
   const feedNameByExternalId = new Map(feeds.map((f) => [f.externalId, f.name]));
   const userById = new Map(users.map((u) => [u.id, u.name]));
+  // One key per (app, environment) — AD-11 — so this is a lookup, not a choice.
+  const keyByLane = new Map(keys.map((k) => [`${k.solutionId}::${k.environment}`, keyState(k, now)]));
 
   return grants.map((g) => ({
     appName: g.solution.name,
@@ -1115,6 +1245,7 @@ export async function listPassport(organizationId: string): Promise<PassportRow[
     approvedBy: g.decidedById === null ? null : (userById.get(g.decidedById) ?? null),
     approvedAt: g.decidedAt,
     accessEnds: g.expiresAt,
+    keyState: keyByLane.get(`${g.solutionId}::${g.environment}`) ?? "none",
     fieldsApproved: null,
   }));
 }
@@ -1261,6 +1392,9 @@ export async function lastLaneCall(
       solutionId,
       interfaceId,
       dryRun: false,
+      // Nor a replay (P0.5): it re-served an older call's outcome, whose own
+      // row is the one that says what the lane did.
+      replayed: false,
       externalId: { not: "-schema-" },
       OR: laneEnvironmentAliases(environment).map((alias) => ({
         environment: { equals: alias, mode: "insensitive" as const },

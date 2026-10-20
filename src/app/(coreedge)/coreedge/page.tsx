@@ -234,6 +234,19 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
           ) : null}
         </section>
       )}
+
+      {/*
+        The way to the members screen (P0.13). Not a rail place — the rail is
+        the six — so it sits here, where an organization's people start.
+      */}
+      <p className="text-sm text-ink-soft">
+        <a
+          href="/coreedge/members"
+          className="text-ink underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy"
+        >
+          Members and invitations
+        </a>
+      </p>
     </CoreEdgeShell>
   );
 }

@@ -20,9 +20,10 @@
  *   tenant, so we can ask each one's remaining budget, and a 429 on these paths
  *   reaches the route and is written to the audit trail.
  *
- *   Per client IP — the middleware buckets. They fire BEFORE the route runs, so
+ *   At the edge — the middleware buckets. They fire BEFORE the route runs, so
  *   nothing is persisted and no audit row exists, and they are keyed by an
- *   address we cannot enumerate. There is no per-tenant usage figure for these
+ *   address, or by a hash of whatever credential a machine call presented
+ *   (P0.5), neither of which we can enumerate. There is no per-tenant usage figure for these
  *   and none can be inferred. Reporting one would be a fabrication, and a
  *   convincing one, because it would look exactly like the real numbers beside
  *   it.
@@ -34,7 +35,12 @@ export interface ThrottleBucket {
   id: string;
   /** The real key shape, with the variable part named. */
   key: string;
-  keyedBy: "client IP" | "credential";
+  /**
+   * "presented credential" is the edge's key for a machine route: a hash of
+   * whatever bearer arrived, valid or not, so it cannot be enumerated from the
+   * credential table the way the route's `credential` buckets can.
+   */
+  keyedBy: "client IP" | "credential" | "presented credential";
   config: { limit: number; windowMs: number };
   /** Whether a per-tenant usage figure for this bucket exists at all. */
   observable: boolean;
@@ -43,12 +49,28 @@ export interface ThrottleBucket {
 
 export const THROTTLE_BUCKETS: readonly ThrottleBucket[] = [
   {
+    id: "edge-machine-credential",
+    key: "machine:cred:{sha256(bearer)}",
+    keyedBy: "presented credential",
+    config: RATE_LIMITS.machineCredential,
+    observable: false,
+    note: "Middleware bucket for a northbound call that carries a credential, keyed by a hash of it — so one runaway key throttles only itself. A ceiling above the route's own budget; a 429 here never reaches the broker and is never audited.",
+  },
+  {
+    id: "edge-machine-ip",
+    key: "machine-ip:{clientIp}",
+    keyedBy: "client IP",
+    config: RATE_LIMITS.machineIpBackstop,
+    observable: false,
+    note: "Middleware backstop behind the credential bucket, against a flood of random keys from one address. Spent only by calls their own credential bucket admitted. Never audited.",
+  },
+  {
     id: "edge-read",
     key: "api:GET:{clientIp}",
     keyedBy: "client IP",
     config: RATE_LIMITS.apiRead,
     observable: false,
-    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
+    note: "Middleware bucket for browser and console reads, and a northbound call with no credential. Applied before the route runs; a 429 here is never audited.",
   },
   {
     id: "edge-write",
@@ -56,7 +78,7 @@ export const THROTTLE_BUCKETS: readonly ThrottleBucket[] = [
     keyedBy: "client IP",
     config: RATE_LIMITS.apiMutation,
     observable: false,
-    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
+    note: "Middleware bucket for browser and console changes, and a northbound call with no credential. Applied before the route runs; a 429 here is never audited.",
   },
   {
     id: "northbound-read",

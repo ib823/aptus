@@ -6,8 +6,8 @@ import { ROLE_HIERARCHY } from "@/types/assessment";
 
 describe("Role Permissions (Phase 17)", () => {
   describe("ROLE_CAPABILITIES matrix", () => {
-    it("should have capabilities for all 12 roles", () => {
-      expect(Object.keys(ROLE_CAPABILITIES)).toHaveLength(12);
+    it("should have capabilities for all 13 roles", () => {
+      expect(Object.keys(ROLE_CAPABILITIES)).toHaveLength(13);
       for (const role of ALL_ROLES) {
         expect(ROLE_CAPABILITIES[role]).toBeDefined();
       }
@@ -214,8 +214,8 @@ describe("Role Permissions (Phase 17)", () => {
   });
 
   describe("ALL_ROLES", () => {
-    it("should contain exactly 12 roles", () => {
-      expect(ALL_ROLES).toHaveLength(12);
+    it("should contain exactly 13 roles", () => {
+      expect(ALL_ROLES).toHaveLength(13);
     });
 
     it("should contain all expected roles", () => {

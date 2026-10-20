@@ -31,6 +31,7 @@ import {
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { ERROR_CODES } from "@/types/api";
 import { checkRateLimit, RATE_LIMITS, getClientIp } from "@/lib/security/rate-limit";
+import { isLimiterOutage, limiterUnavailableResponse } from "@/lib/security/rate-limit-response";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientIp = getClientIp(request.headers);
   const rateCheck = await checkRateLimit(`webauthn-verify:${clientIp}`, RATE_LIMITS.mfa);
   if (!rateCheck.allowed) {
+    // A limiter outage is not "too many attempts" (audit A44).
+    if (isLimiterOutage(rateCheck)) return limiterUnavailableResponse(rateCheck);
     return NextResponse.json(
       { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
       { status: 429, headers: { "Retry-After": String(Math.ceil(rateCheck.resetMs / 1000)) } },

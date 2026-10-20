@@ -47,6 +47,8 @@ vi.mock("@/lib/db/prisma", () => {
       groupBy: mocks.grantGroupBy,
     },
     solution: { findMany: mocks.solutionFindMany },
+    // A pending request matches one interface, so its decision binds it (P0.1).
+    interface: { findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }] },
     configAudit: { create: mocks.auditCreate },
     // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
     // Outside a transaction the lock would commit and release at once, so taking

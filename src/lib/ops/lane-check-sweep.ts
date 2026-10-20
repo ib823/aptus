@@ -34,7 +34,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
-import { parseLaneEnvironment } from "@/lib/coreedge/lanes";
+import { LANE_CHECKED_APP_STATUSES, parseLaneEnvironment } from "@/lib/coreedge/lanes";
 import { readEntitySet } from "@/lib/northbound/read";
 import {
   resolveSapConnections,
@@ -158,8 +158,8 @@ interface LaneTarget {
 }
 
 /**
- * Every lane worth checking: an ACTIVE app's feed, in an environment where an
- * active SAP connection claims to serve it.
+ * Every lane worth checking: a live (ACTIVE or RESTRICTED) app's feed, in an
+ * environment where an active SAP connection claims to serve it.
  *
  * A lane with no connection is not checked and not recorded as failing. There
  * is nothing to ask, and writing a failure would blame SAP for a binding that
@@ -173,7 +173,8 @@ async function laneTargets(): Promise<{
 }> {
   const [solutions, connections] = await Promise.all([
     prisma.solution.findMany({
-      where: { status: "ACTIVE" },
+      // ACTIVE and RESTRICTED: both carry traffic (lanes.ts, isLaneCheckedApp).
+      where: { status: { in: [...LANE_CHECKED_APP_STATUSES] } },
       select: {
         id: true,
         organizationId: true,

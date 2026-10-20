@@ -30,15 +30,18 @@ import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
-import { newCorrelationId } from "@/lib/northbound/respond";
+import { FAILURE_REASON_LIMITER_UNAVAILABLE, newCorrelationId } from "@/lib/northbound/respond";
+import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE } from "@/lib/security/rate-limit-response";
 import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
+import { consoleReadRefusalMessage } from "@/lib/sap-public/console-read-guard";
+import { parseSapEnvironment } from "@/lib/sap-public/environment";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
-import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { canAccessStudio, isSandboxDeveloper, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -154,6 +157,15 @@ export async function POST(request: NextRequest) {
   }
   const client = liveClients[0]!;
 
+  // A sandbox developer (P0.13) runs against SANDBOX credentials only, the same
+  // ceiling every console read holds them to; refused before the bucket or SAP.
+  if (isSandboxDeveloper(user.role) && parseSapEnvironment(client.environment) !== "SANDBOX") {
+    return refusalOk(
+      "SANDBOX_ONLY",
+      consoleReadRefusalMessage("SANDBOX_ONLY", parseSapEnvironment(client.environment)),
+    );
+  }
+
   /*
    * THE SAME PER-CREDENTIAL BUCKET THE NORTHBOUND ROUTES USE (audit E18).
    *
@@ -172,6 +184,9 @@ export async function POST(request: NextRequest) {
    */
   const rate = await checkRateLimit(`northbound:${client.id}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
+    // A limiter outage is not this credential's budget (audit A44): audited
+    // 503 with its reason, and said as the outage it is.
+    const outage = isLimiterOutage(rate);
     await recordNorthboundCall({
       organizationId: scope.organizationId,
       solutionId: iface.solutionId,
@@ -179,12 +194,14 @@ export async function POST(request: NextRequest) {
       operation: "READ",
       externalId: iface.externalId,
       environment: client.environment,
-      status: 429,
+      status: outage ? 503 : 429,
       rowCount: null,
       correlationId,
       clientTokenId: client.id,
       dryRun: true,
+      failureReason: outage ? FAILURE_REASON_LIMITER_UNAVAILABLE : null,
     });
+    if (outage) return refusalOk("LIMITER_UNAVAILABLE", LIMITER_UNAVAILABLE_MESSAGE);
     return refusalOk(
       "RATE_LIMITED",
       `This credential has spent its budget of ${RATE_LIMITS.northbound.limit} calls a minute — the same budget the deployed application shares. ` +

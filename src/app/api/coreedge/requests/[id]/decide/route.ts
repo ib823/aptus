@@ -37,6 +37,7 @@ import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { refuseDecision } from "@/lib/coreedge/authz";
 import { prisma } from "@/lib/db/prisma";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { bindingForDecision } from "@/lib/studio/grant-binding";
 import { evaluateDecision, type GrantDecision } from "@/lib/studio/grants";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 
@@ -106,6 +107,15 @@ export async function POST(
         environment: true,
         requestedById: true,
         expiresAt: true,
+        // The binding (P0.1, A47): what the decision is about, exactly.
+        solutionId: true,
+        externalId: true,
+        interfaceId: true,
+        sapProduct: true,
+        // A flagged legacy request is never bound by a guess, nor to an
+        // interface added after it was raised (lib/studio/grant-binding.ts).
+        unboundReason: true,
+        createdAt: true,
         // The app's owners, for OWN_APP: an owner may not approve their own app.
         solution: {
           select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
@@ -146,6 +156,11 @@ export async function POST(
       return { refusal: refused(outcome.message, outcome.reason === "NOT_PENDING" ? 409 : 403) };
     }
 
+    // The decision binds the request to its one interface, or an approval is
+    // refused (P0.1, A47): see lib/studio/grant-binding.ts.
+    const bound = await bindingForDecision(tx, grant, parsed.data.decision);
+    if (!bound.ok) return { refusal: refused(bound.message, 409) };
+
     /*
      * THE PASSKEY LAST, once every rule above has passed — so a person is
      * asked for it only when it is the one thing between them and the
@@ -182,6 +197,7 @@ export async function POST(
         decision: parsed.data.decision,
         decidedById: user.id,
         decidedAt,
+        ...(bound.binding ? { ...bound.binding, unboundReason: null } : {}),
       },
     });
     if (settled.count === 0) {
@@ -194,11 +210,11 @@ export async function POST(
         ),
       };
     }
-    return { grant, decidedAt };
+    return { grant, decidedAt, binding: bound.binding };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt } = decided;
+  const { grant, decidedAt, binding } = decided;
 
   // The row exactly as written. The guard above makes this write the only one
   // that can settle the grant, so these values cannot have been superseded and
@@ -209,6 +225,8 @@ export async function POST(
     decidedById: user.id,
     decidedAt,
     expiresAt: grant.expiresAt,
+    interfaceId: binding?.interfaceId ?? grant.interfaceId,
+    sapProduct: binding?.sapProduct ?? grant.sapProduct,
   };
 
   await writeConfigAudit({

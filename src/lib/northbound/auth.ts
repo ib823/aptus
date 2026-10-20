@@ -19,22 +19,27 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { LEGACY_TOKEN_PREFIX, overlapIsOpen, overlapStillBound } from "@/lib/northbound/key-policy";
 import { tenantScopeOf, type TenantScope } from "@/lib/studio/tenant-scope";
 
-/** Tokens are prefixed so a leaked string is recognisable in logs and greppable. */
-export const CLIENT_TOKEN_PREFIX = "ce_";
+/**
+ * Tokens are prefixed so a leaked string is recognisable in logs and greppable.
+ *
+ * Every runtime key starts with `ce_`. Since P0.11 a new key carries
+ * `ce_live_` (PROD) or `ce_test_` (every other environment) — see
+ * lib/northbound/key-policy.ts — and a key minted before then carries the
+ * plain `ce_` prefix and keeps working until it expires. Authentication never
+ * reads the prefix: the hash is the lookup, so no prefix is ever refused.
+ */
+export const CLIENT_TOKEN_PREFIX = LEGACY_TOKEN_PREFIX;
 
 export function hashClientToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
-/** Pull the bearer credential out of an Authorization header. */
-export function extractBearer(header: string | null): string | null {
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  const token = match?.[1]?.trim();
-  return token && token.length > 0 ? token : null;
-}
+// Re-exported so every route keeps its import; the parser lives where the edge
+// middleware can reach it too (see bearer.ts).
+export { extractBearer } from "@/lib/northbound/bearer";
 
 export interface AuthenticatedClient {
   clientId: string;
@@ -59,6 +64,13 @@ export type ClientAuthFailure =
   | "INACTIVE"
   | "REVOKED"
   | "EXPIRED"
+  /**
+   * The token is the key a rotation replaced, and its overlap window has
+   * closed (P0.11). Reported apart from EXPIRED because the remedy differs:
+   * the credential itself is fine, and the caller only has to deploy the key
+   * it was given at rotation.
+   */
+  | "ROTATED_OUT"
   /**
    * The credential is fine; the SOLUTION it belongs to has been retired.
    *
@@ -113,6 +125,26 @@ export async function checkSolutionRuntime(
   return { ok: true };
 }
 
+/** What authentication reads from the row. Never the hashes, never the sealed write key. */
+const AUTH_SELECT = {
+  id: true,
+  organizationId: true,
+  solutionId: true,
+  environment: true,
+  sapClient: true,
+  isActive: true,
+  revokedAt: true,
+  expiresAt: true,
+  previousValidUntil: true,
+} as const;
+
+/**
+ * What the lookup by the PREVIOUS hash reads: the same, plus the two hashes
+ * that say whether the overlap still belongs to the row's current key
+ * (`overlapStillBound`). They are compared here and never leave this module.
+ */
+const PREVIOUS_KEY_SELECT = { ...AUTH_SELECT, tokenHash: true, overlapForTokenHash: true } as const;
+
 /**
  * Resolve a raw bearer token to the client it identifies.
  *
@@ -120,6 +152,21 @@ export async function checkSolutionRuntime(
  * debugged — but the ROUTE deliberately collapses them all into one generic 401
  * for the caller. Telling an attacker "that token existed but is revoked" is a
  * free oracle; telling ourselves is operationally necessary.
+ *
+ * THE ROTATION OVERLAP (P0.11). A token that is not any row's current key may
+ * be the key a rotation replaced: it is looked up by `previousTokenHash`, the
+ * same single indexed equality on a unique column, and accepted while
+ * `previousValidUntil` is in the future. It resolves to the SAME row, so
+ * everything else — revocation, deactivation, the row's own expiry, the
+ * solution gate, and the write key sealed on the row — applies to it exactly
+ * as to the current key. That is what makes "revoke ends both at once" a
+ * property of one `revokedAt` rather than of a second check someone must
+ * remember.
+ *
+ * The overlap is also honoured only while it is still bound to the row's
+ * current key (key-policy.ts `overlapStillBound`): a `tokenHash` written by
+ * anything that did not write the overlap with it — above all a build from
+ * before P0.11, after a rollback — closes the window rather than inheriting it.
  */
 export async function authenticateClientToken(
   rawToken: string | null,
@@ -127,25 +174,30 @@ export async function authenticateClientToken(
 ): Promise<ClientAuthResult> {
   if (!rawToken) return { ok: false, reason: "NO_TOKEN" };
 
-  const row = await prisma.solutionClient.findUnique({
-    where: { tokenHash: hashClientToken(rawToken) },
-    select: {
-      id: true,
-      organizationId: true,
-      solutionId: true,
-      environment: true,
-      sapClient: true,
-      isActive: true,
-      revokedAt: true,
-      expiresAt: true,
-    },
-  });
+  const tokenHash = hashClientToken(rawToken);
+  let viaPreviousKey = false;
+  let previousKeyBound = false;
+  let row = await prisma.solutionClient.findUnique({ where: { tokenHash }, select: AUTH_SELECT });
+  if (!row) {
+    // Only on a miss, so a current key costs one lookup as it always did.
+    const previous = await prisma.solutionClient.findUnique({
+      where: { previousTokenHash: tokenHash },
+      select: PREVIOUS_KEY_SELECT,
+    });
+    viaPreviousKey = previous !== null;
+    previousKeyBound = previous !== null && overlapStillBound(previous);
+    row = previous;
+  }
 
   if (!row) return { ok: false, reason: "UNKNOWN_TOKEN" };
   // Revocation is checked before "inactive": a revoked token is a security
-  // event worth seeing in the audit as exactly that.
+  // event worth seeing in the audit as exactly that. It is also checked
+  // before the overlap, so a revoked row refuses its previous key as REVOKED.
   if (row.revokedAt !== null) return { ok: false, reason: "REVOKED" };
   if (!row.isActive) return { ok: false, reason: "INACTIVE" };
+  if (viaPreviousKey && (!previousKeyBound || !overlapIsOpen(row.previousValidUntil, now))) {
+    return { ok: false, reason: "ROTATED_OUT" };
+  }
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) {
     return { ok: false, reason: "EXPIRED" };
   }

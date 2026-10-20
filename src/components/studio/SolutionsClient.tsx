@@ -322,7 +322,15 @@ function OwnershipEditor({
   people: readonly SolutionPerson[];
   onSave: (body: Record<string, unknown>) => void;
 }) {
-  const missing = missingOwners(solution);
+  // Judged on LIVE owners, as the server judges a promotion (P0.1, A69): a
+  // slot held by someone this organization no longer lists counts as empty,
+  // so the button is not offered for a promotion the server would refuse.
+  const isLive = (id: string | null): string | null => (id !== null && people.some((p) => p.id === id) ? id : null);
+  const missing = missingOwners({
+    technicalOwnerId: isLive(solution.technicalOwnerId),
+    businessOwnerId: isLive(solution.businessOwnerId),
+    supportOwnerId: isLive(solution.supportOwnerId),
+  });
   const complete = missing.length === 0;
 
   // "Ikmal Baharudin (ikmal@…)" rather than "cmg3…": the id is the key, not

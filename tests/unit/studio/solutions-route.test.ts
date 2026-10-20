@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   findManyGrants: vi.fn(),
   lockSolution: vi.fn(),
   commit: vi.fn(),
+  findManyUsers: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -37,6 +38,10 @@ vi.mock("@/lib/db/prisma", () => {
     // transaction holds one and the Solution lock; the PATCH must use `tx`.
     keyClaimLink: { updateMany: mocks.closeLinksOutsideTransaction },
     apiAccessGrant: { findFirst: mocks.findFirstGrant, findMany: mocks.findManyGrants },
+    // Owner liveness (lib/studio/owner-liveness.ts): every owner is a live
+    // member unless a test says otherwise. The real-PostgreSQL cases are in
+    // owner-liveness.test.ts.
+    user: { findMany: mocks.findManyUsers },
     // The Solution row lock (lib/studio/owner-lock.ts), the only raw query here.
     // Outside a transaction the lock would commit and release at once, so taking
     // it on the client instead of on `tx` is a failure, not a pass.
@@ -111,6 +116,9 @@ beforeEach(() => {
   // No request awaiting a decision, and nothing the caller decided, by default.
   mocks.findFirstGrant.mockResolvedValue(null);
   mocks.findManyGrants.mockResolvedValue([]);
+  mocks.findManyUsers.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+    Promise.resolve(where.id.in.map((id) => ({ id }))),
+  );
 });
 
 describe("registering a solution", () => {
@@ -170,6 +178,20 @@ describe("the ownership gate lives on the write path", () => {
     const res = await PATCH(req({ id: "sol_1", status: "ACTIVE" }, "PATCH"));
     expect(res.status).toBe(409);
     expect(mocks.updateSolution).not.toHaveBeenCalled();
+  });
+
+  it("409s a promotion while a slot holds someone who has left (A69, review round 1)", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, status: "RESTRICTED" });
+    // u_sup was deactivated: the organization's live members are the other two.
+    mocks.findManyUsers.mockResolvedValue([{ id: "u_tech" }, { id: "u_biz" }]);
+    const res = await PATCH(req({ id: "sol_1", status: "ACTIVE" }, "PATCH"));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toContain("Missing: support owner");
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+    // Live means an ACTIVE member of THIS organization.
+    expect(mocks.findManyUsers).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ organizationId: "org_a", isActive: true }) }),
+    );
   });
 
   it("allows promotion when all three owners are present", async () => {

@@ -21,6 +21,7 @@ import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
 import {
   decideConsoleRead,
+  decideSandboxDeveloperRead,
   DEPLOYMENT_AUDIT_SCOPE,
   newCorrelationId,
   recordConsoleRead,
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * Found by an unauthenticated curl during a browser-agent audit — the same
    * way the earlier incident in that file was found.
    */
-  const refusal = await refuseUnlessMayProbeTenant();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
   if (refusal) return refusal;
 
   const user = await getCurrentUser();
@@ -120,6 +121,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       connectionEnvironment: conn?.environment ?? null,
       ...extra,
     });
+  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
+  // (P0.13). Every other role passes straight through it.
+  const sandboxOnly = decideSandboxDeveloperRead(user.role, { tenant, connection: conn });
+  if (!sandboxOnly.allowed) {
+    await audit(403, null);
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
+      { status: 403 },
+    );
+  }
   if (conn && user.organizationId) {
     const decision = await decideConsoleRead({
       organizationId: user.organizationId,

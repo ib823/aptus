@@ -45,12 +45,23 @@ export class CredentialLaneStore {
   clients: Row[] = [];
   links: Row[] = [];
   audits: Row[] = [];
+  /**
+   * Owner ids that are NOT live members of their organization (deactivated,
+   * deleted or moved away). Every other id the modules ask about is treated as
+   * an active user of the organization asked about, so a test names only the
+   * people who have left (A69).
+   */
+  departedUsers = new Set<string>();
+  /** Every Solution row lock taken (owner-lock.ts), in order: [organizationId, solutionId]. */
+  locks: [unknown, unknown][] = [];
 
   reset(): void {
     this.solutions = [];
     this.clients = [];
     this.links = [];
     this.audits = [];
+    this.departedUsers = new Set();
+    this.locks = [];
   }
 
   /** The Prisma surface the modules under test touch, and nothing else. */
@@ -90,6 +101,12 @@ export class CredentialLaneStore {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          // The database defaults (P0.11): a key minted before prefixes, and
+          // no previous key overlapping.
+          tokenPrefix: "ce_",
+          previousTokenHash: null,
+          previousValidUntil: null,
+          overlapForTokenHash: null,
           createdAt: now,
           updatedAt: now,
           ...create,
@@ -125,6 +142,14 @@ export class CredentialLaneStore {
         return { count: hit.length };
       },
     },
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] }; organizationId: string; isActive: true } }) => {
+        if (!where?.id?.in || where.isActive !== true || typeof where.organizationId !== "string") {
+          throw new Error(`credential-lane-store: unsupported user.findMany where ${JSON.stringify(where)}`);
+        }
+        return where.id.in.filter((id) => !this.departedUsers.has(id)).map((id) => ({ id }));
+      },
+    },
     configAudit: {
       create: async ({ data }: { data: Row }) => {
         this.audits.push(data);
@@ -133,6 +158,11 @@ export class CredentialLaneStore {
     },
     // No isolation: each test drives one request at a time.
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(this.client),
+    // The Solution row lock (lib/studio/owner-lock.ts): recorded, never contended.
+    $queryRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+      this.locks.push([values[1], values[0]]);
+      return [];
+    },
   };
 }
 

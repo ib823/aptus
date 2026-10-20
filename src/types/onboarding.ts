@@ -183,6 +183,16 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
       { index: 1, title: "Operations Center", description: "Watch broker traffic, connection health and incidents for the integrations you support.", isRequired: true, action: { type: "navigate", url: "/operations" } },
     ],
   },
+  sandbox_developer: {
+    role: "sandbox_developer",
+    title: "Developer Workspace",
+    description: "Explore SAP APIs against the SAP API Hub sandbox and bring your colleagues in.",
+    steps: [
+      { index: 0, title: "Welcome", description: "Welcome to your developer workspace.", isRequired: true, action: { type: "none" } },
+      { index: 1, title: "Discover", description: "See which SAP APIs the sandbox tenant exposes, and read sample data from them.", isRequired: true, action: { type: "navigate", url: "/studio/discover" } },
+      { index: 2, title: "Invite a colleague", description: "Add colleagues to your workspace as sandbox developers.", isRequired: false, action: { type: "navigate", url: "/coreedge/members" } },
+    ],
+  },
 };
 
 /** Registry of all contextual tooltips */

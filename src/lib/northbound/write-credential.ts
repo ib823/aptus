@@ -26,8 +26,11 @@
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { KeyIssuerRefused, refuseKeyIssuer } from "@/lib/northbound/issue";
+import { isKeyLive } from "@/lib/northbound/key-policy";
 import { solutionClientAad, solutionClientRowAad } from "@/lib/sap-public/connection-crypto";
 import { openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
+import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
 import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /** Distinct prefix from the read token, so the two are never confused in a log. */
@@ -44,6 +47,16 @@ export function generateWriteCredential(): string {
  * Sealed rather than hashed because it is verified by comparison against a value
  * we must be able to recover — unlike the bearer token, which is looked up BY its
  * hash. The AAD binding is what stops the sealed blob being useful elsewhere.
+ *
+ * ONE TRANSACTION, LOCKED ON THE APP, like every other key change (issue.ts,
+ * review round 2 of P0.1). The write is made under the Solution row lock that
+ * the owner-slot PATCH takes, after re-applying the owner gate to `gate`'s
+ * issuer while holding it, and only onto a credential still live under that
+ * lock. The route's own check ran on a moment that had passed: a colleague's
+ * PATCH putting the issuer into an owner slot could commit between it and
+ * this write, and the issuer then owned the app AND had minted its write key.
+ * Throws KeyIssuerRefused, and nothing is written. False when the credential
+ * is gone, or was revoked or deactivated before the lock was held.
  */
 export async function setWriteCredential(
   scope: TenantScope,
@@ -54,6 +67,8 @@ export async function setWriteCredential(
    */
   clientId: string,
   rawKey: string,
+  /** The owner gate, re-applied under the app lock with the write: names the person minting the key. */
+  gate?: { readonly issuerId: string },
 ): Promise<boolean> {
   const client = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
@@ -61,16 +76,35 @@ export async function setWriteCredential(
   });
   if (!client) return false;
 
+  // Sealed before the lock is taken: it reads the organization's envelope key,
+  // and the lock is held only for the checks and the write.
   const secretsCiphertext = await sealSecretsForOrg(
     scope.organizationId,
     { writeSecret: rawKey },
     solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
   );
-  await prisma.solutionClient.update({
-    where: { id: client.id, organizationId: scope.organizationId },
-    data: { secretsCiphertext },
+
+  return prisma.$transaction(async (tx) => {
+    await lockSolutionOwnership(tx, { organizationId: scope.organizationId, solutionId: client.solutionId });
+    if (gate !== undefined) {
+      const refusal = await refuseKeyIssuer(tx, scope.organizationId, client.solutionId, gate.issuerId);
+      if (refusal !== null) throw new KeyIssuerRefused(refusal);
+    }
+    // Re-read under the lock: a revocation that landed first ended this
+    // credential, and destroyed its write key (A37). Sealing one onto it now
+    // would put the key back on a row nobody can authenticate with. An
+    // expired credential counts as ended too (P0.11): its token is refused.
+    const live = await tx.solutionClient.findFirst({
+      where: scopedWhere(scope, { id: client.id, isActive: true, revokedAt: null }),
+      select: { id: true, isActive: true, revokedAt: true, expiresAt: true },
+    });
+    if (live === null || !isKeyLive(live, new Date())) return false;
+    await tx.solutionClient.update({
+      where: { id: client.id, organizationId: scope.organizationId },
+      data: { secretsCiphertext },
+    });
+    return true;
   });
-  return true;
 }
 
 /**
@@ -90,14 +124,30 @@ export async function verifyWriteCredential(
    */
   clientId: string,
   presented: string | null,
+  now: Date = new Date(),
 ): Promise<boolean> {
   if (!presented) return false;
 
   const client = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
-    select: { id: true, solutionId: true, secretsCiphertext: true },
+    select: {
+      id: true,
+      solutionId: true,
+      secretsCiphertext: true,
+      isActive: true,
+      revokedAt: true,
+      expiresAt: true,
+    },
   });
   if (!client?.secretsCiphertext) return false;
+  /*
+   * THE WRITE KEY ENDS WHEN ITS CREDENTIAL DOES (P0.11). It is sealed on the
+   * bearer token's own row, so it has no expiry of its own: the row's is its.
+   * The write route authenticates the bearer token first and would already
+   * have refused an expired one; asking again here keeps that true for any
+   * caller that verifies a write key on its own.
+   */
+  if (!isKeyLive(client, now)) return false;
 
   let stored: string | undefined;
   try {
