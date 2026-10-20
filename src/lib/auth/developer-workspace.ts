@@ -48,20 +48,17 @@ import { createHash } from "node:crypto";
 import type { User } from "@prisma/client";
 
 import { canRegister } from "@/lib/auth/auth-config";
+import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { prisma } from "@/lib/db/prisma";
 import { uniqueOrganizationSlug } from "@/lib/org/slug";
 import { checkRateLimit, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
 import { isLimiterOutage } from "@/lib/security/rate-limit-response";
 
-export type DeveloperSignupMode = "off" | "open";
+// The mode lives in its own module so the edge can read it; re-exported here.
+export { developerSignupMode, type DeveloperSignupMode } from "@/lib/auth/developer-signup-mode";
 
 /** process.env, or any plain map of the same variables (tests pass one). */
 type EnvVars = Readonly<Record<string, string | undefined>>;
-
-/** The mode in force. Only the exact word `open` opens it. */
-export function developerSignupMode(env: EnvVars = process.env): DeveloperSignupMode {
-  return env.COREEDGE_DEVELOPER_SIGNUP?.trim().toLowerCase() === "open" ? "open" : "off";
-}
 
 /** COREEDGE_DEVELOPER_SIGNUP_DOMAINS, lower-cased; empty means any domain. */
 export function developerSignupDomains(env: EnvVars = process.env): string[] {

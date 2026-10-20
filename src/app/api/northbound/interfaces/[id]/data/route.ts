@@ -58,8 +58,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
-    // Spends the address's failed-lookup budget, which the edge reads first.
-    await noteFailedCredential(request.headers, bearer);
+    // A key matching no row spends the address's failed-lookup budget, which
+    // the edge reads first; a real key that refuses is bounded by its own.
+    await noteFailedCredential(request.headers, bearer, auth.reason);
     return unauthenticated(correlationId);
   }
   const client = auth.client;

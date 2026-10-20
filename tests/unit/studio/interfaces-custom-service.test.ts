@@ -33,21 +33,25 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    solution: { findFirst: mocks.findFirstSolution },
-    interface: {
-      create: mocks.createInterface,
-      findFirst: mocks.findFirstInterface,
-      update: mocks.updateInterface,
-      findMany: vi.fn().mockResolvedValue([]),
+// Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
+vi.mock("@/lib/db/prisma", async () => {
+  const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
+  return {
+    prisma: {
+      solution: { findFirst: mocks.findFirstSolution },
+      interface: {
+        create: mocks.createInterface,
+        findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
+        update: mocks.updateInterface,
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      solutionClient: { findMany: mocks.findManyClients },
+      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+      sapConnection: { findMany: mocks.findManyConnections },
+      configAudit: { create: mocks.createAudit },
     },
-    solutionClient: { findMany: mocks.findManyClients },
-    apiAccessGrant: { findMany: mocks.findManyGrants },
-    sapConnection: { findMany: mocks.findManyConnections },
-    configAudit: { create: mocks.createAudit },
-  },
-}));
+  };
+});
 
 import { PATCH, POST } from "@/app/api/studio/interfaces/route";
 

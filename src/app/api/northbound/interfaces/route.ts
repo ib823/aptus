@@ -24,7 +24,7 @@ import { prisma } from "@/lib/db/prisma";
 import { customServiceDefinition } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { grantsUsableUnder, isBoundTo } from "@/lib/studio/grant-binding";
+import { grantsUsableUnder, isBoundTo, type GrantedInterface } from "@/lib/studio/grant-binding";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
   const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
-    // Spends the address's failed-lookup budget, which the edge reads first.
-    await noteFailedCredential(request.headers, bearer);
+    // A key matching no row spends the address's failed-lookup budget, which
+    // the edge reads first; a real key that refuses is bounded by its own.
+    await noteFailedCredential(request.headers, bearer, auth.reason);
     return unauthenticated(correlationId);
   }
   const client = auth.client;
@@ -88,6 +89,8 @@ export async function GET(request: NextRequest) {
         status: true,
         servicePath: true,
         odataVersion: true,
+        // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+        createdAt: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -104,6 +107,8 @@ export async function GET(request: NextRequest) {
         revokedAt: true,
         interfaceId: true,
         sapProduct: true,
+        createdAt: true,
+        unboundCutoffAt: true,
       },
     }),
   ]);
@@ -133,8 +138,8 @@ export async function GET(request: NextRequest) {
   //
   // And with BINDING (P0.1, A47): a grant counts for the one interface it is
   // bound to, on its product — or, while COREEDGE_GRANT_BINDING is legacy, an
-  // unbound grant counts on the old tuple. `grantsUsableUnder` is the same
-  // call access.ts makes.
+  // unbound grant counts on the old tuple for an interface that existed by its
+  // cut-off. `grantsUsableUnder` is the same call access.ts makes.
   const environment = client.environment as GrantEnvironment;
   const liveReadGrants = grants.filter(
     (g) =>
@@ -144,7 +149,7 @@ export async function GET(request: NextRequest) {
       g.revokedAt == null &&
       (g.expiresAt === null || g.expiresAt.getTime() > now),
   );
-  const hasLiveGrant = (i: { id: string; externalId: string; operation: string; sapProduct: string }) =>
+  const hasLiveGrant = (i: GrantedInterface) =>
     grantsUsableUnder(
       liveReadGrants.filter(
         (g) =>

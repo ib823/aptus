@@ -23,7 +23,8 @@ For a call that carries `Authorization: Bearer …`:
 
 0. `machine-authfail:<ip>` — 60 **failed credential lookups** a minute
    (`RATE_LIMITS.machineAuthFailure`). The route spends it on every 401 for a
-   presented key (`noteFailedCredential`, `src/lib/northbound/auth-failures.ts`);
+   presented key that **matches no credential row** (`UNKNOWN_TOKEN`;
+   `noteFailedCredential`, `src/lib/northbound/auth-failures.ts`);
    the edge only reads it, before anything else, and refuses the address while
    it is empty. Without it, a client sending a new made-up key on every call
    gets a fresh credential bucket each time and meets only the backstop below:
@@ -33,10 +34,17 @@ For a call that carries `Authorization: Bearer …`:
    unknown key is looked up as a current key and then as the key a rotation
    replaced (P0.11, `src/lib/northbound/auth.ts`); after that, each call costs
    one Upstash read and nothing else. A key that authenticates never spends it.
+   Nor does a **real key that refuses** — expired, its rotation overlap closed
+   (`ROTATED_OUT`), revoked, deactivated, or on a retired solution: it is one
+   fixed value, so bucket 1 below already bounds its lookups to its own 600 a
+   minute, and nobody else's. Counting it here would let one tenant's dead key,
+   still retrying behind a shared egress (a BTP NAT range, a vendor's server),
+   refuse every other tenant's valid key on that address — and P0.11 makes key
+   expiry and the end of an overlap routine.
    **Trade-off:** while an address is over it, valid keys calling from that
    same address are refused too (the edge cannot tell them apart without the
    lookup). That lasts until the window frees room, and only an address that is
-   sending failing keys can cause it.
+   sending keys that match no credential at all can cause it.
 1. `machine:cred:<first 128 bits of SHA-256(bearer)>` — 600 a minute
    (`RATE_LIMITS.machineCredential`). The bearer itself is never stored. The
    route still authenticates the credential and applies its own budget
@@ -60,7 +68,7 @@ and `Retry-After`. The code says whose limit it was:
 |---|---|---|
 | `machine:cred:` | 429 `RATE_LIMITED` | Slow that key down |
 | `machine-ip:` (backstop) | 429 `RATE_LIMITED_ADDRESS`, "Too many requests from this address." | Find what else calls from that address |
-| `machine-authfail:` | 429 `RATE_LIMITED_ADDRESS`, "…with an unrecognised client credential from this address…" | Find what is sending a wrong, revoked or expired key |
+| `machine-authfail:` | 429 `RATE_LIMITED_ADDRESS`, "…with an unrecognised client credential from this address…" | Find what is sending a key that matches no credential (mistyped, truncated, from another environment, or made up) |
 
 It is **not audited** (middleware has no database), so looking up that
 correlation id finds no row: the call never reached the broker.

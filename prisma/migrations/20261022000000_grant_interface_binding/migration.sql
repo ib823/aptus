@@ -23,6 +23,15 @@
 -- re-run binds nothing new. It cannot fail on existing data: it writes only
 -- interface ids it has just read.
 --
+-- THE LEGACY CUT-OFF (wave 1a integration review). Every grant left unbound
+-- here is stamped with this deploy's time (unboundCutoffAt;
+-- GRANT_BINDING_CUTOFF_SQL, which the same test keeps identical). Under legacy
+-- it is honoured only on interfaces that existed by then: one added after the
+-- deploy carried no traffic before it, so the old tuple matching there would
+-- only extend the approval to it, on another SAP product say: A47 again. The
+-- operator's re-run does not stamp, so a grant the old code creates during the
+-- rollout keeps its own createdAt as its cut-off.
+--
 -- NOTHING STOPS ON DEPLOY. A bound grant authorises exactly what it authorised
 -- before (its one matching interface). An unbound grant keeps the old matching
 -- until the operator sets COREEDGE_GRANT_BINDING=strict, and each call it
@@ -35,11 +44,13 @@
 -- Backout: ALTER TABLE "ApiAccessGrant" DROP CONSTRAINT "ApiAccessGrant_interfaceId_fkey";
 --          DROP INDEX "ApiAccessGrant_interfaceId_idx";
 --          ALTER TABLE "ApiAccessGrant" DROP COLUMN "interfaceId", DROP COLUMN "sapProduct",
---            DROP COLUMN "unboundReason", DROP COLUMN "unboundLastUsedAt";
+--            DROP COLUMN "unboundReason", DROP COLUMN "unboundLastUsedAt",
+--            DROP COLUMN "unboundCutoffAt";
 
 -- AlterTable
 ALTER TABLE "ApiAccessGrant" ADD COLUMN     "interfaceId" TEXT,
 ADD COLUMN     "sapProduct" TEXT,
+ADD COLUMN     "unboundCutoffAt" TIMESTAMP(3),
 ADD COLUMN     "unboundLastUsedAt" TIMESTAMP(3),
 ADD COLUMN     "unboundReason" TEXT;
 
@@ -76,3 +87,6 @@ SET "interfaceId" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."interf
     END
 FROM "candidates" AS c
 WHERE g."id" = c."grantId";
+
+-- The legacy cut-off (GRANT_BINDING_CUTOFF_SQL)
+UPDATE "ApiAccessGrant" SET "unboundCutoffAt" = CURRENT_TIMESTAMP WHERE "interfaceId" IS NULL AND "unboundCutoffAt" IS NULL;

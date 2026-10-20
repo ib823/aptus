@@ -23,9 +23,10 @@
  * choosing it:
  *
  *   COREEDGE_GRANT_BINDING=legacy (default) — an unbound grant keeps the old
- *     tuple matching, and each call it authorises stamps `unboundLastUsedAt`
- *     (at most hourly per grant), so the operator can see what strict would
- *     refuse.
+ *     tuple matching on the interfaces that existed at the deploy
+ *     (`unboundCutoffAt`; one added since needs a bound grant in either
+ *     mode), and each call it authorises stamps `unboundLastUsedAt` (at most
+ *     hourly per grant), so the operator can see what strict would refuse.
  *   COREEDGE_GRANT_BINDING=strict — an unbound grant authorises nothing; the
  *     access check's reason is GRANT_NEEDS_REAPPROVAL, sent to the caller as a
  *     403 FORBIDDEN whose message asks for re-approval.
@@ -54,6 +55,16 @@ export interface GrantedInterface {
   readonly externalId: string;
   readonly operation: string;
   readonly sapProduct: string;
+  /** Judged against an unbound grant's legacy cut-off (`isUsableUnder`). */
+  readonly createdAt: Date;
+}
+
+/** The grant fields `isUsableUnder` judges. Required, so a caller cannot forget to select them. */
+export interface UsableGrantFields {
+  interfaceId?: string | null;
+  sapProduct?: string | null;
+  createdAt: Date;
+  unboundCutoffAt: Date | null;
 }
 
 /**
@@ -61,10 +72,10 @@ export interface GrantedInterface {
  * caller adds the tenant, the solution and the environment.
  *
  * A bound grant matches only its own interface, with the service, operation
- * and product it was approved for. Under legacy, an UNBOUND grant also
- * matches on the old tuple; under strict it is fetched too, but only so the
- * refusal can say "needs re-approval" instead of "no grant" (see
- * `isBoundTo`).
+ * and product it was approved for. An UNBOUND grant is fetched on the old
+ * tuple in either mode; `grantsUsableUnder` then decides whether it may
+ * authorise, and when it may not, the refusal can say "needs re-approval"
+ * instead of "no grant".
  */
 export function grantsForInterfaceWhere(iface: GrantedInterface): Prisma.ApiAccessGrantWhereInput {
   return {
@@ -81,18 +92,42 @@ export function grantsForInterfaceWhere(iface: GrantedInterface): Prisma.ApiAcce
  */
 export function isBoundTo(
   grant: { interfaceId?: string | null; sapProduct?: string | null },
-  iface: GrantedInterface,
+  iface: Pick<GrantedInterface, "id" | "sapProduct">,
 ): boolean {
   return grant.interfaceId === iface.id && grant.sapProduct === iface.sapProduct;
 }
 
+/**
+ * May this fetched grant authorise a call on the interface, under the mode?
+ *
+ * A bound grant: always (it was fetched for its own interface). An unbound
+ * one: never under strict. Under legacy, only on an interface that existed by
+ * the grant's cut-off (wave 1a integration review): the P0.1 deploy, stamped
+ * by its migration, or for a grant the old code created during the rollout,
+ * that grant's own creation. Legacy exists so that no call that worked before
+ * the deploy stops; an interface added since carried none, and honouring the
+ * old tuple on it would extend the approval to it — on another SAP product,
+ * say — which is A47 in the deployed default.
+ */
+export function isUsableUnder(
+  grant: UsableGrantFields,
+  iface: GrantedInterface,
+  mode: GrantBindingMode = grantBindingMode(),
+): boolean {
+  if (isBoundTo(grant, iface)) return true;
+  // Bound to another interface (or this one on another product): never.
+  if (grant.interfaceId != null || mode === "strict") return false;
+  const cutoff = grant.unboundCutoffAt ?? grant.createdAt;
+  return iface.createdAt.getTime() <= cutoff.getTime();
+}
+
 /** The subset of fetched grants the current mode lets authorise. */
-export function grantsUsableUnder<G extends { interfaceId?: string | null; sapProduct?: string | null }>(
+export function grantsUsableUnder<G extends UsableGrantFields>(
   grants: readonly G[],
   iface: GrantedInterface,
   mode: GrantBindingMode = grantBindingMode(),
 ): G[] {
-  return mode === "strict" ? grants.filter((g) => isBoundTo(g, iface)) : [...grants];
+  return grants.filter((g) => isUsableUnder(g, iface, mode));
 }
 
 /** The hourly throttle on the "an unbound grant was used" stamp. */
@@ -325,3 +360,19 @@ SET "interfaceId" = CASE WHEN c."matches" = 1 AND c."earlier" = 1 THEN c."interf
     END
 FROM "candidates" AS c
 WHERE g."id" = c."grantId";`;
+
+/**
+ * THE LEGACY CUT-OFF, run by the P0.1 migration right after the backfill and
+ * nowhere else (wave 1a integration review): every grant the deploy left
+ * unbound is stamped with the deploy's time, the last moment the old tuple
+ * matching carried traffic. Under legacy it is honoured only on interfaces
+ * created by then (`isUsableUnder`).
+ *
+ * NOT IN THE OPERATOR'S RE-RUN. A grant the old code creates during the
+ * rollout is classified by `pnpm grants:binding --apply`, possibly days later;
+ * stamping it then would honour it on every interface added in between. It
+ * stays unstamped, and its own createdAt stands in: it was raised from an
+ * interface that existed by then. Idempotent: a stamped row is never moved.
+ * The migration holds a copy of this text; the same test keeps them identical.
+ */
+export const GRANT_BINDING_CUTOFF_SQL = `UPDATE "ApiAccessGrant" SET "unboundCutoffAt" = CURRENT_TIMESTAMP WHERE "interfaceId" IS NULL AND "unboundCutoffAt" IS NULL;`;

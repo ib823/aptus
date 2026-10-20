@@ -29,8 +29,12 @@ Nothing changes for production by default.
   empty database a platform admin has been removed. That code only ran on an
   empty database, so it never ran on production.
 - **What is tighter:**
-  - `POST /api/auth/signup` now has its own per-address bucket of 10 an hour
-    (`signup:<ip>`), instead of sharing the 30-a-minute sign-in bucket.
+  - With developer sign-up **open**, `POST /api/auth/signup` has its own
+    per-address bucket of 10 an hour (`signup:<ip>`), instead of sharing the
+    30-a-minute sign-in bucket. With it off (the default), the partner trial
+    keeps the shared `auth:<ip>` bucket it always had, so an office or a
+    partner workshop registering more than ten people from one address in an
+    hour is not refused.
   - `POST /api/auth/signup` is also limited to 5 an hour per email address.
     With developer sign-up off, a magic link sent from the sign-in page keeps
     exactly the limits it had: neither sign-up bucket is spent for it, so
@@ -126,7 +130,9 @@ created in `/admin/users`, as before.
   link for a new address spends it too (`checkSignupCallerLimit`, in the
   link's `sendVerificationRequest`), so `POST /api/auth/signin/email` is no
   way around it. A sign-in link for an existing account never spends it. With
-  the setting off, nothing spends it except `/api/auth/signup`, as before.
+  the setting off, nothing spends it: `/api/auth/signup` (the partner trial)
+  stays in the shared `auth:<ip>` bucket, as before P0.13. The edge reads the
+  setting from `src/lib/auth/developer-signup-mode.ts`.
 - 5 an hour per email address, for both ways in. The sign-in link spends it
   only while sign-up is open.
 - A limiter outage refuses sign-up with `503 LIMITER_UNAVAILABLE`, failing

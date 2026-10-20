@@ -60,6 +60,22 @@ const ENVIRONMENT_ALIASES: Readonly<Record<string, LaneEnvironment>> = {
 };
 
 /**
+ * The app statuses whose lanes the nightly sweep checks: the ones that carry
+ * traffic. RESTRICTED is among them (wave 1a integration review): an ACTIVE
+ * app the owner sweep restricts because an owner left keeps every key and
+ * every call (DECISION D3), so leaving it out stopped the health checks of a
+ * live integration the night its owner was found gone. `laneTargets` filters
+ * on this list and the board's `appIsActive` mirrors it, so the two cannot
+ * drift.
+ */
+export const LANE_CHECKED_APP_STATUSES = ["ACTIVE", "RESTRICTED"] as const;
+
+/** Does the sweep check this app's lanes? */
+export function isLaneCheckedApp(status: string): boolean {
+  return (LANE_CHECKED_APP_STATUSES as readonly string[]).includes(status);
+}
+
+/**
  * Returns null for anything unrecognised rather than guessing. An environment
  * nobody can name is not a lane, and rendering it as one would put a chip on a
  * row whose identity we do not actually know.
@@ -205,7 +221,10 @@ export type UncheckedReason = (typeof UNCHECKED_REASONS)[number];
  * "No key" if it has no key. They decide only whether a check was ever coming.
  */
 export interface SweepFacts {
-  /** False for a draft, restricted or retired app: `laneTargets` takes ACTIVE only. */
+  /**
+   * False for a draft or retired app: `laneTargets` takes the statuses that
+   * carry traffic only (`isLaneCheckedApp`: ACTIVE and RESTRICTED).
+   */
   readonly appIsActive: boolean;
   /** False when the feed names no entity set, so there is no read to attempt. */
   readonly feedHasDataset: boolean;

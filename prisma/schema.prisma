@@ -1172,6 +1172,13 @@ model ApiAccessGrant {
   /// that strict binding would refuse traffic. Written at most hourly per
   /// grant. Null: never used since P0.1.
   unboundLastUsedAt DateTime?
+  /// Under COREEDGE_GRANT_BINDING=legacy an unbound grant is honoured only on
+  /// interfaces created at or before this instant: the P0.1 deploy, written
+  /// by its migration on every grant it left unbound. An interface added since
+  /// carried no traffic before the deploy, so honouring the old tuple there
+  /// would only widen the approval — A47 again. Null on a grant the old code
+  /// created during the rollout; its own createdAt stands in.
+  unboundCutoffAt   DateTime?
 
   createdAt DateTime @default(now())
 

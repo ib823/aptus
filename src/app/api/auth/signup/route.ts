@@ -16,9 +16,11 @@
  *                                         a row. Refused unless
  *                                         COREEDGE_DEVELOPER_SIGNUP=open.
  *
- * Both are limited per caller address at the edge (middleware, `signup:`) and
- * per email address here, and both answer the same neutral sentence whatever
- * the outcome, so the response never says whether an address has an account.
+ * Both are limited per caller address at the edge (middleware: `signup:` while
+ * developer sign-up is open; off, the partner trial keeps the shared `auth:`
+ * bucket it had) and per email address here, and both answer the same neutral
+ * sentence whatever the outcome, so the response never says whether an
+ * address has an account.
  */
 
 import { NextResponse, type NextRequest } from "next/server";

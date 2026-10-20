@@ -58,6 +58,16 @@ Nothing that works today stops without an operator choosing it.
 - `COREEDGE_GRANT_BINDING` defaults to `legacy`: an unbound grant keeps the old
   matching, and each call it authorises stamps `unboundLastUsedAt` (at most
   hourly per grant) and logs `[grant-binding] an unbound legacy grant authorised a call`.
+- **Only on interfaces that existed at the deploy.** The migration stamps every
+  grant it leaves unbound with the deploy time (`unboundCutoffAt`). Under
+  `legacy` an unbound grant is honoured only on an interface created by then; a
+  grant the old code created during the rollout (never stamped: `--apply` does
+  not stamp) uses its own creation time instead. An interface added after the
+  deploy carried no traffic before it, so this stops nothing that worked; it
+  stops an old approval from reaching a new interface, on another SAP system
+  say, which is exactly A47. A call there is refused with the re-approval
+  message below, under `legacy` as under `strict`, and the fix is the same: a
+  request raised from that interface and approved by a second person.
 - Grants created by the old code during the rollout are unbound with no reason
   yet. Run `pnpm grants:binding --apply` after the deploy to bind them (or flag
   them). `--apply` never touches a grant already flagged `NO_MATCH` or
@@ -71,8 +81,11 @@ Nothing that works today stops without an operator choosing it.
 - On the first night, the owner sweep moves every ACTIVE app whose owner was
   deactivated, deleted or moved to another organization to RESTRICTED, with a
   `ConfigAudit` row (actor `system:owner-liveness`). **RESTRICTED stops no
-  runtime call**: the app's keys keep working. Issuing or rotating its key is
-  refused until someone live claims the empty slot.
+  runtime call**: the app's keys keep working, and so does its monitoring: the
+  04:30 UTC lane checks cover ACTIVE and RESTRICTED apps alike
+  (`LANE_CHECKED_APP_STATUSES`, `src/lib/coreedge/lanes.ts`), because both carry
+  traffic. Issuing or rotating its key is refused until someone live claims the
+  empty slot.
 
 ## Where approvers see unbound grants
 
@@ -98,7 +111,7 @@ person approve it, then revoke the old grant in Control Tower.
 Under strict an unbound grant's calls are refused with `403` and error code
 `FORBIDDEN`, the code every missing-grant refusal carries; what tells them apart
 is the message, "The access grant for this capability was approved before grants
-were bound to one interface, and this deployment no longer honours such grants.
+were bound to one interface, and this deployment does not honour such grants on this interface.
 Ask for it to be approved again against this interface." (The broker's internal
 reason is `GRANT_NEEDS_REAPPROVAL`; it is not sent on the wire, and the
 northbound call log records the status only.) Because strict is switched on only

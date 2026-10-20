@@ -18,20 +18,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    interface: {
-      findFirst: mocks.findFirstInterface,
-      update: mocks.updateInterface,
-      findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn(),
+// Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
+vi.mock("@/lib/db/prisma", async () => {
+  const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
+  return {
+    prisma: {
+      interface: {
+        findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
+        update: mocks.updateInterface,
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+      },
+      solution: { findFirst: vi.fn() },
+      solutionClient: { findMany: mocks.findManyClients },
+      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+      configAudit: { create: mocks.createAudit },
     },
-    solution: { findFirst: vi.fn() },
-    solutionClient: { findMany: mocks.findManyClients },
-    apiAccessGrant: { findMany: mocks.findManyGrants },
-    configAudit: { create: mocks.createAudit },
-  },
-}));
+  };
+});
 
 import { PATCH } from "@/app/api/studio/interfaces/route";
 import { UPDATE_NOT_EXECUTABLE } from "@/lib/studio/write-readiness";

@@ -330,6 +330,8 @@ export async function PATCH(request: NextRequest) {
       odataVersion: true,
       serviceVerifiedAt: true,
       serviceVerifications: true,
+      // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+      createdAt: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
@@ -519,6 +521,7 @@ export async function PATCH(request: NextRequest) {
       externalId: nextExternalId,
       operation: nextOperation,
       sapProduct: current.sapProduct,
+      createdAt: current.createdAt,
     };
     const [liveCredentials, writeKeyHolders, grants, connections] = await Promise.all([
       prisma.solutionClient.findMany({
@@ -556,6 +559,8 @@ export async function PATCH(request: NextRequest) {
           revokedAt: true,
           interfaceId: true,
           sapProduct: true,
+          createdAt: true,
+          unboundCutoffAt: true,
         },
       }),
       isCustom ? loadCurrentConnections(organizationId, current.sapProduct) : Promise.resolve(null),

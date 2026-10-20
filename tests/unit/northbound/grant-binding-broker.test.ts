@@ -45,7 +45,7 @@ import { POST as raiseRequest } from "@/app/api/studio/access-grants/route";
 import { POST as createInterface } from "@/app/api/studio/interfaces/route";
 import { listGrantsNeedingReapproval, listOpenRequests } from "@/lib/coreedge/queries";
 import { resolveReadableInterface } from "@/lib/northbound/access";
-import { GRANT_BINDING_BACKFILL_SQL } from "@/lib/studio/grant-binding";
+import { GRANT_BINDING_BACKFILL_SQL, GRANT_BINDING_CUTOFF_SQL } from "@/lib/studio/grant-binding";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 const RUN = `grant-binding-${randomUUID()}`;
@@ -136,6 +136,17 @@ async function backdate(grantId: string): Promise<void> {
     where: { id: grantId, organizationId: ORG },
     data: { createdAt: anHourAgo, decidedAt: anHourAgo },
   });
+}
+
+/**
+ * What the P0.1 migration runs on deploy: the backfill, then the legacy
+ * cut-off stamp. The operator's re-run (`--apply`) is the backfill alone.
+ */
+async function deploy(): Promise<void> {
+  await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+  await prisma.$executeRawUnsafe(GRANT_BINDING_CUTOFF_SQL);
+  // An interface added "after the deploy" is created at a later millisecond.
+  await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
 const binding = (grantId: string) =>
@@ -338,9 +349,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
     });
     await backdate(grantId);
     const onPrem = await addInterface(solutionId, "s4hana-onprem");
-    expect((await read(solutionId, onPrem)).ok).toBe(true);
 
-    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    await deploy();
     expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "AMBIGUOUS" });
     expect((await read(solutionId, cloud)).ok).toBe(true);
     expect((await read(solutionId, onPrem)).ok).toBe(true);
@@ -393,7 +403,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
     const cloud = await addInterface(solutionId, "s4hana");
     const onPrem = await addInterface(solutionId, "s4hana-onprem");
     const grantId = await legacyGrant(solutionId);
-    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    await deploy();
 
     vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
     expect((await read(solutionId, cloud)).ok).toBe(true);
@@ -415,6 +425,67 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("grant binding, against real Pos
       reason: "Needs re-approval: covers several interfaces on different SAP systems",
     });
     expect(flagged.find((r) => r.id === grantId)?.lastUsedAt).toBeInstanceOf(Date);
+  });
+
+  /*
+   * WAVE 1A INTEGRATION REVIEW. Legacy honoured an unbound grant on the old
+   * tuple wherever it matched, including on an interface added AFTER the
+   * deploy: a NO_MATCH or AMBIGUOUS PROD approval reached a newly added
+   * on-premise interface at once — A47, in the deployed default. Such an
+   * interface carried no traffic before the deploy, so nothing that worked
+   * then depends on it.
+   */
+  it("legacy never extends an unbound grant to an interface added after the deploy (NO_MATCH)", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const grantId = await legacyGrant(solutionId);
+    await backdate(grantId);
+    await deploy();
+    expect(await binding(grantId)).toEqual({ interfaceId: null, sapProduct: null, unboundReason: "NO_MATCH" });
+
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    expect(await read(solutionId, onPrem)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+    // Never stamped as used: it authorised nothing.
+    expect(
+      await prisma.apiAccessGrant.findFirst({
+        where: { id: grantId, organizationId: ORG },
+        select: { unboundLastUsedAt: true },
+      }),
+    ).toEqual({ unboundLastUsedAt: null });
+  });
+
+  it("legacy never extends an unbound grant to an interface added after the deploy (AMBIGUOUS)", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    const cloud = await addInterface(solutionId, "s4hana");
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    const grantId = await legacyGrant(solutionId);
+    await deploy();
+    expect(await binding(grantId)).toMatchObject({ unboundReason: "AMBIGUOUS" });
+    // What it served before the deploy, it still serves.
+    expect((await read(solutionId, cloud)).ok).toBe(true);
+    expect((await read(solutionId, onPrem)).ok).toBe(true);
+
+    const later = await addInterface(solutionId, "s4hana-onprem");
+    expect(await read(solutionId, later)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+  });
+
+  it("a grant the old code created during the rollout is honoured only on interfaces older than it", async () => {
+    vi.stubEnv("COREEDGE_GRANT_BINDING", "legacy");
+    const solutionId = await app();
+    await deploy();
+    const cloud = await addInterface(solutionId, "s4hana");
+    // Written by the old code after the migration: unbound, unclassified, unstamped.
+    const grantId = await legacyGrant(solutionId);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const onPrem = await addInterface(solutionId, "s4hana-onprem");
+    expect((await read(solutionId, cloud)).ok).toBe(true);
+    expect(await read(solutionId, onPrem)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
+
+    // The operator's re-run classifies it, and does not move its cut-off.
+    await prisma.$executeRawUnsafe(GRANT_BINDING_BACKFILL_SQL);
+    expect(await binding(grantId)).toMatchObject({ unboundReason: "AMBIGUOUS" });
+    expect(await read(solutionId, onPrem)).toMatchObject({ ok: false, reason: "GRANT_NEEDS_REAPPROVAL" });
   });
 
   it("names the bound SAP system on the requests board, and never flags a bound grant", async () => {
@@ -476,5 +547,9 @@ describe("the migration's backfill is the command's backfill", () => {
       "utf8",
     );
     expect(migration).toContain(GRANT_BINDING_BACKFILL_SQL);
+    // …and stamps the legacy cut-off after it, which the re-run does not.
+    expect(migration).toContain(GRANT_BINDING_CUTOFF_SQL);
+    expect(migration.indexOf(GRANT_BINDING_CUTOFF_SQL)).toBeGreaterThan(migration.indexOf(GRANT_BINDING_BACKFILL_SQL));
+    expect(GRANT_BINDING_BACKFILL_SQL).not.toContain("unboundCutoffAt");
   });
 });

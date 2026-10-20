@@ -25,10 +25,12 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { lookups, valid } = vi.hoisted(() => ({
+const { lookups, valid, dead } = vi.hoisted(() => ({
   lookups: { count: 0 },
   /** tokenHash → client id, for the keys that are live credentials. */
   valid: new Map<string, string>(),
+  /** tokenHash → the row fields that make a REAL credential refuse (expired, revoked, …). */
+  dead: new Map<string, Record<string, unknown>>(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -40,7 +42,9 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: async ({ where }: { where: { tokenHash?: string; previousTokenHash?: string } }) => {
         lookups.count++;
         // No key in this file was ever rotated, so a previous-key lookup misses.
-        const id = where.tokenHash === undefined ? undefined : valid.get(where.tokenHash);
+        const hash = where.tokenHash;
+        const id =
+          hash === undefined ? undefined : (valid.get(hash) ?? (dead.has(hash) ? `dead_${hash}` : undefined));
         return id
           ? {
               id,
@@ -51,6 +55,7 @@ vi.mock("@/lib/db/prisma", () => ({
               isActive: true,
               revokedAt: null,
               expiresAt: null,
+              ...(hash === undefined ? {} : dead.get(hash)),
             }
           : null;
       },
@@ -81,6 +86,13 @@ const QUERIES_PER_UNKNOWN_KEY = 2;
 function validKey(name: string): string {
   const key = `ce_valid_${name}`;
   valid.set(hashClientToken(key), `client_${name}`);
+  return key;
+}
+
+/** A real credential that no longer authenticates: its row is found, and refuses. */
+function deadKey(name: string, row: Record<string, unknown>): string {
+  const key = `ce_dead_${name}`;
+  dead.set(hashClientToken(key), row);
   return key;
 }
 
@@ -159,5 +171,42 @@ describe("random-key floods are capped per address", () => {
       expect((await call(ip)).status).toBe(401);
     }
     expect((await call(ip, key)).status).toBe(200);
+  });
+});
+
+/*
+ * Wave 1a integration review. A key whose row is FOUND — expired at its P0.11
+ * deadline, its rotation overlap closed, revoked, deactivated — is not a
+ * made-up key: its lookup succeeded, and its own credential bucket already
+ * bounds what it costs. Counting it against the ADDRESS let one tenant's dead
+ * key, still retrying behind a shared egress, lock every other tenant's valid
+ * key out at the edge (the P0.5 criterion "a flooding key cannot throttle
+ * another key").
+ */
+describe("a real key that no longer authenticates is bounded by itself, not by its address", () => {
+  it.each([
+    ["expired", "198.51.100.46", { expiresAt: new Date(Date.now() - 60_000) }],
+    ["revoked", "198.51.100.47", { revokedAt: new Date(Date.now() - 60_000) }],
+    ["deactivated", "198.51.100.48", { isActive: false }],
+  ])("a %s key retrying from a shared address does not lock out another tenant's valid key", async (name, ip, row) => {
+    const stale = deadKey(name, row);
+    const key = validKey(`shared_egress_${name}`);
+    for (let i = 0; i < RATE_LIMITS.machineAuthFailure.limit + 10; i++) {
+      expect((await call(ip, stale)).status).toBe(401);
+    }
+    expect((await call(ip, key)).status).toBe(200);
+  });
+
+  it("a dead key retrying is still refused at its own credential ceiling, before any lookup", async () => {
+    const ip = "198.51.100.49";
+    const stale = deadKey("bounded", { expiresAt: new Date(Date.now() - 60_000) });
+    for (let i = 0; i < RATE_LIMITS.machineCredential.limit; i++) await call(ip, stale);
+    const before = lookups.count;
+    const res = await call(ip, stale);
+    expect(res.status).toBe(429);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("RATE_LIMITED");
+    expect(lookups.count).toBe(before);
+    // And the address stays open to every other key.
+    expect((await call(ip, validKey("after_bounded"))).status).toBe(200);
   });
 });

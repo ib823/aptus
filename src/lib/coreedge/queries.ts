@@ -25,7 +25,7 @@ import {
   type ProbeFacts,
   type ReadFacts,
 } from "./lanes";
-import { LANE_ENVIRONMENTS } from "./lanes";
+import { isLaneCheckedApp, LANE_ENVIRONMENTS } from "./lanes";
 
 /**
  * Reading lanes out of the models that already hold the facts.
@@ -351,12 +351,13 @@ export async function listLanes(
           /*
            * WHETHER A CHECK WAS EVER COMING. These two mirror the filters in
            * `laneTargets()` (src/lib/ops/lane-check-sweep.ts) exactly: ACTIVE
-           * apps only, feeds that name an entity set only. They change no
-           * status — only the words a lane uses when it has no age to show,
-           * so "never checked" stops meaning six different things at once.
+           * and RESTRICTED apps only (isLaneCheckedApp), feeds that name an
+           * entity set only. They change no status — only the words a lane
+           * uses when it has no age to show, so "never checked" stops meaning
+           * six different things at once.
            */
           sweep: {
-            appIsActive: solution.status === "ACTIVE",
+            appIsActive: isLaneCheckedApp(solution.status),
             feedHasDataset: feed.entitySet !== null && feed.entitySet !== "",
             feedServiceResolves: resolvableServices.has(
               laneServiceKey({

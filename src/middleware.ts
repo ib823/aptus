@@ -1,6 +1,7 @@
 /** Middleware: Bridge NextAuth JWT sessions + API rate limiting */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { machineAuthFailureKey } from "@/lib/northbound/auth-failures";
 import { extractBearer } from "@/lib/northbound/bearer";
 import {
@@ -119,10 +120,12 @@ const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
  * call is a new credential bucket every time, so neither bucket above holds a
  * client that cannot authenticate: each call it sent cost the route a database
  * lookup, 6,000 a minute per address where the per-IP bucket allowed 120. The
- * route counts every failed lookup in `machine-authfail:<ip>`
+ * route counts every key that matched no row in `machine-authfail:<ip>`
  * (northbound/auth-failures.ts); it is read here, without spending it, before
  * anything else, and once it is empty the address is refused until the window
- * frees room. A key whose lookups succeed never spends it. Read as unknown
+ * frees room. A key whose lookups succeed never spends it, and neither does a
+ * real key that refuses (expired, rotated out, revoked): its own bucket below
+ * bounds it, so it cannot lock other tenants' keys off a shared egress. Read as unknown
  * (the limiter cannot be asked), it refuses nothing: the buckets below then
  * answer the outage.
  */
@@ -388,7 +391,12 @@ async function handleRequest(
       // own: each one sends an email from this host's domain and, with
       // developer sign-up open, can create an organization. Per address here;
       // the route adds a per-email bucket the edge cannot key (it has no body).
-      const isSignup = pathname === "/api/auth/signup" && request.method === "POST";
+      // Only while developer sign-up is OPEN (wave 1a integration review):
+      // off, the only sign-up is the partner trial, which predates P0.13 and
+      // keeps the shared auth bucket it had, so an office registering a dozen
+      // partners from one address is not refused on deploy.
+      const isSignup =
+        pathname === "/api/auth/signup" && request.method === "POST" && developerSignupMode() === "open";
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
       // Expensive live-SAP routes get their own tight bucket so they can't
       // amplify load onto the SAP tenant. The universal "show the data" surface
