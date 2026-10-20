@@ -87,18 +87,67 @@ The intended far side of that work is that the OData service your ABAP exposes
 an **Interface** against it, request access, and your consuming application calls
 it through the northbound API.
 
-**That is not yet true for services you build yourself.** The broker resolves an
-interface's service from two sources only: the curated list, and SAP's published
-Business Accelerator Hub catalogue. A customer service — a `Z*` RAP service, a
-key-user `YY1_*_CDS` view — is in neither, so an interface defined against one is
-refused at call time with *"The catalogue service could not be resolved"*, and the
-nightly lane check skips it for the same reason. Reaching your own services is
-planned work, not a configuration step you have missed.
+### Your own services (Z\*, YY1\_\*, ECC Gateway)
+
+A service you build yourself — a `Z*` RAP service, a key-user `YY1_*_CDS` view or
+custom business object, an ECC NetWeaver Gateway service, SuccessFactors'
+`/odata/v2` with your `cust_*` MDF objects — is in neither the curated list nor
+SAP's catalogue. You register it **by its service path** instead:
+
+1. **Register the interface with its path and OData version.** Studio →
+   Interfaces → **Register your own API** (or Discover → *Not in the catalogue?*),
+   or the API:
+
+   ```http
+   POST /api/studio/interfaces
+   { "solutionId": "…", "sapProduct": "s4hana-onprem", "name": "Travel read",
+     "servicePath": "/sap/opu/odata/sap/ZUI_TRAVEL_O2", "odataVersion": "V2",
+     "operation": "READ", "entitySet": "Travel" }
+   ```
+
+   The path is the part of the service URL after the host, starting with `/` —
+   copy it from the service binding in ADT (*Service URL*) or from
+   `/IWFND/MAINT_SERVICE`, without `$metadata` and without `?sap-client`
+   (CoreEdge adds the client from the connection). It is a path on the
+   connection's own host and nothing else: a full URL, `//host`, `..`, `?`, `#`,
+   backslashes, whitespace and percent-escapes that hide any of those are refused
+   (`src/lib/sap-public/service-path.ts`). Ariba is REST, not OData, and has no
+   path.
+2. **Verify it per environment.** On the interface, **Verify** asks the SAP system
+   for the service's `$metadata` through your organization's connection for the
+   environment you pick — the same binding a call from that environment uses, SAP
+   client included — and lists its datasets. It reads no business data. Pick the
+   dataset from the list (`POST /api/studio/interfaces/<id>/verify-service`).
+3. **Request access and issue keys as normal.** Grants, the two-person rule,
+   tokens, the write key, `Idempotency-Key`, rate limits and the audit trail apply
+   exactly as they do to catalogue services.
+
+What is different, and why:
+
+- **The interface's id is derived**: `custom:<path>`, for example
+  `custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2`. Grants name that id, so a grant a
+  second person approved for one path can never authorise another.
+- **Writes need a current verification.** The broker refuses a write through your
+  own service until it has been verified since it last changed, and a WRITE
+  interface cannot be activated before that. Reads are not gated.
+- **Changing the path or version is a new contract**: the version bumps,
+  verification clears, the id changes (so existing grants detach and a new one is
+  needed), and an active write interface returns to draft. Changing the dataset
+  also clears verification.
+- **Catalogue and custom do not convert.** To move an interface from a catalogue
+  service to your own (or back), register a new one.
+
+Evidence level: traced in code and covered by unit tests
+(`tests/unit/lib/sap-public/service-path.test.ts`,
+`tests/unit/northbound/custom-service-read.test.ts`,
+`tests/unit/northbound/custom-service-write.test.ts`,
+`tests/unit/studio/verify-service-route.test.ts`); not yet run against a live
+tenant.
 
 So the rule stands — **CoreEdge governs the OData your ABAP exposes; it does not
-build your ABAP** — with the caveat above on which OData it can reach today. If a
-service is not probeable (no OData endpoint — SOAP, async, RFC-only), it shows as
-*Not probeable* rather than being silently marked available.
+build your ABAP.** If a service is not probeable (no OData endpoint — SOAP, async,
+RFC-only), it shows as *Not probeable* rather than being silently marked
+available.
 
 ---
 
