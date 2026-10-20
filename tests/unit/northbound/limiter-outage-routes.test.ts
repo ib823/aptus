@@ -112,10 +112,25 @@ describe("every caller of checkRateLimit tells an outage apart", () => {
     });
   }
 
+  /*
+   * Callers that SPEND a bucket only to count, and never answer anyone from
+   * the result, so there is no refusal to word. Each is held to that below:
+   * its result is discarded (`await checkRateLimit(...)` as a statement).
+   */
+  const COUNT_ONLY = [path.join("src", "lib", "northbound", "auth-failures.ts")];
+
   const SRC = path.join(process.cwd(), "src");
   const callers = sources(SRC).filter((f) => {
     if (f.endsWith(path.join("lib", "security", "rate-limit.ts"))) return false;
+    if (COUNT_ONLY.some((c) => f.endsWith(c))) return false;
     return /\bcheckRateLimit\s*\(/.test(readFileSync(f, "utf8"));
+  });
+
+  it.each(COUNT_ONLY.map((f) => [f]))("%s only counts: it never reads the result", (file) => {
+    const text = readFileSync(path.join(process.cwd(), file), "utf8");
+    const calls = text.match(/^.*\bcheckRateLimit\s*\(.*$/gm) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const line of calls) expect(line.trim()).toMatch(/^await checkRateLimit\(/);
   });
 
   it("finds the callers (the guard is not vacuous)", () => {

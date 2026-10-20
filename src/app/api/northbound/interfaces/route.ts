@@ -12,6 +12,7 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   newCorrelationId,
@@ -31,9 +32,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const correlationId = newCorrelationId();
 
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
+    // Spends the address's failed-lookup budget, which the edge reads first.
+    await noteFailedCredential(request.headers, bearer);
     return unauthenticated(correlationId);
   }
   const client = auth.client;

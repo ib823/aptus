@@ -284,6 +284,19 @@ export const RATE_LIMITS = {
    * address is not throttled by its own fleet.
    */
   machineIpBackstop: { limit: 6000, windowMs: 60 * 1000 },
+  /**
+   * FAILED credential lookups per caller address on the machine routes
+   * (`machine-authfail:<ip>`, see src/lib/northbound/auth-failures.ts).
+   *
+   * Keying by the presented credential gives every made-up bearer a fresh
+   * bucket, so without this a client sending a new junk key on every call met
+   * only the backstop above — 6,000 Postgres lookups a minute per address
+   * where the old per-IP bucket allowed 120. The route spends this on each
+   * 401 for a presented key; the edge reads it, without spending, before
+   * anything else, and refuses the address once it is empty. A valid key
+   * never spends it, so only an address sending failing keys can empty it.
+   */
+  machineAuthFailure: { limit: 60, windowMs: 60 * 1000 },
 } as const;
 
 /**

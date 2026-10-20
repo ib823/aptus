@@ -250,17 +250,21 @@ help.
 | `403` | `FORBIDDEN` | Not set up: no approved grant for this call; or the customer's SAP connection cannot sign in — a credential is missing, its token endpoint refused it, or its token URL is wrong; or SAP itself refused (401/403) | **No.** Fix access or the connection, then call again |
 | `403` | `CONNECTION_NOT_CONFIGURED` | The customer has not connected that SAP system for your environment | **No.** The customer connects it |
 | `404` | `NOT_FOUND` | No such interface for your credential, or the dataset does not exist on the tenant | **No.** |
-| `409` | `CONFLICT` | A write's `Idempotency-Key` is in flight, or was used for a different payload or destination | **No.** See *Idempotency is not optional* |
+| `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
+| `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |
 | `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
-| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key, even from the same address, is not affected | **Yes, after `Retry-After`.** |
-| `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
+| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it | **Yes, after `Retry-After`.** Slow this key down |
+| `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
+| `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
 | `503` | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits, so it refused the call for safety. Nothing was sent to SAP, and your budget was not spent | **Yes, after `Retry-After`.** |
 | `504` | `UPSTREAM_TIMEOUT` | The tenant, or the connection's token endpoint, did not answer in time | **Yes, with backoff.** A write that timed out after it was sent returns the same answer under its key; see *Idempotency is not optional* |
 
-**A `429` is only ever about your own credential.** It is never sent for an
-outage: when the limiter itself is down you get `503 LIMITER_UNAVAILABLE`, and
-when SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`. Back off
-on a `429`; do not lower your rate because of a `503` or a `502`.
+**Branch on `error.code`, not only on the status.** A `429 RATE_LIMITED` is
+about your own credential; a `429 RATE_LIMITED_ADDRESS` is about the address
+you call from. Neither is ever sent for an outage: when the limiter itself is
+down you get `503 LIMITER_UNAVAILABLE`, which says nothing about your rate.
+When SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`, so back
+off on a `502` as well, not only on a `429`.
 
 ---
 
@@ -329,7 +333,7 @@ So: **reuse the same key when you retry.** The rules are:
 | First call with a key | The write happens |
 | Same key, same payload and SAP destination | The **recorded outcome**, replayed — SAP is not touched again |
 | Same key, **different** payload or destination | `409` — a different write requires a different intent/key |
-| Same key, still in flight | `409` — one intent, one write |
+| Same key, still in flight | `409` with `Retry-After` — one intent, one write. Retry with the same key after `Retry-After` to get the outcome |
 | Key older than 24h | Treated as a fresh request |
 
 Failures are recorded too. If a write was refused with a `403`, retrying the same

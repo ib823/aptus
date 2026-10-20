@@ -86,11 +86,12 @@ describe("a flooding key cannot throttle another key behind the same IP", () => 
     const ip = "198.51.100.13";
     const refused = await flood(RATE_LIMITS.machineIpBackstop.limit + 5, DATA, ip, (i) => `ce_random_${i}`);
     expect(refused).toBeGreaterThan(0);
-    // Said as the address's limit, not as any one credential's.
+    // Said as the address's limit, not as any one credential's: its own code,
+    // so a client does not back off a key that never used its budget.
     const res = await call(DATA, ip, { bearer: "ce_random_next" });
     expect(res.status).toBe(429);
     const body = (await res.json()) as { error: { code: string; message: string } };
-    expect(body.error).toMatchObject({ code: "RATE_LIMITED", message: "Too many requests from this address." });
+    expect(body.error).toMatchObject({ code: "RATE_LIMITED_ADDRESS", message: "Too many requests from this address." });
   });
 
   it("one key's flood spends at most its own ceiling of the address's backstop", () => {

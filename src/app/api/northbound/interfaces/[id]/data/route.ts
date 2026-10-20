@@ -22,13 +22,15 @@
  * says exactly which one. The middleware in front is keyed the same way, by
  * the credential presented (audit A43): it used to spend a per-IP bucket on
  * every call, which undid this isolation before the route ran. Its per-IP
- * ceiling is now a high backstop against a flood of random keys only.
+ * ceiling is now a high backstop only; a flood of made-up keys is held by the
+ * failed-lookup bucket each 401 here spends (northbound/auth-failures.ts).
  */
 
 import type { NextRequest } from "next/server";
 
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
 import {
@@ -52,9 +54,12 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   const correlationId = newCorrelationId();
 
   // 1 — authenticate. Every failure mode collapses to one 401 for the caller.
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
+    // Spends the address's failed-lookup budget, which the edge reads first.
+    await noteFailedCredential(request.headers, bearer);
     return unauthenticated(correlationId);
   }
   const client = auth.client;

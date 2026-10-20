@@ -21,6 +21,20 @@ today, and the reserved `/api/twin`, `/api/events/ingest`, `/api/mgmt`,
 
 For a call that carries `Authorization: Bearer …`:
 
+0. `machine-authfail:<ip>` — 60 **failed credential lookups** a minute
+   (`RATE_LIMITS.machineAuthFailure`). The route spends it on every 401 for a
+   presented key (`noteFailedCredential`, `src/lib/northbound/auth-failures.ts`);
+   the edge only reads it, before anything else, and refuses the address while
+   it is empty. Without it, a client sending a new made-up key on every call
+   gets a fresh credential bucket each time and meets only the backstop below:
+   up to 6,000 database lookups a minute per address, where the old per-IP
+   bucket allowed 120 writes or 300 reads. With it, such a flood costs at most
+   60 lookups a minute per address; after that, each call costs one Upstash
+   read and nothing else. A key that authenticates never spends it.
+   **Trade-off:** while an address is over it, valid keys calling from that
+   same address are refused too (the edge cannot tell them apart without the
+   lookup). That lasts until the window frees room, and only an address that is
+   sending failing keys can cause it.
 1. `machine:cred:<first 128 bits of SHA-256(bearer)>` — 600 a minute
    (`RATE_LIMITS.machineCredential`). The bearer itself is never stored. The
    route still authenticates the credential and applies its own budget
@@ -37,21 +51,35 @@ per-IP buckets it always had (`api:<method>:<ip>`, `auth:`, `sap-live:`,
 `report:`).
 
 An edge refusal of a machine call uses the broker's envelope:
-`{ "error": { "code": "RATE_LIMITED", "message", "correlationId" } }` with
-`x-correlation-id` and `Retry-After`. It is **not audited** (middleware has no
-database), so looking up that correlation id finds no row: the call never
-reached the broker.
+`{ "error": { "code", "message", "correlationId" } }` with `x-correlation-id`
+and `Retry-After`. The code says whose limit it was:
+
+| Bucket | Status and code | Developer's next step |
+|---|---|---|
+| `machine:cred:` | 429 `RATE_LIMITED` | Slow that key down |
+| `machine-ip:` (backstop) | 429 `RATE_LIMITED_ADDRESS`, "Too many requests from this address." | Find what else calls from that address |
+| `machine-authfail:` | 429 `RATE_LIMITED_ADDRESS`, "…with an unrecognised client credential from this address…" | Find what is sending a wrong, revoked or expired key |
+
+It is **not audited** (middleware has no database), so looking up that
+correlation id finds no row: the call never reached the broker.
+
+To see which addresses are tripping `machine-authfail:`, search the server log
+for `[northbound] auth rejected` / `[northbound-write] auth rejected` (one line
+per failed lookup, with the reason) and the Upstash data browser for keys under
+the `abeam:ratelimit:60:60000` prefix ending in `machine-authfail:<ip>`.
 
 ### Setting: `COREEDGE_MACHINE_RATE_LIMIT`
 
 | Value | Behaviour |
 |---|---|
 | unset / `credential` (default) | As above. |
-| `ip` | The old shared per-IP buckets for machine routes too. **A rollback switch only**: it brings A43 back. |
+| `ip` | The old shared per-IP buckets for machine routes too, and the edge no longer reads `machine-authfail:` (the route still counts failures; nothing reads them). **A rollback switch only**: it brings A43 back. |
 
 Anything else reads as the default. On deploy nobody is locked out: for every
-existing caller the new edge limits are higher than the old ones, and the
-route's own per-credential budgets are unchanged.
+existing caller whose key authenticates, the new edge limits are higher than
+the old ones, and the route's own per-credential budgets are unchanged. The
+only caller refused sooner than before is an address sending more than 60
+failing keys a minute, which the old per-IP bucket let make 120 to 300 lookups.
 
 ## Limiter outage (A44)
 
@@ -69,7 +97,7 @@ in-memory fallback is no limit at all on serverless:
 | Sign-in, MFA, passkey ceremonies | `auth:`, `webauthn-*` | 503 `LIMITER_UNAVAILABLE` — refusing is the brute-force protection |
 | Live SAP console routes | `sap-live:` | 503 — the bucket protects the customer's SAP system |
 | Browser API reads and changes, reports | `api:`, `report:` | 503 |
-| Machine routes (edge) | `machine:cred:`, `machine-ip:` | 503 in the broker's envelope, with a correlation id |
+| Machine routes (edge) | `machine:cred:`, `machine-ip:` | 503 in the broker's envelope, with a correlation id. The `machine-authfail:` read comes back unknown and refuses nothing; the two buckets after it answer the outage |
 | Northbound routes (in-route) | `northbound:`, `northbound-write:` | 503, audited 503 / `LIMITER_UNAVAILABLE` |
 | Studio Test Console dry run | `northbound:` | refusal `LIMITER_UNAVAILABLE`, audited 503 dry run |
 | Lane re-check, Probe all | per lane, per tenant | 503 |
@@ -140,5 +168,16 @@ A replay is a same-key write retry answered from the stored outcome; SAP is not
 called. It is excluded from the topology's counts (`attributeCalls` in
 `src/lib/ops/topology.ts`, and the query in `src/app/api/console/topology/route.ts`)
 and from a lane's last call (`lastLaneCall` in `src/lib/coreedge/queries.ts`).
-The lane board, the usage rollup and both incident rules already excluded them.
-The broker-traffic screen shows them as their own `replayed` bucket.
+The lane board and both incident rules already excluded them.
+
+Two places count them **on purpose**, because a replay is still a request the
+broker answered:
+
+| Where | Excludes replays from | Still counts replays in |
+|---|---|---|
+| Usage rollup (`src/lib/commercial/coreedge-usage.ts`) | `writes` (a replay is not a created record) | `calls` and `refusals` |
+| Broker-traffic screen (`src/app/api/ops/broker-traffic/route.ts`) | the status breakdown (shown as its own `replayed` bucket) and the empty-read count | `total`, calls per solution and calls per credential |
+
+So a credential retrying one write five times shows six calls on the traffic
+screen and in Usage `calls`, one write in Usage `writes`, and one call on the
+topology and the lane board.

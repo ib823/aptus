@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   completeIdempotencyKey,
@@ -54,6 +55,12 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * How long a retry of a still-running write is told to wait. Short: most writes
+ * finish within seconds, and a retry before then only meets this answer again.
+ */
+const IN_FLIGHT_RETRY_AFTER_SECONDS = 5;
+
 const bodySchema = z.object({
   record: z.record(z.string(), z.unknown()),
   /*
@@ -78,9 +85,12 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const correlationId = newCorrelationId();
 
   // 1 — authenticate the read identity.
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound-write] auth rejected", { reason: auth.reason, correlationId });
+    // Spends the address's failed-lookup budget, which the edge reads first.
+    await noteFailedCredential(request.headers, bearer);
     return unauthenticated(correlationId);
   }
   const client = auth.client;
@@ -366,13 +376,34 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     });
   }
 
+  /*
+   * ONE CODE, TWO OPPOSITE ANSWERS, told apart by Retry-After.
+   *
+   * A different payload or destination is a client bug: never retried, and a
+   * different write takes a new key. A key still in flight is the opposite: the
+   * client's own retry arrived while its first attempt was running, and giving
+   * up — or re-sending under a new key — either loses the outcome or writes the
+   * record twice. Retried with the SAME key once the first attempt finishes, it
+   * is answered from the stored outcome. The code stays CONFLICT for both, so a
+   * client branching on it today is not broken; Retry-After is what is new.
+   */
   if (reservation.outcome === "conflict") {
-    const message =
-      reservation.reason === "PAYLOAD_MISMATCH"
-        ? "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write."
-        : "A request with this Idempotency-Key is still in progress.";
     await audit(409, iface.id, iface.externalId);
-    return northboundError("CONFLICT", message, 409, correlationId);
+    if (reservation.reason === "PAYLOAD_MISMATCH") {
+      return northboundError(
+        "CONFLICT",
+        "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write.",
+        409,
+        correlationId,
+      );
+    }
+    return northboundError(
+      "CONFLICT",
+      "A request with this Idempotency-Key is still in progress. Retry with the same Idempotency-Key after Retry-After to get its outcome; do not send it under a new key.",
+      409,
+      correlationId,
+      { "retry-after": String(IN_FLIGHT_RETRY_AFTER_SECONDS) },
+    );
   }
 
   // 8 — write. Timed around the upstream call only — see the read route.

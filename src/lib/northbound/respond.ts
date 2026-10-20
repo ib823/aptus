@@ -29,6 +29,14 @@ export type NorthboundErrorCode =
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
   /**
+   * The CALLER'S ADDRESS is over a limit, not this credential: the edge's
+   * per-address backstop, or too many failed credential lookups from it
+   * (middleware.ts, machineRefusal). Sent only by the edge; listed here so the
+   * vocabulary is in one place. Another key or tenant on a shared egress may
+   * have spent it, so backing off one key is not the answer.
+   */
+  | "RATE_LIMITED_ADDRESS"
+  /**
    * The customer's SAP connection cannot be bound for this call — none is
    * configured for the product, none declares the credential's environment, or
    * the candidates are ambiguous.

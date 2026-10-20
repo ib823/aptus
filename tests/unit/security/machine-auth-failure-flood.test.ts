@@ -1,0 +1,151 @@
+// @vitest-environment node
+/**
+ * A flood of made-up keys from one address cannot buy more credential lookups
+ * than the old per-IP edge bucket allowed (P0.5 review).
+ *
+ * Keying machine routes by the presented credential (A43) gave every new
+ * bearer value a fresh edge bucket of its own, so an unauthenticated client
+ * that sent `Authorization: Bearer junk_<i>` with a new value each time met
+ * only the per-address backstop (6,000 a minute) — where the per-IP bucket had
+ * stopped it at 120 writes or 300 reads. Every admitted call reached the route
+ * and cost a Postgres lookup of the token hash: about 50 times as many
+ * unauthenticated lookups per address as before.
+ *
+ * Failed lookups from one address now spend `machine-authfail:<ip>`, which the
+ * edge reads before it spends anything else. Once it is empty, calls from that
+ * address are refused at the edge — said as the ADDRESS's limit, never as a
+ * credential's — and nothing reaches the database.
+ *
+ * Driven through the real middleware, the real discovery route and the real
+ * in-memory limiter; only Prisma and the audit writer are stubbed. Each test
+ * uses its own address and its own valid key, so the shared limiter Map cannot
+ * leak between them.
+ */
+
+import { NextRequest } from "next/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { lookups, valid } = vi.hoisted(() => ({
+  lookups: { count: 0 },
+  /** tokenHash → client id, for the keys that are live credentials. */
+  valid: new Map<string, string>(),
+}));
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    solutionClient: {
+      findUnique: async ({ where }: { where: { tokenHash: string } }) => {
+        lookups.count++;
+        const id = valid.get(where.tokenHash);
+        return id
+          ? {
+              id,
+              organizationId: "org_a",
+              solutionId: "sol_1",
+              environment: "SANDBOX",
+              sapClient: null,
+              isActive: true,
+              revokedAt: null,
+              expiresAt: null,
+            }
+          : null;
+      },
+      update: async () => ({}),
+    },
+    solution: { findFirst: async () => ({ status: "ACTIVE" }) },
+    interface: { findMany: async () => [] },
+    apiAccessGrant: { findMany: async () => [] },
+  },
+}));
+vi.mock("@/lib/northbound/audit", () => ({ recordNorthboundCall: async () => undefined }));
+
+import { GET as discovery } from "@/app/api/northbound/interfaces/route";
+import { hashClientToken } from "@/lib/northbound/auth";
+import { RATE_LIMITS } from "@/lib/security/rate-limit";
+import { middleware } from "@/middleware";
+
+const PATH = "/api/northbound/interfaces";
+
+/** A live credential of its own, so this test's route budget starts full. */
+function validKey(name: string): string {
+  const key = `ce_valid_${name}`;
+  valid.set(hashClientToken(key), `client_${name}`);
+  return key;
+}
+
+/** One call as the platform runs it: the edge first, then the route if the edge let it through. */
+async function call(ip: string, bearer?: string): Promise<Response> {
+  const make = () =>
+    new NextRequest(`http://localhost${PATH}`, {
+      headers: { "x-real-ip": ip, ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) },
+    });
+  const edge = await middleware(make());
+  if (edge.headers.get("x-middleware-next") !== "1") return edge;
+  return discovery(make());
+}
+
+beforeEach(() => {
+  lookups.count = 0;
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+describe("random-key floods are capped per address", () => {
+  it("a thousand made-up keys from one address cost at most the failure ceiling in lookups", async () => {
+    const ip = "198.51.100.40";
+    const statuses = new Map<number, number>();
+    for (let i = 0; i < 1000; i++) {
+      const res = await call(ip, `junk_${i}`);
+      statuses.set(res.status, (statuses.get(res.status) ?? 0) + 1);
+    }
+    // Before: 1000 lookups (every key was its own fresh edge bucket).
+    expect(lookups.count).toBeLessThanOrEqual(RATE_LIMITS.machineAuthFailure.limit);
+    // Fewer than the old per-IP ceilings let through, for reads or for writes.
+    expect(RATE_LIMITS.machineAuthFailure.limit).toBeLessThanOrEqual(RATE_LIMITS.apiMutation.limit);
+    expect(statuses.get(401)).toBe(RATE_LIMITS.machineAuthFailure.limit);
+    expect(statuses.get(429)).toBe(1000 - RATE_LIMITS.machineAuthFailure.limit);
+  });
+
+  it("the refusal is the address's, in the broker's envelope, with Retry-After", async () => {
+    const ip = "198.51.100.41";
+    for (let i = 0; i < RATE_LIMITS.machineAuthFailure.limit; i++) await call(ip, `junk_${i}`);
+    const res = await call(ip, "junk_next");
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: { code: string; message: string; correlationId: string } };
+    expect(body.error.code).toBe("RATE_LIMITED_ADDRESS");
+    expect(body.error.message).toMatch(/this address/);
+    expect(res.headers.get("x-correlation-id")).toBe(body.error.correlationId);
+    expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
+
+  it("a valid key on another address is untouched by the flood", async () => {
+    const key = validKey("other_address");
+    for (let i = 0; i < RATE_LIMITS.machineAuthFailure.limit + 20; i++) await call("198.51.100.42", `junk_${i}`);
+    expect((await call("198.51.100.43", key)).status).toBe(200);
+  });
+
+  it("a valid key's own traffic never spends the failure budget", async () => {
+    const ip = "198.51.100.44";
+    const key = validKey("busy");
+    // Its whole route budget, every call served, none of them a failure.
+    for (let i = 0; i < RATE_LIMITS.northbound.limit; i++) {
+      expect((await call(ip, key)).status).toBe(200);
+    }
+    // So an unknown key from the same address is still looked up and told 401.
+    const before = lookups.count;
+    expect((await call(ip, "junk_after_valid")).status).toBe(401);
+    expect(lookups.count).toBe(before + 1);
+  });
+
+  it("a call with no key is not counted as a failed credential", async () => {
+    const ip = "198.51.100.45";
+    const key = validKey("after_keyless");
+    for (let i = 0; i < RATE_LIMITS.machineAuthFailure.limit + 5; i++) {
+      expect((await call(ip)).status).toBe(401);
+    }
+    expect((await call(ip, key)).status).toBe(200);
+  });
+});

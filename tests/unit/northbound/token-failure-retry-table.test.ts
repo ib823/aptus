@@ -123,8 +123,15 @@ function guideRetryTable(): Map<string, Advice> {
     const cells = row.split("|").map((c) => c.trim());
     const status = /`(\d{3})`/.exec(cells[1] ?? "")?.[1];
     const code = /`([A-Z_]+)`/.exec(cells[2] ?? "")?.[1];
+    // One code can need two answers (a 409 still in progress is retried with
+    // the same key; one for a different payload never is). Such rows name
+    // their case in parentheses after the code, and are looked up by it.
+    const variant = /\(([^)]+)\)/.exec(cells[2] ?? "")?.[1];
     const retry = cells[4] ?? "";
     if (!status || !code) continue;
+    const key = variant ? `${status} ${code} (${variant})` : `${status} ${code}`;
+    // Two rows under one key would silently keep only the second's advice.
+    expect(table.has(key), `the developer guide has two rows for ${key}`).toBe(false);
     const advice: Advice = retry.startsWith("**No")
       ? "no"
       : retry.includes("Retry-After")
@@ -134,16 +141,17 @@ function guideRetryTable(): Map<string, Advice> {
           : (() => {
               throw new Error(`unreadable retry advice for ${status} ${code}: ${retry}`);
             })();
-    table.set(`${status} ${code}`, advice);
+    table.set(key, advice);
   }
   return table;
 }
 
 const GUIDE = guideRetryTable();
 
-function adviceFor(status: number, code: string): Advice {
-  const advice = GUIDE.get(`${status} ${code}`);
-  expect(advice, `the developer guide has no row for ${status} ${code}`).toBeDefined();
+function adviceFor(status: number, code: string, variant?: string): Advice {
+  const key = variant ? `${status} ${code} (${variant})` : `${status} ${code}`;
+  const advice = GUIDE.get(key);
+  expect(advice, `the developer guide has no row for ${key}`).toBeDefined();
   return advice!;
 }
 
@@ -376,5 +384,66 @@ describe("the broker's own throttle, in the same table", () => {
     const guide = readFileSync(path.join(process.cwd(), "docs/coreedge-developer-guide.md"), "utf8");
     const n = RATE_LIMITS.northbound.limit;
     expect(guide).toContain(`${n} reads and ${n} writes a minute`);
+  });
+});
+
+describe("the edge's address limit, in the same table", () => {
+  it("429 RATE_LIMITED_ADDRESS has its own row: retry after Retry-After", () => {
+    // Sent by the middleware for the per-address backstop and for too many
+    // failed credential lookups from one address (machine-auth-failure-flood
+    // and machine-rate-limit-attribution drive it). RATE_LIMITED's promise
+    // that a 429 is about your own key is not true of it.
+    expect(adviceFor(429, "RATE_LIMITED_ADDRESS")).toBe("after-retry-after");
+  });
+});
+
+/*
+ * ONE CODE, TWO ANSWERS. The write route sends 409 CONFLICT both for a key
+ * reused with a different payload or destination and for a key whose first
+ * attempt is still running. The table said "No." for both — and a client that
+ * gives up on "still in progress", or re-sends under a new key, either never
+ * learns the outcome or writes the record twice, while waiting and retrying
+ * with the SAME key returns the stored outcome. The in-flight 409 now carries
+ * Retry-After, which is how a client tells them apart.
+ */
+describe("a write's 409, in the same table", () => {
+  const writeOnce = () =>
+    writeRoute(
+      new NextRequest("http://localhost/api/northbound/interfaces/if_1/data/write", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer ce_test",
+          "x-coreedge-write-key": "cew_test",
+          "idempotency-key": "order-4471-a",
+        },
+        body: JSON.stringify({ record: { BusinessPartnerName: "Acme" } }),
+      }),
+      { params: Promise.resolve({ id: "if_1" }) },
+    );
+  /** What a client following the guide branches on. */
+  const variantOf = (res: Response) => (res.headers.has("retry-after") ? "still in progress" : "different write");
+
+  it("still in progress: Retry-After, and the guide says retry with the same key", async () => {
+    state.connection = BASIC;
+    mocks.reserve.mockResolvedValue({ outcome: "conflict", reason: "IN_FLIGHT" });
+    const res = await writeOnce();
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect({ status: res.status, code: body.error.code }).toEqual({ status: 409, code: "CONFLICT" });
+    expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(body.error.message).toMatch(/same Idempotency-Key/);
+    expect(variantOf(res)).toBe("still in progress");
+    expect(adviceFor(409, "CONFLICT", variantOf(res))).toBe("after-retry-after");
+    const guide = readFileSync(path.join(process.cwd(), "docs/coreedge-developer-guide.md"), "utf8");
+    expect(guide).toMatch(/^\| `409` \| `CONFLICT` \(still in progress\) \|.*\| \*\*Yes, after `Retry-After`, with the same key/m);
+  });
+
+  it("a different payload or destination: no Retry-After, and no retry", async () => {
+    state.connection = BASIC;
+    mocks.reserve.mockResolvedValue({ outcome: "conflict", reason: "PAYLOAD_MISMATCH" });
+    const res = await writeOnce();
+    const body = (await res.json()) as { error: { code: string } };
+    expect({ status: res.status, code: body.error.code }).toEqual({ status: 409, code: "CONFLICT" });
+    expect(res.headers.has("retry-after")).toBe(false);
+    expect(adviceFor(409, "CONFLICT", variantOf(res))).toBe("no");
   });
 });
