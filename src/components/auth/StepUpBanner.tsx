@@ -58,7 +58,7 @@ export function StepUpBanner({ mode, hasPasskey }: StepUpBannerProps) {
     <div
       role="status"
       data-testid="step-up-banner"
-      className="flex flex-wrap items-center gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950"
+      className="flex flex-wrap items-center gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
     >
       <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
       <p className="min-w-0 flex-1">
@@ -69,12 +69,12 @@ export function StepUpBanner({ mode, hasPasskey }: StepUpBannerProps) {
       </p>
       {hasPasskey ? (
         state !== "done" && (
-          <Button size="sm" variant="outline" onClick={() => void confirmNow()} disabled={state === "working"}>
+          <Button size="sm" variant="outline" className="text-foreground" onClick={() => void confirmNow()} disabled={state === "working"}>
             {state === "working" ? "Checking…" : "Confirm with passkey now"}
           </Button>
         )
       ) : (
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" variant="outline" className="text-foreground" asChild>
           <Link href="/settings/security">Add a passkey</Link>
         </Button>
       )}
