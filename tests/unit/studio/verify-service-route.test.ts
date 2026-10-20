@@ -184,9 +184,16 @@ describe("a service that answers", () => {
       serviceVerifiedEntitySets: ["A_Travel", "A_Booking"],
     });
     expect(call.data.serviceVerifiedAt).toBeInstanceOf(Date);
-    // Per environment, with the binding that answered (review round 1).
+    // Per binding — environment and SAP client — with the binding that
+    // answered (review rounds 1 and 2).
     expect(call.data.serviceVerifications).toEqual({
-      DEV: { at: call.data.serviceVerifiedAt.toISOString(), connectionId: "conn_dev", sapClient: "100", baseUrl: BASE },
+      "DEV::100": {
+        environment: "DEV",
+        at: call.data.serviceVerifiedAt.toISOString(),
+        connectionId: "conn_dev",
+        sapClient: "100",
+        baseUrl: BASE,
+      },
     });
   });
 
@@ -197,9 +204,24 @@ describe("a service that answers", () => {
     const call = mocks.updateMany.mock.calls[0]![0];
     expect(call.where.serviceVerifications).toEqual({ equals: { PROD: prod } });
     expect(call.data.serviceVerifications).toEqual({
-      PROD: prod,
-      DEV: expect.objectContaining({ connectionId: "conn_dev", sapClient: "100", baseUrl: BASE }),
+      "PROD::300": { environment: "PROD", ...prod },
+      "DEV::100": expect.objectContaining({ environment: "DEV", connectionId: "conn_dev", sapClient: "100", baseUrl: BASE }),
     });
+  });
+
+  it("a second SAP client of the same environment is kept beside the first (review round 2)", async () => {
+    const c100 = { environment: "PROD", at: "2026-10-18T09:00:00.000Z", connectionId: "conn-100", sapClient: "100", baseUrl: BASE };
+    mocks.findIface.mockResolvedValue(iface({ serviceVerifications: { "PROD::100": c100 } }));
+    mocks.binding.mockResolvedValue({
+      ok: true,
+      connection: { ...CONNECTION, id: "conn-200", environment: "PROD", client: "200" },
+      bindingUnverified: false,
+    });
+    await verify({ environment: "PROD", sapClient: "200" });
+    const written = mocks.updateMany.mock.calls[0]![0].data.serviceVerifications as Record<string, { connectionId: string }>;
+    expect(Object.keys(written).sort()).toEqual(["PROD::100", "PROD::200"]);
+    expect(written["PROD::100"]).toEqual(c100);
+    expect(written["PROD::200"]!.connectionId).toBe("conn-200");
   });
 
   it("a verify of another environment that landed meanwhile is re-read and kept", async () => {
@@ -213,7 +235,7 @@ describe("a service that answers", () => {
     expect(mocks.updateMany).toHaveBeenCalledTimes(2);
     const second = mocks.updateMany.mock.calls[1]![0];
     expect(second.where.serviceVerifications).toEqual({ equals: { SANDBOX: sbx } });
-    expect(Object.keys(second.data.serviceVerifications as object).sort()).toEqual(["DEV", "SANDBOX"]);
+    expect(Object.keys(second.data.serviceVerifications as object).sort()).toEqual(["DEV::100", "SANDBOX::"]);
   });
 
   it("a contract change that landed meanwhile stops the retry", async () => {

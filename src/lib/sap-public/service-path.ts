@@ -41,6 +41,15 @@
  *     four digits, on the last segment (`/sap/opu/odata/sap/ZX_SRV;v=0002`),
  *     and `(` / `)` are refused in the first two segments, where ICF reads
  *     its session segment.
+ *   - ANYTHING THAT IS NOT AN ODATA SERVICE ROOT. The path must sit under
+ *     one of the OData handlers SAP systems publish (ODATA_SERVICE_ROOTS):
+ *     Gateway's /sap/opu/odata/ and /sap/opu/odata4/, SuccessFactors'
+ *     /odata/v2 and /odatav4/. Reads of a custom service are not gated on a
+ *     $metadata verification, so without this a path such as
+ *     /sap/bc/adt/…, /sap/bc/soap/rfc or /sap/bc/gui/sap/its/webgui — any
+ *     ICF handler, called with the connection's credentials — would be
+ *     served to an external client as "records" (review round 2). The
+ *     feature is the customer's own OData service; this makes that the rule.
  *
  * And a final backstop: the path is resolved against a dummy origin by the
  * WHATWG parser, and refused unless the parser agrees it is exactly that path
@@ -84,6 +93,7 @@ export type ServicePathRefusal =
   | "ROUTING_PARAMETER"
   | "SESSION_SEGMENT"
   | "SYSTEM_RESOURCE"
+  | "NOT_ODATA_ROOT"
   | "NOT_NORMALIZED";
 
 export type ServicePathCheck =
@@ -116,8 +126,30 @@ export const SERVICE_PATH_MESSAGES: Record<ServicePathRefusal, string> = {
     "The service path starts with an SAP session part in brackets, such as /sap(…)/, which can choose another SAP client. Enter the plain service path; the client always comes from the connection.",
   SYSTEM_RESOURCE:
     "Enter the service root, without $metadata or any other $ resource. For example /sap/opu/odata/sap/ZUI_TRAVEL_O2.",
+  NOT_ODATA_ROOT:
+    "The service path must be an OData service: under /sap/opu/odata/ or /sap/opu/odata4/ on an SAP ERP or S/4HANA system (for example /sap/opu/odata/sap/ZUI_TRAVEL_O2), or /odata/v2 or under /odatav4/ on SuccessFactors.",
   NOT_NORMALIZED: "The service path does not read the same once it is parsed as a URL path. Enter it as plain text.",
 };
+
+/**
+ * The OData handlers a custom service may live under. `prefix` roots need at
+ * least one segment after them (the service); `exact` roots are a service
+ * root themselves. Matched case-insensitively: ICF resolves its paths without
+ * regard to case, so /SAP/OPU/ODATA/… reaches the same handler.
+ */
+export const ODATA_SERVICE_ROOTS: ReadonlyArray<{ root: string; kind: "prefix" | "exact" }> = [
+  { root: "/sap/opu/odata", kind: "prefix" },
+  { root: "/sap/opu/odata4", kind: "prefix" },
+  { root: "/odata/v2", kind: "exact" },
+  { root: "/odatav4", kind: "prefix" },
+];
+
+function isUnderODataRoot(path: string): boolean {
+  const lower = path.toLowerCase();
+  return ODATA_SERVICE_ROOTS.some(({ root, kind }) =>
+    kind === "exact" ? lower === root : lower.startsWith(`${root}/`) && lower.length > root.length + 1,
+  );
+}
 
 const WHITESPACE_OR_CONTROL = /[\u0000-\u001F\u007F\s\u00A0\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]/;
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
@@ -201,6 +233,9 @@ export function validateServicePath(raw: unknown): ServicePathCheck {
   ) {
     return refuse("NOT_NORMALIZED");
   }
+
+  // Last, so every structural refusal above keeps its own, more precise, reason.
+  if (!isUnderODataRoot(path)) return refuse("NOT_ODATA_ROOT");
 
   return { ok: true, path };
 }

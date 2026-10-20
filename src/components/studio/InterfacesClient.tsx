@@ -305,6 +305,7 @@ export function InterfacesClient({
                 <ServiceVerifyPanel
                   key={selected.id}
                   interfaceId={selected.id}
+                  interfaceVersion={selected.version}
                   isCustom={selectedIsCustom}
                   entitySet={selected.entitySet}
                   verifiedAt={selected.serviceVerifiedAt ?? null}
@@ -356,7 +357,9 @@ export function InterfacesClient({
                   <span style={{ ...muted, marginTop: 4 }}>
                     {readyEnvironments(selected.writeReadiness ?? []).length > 0
                       ? `Ready in ${readyEnvironments(selected.writeReadiness ?? []).join(", ")} — the solution can write there once this interface is ACTIVE.`
-                      : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
+                      : selectedIsCustom
+                        ? "No environment is ready — the broker refuses every write that lacks a write key, an approved write grant, or a verification of this service in that environment, so this interface cannot be activated yet. Get the write grant approved for an environment, issue that environment's write credential under API Access, and verify the service there."
+                        : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
                   </span>
                 </div>
               </Row>
@@ -430,7 +433,9 @@ export function InterfacesClient({
                         : selected.mode === "WRITE" && selectedIsCustom && !selected.serviceVerifiedAt
                         ? "Verify this interface's own SAP service first — the broker refuses writes to an unverified service."
                         : selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0
-                        ? "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
+                        ? selectedIsCustom
+                          ? "No environment holds the full write chain (credential with write key + approved write grant + this service verified there) — a WRITE interface activated now builds toward a call the broker refuses."
+                          : "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
                         : undefined
                   }
                   onClick={() => patch({ id: selected.id, status: "ACTIVE" })}

@@ -32,7 +32,7 @@
 import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
-import { fetchMetadataDocument } from "@/lib/studio/connection-health";
+import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
 
 /**
  * Products whose service root describes the whole tenant, and which answer
@@ -101,11 +101,22 @@ export interface ServiceVerifyResult {
   failureReason: string | null;
 }
 
-const EDMX_OPEN = /<(?:[A-Za-z_][\w.-]*:)?Edmx\b([^>]*)>/;
+/**
+ * The EDMX root's start tag. Bounded and `<`-free for the same reason as
+ * ENTITY_SET_TAG (tdd-connector.ts): `[^>]*` let every `<Edmx` in a hostile
+ * body scan to its end, which is quadratic over the 8 MB a verify reads.
+ */
+const EDMX_OPEN = /<(?:[A-Za-z_][\w.-]{0,64}:)?Edmx\b([^<>]{0,4096})>/;
 
-/** Root element `<…:Edmx Version="1.0">` → V2; "4.0" / "4.01" → V4; otherwise null. */
+/**
+ * Root element `<…:Edmx Version="1.0">` → V2; "4.0" / "4.01" → V4; otherwise null.
+ *
+ * Reads only the first METADATA_SNIFF_BYTES: the root element is at the top
+ * of the document — the probe's EDMX check already requires it there — and
+ * nothing past it can change the answer.
+ */
 export function edmxODataVersion(xml: string): ODataVersion | null {
-  const attrs = EDMX_OPEN.exec(xml)?.[1] ?? "";
+  const attrs = EDMX_OPEN.exec(xml.slice(0, METADATA_SNIFF_BYTES))?.[1] ?? "";
   const version = /\bVersion\s*=\s*["']([^"']+)["']/.exec(attrs)?.[1]?.trim();
   if (version === "1.0") return "V2";
   if (version === "4.0" || version === "4.01") return "V4";

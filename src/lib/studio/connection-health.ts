@@ -93,7 +93,7 @@ function classify(httpStatus: number): { status: ConnectionHealthStatus; detail:
 }
 
 /** How much of a 200 is read to decide whether it is a metadata document. */
-const METADATA_SNIFF_BYTES = 8 * 1024;
+export const METADATA_SNIFF_BYTES = 8 * 1024;
 
 /** An EDMX root element, under any namespace prefix (V2 and V4 alike). */
 const EDMX_ROOT = /<(?:[A-Za-z_][\w.-]*:)?Edmx[\s>]/;

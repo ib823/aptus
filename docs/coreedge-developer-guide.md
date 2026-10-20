@@ -115,16 +115,24 @@ SAP's catalogue. You register it **by its service path** instead:
    that would pick another system or client than the connection's: Gateway
    matrix parameters such as `;o=<system alias>`, `;mo` or `;c=`, and an ICF
    session segment such as `/sap(bD1lbiZjPTIwMA==)/`. The only matrix parameter
-   kept is a version suffix on the last segment, `;v=0002`. Ariba is REST, not
-   OData, and has no path.
+   kept is a version suffix on the last segment, `;v=0002`. And it must be an
+   OData service: under `/sap/opu/odata/` or `/sap/opu/odata4/` on an ERP or
+   S/4HANA system, or `/odata/v2` (exactly) or under `/odatav4/` on
+   SuccessFactors. Any other ICF path — `/sap/bc/…`, `/sap/public/…`, a
+   customer REST handler — is refused, because reads are not checked against
+   `$metadata` and the connection's credentials travel with every call. An ICF
+   alias for an OData service is not accepted; use the service's
+   `/sap/opu/odata…` path. Ariba is REST, not OData, and has no path.
 2. **Verify it in every environment you will write to.** On the interface,
    **Verify** asks the SAP system for the service's `$metadata` through your
    organization's connection for the environment you pick — the same binding a
    call from that environment uses, SAP client included — and lists its datasets.
    It reads no business data. Pick the dataset from the list
    (`POST /api/studio/interfaces/<id>/verify-service`). A successful verify is
-   recorded for that environment only, with the connection, SAP client and host
-   that answered. For SuccessFactors, once the interface names its dataset,
+   recorded for that environment and SAP client only, with the connection and
+   host that answered. One system serving two clients in the same environment
+   (two connections, client 100 and client 200) keeps two verifications: verify
+   each client you write to, and verifying one never removes the other. For SuccessFactors, once the interface names its dataset,
    Verify asks for that one dataset's description
    (`/odata/v2/<EntitySet>/$metadata`) instead of the whole tenant's, which is
    large and slow enough to time out.
@@ -141,8 +149,15 @@ What is different, and why:
   refuses a write through your own service unless that environment has been
   verified since the interface last changed, through the same connection, SAP
   client and host the write uses. Verifying DEV does not open PROD: verify each
-  environment you write to. A WRITE interface cannot be activated before it has
-  been verified in at least one environment. Reads are not gated.
+  environment you write to. A WRITE interface is activated only when one
+  environment holds all of it at once: a credential with a write key, an
+  approved write grant, **and** a verification of the service there. Verified in
+  SANDBOX with the write chain only in PROD is refused, and the Write chain row
+  says `service not verified here` for PROD. Reads are not gated.
+- **Editing a connection asks for a new verify.** If an administrator changes a
+  connection's host or SAP client after a verify (or deactivates it), writes in
+  that environment are refused, and Studio says *Verify again: the connection
+  for … has changed since it was verified* instead of listing it as open.
 - **Changing the path, the version or the dataset is a new contract**: the
   version bumps, verification clears in every environment, and an active write
   interface returns to draft (verify again, then activate). Only a **path**

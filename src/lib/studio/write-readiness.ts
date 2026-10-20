@@ -9,6 +9,15 @@
  * carries a write key" — so a solution with a DEV write key and a PROD write
  * grant could activate an interface that no environment could call.
  *
+ * YOUR OWN API ADDS A FOURTH. A custom service is written through only in an
+ * environment where it has been verified, through that environment's current
+ * connection (the write route's isVerifiedForBinding). Checking that
+ * "verified somewhere" at activation repeated the defect above with other
+ * halves: verified in SANDBOX, the chain complete only in PROD, ACTIVE — and
+ * every PROD write refused (review round 2). So for a custom interface the
+ * caller passes the environments that hold a current verification, and an
+ * environment is ready only when it holds one too.
+ *
  * This is the pure part: given the rows, say for each environment which
  * halves are present, and whether the chain is complete. The route refuses
  * activation when no environment is complete; the Interfaces page shows the
@@ -26,12 +35,16 @@ import {
 
 export type CredentialReadiness = "none" | "no-write-key" | "ready";
 export type GrantReadiness = "none" | "not-granting" | "revoked" | "expired" | "approved";
+/** Your own API only: is the service verified in this environment, through its current connection? */
+export type ServiceReadiness = "verified" | "not-verified";
 
 export interface WriteReadinessRow {
   environment: GrantEnvironment;
   credential: CredentialReadiness;
   grant: GrantReadiness;
-  /** Both halves present: a call in this environment would pass the gates. */
+  /** Present only for your own API (a custom service path). */
+  service?: ServiceReadiness;
+  /** Every half present: a call in this environment would pass the gates. */
   ready: boolean;
 }
 
@@ -45,6 +58,12 @@ export interface WriteReadinessInput {
     expiresAt: Date | string | null;
     revokedAt: Date | string | null;
   }[];
+  /**
+   * Your own API only: the environments holding a verification that still
+   * matches their connection (currentlyVerifiedEnvironments). Omitted or
+   * null for a catalogue interface, whose writes are not gated on Verify.
+   */
+  serviceVerifiedEnvironments?: readonly string[] | null;
   now?: Date;
 }
 
@@ -80,7 +99,14 @@ export function writeReadinessByEnvironment(input: WriteReadinessInput): WriteRe
               ? "expired"
               : "approved";
 
-    return { environment, credential, grant, ready: credential === "ready" && grant === "approved" };
+    const chainReady = credential === "ready" && grant === "approved";
+    if (input.serviceVerifiedEnvironments == null) {
+      return { environment, credential, grant, ready: chainReady };
+    }
+    const service: ServiceReadiness = input.serviceVerifiedEnvironments.includes(environment)
+      ? "verified"
+      : "not-verified";
+    return { environment, credential, grant, service, ready: chainReady && service === "verified" };
   });
 }
 
@@ -102,9 +128,15 @@ const GRANT_WORDS: Record<GrantReadiness, string> = {
   approved: "write grant approved",
 };
 
+const SERVICE_WORDS: Record<ServiceReadiness, string> = {
+  verified: "service verified here",
+  "not-verified": "service not verified here",
+};
+
 /** One line per environment, for the Contract card. */
 export function describeWriteReadiness(row: WriteReadinessRow): string {
-  return `${row.environment}: ${CREDENTIAL_WORDS[row.credential]} · ${GRANT_WORDS[row.grant]}${row.ready ? " → ready" : ""}`;
+  const service = row.service ? ` · ${SERVICE_WORDS[row.service]}` : "";
+  return `${row.environment}: ${CREDENTIAL_WORDS[row.credential]} · ${GRANT_WORDS[row.grant]}${service}${row.ready ? " → ready" : ""}`;
 }
 
 /**
@@ -113,16 +145,20 @@ export function describeWriteReadiness(row: WriteReadinessRow): string {
  * started — "no credential, no grant" four times over is noise, not help.
  */
 export function writeReadinessRefusal(operation: string, rows: readonly WriteReadinessRow[]): string {
-  const started = rows.filter((r) => r.credential !== "none" || r.grant !== "none");
+  const started = rows.filter((r) => r.credential !== "none" || r.grant !== "none" || r.service === "verified");
+  const custom = rows.some((r) => r.service !== undefined);
   const detail =
     started.length === 0
       ? "No environment has a credential or a write grant yet."
       : started.map(describeWriteReadiness).join("; ") + ".";
   return (
     `A ${operation} interface cannot be activated until some environment holds the full write chain — ` +
-    "a live credential for that environment carrying a write key, AND a live approved write grant for this capability in it. " +
-    `The broker refuses every write that lacks either, so activating now would build toward a call that cannot succeed. ${detail} ` +
-    "Get the write grant approved for an environment, issue the write credential for that environment under API Access, then activate."
+    "a live credential for that environment carrying a write key, AND a live approved write grant for this capability in it" +
+    (custom ? ", AND a verification of this interface's own SAP service through that environment's connection. " : ". ") +
+    `The broker refuses every write that lacks any of them, so activating now would build toward a call that cannot succeed. ${detail} ` +
+    "Get the write grant approved for an environment, issue the write credential for that environment under API Access" +
+    (custom ? ", verify the service in that same environment" : "") +
+    ", then activate."
   );
 }
 

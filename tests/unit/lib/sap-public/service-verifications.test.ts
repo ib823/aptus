@@ -1,17 +1,21 @@
 /**
- * service-verifications.ts — the per-environment record the write gate reads.
+ * service-verifications.ts — the per-binding record the write gate reads.
  *
  * A verify answers for the system that gave it. These pin that an entry only
  * counts for its own environment AND the binding that answered (connection,
- * SAP client, host), that anything malformed reads as "not verified", and
- * that what Studio displays never carries the connection id or host.
+ * SAP client, host), that two SAP clients of one environment are two entries
+ * (review round 2), that anything malformed reads as "not verified", and that
+ * what Studio displays never carries the connection id or host — but does say
+ * when the connection that answered has changed since.
  */
 
 import { describe, expect, it } from "vitest";
 
 import {
+  currentlyVerifiedEnvironments,
   isVerifiedForBinding,
   parseServiceVerifications,
+  verificationKey,
   verifiedEnvironmentsForDisplay,
   withServiceVerification,
 } from "@/lib/sap-public/service-verifications";
@@ -19,59 +23,146 @@ import {
 const DEV = { at: "2026-10-19T10:00:00.000Z", connectionId: "conn_dev", sapClient: "100", baseUrl: "https://dev" };
 const BINDING = { environment: "DEV", connectionId: "conn_dev", sapClient: "100", baseUrl: "https://dev" };
 
+/** The stored shape, built the way the verify route builds it. */
+function stored(...entries: Array<[string, typeof DEV | (Omit<typeof DEV, "sapClient"> & { sapClient: string | null })]>) {
+  return entries.reduce<unknown>((json, [env, entry]) => withServiceVerification(json, env, entry), null);
+}
+
 describe("isVerifiedForBinding", () => {
   it("is true only for the environment's own entry, for the same binding", () => {
-    expect(isVerifiedForBinding({ DEV }, BINDING)).toBe(true);
-    expect(isVerifiedForBinding({ DEV }, { ...BINDING, environment: "PROD" })).toBe(false);
-    expect(isVerifiedForBinding({ DEV }, { ...BINDING, connectionId: "conn_other" })).toBe(false);
-    expect(isVerifiedForBinding({ DEV }, { ...BINDING, sapClient: "200" })).toBe(false);
-    expect(isVerifiedForBinding({ DEV }, { ...BINDING, sapClient: null })).toBe(false);
-    expect(isVerifiedForBinding({ DEV }, { ...BINDING, baseUrl: "https://elsewhere" })).toBe(false);
+    const json = stored(["DEV", DEV]);
+    expect(isVerifiedForBinding(json, BINDING)).toBe(true);
+    expect(isVerifiedForBinding(json, { ...BINDING, environment: "PROD" })).toBe(false);
+    expect(isVerifiedForBinding(json, { ...BINDING, connectionId: "conn_other" })).toBe(false);
+    expect(isVerifiedForBinding(json, { ...BINDING, sapClient: "200" })).toBe(false);
+    expect(isVerifiedForBinding(json, { ...BINDING, sapClient: null })).toBe(false);
+    expect(isVerifiedForBinding(json, { ...BINDING, baseUrl: "https://elsewhere" })).toBe(false);
   });
 
   it("a SANDBOX entry never opens DEV", () => {
-    expect(isVerifiedForBinding({ SANDBOX: { ...DEV } }, BINDING)).toBe(false);
+    expect(isVerifiedForBinding(stored(["SANDBOX", DEV]), BINDING)).toBe(false);
   });
 
   it("matches a null client to a null client", () => {
     expect(
-      isVerifiedForBinding({ DEV: { ...DEV, sapClient: null } }, { ...BINDING, sapClient: null }),
+      isVerifiedForBinding(stored(["DEV", { ...DEV, sapClient: null }]), { ...BINDING, sapClient: null }),
     ).toBe(true);
   });
 
+  it("still reads an entry stored under a bare environment key (the first shape)", () => {
+    expect(isVerifiedForBinding({ DEV }, BINDING)).toBe(true);
+    expect(isVerifiedForBinding({ DEV }, { ...BINDING, environment: "PROD" })).toBe(false);
+  });
+
   it("reads null, arrays, strings and malformed entries as not verified", () => {
-    for (const json of [null, undefined, [], "DEV", 1, { DEV: null }, { DEV: { at: DEV.at } }, { DEV: { ...DEV, connectionId: "" } }]) {
+    for (const json of [
+      null,
+      undefined,
+      [],
+      "DEV",
+      1,
+      { DEV: null },
+      { DEV: { at: DEV.at } },
+      { DEV: { ...DEV, connectionId: "" } },
+      { "DEV::100": { ...DEV, environment: "" } },
+      { "DEV::100": { ...DEV, environment: 7 } },
+    ]) {
       expect(isVerifiedForBinding(json, BINDING)).toBe(false);
     }
+  });
+
+  it("an entry's own environment wins over its key: a PROD entry filed under DEV never opens DEV", () => {
+    expect(isVerifiedForBinding({ "DEV::100": { ...DEV, environment: "PROD" } }, BINDING)).toBe(false);
+  });
+});
+
+describe("two SAP clients in one environment (review round 2)", () => {
+  const C100 = { ...DEV, connectionId: "conn-100", sapClient: "100", baseUrl: "https://prd" };
+  const C200 = { ...DEV, connectionId: "conn-200", sapClient: "200", baseUrl: "https://prd" };
+  const B100 = { environment: "PROD", connectionId: "conn-100", sapClient: "100", baseUrl: "https://prd" };
+  const B200 = { environment: "PROD", connectionId: "conn-200", sapClient: "200", baseUrl: "https://prd" };
+
+  it("verifying client 200 after client 100 keeps client 100 writable", () => {
+    const json = stored(["PROD", C100], ["PROD", C200]);
+    expect(isVerifiedForBinding(json, B100)).toBe(true);
+    expect(isVerifiedForBinding(json, B200)).toBe(true);
+  });
+
+  it("re-verifying client 100 does not knock out client 200", () => {
+    const json = stored(["PROD", C100], ["PROD", C200], ["PROD", { ...C100, at: "2026-10-20T00:00:00.000Z" }]);
+    expect(isVerifiedForBinding(json, B100)).toBe(true);
+    expect(isVerifiedForBinding(json, B200)).toBe(true);
+    expect(Object.keys(parseServiceVerifications(json)).sort()).toEqual(["PROD::100", "PROD::200"]);
+  });
+
+  it("the display lists both clients", () => {
+    expect(verifiedEnvironmentsForDisplay(stored(["PROD", C200], ["PROD", C100]))).toEqual([
+      { environment: "PROD", at: DEV.at, sapClient: "100", connectionChanged: false },
+      { environment: "PROD", at: DEV.at, sapClient: "200", connectionChanged: false },
+    ]);
   });
 });
 
 describe("withServiceVerification", () => {
-  it("adds an environment beside the others, and replaces only its own", () => {
+  it("adds a binding beside the others, and replaces only its own", () => {
     const prod = { ...DEV, connectionId: "conn_prd", baseUrl: "https://prd" };
-    const merged = withServiceVerification({ PROD: prod, DEV: { ...DEV, at: "old" } }, "DEV", DEV);
-    expect(merged).toEqual({ PROD: prod, DEV });
+    const merged = withServiceVerification(stored(["PROD", prod], ["DEV", { ...DEV, at: "old" }]), "DEV", DEV);
+    expect(merged).toEqual({
+      [verificationKey("PROD", "100")]: { environment: "PROD", ...prod },
+      [verificationKey("DEV", "100")]: { environment: "DEV", ...DEV },
+    });
+  });
+
+  it("re-keys a first-shape entry rather than keeping a duplicate", () => {
+    expect(withServiceVerification({ DEV: { ...DEV, at: "old" } }, "DEV", DEV)).toEqual({
+      "DEV::100": { environment: "DEV", ...DEV },
+    });
   });
 
   it("drops malformed entries rather than carrying them forward", () => {
-    expect(withServiceVerification({ TEST: { junk: true } }, "DEV", DEV)).toEqual({ DEV });
+    expect(withServiceVerification({ TEST: { junk: true } }, "DEV", DEV)).toEqual({
+      "DEV::100": { environment: "DEV", ...DEV },
+    });
     expect(parseServiceVerifications({ TEST: { junk: true } })).toEqual({});
   });
 });
 
 describe("verifiedEnvironmentsForDisplay", () => {
   it("lists environment, time and client in landscape order — never a host or connection id", () => {
-    const rows = verifiedEnvironmentsForDisplay({
-      PROD: { ...DEV, sapClient: "300" },
-      SANDBOX: { ...DEV, sapClient: null },
-      DEV,
-    });
+    const rows = verifiedEnvironmentsForDisplay(
+      stored(["PROD", { ...DEV, sapClient: "300" }], ["SANDBOX", { ...DEV, sapClient: null }], ["DEV", DEV]),
+    );
     expect(rows).toEqual([
-      { environment: "SANDBOX", at: DEV.at, sapClient: null },
-      { environment: "DEV", at: DEV.at, sapClient: "100" },
-      { environment: "PROD", at: DEV.at, sapClient: "300" },
+      { environment: "SANDBOX", at: DEV.at, sapClient: null, connectionChanged: false },
+      { environment: "DEV", at: DEV.at, sapClient: "100", connectionChanged: false },
+      { environment: "PROD", at: DEV.at, sapClient: "300", connectionChanged: false },
     ]);
     expect(JSON.stringify(rows)).not.toContain("https://");
     expect(JSON.stringify(rows)).not.toContain("conn_");
+  });
+});
+
+describe("a connection edited after the verify (review round 2)", () => {
+  const LIVE = { id: "conn_dev", environment: "DEV", client: "100", baseUrl: "https://dev/" };
+
+  it("an unchanged connection is current (trailing slashes normalized as the resolver does)", () => {
+    const json = stored(["DEV", DEV]);
+    expect(verifiedEnvironmentsForDisplay(json, [LIVE])[0]?.connectionChanged).toBe(false);
+    expect(currentlyVerifiedEnvironments(json, [LIVE])).toEqual(["DEV"]);
+  });
+
+  it.each([
+    ["its host changed", { ...LIVE, baseUrl: "https://dev-new" }],
+    ["its SAP client changed", { ...LIVE, client: "200" }],
+    ["it now declares another environment", { ...LIVE, environment: "TEST" }],
+    ["it is gone (deactivated or deleted)", { ...LIVE, id: "conn_other" }],
+  ])("when %s, the entry is marked changed and opens no environment", (_label, conn) => {
+    const json = stored(["DEV", DEV]);
+    expect(verifiedEnvironmentsForDisplay(json, [conn])[0]?.connectionChanged).toBe(true);
+    expect(currentlyVerifiedEnvironments(json, [conn])).toEqual([]);
+  });
+
+  it("without a connection list, every entry counts (the pure view)", () => {
+    expect(currentlyVerifiedEnvironments(stored(["DEV", DEV], ["PROD", DEV]))).toEqual(["DEV", "PROD"]);
   });
 });

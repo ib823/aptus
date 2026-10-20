@@ -11,7 +11,9 @@
  *     verification cleared in every environment, an active WRITE interface
  *     back to DRAFT — and a dataset change on an active custom WRITE
  *     interface follows the same rule;
- *   - a custom WRITE interface is activated only once verified;
+ *   - a custom WRITE interface is activated only once verified — in an
+ *     environment that also holds the full write chain, through a connection
+ *     that has not changed since (review round 2);
  *   - none of this touches a catalogue interface.
  */
 
@@ -27,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
   findManyClients: vi.fn(),
   findManyGrants: vi.fn(),
+  findManyConnections: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -41,6 +44,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     solutionClient: { findMany: mocks.findManyClients },
     apiAccessGrant: { findMany: mocks.findManyGrants },
+    sapConnection: { findMany: mocks.findManyConnections },
     configAudit: { create: mocks.createAudit },
   },
 }));
@@ -114,13 +118,27 @@ function updateData(): Record<string, unknown> {
   return mocks.updateInterface.mock.calls[0]?.[0]?.data as Record<string, unknown>;
 }
 
-/** A write chain that is complete in TEST — so the readiness gate is not what refuses. */
-function writeChainReadyInTest() {
-  mocks.findManyClients.mockResolvedValue([{ environment: "TEST", expiresAt: null }]);
+/** A write chain that is complete in one environment (TEST by default). */
+function writeChainReadyIn(environment = "TEST") {
+  mocks.findManyClients.mockResolvedValue([{ environment, expiresAt: null }]);
   mocks.findManyGrants.mockResolvedValue([
-    { environment: "TEST", decision: "APPROVED", expiresAt: null, revokedAt: null },
+    { environment, decision: "APPROVED", expiresAt: null, revokedAt: null },
   ]);
 }
+const writeChainReadyInTest = () => writeChainReadyIn("TEST");
+
+/** The organization's live connections, as the activation gate reads them. */
+const TEST_CONNECTION = { id: "conn_tst", product: "s4hana-onprem", environment: "TEST", client: "100", baseUrl: "https://tst" };
+const SANDBOX_CONNECTION = { id: "conn_sbx", product: "s4hana-onprem", environment: "SANDBOX", client: null, baseUrl: "https://sbx" };
+const PROD_CONNECTION = { id: "conn_prd", product: "s4hana-onprem", environment: "PROD", client: "100", baseUrl: "https://prd" };
+
+/** Verifications as the verify route stores them. */
+const VERIFIED_IN_TEST = {
+  "TEST::100": { environment: "TEST", at: "2026-10-19T10:00:00.000Z", connectionId: "conn_tst", sapClient: "100", baseUrl: "https://tst" },
+};
+const VERIFIED_IN_SANDBOX = {
+  "SANDBOX::": { environment: "SANDBOX", at: "2026-10-19T10:00:00.000Z", connectionId: "conn_sbx", sapClient: null, baseUrl: "https://sbx" },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -136,6 +154,7 @@ beforeEach(() => {
   mocks.createAudit.mockResolvedValue({ id: "a1" });
   mocks.findManyClients.mockResolvedValue([]);
   mocks.findManyGrants.mockResolvedValue([]);
+  mocks.findManyConnections.mockResolvedValue([TEST_CONNECTION, SANDBOX_CONNECTION]);
 });
 
 describe("POST — register your own API", () => {
@@ -369,7 +388,7 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
   });
 
   it("allows it once verified — and the write chain is checked under the derived id", async () => {
-    mocks.findFirstInterface.mockResolvedValue(WRITE);
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_TEST });
     writeChainReadyInTest();
     const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
     expect(res.status).toBe(200);
@@ -377,6 +396,39 @@ describe("PATCH — activating a custom WRITE interface needs a verification", (
     expect(mocks.findManyGrants).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ externalId: `custom:${PATH}`, operation: "CREATE" }) }),
     );
+  });
+
+  it("refuses when the service is verified in SANDBOX but the write chain is complete only in PROD (review round 2)", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_SANDBOX });
+    mocks.findManyConnections.mockResolvedValue([SANDBOX_CONNECTION, PROD_CONNECTION]);
+    writeChainReadyIn("PROD");
+    const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    const msg = await message(res);
+    expect(msg).toContain("PROD: credential with write key · write grant approved · service not verified here");
+    expect(msg).toContain("SANDBOX: no live credential · no write grant requested · service verified here");
+    expect(msg).toContain("verify the service in that same environment");
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+    expect(mocks.findManyConnections).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ organizationId: "org_a", product: "s4hana-onprem", isActive: true }) }),
+    );
+  });
+
+  it("refuses when the connection that answered the verify has since been edited (new host)", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...WRITE, serviceVerifications: VERIFIED_IN_TEST });
+    mocks.findManyConnections.mockResolvedValue([{ ...TEST_CONNECTION, baseUrl: "https://tst-new" }]);
+    writeChainReadyInTest();
+    const res = await PATCH(req("PATCH", { id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect(await message(res)).toContain("TEST: credential with write key · write grant approved · service not verified here");
+  });
+
+  it("a catalogue WRITE interface never consults verification or connections", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...CATALOGUE, operation: "CREATE", mode: "WRITE" });
+    writeChainReadyInTest();
+    const res = await PATCH(req("PATCH", { id: "if_2", status: "ACTIVE" }));
+    expect(res.status).toBe(200);
+    expect(mocks.findManyConnections).not.toHaveBeenCalled();
   });
 
   it("a custom READ interface activates without a verification (reads are not gated)", async () => {

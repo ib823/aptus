@@ -102,3 +102,45 @@ describe("the sentences", () => {
     expect(msg).toContain("No environment has a credential or a write grant yet.");
   });
 });
+
+describe("your own API: verification is a third half, per environment (review round 2)", () => {
+  const chainIn = (environment: string) => ({
+    credentials: [{ environment, hasWriteKey: true }],
+    grants: [approved(environment)],
+    now: NOW,
+  });
+
+  it("verified in SANDBOX, chain complete only in PROD → no environment is ready", () => {
+    const rows = writeReadinessByEnvironment({ ...chainIn("PROD"), serviceVerifiedEnvironments: ["SANDBOX"] });
+    expect(readyEnvironments(rows)).toEqual([]);
+    const prod = rows.find((r) => r.environment === "PROD")!;
+    expect(prod).toMatchObject({ credential: "ready", grant: "approved", service: "not-verified", ready: false });
+    expect(describeWriteReadiness(prod)).toBe(
+      "PROD: credential with write key · write grant approved · service not verified here",
+    );
+  });
+
+  it("verified where the chain is complete → ready there", () => {
+    const rows = writeReadinessByEnvironment({ ...chainIn("PROD"), serviceVerifiedEnvironments: ["SANDBOX", "PROD"] });
+    expect(readyEnvironments(rows)).toEqual(["PROD"]);
+    expect(describeWriteReadiness(rows.find((r) => r.environment === "PROD")!)).toBe(
+      "PROD: credential with write key · write grant approved · service verified here → ready",
+    );
+  });
+
+  it("the refusal names verification, and counts a verified-only environment as started", () => {
+    const msg = writeReadinessRefusal(
+      "CREATE",
+      writeReadinessByEnvironment({ ...chainIn("PROD"), serviceVerifiedEnvironments: ["SANDBOX"] }),
+    );
+    expect(msg).toContain("AND a verification of this interface's own SAP service through that environment's connection");
+    expect(msg).toContain("SANDBOX: no live credential · no write grant requested · service verified here");
+    expect(msg).toMatch(/verify the service in that same environment, then activate\.$/);
+  });
+
+  it("a catalogue interface (no list) is exactly as before: no service half", () => {
+    const rows = writeReadinessByEnvironment(chainIn("PROD"));
+    expect(rows.every((r) => !("service" in r))).toBe(true);
+    expect(readyEnvironments(rows)).toEqual(["PROD"]);
+  });
+});

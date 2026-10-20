@@ -18,7 +18,13 @@ SuccessFactors custom services are now registered by path and verified live
 then made verification per environment (a DEV verify no longer opens PROD
 writes), refused SAP routing in the path (`;o=`, `/sap(...)/`, `..;`), let
 SuccessFactors verify one dataset instead of the whole tenant, and added the
-OData version control to Studio. Everything said about that feature was traced
+OData version control to Studio. A second review round kept one verification
+per SAP client (two clients of one PROD system no longer overwrite each other),
+refused service paths outside the OData handlers (`/sap/bc/...` and other ICF
+paths), made activation of a write interface require the verification and the
+write chain in the **same** environment, marked an environment whose connection
+was edited after its verify, and bounded the `$metadata` parsing so a hostile
+8 MB answer cannot stall CoreEdge. Everything said about that feature was traced
 in code and is covered by unit tests; it has **not been run against a live
 tenant**.
 
@@ -424,7 +430,7 @@ the sign-in bridge. A user without an organization, including the platform
 owner, may hold one session at a time: signing in from a second browser silently
 ends the first. Organization users are limited by the organization's
 `maxConcurrentSessions` setting, 3 by default (`session.ts:52`;
-`prisma/schema.prisma:2811`).
+`prisma/schema.prisma:2833`).
 
 ### 4.8 Load the SAP API catalogue (platform owner)
 
@@ -448,7 +454,7 @@ API reference** calls the same route, but it sits inside the catalogue, and
 Discover shows "No tenant connected" instead of the catalogue to anyone whose
 organization has no connection. The platform owner has no organization, so it
 never sees the button (`src/lib/auth/auth-options.ts:24-33`;
-`src/app/(studio)/studio/discover/page.tsx:64-95`; `src/lib/studio/tenants.ts:77-123`).
+`src/app/(studio)/studio/discover/page.tsx:74-105`; `src/lib/studio/tenants.ts:77-123`).
 
 ### 4.9 Smoke test
 
@@ -498,7 +504,7 @@ Only a `consultant` can add, change or test a connection.
 | Label | A display name |
 | Environment | `SANDBOX`, `DEV`, `TEST` or `PROD`. Aliases are accepted: `SBX`, `DEVELOPMENT`, `QA`, `QAS`, `PRD` and `PRODUCTION`. Any other word is **refused** (`src/lib/sap-public/environment.ts:26-49`). The form's help text suggests free text; the server disagrees. Always set an environment, because a connection with no environment never accepts a write. |
 | Base URL | The API host, for example `https://<your-tenant>-api.s4hana.cloud.sap`, with no trailing path to a service |
-| Probe path | Optional. The service root that the Test calls, for example `/sap/opu/odata/sap/API_BUSINESS_PARTNER`. The broker does not use it, but it replaces the default target of the daily connection probe and the lane checks, so Operations health reports on it (`src/lib/studio/connection-health.ts:60-66`). |
+| Probe path | Optional. The service root that the Test calls, for example `/sap/opu/odata/sap/API_BUSINESS_PARTNER`. The broker does not use it, but it replaces the default target of the daily connection probe and the lane checks, so Operations health reports on it (`src/lib/studio/connection-health.ts:66-72`). |
 | Timeout (ms) | Optional. The form accepts up to 120000, but the code caps the Test and reads at 30 s and writes at 45 s. |
 | Auth type | `basic`, `bearer`, `oauth-client-credentials`, `oauth-saml-bearer` (SuccessFactors) or `api-key`. There is no X.509 option. |
 
@@ -511,7 +517,7 @@ active. The save is refused, because the broker could not tell them apart.
 client when one is set. Without a probe path, S/4 products use the V4 Purchase
 Order service (`/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001`,
 scenario `SAP_COM_0053`), SuccessFactors uses `/odata/v2/$metadata`, and ECC and
-Ariba have no default (`src/lib/studio/connection-health.ts:60-67`).
+Ariba have no default (`src/lib/studio/connection-health.ts:66-73`).
 
 | Result | Meaning | Usual cause, in SAP terms |
 |---|---|---|
@@ -519,7 +525,7 @@ Ariba have no default (`src/lib/studio/connection-health.ts:60-67`).
 | `UNAUTHORIZED` | 401 or 403. Also: the token endpoint refused the client credentials, a credential field is missing, or the tenant redirected to another host, such as a login page (`src/lib/sap-public/upstream-failure.ts:124-153`). | Communication arrangement not set up, wrong communication user or password, locked user, missing `S_SERVICE` authorisation, wrong SAP client, wrong OAuth client |
 | `NOT_FOUND` | 404 | Service not activated (`/IWFND/MAINT_SERVICE`, `/IWFND/V4_ADMIN`), or the probe path is wrong. Common when `SAP_COM_0053` is not in your arrangement and no probe path is set. |
 | `TIMEOUT` | No answer within the timeout (10 s by default, 30 s at most) | Firewall drops the traffic, or the host cannot be reached from where CoreEdge runs |
-| `ERROR` | Any other status, or the connection could not be made. Also a 200 that is not an OData metadata document (`src/lib/studio/connection-health.ts:146-155`). | DNS failure, connection refused, or a TLS certificate the CoreEdge host does not trust. A 200 that is not metadata usually means the UI host was entered instead of the `-api` host. |
+| `ERROR` | Any other status, or the connection could not be made. Also a 200 that is not an OData metadata document (`src/lib/studio/connection-health.ts:185-201`). | DNS failure, connection refused, or a TLS certificate the CoreEdge host does not trust. A 200 that is not metadata usually means the UI host was entered instead of the `-api` host. |
 | `NO_PROBE_PATH` | Nothing to call | ECC or Ariba without a probe path |
 | `CONNECTION_UNREADABLE` | The stored secrets cannot be decrypted | `SAP_CONNECTION_ENCRYPTION_KEY` changed. Save the connection again. |
 
@@ -761,7 +767,12 @@ tenant.**
    **Verify** (`POST /api/studio/interfaces/<id>/verify-service`,
    `src/app/api/studio/interfaces/[id]/verify-service/route.ts:73`). It asks the
    connection a call from that environment would use, and a success is recorded
-   for that environment only. The panel lists the environments verified.
+   for that environment and SAP client only. Two clients of one system in the
+   same environment are verified, and kept, separately. The panel lists the
+   environments verified, and flags one whose connection has been edited since
+   (*Verify again: the connection for ... has changed*). A result on screen
+   belongs to the interface version it was asked about; after a change to the
+   path, the version or the dataset it disappears, so verify again.
    Outcomes:
 
    | Shown as | Status | What to do |
@@ -781,7 +792,7 @@ tenant.**
 **Rules that follow from the design.**
 
 - **The id is derived**: `custom:<path>`
-  (`src/lib/sap-public/service-path.ts:209-211`). Grants name that id, so a
+  (`src/lib/sap-public/service-path.ts:244-246`). Grants name that id, so a
   grant a second person approved for one path never authorises another.
 - **The path is a path on the connection's host and nothing else.** A full URL,
   `//host`, `.` or `..` segments (also with parameters, `..;` or `..;x=1`, which
@@ -789,8 +800,16 @@ tenant.**
   backslashes, whitespace and control characters, `$metadata`, and
   percent-escapes that decode to any of those or to `;` (`%2e%2e`, `%2f`,
   `%3b`, `%252e`) are refused, with a sentence saying what to enter instead
-  (`src/lib/sap-public/service-path.ts:147-206`). Ariba is REST, not OData, and
+  (`src/lib/sap-public/service-path.ts:179-240`). Ariba is REST, not OData, and
   has no path.
+- **The path must be an OData service.** It has to sit under `/sap/opu/odata/`
+  or `/sap/opu/odata4/`, or be SuccessFactors' `/odata/v2` or under `/odatav4/`
+  (`src/lib/sap-public/service-path.ts:134-152`). Reads are not checked against
+  `$metadata`, and the connection's credentials go with every call, so without
+  this rule a path such as `/sap/bc/adt/...`, `/sap/bc/soap/rfc` or a customer
+  REST handler would have been called through the broker and its JSON served as
+  records. An ICF alias for an OData service is refused too; register the
+  service's `/sap/opu/odata...` path instead.
 - **The path cannot choose the SAP system or client.** The connection and its
   environment binding decide that, and the grant, the audit row and the write
   gate all read the binding. A Gateway hub routes `;o=<system alias>` to another
@@ -807,10 +826,15 @@ tenant.**
   through the same connection, SAP client and host the write is bound to. It
   refuses before the `Idempotency-Key` is reserved and before SAP is called
   (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:302-318`,
-  `src/lib/sap-public/service-verifications.ts:72-85`). Verifying SANDBOX or
-  DEV does not open PROD. A custom WRITE interface cannot be activated until it
-  has been verified in at least one environment
-  (`src/app/api/studio/interfaces/route.ts:424-441`). Reads are not gated.
+  `src/lib/sap-public/service-verifications.ts:116-128`). Verifying SANDBOX or
+  DEV does not open PROD, and verifying client 200 does not open (or close)
+  client 100. A custom WRITE interface is activated only when one environment
+  holds a credential with a write key, an approved write grant **and** a
+  verification whose connection has not changed since
+  (`src/app/api/studio/interfaces/route.ts:436-453,505-517`, `src/lib/studio/write-readiness.ts:102-109`).
+  Verified in SANDBOX with the write chain only in PROD is refused, and the
+  Write chain row shows `service not verified here` for PROD. Reads are not
+  gated.
 - **Changing the path, the version or the dataset is a new contract.** The
   version bumps, verification clears in every environment, and an active write
   interface returns to draft; changing one of them and activating in the same
@@ -818,7 +842,7 @@ tenant.**
   existing grants detach (ask for a new one); an active read interface stays
   active, and its calls answer 403 until the new grant is approved. After a
   version or dataset change the grants stay attached
-  (`src/app/api/studio/interfaces/route.ts:407-422,503-540`).
+  (`src/app/api/studio/interfaces/route.ts:419-434,528-565`).
 - **A failed verify never clears an earlier success**, in any environment, so a
   timeout cannot stop live writes. A verify is recorded only if the interface
   did not change while SAP was answering; a verify of another environment that
@@ -996,7 +1020,7 @@ it.
 | 201 | | Record created | Store `record` and `location` |
 | 400 | `VALIDATION_ERROR` | Configuration problem: no entity set, unresolvable service, bad body or bad idempotency key | Fix the configuration. Do not retry. |
 | 401 | `UNAUTHENTICATED` | Token missing, wrong, revoked, rotated or expired | Stop. Get a new token. |
-| 403 | `FORBIDDEN` | CoreEdge refused: no live grant, grant expired or revoked, or wrong write key; writes are not enabled on the connection (any Studio-form save turns them off, section 5.8); the interface is not ACTIVE (writes) or is DEPRECATED (reads); the interface's operation does not match the route (a CREATE interface on `/data`, a READ interface on `/data/write`) (`src/lib/northbound/access.ts:127-143,271-287`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:247-255`). Or SAP itself answered 401/403. Also: the connection's stored credential is unusable or its token endpoint refused it, and SAP was never called (`src/lib/northbound/read.ts:166-172`). | Do not retry. Fix the cause the message names: in Studio, with the Appendix B call, in the grant, or in the SAP arrangement. CoreEdge's own refusals are never stored under the key. A 401/403 from SAP on a write **is** stored and replayed for 24 hours, so after fixing the SAP side, send under a **new** key. SAP refused, so nothing was created. |
+| 403 | `FORBIDDEN` | CoreEdge refused: no live grant, grant expired or revoked, or wrong write key; writes are not enabled on the connection (any Studio-form save turns them off, section 5.8); the interface is not ACTIVE (writes) or is DEPRECATED (reads); the interface's operation does not match the route (a CREATE interface on `/data`, a READ interface on `/data/write`) (`src/lib/northbound/access.ts:146-162,298-314`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:248-256`). Or SAP itself answered 401/403. Also: the connection's stored credential is unusable or its token endpoint refused it, and SAP was never called (`src/lib/northbound/read.ts:166-172`). | Do not retry. Fix the cause the message names: in Studio, with the Appendix B call, in the grant, or in the SAP arrangement. CoreEdge's own refusals are never stored under the key. A 401/403 from SAP on a write **is** stored and replayed for 24 hours, so after fixing the SAP side, send under a **new** key. SAP refused, so nothing was created. |
 | 403 | `CONNECTION_NOT_CONFIGURED` | No connection bound to the credential's environment, two connections match (the credential names no SAP client), or none carries the credential's SAP client (`src/lib/sap-public/connection-resolver.ts:414-429`) | Fix the connection or the credential's SAP client. Do not retry. |
 | 404 | `NOT_FOUND` | Interface not found for this solution, or SAP returned 404 | Check the interface id and the service activation |
 | 409 | `CONFLICT` | Key reused with a different payload, or the first request is still in flight | Use a new key only for a new intent |
@@ -1012,7 +1036,7 @@ it.
   released, so retry with the **same** key; it really does write. This
   covers the credential step, the CSRF handshake and SAP's 408 or 429
   (`src/lib/northbound/write.ts:275-290,358,375-383,423-463`;
-  `src/app/api/northbound/interfaces/[id]/data/write/route.ts:389-393`).
+  `src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`).
 - Otherwise SAP may have acted, and the same key replays the stored answer for
   24 hours (`idempotency-replayed: true`). Check SAP for the record before you
   send again under a new key.
@@ -1253,7 +1277,7 @@ is logged.
 | Limit | Detail |
 |---|---|
 | Reads | Only `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100. CoreEdge sends SAP only `$top` and `$format=json`. There is no `$filter`, `$select`, key lookup, `$expand` or paging, and `?entity=` is ignored (`src/app/api/northbound/interfaces/[id]/data/route.ts:87`; `src/lib/northbound/read.ts:56, 149, 177`). |
-| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:139-141`). |
+| Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:175-177`). |
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. The middleware also limits per IP: 300 GET and 120 POST per minute on `/api/*`, shared by every caller behind the same egress IP, with its own 429 shape (section 6.2). |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
@@ -1362,7 +1386,7 @@ northbound route handlers carries `x-correlation-id` and `cache-control: no-stor
 
 A DRAFT interface is still served for reads, with the header
 `x-coreedge-interface-status: DRAFT`. Writes require ACTIVE and return 403
-`FORBIDDEN` otherwise (`src/lib/northbound/access.ts:146-155`). `callable` in the
+`FORBIDDEN` otherwise (`src/lib/northbound/access.ts:153-162`). `callable` in the
 discovery list describes reads only, and is always false for CREATE interfaces
 (`src/app/api/northbound/interfaces/route.ts:169-174`). For your own API it is
 also false when the stored path would be refused. The list never returns a
@@ -1432,8 +1456,9 @@ await fetch('/api/studio/interfaces', {
 
 **Verify an interface's service in one environment** (the **Verify** button).
 Any `consultant` can run this; `sapClient` only where the product addresses one.
-Run it for each environment you will write to: a write is refused in an
-environment that has not been verified.
+Run it for each environment (and SAP client) you will write to: a write is
+refused in an environment that has not been verified through the connection and
+client it uses.
 
 ```js
 await fetch('/api/studio/interfaces/<interface id>/verify-service', {
@@ -1505,7 +1530,7 @@ In each case the code is what runs.
 | `SAP_HOST_ALLOWLIST_EXTRA` | Missing from `.env.example` | Read by `src/lib/studio/sap-host-allowlist.ts:56-63` |
 | Connection environment | The form describes the field as free text | Only SANDBOX, DEV, TEST, PROD and their aliases are accepted |
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
-| Write replays | `docs/coreedge-developer-guide.md:256-258` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:413-417`). |
+| Write replays | `docs/coreedge-developer-guide.md:289-291` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`). |
 | Read options | The design mock lists `$top`, `$skip`, `$filter` and `$select` | Only `limit` is read |
 | Starter kit OpenAPI | Its 400 description says "pass ?entity=" (`src/lib/studio/scaffold.ts:146`) | `?entity=` is ignored |
 | Target expansion spec | `docs/coreedge-sap-target-expansion-spec.md` says nothing in it has been applied, and that SAML bearer and CSRF are missing | Private, on-premise and ECC products, SAP-client addressing, SAML bearer and CSRF all exist |

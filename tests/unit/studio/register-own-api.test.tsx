@@ -286,3 +286,118 @@ describe("review round 1 — the version, per-environment verification, live-wri
     expect(screen.queryByText(/This write interface is live/)).toBeNull();
   });
 });
+
+describe("review round 2 — a result describes one version; a changed connection is not open", () => {
+  const TARGETS = [{ product: "s4hana-onprem", environment: "DEV", sapClient: "100", label: "ERP DEV" }];
+  const OK_V2 = {
+    status: "OK",
+    verified: true,
+    detail: 'The service answered with its description and offers the dataset "A_Travel" (2 datasets in all).',
+    entitySets: ["A_Travel", "A_Booking"],
+    entitySet: "A_Travel",
+    suggestedEntitySet: null,
+    boundTo: { label: "ERP DEV", environment: "DEV", sapClient: "100" },
+    interfaceVersion: 2,
+  };
+
+  it("after the path changes elsewhere, the old 'verified' result and its dataset picker are gone", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: OK_V2 }), { status: 200 })));
+    const verified = { ...CUSTOM, serviceVerifiedAt: "2026-10-19T10:00:00.000Z", serviceVerifiedEnvironment: "DEV" };
+    const { rerender } = render(
+      <InterfacesClient interfaces={[verified]} canAuthor products={PRODUCTS} verifyTargets={TARGETS} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByText("Answered by ERP DEV");
+    expect(screen.getByRole("button", { name: "Use this dataset" })).toBeTruthy();
+
+    // What router.refresh brings after "Change path or version" saved ZNEW.
+    rerender(
+      <InterfacesClient
+        interfaces={[
+          {
+            ...CUSTOM,
+            version: 3,
+            servicePath: "/sap/opu/odata/sap/ZNEW",
+            externalId: "custom:/sap/opu/odata/sap/ZNEW",
+            serviceVerifiedAt: null,
+          },
+        ]}
+        canAuthor
+        products={PRODUCTS}
+        verifyTargets={TARGETS}
+      />,
+    );
+    expect(screen.getByText("Not verified since it last changed")).toBeTruthy();
+    expect(screen.queryByText("verified")).toBeNull();
+    expect(screen.queryByText("Answered by ERP DEV")).toBeNull();
+    expect(screen.queryByText(/offers the dataset "A_Travel"/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use this dataset" })).toBeNull();
+  });
+
+  it("a result for the current version stays shown across a refresh", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: OK_V2 }), { status: 200 })));
+    const { rerender } = render(
+      <InterfacesClient interfaces={[CUSTOM]} canAuthor products={PRODUCTS} verifyTargets={TARGETS} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await screen.findByText("Answered by ERP DEV");
+    rerender(
+      <InterfacesClient
+        interfaces={[{ ...CUSTOM, serviceVerifiedAt: "2026-10-20T10:00:00.000Z", serviceVerifiedEnvironment: "DEV" }]}
+        canAuthor
+        products={PRODUCTS}
+        verifyTargets={TARGETS}
+      />,
+    );
+    expect(screen.getByText("Answered by ERP DEV")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Use this dataset" })).toBeTruthy();
+  });
+
+  it("an environment whose connection changed since its verify is not listed as open for writes", () => {
+    render(
+      <InterfacesClient
+        interfaces={[
+          {
+            ...CUSTOM,
+            serviceVerifiedAt: "2026-10-19T10:00:00.000Z",
+            serviceVerifiedEnvironment: "DEV",
+            serviceVerifiedEnvironments: [
+              { environment: "DEV", at: "2026-10-19T10:00:00.000Z", sapClient: "100", connectionChanged: true },
+              { environment: "TEST", at: "2026-10-19T11:00:00.000Z", sapClient: "100", connectionChanged: false },
+            ],
+          },
+        ]}
+        canAuthor
+        products={PRODUCTS}
+      />,
+    );
+    expect(screen.getByText(/Writes are allowed only in the environments verified here: TEST \(client 100\)\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Verify again: the connection for DEV \(client 100\) has changed since it was verified, so writes there are refused\./),
+    ).toBeTruthy();
+  });
+
+  it("the Write chain row names a missing verification for your own API", () => {
+    render(
+      <InterfacesClient
+        interfaces={[
+          {
+            ...CUSTOM,
+            serviceVerifiedAt: "2026-10-19T10:00:00.000Z",
+            writeReadiness: [
+              { environment: "SANDBOX", credential: "none", grant: "none", service: "verified", ready: false },
+              { environment: "PROD", credential: "ready", grant: "approved", service: "not-verified", ready: false },
+            ],
+          },
+        ]}
+        canAuthor
+        products={PRODUCTS}
+      />,
+    );
+    expect(screen.getByText("PROD: credential with write key · write grant approved · service not verified here")).toBeTruthy();
+    expect(screen.getByText(/or a verification of this service in that environment/)).toBeTruthy();
+    const btn = screen.getByRole("button", { name: "Mark ACTIVE" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toMatch(/this service verified there/);
+  });
+});

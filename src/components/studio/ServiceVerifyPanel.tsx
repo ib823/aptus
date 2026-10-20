@@ -18,6 +18,14 @@
  * When the service says it is another OData version than the interface does,
  * the panel offers to switch the version and verify again — the only other
  * way out of that answer would be a hand-written API call.
+ *
+ * A RESULT DESCRIBES ONE VERSION. Every verify answer carries the interface
+ * version it was asked about, and is shown only while the interface is still
+ * that version. A path, version or dataset saved elsewhere on the page bumps
+ * the version, so a green "verified" and the old service's dataset picker
+ * disappear instead of sitting under "Not verified since it last changed"
+ * (review round 2) — and a dataset picked here can only come from the
+ * service the interface now names.
  */
 
 import { useRouter } from "next/navigation";
@@ -30,6 +38,11 @@ export interface VerifiedEnvironment {
   /** ISO timestamp. */
   at: string;
   sapClient: string | null;
+  /**
+   * The connection that answered has since been edited (host or client),
+   * deactivated, or re-declared: the write gate no longer accepts this entry.
+   */
+  connectionChanged?: boolean;
 }
 
 export interface VerifyTarget {
@@ -48,6 +61,8 @@ interface VerifyOutcome {
   suggestedEntitySet: string | null;
   detectedODataVersion?: string | null;
   boundTo: { label: string; environment: string | null; sapClient: string | null } | null;
+  /** The interface version the answer describes. */
+  interfaceVersion?: number;
 }
 
 const CHIP: Record<string, { status: HonestStatus; label: string }> = {
@@ -71,6 +86,10 @@ function targetLabel(t: VerifyTarget): string {
   return [t.environment, t.sapClient ? `client ${t.sapClient}` : null, t.label].filter(Boolean).join(" · ");
 }
 
+function bindingLabel(v: VerifiedEnvironment): string {
+  return `${v.environment}${v.sapClient ? ` (client ${v.sapClient})` : ""}`;
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -78,6 +97,7 @@ function formatDate(iso: string): string {
 
 export function ServiceVerifyPanel({
   interfaceId,
+  interfaceVersion,
   isCustom,
   entitySet,
   verifiedAt,
@@ -90,6 +110,11 @@ export function ServiceVerifyPanel({
   canAuthor,
 }: {
   interfaceId: string;
+  /**
+   * The interface's current version. A result for another version is not
+   * shown (see the header). Omitted: every result is shown.
+   */
+  interfaceVersion?: number;
   isCustom: boolean;
   entitySet: string | null;
   verifiedAt: string | null;
@@ -180,13 +205,22 @@ export function ServiceVerifyPanel({
     [saveAndVerify],
   );
 
-  const chip = outcome ? (CHIP[outcome.status] ?? { status: "PROBE_FAILED" as const, label: outcome.status.toLowerCase() }) : null;
-  const sets = outcome?.entitySets ?? [];
-  const detected = outcome?.detectedODataVersion ?? null;
+  // Only an answer about the contract the interface has NOW.
+  const current =
+    outcome !== null &&
+    (interfaceVersion === undefined || outcome.interfaceVersion === undefined || outcome.interfaceVersion === interfaceVersion)
+      ? outcome
+      : null;
+  const openBindings = verifiedEnvironments.filter((v) => !v.connectionChanged);
+  const changedBindings = verifiedEnvironments.filter((v) => v.connectionChanged);
+
+  const chip = current ? (CHIP[current.status] ?? { status: "PROBE_FAILED" as const, label: current.status.toLowerCase() }) : null;
+  const sets = current?.entitySets ?? [];
+  const detected = current?.detectedODataVersion ?? null;
   const canSwitchVersion =
     canAuthor &&
     isCustom &&
-    outcome?.status === "VERSION_MISMATCH" &&
+    current?.status === "VERSION_MISMATCH" &&
     (detected === "V2" || detected === "V4") &&
     detected !== odataVersion;
   const liveWriteWarning = liveWrite ? (
@@ -205,13 +239,16 @@ export function ServiceVerifyPanel({
           : "Not verified since it last changed"}
         {isCustom && (
           <span style={{ ...muted, display: "block" }}>
-            {verifiedEnvironments.length > 0
+            {openBindings.length > 0
               ? "Writes are allowed only in the environments verified here: " +
-                verifiedEnvironments
-                  .map((v) => `${v.environment}${v.sapClient ? ` (client ${v.sapClient})` : ""}`)
-                  .join(", ") +
+                openBindings.map(bindingLabel).join(", ") +
                 ". Verify every environment you will write to — a DEV verify does not open PROD."
               : "Writes through your own API are refused in each environment until it has been verified there."}
+          </span>
+        )}
+        {isCustom && changedBindings.length > 0 && (
+          <span style={{ ...muted, display: "block", color: "var(--status-awaiting-fg)" }}>
+            {`Verify again: the connection for ${changedBindings.map(bindingLabel).join(", ")} has changed since it was verified, so writes there are refused.`}
           </span>
         )}
       </span>
@@ -255,13 +292,13 @@ export function ServiceVerifyPanel({
 
       <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {error && <span style={{ fontSize: 12, color: "var(--status-revoked-fg)" }}>{error}</span>}
-        {outcome && chip && (
+        {current && chip && (
           <>
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <StudioStatusChip status={chip.status} label={chip.label} />
-              {outcome.boundTo && <span style={muted}>Answered by {outcome.boundTo.label}</span>}
+              {current.boundTo && <span style={muted}>Answered by {current.boundTo.label}</span>}
             </span>
-            <span style={{ color: "var(--ink-secondary)" }}>{outcome.detail}</span>
+            <span style={{ color: "var(--ink-secondary)" }}>{current.detail}</span>
             {canSwitchVersion && (
               <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
                 <span>
@@ -272,15 +309,15 @@ export function ServiceVerifyPanel({
                 {liveWriteWarning}
               </span>
             )}
-            {canAuthor && outcome.status === "ENTITY_SET_MISSING" && outcome.suggestedEntitySet && (
+            {canAuthor && current.status === "ENTITY_SET_MISSING" && current.suggestedEntitySet && (
               <span>
                 <button
                   type="button"
                   style={linkBtn}
                   disabled={busy}
-                  onClick={() => void chooseDataset(outcome.suggestedEntitySet!)}
+                  onClick={() => void chooseDataset(current.suggestedEntitySet!)}
                 >
-                  Did you mean {outcome.suggestedEntitySet}?
+                  Did you mean {current.suggestedEntitySet}?
                 </button>
               </span>
             )}

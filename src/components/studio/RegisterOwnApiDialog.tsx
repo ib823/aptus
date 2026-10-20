@@ -197,7 +197,7 @@ export function RegisterOwnApiDialog({
               />
               <p id={`${ids}-path-help`} style={pathError ? { ...hint, color: "var(--status-revoked-fg)" } : hint}>
                 {pathError ??
-                  "The part of the service's address after the host, starting with /. Copy it from the service binding in ADT (Service URL) or from /IWFND/MAINT_SERVICE, without $metadata or ?sap-client. The host always comes from your connection."}
+                  "The part of the service's address after the host, starting with /. Copy it from the service binding in ADT (Service URL) or from /IWFND/MAINT_SERVICE, without $metadata or ?sap-client. It starts with /sap/opu/odata/ or /sap/opu/odata4/ (SuccessFactors: /odata/v2). The host always comes from your connection."}
               </p>
             </div>
 

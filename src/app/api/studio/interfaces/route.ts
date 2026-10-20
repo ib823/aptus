@@ -46,7 +46,11 @@ import {
   ODATA_VERSIONS,
   validateServicePath,
 } from "@/lib/sap-public/service-path";
-import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
+import { loadCurrentConnections } from "@/lib/sap-public/current-connections";
+import {
+  currentlyVerifiedEnvironments,
+  verifiedEnvironmentsForDisplay,
+} from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -271,12 +275,19 @@ export async function GET(request: NextRequest) {
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  // Per-environment verification, for display: environment, when, client —
-  // never the connection id or host the gate compares against.
+  // Per-binding verification, for display: environment, when, client, and
+  // whether the connection that answered has changed since — never the
+  // connection id or host the gate compares against. Connections are read
+  // only when some interface carries a verification.
+  const anyVerified = interfaces.some((i) => i.serviceVerifications != null);
+  const connections = anyVerified ? await loadCurrentConnections(organizationId) : [];
   return studioOk({
     interfaces: interfaces.map(({ serviceVerifications, ...rest }) => ({
       ...rest,
-      serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(serviceVerifications),
+      serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(
+        serviceVerifications,
+        connections.filter((c) => c.product === rest.sapProduct),
+      ),
     })),
   });
 }
@@ -316,6 +327,7 @@ export async function PATCH(request: NextRequest) {
       servicePath: true,
       odataVersion: true,
       serviceVerifiedAt: true,
+      serviceVerifications: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
@@ -454,10 +466,16 @@ export async function PATCH(request: NextRequest) {
    *      Checked on PROMOTION only, like the entity set: an interface already
    *      ACTIVE is not demoted by a later revocation — the broker refuses that
    *      call itself.
+   *
+   *      For YOUR OWN API the same environment must ALSO hold a verification
+   *      that still matches its connection: the write route refuses a custom
+   *      service in any environment it has not been verified in (3c only
+   *      asks "verified somewhere"), so "verified in SANDBOX, chain complete
+   *      in PROD" is another wall (review round 2).
    */
   if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation !== "READ") {
     const now = new Date();
-    const [liveCredentials, writeKeyHolders, grants] = await Promise.all([
+    const [liveCredentials, writeKeyHolders, grants, connections] = await Promise.all([
       prisma.solutionClient.findMany({
         where: { organizationId, solutionId: current.solutionId, isActive: true, revokedAt: null },
         select: { environment: true, expiresAt: true },
@@ -478,6 +496,7 @@ export async function PATCH(request: NextRequest) {
         where: { organizationId, solutionId: current.solutionId, externalId: nextExternalId, operation: nextOperation },
         select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
       }),
+      isCustom ? loadCurrentConnections(organizationId, current.sapProduct) : Promise.resolve(null),
     ]);
     const withWriteKey = new Set(writeKeyHolders.map((c) => c.environment));
     const readiness = writeReadinessByEnvironment({
@@ -485,6 +504,12 @@ export async function PATCH(request: NextRequest) {
         .filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime())
         .map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.environment) })),
       grants,
+      // A contract this request changes is verified nowhere (3b refuses it anyway).
+      serviceVerifiedEnvironments: connections
+        ? verificationReset
+          ? []
+          : currentlyVerifiedEnvironments(current.serviceVerifications, connections)
+        : null,
       now,
     });
     if (readyEnvironments(readiness).length === 0) {

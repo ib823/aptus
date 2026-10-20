@@ -22,7 +22,11 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeEnvironment } from "@/lib/sap-public/connection-resolver";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
-import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
+import { toCurrentConnection } from "@/lib/sap-public/current-connections";
+import {
+  currentlyVerifiedEnvironments,
+  verifiedEnvironmentsForDisplay,
+} from "@/lib/sap-public/service-verifications";
 import { getSapProduct, getSapServices, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
@@ -101,11 +105,13 @@ export default async function StudioInterfacesPage({
         })
       : Promise.resolve([]),
     // What Verify may ask: each active connection's product, label, declared
-    // environment and SAP client. Metadata only — no secret is selected.
+    // environment and SAP client. Metadata only — no secret is selected. The
+    // id and host stay on the server: they say whether a stored verification
+    // still describes the connection (an edited host or client keeps the id).
     organizationId
       ? prisma.sapConnection.findMany({
           where: { organizationId, isActive: true },
-          select: { product: true, label: true, environment: true, client: true },
+          select: { id: true, product: true, label: true, environment: true, client: true, baseUrl: true },
           orderBy: { createdAt: "asc" },
         })
       : Promise.resolve([]),
@@ -125,16 +131,26 @@ export default async function StudioInterfacesPage({
     verifyTargets.push({ product: c.product, environment, sapClient: c.client ?? null, label: c.label });
   }
 
+  const currentConnections = connectionRows.map(toCurrentConnection);
+  const connectionsFor = (product: string) => currentConnections.filter((c) => c.product === product);
+
   const products = SAP_ODATA_PRODUCTS.map((p) => ({ key: p.key, label: p.label, addressesClient: p.addressesClient }));
 
   const now = new Date();
   const writeKeyBySolution = new Set(writeKeyHolders.map((c) => `${c.solutionId}::${c.environment}`));
-  const writeReadinessFor = (solutionId: string, externalId: string, operation: string): WriteReadinessRow[] =>
+  const writeReadinessFor = (
+    solutionId: string,
+    externalId: string,
+    operation: string,
+    /** Your own API: environments with a verification that still matches its connection. */
+    serviceVerifiedEnvironments: readonly string[] | null,
+  ): WriteReadinessRow[] =>
     writeReadinessByEnvironment({
       credentials: liveCredentials
         .filter((c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()))
         .map((c) => ({ environment: c.environment, hasWriteKey: writeKeyBySolution.has(`${c.solutionId}::${c.environment}`) })),
       grants: writeGrants.filter((g) => g.solutionId === solutionId && g.externalId === externalId && g.operation === operation),
+      serviceVerifiedEnvironments,
       now,
     });
 
@@ -176,11 +192,22 @@ export default async function StudioInterfacesPage({
     odataVersion: r.odataVersion,
     serviceVerifiedAt: r.serviceVerifiedAt ? r.serviceVerifiedAt.toISOString() : null,
     serviceVerifiedEnvironment: r.serviceVerifiedEnvironment,
-    serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(r.serviceVerifications),
+    serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(r.serviceVerifications, connectionsFor(r.sapProduct)),
     serviceVerifiedEntitySets: Array.isArray(r.serviceVerifiedEntitySets)
       ? r.serviceVerifiedEntitySets.filter((n): n is string => typeof n === "string")
       : null,
-    ...(r.operation === "READ" ? {} : { writeReadiness: writeReadinessFor(r.solutionId, r.externalId, r.operation) }),
+    ...(r.operation === "READ"
+      ? {}
+      : {
+          // The same three halves the activation gate and the broker check —
+          // for your own API, verification in that environment too.
+          writeReadiness: writeReadinessFor(
+            r.solutionId,
+            r.externalId,
+            r.operation,
+            r.servicePath ? currentlyVerifiedEnvironments(r.serviceVerifications, connectionsFor(r.sapProduct)) : null,
+          ),
+        }),
   }));
 
   return (

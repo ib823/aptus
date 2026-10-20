@@ -90,6 +90,19 @@ const REFUSALS: ReadonlyArray<[string, unknown, ServicePathRefusal]> = [
   ["$metadata", "/x/$metadata", "SYSTEM_RESOURCE"],
   ["encoded $metadata", "/x/%24metadata", "SYSTEM_RESOURCE"],
   ["$batch", "/x/$batch", "SYSTEM_RESOURCE"],
+  // Not an OData service: any other ICF handler, called with the connection's
+  // credentials, would be served as records (review round 2).
+  ["an ADT repository handler", "/sap/bc/adt/repository/nodestructure", "NOT_ODATA_ROOT"],
+  ["the SOAP RFC handler", "/sap/bc/soap/rfc", "NOT_ODATA_ROOT"],
+  ["the Web GUI", "/sap/bc/gui/sap/its/webgui", "NOT_ODATA_ROOT"],
+  ["a public info handler", "/sap/public/info", "NOT_ODATA_ROOT"],
+  ["the ping handler", "/sap/bc/ping", "NOT_ODATA_ROOT"],
+  ["a customer REST handler", "/sap/bc/rest/ZHR_EMPLOYEES", "NOT_ODATA_ROOT"],
+  ["the Gateway root alone", "/sap/opu/odata", "NOT_ODATA_ROOT"],
+  ["the Gateway V4 root alone", "/sap/opu/odata4/", "NOT_ODATA_ROOT"],
+  ["a look-alike root", "/sap/opu/odataX/sap/ZX", "NOT_ODATA_ROOT"],
+  ["SuccessFactors below its root", "/odata/v2/User", "NOT_ODATA_ROOT"],
+  ["a bare one-segment path", "/a", "NOT_ODATA_ROOT"],
 ];
 
 describe("validateServicePath — every rejection class", () => {
@@ -126,7 +139,8 @@ const ACCEPTED = [
   "/sap/opu/odata/sap/ZX_SRV;v=0002",
   "/sap/opu/odata/SAP/ZX_SRV;v=0001",
   "/sap/opu/odata/sap/Z%28X%29",
-  "/a",
+  "/SAP/OPU/ODATA/SAP/ZX_SRV",
+  "/odatav4/talent/learning/Course.svc/v1",
 ];
 
 describe("validateServicePath — the shapes SAP prints are accepted", () => {
@@ -143,7 +157,9 @@ describe("validateServicePath — the shapes SAP prints are accepted", () => {
   });
 
   it("accepts the 180-character limit exactly", () => {
-    const p = "/" + "a".repeat(MAX_SERVICE_PATH_LENGTH - 1);
+    const root = "/sap/opu/odata/sap/";
+    const p = root + "A".repeat(MAX_SERVICE_PATH_LENGTH - root.length);
+    expect(p).toHaveLength(MAX_SERVICE_PATH_LENGTH);
     expect(validateServicePath(p).ok).toBe(true);
   });
 

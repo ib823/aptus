@@ -78,6 +78,7 @@ vi.mock("@/lib/northbound/idempotency", async (importOriginal) => ({
 }));
 
 import { POST } from "@/app/api/northbound/interfaces/[id]/data/write/route";
+import { withServiceVerification } from "@/lib/sap-public/service-verifications";
 
 const PATH = "/sap/opu/odata/sap/ZUI_X_O2";
 const DEV_VERIFIED = {
@@ -233,6 +234,36 @@ describe("verification is per environment and per binding (review round 1)", () 
     });
     const res = await post();
     expect(res.status).toBe(201);
+  });
+});
+
+describe("two SAP clients in one environment (review round 2)", () => {
+  it("verifying client 200 after client 100 leaves the client-100 write open", async () => {
+    // The order Studio's Verify panel produces: DEV · client 100, then DEV · client 200.
+    let stored: unknown = null;
+    stored = withServiceVerification(stored, "DEV", DEV_VERIFIED.DEV);
+    stored = withServiceVerification(stored, "DEV", {
+      at: "2026-10-19T12:00:00.000Z",
+      connectionId: "conn_dev_200",
+      sapClient: "200",
+      baseUrl: BASE,
+    });
+    mocks.access.mockResolvedValue({ ok: true, iface: iface({ serviceVerifications: stored }) });
+    const res = await post();
+    expect(res.status).toBe(201);
+    expect(mocks.reserve).toHaveBeenCalledTimes(1);
+  });
+
+  it("only the other client verified still refuses the client-100 write", async () => {
+    const stored = withServiceVerification(null, "DEV", {
+      at: "2026-10-19T12:00:00.000Z",
+      connectionId: "conn_dev_200",
+      sapClient: "200",
+      baseUrl: BASE,
+    });
+    mocks.access.mockResolvedValue({ ok: true, iface: iface({ serviceVerifications: stored }) });
+    expect((await post()).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
