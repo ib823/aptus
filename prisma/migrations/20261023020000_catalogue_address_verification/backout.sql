@@ -1,0 +1,14 @@
+-- Backout for 20261023020000_catalogue_address_verification (P0.8), written
+-- by P0.17.
+--
+-- In this file, not in migration.sql, because an applied migration is never
+-- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
+--
+-- Run it only after the deployment is rolled back to code before P0.8, which
+-- never reads the table. What it loses: every recorded verification, so each
+-- OData V4 address reads "unverified" again after a roll-forward until it is
+-- probed again.
+--
+-- Print it with its _prisma_migrations line:
+--   pnpm migrations:backout-sql 20261023020000_catalogue_address_verification
+DROP TABLE "CatalogueAddressVerification";

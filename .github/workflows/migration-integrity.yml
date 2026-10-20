@@ -41,6 +41,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The protocol gate compares migrations with origin/main and with
+          # the push's parent commit, so it needs the history.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -54,6 +58,26 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm db:generate
+
+      # ------------------------------------------------------------------ #
+      # GATE 0 — the release protocol (P0.17,                              #
+      # docs/runbooks/coreedge-release.md). A migration already on main is  #
+      # never modified, renamed or removed (Prisma never re-runs an applied #
+      # one, and does not warn when its file changes). Every migration      #
+      # added after 520ee318 carries backout SQL and is additive, unless it #
+      # says why it is a safe contract step. No database needed.            #
+      # ------------------------------------------------------------------ #
+      - name: Assert the migration protocol (applied migrations unchanged, backout SQL, additive)
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # A pull request is held against main; a push to main against the
+          # commit main pointed at before it (all zeros on a new branch,
+          # which the check skips).
+          if [ "$EVENT" = "push" ]; then BASE="$BEFORE"; else BASE="origin/main"; fi
+          pnpm migrations:check --base "$BASE"
 
       # ------------------------------------------------------------------ #
       # GATE 1 — no destructive statement in the reconciliation migration. #
@@ -139,3 +163,18 @@ jobs:
           JS
           node "$GITHUB_WORKSPACE/boot-smoke.mjs"
           rm -f "$GITHUB_WORKSPACE/boot-smoke.mjs"
+
+      # ------------------------------------------------------------------ #
+      # GATE 4 — every backout runs (P0.17). On the history-built database  #
+      # above: each migration added after 520ee318 is backed out, newest    #
+      # first, with exactly the script `pnpm migrations:backout-sql` prints; #
+      # the result must match the migrations kept (zero drift); then        #
+      # migrate deploy rolls forward and the result must match              #
+      # schema.prisma. A backout that forgets an index, a constraint or a   #
+      # column fails here, not during an incident. Last, because it changes #
+      # the database the steps above checked.                               #
+      # ------------------------------------------------------------------ #
+      - name: Rehearse every backout, then roll forward
+        env:
+          REHEARSAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/migration_integrity
+        run: pnpm migrations:rehearse-backout
