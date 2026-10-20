@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import {
   ENVIRONMENT_ORDER,
   isWriteOperation,
@@ -174,7 +175,7 @@ export function AccessGrantsClient({
       setBusy(grantId);
       setErrors((e) => ({ ...e, [grantId]: "" }));
       try {
-        const res = await fetch("/api/studio/access-grants", {
+        const res = await fetchWithStepUp("/api/studio/access-grants", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -32,6 +32,7 @@ import { STUDIO_SECTIONS } from "@/lib/studio/sections";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { GovernanceStepUp } from "@/components/auth/GovernanceStepUp";
 import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
@@ -113,6 +114,7 @@ export default async function StudioLayout({ children }: { children: ReactNode }
         roleLabel={roleLabel}
         userEmail={user.email}
       >
+        <GovernanceStepUp user={user} />
         {children}
       </StudioShell>
     </AffirmLearnProvider>

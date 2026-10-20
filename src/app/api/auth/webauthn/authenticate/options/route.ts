@@ -96,7 +96,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // No email provided → usernameless / discoverable-credential flow: leave
   // allowCredentials empty. There is no email to enumerate in this path.
 
-  const { options } = await generateAuthenticationChallenge(allowCredentials);
+  const { options } = await generateAuthenticationChallenge(allowCredentials, "signin");
 
   return NextResponse.json({ data: options });
 }

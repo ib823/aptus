@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
@@ -132,7 +133,7 @@ export function ConnectionsClient({
     setToggling(id);
     setToggleError(null);
     try {
-      const res = await fetch("/api/studio/connections", {
+      const res = await fetchWithStepUp("/api/studio/connections", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, isActive }),
@@ -447,7 +448,7 @@ function ConnectionForm({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/studio/connections", {
+      const res = await fetchWithStepUp("/api/studio/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

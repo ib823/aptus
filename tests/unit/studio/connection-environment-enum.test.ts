@@ -55,7 +55,7 @@ const ENUM_MIGRATION = readFileSync(
   "utf8",
 );
 
-const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com" };
+const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com", authMethod: "session" };
 
 function body(over: Record<string, unknown> = {}) {
   return {

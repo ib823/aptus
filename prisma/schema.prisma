@@ -1208,6 +1208,55 @@ model ConfigAudit {
   @@index([organizationId, at])
 }
 
+/// The governance trail of an actor with NO TENANT: a platform admin, or an
+/// account an admin created without an organization. ConfigAudit rows belong
+/// to an organization, so the passkey and step-up events of exactly the most
+/// privileged accounts had nowhere durable to go and were only logged —
+/// including the trust-on-first-use enrolment of a first passkey, which the
+/// step-up design depends on being visible. Same shape as ConfigAudit, minus
+/// the tenant, and append-only in the same way (lib/studio/audit.ts).
+model PlatformAudit {
+  id      String @id @default(cuid())
+  actorId String
+
+  /// As ConfigAudit: "Passkey" | "StepUp" | "User" | ...
+  entityType String
+  entityId   String
+  action     String
+
+  after Json?
+
+  at DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, at])
+  @@index([at])
+}
+
+/// Queries the tenant-scope guard caught with no organizationId while in LOG
+/// mode (lib/db/tenant-guard.ts). The switch to throw mode needs "zero
+/// violations in seven days", and runtime logs are kept for one to three days,
+/// so the evidence has to live here. One row per model, operation and call
+/// site, counted, not one per query: the first occurrence is written at once,
+/// later ones are batched per process, so a hot unscoped path cannot turn the
+/// guard into a write amplifier. Not tenant-anchored, and written through the
+/// unextended client, so recording a violation cannot itself be one.
+model TenantGuardViolation {
+  id        String @id @default(cuid())
+  model     String
+  operation String
+  /// The first application frame of the query's stack, best-effort (a bundle
+  /// path in production), or "unknown".
+  callSite  String
+
+  count       Int      @default(0)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([model, operation, callSite])
+  @@index([lastSeenAt])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CoreEdge runtime (Phase D) — the northbound broker's spine.
 //
@@ -3096,6 +3145,19 @@ model Session {
   expiresAt     DateTime
   mfaVerified   Boolean   @default(false)
   mfaVerifiedAt DateTime?
+  /// When this session last completed a passkey (WebAuthn) assertion: at
+  /// passkey sign-in, or at a step-up before a governance action. The
+  /// governance routes accept it only while it is fresh (lib/auth/step-up.ts),
+  /// so it is overwritten on every assertion rather than set once like
+  /// mfaVerifiedAt. Null means this session has never asserted a passkey.
+  passkeyAssertedAt DateTime?
+  /// SHA-256 hex of the step-up challenge this session was last issued
+  /// (/api/auth/webauthn/step-up/options). The verify route consumes it in the
+  /// same write that stamps passkeyAssertedAt, so a challenge counts once and
+  /// only on the session it was issued to: the challenge cookie is stateless,
+  /// and deleting it only asks the browser to forget it. Null when none is
+  /// outstanding.
+  stepUpChallengeHash String?
 
   ipAddress         String?
   userAgent         String?
@@ -3132,6 +3194,23 @@ model WebAuthnCredential {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+/// A passkey SIGN-IN challenge that has been used (lib/auth/webauthn-db.ts
+/// `consumeSignInChallenge`). The challenge cookie is HMAC-signed and
+/// stateless, so a captured cookie and assertion would mint a fresh session —
+/// one that counts as stepped up — for as long as the cookie lives. The verify
+/// route inserts the hash here once the signature checks out; the primary key
+/// makes a second use fail. Rows are needed only until the challenge would
+/// have expired, and are swept then.
+model WebAuthnChallengeUse {
+  /// SHA-256 hex of the challenge.
+  challengeHash String   @id
+  usedAt        DateTime @default(now())
+  /// When the challenge would have expired anyway; the row can go after it.
+  expiresAt     DateTime
+
+  @@index([expiresAt])
 }
 
 model MagicLinkToken {

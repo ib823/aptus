@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 
 import { contentReleaseScope } from "@/lib/db/content-release-scope";
-import { tenantScopeGuard } from "@/lib/db/tenant-guard";
+import { setTenantGuardViolationRecorder, tenantScopeGuard } from "@/lib/db/tenant-guard";
+import { tenantGuardViolationRecorder } from "@/lib/db/tenant-guard-violations";
 
 /**
  * Singleton Prisma client with global caching for Next.js hot-reload.
@@ -9,8 +10,8 @@ import { tenantScopeGuard } from "@/lib/db/tenant-guard";
  * THE TENANT-SCOPE GUARD IS ATTACHED HERE, so it is not optional equipment: a
  * query against a tenant-anchored model that carries no organizationId — and
  * runs outside a declared cross-tenant context — throws in development and
- * test, and logs in production until the burn-in flips TENANT_SCOPE_GUARD to
- * "throw". See lib/db/tenant-guard for the modes and the two sanctioned
+ * test, and logs (and durably counts) in production until the burn-in flips
+ * TENANT_SCOPE_GUARD to "throw". See lib/db/tenant-guard for the modes and the two sanctioned
  * exemptions. The factory existed for months with zero attachments — a
  * declared control the runtime did not enforce.
  *
@@ -38,6 +39,9 @@ function buildClient(): PrismaClient {
   // whose client chunk pulled this module in. No query can run in a browser
   // bundle, so there is nothing for the guard to guard there.
   if (typeof window !== "undefined") return base;
+  // Log-mode violations are counted durably, through the UNEXTENDED client so
+  // the write is not itself judged by the guard (lib/db/tenant-guard-violations).
+  setTenantGuardViolationRecorder(tenantGuardViolationRecorder(base));
   // Content-release scoping (2608 WS1) sits INSIDE the tenant guard: the guard
   // inspects the caller's where as written; the scope then narrows SAP-content
   // reads to the active release before they reach the engine.

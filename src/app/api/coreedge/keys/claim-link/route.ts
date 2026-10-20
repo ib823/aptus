@@ -32,6 +32,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { refuseSendClaimLink } from "@/lib/coreedge/authz";
 import { CLAIM_LINK_COPY, DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
@@ -88,6 +89,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const issuer = refuseCredentialIssuer(solution, user.id);
   if (issuer === "ownersMissing") return refused(CLAIM_LINK_COPY.appNeedsOwners, 409);
   if (issuer === "issuerIsOwner") return refused(CLAIM_LINK_COPY.ownAppKey, 403);
+
+  // An issuance, so a fresh passkey too — asked last, once the link would
+  // otherwise be sent (lib/auth/step-up.ts).
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "claim_link.send",
+    targetId: solutionId,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   const link = await createClaimLink({
     organizationId: user.organizationId,

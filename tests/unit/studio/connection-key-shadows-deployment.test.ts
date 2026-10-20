@@ -41,7 +41,7 @@ vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit 
 import { PATCH, POST } from "@/app/api/studio/connections/route";
 import { readTenantRefusalResponse } from "@/lib/sap-public/tenant-for-read";
 
-const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com" };
+const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com", authMethod: "session" };
 
 function body(over: Record<string, unknown> = {}) {
   return {

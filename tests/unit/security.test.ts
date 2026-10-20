@@ -339,21 +339,21 @@ describe("Permission Boundaries", () => {
     const externalUser = {
       id: "1", email: "test@test.com", name: "Test",
       role: "process_owner" as const,
-      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: false, hasWebAuthn: false,
+      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: false, hasWebAuthn: false, authMethod: "session" as const,
     };
     expect(isMfaRequired(externalUser)).toBe(false);
 
     const adminNoMfa = {
       id: "2", email: "admin@test.com", name: "Admin",
       role: "admin" as unknown as UserRole,
-      organizationId: null, organizationMfaPolicy: null, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false,
+      organizationId: null, organizationMfaPolicy: null, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false, authMethod: "session" as const,
     };
     expect(isMfaRequired(adminNoMfa)).toBe(false);
 
     const requiredOrgUser = {
       id: "3", email: "required@test.com", name: "Required",
       role: "process_owner" as const,
-      organizationId: "org-1", organizationMfaPolicy: "required" as const, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false,
+      organizationId: "org-1", organizationMfaPolicy: "required" as const, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false, authMethod: "session" as const,
     };
     expect(isMfaRequired(requiredOrgUser)).toBe(true);
   });
@@ -364,7 +364,7 @@ describe("Permission Boundaries", () => {
     const executive = {
       id: "1", email: "exec@test.com", name: "Exec",
       role: "executive" as unknown as UserRole,
-      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false,
+      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false, authMethod: "session" as const,
     };
     const result = await canEditStepResponse(executive, "assessment-1", "Finance");
     expect(result.allowed).toBe(false);
@@ -376,14 +376,14 @@ describe("Permission Boundaries", () => {
     const executive = {
       id: "1", email: "exec@test.com", name: "Exec",
       role: "executive" as unknown as UserRole,
-      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false,
+      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false, authMethod: "session" as const,
     };
     expect(canManageStakeholders(executive).allowed).toBe(false);
 
     const itLead = {
       id: "2", email: "it@test.com", name: "IT",
       role: "it_lead" as const,
-      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false,
+      organizationId: null, organizationMfaPolicy: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false, authMethod: "session" as const,
     };
     expect(canManageStakeholders(itLead).allowed).toBe(false);
   });

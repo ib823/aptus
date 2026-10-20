@@ -53,36 +53,61 @@ function getHmacSecret(): string {
 
 // --- Challenge cookie helpers (HMAC-SHA256 signed, no DB round-trip) ---
 
-function signChallenge(challenge: string, expiresAt: number): string {
-  const payload = `${challenge}.${expiresAt}`;
+/**
+ * What a challenge was issued FOR, signed into the cookie with it.
+ *
+ * Every ceremony shares one cookie name, and the cookie is stateless: a
+ * captured cookie and body verify again wherever the same challenge is
+ * accepted. Binding the purpose means a challenge is accepted only by the
+ * ceremony that issued it, so a captured step-up cannot be replayed at the
+ * public sign-in route to mint a session that counts as stepped up, and a
+ * sign-in challenge is not a registration one. Counting once within a
+ * ceremony is separate: the step-up consumes its challenge on the session
+ * (`recordStepUpAssertion`), the sign-in in `consumeSignInChallenge`.
+ */
+export type ChallengePurpose = "signin" | "stepup" | "register";
+
+/** How long a challenge stays valid; a consumed one need not be remembered longer. */
+export const CHALLENGE_TTL_SECONDS = Math.ceil(CHALLENGE_TTL_MS / 1000);
+
+function signChallenge(purpose: ChallengePurpose, challenge: string, expiresAt: number): string {
+  const payload = `${purpose}.${challenge}.${expiresAt}`;
   const hmac = createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
   return `${payload}.${hmac}`;
 }
 
-function verifyChallengeCookie(cookieValue: string): string | null {
+/**
+ * The challenge, if the cookie is genuine, unexpired and was issued for
+ * `purpose`. A cookie in the format from before purposes were signed (three
+ * parts) reads as missing: the person retries and gets one that carries one.
+ */
+function verifyChallengeCookie(cookieValue: string, purpose: ChallengePurpose): string | null {
   const parts = cookieValue.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 4) return null;
 
-  const [challenge, expiresAtStr, providedHmac] = parts;
-  if (!challenge || !expiresAtStr || !providedHmac) return null;
+  const [signedPurpose, challenge, expiresAtStr, providedHmac] = parts;
+  if (!signedPurpose || !challenge || !expiresAtStr || !providedHmac) return null;
 
   const expiresAt = parseInt(expiresAtStr, 10);
   if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
 
   const expectedHmac = createHmac("sha256", getHmacSecret())
-    .update(`${challenge}.${expiresAtStr}`)
+    .update(`${signedPurpose}.${challenge}.${expiresAtStr}`)
     .digest("hex");
 
   const a = Buffer.from(providedHmac, "hex");
   const b = Buffer.from(expectedHmac, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
+  // A genuine challenge issued for another ceremony is refused like a forged one.
+  if (signedPurpose !== purpose) return null;
+
   return challenge;
 }
 
-export async function setChallengeInCookie(challenge: string): Promise<void> {
+export async function setChallengeInCookie(challenge: string, purpose: ChallengePurpose): Promise<void> {
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
-  const signed = signChallenge(challenge, expiresAt);
+  const signed = signChallenge(purpose, challenge, expiresAt);
 
   const cookieStore = await cookies();
   cookieStore.set(CHALLENGE_COOKIE_NAME, signed, {
@@ -90,19 +115,26 @@ export async function setChallengeInCookie(challenge: string): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     path: "/",
-    maxAge: Math.ceil(CHALLENGE_TTL_MS / 1000),
+    maxAge: CHALLENGE_TTL_SECONDS,
   });
 }
 
-export async function getChallengeFromCookie(): Promise<string | null> {
+/**
+ * The challenge this request's cookie carries for `purpose`, or null.
+ *
+ * Deleting the cookie is only a request to the browser; a captured copy still
+ * verifies here until it expires. A ceremony that must count once also
+ * consumes its challenge on the server.
+ */
+export async function getChallengeFromCookie(purpose: ChallengePurpose): Promise<string | null> {
   const cookieStore = await cookies();
   const cookie = cookieStore.get(CHALLENGE_COOKIE_NAME);
   if (!cookie?.value) return null;
 
-  // Delete after reading (one-time use)
+  // Delete after reading (one-time use, as far as the browser is concerned)
   cookieStore.delete(CHALLENGE_COOKIE_NAME);
 
-  return verifyChallengeCookie(cookie.value);
+  return verifyChallengeCookie(cookie.value, purpose);
 }
 
 // --- Registration ---
@@ -142,7 +174,7 @@ export async function generateRegistrationChallenge(
     },
   });
 
-  await setChallengeInCookie(options.challenge);
+  await setChallengeInCookie(options.challenge, "register");
 
   return { options, challenge: options.challenge };
 }
@@ -168,8 +200,14 @@ interface AllowCredential {
   transports?: string[];
 }
 
+/**
+ * Options for an assertion. `purpose` is signed into the challenge cookie: a
+ * sign-in challenge is accepted only by /authenticate/verify, a step-up one
+ * only by /step-up/verify.
+ */
 export async function generateAuthenticationChallenge(
-  allowCredentials?: AllowCredential[],
+  allowCredentials: AllowCredential[] | undefined,
+  purpose: "signin" | "stepup",
 ): Promise<{
   options: PublicKeyCredentialRequestOptionsJSON;
   challenge: string;
@@ -188,7 +226,7 @@ export async function generateAuthenticationChallenge(
 
   const options = await generateAuthenticationOptions(opts);
 
-  await setChallengeInCookie(options.challenge);
+  await setChallengeInCookie(options.challenge, purpose);
 
   return { options, challenge: options.challenge };
 }

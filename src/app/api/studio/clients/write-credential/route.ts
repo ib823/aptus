@@ -32,6 +32,8 @@
  *      today and something the moment a grant lands — minted before the
  *      second person agreed, which inverts the approval order the whole
  *      ledger exists to enforce.
+ *   7. a fresh passkey assertion on this session, once COREEDGE_STEP_UP is
+ *      enforce (lib/auth/step-up.ts)
  *
  * `writeEnabled` on the connection is deliberately NOT checked here: it is a
  * per-tenant runtime veto the broker enforces on every call, and asserting it
@@ -45,6 +47,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { generateWriteCredential, setWriteCredential } from "@/lib/northbound/write-credential";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -189,6 +192,14 @@ export async function POST(request: NextRequest) {
         "environment — request one in the API Access ledger first.",
     );
   }
+
+  // 7. A fresh passkey — asked last, when it is the one thing left between
+  //    this person and the key (lib/auth/step-up.ts).
+  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    action: "write_key.issue",
+    targetId: client.id,
+  });
+  if (!stepUp.ok) return stepUp.response;
 
   const rawKey = generateWriteCredential();
   const sealed = await setWriteCredential(scope, client.id, rawKey);

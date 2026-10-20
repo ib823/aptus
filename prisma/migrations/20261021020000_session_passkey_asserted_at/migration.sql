@@ -1,0 +1,12 @@
+-- Session: record when the session last asserted a passkey.
+--
+-- Governance actions (deciding a grant, issuing, rotating or revoking a runtime
+-- credential or write key, sending a claim link, saving a connection's secrets
+-- or enabling its writes) need a FRESH passkey assertion once COREEDGE_STEP_UP
+-- is enforce. mfaVerifiedAt records when a session first became MFA-verified;
+-- this records the most recent assertion, and each one overwrites it.
+--
+-- Additive and nullable. Existing sessions read null = no assertion yet, which
+-- under the default COREEDGE_STEP_UP=warn allows the action and records a
+-- step-up-missing audit row, so the code already deployed is unaffected.
+ALTER TABLE "Session" ADD COLUMN     "passkeyAssertedAt" TIMESTAMP(3);

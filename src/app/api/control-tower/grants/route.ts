@@ -24,6 +24,12 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import {
+  checkStepUp,
+  recordStepUpMissing,
+  STEP_UP_MAX_AGE_SECONDS,
+  type StepUpMissing,
+} from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
 import { opsLimit, opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -298,6 +304,8 @@ export async function PATCH(request: NextRequest) {
    * (lib/studio/owner-lock.ts), so whichever lands first, the other reads what
    * it wrote and is refused.
    */
+  // A warn-mode admission, recorded once the transaction has ended (below).
+  let stepUpMissing = null as StepUpMissing | null;
   const decided = await prisma.$transaction(async (tx) => {
     await lockSolutionOwnership(tx, located);
 
@@ -350,6 +358,18 @@ export async function PATCH(request: NextRequest) {
       return { refusal: studioError(code, verdict.message) };
     }
 
+    // The passkey last, once every rule has passed (lib/auth/step-up.ts). The
+    // row's own tenant, because a global admin has none of their own. Checked
+    // here, recorded after the transaction: the record needs a pooled
+    // connection, and this transaction holds one and the lock.
+    const stepUp = checkStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      action: "grant.decide",
+      targetId: grant.id,
+      organizationId: grant.organizationId,
+    });
+    if (!stepUp.ok) return { refusal: stepUp.response };
+    if (stepUp.outcome === "warned") stepUpMissing = stepUp.missing;
+
     const decidedAt = new Date();
     const settled = await tx.apiAccessGrant.updateMany({
       // Tenant-anchored in the write itself, from the row's own organization —
@@ -377,6 +397,7 @@ export async function PATCH(request: NextRequest) {
     }
     return { grant, decidedAt };
   });
+  if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
   const { grant, decidedAt } = decided;
 

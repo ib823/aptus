@@ -1,18 +1,30 @@
-/** POST: Verify WebAuthn authentication response and create session */
+/**
+ * POST: Verify WebAuthn authentication response and create session.
+ *
+ * THE SESSION IT MINTS COUNTS AS STEPPED UP (`markSessionPasskeyAsserted`), so
+ * this route must not accept anything a step-up would refuse. The challenge
+ * must have been issued for a SIGN-IN (the purpose is signed into the cookie):
+ * a captured step-up replayed here finds no sign-in challenge. And it counts
+ * once (`consumeSignInChallenge`): the cookie is stateless, so without the
+ * server-side record a captured sign-in would mint a fresh session for the
+ * person, assertion and all, until the cookie expired.
+ */
 
 import { NextResponse, type NextRequest } from "next/server";
 import {
   verifyAuthenticationResponse,
   getChallengeFromCookie,
+  CHALLENGE_TTL_SECONDS,
 } from "@/lib/auth/webauthn";
 import {
+  consumeSignInChallenge,
   getCredentialByCredentialId,
   updateCredentialCounter,
   getUserByCredentialId,
 } from "@/lib/auth/webauthn-db";
 import {
   createSession,
-  markSessionMfaVerified,
+  markSessionPasskeyAsserted,
   SESSION_COOKIE_NAME,
   getSessionCookieOptions,
 } from "@/lib/auth/session";
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const expectedChallenge = await getChallengeFromCookie();
+  const expectedChallenge = await getChallengeFromCookie("signin");
   if (!expectedChallenge) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Challenge expired or missing" } },
@@ -99,6 +111,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // A genuine assertion, so spend the challenge: a second use of it is a
+    // replay, refused before anything is minted.
+    if (!(await consumeSignInChallenge(expectedChallenge, CHALLENGE_TTL_SECONDS))) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Challenge expired or missing" } },
+        { status: 400 },
+      );
+    }
+
     // Update credential counter
     await updateCredentialCounter(
       credential.credentialId,
@@ -118,8 +139,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       notifySessionDisplaced({ userId: user.id, newIpAddress: ipAddress, newUserAgent: userAgent });
     }
 
-    // Passkey satisfies MFA — mark session as verified immediately
-    await markSessionMfaVerified(token);
+    // Passkey satisfies MFA, and this sign-in IS an assertion: the session is
+    // verified and counts as stepped up for the next few minutes.
+    await markSessionPasskeyAsserted(token);
 
     // Set session cookie and return success
     const response = NextResponse.json({

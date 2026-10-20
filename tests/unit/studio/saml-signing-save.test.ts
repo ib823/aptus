@@ -33,7 +33,7 @@ vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit 
 
 import { POST } from "@/app/api/studio/connections/route";
 
-const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com" };
+const CONSULTANT = { id: "u_1", role: "consultant", organizationId: "org_a", email: "c@abeam.com", authMethod: "session" };
 const KEY_PEM = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({
   type: "pkcs8",
   format: "pem",

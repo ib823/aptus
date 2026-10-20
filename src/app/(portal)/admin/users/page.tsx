@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { AdminUsersClient } from "@/components/admin/AdminUsersClient";
+import { GovernanceStepUp } from "@/components/auth/GovernanceStepUp";
 
 export const metadata: Metadata = { title: "Users" };
 
@@ -55,6 +56,10 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       <p className="text-base text-muted-foreground mb-8">
         All registered users ({totalCount})
       </p>
+
+      {/* Creating an approver, changing a role and resetting passkeys may ask
+          for a fresh passkey (lib/auth/step-up.ts): the dialog that asks. */}
+      <GovernanceStepUp user={user} />
 
       <AdminUsersClient
         initialUsers={serializedUsers}

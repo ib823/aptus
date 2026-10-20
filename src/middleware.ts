@@ -249,7 +249,12 @@ async function handleRequest(
 
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
-      const isAuthMutation = pathname.startsWith("/api/auth");
+      // The governance step-up is not a sign-in: its caller already holds a
+      // session, and its routes limit each person themselves. In the shared
+      // per-IP sign-in bucket, approvers behind one office address would
+      // spend each other's allowance; they fall through to the mutation one.
+      const isStepUp = pathname.startsWith("/api/auth/webauthn/step-up/");
+      const isAuthMutation = pathname.startsWith("/api/auth") && !isStepUp;
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
       // Expensive live-SAP routes get their own tight bucket so they can't
       // amplify load onto the SAP tenant. The universal "show the data" surface

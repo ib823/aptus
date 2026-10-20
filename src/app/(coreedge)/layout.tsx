@@ -29,6 +29,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { GovernanceStepUp } from "@/components/auth/GovernanceStepUp";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -44,5 +45,12 @@ export default async function CoreEdgeLayout({ children }: { children: ReactNode
   if (!user) redirect("/presales/login");
 
   // No role check. See the header: role changes the actions, never the route.
-  return <div className="coreedge min-h-screen">{children}</div>;
+  // The step-up banner and passkey dialog are the one exception to "every
+  // person sees the same page": the banner speaks only to people who can act.
+  return (
+    <div className="coreedge min-h-screen">
+      <GovernanceStepUp user={user} />
+      {children}
+    </div>
+  );
 }

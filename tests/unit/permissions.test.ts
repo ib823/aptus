@@ -13,6 +13,7 @@ function makeUser(overrides: Partial<SessionUser> = {}): SessionUser {
     mfaEnabled: true,
     mfaVerified: true,
     hasWebAuthn: false,
+    authMethod: "session",
     ...overrides,
   };
 }
