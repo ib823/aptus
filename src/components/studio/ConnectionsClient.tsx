@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
+import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -107,11 +108,18 @@ function healthLabel(status: HonestStatus): string | undefined {
 export function ConnectionsClient({
   connections,
   canManage,
+  basicAuthNotices = {},
 }: {
   connections: readonly StudioConnection[];
   /** Builder rights: test, add, replace, activate. Was named canTest when
    *  testing was the only thing this screen could do. */
   canManage: boolean;
+  /**
+   * Product key → the dated notice shown before a NEW Basic-auth connection to
+   * it is saved (SuccessFactors). Computed on the server, which has the clock
+   * and SF_BASIC_AUTH_DELETION_DATE; absent products get no notice.
+   */
+  basicAuthNotices?: Readonly<Record<string, string>>;
 }) {
   const router = useRouter();
   const [outcomes, setOutcomes] = useState<Record<string, TestOutcome | { error: string }>>({});
@@ -167,7 +175,7 @@ export function ConnectionsClient({
           nothing anywhere in Studio will claim a capability is activated.
         </p>
         {canManage ? (
-          <ConnectionForm />
+          <ConnectionForm connections={connections} basicAuthNotices={basicAuthNotices} />
         ) : (
           <p style={{ ...body, marginTop: 12 }}>
             Your role can view connections; adding one is a builder action.
@@ -186,7 +194,7 @@ export function ConnectionsClient({
           </button>
           {adding && (
             <section style={{ ...card, marginTop: 12 }}>
-              <ConnectionForm />
+              <ConnectionForm connections={connections} basicAuthNotices={basicAuthNotices} />
             </section>
           )}
         </div>
@@ -340,7 +348,13 @@ export function ConnectionsClient({
  * Nothing here ever displays an existing secret, because nothing can: the read
  * path does not select the sealed column, so there is no value to prefill.
  */
-function ConnectionForm() {
+function ConnectionForm({
+  connections,
+  basicAuthNotices,
+}: {
+  connections: readonly StudioConnection[];
+  basicAuthNotices: Readonly<Record<string, string>>;
+}) {
   const [product, setProduct] = useState("s4hana");
   const [client, setClient] = useState("");
   const [key, setKey] = useState("");
@@ -386,6 +400,21 @@ function ConnectionForm() {
   const envOutsideGrantVocabulary =
     environment.trim().length > 0 &&
     !GRANT_ENVIRONMENTS.includes(environment.trim().toUpperCase());
+
+  /*
+   * SAP RETIRES BASIC FOR SUCCESSFACTORS — said BEFORE Save, on new rows only.
+   *
+   * A warning, not a disabled button: Basic still authenticates until SAP's
+   * (tentative) deletion date, and the server saves it too. A key that matches
+   * an existing connection of this product is a re-save — credential rotation
+   * on a connection already running — so it gets no notice. The key is
+   * normalized exactly as the server stores it, or "SF-Prod" would read as new
+   * against a stored "sf-prod".
+   */
+  const normalizedKey = sanitizeTenantKey(key);
+  const isNewConnection = !connections.some((c) => c.product === product && c.key === normalizedKey);
+  const basicAuthNotice =
+    authType === "basic" && isNewConnection ? (basicAuthNotices[product] ?? null) : null;
 
   // Mirrors the server's superRefine. Reported as you type so the disabled
   // button is never a mystery.
@@ -695,6 +724,15 @@ function ConnectionForm() {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" style={input} />
           </Label>
         </div>
+      )}
+      {basicAuthNotice && (
+        <p
+          role="status"
+          data-testid="sf-basic-auth-notice"
+          style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}
+        >
+          {basicAuthNotice}
+        </p>
       )}
       {authType === "bearer" && (
         <Label text="Bearer token">
