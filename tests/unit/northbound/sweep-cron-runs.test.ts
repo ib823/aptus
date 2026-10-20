@@ -26,7 +26,12 @@ vi.mock("@/lib/northbound/retention", async (importOriginal) => {
   return { ...real, enforceNorthboundAuditRetention: mocks.enforce };
 });
 vi.mock("@/lib/northbound/reap", () => ({ reapExpiredIdempotencyKeys: mocks.reap }));
-vi.mock("@/lib/ops/cron", () => ({ authorizeCron: () => true, recordCronRun: mocks.record }));
+vi.mock("@/lib/ops/cron", () => ({
+  authorizeCron: () => true,
+  recordCronRun: mocks.record,
+  // The lease is granted here; tests/integration/cron-job-leases.test.ts holds it.
+  runWithCronLease: (_job: string, run: () => Promise<unknown>) => run(),
+}));
 
 const req = (path: string) => new NextRequest(`https://x.test${path}`);
 

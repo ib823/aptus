@@ -100,6 +100,11 @@ const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string
       why: "Appends one row per scheduled-job run. The log is deployment-wide by design.",
     },
     {
+      file: "src/lib/ops/job-lease.ts",
+      models: ["jobLease"],
+      why: "One lease row per scheduled job (P0.18). A job serves every tenant in one run, so its lease has no organization.",
+    },
+    {
       file: "src/app/api/ops/jobs/route.ts",
       models: ["cronRunLog"],
       why: "Reads the job log for the Operations jobs strip. Summaries are aggregate counts and never name a tenant.",

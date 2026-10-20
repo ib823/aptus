@@ -86,6 +86,63 @@ async function alertDrift(
   }
 }
 
+/** How many times a status write retries against a status that moved under it. */
+const SWAP_ATTEMPTS = 3;
+
+/**
+ * Record a probe's status and return the status it REPLACED, which is the one
+ * the drift transition must be judged against.
+ *
+ * THE SWEEP'S OWN SNAPSHOT IS NOT THAT STATUS. `lastValidationStatus` is read
+ * when the sweep starts, possibly minutes before this write. Two sweeps that
+ * overlap (a duplicate delivery, or a run that outlived its job lease) both
+ * read OK, both probe ERROR, and both alerted: two emails for one break, the
+ * duplicate the transition rule exists to prevent. So the write is a compare-
+ * and-set on the status this sweep believes it replaces. It lands only if that
+ * is still the stored status; a write that misses re-reads the status and
+ * tries again against what it finds. Exactly one writer replaces OK with
+ * ERROR, and any other sees ERROR → ERROR, which is not a transition.
+ *
+ * A manual "Probe now" is a writer too, under the same rule: the transition is
+ * from the last RECORDED status, whoever recorded it.
+ */
+async function swapProbeStatus(
+  id: string,
+  organizationId: string,
+  believed: string | null,
+  next: ConnectionHealthStatus,
+): Promise<string | null> {
+  // lastValidatedAt moves ONLY on a real 200 — same rule as the Studio test
+  // route. A failing probe must not touch the one record of when the
+  // connection last actually worked.
+  const data = {
+    lastValidationStatus: next,
+    ...(next === "OK" ? { lastValidatedAt: new Date() } : {}),
+  };
+
+  let expected = believed;
+  for (let attempt = 0; attempt < SWAP_ATTEMPTS; attempt++) {
+    const swapped = await prisma.sapConnection.updateMany({
+      where: { id, organizationId, lastValidationStatus: expected },
+      data,
+    });
+    if (swapped.count === 1) return expected;
+    const current = await prisma.sapConnection.findFirst({
+      where: { id, organizationId },
+      select: { lastValidationStatus: true },
+    });
+    // Gone since the scan: the plain update below fails on it, as it always has.
+    if (!current) break;
+    expected = current.lastValidationStatus;
+  }
+
+  // Still moving after every attempt. Record the observation anyway and claim
+  // no transition: an alert this sweep cannot attribute risks being the
+  // duplicate, and the next sweep judges against whatever is stored by then.
+  await prisma.sapConnection.update({ where: { id, organizationId }, data });
+  return next;
+}
+
 export async function sweepConnectionProbes(): Promise<SweepResult> {
   // The sweep serves every tenant in one run — the fleet query below is
   // cross-tenant BY DESIGN, declared so the attached tenant-scope guard
@@ -146,16 +203,7 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
         result.probed++;
         result.byStatus[probe.status] = (result.byStatus[probe.status] ?? 0) + 1;
 
-        await prisma.sapConnection.update({
-          where: { id: row.id, organizationId },
-          // lastValidatedAt moves ONLY on a real 200 — same rule as the Studio
-          // test route. A failing probe must not touch the one record of when
-          // the connection last actually worked.
-          data: {
-            lastValidationStatus: probe.status,
-            ...(probe.status === "OK" ? { lastValidatedAt: new Date() } : {}),
-          },
-        });
+        const previous = await swapProbeStatus(row.id, organizationId, row.lastValidationStatus, probe.status);
         await prisma.sapConnectionProbeEvent.create({
           data: {
             organizationId,
@@ -167,7 +215,6 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
           },
         });
 
-        const previous = row.lastValidationStatus;
         if (isDriftTransition(previous, probe.status)) {
           result.transitions.push({ connectionId: row.id, from: previous, to: probe.status });
           const sent = await alertDrift(

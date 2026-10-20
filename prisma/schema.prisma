@@ -1024,8 +1024,35 @@ model CronRunLog {
   ok          Boolean
   /// Job-shaped summary: counts, caps hit, error strings. Never secrets.
   summaryJson Json?
+  /// True for an invocation that found the job's lease held and did no work.
+  /// Recorded so a duplicate invocation is visible, and excluded wherever a
+  /// screen asks "what did the last run find": a skip found nothing.
+  skipped     Boolean @default(false)
 
   @@index([job, startedAt])
+}
+
+/// Who is running a scheduled job right now, and until when (P0.18).
+///
+/// Vercel can deliver one scheduled run more than once, and a slow run can
+/// still be going when another invocation arrives. One row per job, claimed by
+/// one conditional INSERT … ON CONFLICT DO UPDATE (src/lib/ops/job-lease.ts)
+/// and deleted by its holder at the end. A row whose expiresAt has passed
+/// belongs to a run that died without releasing it, and the next claim takes
+/// it over. Not a session advisory lock: production may sit behind a
+/// transaction-mode pooler, where a session lock stays with the pooled
+/// connection, not with the run that took it.
+model JobLease {
+  /// The CronRunLog job name the lease guards, e.g. "lane-checks".
+  job        String   @id
+  /// Opaque per-invocation token. Release compares against it, so a run whose
+  /// lease was taken over cannot release its successor's.
+  holder     String
+  acquiredAt DateTime
+  /// Later than the job's maxDuration lets it run: a live run never loses its
+  /// lease, and a dead one frees the job within minutes, long before the next
+  /// schedule.
+  expiresAt  DateTime
 }
 
 /// Scope request + decision — the governance ledger, ENFORCED AT RUNTIME: the

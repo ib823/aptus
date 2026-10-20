@@ -21,7 +21,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { authorizeCron, recordCronRun } from "@/lib/ops/cron";
+import { authorizeCron, recordCronRun, runWithCronLease } from "@/lib/ops/cron";
 import { sweepLaneChecks } from "@/lib/ops/lane-check-sweep";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // One run at a time: a duplicate delivery records a skip and does nothing.
+  return runWithCronLease("lane-checks", checkLanes);
+}
 
+async function checkLanes(): Promise<NextResponse> {
   const startedAt = new Date();
   try {
     const result = await sweepLaneChecks();

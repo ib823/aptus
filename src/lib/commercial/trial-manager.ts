@@ -24,27 +24,28 @@ export async function createTrial(organizationId: string): Promise<Date> {
   return trialEndsAt;
 }
 
-export async function checkAndExpireTrials(): Promise<number> {
-  const now = new Date();
-
-  const expiredOrgs = await prisma.organization.findMany({
+/**
+ * Expire every trial whose end has passed. Returns how many THIS call expired.
+ *
+ * ONE CONDITIONAL UPDATE, NOT A SCAN AND THEN AN UPDATE BY ID. The scan-then-
+ * update form had two defects that a second, overlapping run exposed (P0.18):
+ * both runs scanned the same organizations and each reported all of them as
+ * expired, so the jobs strip counted every expiry twice; and the update
+ * matched by id alone, so an organization activated between the scan and the
+ * update was written back to TRIAL_EXPIRED over its new paid status. The
+ * predicate now lives in the UPDATE itself: Postgres re-checks it on each row
+ * it locks, so a row is expired once, by one run, only while it is still a
+ * lapsed trial, and the count is the rows this call actually changed.
+ */
+export async function checkAndExpireTrials(now: Date = new Date()): Promise<number> {
+  const expired = await prisma.organization.updateMany({
     where: {
       subscriptionStatus: "TRIALING",
       trialEndsAt: { lte: now },
     },
-    select: { id: true },
-  });
-
-  if (expiredOrgs.length === 0) return 0;
-
-  const ids = expiredOrgs.map((o) => o.id);
-
-  await prisma.organization.updateMany({
-    where: { id: { in: ids } },
     data: { subscriptionStatus: "TRIAL_EXPIRED" },
   });
-
-  return expiredOrgs.length;
+  return expired.count;
 }
 
 export async function getTrialStatus(organizationId: string): Promise<{

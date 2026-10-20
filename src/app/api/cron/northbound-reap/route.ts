@@ -3,7 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { reapExpiredIdempotencyKeys } from "@/lib/northbound/reap";
-import { authorizeCron, recordCronRun } from "@/lib/ops/cron";
+import { authorizeCron, recordCronRun, runWithCronLease } from "@/lib/ops/cron";
 
 export const dynamic = "force-dynamic";
 // The reaper repeats batches for up to REAP_TIME_BUDGET_MS (240 s); without
@@ -18,7 +18,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // One run at a time: a duplicate delivery records a skip and does nothing.
+  return runWithCronLease("northbound-reap", reap);
+}
 
+async function reap(): Promise<NextResponse> {
   const startedAt = new Date();
   const result = await reapExpiredIdempotencyKeys();
   // A run that spent its budget with expired keys still queued fell behind,
