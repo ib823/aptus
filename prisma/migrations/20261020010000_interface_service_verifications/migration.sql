@@ -1,0 +1,12 @@
+-- Interface: record service verification PER ENVIRONMENT.
+--
+-- A single "verified at" let one successful $metadata check in SANDBOX or DEV
+-- unlock writes through a custom service in every environment, PROD included,
+-- against a system nobody had asked. The write route now requires a
+-- verification for the caller's own environment, made through the same
+-- connection and SAP client the write is bound to. Each entry is
+-- { at, connectionId, sapClient, baseUrl }, keyed by environment.
+--
+-- Additive; existing rows read null = verified nowhere, so a custom write
+-- interface verified before this change is verified again before it writes.
+ALTER TABLE "Interface" ADD COLUMN     "serviceVerifications" JSONB;

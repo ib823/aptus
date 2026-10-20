@@ -947,9 +947,19 @@ function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
 
 // Shared with the connection-aware northbound CSRF handshake.
 
-function parseEntitySets(metadataXml: string): SapEntitySet[] {
+/**
+ * An `<EntitySet …>` start tag. LINEAR ON HOSTILE INPUT: the attribute run
+ * excludes `<` as well as `>` and is bounded, so a body of `<EntitySet
+ * <EntitySet …` with no `>` costs one short scan per tag instead of a scan to
+ * the end of the document from every one (quadratic — an 8 MB description
+ * held the event loop for hours). `<` cannot appear inside an XML attribute
+ * value, so no real tag is lost.
+ */
+export const ENTITY_SET_TAG = /<EntitySet\b([^<>]{0,4096})>/g;
+
+export function parseEntitySets(metadataXml: string): SapEntitySet[] {
   const entitySets: SapEntitySet[] = [];
-  const re = /<EntitySet\b([^>]*)>/g;
+  const re = new RegExp(ENTITY_SET_TAG.source, "g");
   let match: RegExpExecArray | null;
   while ((match = re.exec(metadataXml)) !== null) {
     const attrs = match[1] ?? "";
@@ -997,7 +1007,7 @@ function readV4Restriction(xml: string, entitySet: string, term: string, propert
 export function parseEntityCapabilities(metadataXml: string): EntityCapability[] {
   const flavor = detectMetadataFlavor(metadataXml);
   const caps: EntityCapability[] = [];
-  const re = /<EntitySet\b([^>]*)>/g;
+  const re = new RegExp(ENTITY_SET_TAG.source, "g");
   let match: RegExpExecArray | null;
   while ((match = re.exec(metadataXml)) !== null) {
     const attrs = match[1] ?? "";

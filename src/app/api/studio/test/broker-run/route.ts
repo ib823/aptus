@@ -35,7 +35,7 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -93,7 +93,16 @@ export async function POST(request: NextRequest) {
 
   const iface = await prisma.interface.findFirst({
     where: scopedById(scope, input.interfaceId),
-    select: { id: true, name: true, solutionId: true, externalId: true, sapProduct: true, entitySet: true },
+    select: {
+      id: true,
+      name: true,
+      solutionId: true,
+      externalId: true,
+      sapProduct: true,
+      entitySet: true,
+      servicePath: true,
+      odataVersion: true,
+    },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
@@ -250,7 +259,10 @@ export async function POST(request: NextRequest) {
   }
   const connection = binding.connection;
 
-  const service = await resolveHubService(product!, iface.externalId);
+  // The same resolution the broker makes: the interface's own service, or the
+  // catalogue's — never a fallback from one to the other.
+  const resolved = await resolveInterfaceService(product!, iface);
+  const service = resolved?.service ?? null;
   const entitySet = iface.entitySet;
   if (input.entity !== undefined && input.entity !== entitySet) {
     await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
@@ -270,7 +282,9 @@ export async function POST(request: NextRequest) {
         ? access.iface.draft
           ? "This feed is still a draft and names no dataset yet. Set its entity set in Studio — the deployed application reads that value and nothing else."
           : "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
-        : "The catalogue service for this interface could not be resolved.",
+        : iface.servicePath
+          ? "This interface's own service path is not valid for its product. Fix it in Studio."
+          : "The catalogue service for this interface could not be resolved.",
     );
   }
 

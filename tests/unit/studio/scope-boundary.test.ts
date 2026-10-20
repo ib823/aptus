@@ -68,12 +68,20 @@ describe("the guide is straight about what is NOT built", () => {
     expect(GUIDE).toContain("No updates to existing records.");
   });
 
-  it("does not promise that a developer's own ABAP service is reachable", () => {
-    // It said the service "appears in the capability catalogue like any other
-    // service". The resolver reads the curated list and SAP's Hub catalogue
-    // only, so a Z*/YY1_* service is refused at call time.
+  it("says how a developer's own ABAP service is reached — by its path, verified — not that it just appears", () => {
+    // It once said the service "appears in the capability catalogue like any
+    // other service", which was never true: the catalogue lists what SAP
+    // publishes. A Z*/YY1_* service is reached by registering its service path,
+    // and a write through it needs a current verification — for the
+    // environment it writes in (review round 1). The guide must say both, or a
+    // developer builds toward a 400.
     expect(GUIDE).not.toContain("appears in the capability catalogue like any other service");
-    expect(GUIDE).toContain("**That is not yet true for services you build yourself.**");
+    expect(GUIDE).not.toContain("**That is not yet true for services you build yourself.**");
+    expect(GUIDE).toContain("### Your own services (Z\\*, YY1\\_\\*, ECC Gateway)");
+    expect(GUIDE).toContain("Register your own API");
+    expect(GUIDE).toContain("custom:<path>");
+    expect(GUIDE).toContain("**Writes need a current verification in the caller's environment.**");
+    expect(GUIDE).toContain("Verifying DEV does not open PROD");
   });
 
   it("documents the write path's gates rather than leaving them to be discovered", () => {

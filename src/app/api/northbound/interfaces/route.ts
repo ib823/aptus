@@ -15,6 +15,8 @@ import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/l
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { newCorrelationId, northboundError, northboundOk, unauthenticated } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
+import { customServiceDefinition } from "@/lib/sap-public/interface-service";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
@@ -71,6 +73,8 @@ export async function GET(request: NextRequest) {
         mode: true,
         version: true,
         status: true,
+        servicePath: true,
+        odataVersion: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -158,10 +162,25 @@ export async function GET(request: NextRequest) {
         // DEPRECATED is refused by the read path (INTERFACE_DEPRECATED), so it
         // must not be advertised — same agreement rule as the grant predicates.
         // DRAFT stays callable; the data route flags it in a header.
+        //
+        // A custom service whose stored path no longer resolves is refused by
+        // the data route (400), so it is not advertised either. Pure, like the
+        // rest of this predicate: discovery adds no lookup per interface.
         callable:
           i.mode !== "WRITE" &&
           i.status !== "DEPRECATED" &&
-          liveGrants.has(`${i.externalId}::${i.operation}`),
+          liveGrants.has(`${i.externalId}::${i.operation}`) &&
+          (i.servicePath == null ||
+            customServiceDefinition(getSapProduct(i.sapProduct) ?? { key: "" }, i) !== null),
+        // Which kind of service this is, and its version when the interface
+        // declares one. Never the path or the host: the broker does not hand
+        // out upstream addressing. (A custom interface's externalId is its
+        // derived grant identity, `custom:<path>` — the path the developer
+        // registered, never the connection's host.)
+        service: {
+          source: i.servicePath ? ("custom" as const) : ("catalogue" as const),
+          odataVersion: i.odataVersion ?? null,
+        },
       })),
     },
     correlationId,

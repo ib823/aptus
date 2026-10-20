@@ -40,7 +40,7 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 
 export const dynamic = "force-dynamic";
@@ -162,7 +162,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
   // `product!` is sound: a null product forces the binding to fail above, so we
   // cannot reach here without one. Same idiom as the write route.
-  const service = await resolveHubService(product!, iface.externalId);
+  // The interface's OWN service when it carries one, the catalogue's otherwise —
+  // never a fallback from one to the other (see interface-service.ts).
+  const resolved = await resolveInterfaceService(product!, iface);
+  const service = resolved?.service ?? null;
   /*
    * THE GOVERNED ENTITY SET IS THE ONLY SOURCE (audit E16).
    *
@@ -202,7 +205,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         ? iface.draft
           ? "This data feed is still a draft and names no dataset yet. Set its entity set in Studio and publish it — the dataset is part of the feed's definition, not something a caller may choose."
           : "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose."
-        : "The catalogue service for this interface could not be resolved.",
+        : iface.servicePath
+          ? "This interface's own service path is not valid for its product. Fix it in Studio."
+          : "The catalogue service for this interface could not be resolved.",
       400,
       correlationId,
     );

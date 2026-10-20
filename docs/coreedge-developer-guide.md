@@ -87,18 +87,110 @@ The intended far side of that work is that the OData service your ABAP exposes
 an **Interface** against it, request access, and your consuming application calls
 it through the northbound API.
 
-**That is not yet true for services you build yourself.** The broker resolves an
-interface's service from two sources only: the curated list, and SAP's published
-Business Accelerator Hub catalogue. A customer service — a `Z*` RAP service, a
-key-user `YY1_*_CDS` view — is in neither, so an interface defined against one is
-refused at call time with *"The catalogue service could not be resolved"*, and the
-nightly lane check skips it for the same reason. Reaching your own services is
-planned work, not a configuration step you have missed.
+### Your own services (Z\*, YY1\_\*, ECC Gateway)
+
+A service you build yourself — a `Z*` RAP service, a key-user `YY1_*_CDS` view or
+custom business object, an ECC NetWeaver Gateway service, SuccessFactors'
+`/odata/v2` with your `cust_*` MDF objects — is in neither the curated list nor
+SAP's catalogue. You register it **by its service path** instead:
+
+1. **Register the interface with its path and OData version.** Studio →
+   Interfaces → **Register your own API** (or Discover → *Not in the catalogue?*),
+   or the API:
+
+   ```http
+   POST /api/studio/interfaces
+   { "solutionId": "…", "sapProduct": "s4hana-onprem", "name": "Travel read",
+     "servicePath": "/sap/opu/odata/sap/ZUI_TRAVEL_O2", "odataVersion": "V2",
+     "operation": "READ", "entitySet": "Travel" }
+   ```
+
+   The path is the part of the service URL after the host, starting with `/` —
+   copy it from the service binding in ADT (*Service URL*) or from
+   `/IWFND/MAINT_SERVICE`, without `$metadata` and without `?sap-client`
+   (CoreEdge adds the client from the connection). It is a path on the
+   connection's own host and nothing else: a full URL, `//host`, `..` (also
+   `..;`), `?`, `#`, backslashes, whitespace and percent-escapes that hide any of
+   those are refused (`src/lib/sap-public/service-path.ts`); any other escape is
+   decoded and the path stored as plain text, so one service has one id. So is SAP routing
+   that would pick another system or client than the connection's: Gateway
+   matrix parameters such as `;o=<system alias>`, `;mo` or `;c=`, and an ICF
+   session segment such as `/sap(bD1lbiZjPTIwMA==)/`. The only matrix parameter
+   kept is a version suffix on the last segment, `;v=0002` (the short form
+   `;v=2` is accepted and stored as `;v=0002`). And it must be an
+   OData service: under `/sap/opu/odata/` or `/sap/opu/odata4/` on an ERP or
+   S/4HANA system, or `/odata/v2` (exactly) or under `/odatav4/` on
+   SuccessFactors. Any other ICF path — `/sap/bc/…`, `/sap/public/…`, a
+   customer REST handler — is refused, because reads are not checked against
+   `$metadata` and the connection's credentials travel with every call. An ICF
+   alias for an OData service is not accepted; use the service's
+   `/sap/opu/odata…` path. Ariba is REST, not OData, and has no path.
+2. **Verify it in every environment you will write to.** On the interface,
+   **Verify** asks the SAP system for the service's `$metadata` through your
+   organization's connection for the environment you pick — the same binding a
+   call from that environment uses, SAP client included — and lists its datasets.
+   It reads no business data (`POST /api/studio/interfaces/<id>/verify-service`
+   with `{ "environment": "DEV", "sapClient": "100" }`; it never saves a
+   dataset). Save the dataset with **Use this dataset**, or
+   `PATCH /api/studio/interfaces` with `{ "id": "<id>", "entitySet": "<name>" }`,
+   then verify again: a dataset change clears verification. A successful verify is
+   recorded for that environment and SAP client only, with the connection and
+   host that answered. One system serving two clients in the same environment
+   (two connections, client 100 and client 200) keeps two verifications: verify
+   each client you write to, and verifying one never removes the other.
+   Activation, and the Write chain row, count an environment as verified only
+   when the connection your credential for it binds to (its environment and
+   SAP client) is the one verified: verifying client 100 does not make PROD
+   ready for a credential bound to client 200. For SuccessFactors on
+   `/odata/v2`, once the interface names its dataset, Verify asks for that one
+   dataset's description (`/odata/v2/<EntitySet>/$metadata`) instead of the
+   whole tenant's, which is large and slow enough to time out. An OData V4
+   service under `/odatav4/` has no per-dataset description and is read whole.
+3. **Request access and issue keys as normal.** Grants, the two-person rule,
+   tokens, the write key, `Idempotency-Key`, rate limits and the audit trail apply
+   exactly as they do to catalogue services.
+
+What is different, and why:
+
+- **The interface's id is derived**: `custom:<path>`, for example
+  `custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2`. Grants name that id, so a grant a
+  second person approved for one path can never authorise another.
+- **Writes need a current verification in the caller's environment.** The broker
+  refuses a write through your own service unless that environment has been
+  verified since the interface last changed, through the same connection, SAP
+  client and host the write uses. Verifying DEV does not open PROD: verify each
+  environment you write to. A WRITE interface is activated only when one
+  environment holds all of it at once: a credential with a write key, an
+  approved write grant, **and** a verification of the service there. Verified in
+  SANDBOX with the write chain only in PROD is refused, and the Write chain row
+  says `service not verified here` for PROD. Reads are not gated.
+- **Editing a connection asks for a new verify.** If an administrator changes a
+  connection's host or SAP client after a verify (or deactivates it), writes in
+  that environment are refused, and Studio says *Verify again: the connection
+  for … has changed since it was verified* instead of listing it as open.
+- **Changing the path, the version or the dataset is a new contract**: the
+  version bumps, verification clears in every environment, and an active write
+  interface returns to draft (verify again, then activate). Only a **path**
+  change produces a new id, so only then do existing grants detach and a new one
+  is needed; after a version or dataset change the grants stay attached. In
+  Studio the path and the version are edited together under **Change path or
+  version**, and when Verify answers `VERSION_MISMATCH` it offers **Switch to
+  V2/V4 and verify again**. With the API:
+  `PATCH /api/studio/interfaces { "id": "…", "odataVersion": "V4" }`.
+- **Catalogue and custom do not convert.** To move an interface from a catalogue
+  service to your own (or back), register a new one.
+
+Evidence level: traced in code and covered by unit tests
+(`tests/unit/lib/sap-public/service-path.test.ts`,
+`tests/unit/northbound/custom-service-read.test.ts`,
+`tests/unit/northbound/custom-service-write.test.ts`,
+`tests/unit/studio/verify-service-route.test.ts`); not yet run against a live
+tenant.
 
 So the rule stands — **CoreEdge governs the OData your ABAP exposes; it does not
-build your ABAP** — with the caveat above on which OData it can reach today. If a
-service is not probeable (no OData endpoint — SOAP, async, RFC-only), it shows as
-*Not probeable* rather than being silently marked available.
+build your ABAP.** If a service is not probeable (no OData endpoint — SOAP, async,
+RFC-only), it shows as *Not probeable* rather than being silently marked
+available.
 
 ---
 

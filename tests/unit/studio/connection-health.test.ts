@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
+import { fetchMetadataDocument, probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 
 function conn(overrides: Partial<ResolvedSapConnection> = {}): ResolvedSapConnection {
@@ -540,5 +540,69 @@ describe("the connectivity probe is throttled like every other live-SAP route", 
       expect(isLiveSapTenantRoute("/api/studio/connections/c_123/test/extra")).toBe(false);
       expect(isLiveSapTenantRoute("/api/studio/interfaces")).toBe(false);
     });
+  });
+});
+
+/*
+ * fetchMetadataDocument — the probe's own request, shared with Studio's
+ * service verification. The probe reads 8 KB and stops; verification reads the
+ * whole description up to its own bound, and must know when it did not get it.
+ */
+describe("fetchMetadataDocument", () => {
+  const big = (bytes: number) =>
+    EDMX.replace("</edmx:DataServices>", `<!--${"x".repeat(bytes)}--></edmx:DataServices>`);
+
+  it("returns the whole document when it fits the bound", async () => {
+    const body = big(20_000);
+    const f = vi.fn(async () => new Response(body, { status: 200, headers: { "content-type": "application/xml" } }));
+    const r = await fetchMetadataDocument(conn(), "/sap/opu/odata/sap/ZUI_X_O2", f as unknown as typeof fetch, {
+      maxBytes: 64 * 1024,
+    });
+    expect(r.status).toBe("OK");
+    expect(r.truncated).toBe(false);
+    expect(r.body).toBe(body);
+    expect(r.failureReason).toBeNull();
+  });
+
+  it("says it was truncated when the document is larger than the bound", async () => {
+    const f = vi.fn(
+      async () => new Response(big(100_000), { status: 200, headers: { "content-type": "application/xml" } }),
+    );
+    const r = await fetchMetadataDocument(conn(), "/x", f as unknown as typeof fetch, { maxBytes: 16 * 1024 });
+    expect(r.status).toBe("OK");
+    expect(r.truncated).toBe(true);
+    expect(r.body!.length).toBeLessThanOrEqual(16 * 1024);
+  });
+
+  it("asks the given path on the connection's host, with the client after $metadata", async () => {
+    const f = okFetch(200);
+    await fetchMetadataDocument(conn({ client: "100" }), "/sap/opu/odata/sap/ZUI_X_O2", f);
+    expect((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe(
+      "https://my123456-api.s4hana.cloud.sap/sap/opu/odata/sap/ZUI_X_O2/$metadata?sap-client=100",
+    );
+  });
+
+  it("names a bounded failure reason for each failure", async () => {
+    const notFound = await fetchMetadataDocument(conn(), "/x", okFetch(404));
+    expect(notFound).toMatchObject({ status: "NOT_FOUND", body: null, failureReason: "HTTP_404" });
+
+    const html = vi.fn(
+      async () => new Response("<html>login</html>", { status: 200, headers: { "content-type": "text/html" } }),
+    );
+    const login = await fetchMetadataDocument(conn(), "/x", html as unknown as typeof fetch);
+    expect(login).toMatchObject({ status: "ERROR", body: null, failureReason: "INVALID_UPSTREAM_BODY" });
+
+    const aborted = vi.fn(async () => {
+      const e = new Error("aborted");
+      e.name = "AbortError";
+      throw e;
+    });
+    const timeout = await fetchMetadataDocument(conn(), "/x", aborted as unknown as typeof fetch);
+    expect(timeout).toMatchObject({ status: "TIMEOUT", body: null, failureReason: "TIMEOUT" });
+  });
+
+  it("leaves probeConnection's result shape exactly as it was", async () => {
+    const r = await probeConnection(conn(), okFetch(200));
+    expect(Object.keys(r).sort()).toEqual(["detail", "durationMs", "httpStatus", "status"]);
   });
 });

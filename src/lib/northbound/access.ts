@@ -47,6 +47,21 @@ export interface AccessibleInterface {
    * interface kept for the record must not quietly keep serving new traffic.
    */
   draft: boolean;
+  /**
+   * The interface's OWN service root, or null for a catalogue interface — see
+   * resolveInterfaceService. Mapped with `?? null` so a row read without these
+   * fields reads as catalogue, never as custom.
+   */
+  servicePath: string | null;
+  odataVersion: string | null;
+  /** Last successful live $metadata verification, in any environment (display and activation). */
+  serviceVerifiedAt: Date | null;
+  /**
+   * Successful verifications PER ENVIRONMENT (service-verifications.ts). The
+   * write route gates a custom service on the caller's environment's entry,
+   * for the binding the write uses — never on serviceVerifiedAt.
+   */
+  serviceVerifications: unknown;
 }
 
 export type AccessRefusal =
@@ -114,6 +129,10 @@ export async function resolveWritableInterface(
       version: true,
       solutionId: true,
       status: true,
+      servicePath: true,
+      odataVersion: true,
+      serviceVerifiedAt: true,
+      serviceVerifications: true,
     },
   });
 
@@ -222,6 +241,10 @@ export async function resolveWritableInterface(
       version: iface.version,
       // The write path only reaches here for ACTIVE interfaces.
       draft: false,
+      servicePath: iface.servicePath ?? null,
+      odataVersion: iface.odataVersion ?? null,
+      serviceVerifiedAt: iface.serviceVerifiedAt ?? null,
+      serviceVerifications: iface.serviceVerifications ?? null,
     },
   };
 }
@@ -247,6 +270,10 @@ export async function resolveReadableInterface(
       version: true,
       status: true,
       solutionId: true,
+      servicePath: true,
+      odataVersion: true,
+      serviceVerifiedAt: true,
+      serviceVerifications: true,
     },
   });
 
@@ -346,6 +373,10 @@ export async function resolveReadableInterface(
       mode: iface.mode,
       version: iface.version,
       draft: iface.status === "DRAFT",
+      servicePath: iface.servicePath ?? null,
+      odataVersion: iface.odataVersion ?? null,
+      serviceVerifiedAt: iface.serviceVerifiedAt ?? null,
+      serviceVerifications: iface.serviceVerifications ?? null,
     },
   };
 }

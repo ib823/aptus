@@ -46,7 +46,8 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
-import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
+import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
+import { isVerifiedForBinding } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
@@ -254,7 +255,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
-  const service = await resolveHubService(product!, iface.externalId);
+  // The interface's OWN service when it carries one, the catalogue's otherwise —
+  // never a fallback from one to the other (see interface-service.ts).
+  const resolved = await resolveInterfaceService(product!, iface);
+  const service = resolved?.service ?? null;
   // The governed value, and only it. A caller-supplied `entity` that disagrees is
   // refused rather than ignored (see bodySchema); one that agrees is a harmless
   // restatement and proceeds.
@@ -275,7 +279,39 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       "VALIDATION_ERROR",
       service
         ? "This data feed names no dataset, so there is nowhere to write. Set its entity set in Studio."
-        : "The catalogue service could not be resolved.",
+        : iface.servicePath
+          ? "This interface's own service path is not valid for its product. Fix it in Studio."
+          : "The catalogue service could not be resolved.",
+      400,
+      correlationId,
+    );
+  }
+
+  /*
+   * A CUSTOM SERVICE WRITES ONLY ONCE VERIFIED — HERE. A catalogue service is
+   * a contract SAP published; a path the customer typed is a claim until the
+   * system has been asked for its description and answered. The answer is
+   * about the system that gave it, so the gate is PER ENVIRONMENT and per
+   * binding: this credential's environment must hold a successful verify made
+   * through this very connection, SAP client and host (a DEV verify says
+   * nothing about PROD). Verification is cleared by every change to the path,
+   * version or dataset, so this also stops an edited feed writing somewhere
+   * nobody has looked. Refused here — before the idempotency key is reserved
+   * — so nothing reaches SAP and the key stays free for the retry after Verify.
+   */
+  if (
+    resolved!.source === "custom" &&
+    !isVerifiedForBinding(iface.serviceVerifications, {
+      environment: client.environment,
+      connectionId: connection.id,
+      sapClient: connection.client ?? null,
+      baseUrl: connection.baseUrl,
+    })
+  ) {
+    await audit(400, iface.id, iface.externalId, connection);
+    return northboundError(
+      "VALIDATION_ERROR",
+      `This data feed's own SAP service has not been verified in ${client.environment}, through the connection and SAP client this write uses, since it last changed. Verify it in Studio for ${client.environment} before writing.`,
       400,
       correlationId,
     );
