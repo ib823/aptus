@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const prisma: Record<string, unknown> = {
     interface: {
       findFirst: vi.fn(async () => (mocks.row ? { ...mocks.row } : null)),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -38,6 +38,8 @@ vi.mock("@/lib/db/prisma", () => ({
         mocks.row = next;
         return { ...next };
       }),
+      // P0.4: a contract change clears the schema and fixtures in the update's transaction.
+      updateMany: vi.fn(async () => ({ count: 0 })),
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
     },
@@ -50,8 +52,11 @@ vi.mock("@/lib/db/prisma", () => ({
         return { id: `a${mocks.audits.length}` };
       }),
     },
-  },
-}));
+    mockFixture: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+  };
+  prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
+  return { prisma };
+});
 
 import { PATCH } from "@/app/api/studio/interfaces/route";
 import { UPDATE_NOT_EXECUTABLE } from "@/lib/studio/write-readiness";

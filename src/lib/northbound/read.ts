@@ -27,14 +27,11 @@ import {
   failureReasonFromError,
   failureReasonFromHttp,
 } from "@/lib/northbound/failure-reason";
+import type { NorthboundReadStatus } from "@/lib/northbound/read-status";
 
-export type NorthboundReadStatus =
-  | "OK"
-  | "EMPTY"
-  | "NEEDS_SETUP"
-  | "NOT_FOUND"
-  | "TIMEOUT"
-  | "ERROR";
+// The status vocabulary and its HTTP/code tables live in a pure module, so the
+// fixture builder can share them without importing the connection resolver.
+export { httpStatusFor, northboundErrorCodeFor, type NorthboundReadStatus } from "@/lib/northbound/read-status";
 
 export interface NorthboundReadResult {
   status: NorthboundReadStatus;
@@ -233,24 +230,5 @@ export async function readEntitySet(
     };
   } finally {
     clearTimeout(timer);
-  }
-}
-
-/** The HTTP status the BROKER returns for each honest outcome. */
-export function httpStatusFor(status: NorthboundReadStatus): number {
-  switch (status) {
-    case "OK":
-    case "EMPTY":
-      // An empty resource is a successful read. Returning 404 here would be the
-      // single most damaging lie the broker could tell a consumer.
-      return 200;
-    case "NEEDS_SETUP":
-      return 403;
-    case "NOT_FOUND":
-      return 404;
-    case "TIMEOUT":
-      return 504;
-    case "ERROR":
-      return 502;
   }
 }

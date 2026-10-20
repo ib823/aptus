@@ -928,6 +928,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - The schema endpoint never serves an older version.
   - Mock and broker statuses match for every failure reason.
   - The generated client compiles under `strict` in CI.
+- Status: delivered in Phase 0b, with no new setting. Captures are stamped with the contract they were read under and cleared on a contract change; the migration stamps existing ones from the audit trail and withholds those whose contract cannot be established. Discovery runs the data route's own chain (`src/lib/northbound/read-verdict.ts`) and names the refusal. Fixtures have one scenario per broker outcome (`not_found` and `timeout` added). CI compiles the generated client (`pnpm check:scaffold-client`). Operator notes are in `docs/runbooks/coreedge-contract-hygiene.md`.
 
 **P0.5 Rate-limit attribution and error-classification residuals (A43, A44, batch-2 follow-ups).** Size M. Depends on: none.
 - Problem:
@@ -2114,7 +2115,7 @@ lifecycle stages are scored separately (0, 1, 2); lifecycleFull counts the 2s
 | A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 (fixed) |
 | A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 |
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
-| A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 |
+| A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 (fixed) |
 | A43, A44 | Rate-limit attribution | P0.5 |
 | A71, A72, A73, A74, A75 | Ariba configuration and errors | P0.6 |
 

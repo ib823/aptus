@@ -7,6 +7,11 @@
  *
  * The artifacts are rendered from the interface's governed configuration by pure
  * functions in lib/studio/scaffold.ts, which is where they are tested.
+ *
+ * ONLY THIS CONTRACT'S CAPTURES (P0.4, A38). The schema and the fixtures go in
+ * only when their stamp matches the interface's current version and entity
+ * set; anything else is named in the kit as withheld, with the reason, and
+ * never served by its mock (contract-provenance.ts).
  */
 
 import type { NextRequest } from "next/server";
@@ -14,6 +19,12 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
+import {
+  partitionFixtures,
+  responseSchemaState,
+  withheldArtifactNote,
+} from "@/lib/studio/contract-provenance";
+import { servedFixtures } from "@/lib/studio/fixtures";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { buildScaffold } from "@/lib/studio/scaffold";
 
@@ -54,9 +65,27 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // is complete.
   const fixtureRows = await prisma.mockFixture.findMany({
     where: { organizationId, interfaceId: iface.id },
-    select: { scenario: true, status: true, body: true, sourceStatus: true, capturedAt: true },
+    select: {
+      scenario: true,
+      status: true,
+      body: true,
+      sourceStatus: true,
+      capturedAt: true,
+      interfaceVersion: true,
+      entitySet: true,
+    },
     orderBy: { scenario: "asc" },
   });
+
+  const schemaState = responseSchemaState(iface.responseSchema, iface);
+  // This contract's recordings only; then each as the broker would answer it,
+  // one per scenario (fixtures.ts, A57).
+  const partitioned = partitionFixtures(
+    fixtureRows.map((f) => ({ ...f, capturedAt: f.capturedAt.toISOString() })),
+    iface,
+  );
+  const fixtures = servedFixtures(partitioned.current);
+  const { withheld } = partitioned;
 
   const files = buildScaffold(
     {
@@ -68,17 +97,22 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       entitySet: iface.entitySet,
       version: iface.version,
       solutionName: iface.solution.name,
-      // Present → the contract describes real fields. Absent → it says so.
-      responseSchema: iface.responseSchema,
+      // Present → the contract describes real fields. Absent → it says so,
+      // and says why when a stored schema of another contract was set aside.
+      ...(schemaState === "current" ? { responseSchema: iface.responseSchema } : {}),
+      ...(schemaState === "stale" || schemaState === "unverified"
+        ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
+        : {}),
     },
     baseUrl,
-    fixtureRows.map((f) => ({
+    fixtures.map((f) => ({
       scenario: f.scenario,
       status: f.status,
       body: f.body,
       sourceStatus: f.sourceStatus,
-      capturedAt: f.capturedAt.toISOString(),
+      capturedAt: f.capturedAt,
     })),
+    withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
   );
 
   return studioOk({ files });

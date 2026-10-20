@@ -95,6 +95,7 @@
     "keys:reseal": "tsx scripts/ce-keys.ts reseal",
     "keys:retire": "tsx scripts/ce-keys.ts retire",
     "grants:binding": "tsx scripts/grant-binding.ts",
+    "check:scaffold-client": "tsx scripts/check-scaffold-client.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",

@@ -69,10 +69,29 @@ npm run mock                              # serves recorded responses, no networ
 COREEDGE_SCENARIO=empty npm run mock      # or pick a scenario per request: ?scenario=…
 ```
 
-Capture fixtures for **all four** states — data, empty, needs-setup, error — not
-just the happy one. A suite that only proves your code works when everything is
-fine is proving the easy half; the states that break integrations are the other
-three.
+Capture fixtures for **every** state — data, empty, needs_setup, not_found,
+timeout, error — not just the happy one. A suite that only proves your code
+works when everything is fine is proving the easy half; the states that break
+integrations are the others.
+
+Each fixture answers with exactly the status and error code the broker sends
+for that outcome: a run the broker answers `404 NOT_FOUND` (the dataset does
+not exist on the tenant) is served by the mock as `404 NOT_FOUND`, a timeout as
+`504 UPSTREAM_TIMEOUT`, any other upstream failure as `502 UPSTREAM_ERROR`.
+A `404` is a configuration fault to fix, not a failure to retry.
+
+**Captures belong to one contract.** The schema and fixtures record the
+interface version and entity set they were captured under. Changing the
+interface's entity set (or its operation, or your own API's service) is a new
+contract version: Studio clears the old captures, `GET /interfaces/{id}/schema`
+answers `schemaCaptured: false`, and the kit ships no mock for the old dataset
+until you run the interface again and capture. A capture made before CoreEdge
+recorded versions, whose version cannot be established from the audit trail,
+is withheld the same way (`schemaState: "unverified"`); capture it again.
+
+The kit's `client.ts` compiles under `tsc --strict` (and `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `erasableSyntaxOnly` and the other strict flags),
+with the DOM lib or with Node's types.
 
 ---
 
@@ -280,6 +299,17 @@ Reads check the interface's status too, asymmetrically and on purpose:
   builder's statement that new traffic should stop; an interface kept for the
   record must not quietly keep serving it. Discovery agrees: a deprecated
   interface is never advertised as callable.
+
+**`callable` in discovery means the broker would make the call.** `GET
+/api/northbound/interfaces` runs the data route's own checks for each
+interface — the grant (bound to that interface, in your credential's
+environment), the connection your credential binds to, and the interface's
+definition — and says `callable: true` only when all pass. When it is false,
+`refusal` names why, with the reason the data route would give: for example
+`NO_APPROVED_GRANT`, `GRANT_REVOKED`, `NO_MATCH_FOR_ENVIRONMENT`, `NO_ENTITY_SET`
+or `SERVICE_UNRESOLVED`. `callable` cannot promise what the tenant will
+answer, and it cannot see a stored connection whose secrets no longer open
+(the call then answers `403 CONNECTION_NOT_CONFIGURED`).
 
 ---
 

@@ -1800,6 +1800,15 @@ model MockFixture {
 
   capturedAt DateTime @default(now())
 
+  /// The interface's contract version and entity set when this was recorded
+  /// (P0.4, A38). A changed entity set bumps the version; a fixture whose
+  /// stamp no longer matches recorded another contract and is not shipped in
+  /// the starter kit (src/lib/studio/contract-provenance.ts). NULL predates
+  /// the stamp: the P0.4 migration stamped every row whose contract the audit
+  /// trail establishes, so a NULL left is one whose contract cannot be.
+  interfaceVersion Int?
+  entitySet        String?
+
   @@index([organizationId, interfaceId, scenario])
 }
 

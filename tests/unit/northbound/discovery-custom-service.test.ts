@@ -31,6 +31,11 @@ vi.mock("@/lib/db/prisma", async () => {
       apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
       northboundAuditEvent: { create: mocks.auditCreate },
       sapHubContent: { findFirst: mocks.findHub },
+      // Discovery's binding step (P0.4, A42): one undeclared connection binds
+      // a read in any environment, as the data route's selection does.
+      sapConnection: {
+        findMany: async () => [{ key: "c1", label: "Tenant", product: "s4hana-onprem", environment: null, client: null }],
+      },
     },
   };
 });
@@ -139,10 +144,37 @@ describe("discovery with your own API", () => {
     }
   });
 
-  it("catalogue callable is unchanged and makes no catalogue lookup", async () => {
-    const k = (await list()).find((i) => i.id === "if_k")!;
-    expect(k.callable).toBe(true);
-    expect(k.service).toEqual({ source: "catalogue", odataVersion: null });
+  it("a custom interface makes no catalogue lookup", async () => {
+    mocks.findManyInterfaces.mockResolvedValue([CUSTOM, BROKEN]);
+    await list();
     expect(mocks.findHub).not.toHaveBeenCalled();
+  });
+
+  /*
+   * A CATALOGUE INTERFACE IS JUDGED ON THE CATALOGUE, as the data route judges
+   * it (P0.4, A42). Discovery used to make no catalogue lookup and called a
+   * feed callable whose service the data route could not resolve — a 400 on
+   * every call. It now asks the same resolver, once per service.
+   */
+  it("a catalogue interface is callable when the catalogue resolves its service", async () => {
+    mocks.findHub.mockResolvedValue({
+      contentType: "API",
+      apiType: "ODATAV2",
+      externalId: "API_BUSINESS_PARTNER",
+      title: "Business Partner",
+      packageId: "SAPS4HANAOnPremise",
+      communicationScenarios: [],
+    });
+    const k = (await list()).find((i) => i.id === "if_k")!;
+    expect(k.service).toEqual({ source: "catalogue", odataVersion: null });
+    expect(k.callable).toBe(true);
+    expect(mocks.findHub).toHaveBeenCalledTimes(1);
+  });
+
+  it("and not callable when it does not — the data route's 400", async () => {
+    mocks.findHub.mockResolvedValue(null);
+    const k = (await list()).find((i) => i.id === "if_k")!;
+    expect(k.callable).toBe(false);
+    expect(k.refusal).toBe("SERVICE_UNRESOLVED");
   });
 });

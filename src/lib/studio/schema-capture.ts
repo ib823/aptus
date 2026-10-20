@@ -50,7 +50,22 @@ export interface CapturedSchema {
      * servedResponseSchema reconciles on the way out.
      */
     envelope?: "stripped";
+    /**
+     * THE CONTRACT THE ROWS WERE READ UNDER (P0.4, A38): the interface's
+     * version and entity set at capture. A changed entity set bumps the
+     * version, and a schema whose stamp no longer matches describes another
+     * contract — contract-provenance.ts decides, and every reader asks it.
+     * Absent on schemas captured before the stamp existed.
+     */
+    interfaceVersion?: number;
+    entitySet?: string | null;
   };
+}
+
+/** The contract a capture is stamped with. */
+export interface CaptureContract {
+  version: number;
+  entitySet: string | null;
 }
 
 /**
@@ -90,6 +105,8 @@ function jsonTypeOf(value: unknown): { type?: string; format?: string } | null {
 export function inferResponseSchema(
   rows: readonly Record<string, unknown>[],
   capturedAt: Date = new Date(),
+  /** The contract the rows were read under; stamped into x-captured. */
+  contract?: CaptureContract,
 ): CapturedSchema | null {
   if (rows.length === 0) return null;
 
@@ -169,6 +186,7 @@ export function inferResponseSchema(
             `${alwaysPresent.length} ${alwaysPresent.length === 1 ? "was" : "were"} present in every sampled row (x-captured.alwaysPresent), which is an observation, not a guarantee.`),
       alwaysPresent,
       envelope: "stripped",
+      ...(contract ? { interfaceVersion: contract.version, entitySet: contract.entitySet } : {}),
     },
   };
 }

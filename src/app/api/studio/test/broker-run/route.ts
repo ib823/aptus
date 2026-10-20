@@ -30,6 +30,7 @@ import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
+import { resolveReadDefinition } from "@/lib/northbound/read-definition";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE, newCorrelationId } from "@/lib/northbound/respond";
 import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE } from "@/lib/security/rate-limit-response";
 import {
@@ -38,7 +39,6 @@ import {
 } from "@/lib/sap-public/connection-resolver";
 import { consoleReadRefusalMessage } from "@/lib/sap-public/console-read-guard";
 import { parseSapEnvironment } from "@/lib/sap-public/environment";
-import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { canAccessStudio, isSandboxDeveloper, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -223,7 +223,14 @@ export async function POST(request: NextRequest) {
   const audit = (
     status: number,
     rowCount: number | null,
-    extras: { connectionId?: string | null; connectionEnvironment?: string | null; durationMs?: number | null; bindingRefusal?: string | null } = {},
+    extras: {
+      connectionId?: string | null;
+      connectionEnvironment?: string | null;
+      durationMs?: number | null;
+      bindingRefusal?: string | null;
+      /** Why the read failed (failure-reason.ts), as the data route records it (A56). */
+      failureReason?: string | null;
+    } = {},
   ) =>
     recordNorthboundCall({
       organizationId: scope.organizationId,
@@ -277,9 +284,8 @@ export async function POST(request: NextRequest) {
   const connection = binding.connection;
 
   // The same resolution the broker makes: the interface's own service, or the
-  // catalogue's — never a fallback from one to the other.
-  const resolved = await resolveInterfaceService(product!, iface);
-  const service = resolved?.service ?? null;
+  // catalogue's — never a fallback from one to the other (read-definition.ts).
+  const definition = await resolveReadDefinition(product!, iface);
   const entitySet = iface.entitySet;
   if (input.entity !== undefined && input.entity !== entitySet) {
     await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
@@ -291,25 +297,26 @@ export async function POST(request: NextRequest) {
         "Change the feed's dataset in Studio, or re-record this case.",
     );
   }
-  if (!service || !entitySet) {
+  if (!definition.ok) {
     await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
     return refusalOk(
       "NO_ENTITY_SET",
-      service
+      definition.reason === "NO_ENTITY_SET"
         ? access.iface.draft
           ? "This feed is still a draft and names no dataset yet. Set its entity set in Studio — the deployed application reads that value and nothing else."
           : "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
-        : iface.servicePath
+        : definition.reason === "SERVICE_PATH_INVALID"
           ? "This interface's own service path is not valid for its product. Fix it in Studio."
           : "The catalogue service for this interface could not be resolved.",
     );
   }
+  const { service } = definition;
 
   // 3 — the same read function the broker calls, against the BOUND connection.
   const result = await readEntitySet({
     connection,
     servicePath: service.path,
-    entitySet,
+    entitySet: definition.entitySet,
     limit: input.limit ?? 10,
   });
   const durationMs = result.durationMs;
@@ -320,7 +327,23 @@ export async function POST(request: NextRequest) {
     connectionId: connection.id,
     connectionEnvironment: connection.environment,
     durationMs,
+    /*
+     * THE CAUSE, ON THE ROW THE QUOTED ID LEADS TO (A56). The console shows a
+     * correlation id for ops to look up; this row used to record a bare 502
+     * with no reason, so a run that failed on a rotated client secret could not
+     * be told apart from a SAP fault — while the same failure through the
+     * deployed app recorded its code. The data route's own field and log line.
+     */
+    failureReason: result.failureReason,
   });
+  if (result.failureReason) {
+    console.warn("[studio] broker-run read failed", {
+      correlationId,
+      failureReason: result.failureReason,
+      httpStatus: result.httpStatus,
+      durationMs,
+    });
+  }
 
   return studioOk({
     outcome: "ran" as const,
@@ -332,6 +355,13 @@ export async function POST(request: NextRequest) {
     note: result.detail,
     durationMs,
     draft: access.iface.draft,
+    /*
+     * THE CONTRACT THIS RUN WAS AGAINST (P0.4, A38). The console sends it back
+     * with Capture schema and Capture fixture, and the capture is refused when
+     * the interface has moved on since — a run of the old entity set must not
+     * be recorded as the new contract's shape or mock.
+     */
+    contract: { version: access.iface.version, entitySet: access.iface.entitySet },
     // WHICH system answered — the fact the old console could not state. The
     // caller's own connection metadata, never another org's.
     boundTo: {

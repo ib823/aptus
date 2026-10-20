@@ -11,9 +11,11 @@
 
 import type { NextRequest } from "next/server";
 
+import { GRANT_SELECT, READABLE_INTERFACE_SELECT } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
+import { readVerdicts } from "@/lib/northbound/read-verdict";
 import {
   newCorrelationId,
   northboundOk,
@@ -21,11 +23,7 @@ import {
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
-import { customServiceDefinition } from "@/lib/sap-public/interface-service";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { grantsUsableUnder, isBoundTo, type GrantedInterface } from "@/lib/studio/grant-binding";
-import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -77,22 +75,9 @@ export async function GET(request: NextRequest) {
   const [interfaces, grants] = await Promise.all([
     prisma.interface.findMany({
       where: scopedWhere(client.scope, { solutionId: client.solutionId }),
-      select: {
-        id: true,
-        name: true,
-        externalId: true,
-        sapProduct: true,
-        operation: true,
-        entitySet: true,
-        mode: true,
-        version: true,
-        status: true,
-        servicePath: true,
-        odataVersion: true,
-        // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
-        createdAt: true,
-        grantMatchChangedAt: true,
-      },
+      // Exactly what the read decision judges, so the verdict below is the
+      // data route's own (read-verdict.ts).
+      select: READABLE_INTERFACE_SELECT,
       orderBy: { name: "asc" },
     }),
     prisma.apiAccessGrant.findMany({
@@ -100,66 +85,31 @@ export async function GET(request: NextRequest) {
         solutionId: client.solutionId,
         environment: client.environment,
       }),
-      select: {
-        externalId: true,
-        operation: true,
-        decision: true,
-        expiresAt: true,
-        revokedAt: true,
-        interfaceId: true,
-        sapProduct: true,
-        createdAt: true,
-        unboundCutoffAt: true,
-      },
+      // The read decision's own fields, plus the service id it is matched on.
+      select: { ...GRANT_SELECT, externalId: true },
     }),
   ]);
 
-  const now = Date.now();
-  // THE SAME PREDICATE THE DATA ROUTE ENFORCES WITH — deliberately, and this
-  // has been wrong TWICE.
-  //
-  // First with `isGranting`, which asks only "is this decision one of the
-  // granting kinds?" and is display-only for exactly that reason. The read path
-  // uses `grantsRead(decision, environment)`. They disagree on SANDBOX_ONLY
-  // outside SANDBOX: `isGranting` says yes, `grantsRead` says no. So this
-  // endpoint reported `callable: true` for a call that `access.ts` then refused
-  // with 403 NO_APPROVED_GRANT — while the comment below promises the opposite.
-  //
-  // Then with revocation: `access.ts` refuses a revoked grant with
-  // GRANT_REVOKED, and this filter never selected `revokedAt` — so a grant an
-  // admin had withdrawn in Control Tower was advertised as callable right up to
-  // the 403. The agreement test existed and its fixture never set `revokedAt`,
-  // which is how the disagreement stayed green. An advisory that contradicts
-  // the enforcement is worse than no advisory.
-  //
-  // `grantsRead` and not `grantsWrite`: write-mode interfaces are excluded from
-  // `callable` outright a few lines down, so a read predicate is the whole of
-  // what this set can ever decide. If that exclusion is ever relaxed, this must
-  // branch on `isWriteOperation(g.operation)` at the same time.
-  //
-  // And with BINDING (P0.1, A47): a grant counts for the one interface it is
-  // bound to, on its product — or, while COREEDGE_GRANT_BINDING is legacy, an
-  // unbound grant counts on the old tuple for an interface that existed by its
-  // cut-off. `grantsUsableUnder` is the same call access.ts makes.
-  const environment = client.environment as GrantEnvironment;
-  const liveReadGrants = grants.filter(
-    (g) =>
-      grantsRead(g.decision as GrantDecision, environment) &&
-      // `== null` to match access.ts exactly — an unselected field must not
-      // read as revoked. Same predicate, same nullishness, or they drift.
-      g.revokedAt == null &&
-      (g.expiresAt === null || g.expiresAt.getTime() > now),
-  );
-  const hasLiveGrant = (i: GrantedInterface) =>
-    grantsUsableUnder(
-      liveReadGrants.filter(
-        (g) =>
-          g.externalId === i.externalId &&
-          g.operation === i.operation &&
-          (g.interfaceId == null || isBoundTo(g, i)),
-      ),
-      i,
-    ).length > 0;
+  /*
+   * THE DATA ROUTE'S CHAIN, NOT A COPY OF IT (P0.4, A42). This endpoint kept
+   * its own predicate, and it drifted from the enforcement four times:
+   * SANDBOX_ONLY outside SANDBOX (`isGranting` where the read path asks
+   * `grantsRead`), revoked grants (`revokedAt` was never selected), grant
+   * binding (P0.1), and then the feeds the data route refuses before a grant
+   * matters at all — no entity set, an unresolvable catalogue service, no
+   * connection the credential binds to. Each time, the comment here promised
+   * agreement. The verdict is now the data route's own steps, in its order,
+   * through the same functions; read-verdict.ts says what it can and cannot see.
+   */
+  const verdicts = await readVerdicts({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    environment: client.environment,
+    sapClient: client.sapClient ?? null,
+    interfaces,
+    grants,
+    now: new Date(),
+  });
 
   /*
    * Discovery is audited like the data routes — a 200 — but with a NULL
@@ -196,20 +146,13 @@ export async function GET(request: NextRequest) {
         version: i.version,
         status: i.status,
         // Stated per interface so a developer can see WHY a call would be
-        // refused before making it, instead of discovering it as a 403.
-        // DEPRECATED is refused by the read path (INTERFACE_DEPRECATED), so it
-        // must not be advertised — same agreement rule as the grant predicates.
-        // DRAFT stays callable; the data route flags it in a header.
-        //
-        // A custom service whose stored path no longer resolves is refused by
-        // the data route (400), so it is not advertised either. Pure, like the
-        // rest of this predicate: discovery adds no lookup per interface.
-        callable:
-          i.mode !== "WRITE" &&
-          i.status !== "DEPRECATED" &&
-          hasLiveGrant(i) &&
-          (i.servicePath == null ||
-            customServiceDefinition(getSapProduct(i.sapProduct) ?? { key: "" }, i) !== null),
+        // refused before making it, instead of discovering it as a 403 or a
+        // 400. True exactly when the data route would make the call; when it
+        // would not, `refusal` names the reason it would record. A DRAFT is
+        // callable once its definition is complete: the data route serves it
+        // and flags it in a header.
+        callable: verdicts.get(i.id) === null,
+        refusal: verdicts.get(i.id) ?? null,
         // Which kind of service this is, and its version when the interface
         // declares one. Never the path or the host: the broker does not hand
         // out upstream addressing. (A custom interface's externalId is its

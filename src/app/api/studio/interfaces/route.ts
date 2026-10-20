@@ -55,6 +55,7 @@ import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verific
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { responseSchemaState } from "@/lib/studio/contract-provenance";
 import { grantsForInterfaceWhere, grantsUsableUnder } from "@/lib/studio/grant-binding";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import {
@@ -286,6 +287,8 @@ export async function GET(request: NextRequest) {
   return studioOk({
     interfaces: interfaces.map(({ serviceVerifications, ...rest }) => ({
       ...rest,
+      // Whether the stored schema is THIS contract's (contract-provenance.ts, A38).
+      responseSchemaState: responseSchemaState(rest.responseSchema, rest),
       serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(
         serviceVerifications,
         connections.filter((c) => c.product === rest.sapProduct),
@@ -627,57 +630,80 @@ export async function PATCH(request: NextRequest) {
    * writes nothing and answers 409; the caller re-reads, and its retry is
    * judged on what the first one wrote.
    */
+  /*
+   * A NEW CONTRACT INVALIDATES WHAT WAS CAPTURED FROM THE OLD ONE (P0.4, A38).
+   * The version was bumped and the captured response schema and mock
+   * fixtures were left alone, so /schema served the new entity set with the
+   * old shape and the kit's mock served the old entity set's rows. They are
+   * cleared in the same transaction as the bump, and the audit says what went.
+   * Readers also check each capture's stamp (contract-provenance.ts), so a
+   * capture that races this one is never served either.
+   */
   let updated;
+  let fixturesCleared = 0;
+  let schemaCleared = false;
   try {
-    updated = await prisma.interface.update({
-      where: {
-        id: current.id,
-        organizationId,
-        status: current.status,
-        operation: current.operation,
-        entitySet: current.entitySet,
-        externalId: current.externalId,
-        servicePath: current.servicePath,
-        odataVersion: current.odataVersion,
-        version: current.version,
-      },
-      data: {
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(nextStatus !== undefined ? { status: nextStatus } : {}),
-        operation: nextOperation,
-        entitySet: nextEntitySet,
-        // Mode follows the operation: a READ interface is read-mode, anything else
-        // carries the stronger review. Derived, never client-supplied.
-        mode: nextMode,
-        ...(contractChanged ? { version: { increment: 1 } } : {}),
-        ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
-        ...(serviceChanged
-          ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
-          : {}),
-        ...(verificationReset
-          ? {
-              serviceVerifiedAt: null,
-              serviceVerifiedEnvironment: null,
-              serviceVerifiedEntitySets: Prisma.DbNull,
-              serviceVerifications: Prisma.DbNull,
-            }
-          : {}),
-        // mappingVersion is never written here — see patchSchema.
-      },
-      select: {
-        id: true,
-        name: true,
-        version: true,
-        operation: true,
-        entitySet: true,
-        mode: true,
-        status: true,
-        mappingVersion: true,
-        externalId: true,
-        servicePath: true,
-        odataVersion: true,
-        serviceVerifiedAt: true,
-      },
+    updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.interface.update({
+        where: {
+          id: current.id,
+          organizationId,
+          status: current.status,
+          operation: current.operation,
+          entitySet: current.entitySet,
+          externalId: current.externalId,
+          servicePath: current.servicePath,
+          odataVersion: current.odataVersion,
+          version: current.version,
+        },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(nextStatus !== undefined ? { status: nextStatus } : {}),
+          operation: nextOperation,
+          entitySet: nextEntitySet,
+          // Mode follows the operation: a READ interface is read-mode, anything else
+          // carries the stronger review. Derived, never client-supplied.
+          mode: nextMode,
+          ...(contractChanged ? { version: { increment: 1 } } : {}),
+          ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
+          ...(serviceChanged
+            ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
+            : {}),
+          ...(verificationReset
+            ? {
+                serviceVerifiedAt: null,
+                serviceVerifiedEnvironment: null,
+                serviceVerifiedEntitySets: Prisma.DbNull,
+                serviceVerifications: Prisma.DbNull,
+              }
+            : {}),
+          // mappingVersion is never written here — see patchSchema.
+        },
+        select: {
+          id: true,
+          name: true,
+          version: true,
+          operation: true,
+          entitySet: true,
+          mode: true,
+          status: true,
+          mappingVersion: true,
+          externalId: true,
+          servicePath: true,
+          odataVersion: true,
+          serviceVerifiedAt: true,
+        },
+      });
+      if (contractChanged) {
+        const cleared = await tx.interface.updateMany({
+          where: { id: current.id, organizationId, responseSchema: { not: Prisma.DbNull } },
+          data: { responseSchema: Prisma.DbNull },
+        });
+        schemaCleared = cleared.count > 0;
+        const removed = await tx.mockFixture.deleteMany({ where: { organizationId, interfaceId: current.id } });
+        fixturesCleared = removed.count;
+      }
+      return saved;
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
@@ -699,8 +725,26 @@ export async function PATCH(request: NextRequest) {
     // an interface that stays ACTIVE (A46). Everything else is an edit.
     action: gated ? "PROMOTE" : "UPDATE",
     before: current,
-    after: { ...updated, contractChanged, serviceChanged, verificationReset, demoted, repromoted: repromoting },
+    after: {
+      ...updated,
+      contractChanged,
+      serviceChanged,
+      verificationReset,
+      demoted,
+      repromoted: repromoting,
+      schemaCleared,
+      fixturesCleared,
+    },
   });
 
-  return studioOk({ ...updated, contractChanged, serviceChanged, verificationReset, demoted, repromoted: repromoting });
+  return studioOk({
+    ...updated,
+    contractChanged,
+    serviceChanged,
+    verificationReset,
+    demoted,
+    repromoted: repromoting,
+    schemaCleared,
+    fixturesCleared,
+  });
 }

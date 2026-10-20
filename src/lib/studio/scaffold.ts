@@ -16,7 +16,7 @@
  */
 
 import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
-import { stripFixtureEnvelope } from "@/lib/studio/fixtures";
+import { FIXTURE_SCENARIOS, stripFixtureEnvelope } from "@/lib/studio/fixtures";
 
 export interface ScaffoldInterface {
   id: string;
@@ -29,10 +29,17 @@ export interface ScaffoldInterface {
   solutionName: string;
   /**
    * A schema inferred from rows this tenant actually returned, when one has been
-   * captured. Absent → the document keeps the open shape and says why, rather
-   * than describing fields nobody has seen.
+   * captured FOR THIS CONTRACT. Absent → the document keeps the open shape and
+   * says why, rather than describing fields nobody has seen. The caller passes
+   * only a schema whose stamp matches the interface (contract-provenance.ts).
    */
   responseSchema?: unknown;
+  /**
+   * Why a stored schema was withheld — captured under an earlier contract, or
+   * of a contract that cannot be established (A38). Said in the generated
+   * files, so "not captured" is not mistaken for "nobody ever ran it".
+   */
+  withheldSchemaNote?: string;
 }
 
 /** A conservative identifier for generated TypeScript. */
@@ -143,7 +150,7 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
             },
             "400": {
               description:
-                "The interface cannot be read as configured: it has no entity set (set one in Studio, or pass ?entity=), or its catalogue service could not be resolved. Fix the configuration — do not retry.",
+                "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry.",
               content: errorContent(),
             },
             "401": { description: "Missing, revoked or expired client token.", content: errorContent() },
@@ -153,11 +160,16 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
               content: errorContent(),
             },
             "404": {
-              description: "No interface with this id belongs to the solution this token was issued for.",
+              description:
+                "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry.",
               content: errorContent(),
             },
             "429": { description: "Rate limited — this endpoint reaches a live SAP tenant.", content: errorContent() },
-            "5XX": { description: "The tenant or the broker failed. Distinct from an empty result.", content: errorContent() },
+            "5XX": {
+              description:
+                "The tenant or the broker failed: 502 UPSTREAM_ERROR, 504 UPSTREAM_TIMEOUT, or 503 when the broker's rate limiter is unavailable. Distinct from an empty result; retrying may help.",
+              content: errorContent(),
+            },
           },
         },
       },
@@ -175,7 +187,7 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
         // schema describes fields this tenant actually returned; without one the
         // document says so rather than describing fields nobody has observed,
         // because a confident lie inside a contract file is worse than a gap.
-        [typeName]: describeRecord(iface.responseSchema),
+        [typeName]: describeRecord(iface.responseSchema, iface.withheldSchemaNote),
         Error: {
           type: "object",
           required: ["error"],
@@ -211,7 +223,7 @@ function errorContent() {
  * run has happened — a reader can then tell the difference between "this
  * entity has no fields" and "nobody has looked yet".
  */
-function describeRecord(stored: unknown): Record<string, unknown> {
+function describeRecord(stored: unknown, withheldNote?: string): Record<string, unknown> {
   const responseSchema = servedResponseSchema(stored);
   if (isCapturedSchema(responseSchema)) {
     return {
@@ -225,8 +237,9 @@ function describeRecord(stored: unknown): Record<string, unknown> {
   }
   return {
     type: "object",
-    description:
-      "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
+    description: withheldNote
+      ? `No captured response describes this contract, so its fields are not described. ${withheldNote}`
+      : "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
     additionalProperties: true,
   };
 }
@@ -296,7 +309,18 @@ function buildRecordBody(stored: unknown): string {
   return lines.join("\n");
 }
 
-/** TypeScript types + a tiny typed client. Any language can be generated from the OpenAPI. */
+/**
+ * TypeScript types + a tiny typed client. Any language can be generated from the OpenAPI.
+ *
+ * IT MUST COMPILE UNDER THE DEVELOPER'S STRICTEST SETTINGS (P0.4). The file goes
+ * into someone else's repository, and it failed `tsc --strict` there: the body
+ * was cast `as typeof json`, which reads the variable's type at that point —
+ * narrowed to `null` by its initialiser — so every later read of it was
+ * `never`. It now names its envelope type, and avoids constructs some strict
+ * setups refuse (parameter properties, under `erasableSyntaxOnly`).
+ * scripts/check-scaffold-client.ts compiles the generated file in CI under
+ * strict and the stricter flags beside it, with the DOM lib and with Node's.
+ */
 export function buildTypeScriptClient(
   iface: ScaffoldInterface,
   baseUrl = "https://coreedge.example/api/northbound",
@@ -312,15 +336,17 @@ export function buildTypeScriptClient(
     ? ` * The record type below was CAPTURED from ${iface.responseSchema["x-captured"].sampleSize} live row${
         iface.responseSchema["x-captured"].sampleSize === 1 ? "" : "s"
       } this tenant returned
- * (${iface.responseSchema["x-captured"].capturedAt}). It describes what was observed, not
+ * (${safeComment(String(iface.responseSchema["x-captured"].capturedAt))}). It describes what was observed, not
  * SAP's full $metadata: fields outside the sample are not listed, and the index
  * signature keeps them reachable. Fields are optional unless the sample was
  * large enough to assert otherwise — see x-captured in openapi.json.`
     : ` * This is a TEMPLATE, not generated from a live $metadata document. The record
  * shape is intentionally open — run the interface in the Test Console, use
- * Capture schema, and regenerate to get the fields this tenant actually returns.`;
+ * Capture schema, and regenerate to get the fields this tenant actually returns.${
+   iface.withheldSchemaNote ? `\n *\n * A stored schema was not used: ${safeComment(iface.withheldSchemaNote)}` : ""
+ }`;
   return `/**
- * ${safeName(iface.name)} — CoreEdge northbound client
+ * ${safeComment(safeName(iface.name))} — CoreEdge northbound client
  *
  * Generated by CoreEdge Developer Studio from governed interface configuration
  * (${safeComment(iface.externalId)}, v${iface.version}).
@@ -342,6 +368,9 @@ ${buildRecordBody(iface.responseSchema)}
 export interface CoreEdgeErrorBody {
   error: { code: string; message: string; correlationId: string };
 }
+
+/** What a read response body may parse to: the data envelope, the error envelope, or neither. */
+type ReadEnvelope = { data?: Omit<ReadResult, "draft"> } & Partial<CoreEdgeErrorBody>;
 
 /** What a 200 carries — every field the broker sends, not only the records. */
 export interface ReadResult {
@@ -375,14 +404,16 @@ export interface CoreEdgeClientOptions {
 }
 
 export class CoreEdgeError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string,
-    readonly correlationId: string,
-  ) {
+  readonly status: number;
+  readonly code: string;
+  readonly correlationId: string;
+
+  constructor(message: string, status: number, code: string, correlationId: string) {
     super(message);
     this.name = "CoreEdgeError";
+    this.status = status;
+    this.code = code;
+    this.correlationId = correlationId;
   }
 }
 
@@ -413,9 +444,9 @@ export function createClient(options: CoreEdgeClientOptions) {
        * fact the developer needed at exactly the moment it mattered.
        */
       const body = await res.text().catch(() => "");
-      let json: ({ data?: Omit<ReadResult, "draft"> } & Partial<CoreEdgeErrorBody>) | null = null;
+      let json: ReadEnvelope | null = null;
       try {
-        json = body ? (JSON.parse(body) as typeof json) : null;
+        json = body ? (JSON.parse(body) as ReadEnvelope) : null;
       } catch {
         json = null;
       }
@@ -450,9 +481,17 @@ export function buildReadme(
   iface: ScaffoldInterface,
   fixtures: readonly ScaffoldFixture[] = [],
   baseUrl = "https://coreedge.example/api/northbound",
+  withheld: readonly WithheldFixture[] = [],
 ): string {
   const captured = fixtures.map((f) => f.scenario);
-  const missing = ["data", "empty", "needs_setup", "error"].filter((s) => !captured.includes(s));
+  const missing = FIXTURE_SCENARIOS.filter((s) => !captured.includes(s));
+  const withheldSection =
+    withheld.length === 0
+      ? ""
+      : `\n\nWithheld: **${withheld.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
+this interface, or before CoreEdge recorded which contract a recording belongs to.
+A mock of another contract would test code against rows the live route will
+never return, so they are not shipped. Capture them again from the Test Console.`;
   const fixtureSection =
     captured.length === 0
       ? `## Offline mock — nothing captured yet
@@ -472,8 +511,8 @@ Captured scenarios: **${captured.join(", ")}**${
             ? `\n\nNot captured yet: **${missing.join(", ")}** — capture them from the Test
 Console so your tests can exercise those paths too. A suite that only proves your
 code works when everything is fine is proving the easy half.`
-            : "\n\nAll four honest states are recorded, so your tests can exercise every path."
-        }
+            : "\n\nEvery honest state is recorded, so your tests can exercise every path."
+        }${withheldSection}
 
 Choose one per request with \`?scenario=empty\`, or for the whole process with
 \`COREEDGE_SCENARIO=empty\`.
@@ -534,8 +573,9 @@ whatever the entity set returned. It is truncated to a sample, never redacted.
 - It is listed in \`.gitignore\`, so it stays out of your repository unless you
   choose otherwise. Keep it that way, or redact it first.
 - Do not share this kit with anyone who is not cleared to see the tenant's data.
-- The other scenarios (\`empty\`, \`needs_setup\`, \`error\`) carry no records
-  and are safe to commit; split them out if your suite needs them in CI.
+- The other scenarios (\`empty\`, \`needs_setup\`, \`not_found\`, \`timeout\`,
+  \`error\`) carry no records and are safe to commit; split them out if your
+  suite needs them in CI.
 
 ## Not a TypeScript shop?
 
@@ -552,7 +592,8 @@ openapi-generator-cli generate -i openapi.json -g python -o ./client
 | \`200\` with records | Data | Use it |
 | \`200\` with \`records: []\` | **No records** | Treat as data, not failure |
 | \`403\` | Not set up, or no approved grant | Fix access — do not retry |
-| \`5xx\` | Tenant or broker failed | Retry or escalate |
+| \`404\` | No such interface, or its dataset does not exist on the tenant | Fix the configuration — do not retry |
+| \`5xx\` | Tenant or broker failed (\`502\`, \`504\` timeout) | Retry or escalate |
 
 An empty result is **not** an error. Conflating the two is the single most common
 way an integration lies to its users.
@@ -605,6 +646,7 @@ COREEDGE_TOKEN=
 function buildFixturesJson(
   iface: { id: string; name: string },
   fixtures: readonly ScaffoldFixture[],
+  withheld: readonly WithheldFixture[] = [],
 ): string {
   const unproven = fixtures.filter((f) => f.sourceStatus === null || f.sourceStatus === undefined);
   const dataFixtures = fixtures.filter((f) => f.scenario === "data");
@@ -641,6 +683,9 @@ function buildFixturesJson(
         // every row's __metadata / __deferred URIs. See stripFixtureEnvelope.
         body: stripFixtureEnvelope(f.body),
       })),
+      // Named, never served: recorded under another contract, or under one
+      // nobody can establish (A38). No body — it describes the wrong rows.
+      ...(withheld.length > 0 ? { withheld: withheld.map((w) => ({ scenario: w.scenario, reason: w.reason })) } : {}),
     },
     null,
     2,
@@ -714,6 +759,12 @@ function inlineCode(value: string): string {
   return `${fence}${pad}${value}${pad}${fence}`;
 }
 
+/** A recorded response the kit does not ship, and why (contract-provenance.ts). */
+export interface WithheldFixture {
+  scenario: string;
+  reason: string;
+}
+
 /** A recorded response, as captured from a real run. */
 export interface ScaffoldFixture {
   scenario: string;
@@ -748,7 +799,7 @@ export interface ScaffoldFixture {
 export function buildMockServer(iface: ScaffoldInterface): string {
   return `#!/usr/bin/env node
 /**
- * Offline CoreEdge mock for "${safeName(iface.name)}".
+ * Offline CoreEdge mock for "${safeComment(safeName(iface.name))}".
  *
  * Serves the recorded responses in fixtures.json in exactly the shape the real
  * northbound API returns. No dependencies — node mock.mjs and you are running.
@@ -758,7 +809,7 @@ export function buildMockServer(iface: ScaffoldInterface): string {
  *
  * Pick a scenario per request with ?scenario=…, or for the whole process with
  * COREEDGE_SCENARIO. Available scenarios are whatever was captured:
- * data, empty, needs_setup, error.
+ * ${FIXTURE_SCENARIOS.join(", ")}.
  *
  * Point your app at it by changing ONE variable:
  *   COREEDGE_BASE_URL=http://localhost:4010
@@ -1018,9 +1069,10 @@ export function buildScaffold(
   iface: ScaffoldInterface,
   baseUrl?: string,
   fixtures: readonly ScaffoldFixture[] = [],
+  withheld: readonly WithheldFixture[] = [],
 ): ScaffoldFile[] {
   return [
-    { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl) },
+    { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl, withheld) },
     { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
     { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
     { path: ".env.example", contents: buildEnvExample(baseUrl) },
@@ -1030,7 +1082,7 @@ export function buildScaffold(
     { path: "mock.mjs", contents: buildMockServer(iface) },
     {
       path: "fixtures.json",
-      contents: buildFixturesJson(iface, fixtures),
+      contents: buildFixturesJson(iface, fixtures, withheld),
     },
   ];
 }
