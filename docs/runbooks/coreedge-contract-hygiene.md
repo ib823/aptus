@@ -90,6 +90,19 @@ filter runs before it.
   - Anything else stays unstamped (**unverified**: withheld).
 - The running code ignores both columns and the new JSON keys, so the migration
   is safe ahead of the code, and a code rollback is safe after it.
+- **After the build is promoted, run `pnpm contracts:stamp --apply`** against
+  production's `DATABASE_URL`. The migration stamps only what existed when it
+  ran; `vercel-build` runs it minutes before `next build` finishes, and the old
+  build keeps serving meanwhile, so a capture made in that window is written
+  without a stamp and would be withheld as unverified. The command re-runs the
+  migration's own statements in one transaction and stamps every such capture
+  the audit trail can place. It touches only captures still unstamped, so it is
+  safe to run any number of times; `pnpm contracts:stamp` (no flag) only counts
+  what is unstamped.
+- **Rollback.** While a pre-P0.4 build serves, its captures are unstamped too
+  (and a re-captured fixture keeps the stamp of the recording it replaced, so
+  after a contract change it reads as stale: withheld, never served). After
+  rolling forward again, run `pnpm contracts:stamp --apply` once more.
 - Developers whose interface lost a schema or fixture to `stale` or `unverified`
   see `schemaCaptured: false` with a `schemaState` and `schemaNote`, Studio says
   "not served; capture it again", and the kit lists the fixture as withheld.
@@ -125,8 +138,10 @@ WHERE f."interfaceVersion" IS DISTINCT FROM i."version"
    OR f."entitySet" IS DISTINCT FROM i."entitySet";
 ```
 
-The remedy is the builder's: run the interface in the Test Console and use
-Capture schema / Capture fixture. An operator should not stamp a capture by hand
+First run `pnpm contracts:stamp --apply`: it stamps every unstamped capture the
+audit trail can place, and is the only stamping an operator should do. What is
+left after it is the builder's to fix: run the interface in the Test Console and
+use Capture schema / Capture fixture. An operator should not stamp a capture by hand
 unless they know which contract it was read under; a wrong stamp would publish
 another contract's shape, which is the defect this closes.
 
@@ -143,6 +158,8 @@ another contract's shape, which is the defect this closes.
 
 ## Verifying
 
+- `pnpm contracts:stamp` — how many captures are still unstamped (withheld as
+  unverified); `--apply` stamps the ones the audit trail can place.
 - `pnpm check:scaffold-client` — the generated client compiles.
 - `tests/unit/studio/contract-provenance.test.ts` — the A38 sequence through the
   routes, and "the schema endpoint never serves an older version" for every

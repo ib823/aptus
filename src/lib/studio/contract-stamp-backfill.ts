@@ -159,3 +159,43 @@ export const CONTRACT_STAMP_BACKFILL_SQL = [
   CURRENT_FIXTURE_STAMP_SQL,
   STALE_FIXTURE_STAMP_SQL,
 ] as const;
+
+/** How many captures one run of the backfill stamped, by statement. */
+export interface ContractStampResult {
+  readonly currentSchemas: number;
+  readonly staleSchemas: number;
+  readonly currentFixtures: number;
+  readonly staleFixtures: number;
+}
+
+interface RawExecutor {
+  $executeRawUnsafe(query: string): PromiseLike<number>;
+}
+
+/**
+ * Run the backfill again, in one transaction (`pnpm contracts:stamp --apply`).
+ *
+ * The migration runs it once, at deploy; but the build that follows the
+ * migration takes minutes, and a rollback can put the pre-P0.4 build back.
+ * In both windows the old routes write captures with no stamp, which the new
+ * readers withhold as unverified — although the audit trail can place every
+ * one of them. Re-running the same statements stamps those, and only those:
+ * each statement touches only rows still unstamped, so a capture the new
+ * code stamped, or one an earlier run stamped, is never changed.
+ */
+export async function runContractStampBackfill(db: {
+  $transaction<R>(fn: (tx: RawExecutor) => Promise<R>): Promise<R>;
+}): Promise<ContractStampResult> {
+  return db.$transaction(async (tx) => {
+    const counts: number[] = [];
+    for (const statement of CONTRACT_STAMP_BACKFILL_SQL) counts.push(await tx.$executeRawUnsafe(statement));
+    const [currentSchemas = 0, staleSchemas = 0, currentFixtures = 0, staleFixtures = 0] = counts;
+    return { currentSchemas, staleSchemas, currentFixtures, staleFixtures };
+  });
+}
+
+/** Captures that carry no contract stamp (withheld as unverified): what a run could still place. */
+export const UNSTAMPED_CAPTURES_SQL = `SELECT
+  (SELECT count(*)::int FROM "Interface" i
+    WHERE i."responseSchema" IS NOT NULL AND (i."responseSchema"->'x-captured'->'interfaceVersion') IS NULL) AS "schemas",
+  (SELECT count(*)::int FROM "MockFixture" f WHERE f."interfaceVersion" IS NULL) AS "fixtures";`;

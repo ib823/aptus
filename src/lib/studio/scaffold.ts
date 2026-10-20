@@ -489,7 +489,7 @@ export function buildReadme(
     withheld.length === 0
       ? ""
       : `\n\nWithheld: **${withheld.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
-this interface, or before CoreEdge recorded which contract a recording belongs to.
+this interface, or with no record of which contract it belongs to.
 A mock of another contract would test code against rows the live route will
 never return, so they are not shipped. Capture them again from the Test Console.`;
   const fixtureSection =

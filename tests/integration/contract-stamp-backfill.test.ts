@@ -39,7 +39,11 @@ vi.mock("@/lib/db/prisma", async () => {
 
 import { prisma } from "@/lib/db/prisma";
 import { artifactState, responseSchemaState, schemaStamp } from "@/lib/studio/contract-provenance";
-import { CONTRACT_STAMP_BACKFILL_SQL } from "@/lib/studio/contract-stamp-backfill";
+import {
+  CONTRACT_STAMP_BACKFILL_SQL,
+  runContractStampBackfill,
+  UNSTAMPED_CAPTURES_SQL,
+} from "@/lib/studio/contract-stamp-backfill";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
 
 const RUN = `p04-${randomUUID().slice(0, 8)}`;
@@ -54,7 +58,10 @@ let solutionId = "";
 /** An unstamped schema, as capture stored it before P0.4, captured at `at`. */
 function legacySchema(at: Date | string): unknown {
   const schema = inferResponseSchema(ROWS, new Date("2026-01-01T00:00:00.000Z"))!;
-  return { ...schema, "x-captured": { ...schema["x-captured"], capturedAt: typeof at === "string" ? at : at.toISOString() } };
+  return {
+    ...schema,
+    "x-captured": { ...schema["x-captured"], capturedAt: typeof at === "string" ? at : at.toISOString() },
+  };
 }
 
 async function iface(name: string, version: number, responseSchema: unknown, fixtureAt?: Date): Promise<string> {
@@ -75,7 +82,14 @@ async function iface(name: string, version: number, responseSchema: unknown, fix
   });
   if (fixtureAt) {
     await prisma.mockFixture.create({
-      data: { organizationId: ORG, interfaceId: row.id, scenario: "data", status: 200, body: { records: ROWS }, capturedAt: fixtureAt },
+      data: {
+        organizationId: ORG,
+        interfaceId: row.id,
+        scenario: "data",
+        status: 200,
+        body: { records: ROWS },
+        capturedAt: fixtureAt,
+      },
     });
   }
   return row.id;
@@ -193,14 +207,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the contract-stamp backfill, ag
   });
 
   it("G and H: malformed values are passed over, not cast", async () => {
-    expect(responseSchemaState((await load(ids.G!)).iface.responseSchema, { version: 1, entitySet: "Set_G" })).toBe("unverified");
+    expect(responseSchemaState((await load(ids.G!)).iface.responseSchema, { version: 1, entitySet: "Set_G" })).toBe(
+      "unverified",
+    );
     const h = await load(ids.H!);
     expect(responseSchemaState(h.iface.responseSchema, h.iface)).toBe("unverified");
   });
 
   it("keeps everything else in the schema as it was", async () => {
     const { iface: i } = await load(ids.A!);
-    const captured = (i.responseSchema as { "x-captured": Record<string, unknown>; properties: Record<string, unknown> });
+    const captured = i.responseSchema as { "x-captured": Record<string, unknown>; properties: Record<string, unknown> };
     expect(captured.properties).toHaveProperty("BusinessPartner");
     expect(captured["x-captured"].capturedAt).toBe(AFTER.toISOString());
     expect(captured["x-captured"].sampleSize).toBe(1);
@@ -211,6 +227,60 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the contract-stamp backfill, ag
     await backfill();
     const after = await Promise.all(Object.values(ids).map(load));
     expect(after).toEqual(before);
+  });
+
+  it("re-run after deploy (pnpm contracts:stamp --apply): stamps what the old build captured after the migration, and only that", async () => {
+    // The migration has run (beforeAll). While the new build is still being
+    // built, or after a rollback, the pre-P0.4 routes keep capturing — with no
+    // stamp. Every one of these is placeable from the audit trail.
+    const LATER = new Date("2026-09-01T00:00:00.000Z");
+    ids.I = await iface("I", 1, legacySchema(LATER), LATER);
+    ids.J = await iface("J", 2, legacySchema(LATER), LATER);
+    await versionChange(ids.J, 1, 2, CHANGED_AT);
+    for (const id of [ids.I, ids.J]) {
+      const { iface: i, fixture } = await load(id);
+      expect(responseSchemaState(i.responseSchema, i)).toBe("unverified");
+      expect(fixture!.interfaceVersion).toBeNull();
+    }
+    const untouched = await Promise.all([ids.A!, ids.B!, ids.C!, ids.D!, ids.E!, ids.F!, ids.G!, ids.H!].map(load));
+
+    // The database may be shared with other suites, so the counts are a floor.
+    const first = await runContractStampBackfill(prisma);
+    expect(first.currentSchemas).toBeGreaterThanOrEqual(2);
+    expect(first.currentFixtures).toBeGreaterThanOrEqual(2);
+    for (const id of [ids.I, ids.J]) {
+      const { iface: i, fixture } = await load(id);
+      expect(responseSchemaState(i.responseSchema, i)).toBe("current");
+      expect(artifactState(fixture!, i)).toBe("current");
+    }
+    // Nothing stamped before is changed, and what could not be placed stays unplaced.
+    expect(await Promise.all([ids.A!, ids.B!, ids.C!, ids.D!, ids.E!, ids.F!, ids.G!, ids.H!].map(load))).toEqual(
+      untouched,
+    );
+
+    const stamped = await Promise.all(Object.values(ids).map(load));
+    await runContractStampBackfill(prisma);
+    expect(await Promise.all(Object.values(ids).map(load))).toEqual(stamped);
+  });
+
+  it("counts what is still unstamped", async () => {
+    const [row] = await prisma.$queryRawUnsafe<{ schemas: number; fixtures: number }[]>(UNSTAMPED_CAPTURES_SQL);
+    // At least D, E, G and H's schemas and D and E's fixtures (other suites may share the database).
+    expect(row!.schemas).toBeGreaterThanOrEqual(4);
+    expect(row!.fixtures).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("the backfill can be re-run", () => {
+  it("pnpm contracts:stamp runs the same statements through runContractStampBackfill", () => {
+    const pkg = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts["contracts:stamp"]).toBe("tsx scripts/contract-stamp.ts");
+    const script = readFileSync(path.join(process.cwd(), "scripts/contract-stamp.ts"), "utf8");
+    expect(script).toContain("runContractStampBackfill(prisma)");
+    const runbook = readFileSync(path.join(process.cwd(), "docs/runbooks/coreedge-contract-hygiene.md"), "utf8");
+    expect(runbook).toContain("pnpm contracts:stamp --apply");
   });
 });
 

@@ -85,7 +85,7 @@ export function withheldArtifactNote(state: Exclude<ArtifactState, "current">, i
     ? `Captured under an earlier contract of this interface; it is now v${iface.version}${
         iface.entitySet ? ` on ${iface.entitySet}` : ""
       }. Run it in the Test Console and capture again.`
-    : "Captured before CoreEdge recorded which contract version a capture belongs to, and its version cannot be established. Run it in the Test Console and capture again.";
+    : "This capture does not record which contract version it was read under, and that version cannot be established. Run it in the Test Console and capture again.";
 }
 
 /** Fixtures for the kit: those of the current contract, and which were withheld and why. */

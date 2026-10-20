@@ -25,6 +25,7 @@
  * matches; a capture from a run of an earlier contract is refused with 409.
  */
 
+import { Prisma } from "@prisma/client";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -124,21 +125,23 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   });
 
   const saved = existing
-    ? await prisma.mockFixture.update({
-        where: { id: existing.id, organizationId: scope.organizationId },
-        // sourceStatus is written on every replace, including back to null when
-        // the caller did not send one. A stale provenance stamp left over from a
-        // previous capture would be worse than none: it would evidence a run
-        // that is no longer the one stored here.
-        data: {
-          status,
-          body: body as never,
-          sourceStatus: parsed.data.sourceStatus ?? null,
-          capturedAt: new Date(),
-          ...stamp,
-        },
-        select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
-      })
+    ? await prisma.mockFixture
+        .update({
+          where: { id: existing.id, organizationId: scope.organizationId },
+          // sourceStatus is written on every replace, including back to null when
+          // the caller did not send one. A stale provenance stamp left over from a
+          // previous capture would be worse than none: it would evidence a run
+          // that is no longer the one stored here.
+          data: {
+            status,
+            body: body as never,
+            sourceStatus: parsed.data.sourceStatus ?? null,
+            capturedAt: new Date(),
+            ...stamp,
+          },
+          select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
+        })
+        .catch(vanishedAsNull)
     : await prisma.mockFixture.create({
         data: {
           organizationId: scope.organizationId,
@@ -151,6 +154,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         },
         select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
       });
+  if (!saved) {
+    // The recording found above was deleted before it could be replaced: a
+    // Studio PATCH that changes the contract deletes every fixture of the
+    // interface in the same transaction as the version bump. It is the race
+    // capture-schema reports as 409, and these rows belong to the old contract.
+    return studioError(
+      "CONFLICT",
+      "This interface's contract changed while the fixture was being captured. Run it again and capture from the new run.",
+    );
+  }
 
   await writeConfigAudit({
     organizationId: scope.organizationId,
@@ -168,4 +181,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     rows: body.records?.length ?? 0,
     replaced: Boolean(existing),
   });
+}
+
+/** An update whose row is gone (Prisma P2025) reads as null; anything else still throws. */
+function vanishedAsNull(err: unknown): null {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") return null;
+  throw err;
 }
