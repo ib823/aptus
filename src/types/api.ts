@@ -37,6 +37,11 @@ export const ERROR_CODES = {
   MFA_SETUP_REQUIRED: "MFA_SETUP_REQUIRED",
   SESSION_REVOKED: "SESSION_REVOKED",
   RATE_LIMITED: "RATE_LIMITED",
+  /**
+   * The rate limiter could not be asked, so the request was refused for safety
+   * (503, with Retry-After). Never RATE_LIMITED: nobody was over any limit.
+   */
+  LIMITER_UNAVAILABLE: "LIMITER_UNAVAILABLE",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   AREA_LOCKED: "AREA_LOCKED",
   CONFLICT: "CONFLICT",

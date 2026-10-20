@@ -46,7 +46,8 @@ import {
 import { STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up-codes";
 import { getChallengeFromCookie, verifyAuthenticationResponse } from "@/lib/auth/webauthn";
 import { getCredentialByCredentialId, updateCredentialCounter } from "@/lib/auth/webauthn-db";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { checkRateLimit, getClientIp, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
+import { isLimiterOutage, limiterUnavailableResponse } from "@/lib/security/rate-limit-response";
 import { ERROR_CODES } from "@/types/api";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,10 @@ function failed(message: string, status = 400): NextResponse {
   return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status });
 }
 
-function tooMany(resetMs: number): NextResponse {
+function tooMany(result: RateLimitResult): NextResponse {
+  // A limiter outage is not "too many attempts" (audit A44).
+  if (isLimiterOutage(result)) return limiterUnavailableResponse(result);
+  const { resetMs } = result;
   return NextResponse.json(
     { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
     { status: 429, headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) } },
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     `webauthn-step-up-verify:ip:${getClientIp(request.headers)}`,
     RATE_LIMITS.stepUpPerIp,
   );
-  if (!ipCheck.allowed) return tooMany(ipCheck.resetMs);
+  if (!ipCheck.allowed) return tooMany(ipCheck);
 
   const token = await getSessionToken();
   const user = token ? await validateSession(token) : null;
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const userCheck = await checkRateLimit(`webauthn-step-up-verify:user:${user.id}`, RATE_LIMITS.mfa);
-  if (!userCheck.allowed) return tooMany(userCheck.resetMs);
+  if (!userCheck.allowed) return tooMany(userCheck);
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return failed("Invalid request body");

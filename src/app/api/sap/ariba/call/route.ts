@@ -21,6 +21,11 @@ import { ERROR_CODES } from "@/types/api";
  * guard exists to prevent. It now takes `refuseUnlessMayProbeTenant` and writes
  * the same style of audit row the OData probes write. The sapLive throttle
  * covers it via isLiveSapTenantRoute.
+ *
+ * NO SANDBOX DEVELOPER (roadmap P0.13). An Ariba realm declares no landscape,
+ * so there is no SANDBOX to hold that role to; the guard's default refuses it
+ * here, before any OAuth exchange. Do not pass `appliesSandboxDeveloperCeiling`
+ * unless this route learns to cap the role itself.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const refusal = await refuseUnlessMayProbeTenant();

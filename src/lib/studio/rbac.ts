@@ -15,6 +15,10 @@
  *   Platform Admin → `platform_admin`
  *   Support        → `support`
  *
+ * One role was added since, for a persona the design did not have: the
+ * stranger who signs up on the shared host (P0.13) is `sandbox_developer`,
+ * which opens Studio to read and nothing more. See `isSandboxDeveloper`.
+ *
  * `support` was added to the `UserRole` union in PR #170. This header used to
  * say the union had no such value and that Support was deferred to v2 — forty
  * lines above `isSupport()`, which tests for exactly that value. It was written
@@ -85,19 +89,38 @@ export function isStudioBuilder(role: string | null | undefined): boolean {
 }
 
 /**
- * May this role open Developer Studio at all? Builders and platform admins can;
- * everyone else gets the role-gated empty state (never a 404 — the section
- * exists, the caller simply is not entitled to it).
+ * The self-service developer (roadmap P0.13): what an open sign-up grants.
+ *
+ * A NEW ROLE, NOT THE BUILDER, because no existing one fits. `consultant` can
+ * decide access, issue keys and save connections — giving that to anyone who
+ * can verify an email address would hand governance to strangers. Every other
+ * role is refused Studio entirely. This one may OPEN Studio and read
+ * (Discover, the catalogue, the shared SAP API Hub sandbox tenant) and is
+ * false for every mutation below, so each governance route refuses it on the
+ * gate it already has. Its live reads are capped at SANDBOX tenants as well
+ * (console-read-guard.ts, `decideSandboxDeveloperRead`), and the probe guard
+ * refuses it on any live-read route that does not apply that cap
+ * (probe-guard.ts, `appliesSandboxDeveloperCeiling`).
+ */
+export function isSandboxDeveloper(role: string | null | undefined): boolean {
+  return role === "sandbox_developer";
+}
+
+/**
+ * May this role open Developer Studio at all? Builders, platform admins and
+ * sandbox developers can; everyone else gets the role-gated empty state (never
+ * a 404 — the section exists, the caller simply is not entitled to it).
  */
 export function canAccessStudio(role: string | null | undefined): boolean {
   if (!role) return false;
-  return isStudioBuilder(role) || isAdminRole(role);
+  return isStudioBuilder(role) || isAdminRole(role) || isSandboxDeveloper(role);
 }
 
 /**
  * May this role perform a governance MUTATION inside Studio (register a solution,
  * define an interface, decide a grant)? Builders only — an admin's Studio access
- * is oversight. Admin-specific governance lives in Control Tower (v2).
+ * is oversight, and a sandbox developer's is reading. Admin-specific governance
+ * lives in Control Tower (v2).
  */
 export function canMutateStudio(role: string | null | undefined): boolean {
   return isStudioBuilder(role);

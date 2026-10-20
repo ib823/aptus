@@ -62,7 +62,17 @@ export type UserRole =
    * has no governance mutation anywhere, which is what distinguishes "watches
    * the running system" from "changes what the system may do".
    */
-  | "support";
+  | "support"
+  /**
+   * A developer in a self-service workspace (roadmap P0.13). Opens Developer
+   * Studio's Discover, the catalogue and the deployment's SAP API Hub sandbox
+   * tenant, and invites colleagues into the same workspace -- nothing else.
+   * No governance right anywhere: cannot decide or request access, issue,
+   * rotate or revoke a key, or save a connection (lib/studio/rbac.ts). It is
+   * the role an open sign-up grants, so it must stay this narrow; anything
+   * more is given by an admin or an invitation.
+   */
+  | "sandbox_developer";
 
 /**
  * Legacy role type -- for backward compatibility references.
@@ -89,6 +99,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   viewer: "Viewer",
   client_admin: "Client Admin",
   support: "Support",
+  sandbox_developer: "Sandbox Developer",
 };
 
 /**
@@ -129,6 +140,10 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   // Between it_lead and data_migration_lead: operational reach across the
   // platform, no authority over assessment content or people.
   support: 52,
+  // Just above viewer: a self-service sign-up must be able to invite another
+  // sandbox developer and nobody with more reach (canAssignRole compares
+  // levels, and the invite route narrows it further to this role alone).
+  sandbox_developer: 15,
   viewer: 10,
 };
 

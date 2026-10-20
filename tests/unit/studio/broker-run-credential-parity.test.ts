@@ -58,7 +58,8 @@ describe("the per-credential throttle", () => {
     const m = /if \(!rate\.allowed\) \{([\s\S]*?)\n  \}/.exec(code(read(BROKER_RUN)));
     expect(m, "the throttle branch must exist").toBeTruthy();
     expect(m![1]).toContain("recordNorthboundCall");
-    expect(m![1]).toContain("status: 429");
+    // 429 for the credential's own budget; 503 when the limiter is down (A44).
+    expect(m![1]).toContain("status: outage ? 503 : 429");
     expect(m![1]).toContain("dryRun: true");
   });
 

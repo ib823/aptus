@@ -98,4 +98,5 @@ export const DEFAULT_ROLE_WIDGETS: Record<UserRole, WidgetType[]> = {
   // The Aptus portal dashboard is not this persona's surface -- its home is the
   // Operations Center. Attention only, so the portal is not a blank page.
   support: ["attention"],
+  sandbox_developer: ["attention"],
 };

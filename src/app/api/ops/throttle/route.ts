@@ -17,9 +17,12 @@
  *   can ask for each one's headroom, and a 429 on these paths reaches the route
  *   and is written to the audit trail.
  *
- *   PER CLIENT IP — the middleware's `api:{METHOD}:{ip}` buckets. These fire
- *   BEFORE the route runs, so nothing is persisted and no audit row exists. They
- *   are also keyed by an address we cannot enumerate. So they are reported as
+ *   AT THE EDGE — the middleware's buckets: `api:{METHOD}:{ip}` for browser
+ *   and console calls, and for a northbound call that carries a credential,
+ *   `machine:cred:{hash}` then the `machine-ip:{ip}` backstop (audit A43).
+ *   These fire BEFORE the route runs, so nothing is persisted and no audit row
+ *   exists, and they are keyed by an address or a hash of whatever credential
+ *   was presented, neither of which we can enumerate. So they are reported as
  *   CONFIGURATION ONLY, with `observable: false` — never as a per-tenant figure.
  *   Calling an IP-keyed limit "this customer's throttle" would be a fabrication,
  *   and a particularly convincing one.
@@ -149,7 +152,7 @@ export async function GET(request: NextRequest) {
       nonConsumingRead: true,
       why: "Headroom is read with getRemaining, which does not spend a token. A gauge built on the consuming check would eat the budget it displays and could create the 429s it warns about.",
       edgeBucketsAreNotObservable:
-        "The two IP-keyed middleware buckets fire before the route and persist nothing, and their key is an address we cannot enumerate. Their limits are reported as configuration; no per-tenant usage figure for them exists or can be inferred.",
+        "The middleware buckets fire before the route and persist nothing, and their key is an address, or a hash of whatever credential was presented, that we cannot enumerate. Their limits are reported as configuration; no per-tenant usage figure for them exists or can be inferred.",
       unknownRatherThanZero: anyUnknown
         ? "The shared rate-limit backend did not answer for at least one credential. Those are reported as unknown, not as zero — a zero would read as 'throttled right now'."
         : null,

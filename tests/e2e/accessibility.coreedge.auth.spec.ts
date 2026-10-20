@@ -150,6 +150,9 @@ const PR6_ROUTES = [
   { path: "/coreedge/passport", heading: "Passport" },
   { path: "/coreedge/sap-systems", heading: "SAP systems" },
   { path: "/coreedge/operations/keys", heading: "Keys" },
+  // P0.13: the members screen (invite form included) and the first-admin claim.
+  { path: "/coreedge/members", heading: "Members" },
+  { path: "/coreedge/bootstrap", heading: "Claim this instance" },
 ] as const;
 
 test.describe("CoreEdge · the PR-6 screens", () => {

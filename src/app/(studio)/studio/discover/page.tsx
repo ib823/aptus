@@ -16,8 +16,8 @@ import { ScopeNote } from "@/components/studio/ScopeNote";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { canMutateStudio } from "@/lib/studio/rbac";
-import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
+import { canMutateStudio, isSandboxDeveloper } from "@/lib/studio/rbac";
+import { pickActiveTenant, resolveStudioTenants, tenantsVisibleTo } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Discover" };
@@ -27,7 +27,7 @@ export default async function StudioDiscoverPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const [solutions, tenants] = await Promise.all([
+  const [solutions, allTenants] = await Promise.all([
     organizationId
       ? prisma.solution.findMany({
           where: { organizationId },
@@ -37,6 +37,9 @@ export default async function StudioDiscoverPage() {
       : Promise.resolve([]),
     resolveStudioTenants(organizationId),
   ]);
+  // The same tenants the switcher offers this role (P0.13: Sandbox only for a
+  // sandbox developer), so the page never defaults to one it cannot read.
+  const tenants = tenantsVisibleTo(user.role, allTenants);
 
   // This page is genuinely tenant-specific — its heading claims to show what THIS
   // tenant exposes, and probe results are stored per tenant key. It previously
@@ -58,6 +61,17 @@ export default async function StudioDiscoverPage() {
           an error are three different things, and this page keeps them apart.
         </p>
       </div>
+      {/* A developer workspace (P0.13) lands here first: say what it can reach,
+          and where its colleagues are invited from. */}
+      {isSandboxDeveloper(user.role) ? (
+        <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
+          Your developer workspace reads Sandbox tenants, such as the SAP API Hub sandbox.{" "}
+          <a href="/coreedge/members" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
+            Invite a colleague
+          </a>{" "}
+          to work in it with you.
+        </p>
+      ) : null}
       {/* The likeliest place to assume CoreEdge builds ABAP: right where an
           ABAP-exposed OData service shows up alongside standard SAP APIs. */}
       <ScopeNote topic="abap" />

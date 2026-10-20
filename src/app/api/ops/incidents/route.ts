@@ -19,6 +19,7 @@ import type { NextRequest } from "next/server";
 import type { $Enums } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { FAILURE_REASON_LIMITER_UNAVAILABLE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import {
   countDriftingConnections,
@@ -95,9 +96,21 @@ export async function GET(request: NextRequest) {
        * re-serves a stored outcome without calling SAP, so it is not the tenant
        * answering again. Counted, five retries of one stored 504 fired this
        * rule after a single SAP call.
+       *
+       * And a call refused because the rate limiter was down (503
+       * LIMITER_UNAVAILABLE, audit A44): CoreEdge's own outage, before any
+       * connection, so not "the upstream SAP system returning errors". The
+       * reason is matched with an explicit null branch: `not` alone would
+       * drop every row with no reason, which is most of them.
        */
       prisma.northboundAuditEvent.count({
-        where: opsWhere(guard.actor, { at: { gte: since }, status: { gte: 500 }, dryRun: false, replayed: false }),
+        where: opsWhere(guard.actor, {
+          at: { gte: since },
+          status: { gte: 500 },
+          dryRun: false,
+          replayed: false,
+          OR: [{ failureReason: null }, { failureReason: { not: FAILURE_REASON_LIMITER_UNAVAILABLE } }],
+        }),
       }),
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, { at: { gte: since }, status: 429, replayed: false }),

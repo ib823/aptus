@@ -4,7 +4,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
-import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { managedInvitationRole, mayManageInvitation, orgMemberRights } from "@/lib/auth/org-invites";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -28,21 +28,20 @@ export async function GET(
   }
 
   const { orgId } = await params;
-  const role = mapLegacyRole(user.role);
 
-  const canView =
-    role === "platform_admin" ||
-    ((role === "partner_lead" || role === "client_admin") && user.organizationId === orgId);
-
-  if (!canView) {
+  // The people who may invite are the people who see what is pending.
+  if (!(await orgMemberRights(user, orgId)).manage) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
       { status: 403 },
     );
   }
 
+  // A sandbox developer sees the sandbox developer invitations only, never an
+  // administrator's (lib/auth/org-invites.ts, `managedInvitationRole`).
+  const onlyRole = managedInvitationRole(user);
   const invitations = await prisma.orgInvitation.findMany({
-    where: { organizationId: orgId, status: "pending" },
+    where: { organizationId: orgId, status: "pending", ...(onlyRole ? { role: onlyRole } : {}) },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -78,13 +77,8 @@ export async function DELETE(
   }
 
   const { orgId } = await params;
-  const role = mapLegacyRole(user.role);
 
-  const canRevoke =
-    role === "platform_admin" ||
-    ((role === "partner_lead" || role === "client_admin") && user.organizationId === orgId);
-
-  if (!canRevoke) {
+  if (!(await orgMemberRights(user, orgId)).manage) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
       { status: 403 },
@@ -107,6 +101,18 @@ export async function DELETE(
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Invitation not found" } },
       { status: 404 },
+    );
+  }
+
+  if (!mayManageInvitation(user, invitation)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.FORBIDDEN,
+          message: "A sandbox developer can revoke sandbox developer invitations only.",
+        },
+      },
+      { status: 403 },
     );
   }
 

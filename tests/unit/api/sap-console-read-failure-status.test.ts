@@ -154,7 +154,7 @@ describe("/entities", () => {
     );
     const res = await entities.GET(get(ENTITIES));
     expect(res.status).toBe(502);
-    expect(audited()).toEqual([expect.objectContaining({ status: 502, failureReason: "OAUTH_TOKEN_HTTP_503" })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 502, failureReason: "TOKEN_HTTP_503" })]);
   });
 
   it("SAP's own 5xx stays the generic 502", async () => {
@@ -181,7 +181,7 @@ describe("/operations", () => {
       new SapCredentialError(new OAuthTokenRequestError("OAuth token request failed: HTTP 401", 401)),
     );
     await operations.GET(get(OPERATIONS));
-    expect(audited()).toEqual([expect.objectContaining({ status: 403, failureReason: "OAUTH_TOKEN_REJECTED" })]);
+    expect(audited()).toEqual([expect.objectContaining({ status: 403, failureReason: "TOKEN_REJECTED" })]);
   });
 
   /*

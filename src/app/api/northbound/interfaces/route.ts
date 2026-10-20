@@ -12,8 +12,14 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
-import { newCorrelationId, northboundError, northboundOk, unauthenticated } from "@/lib/northbound/respond";
+import {
+  newCorrelationId,
+  northboundOk,
+  northboundThrottleRefusal,
+  unauthenticated,
+} from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
 import { customServiceDefinition } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
@@ -27,9 +33,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const correlationId = newCorrelationId();
 
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
+    // Spends the address's failed-lookup budget, which the edge reads first.
+    await noteFailedCredential(request.headers, bearer);
     return unauthenticated(correlationId);
   }
   const client = auth.client;
@@ -46,6 +55,8 @@ export async function GET(request: NextRequest) {
    */
   const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
+    // 429 for this credential's own use, 503 when the limiter is down (A44).
+    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -53,12 +64,13 @@ export async function GET(request: NextRequest) {
       operation: "READ",
       externalId: "-discovery-",
       environment: client.environment,
-      status: 429,
+      status: refusal.status,
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      failureReason: refusal.failureReason,
     });
-    return northboundError("RATE_LIMITED", "Too many requests. Slow down and retry.", 429, correlationId);
+    return refusal.response;
   }
 
   const [interfaces, grants] = await Promise.all([

@@ -17,6 +17,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   viewer: "bg-slate-50 text-slate-700",
   client_admin: "bg-pink-50 text-pink-700",
   support: "bg-stone-50 text-stone-700",
+  sandbox_developer: "bg-sky-50 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
 };
 
 interface RoleBadgeProps {

@@ -280,6 +280,20 @@ if (isProductionDeploy) {
     );
     exitCode = 1;
   }
+  // P0.13 (docs/runbooks/developer-onboarding.md). Warnings, never fatal: each
+  // is a deliberate setting an operator may have reasons for, and failing the
+  // build over one would be worse than saying so.
+  if (process.env.SMTP_REQUIRE_TLS?.trim().toLowerCase() === "false") {
+    console.warn(
+      "[WARN] SMTP_REQUIRE_TLS=false: mail may be sent, SMTP password included, without TLS. Meant for a local relay only.",
+    );
+  }
+  const bootstrapToken = process.env.COREEDGE_BOOTSTRAP_TOKEN?.trim() ?? "";
+  if (bootstrapToken && bootstrapToken.length < 32) {
+    console.warn(
+      "[WARN] COREEDGE_BOOTSTRAP_TOKEN is shorter than 32 characters, so it is ignored: no first admin can be claimed with it.",
+    );
+  }
   if (
     process.env.PRESALES_CSRF_SECRET &&
     process.env.PRESALES_CSRF_SECRET.length < 32

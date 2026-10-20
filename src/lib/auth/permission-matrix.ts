@@ -173,6 +173,14 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
     "assessment.view",
     "report.view",
   ]),
+
+  // Self-service developer workspace (P0.13): no assessment work at all. It may
+  // edit its own profile and invite a colleague into its own workspace (as a
+  // sandbox developer, which the invite route enforces) — nothing else.
+  sandbox_developer: new Set([
+    "profile.edit",
+    "user.invite",
+  ]),
 };
 
 /**

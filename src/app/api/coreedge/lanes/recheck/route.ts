@@ -27,6 +27,7 @@ import { DISABLED_REASONS } from "@/lib/coreedge/copy";
 import { LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { recheckOneLane } from "@/lib/ops/lane-check-sweep";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { isLimiterOutage, limiterUnavailableResponse } from "@/lib/security/rate-limit-response";
 import { writeConfigAudit } from "@/lib/studio/audit";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     RECHECK_LIMIT,
   );
   if (!gate.allowed) {
+    // Not "checked a moment ago" when the limiter is down (audit A44).
+    if (isLimiterOutage(gate)) return limiterUnavailableResponse(gate);
     return NextResponse.json(
       { error: { message: "Checked a moment ago. Try again shortly." } },
       { status: 429, headers: { "Retry-After": String(Math.ceil(gate.resetMs / 1000)) } },
