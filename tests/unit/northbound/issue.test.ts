@@ -516,6 +516,18 @@ describe("a revoked credential does not keep its write key", () => {
     expect(call.update).not.toHaveProperty("secretsCiphertext");
   });
 
+  it("re-issuing or rotating an EXPIRED credential clears it too (P0.11)", async () => {
+    const expired = { ...LIVE, expiresAt: new Date(Date.now() - HOUR) };
+    mocks.findFirst.mockResolvedValue(expired);
+    await issueClientToken(SCOPE, { solutionId: "sol_1", label: "x", environment: "PROD", createdById: "u", expiresAt: EXPIRES });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update).toHaveProperty("secretsCiphertext", null);
+
+    mocks.update.mockResolvedValue(ROW);
+    await rotateClientToken(SCOPE, "client_1");
+    expect(mocks.update.mock.calls[0]?.[0]?.data).toHaveProperty("secretsCiphertext", null);
+  });
+
   it("rotating a revoked credential clears it, rotating a live one does not", async () => {
     mocks.update.mockResolvedValue(ROW);
     mocks.findFirst.mockResolvedValue({ ...LIVE, isActive: false, revokedAt: new Date("2026-07-01T00:00:00Z") });

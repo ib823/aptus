@@ -19,7 +19,7 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { LEGACY_TOKEN_PREFIX } from "@/lib/northbound/key-policy";
+import { LEGACY_TOKEN_PREFIX, overlapIsOpen, overlapStillBound } from "@/lib/northbound/key-policy";
 import { tenantScopeOf, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /**
@@ -143,6 +143,13 @@ const AUTH_SELECT = {
 } as const;
 
 /**
+ * What the lookup by the PREVIOUS hash reads: the same, plus the two hashes
+ * that say whether the overlap still belongs to the row's current key
+ * (`overlapStillBound`). They are compared here and never leave this module.
+ */
+const PREVIOUS_KEY_SELECT = { ...AUTH_SELECT, tokenHash: true, overlapForTokenHash: true } as const;
+
+/**
  * Resolve a raw bearer token to the client it identifies.
  *
  * Every failure mode is reported distinctly HERE so it can be audited and
@@ -159,6 +166,11 @@ const AUTH_SELECT = {
  * as to the current key. That is what makes "revoke ends both at once" a
  * property of one `revokedAt` rather than of a second check someone must
  * remember.
+ *
+ * The overlap is also honoured only while it is still bound to the row's
+ * current key (key-policy.ts `overlapStillBound`): a `tokenHash` written by
+ * anything that did not write the overlap with it — above all a build from
+ * before P0.11, after a rollback — closes the window rather than inheriting it.
  */
 export async function authenticateClientToken(
   rawToken: string | null,
@@ -168,14 +180,17 @@ export async function authenticateClientToken(
 
   const tokenHash = hashClientToken(rawToken);
   let viaPreviousKey = false;
+  let previousKeyBound = false;
   let row = await prisma.solutionClient.findUnique({ where: { tokenHash }, select: AUTH_SELECT });
   if (!row) {
     // Only on a miss, so a current key costs one lookup as it always did.
-    row = await prisma.solutionClient.findUnique({
+    const previous = await prisma.solutionClient.findUnique({
       where: { previousTokenHash: tokenHash },
-      select: AUTH_SELECT,
+      select: PREVIOUS_KEY_SELECT,
     });
-    viaPreviousKey = row !== null;
+    viaPreviousKey = previous !== null;
+    previousKeyBound = previous !== null && overlapStillBound(previous);
+    row = previous;
   }
 
   if (!row) return { ok: false, reason: "UNKNOWN_TOKEN" };
@@ -184,7 +199,7 @@ export async function authenticateClientToken(
   // before the overlap, so a revoked row refuses its previous key as REVOKED.
   if (row.revokedAt !== null) return { ok: false, reason: "REVOKED" };
   if (!row.isActive) return { ok: false, reason: "INACTIVE" };
-  if (viaPreviousKey && (row.previousValidUntil === null || row.previousValidUntil.getTime() <= now.getTime())) {
+  if (viaPreviousKey && (!previousKeyBound || !overlapIsOpen(row.previousValidUntil, now))) {
     return { ok: false, reason: "ROTATED_OUT" };
   }
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) {

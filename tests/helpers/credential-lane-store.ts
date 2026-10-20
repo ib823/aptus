@@ -106,6 +106,7 @@ export class CredentialLaneStore {
           tokenPrefix: "ce_",
           previousTokenHash: null,
           previousValidUntil: null,
+          overlapForTokenHash: null,
           createdAt: now,
           updatedAt: now,
           ...create,

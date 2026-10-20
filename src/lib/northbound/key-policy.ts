@@ -241,10 +241,20 @@ export interface ReplacedKey {
 export interface OverlapFields {
   readonly previousTokenHash: string | null;
   readonly previousValidUntil: Date | null;
+  /**
+   * The `tokenHash` the overlap was opened for: the key that replaced
+   * `previousTokenHash`. Authentication honours the overlap only while the
+   * row's current `tokenHash` is still this one (see `overlapStillBound`).
+   */
+  readonly overlapForTokenHash: string | null;
 }
 
 /** No previous key: what a first issue, or the replacement of an ended key, writes. */
-export const NO_OVERLAP: OverlapFields = { previousTokenHash: null, previousValidUntil: null };
+export const NO_OVERLAP: OverlapFields = {
+  previousTokenHash: null,
+  previousValidUntil: null,
+  overlapForTokenHash: null,
+};
 
 /**
  * What a key change writes into the overlap columns.
@@ -258,11 +268,16 @@ export const NO_OVERLAP: OverlapFields = { previousTokenHash: null, previousVali
  * Writing the fields every time, including NO_OVERLAP, is deliberate: the
  * key that was "previous" before this change is dropped, so only the
  * immediately previous key ever overlaps.
+ *
+ * The overlap is BOUND to the key change that opened it: `newTokenHash`, the
+ * hash being written as the row's `tokenHash` in the same update, is recorded
+ * beside it as `overlapForTokenHash`.
  */
 export function overlapFields(
   replaced: ReplacedKey | null,
   now: Date,
   newExpiresAt: Date | null,
+  newTokenHash: string,
 ): OverlapFields {
   const overlapMs = rotationOverlapHours() * HOUR_MS;
   if (replaced === null || overlapMs === 0) return NO_OVERLAP;
@@ -272,12 +287,36 @@ export function overlapFields(
   if (replaced.expiresAt != null) until = Math.min(until, replaced.expiresAt.getTime());
   if (newExpiresAt != null) until = Math.min(until, newExpiresAt.getTime());
   if (until <= now.getTime()) return NO_OVERLAP;
-  return { previousTokenHash: replaced.tokenHash, previousValidUntil: new Date(until) };
+  return {
+    previousTokenHash: replaced.tokenHash,
+    previousValidUntil: new Date(until),
+    overlapForTokenHash: newTokenHash,
+  };
 }
 
 /** Is the previous key still inside its overlap window? */
 export function overlapIsOpen(previousValidUntil: Date | null | undefined, now: Date): boolean {
   return previousValidUntil instanceof Date && previousValidUntil.getTime() > now.getTime();
+}
+
+/**
+ * Does the overlap still belong to the row's current key?
+ *
+ * WHY THE OVERLAP IS BOUND. The code before P0.11 knows nothing of the
+ * overlap columns, so a deploy rolled back after a rotation leaves them in
+ * place, and every key change made under it — a rotation meant as an
+ * immediate cut-over, or the revoke-then-reissue that answers a leak — writes
+ * a new `tokenHash` and `revokedAt: null` beside a window it cannot see. Rolled
+ * forward inside that window, the replaced (perhaps leaked) key would
+ * authenticate again. Any change of `tokenHash` that did not write the
+ * overlap breaks this match, so the window fails closed whichever build made
+ * the change, and no runbook step is needed for the key to stay dead.
+ */
+export function overlapStillBound(row: {
+  readonly tokenHash: string;
+  readonly overlapForTokenHash: string | null;
+}): boolean {
+  return row.overlapForTokenHash !== null && row.overlapForTokenHash === row.tokenHash;
 }
 
 /* ── is it live? one predicate for every screen ───────────────────────── */

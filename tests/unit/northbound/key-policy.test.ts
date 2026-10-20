@@ -24,6 +24,7 @@ import {
   NO_OVERLAP,
   overlapFields,
   overlapIsOpen,
+  overlapStillBound,
   requiresExpiry,
   resolveKeyExpiry,
   rotationOverlapHours,
@@ -202,33 +203,43 @@ describe("the rotation overlap", () => {
   const live = { tokenHash: "old", isActive: true, revokedAt: null, expiresAt: null };
 
   it("keeps a live replaced key for 24 hours by default", () => {
-    expect(overlapFields(live, NOW, days(90))).toEqual({
+    expect(overlapFields(live, NOW, days(90), "new")).toEqual({
       previousTokenHash: "old",
       previousValidUntil: new Date(NOW.getTime() + 24 * HOUR),
+      overlapForTokenHash: "new",
     });
   });
 
+  // Review round 1: a build from before P0.11 changes tokenHash without
+  // touching the overlap, so the window must not survive that change.
+  it("is bound to the key that opened it: any later change of tokenHash ends it", () => {
+    const opened = overlapFields(live, NOW, days(90), "new");
+    expect(overlapStillBound({ tokenHash: "new", overlapForTokenHash: opened.overlapForTokenHash })).toBe(true);
+    expect(overlapStillBound({ tokenHash: "changed-elsewhere", overlapForTokenHash: opened.overlapForTokenHash })).toBe(false);
+    expect(overlapStillBound({ tokenHash: "new", overlapForTokenHash: null })).toBe(false);
+  });
+
   it("never outlives the replaced key's own expiry, nor the new key's", () => {
-    expect(overlapFields({ ...live, expiresAt: new Date(NOW.getTime() + 2 * HOUR) }, NOW, null).previousValidUntil).toEqual(
+    expect(overlapFields({ ...live, expiresAt: new Date(NOW.getTime() + 2 * HOUR) }, NOW, null, "new").previousValidUntil).toEqual(
       new Date(NOW.getTime() + 2 * HOUR),
     );
-    expect(overlapFields(live, NOW, new Date(NOW.getTime() + 3 * HOUR)).previousValidUntil).toEqual(
+    expect(overlapFields(live, NOW, new Date(NOW.getTime() + 3 * HOUR), "new").previousValidUntil).toEqual(
       new Date(NOW.getTime() + 3 * HOUR),
     );
   });
 
   it("gives an ended key none: revoked, deactivated or expired keys never come back", () => {
-    expect(overlapFields({ ...live, revokedAt: days(-1) }, NOW, null)).toEqual(NO_OVERLAP);
-    expect(overlapFields({ ...live, isActive: false }, NOW, null)).toEqual(NO_OVERLAP);
-    expect(overlapFields({ ...live, expiresAt: NOW }, NOW, null)).toEqual(NO_OVERLAP);
-    expect(overlapFields(null, NOW, null)).toEqual(NO_OVERLAP);
+    expect(overlapFields({ ...live, revokedAt: days(-1) }, NOW, null, "new")).toEqual(NO_OVERLAP);
+    expect(overlapFields({ ...live, isActive: false }, NOW, null, "new")).toEqual(NO_OVERLAP);
+    expect(overlapFields({ ...live, expiresAt: NOW }, NOW, null, "new")).toEqual(NO_OVERLAP);
+    expect(overlapFields(null, NOW, null, "new")).toEqual(NO_OVERLAP);
   });
 
   it("is switched off by COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0, and follows any other value", () => {
     vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
-    expect(overlapFields(live, NOW, null)).toEqual(NO_OVERLAP);
+    expect(overlapFields(live, NOW, null, "new")).toEqual(NO_OVERLAP);
     vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "6");
-    expect(overlapFields(live, NOW, null).previousValidUntil).toEqual(new Date(NOW.getTime() + 6 * HOUR));
+    expect(overlapFields(live, NOW, null, "new").previousValidUntil).toEqual(new Date(NOW.getTime() + 6 * HOUR));
   });
 
   it("is open strictly before its end", () => {

@@ -1341,6 +1341,13 @@ model SolutionClient {
   previousTokenHash  String?   @unique
   /// When the previous key stops working. Null when there is no previous key.
   previousValidUntil DateTime?
+  /// The `tokenHash` the overlap was opened FOR — the key that replaced
+  /// `previousTokenHash`, written in the same update. The previous key is
+  /// accepted only while this still equals `tokenHash`, so any later change of
+  /// the current key that did not write the overlap with it (a build from
+  /// before P0.11, after a rollback, knows nothing of these columns) ends the
+  /// window instead of inheriting it.
+  overlapForTokenHash String?
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
   environment String
 

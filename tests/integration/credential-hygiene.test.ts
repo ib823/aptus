@@ -249,6 +249,44 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("credential hygiene against real
     expect(again.body.data?.previousValidUntil).toBeNull();
   });
 
+  /*
+   * Review round 1. The code before P0.11 (088036ac) never writes the overlap
+   * columns, so after a rotation, a code rollback, and a revoke or rotation
+   * made under the old code, the row still held the replaced key and an open
+   * window — and the roll-forward accepted it again. These are the old code's
+   * writes, copied from `git show 088036ac:src/lib/northbound/issue.ts`.
+   */
+  it("3b · a key changed by the pre-P0.11 code after a rollback ends the overlap it left", async () => {
+    for (const oldCodeRevokes of [true, false]) {
+      const solutionId = await app(`Rollback ${oldCodeRevokes ? "revoke" : "rotate"}`);
+      const first = await issue(solutionId, "PROD", inDays(30));
+      const keyA = String(first.body.data?.token);
+      const clientId = String(first.body.data?.id);
+      const keyB = String((await patch({ clientId, action: "rotate" })).body.data?.token);
+      expect(await authOk(keyA)).toBe(true);
+
+      // Rolled back. Under the old code an operator revokes (A leaked) and then
+      // rotates, or simply rotates to cut over at once.
+      const where = { id: clientId, organizationId: ORG };
+      if (oldCodeRevokes) {
+        await prisma.solutionClient.update({
+          where,
+          data: { isActive: false, revokedAt: new Date(), secretsCiphertext: null },
+        });
+      }
+      const keyC = `ce_${randomBytes(32).toString("base64url")}`;
+      await prisma.solutionClient.update({
+        where,
+        data: { tokenHash: hashClientToken(keyC), isActive: true, revokedAt: null },
+      });
+
+      // Rolled forward, inside A's old window.
+      expect(await authenticateClientToken(keyA)).toEqual({ ok: false, reason: "ROTATED_OUT" });
+      expect(await authOk(keyB)).toBe(false);
+      expect(await authOk(keyC)).toBe(true);
+    }
+  });
+
   it("4 · an expired key never shows as live, anywhere", async () => {
     const expiredApp = await app("Expired app");
     const legacyApp = await app("Legacy app");

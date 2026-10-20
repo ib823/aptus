@@ -520,6 +520,7 @@ async function mintKey(
   now: Date,
 ): Promise<MintedKey> {
   const rawToken = generateClientToken(link.environment);
+  const tokenHash = hashClientToken(rawToken);
   const solutionName = facts.solution?.name ?? "";
   const existing = facts.client;
   const expiry = mintedExpiry(link, facts, now);
@@ -542,7 +543,7 @@ async function mintKey(
       solutionId: link.solutionId,
       environment: link.environment,
       label: `${solutionName} · ${link.environment}`,
-      tokenHash: hashClientToken(rawToken),
+      tokenHash,
       tokenPrefix: tokenPrefixFor(link.environment),
       expiresAt,
       isActive: true,
@@ -565,9 +566,9 @@ async function mintKey(
      * that had ended (revoked, deactivated, expired) does not come back.
      */
     update: {
-      tokenHash: hashClientToken(rawToken),
+      tokenHash,
       tokenPrefix: tokenPrefixFor(link.environment),
-      ...overlapFields(existing, now, expiresAt),
+      ...overlapFields(existing, now, expiresAt, tokenHash),
       isActive: true,
       revokedAt: null,
       /*
@@ -577,7 +578,7 @@ async function mintKey(
        */
       expiresAt,
       // A revived key does not bring the old write key back. See `endedCredential`.
-      ...(endedCredential(existing) ? { secretsCiphertext: null } : {}),
+      ...(endedCredential(existing, now) ? { secretsCiphertext: null } : {}),
     },
     select: { id: true, expiresAt: true, previousValidUntil: true },
   });

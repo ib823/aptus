@@ -42,6 +42,7 @@ import { prisma } from "@/lib/db/prisma";
 import { hashClientToken } from "@/lib/northbound/auth";
 import {
   expiryOnRenewal,
+  isKeyLive,
   overlapFields,
   overlapIsOpen,
   resolveKeyExpiry,
@@ -202,9 +203,17 @@ export async function closePendingClaimLinks(
  * again beside the new token, with no ISSUE_WRITE gate and no ISSUE_WRITE
  * audit. Revocation now destroys the write key itself; this covers rows that
  * were revoked before it did, and rows deactivated without being revoked.
+ *
+ * AN EXPIRED ROW IS ENDED TOO (P0.11). Its write key stopped with it, and
+ * renewing it — what the console tells the owner to do with an expired key —
+ * must not hand that `cew_` key a fresh lifetime. The rule is `isKeyLive`'s,
+ * the one authentication, the overlap and `setWriteCredential` already use.
  */
-export function endedCredential(row: { revokedAt: Date | null; isActive: boolean } | null): boolean {
-  return row !== null && (row.revokedAt !== null || !row.isActive);
+export function endedCredential(
+  row: { revokedAt: Date | null; isActive: boolean; expiresAt: Date | null } | null,
+  now: Date,
+): boolean {
+  return row !== null && !isKeyLive(row, now);
 }
 
 /**
@@ -370,7 +379,7 @@ export async function issueClientToken(
         // A re-issue over a live key is a rotation, and overlaps like one: the
         // key it replaces keeps working for the window. Over an ended key it
         // writes NO_OVERLAP, so a revoked key never comes back for a day.
-        ...overlapFields(previous, now, expiresAt),
+        ...overlapFields(previous, now, expiresAt, tokenHash),
         // Rotation re-states the binding rather than preserving it: the caller
         // just described the credential it wants, and a silently-kept client
         // from a previous issue would be a binding nobody chose.
@@ -381,7 +390,7 @@ export async function issueClientToken(
         isActive: true,
         revokedAt: null,
         // ...but not the write key that was sealed on it. See `endedCredential`.
-        ...(endedCredential(previous) ? { secretsCiphertext: null } : {}),
+        ...(endedCredential(previous, now) ? { secretsCiphertext: null } : {}),
       },
       select: WRITTEN_SELECT,
     });
@@ -445,19 +454,20 @@ export async function rotateClientToken(
     await closePendingClaimLinks(lane, reason, now, tx);
 
     const rawToken = generateClientToken(existing.environment);
+    const tokenHash = hashClientToken(rawToken);
     const written = await tx.solutionClient.update({
       where: { id: existing.id, organizationId: scope.organizationId },
       data: {
-        tokenHash: hashClientToken(rawToken),
+        tokenHash,
         tokenPrefix: tokenPrefixFor(existing.environment),
-        ...overlapFields(existing, now, expiresAt),
+        ...overlapFields(existing, now, expiresAt, tokenHash),
         // Rotating an inactive or revoked credential brings it back — that is what
         // "give me a working token" means.
         isActive: true,
         revokedAt: null,
         // A working token cannot carry an expiry that has already passed.
         expiresAt,
-        ...(endedCredential(existing) ? { secretsCiphertext: null } : {}),
+        ...(endedCredential(existing, now) ? { secretsCiphertext: null } : {}),
       },
       select: WRITTEN_SELECT,
     });

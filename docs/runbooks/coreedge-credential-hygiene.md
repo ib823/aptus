@@ -21,6 +21,8 @@ default (`COREEDGE_KEY_MAX_TTL_DAYS`):
 - SANDBOX and DEV keys may still have no expiry. Renewing one keeps its expiry
   unless that date has passed (audit A48).
 - The write key has no expiry of its own; it stops when its runtime key stops.
+  Renewing an expired key (rotate, re-issue or claim link) destroys the old
+  write key, as renewing a revoked one does. Issue a new write key afterwards.
   `POST /api/studio/clients/write-credential` refuses to issue a write key on a
   TEST or PROD key that has no expiry, and tells the person to rotate first.
 
@@ -50,6 +52,12 @@ Further rules:
 - Authentication looks a key up by its current hash first and by the previous
   hash only on a miss. A previous key past its window is refused, and the
   failure is logged as `ROTATED_OUT`.
+- The overlap is bound to the key change that opened it.
+  `SolutionClient.overlapForTokenHash` records the `tokenHash` written by that
+  rotation, and the previous key is accepted only while the row's `tokenHash`
+  still equals it. If anything else changes the current key afterwards, for
+  example code from before P0.11 after a rollback, the window closes and the
+  previous key is refused as `ROTATED_OUT`.
 
 **Revocation ends both keys.** Revoking sets `revokedAt` on the row. Both the
 current and the previous key resolve to that row, so both are refused as
@@ -78,9 +86,10 @@ authentication uses:
 
 Nothing that works today stops working.
 
-- The migration `20261022010000_credential_hygiene` adds three columns.
+- The migration `20261022010000_credential_hygiene` adds four columns.
   `tokenPrefix` is `NOT NULL DEFAULT 'ce_'`, which is a metadata-only change.
-  `previousTokenHash` and `previousValidUntil` are nullable, and the new unique
+  `previousTokenHash`, `previousValidUntil` and `overlapForTokenHash` are
+  nullable, and the new unique
   index is built over a column that is `NULL` on every row. There is no
   backfill. The code that runs before the deploy finishes never reads the new
   columns.
@@ -148,11 +157,33 @@ deployment never picked up the new key.
 - **Policy only:** set `COREEDGE_KEY_EXPIRY=off`, or
   `COREEDGE_KEY_ROTATION_OVERLAP_HOURS=0`, and redeploy. Keys already minted
   keep the expiry they were given.
-- **Code:** reverting the deploy is safe. The previous code ignores the three
-  columns. An open overlap simply stops working, because the old code does not
-  look up `previousTokenHash`, and the next rotation overwrites the stale values.
-  Keys minted with `ce_live_` or `ce_test_` keep working, because
-  authentication only ever compared hashes.
+- **Code:** you can revert the deploy.
+  - The previous code ignores the new columns. While it runs, an open overlap
+    stops working, because the old code never looks up `previousTokenHash`.
+    Callers that have not yet picked up their new key fail until they do.
+  - The old code also never writes these columns. A rotation, revocation or
+    re-issue made under it leaves `previousTokenHash` and `previousValidUntil`
+    exactly as they were.
+  - Rolling forward is still safe for any key the old code changed. The old
+    code's write changes `tokenHash` but not `overlapForTokenHash`, so the
+    overlap is no longer bound to the current key, and authentication refuses
+    the previous key (`ROTATED_OUT`). This holds even when the operator used
+    the old code to revoke a leaked key and then issue a new one.
+  - A row the old code did not touch keeps its overlap after the roll-forward,
+    until `previousValidUntil`. That is the overlap its rotation asked for.
+  - Keys minted with `ce_live_` or `ce_test_` keep working under the old code,
+    because authentication only ever compared hashes.
+- **Tidy up after a roll-forward (optional).** A row the old code changed can
+  still show "previous key works until ..." on the screens until that time,
+  even though authentication already refuses the key. To clear those rows:
+
+  ```sql
+  UPDATE "SolutionClient"
+  SET "previousTokenHash" = NULL, "previousValidUntil" = NULL, "overlapForTokenHash" = NULL
+  WHERE "previousTokenHash" IS NOT NULL
+    AND "overlapForTokenHash" IS DISTINCT FROM "tokenHash";
+  ```
+
 - **Schema:** the migration is additive. Leave it in place on a code rollback.
 
 ## Verification after deploy
@@ -165,3 +196,12 @@ deployment never picked up the new key.
 4. Revoke it. Both keys get `401` at once.
 5. Operations > Tokens shows any pre-P0.11 TEST or PROD key without an expiry as
    "no expiry - set one", and no expired key as active.
+6. After a rollback and roll-forward, check that no overlap outlived a key
+   change made by the old code. Authentication refuses these keys anyway; a
+   non-zero count only means the screens need the tidy-up under Rollback:
+
+   ```sql
+   SELECT count(*) FROM "SolutionClient"
+   WHERE "previousValidUntil" > now()
+     AND "overlapForTokenHash" IS DISTINCT FROM "tokenHash";
+   ```

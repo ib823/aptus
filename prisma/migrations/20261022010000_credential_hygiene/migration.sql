@@ -11,15 +11,26 @@
 -- authentication look a row up by the previous hash in one indexed equality,
 -- the same way it looks up the current one.
 --
+-- overlapForTokenHash binds the overlap to the key change that opened it: it
+-- is the tokenHash written in the same update, and the previous key is
+-- accepted only while it still equals tokenHash. That is what makes a code
+-- rollback safe in both directions: the code before P0.11 never writes these
+-- columns, so a rotation or a revoke-then-reissue made under it changes
+-- tokenHash beside a window it cannot see, and the roll-forward then finds
+-- the window unbound and refuses the replaced key (ROTATED_OUT) instead of
+-- bringing it back.
+--
 -- NOTHING STOPS ON DEPLOY. Adding a column with a constant default is a
 -- metadata-only change in PostgreSQL 11+, and the index is built over a column
--- that is NULL on every row. The running code never reads the new columns:
--- existing keys, including those with no expiry, keep authenticating exactly
--- as before. Mandatory expiry applies only to keys issued or rotated after
--- the deploy (COREEDGE_KEY_EXPIRY, docs/runbooks/coreedge-credential-hygiene.md).
+-- that is NULL on every row. The code running before the deploy never reads
+-- the new columns: existing keys, including those with no expiry, keep
+-- authenticating exactly as before. Mandatory expiry applies only to keys
+-- issued or rotated after the deploy (COREEDGE_KEY_EXPIRY,
+-- docs/runbooks/coreedge-credential-hygiene.md).
 
 -- AlterTable
-ALTER TABLE "SolutionClient" ADD COLUMN     "previousTokenHash" TEXT,
+ALTER TABLE "SolutionClient" ADD COLUMN     "overlapForTokenHash" TEXT,
+ADD COLUMN     "previousTokenHash" TEXT,
 ADD COLUMN     "previousValidUntil" TIMESTAMP(3),
 ADD COLUMN     "tokenPrefix" TEXT NOT NULL DEFAULT 'ce_';
 

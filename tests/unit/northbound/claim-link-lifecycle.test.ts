@@ -416,6 +416,28 @@ describe("A37 · revoking a credential destroys its write key", () => {
     }
   });
 
+  // P0.11 review round 1: an expired row counted as live for this rule, so
+  // renewing it — the console's own advice for an expired key — handed the
+  // lapsed `cew_` key a fresh 90-day life beside the new runtime key.
+  it("an EXPIRED credential's write key does not come back with its renewal (P0.11)", async () => {
+    for (const renew of ["issue", "rotate", "claim"] as const) {
+      laneStore.clients = [];
+      laneStore.links = [];
+      const issued = await liveKeyWithWriteKey();
+      // The key reached its mandatory expiry: both keys are dead now.
+      Object.assign(lane()!, { expiresAt: at(-0.5) });
+      moveTo(at(0));
+      expect(await verifyWriteCredential(SCOPE, issued.id, WRITE_KEY), renew).toBe(false);
+
+      if (renew === "issue") await issueInStudio();
+      if (renew === "rotate") await rotateClientToken(SCOPE, issued.id);
+      if (renew === "claim") expect((await claimKey(await sendLink())).ok).toBe(true);
+
+      expect(lane()!.secretsCiphertext ?? null, renew).toBeNull();
+      expect(await verifyWriteCredential(SCOPE, issued.id, WRITE_KEY), renew).toBe(false);
+    }
+  });
+
   it("rotating a LIVE key keeps its write key — rotation is not a compromise", async () => {
     const issued = await liveKeyWithWriteKey();
     moveTo(at(0));

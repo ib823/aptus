@@ -415,8 +415,9 @@ existing connections are not touched. Use OAuth SAML bearer instead
   this rule may have no expiry. It keeps working, and the Studio and the
   Operations screens show it as **no expiry - set one** until it is rotated.
   The write key (`cew_`) is stored on the same credential, so it stops when the
-  runtime key does. Studio does not issue a write key on a TEST or PROD key that
-  has no expiry: rotate the key first.
+  runtime key does. It does not come back when an expired or revoked key is
+  renewed: ask for a new write key after the renewal. Studio does not issue a
+  write key on a TEST or PROD key that has no expiry: rotate the key first.
 - **Rotating overlaps.** Rotating mints a new key with a fresh lifetime. The
   key it replaces keeps working for 24 hours, or until it would have expired if
   that is sooner. The response, the claim screen and the Studio table show the
