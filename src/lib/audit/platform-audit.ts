@@ -2,6 +2,11 @@
  * The platform-scope audit trail: a change a PERSON made to a live SAP system
  * from the Workbench, outside the broker. Roadmap item P0.7.
  *
+ * NOT THE GOVERNANCE TRAIL. Passkey and step-up events of tenantless actors go
+ * to `PlatformGovernanceAudit` through `writePlatformGovernanceAudit`
+ * (lib/studio/audit.ts), which is best-effort. A new SAP write uses THIS
+ * module's fail-closed begin/complete pair, never that writer.
+ *
  * THE GAP THIS CLOSES. `POST /api/sap/tdd/write` created records in a live SAP
  * tenant and left no audit row at all. `POST /api/sap/tdd/hub-content/write-test`
  * created and deleted one and recorded it with a best-effort `logDecision`,
@@ -17,7 +22,7 @@
  *      account for is the one write this module exists to prevent. Fail-closed,
  *      not fail-loud.
  *   2. `completePlatformAudit` AFTER, with what happened. It inserts the
- *      `PlatformAuditOutcome` and NEVER throws: by then SAP has acted, and
+ *      `PlatformAuditOutcome` row and NEVER throws: by then SAP has acted, and
  *      losing the caller's answer because the outcome insert failed would hide
  *      a real change from the person who made it. The event is then left with
  *      no outcome, which is itself the signal — see below.
@@ -68,7 +73,7 @@ export const PLATFORM_AUDIT_OUTCOMES = {
   /** A write-test created its record and could not delete it. It is still in SAP. */
   LEFT_BEHIND: "the test record was created and NOT deleted — it is still in SAP",
 } as const;
-export type PlatformAuditOutcome = keyof typeof PLATFORM_AUDIT_OUTCOMES;
+export type PlatformAuditOutcomeKind = keyof typeof PLATFORM_AUDIT_OUTCOMES;
 
 /** What an event with no outcome row means, once it is old enough to mean it. */
 export const NO_OUTCOME_RECORDED =
@@ -188,7 +193,7 @@ export async function beginPlatformAudit(input: BeginPlatformAuditInput): Promis
 }
 
 export interface PlatformAuditCompletion {
-  outcome: PlatformAuditOutcome;
+  outcome: PlatformAuditOutcomeKind;
   sapStatus?: number | null;
   /** A bounded code (HTTP_404, TIMEOUT, DELETE_NOT_SENT …), never free text. */
   reason?: string | null;

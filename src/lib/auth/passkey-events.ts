@@ -10,7 +10,7 @@
  * visible, and this is where it is made visible:
  *
  *   - an audit row (`Passkey` / CREATE or REVOKE) per change — ConfigAudit, or
- *     PlatformAudit for an account with no organization — append-only
+ *     PlatformGovernanceAudit for an account with no organization — append-only
  *     like every governance record, so "which passkeys did this account gain,
  *     from where, and was it stepped up" has an answer after the fact;
  *   - an email to the person for every passkey added, so an enrolment they did
@@ -25,7 +25,7 @@ import { parseDevice } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
 import { sendEmail } from "@/lib/email/brevo";
 import { passkeyAddedEmail } from "@/lib/email/templates";
-import { writeConfigAudit, writePlatformAudit } from "@/lib/studio/audit";
+import { writeConfigAudit, writePlatformGovernanceAudit } from "@/lib/studio/audit";
 import type { SessionUser } from "@/types/assessment";
 
 interface PasskeyEventSource {
@@ -48,7 +48,7 @@ async function recordPasskeyAudit(
 ): Promise<void> {
   const entry = { actorId: user.id, entityType: "Passkey" as const, entityId: credentialId, action, after };
   if (!user.organizationId) {
-    await writePlatformAudit(entry);
+    await writePlatformGovernanceAudit(entry);
     return;
   }
   await writeConfigAudit({ organizationId: user.organizationId, ...entry });

@@ -296,7 +296,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-
     const made = await prisma.user.findMany({ where: { email: { startsWith: `${RUN}-made-` } }, select: { id: true } });
     const userIds = [VICTIM.id, NEWCOMER.id, ADMIN.id, ...made.map((u) => u.id)];
     await prisma.verificationToken.deleteMany({ where: { identifier: { startsWith: `${RUN}-made-` } } });
-    await prisma.platformAudit.deleteMany({ where: { actorId: { in: userIds } } });
+    await prisma.platformGovernanceAudit.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.webAuthnCredential.deleteMany({ where: { userId: { in: userIds } } });
@@ -573,7 +573,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-
 
       expect(res.status).toBe(201);
       const { data } = (await res.json()) as { data: { id: string } };
-      const rows = await prisma.platformAudit.findMany({
+      const rows = await prisma.platformGovernanceAudit.findMany({
         where: { actorId: ADMIN.id, entityType: "User", entityId: data.id, action: "STEP_UP_MISSING" },
       });
       expect(rows).toHaveLength(1);
@@ -581,7 +581,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("passkey enrolment and the step-
     });
 
     it("an account with no organization still leaves a durable record of its first passkey", async () => {
-      const rows = await prisma.platformAudit.findMany({
+      const rows = await prisma.platformGovernanceAudit.findMany({
         where: { actorId: ADMIN.id, entityType: "Passkey", entityId: adminPasskey.id, action: "CREATE" },
       });
       expect(rows).toHaveLength(1);

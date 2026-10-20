@@ -11,10 +11,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ writeConfigAudit: vi.fn(), writePlatformAudit: vi.fn() }));
+const mocks = vi.hoisted(() => ({ writeConfigAudit: vi.fn(), writePlatformGovernanceAudit: vi.fn() }));
 vi.mock("@/lib/studio/audit", () => ({
   writeConfigAudit: mocks.writeConfigAudit,
-  writePlatformAudit: mocks.writePlatformAudit,
+  writePlatformGovernanceAudit: mocks.writePlatformGovernanceAudit,
 }));
 
 import {
@@ -51,8 +51,8 @@ const CONTEXT = { action: "grant.decide", targetId: "g1", now: NOW } as const;
 beforeEach(() => {
   mocks.writeConfigAudit.mockReset();
   mocks.writeConfigAudit.mockResolvedValue(undefined);
-  mocks.writePlatformAudit.mockReset();
-  mocks.writePlatformAudit.mockResolvedValue(undefined);
+  mocks.writePlatformGovernanceAudit.mockReset();
+  mocks.writePlatformGovernanceAudit.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -200,7 +200,7 @@ describe("requireStepUp", () => {
     const result = await requireStepUp({ ...USER, organizationId: null }, 300, CONTEXT);
     expect(result.ok).toBe(true);
     expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
-    expect(mocks.writePlatformAudit).toHaveBeenCalledWith(
+    expect(mocks.writePlatformGovernanceAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: "u1",
         entityType: "ApiAccessGrant",

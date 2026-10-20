@@ -91,6 +91,11 @@ write-backs**, for platform admins only. It lists who wrote what, where, and
 the outcome, with a "Check SAP" count for outcome unknown, left behind and
 never recorded. The feed is `GET /api/ops/workbench-writes`.
 
+These tables hold SAP writes only. The same admins' passkey enrolments,
+revocations and `STEP_UP_MISSING` admissions are in `PlatformGovernanceAudit`
+(`docs/runbooks/coreedge-step-up.md`), which this screen does not show. To
+answer "what did this admin do", query both.
+
 It is not shown to `support` users or to anyone scoped to an organization: the
 rows belong to no organization, and the people in them are platform admins.
 
