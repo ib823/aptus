@@ -3,8 +3,8 @@
  *
  * A SapConnection stores its non-secret fields (baseUrl, authType, label) in
  * plaintext columns and its SECRETS (password / bearer token / client secret)
- * as a single encrypted JSON bundle. This module is the ONLY sanctioned path
- * to seal/open that bundle.
+ * as a single encrypted JSON bundle. This module, with secret-envelope.ts
+ * on top of it, is the ONLY sanctioned path to seal/open that bundle.
  *
  * Mirrors src/lib/intelligence/ai-key-crypto.ts (the established BYOAI key
  * pattern) so the crypto convention is uniform across the codebase: IV(12) +
@@ -12,8 +12,25 @@
  *
  * Requires SAP_CONNECTION_ENCRYPTION_KEY — a 32-byte key as 64 hex chars.
  * Generate one with:  openssl rand -hex 32
+ *
+ * TWO FORMATS SINCE P0.10. This module seals and opens the LEGACY format —
+ * base64, no version, sealed directly under the legacy key (the keyring's `v1`,
+ * keys/keyring.ts). The envelope format, `ce2:<dataKeyVersion>:<iv>:<ct>`, is
+ * sealed under a per-organisation data key and needs a database read to open,
+ * so it lives in secret-envelope.ts behind an async API: `sealSecretsForOrg` /
+ * `openSecretsForOrg`. Those are what every call site uses; they open both
+ * formats, and write `ce2` only once an operator has named an active master
+ * key. With only the legacy key configured, every byte this module produces is
+ * what it produced before P0.10.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+
+import { envelopeSealingEnabled, getKeyProvider } from "@/lib/sap-public/keys/key-provider";
+import {
+  legacyFormatPolicy,
+  legacySealingKey,
+  legacySealingKeyConfigured,
+} from "@/lib/sap-public/keys/keyring";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -88,19 +105,35 @@ export interface SapConnectionSecrets {
  * which is exactly this predicate, and a page must not need a plaintext to ask.
  */
 export function isConnectionEncryptionConfigured(): boolean {
-  const hex = process.env.SAP_CONNECTION_ENCRYPTION_KEY;
-  return typeof hex === "string" && hex.length === 64 && /^[0-9a-fA-F]+$/.test(hex);
+  // Once envelope sealing is switched on, a save writes `ce2`, so the question
+  // is whether the key provider can wrap a data key. Until then it is the
+  // legacy key, checked exactly as before — unless legacy blobs are refused
+  // outright, in which case a legacy save could never be opened again.
+  if (envelopeSealingEnabled()) {
+    try {
+      return getKeyProvider().isConfigured();
+    } catch {
+      return false;
+    }
+  }
+  try {
+    if (legacyFormatPolicy() === "none") return false;
+  } catch {
+    return false;
+  }
+  return legacySealingKeyConfigured();
 }
 
+/**
+ * The legacy key: SAP_CONNECTION_ENCRYPTION_KEY, or the keyring's `v1` once it
+ * has moved there. Same validation and the same message as before P0.10.
+ */
 function getEncryptionKey(): Buffer {
-  const hex = process.env.SAP_CONNECTION_ENCRYPTION_KEY;
-  if (!hex || hex.length !== 64) {
-    throw new Error(
-      "SAP_CONNECTION_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate with `openssl rand -hex 32`.",
-    );
-  }
-  return Buffer.from(hex, "hex");
+  return legacySealingKey();
 }
+
+/** The envelope prefix. A legacy blob is base64 and can never contain `:`. */
+const ENVELOPE_PREFIX = "ce2:";
 
 /**
  * Additional Authenticated Data — binds a ciphertext to the ROW it belongs to.
@@ -166,6 +199,13 @@ export function encryptSecret(plaintext: string, aad?: string): string {
 }
 
 function openBlob(encryptedBase64: string, aad?: string): string {
+  if (encryptedBase64.startsWith(ENVELOPE_PREFIX)) {
+    // Not a tamper and not a wrong key: the blob is in the envelope format,
+    // which needs its organisation's data key. Saying so beats a GCM failure.
+    throw new Error(
+      "This secret is sealed in the envelope (ce2) format; open it with openSecretsForOrg (secret-envelope.ts).",
+    );
+  }
   const key = getEncryptionKey();
   const buf = Buffer.from(encryptedBase64, "base64");
   if (buf.length < IV_LENGTH + 1 + AUTH_TAG_LENGTH) {
@@ -201,13 +241,45 @@ export function decryptSecret(encryptedBase64: string, aad?: string): string {
   }
 }
 
-/** Seal a secrets object into a single storable blob (only defined fields are kept). */
-export function sealSecrets(secrets: SapConnectionSecrets, aad?: string): string {
+/**
+ * Does a legacy blob open under `aad` itself — without the unbound fallback?
+ *
+ * For the reseal script, which must tell a bound legacy blob from one sealed
+ * before AAD existed: both open through decryptSecret, and only the second is
+ * still swappable between rows.
+ */
+export function isBoundLegacyBlob(encryptedBase64: string, aad: string): boolean {
+  try {
+    openBlob(encryptedBase64, aad);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Decrypt a legacy blob under `aad` ONLY — no unbound fallback. Throws on a
+ * blob sealed before AAD existed, as on one sealed for another row.
+ *
+ * For the envelope (secret-envelope.ts) once the operator has narrowed what
+ * legacy blobs open to bound ones (SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=bound).
+ */
+export function decryptBoundSecret(encryptedBase64: string, aad: string): string {
+  return openBlob(encryptedBase64, aad);
+}
+
+/** Only the non-empty string fields — what both formats store. */
+export function trimSecrets(secrets: SapConnectionSecrets): SapConnectionSecrets {
   const trimmed: SapConnectionSecrets = {};
   for (const [k, v] of Object.entries(secrets)) {
     if (typeof v === "string" && v.length > 0) trimmed[k as keyof SapConnectionSecrets] = v;
   }
-  return encryptSecret(JSON.stringify(trimmed), aad);
+  return trimmed;
+}
+
+/** Seal a secrets object into a single storable blob (only defined fields are kept). */
+export function sealSecrets(secrets: SapConnectionSecrets, aad?: string): string {
+  return encryptSecret(JSON.stringify(trimSecrets(secrets)), aad);
 }
 
 /**
@@ -223,7 +295,15 @@ export function sealSecrets(secrets: SapConnectionSecrets, aad?: string): string
  */
 export function openSecrets(blob: string | null | undefined, aad?: string): SapConnectionSecrets {
   if (!blob) return {};
-  const parsed = JSON.parse(decryptSecret(blob, aad)) as unknown;
+  return parseSecrets(decryptSecret(blob, aad));
+}
+
+/**
+ * The decrypted JSON → a secrets object, through the allow-list below. Shared
+ * by both formats, so the envelope path cannot drift from this one.
+ */
+export function parseSecrets(json: string): SapConnectionSecrets {
+  const parsed = JSON.parse(json) as unknown;
   if (!parsed || typeof parsed !== "object") return {};
   const src = parsed as Record<string, unknown>;
   const out: SapConnectionSecrets = {};

@@ -120,9 +120,100 @@ for (const key of REQUIRED_VARS) {
 
 // Warn about recommended vars
 for (const key of RECOMMENDED_VARS) {
+  // P0.10: a deployment that has moved its SAP key into the versioned ring
+  // (SAP_CONNECTION_ENCRYPTION_KEYS) no longer needs the legacy variable.
+  if (key === "SAP_CONNECTION_ENCRYPTION_KEY" && process.env.SAP_CONNECTION_ENCRYPTION_KEYS) continue;
   if (!process.env[key]) {
     console.warn(`[WARN] Missing recommended env var: ${key}`);
   }
+}
+
+/*
+ * The SAP master-key ring (P0.10), checked on EVERY deploy type.
+ *
+ * A ring the application cannot read fails every connection save — and, once
+ * envelope sealing is on, every connection open — on the first request after
+ * the deploy goes live. Failing the build instead leaves the running
+ * deployment serving. Only the new variables are checked, so a deployment that
+ * sets none of them is unaffected.
+ *
+ * MIRRORS src/lib/sap-public/keys/keyring.ts (this script runs under plain
+ * node and cannot import TypeScript); tests/unit/scripts/check-production-env
+ * pins the same cases.
+ */
+const sapKeyring = process.env.SAP_CONNECTION_ENCRYPTION_KEYS || "";
+const sapActive = (process.env.SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY || "").trim();
+const sapLegacy = (process.env.SAP_CONNECTION_ENCRYPTION_KEY || "").trim();
+if (sapKeyring.trim() || sapActive) {
+  const versions = new Map();
+  for (const raw of sapKeyring.split(",")) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    const sep = entry.indexOf(":");
+    const version = sep > 0 ? entry.slice(0, sep).trim() : "";
+    const hex = sep > 0 ? entry.slice(sep + 1).trim() : "";
+    if (!/^v[1-9][0-9]{0,5}$/.test(version) || !/^[0-9a-fA-F]{64}$/.test(hex) || versions.has(version)) {
+      console.error(
+        `[FAIL] SAP_CONNECTION_ENCRYPTION_KEYS has a malformed or duplicate entry${version ? ` (${version})` : ""}; each entry is "v<N>:<64 hex>".`,
+      );
+      exitCode = 1;
+      continue;
+    }
+    versions.set(version, hex.toLowerCase());
+  }
+  if (sapLegacy) {
+    if (versions.has("v1") && versions.get("v1") !== sapLegacy.toLowerCase()) {
+      console.error(
+        "[FAIL] SAP_CONNECTION_ENCRYPTION_KEY and the v1 entry of SAP_CONNECTION_ENCRYPTION_KEYS are different keys; the legacy key IS v1.",
+      );
+      exitCode = 1;
+    }
+    versions.set("v1", sapLegacy.toLowerCase());
+  }
+  const provider = (process.env.SAP_CONNECTION_KEY_PROVIDER || "env").trim() || "env";
+  if (sapActive && provider === "env" && !versions.has(sapActive)) {
+    console.error(
+      "[FAIL] SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY names a version that is not in SAP_CONNECTION_ENCRYPTION_KEYS — every SAP connection save would fail.",
+    );
+    exitCode = 1;
+  }
+}
+
+/*
+ * The SAP key provider (P0.10), also checked on every deploy type and whether
+ * or not a ring is set. Any name but blank or "env" switches new writes to the
+ * ce2 format under that provider, so a name the application does not register
+ * ("ENV", or a KMS adapter that has not shipped) fails every connection save
+ * and write-key issue after go-live while reads keep working.
+ *
+ * MIRRORS BUILT_IN_KEY_PROVIDER_NAMES in src/lib/sap-public/keys/key-provider.ts;
+ * tests/unit/scripts/check-production-env-sap-keyring pins the two together.
+ */
+const SAP_KEY_PROVIDERS = ["env"];
+const sapProvider = (process.env.SAP_CONNECTION_KEY_PROVIDER || "").trim();
+if (sapProvider && !SAP_KEY_PROVIDERS.includes(sapProvider)) {
+  console.error(
+    `[FAIL] SAP_CONNECTION_KEY_PROVIDER names a key provider the application does not register (registered: ${SAP_KEY_PROVIDERS.join(", ")}; names are case-sensitive) — every SAP connection save would fail.`,
+  );
+  exitCode = 1;
+}
+
+/*
+ * Which legacy-format SAP secrets still open (P0.10), checked on every deploy
+ * type. MIRRORS legacyFormatPolicy in src/lib/sap-public/keys/keyring.ts: a
+ * value the application does not know fails every legacy open, and `none`
+ * without envelope sealing switched on would seal every new save in a format
+ * the same deployment refuses to open.
+ */
+const sapLegacyFormat = (process.env.SAP_CONNECTION_ACCEPT_LEGACY_FORMAT || "").trim();
+if (sapLegacyFormat && !["any", "bound", "none"].includes(sapLegacyFormat)) {
+  console.error("[FAIL] SAP_CONNECTION_ACCEPT_LEGACY_FORMAT must be any, bound or none.");
+  exitCode = 1;
+} else if (sapLegacyFormat === "none" && !sapActive && (!sapProvider || sapProvider === "env")) {
+  console.error(
+    "[FAIL] SAP_CONNECTION_ACCEPT_LEGACY_FORMAT=none refuses every legacy-format secret, but envelope sealing is off (no SAP_CONNECTION_ENCRYPTION_ACTIVE_KEY), so every SAP connection save would be legacy — set the active key, or unset this.",
+  );
+  exitCode = 1;
 }
 
 // Flag dangerous vars + enforce prod-only requirements on production deploys.
