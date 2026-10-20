@@ -384,6 +384,11 @@ async function handleRequest(
       // spend each other's allowance; they fall through to the mutation one.
       const isStepUp = pathname.startsWith("/api/auth/webauthn/step-up/");
       const isAuthMutation = pathname.startsWith("/api/auth") && !isStepUp;
+      // Sign-up (P0.13) is an auth mutation with a much tighter budget of its
+      // own: each one sends an email from this host's domain and, with
+      // developer sign-up open, can create an organization. Per address here;
+      // the route adds a per-email bucket the edge cannot key (it has no body).
+      const isSignup = pathname === "/api/auth/signup" && request.method === "POST";
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
       // Expensive live-SAP routes get their own tight bucket so they can't
       // amplify load onto the SAP tenant. The universal "show the data" surface
@@ -395,6 +400,8 @@ async function handleRequest(
       // endpoints use method-based limits.
       const config = isSapLive
         ? RATE_LIMITS.sapLive
+        : isSignup
+        ? RATE_LIMITS.signupPerIp
         : isAuthMutation
         ? RATE_LIMITS.auth
         : isReportRoute
@@ -405,6 +412,8 @@ async function handleRequest(
 
       const key = isSapLive
         ? `sap-live:${clientIp}`
+        : isSignup
+        ? `signup:${clientIp}`
         : isAuthMutation
         ? `auth:${clientIp}`
         : isReportRoute

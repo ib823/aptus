@@ -50,6 +50,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   // Neutral rather than another engagement colour: this persona watches the
   // platform, it does not hold a seat on an engagement.
   support: "bg-zinc-200 text-zinc-700",
+  sandbox_developer: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
 };
 
 /**

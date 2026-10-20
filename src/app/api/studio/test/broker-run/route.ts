@@ -36,10 +36,12 @@ import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
+import { consoleReadRefusalMessage } from "@/lib/sap-public/console-read-guard";
+import { parseSapEnvironment } from "@/lib/sap-public/environment";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
-import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { canAccessStudio, isSandboxDeveloper, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -154,6 +156,15 @@ export async function POST(request: NextRequest) {
     );
   }
   const client = liveClients[0]!;
+
+  // A sandbox developer (P0.13) runs against SANDBOX credentials only, the same
+  // ceiling every console read holds them to; refused before the bucket or SAP.
+  if (isSandboxDeveloper(user.role) && parseSapEnvironment(client.environment) !== "SANDBOX") {
+    return refusalOk(
+      "SANDBOX_ONLY",
+      consoleReadRefusalMessage("SANDBOX_ONLY", parseSapEnvironment(client.environment)),
+    );
+  }
 
   /*
    * THE SAME PER-CREDENTIAL BUCKET THE NORTHBOUND ROUTES USE (audit E18).

@@ -24,6 +24,7 @@ import {
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import {
   decideConsoleRead,
+  decideSandboxDeveloperRead,
   DEPLOYMENT_AUDIT_SCOPE,
   newCorrelationId,
   recordConsoleRead,
@@ -134,6 +135,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       connectionEnvironment: conn?.environment ?? null,
       ...extra,
     });
+
+  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
+  // (P0.13). Every other role passes straight through it.
+  const sandboxOnly = decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn });
+  if (!sandboxOnly.allowed) {
+    await audit(403, null);
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
+      { status: 403 },
+    );
+  }
 
   /*
    * THE ENVIRONMENT CEILING. Only a stored connection has a landscape to cap —

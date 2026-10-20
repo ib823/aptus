@@ -48,9 +48,15 @@ export type AuditEntityType =
   /**
    * An account administered by a platform admin (/api/admin/users): created
    * with a role that can act on governance, given a new role, or its passkeys
-   * reset. `entityId` is the user id. Recorded for a missing step-up.
+   * reset. `entityId` is the user id. Recorded for a missing step-up, and for
+   * the first platform admin claimed with the bootstrap token (P0.13).
    */
-  | "User";
+  | "User"
+  /**
+   * An organization a platform admin created (POST /api/admin/organizations,
+   * P0.13). `entityId` is the organization id. Platform-level trail only.
+   */
+  | "Organization";
 
 export type AuditAction =
   | "CREATE"
@@ -84,7 +90,15 @@ export type AuditAction =
    * A governance action went ahead with no passkey assertion inside the
    * step-up window. Recorded only in warn mode; enforce refuses instead.
    */
-  | "STEP_UP_MISSING";
+  | "STEP_UP_MISSING"
+  /**
+   * The instance's first platform admin, claimed with the one-time bootstrap
+   * token (lib/auth/bootstrap.ts). Platform-level trail; `after.tokenSha256`
+   * is what makes the token single-use.
+   */
+  | "BOOTSTRAP_ADMIN"
+  /** A bootstrap claim refused: wrong token, none configured, or already used. */
+  | "BOOTSTRAP_REFUSED";
 
 export interface ConfigAuditInput {
   organizationId: string;

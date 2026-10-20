@@ -8,8 +8,84 @@ import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
+import {
+  checkSignupEmailLimit,
+  createDeveloperWorkspaceUser,
+  mayCreateDeveloperWorkspace,
+} from "@/lib/auth/developer-workspace";
 import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 import { safeRelativePath } from "@/lib/http/safe-relative-path";
+
+/**
+ * The account a first sign-in creates (NextAuth calls this only after the
+ * magic link was clicked, so the address is proven).
+ *
+ * NOBODY BECOMES PLATFORM ADMIN HERE. This used to make the very first account
+ * on an empty database `platform_admin`, so on a fresh instance whoever
+ * reached the sign-in page first owned it — a race a stranger could win. The
+ * first administrator is now claimed with the one-time bootstrap token
+ * (lib/auth/bootstrap.ts, COREEDGE_BOOTSTRAP_TOKEN); everyone else is created
+ * as before. An instance that already has an administrator (production does)
+ * never took that branch, so nothing changes for it.
+ *
+ * With developer sign-up open (lib/auth/developer-workspace.ts) a new person
+ * gets their own workspace and the sandbox developer role instead of an
+ * organization-less `consultant`. Off, which is the default, it is exactly the
+ * account this created before.
+ */
+export async function createFirstSignInUser(data: {
+  email: string;
+  emailVerified?: Date | null;
+  name?: string | null;
+  image?: string | null;
+}) {
+  if (mayCreateDeveloperWorkspace(data.email).allowed) {
+    return createDeveloperWorkspaceUser({ ...data, emailVerified: data.emailVerified ?? null });
+  }
+  return prisma.user.create({
+    data: {
+      email: data.email,
+      emailVerified: data.emailVerified ?? null,
+      name: data.name || data.email.split("@")[0] || "User",
+      image: data.image ?? null,
+      role: "consultant",
+    },
+  });
+}
+
+/**
+ * Who may get an account at their first sign-in: the registration policy, and
+ * with developer sign-up open, the developer domain list too. The signIn
+ * callback below asks this; /api/auth/signup's developer branch asks
+ * `mayCreateDeveloperWorkspace`, which this admits whenever it does, so a link
+ * a sign-up sends is never one the callback then refuses.
+ */
+export function mayRegisterOnFirstSignIn(email: string): { allowed: boolean; reason?: string } {
+  const developer = mayCreateDeveloperWorkspace(email);
+  if (developer.allowed) return developer;
+  return canRegister(email);
+}
+
+/**
+ * Spend the per-address sign-up bucket before a link goes to an address that
+ * has no account yet: such a link is a sign-up, and P0.13 limits sign-ups per
+ * email as well as per caller address. An existing account's sign-in link is
+ * never limited here, so nobody already on the host can be locked out by it.
+ * Throws (NextAuth answers EmailSignin) when the address has had its share.
+ */
+async function limitSignupLinks(email: string): Promise<void> {
+  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
+  if (existing) return;
+  const limit = await checkSignupEmailLimit(email);
+  if (!limit.allowed) {
+    console.warn(`[AUTH] sign-up link refused for a new address — ${limit.outage ? "limiter unavailable" : "limited"}`);
+    throw new Error(
+      limit.outage
+        ? "Sign-up limits cannot be checked right now. Try again shortly."
+        : "Too many sign-up links for this address. Try again later.",
+    );
+  }
+}
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -20,19 +96,7 @@ function getAdapter(): Adapter {
   const baseAdapter = PrismaAdapter(prisma);
   return {
     ...baseAdapter,
-    createUser: async (data: { email: string; emailVerified?: Date | null; name?: string | null; image?: string | null }) => {
-      const userCount = await prisma.user.count();
-      const role = userCount === 0 ? "platform_admin" : "consultant";
-      return prisma.user.create({
-        data: {
-          email: data.email,
-          emailVerified: data.emailVerified ?? null,
-          name: data.name || data.email.split("@")[0] || "User",
-          image: data.image ?? null,
-          role,
-        },
-      });
-    },
+    createUser: createFirstSignInUser,
     /**
      * Session methods are intentionally no-ops because we use a custom session
      * system (src/lib/auth/session.ts) instead of NextAuth's built-in sessions.
@@ -58,6 +122,7 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
+        await limitSignupLinks(email);
         if (!process.env.SMTP_USER) {
           if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
             console.warn(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
@@ -203,8 +268,9 @@ export const authOptions: NextAuthOptions = {
         return existingUser.isActive;
       }
 
-      // 3. If user is NEW, enforce the security policy
-      const policy = canRegister(email);
+      // 3. If user is NEW, enforce the security policy — widened only by an
+      // explicitly opened developer sign-up, whose account can govern nothing.
+      const policy = mayRegisterOnFirstSignIn(email);
       if (!policy.allowed) {
         console.warn(
           `[AUTH/signIn] denied: registration policy — ${email}: ${policy.reason}`,

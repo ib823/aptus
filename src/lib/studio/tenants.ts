@@ -49,7 +49,9 @@
 export { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenant-cookie";
 
 import { prisma } from "@/lib/db/prisma";
+import { parseSapEnvironment } from "@/lib/sap-public/environment";
 import { getConfiguredSapTenants, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
+import { isSandboxDeveloper } from "@/lib/studio/rbac";
 
 export interface StudioTenant {
   /** Tenant key — also the key stored probes are recorded under. */
@@ -120,6 +122,20 @@ export async function resolveStudioTenants(
       environment: t.environment ?? null,
     }));
   });
+}
+
+/**
+ * The tenants this ROLE is offered in the switcher.
+ *
+ * A sandbox developer (P0.13) may read Sandbox systems only — every live-read
+ * route refuses anything else (console-read-guard.ts,
+ * `decideSandboxDeveloperRead`). Offering them a TEST or undeclared deployment
+ * tenant would make the default selection one whose every read is refused, so
+ * the switcher lists only what they can use. Everyone else sees every tenant.
+ */
+export function tenantsVisibleTo(role: string | null | undefined, tenants: StudioTenant[]): StudioTenant[] {
+  if (!isSandboxDeveloper(role)) return tenants;
+  return tenants.filter((t) => parseSapEnvironment(t.environment) === "SANDBOX");
 }
 
 /**

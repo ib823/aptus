@@ -6,7 +6,12 @@ import { randomBytes } from "crypto";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
-import { canAssignRole } from "@/lib/auth/role-permissions";
+import {
+  mayManageOrgMembers,
+  mayViewOrgMembers,
+  pendingInvitesCountAsSeats,
+  refuseInviteRole,
+} from "@/lib/auth/org-invites";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { sendEmail } from "@/lib/email/brevo";
 import { orgInvitationEmail } from "@/lib/email/templates";
@@ -17,7 +22,9 @@ import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
 const inviteSchema = z.object({
-  email: z.string().email(),
+  // Lower-cased like every other address on the User table, so the invitation
+  // matches the account its recipient signs in as.
+  email: z.string().trim().email().transform((v) => v.toLowerCase()),
   role: z.string().min(1),
   name: z.string().min(1).max(200).optional(),
 });
@@ -41,14 +48,10 @@ export async function GET(
   }
 
   const { orgId } = await params;
-  const role = mapLegacyRole(user.role);
 
-  // Access: platform_admin (all), partner_lead/client_admin/consultant (own org)
-  const canView =
-    role === "platform_admin" ||
-    (["partner_lead", "client_admin", "consultant"].includes(role) && user.organizationId === orgId);
-
-  if (!canView) {
+  // Access: platform_admin (all); partner_lead, client_admin, consultant and
+  // sandbox_developer (own org) — one list, in lib/auth/org-invites.
+  if (!mayViewOrgMembers(user, orgId)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
       { status: 403 },
@@ -120,19 +123,16 @@ export async function POST(
   const { orgId } = await params;
   const role = mapLegacyRole(user.role);
 
-  // Only platform_admin, partner_lead (own org), client_admin (own org)
-  const canInvite =
-    role === "platform_admin" ||
-    ((role === "partner_lead" || role === "client_admin") && user.organizationId === orgId);
-
-  if (!canInvite) {
+  // platform_admin (any org); partner_lead, client_admin and, since P0.13, a
+  // sandbox developer — each in its own organization only.
+  if (!mayManageOrgMembers(user, orgId)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions to invite users" } },
       { status: 403 },
     );
   }
 
-  const body: unknown = await request.json();
+  const body: unknown = await request.json().catch(() => null);
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -143,18 +143,28 @@ export async function POST(
 
   const targetRole = mapLegacyRole(parsed.data.role) as UserRole;
 
-  // Privilege escalation check
-  if (!canAssignRole(role, targetRole)) {
+  // Privilege escalation check: never above your own level, and a developer
+  // workspace invites sandbox developers only.
+  const roleRefusal = refuseInviteRole(role, targetRole);
+  if (roleRefusal) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot invite a role above your own level" } },
+      { error: { code: ERROR_CODES.FORBIDDEN, message: roleRefusal } },
       { status: 403 },
     );
   }
 
   // Enforce the plan's seat limit before minting an invitation. checkUserLimit
   // existed since Phase 29 but nothing called it, so seats were unlimited on
-  // every tier in practice.
+  // every tier in practice. A developer workspace's pending invitations hold a
+  // seat too, so an open sign-up cannot mail any number of addresses.
   const seatCheck = await checkUserLimit(orgId);
+  if (seatCheck.allowed && pendingInvitesCountAsSeats(role)) {
+    const pending = await prisma.orgInvitation.count({
+      where: { organizationId: orgId, status: "pending", expiresAt: { gt: new Date() } },
+    });
+    seatCheck.current += pending;
+    seatCheck.allowed = seatCheck.current < seatCheck.limit;
+  }
   if (!seatCheck.allowed) {
     console.warn("[API] POST /api/organizations/[orgId]/users rejected: seat limit reached", {
       userId: user.id,
@@ -188,6 +198,19 @@ export async function POST(
   // Create invitation
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  // One pending invitation per address and organization (a unique index); a
+  // second one is a conflict to say, not a 500.
+  const alreadyPending = await prisma.orgInvitation.findFirst({
+    where: { organizationId: orgId, email: parsed.data.email, status: "pending" },
+    select: { id: true },
+  });
+  if (alreadyPending) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.CONFLICT, message: "That address already has a pending invitation." } },
+      { status: 409 },
+    );
+  }
 
   const invitation = await prisma.orgInvitation.create({
     data: {

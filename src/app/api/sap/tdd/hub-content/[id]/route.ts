@@ -29,6 +29,7 @@ import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import {
   decideConsoleRead,
+  decideSandboxDeveloperRead,
   DEPLOYMENT_AUDIT_SCOPE,
   newCorrelationId,
   recordConsoleRead,
@@ -163,6 +164,13 @@ export async function GET(
         await audit(403, null);
         allowed = false;
       }
+    }
+    // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
+    // (P0.13); refused, the detail falls back to the stored probe like any
+    // other refusal here.
+    if (allowed && !decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn }).allowed) {
+      await audit(403, null);
+      allowed = false;
     }
     if (allowed) {
       const startedAt = Date.now();

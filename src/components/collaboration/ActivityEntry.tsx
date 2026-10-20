@@ -63,6 +63,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   viewer: "Viewer",
   client_admin: "Client Admin",
   support: "Support",
+  sandbox_developer: "Sandbox Developer",
 };
 
 /** Map raw entity types to human-readable labels */

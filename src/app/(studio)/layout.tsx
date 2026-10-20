@@ -35,7 +35,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { GovernanceStepUp } from "@/components/auth/GovernanceStepUp";
 import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
+import { pickActiveTenant, resolveStudioTenants, tenantsVisibleTo } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +83,9 @@ export default async function StudioLayout({ children }: { children: ReactNode }
   //
   // An environment tenant is SHARED across the deployment, so it is labelled as
   // such rather than presented as this client's SAP.
-  const resolved = await resolveStudioTenants(user.organizationId);
+  // A sandbox developer is offered the Sandbox tenants only — the ones every
+  // live read lets them use (P0.13).
+  const resolved = tenantsVisibleTo(user.role, await resolveStudioTenants(user.organizationId));
 
   // Passed through with `source` intact: the switcher shows "shared environment
   // tenant" on its own sub-line, which is where the design puts that detail —

@@ -44,6 +44,8 @@ const ROUTES: readonly string[] = [
   "/coreedge/sap-systems",
   `/coreedge/sap-systems/${CONNECTION}`,
   "/coreedge/passport",
+  "/coreedge/members",
+  "/coreedge/bootstrap",
   "/coreedge/design-system",
   `/coreedge/apps/${APP}`,
   `/coreedge/apps/${APP}/${FEED}/DEV`,

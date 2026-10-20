@@ -41,6 +41,9 @@ const POST_ONBOARDING_HOME = {
   viewer: "/dashboard",
   // Matches the destination this persona's own onboarding flow points at.
   support: "/operations",
+  // A developer workspace starts at Discover (P0.13), the first minute of
+  // time to first call; nothing else this switch names is open to it.
+  sandbox_developer: "/studio/discover",
 } as const satisfies Record<UserRole, string>;
 
 /**

@@ -297,6 +297,19 @@ export const RATE_LIMITS = {
    * never spends it, so only an address sending failing keys can empty it.
    */
   machineAuthFailure: { limit: 60, windowMs: 60 * 1000 },
+  /**
+   * Sign-up requests per caller address (P0.13): POST /api/auth/signup, keyed
+   * `signup:<ip>` at the edge. An hour's window, because each one can send an
+   * email from this host's domain and, with developer sign-up open, create an
+   * organization; a person signing up needs a handful, not thirty a minute.
+   */
+  signupPerIp: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /**
+   * Sign-up attempts per email ADDRESS (P0.13), keyed by its hash in the route
+   * (developer-workspace.ts). The per-address bucket above cannot stop one
+   * inbox being sent link after link from many addresses; this does.
+   */
+  signupPerEmail: { limit: 5, windowMs: 60 * 60 * 1000 },
 } as const;
 
 /**

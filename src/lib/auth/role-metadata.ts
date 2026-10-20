@@ -163,6 +163,20 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     canCreateAssessments: false,
     canManageUsers: false,
   },
+  sandbox_developer: {
+    id: "sandbox_developer",
+    label: "Sandbox Developer",
+    description:
+      "Self-service developer workspace — Discover, the catalogue and the SAP API Hub sandbox; no governance rights",
+    category: "client",
+    hierarchyLevel: 9,
+    validOrgTypes: ["DIRECT_CLIENT"],
+    mfaDefault: "optional",
+    maxConcurrentSessions: 2,
+    canCreateAssessments: false,
+    // Invites colleagues into its own workspace, as sandbox developers only.
+    canManageUsers: true,
+  },
 };
 
 /**

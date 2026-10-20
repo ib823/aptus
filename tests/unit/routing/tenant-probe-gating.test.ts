@@ -110,7 +110,10 @@ describe("the guard says no to the right people", () => {
     const { ALL_USER_ROLES } = await import("@/types/assessment");
 
     const admitted = ALL_USER_ROLES.filter((r) => canAccessStudio(r));
-    expect(admitted.sort()).toEqual(["consultant", "platform_admin"].sort());
+    // sandbox_developer is the deliberate widening (P0.13): it may cause a live
+    // read, and every read route caps it at SANDBOX tenants
+    // (decideSandboxDeveloperRead, tests/unit/api/sap-sandbox-developer-ceiling).
+    expect(admitted.sort()).toEqual(["consultant", "platform_admin", "sandbox_developer"].sort());
 
     // The four that lost access, named so a future widening is a deliberate edit
     // to this list rather than a silent drift in a predicate.

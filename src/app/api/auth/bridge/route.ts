@@ -4,6 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/auth-options";
 import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
+import { developerLandingPath } from "@/lib/auth/developer-workspace";
+import { isSandboxDeveloper } from "@/lib/studio/rbac";
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
 import { getClientIp } from "@/lib/security/client-ip";
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isActive: true, emailVerified: true },
+    select: { id: true, isActive: true, emailVerified: true, role: true },
   });
 
   if (!user || !user.isActive) {
@@ -79,8 +81,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     notifySessionDisplaced({ userId: user.id, newIpAddress: ipAddress, newUserAgent: userAgent });
   }
 
+  // A sandbox developer (P0.13) can use Studio and the console and nothing
+  // else, so a sign-in headed for the Workbench or the portal would land them
+  // on a refusal. They land on Discover instead; anywhere they CAN go stands.
+  const landing = isSandboxDeveloper(user.role) ? developerLandingPath(redirectTo) : redirectTo;
+
   // Set the session cookie and redirect
-  const response = NextResponse.redirect(new URL(redirectTo, request.url));
+  const response = NextResponse.redirect(new URL(landing, request.url));
   response.cookies.set(SESSION_COOKIE_NAME, token, {
     ...getSessionCookieOptions(),
   });

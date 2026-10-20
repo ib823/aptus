@@ -20,6 +20,7 @@ import { isStudioBuilder } from "@/lib/studio/rbac";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import {
   decideConsoleRead,
+  decideSandboxDeveloperRead,
   DEPLOYMENT_AUDIT_SCOPE,
   newCorrelationId,
   recordConsoleRead,
@@ -444,6 +445,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         allowed = false;
         dataProbeRefusal = decision.message;
       }
+    }
+    // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
+    // (P0.13); refused, the overlay falls back like any other refusal here.
+    const sandboxOnly = decideSandboxDeveloperRead(user.role, { tenant, connection: conn });
+    if (allowed && !sandboxOnly.allowed) {
+      await audit(403, null);
+      allowed = false;
+      dataProbeRefusal = sandboxOnly.message;
     }
     if (allowed) {
       const startedAt = Date.now();

@@ -69,6 +69,24 @@ describe("isWorkbenchPath", () => {
     }
   });
 
+  it("admits every step of developer onboarding (P0.13)", () => {
+    // Sign up, land in Discover, invite from the members screen, accept from
+    // the email, claim a fresh instance. The portal's /organization/users is
+    // NOT one of them: it stays behind the gate, which is why the members
+    // screen lives under /coreedge.
+    for (const p of [
+      "/signup/developer",
+      "/studio/discover",
+      "/coreedge/members",
+      "/invitations/0123abcd",
+      "/coreedge/bootstrap",
+      "/api/auth/bootstrap-admin",
+    ]) {
+      expect(isWorkbenchPath(p), `${p} must be reachable`).toBe(true);
+    }
+    expect(isWorkbenchPath("/organization/users")).toBe(false);
+  });
+
   it("admits the APIs the surfaces call", () => {
     for (const p of [
       "/api/auth/callback/email",
