@@ -19,6 +19,7 @@ import {
   newCorrelationId,
   northboundError,
   northboundOk,
+  northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
@@ -45,6 +46,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // A stolen token pulling every stored contract used to leave no trace.
   const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
+    // 429 for this credential's own use, 503 when the limiter is down (A44).
+    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -52,12 +55,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       operation: "READ",
       externalId: "-schema-",
       environment: client.environment,
-      status: 429,
+      status: refusal.status,
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      failureReason: refusal.failureReason,
     });
-    return northboundError("RATE_LIMITED", "Too many requests. Slow down and retry.", 429, correlationId);
+    return refusal.response;
   }
 
   const iface = await prisma.interface.findFirst({

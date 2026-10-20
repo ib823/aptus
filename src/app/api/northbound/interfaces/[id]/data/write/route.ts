@@ -38,6 +38,7 @@ import {
   newCorrelationId,
   northboundError,
   northboundOk,
+  northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
@@ -162,10 +163,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // credential genuinely holds two independent 60/min budgets.
   const rate = await checkRateLimit(`northbound-write:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
-    await audit(429, id, "-");
-    return northboundError("RATE_LIMITED", "Too many requests for this client credential.", 429, correlationId, {
-      "retry-after": String(Math.ceil(rate.resetMs / 1000)),
-    });
+    // 429 for this credential's own use, 503 when the limiter is down (A44).
+    // Either way before the key is reserved, so a retry with it is a fresh try.
+    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests for this client credential.");
+    await audit(refusal.status, id, "-", undefined, undefined, undefined, refusal.failureReason);
+    return refusal.response;
   }
 
   // 4 — idempotency key is MANDATORY. Refusing the write outright is the only

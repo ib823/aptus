@@ -26,9 +26,15 @@
  * NO Prisma import: tdd-connector and sf-basic-auth-sunset throw these, and
  * tdd-connector is reachable from client bundles through the product registry.
  */
-import { isTokenRefusal, publicSamlFailure } from "@/lib/sap-public/oauth-saml-bearer";
+import {
+  isCredentialRefusal,
+  isTokenRefusal,
+  publicSamlFailure,
+  SamlBearerExchangeError,
+  tokenAnswerReason,
+} from "@/lib/sap-public/oauth-saml-bearer";
 
-export { isTokenRefusal } from "@/lib/sap-public/oauth-saml-bearer";
+export { isTokenEndpointOutage, isTokenRefusal } from "@/lib/sap-public/oauth-saml-bearer";
 
 /**
  * The connection — a stored row, or the deployment's `{PREFIX}_*` variables —
@@ -69,11 +75,8 @@ export class OAuthTokenRequestError extends Error {
   ) {
     super(message);
     this.name = "OAuthTokenRequestError";
-    this.code = isTokenRefusal(httpStatus)
-      ? "OAUTH_TOKEN_REJECTED"
-      : httpStatus >= 200 && httpStatus < 300
-        ? "OAUTH_TOKEN_MISSING"
-        : `OAUTH_TOKEN_HTTP_${httpStatus}`;
+    // The SAML exchange's vocabulary, not a second one (tokenAnswerReason).
+    this.code = tokenAnswerReason(httpStatus);
   }
 }
 
@@ -167,7 +170,123 @@ export function publicCredentialFailure(
 export type CredentialFailureKind = "refused" | "unavailable" | "timeout";
 
 export function credentialFailureKind(err: unknown): CredentialFailureKind {
+  return credentialFailure(err).kind;
+}
+
+/**
+ * THE ONE CLASSIFIER for a failed credential step (roadmap P0.5): what kind
+ * of failure it was, whether a retry can help, and the bounded reason the
+ * audit row carries. The broker's read and write (credentialStepOutcome), the
+ * console reads (consoleReadFailure), the capability probe and the connection
+ * Test all ask it, so a connection whose token endpoint answers one thing
+ * cannot be "fix the connection" on one surface and "retry later" on another.
+ *
+ *   refused     — not retryable; fixed in the connection. A field it lacks, a
+ *                 key that cannot sign, a value the assertion cannot carry,
+ *                 a reserved header, SAP's Basic deletion, or a token
+ *                 endpoint that refused the request as sent: the credential
+ *                 (TOKEN_REJECTED) or the URL (TOKEN_URL_HTTP_<n>).
+ *   timeout     — retryable. The token endpoint did not answer within its own
+ *                 limit: TOKEN_TIMEOUT, never the TIMEOUT a tenant leaves.
+ *   unavailable — retryable. The token endpoint answered 408, 429, a 5xx or a
+ *                 2xx without a token (TOKEN_HTTP_<n>, TOKEN_NO_TOKEN), or could
+ *                 not be reached (TOKEN_<code>: TOKEN_ECONNRESET,
+ *                 TOKEN_ENOTFOUND, TOKEN_FETCH_FAILED).
+ *
+ * EVERY RETRYABLE REASON IS TOKEN_*. An unreachable token endpoint left
+ * ECONNRESET or FETCH_FAILED — word for word the row an unreachable TENANT
+ * leaves — and a token endpoint's 503 left OAUTH_TOKEN_HTTP_503 or
+ * SAML_BEARER_HTTP_503 by auth type; correlation lookup, the traffic screen and
+ * the server log sent triage to the tenant, or had two names for one fact.
+ *
+ * `tokenHttpStatus` is what the token endpoint answered, when it answered
+ * without a token; null when it never answered or was never asked.
+ */
+export interface CredentialFailure {
+  kind: CredentialFailureKind;
+  retryable: boolean;
+  failureReason: string;
+  tokenHttpStatus: number | null;
+  /** Refused because the token URL points at the wrong thing (a 404, 405, 3xx). */
+  wrongTokenUrl: boolean;
+}
+
+export function credentialFailure(err: unknown): CredentialFailure {
   const cause = err instanceof SapCredentialError ? err.cause : err;
-  if (cause instanceof Error && cause.name === "AbortError") return "timeout";
-  return publicCredentialFailure(cause)?.status === "UNAUTHORIZED" ? "refused" : "unavailable";
+  if (cause instanceof Error && cause.name === "AbortError") {
+    return { kind: "timeout", retryable: true, failureReason: "TOKEN_TIMEOUT", tokenHttpStatus: null, wrongTokenUrl: false };
+  }
+  if (cause instanceof OAuthTokenRequestError || cause instanceof SamlBearerExchangeError) {
+    const status = cause.httpStatus;
+    const refused = isTokenRefusal(status);
+    return {
+      kind: refused ? "refused" : "unavailable",
+      retryable: !refused,
+      failureReason: tokenAnswerReason(status),
+      tokenHttpStatus: status,
+      wrongTokenUrl: refused && !isCredentialRefusal(status),
+    };
+  }
+  if (publicCredentialFailure(cause)?.status === "UNAUTHORIZED") {
+    // The error's own bounded code: CONNECTION_MISCONFIGURED,
+    // SAML_BEARER_MISCONFIGURED, a SAML key or input code.
+    return {
+      kind: "refused",
+      retryable: false,
+      failureReason: failureReasonFromError(cause, "CREDENTIAL_UNUSABLE"),
+      tokenHttpStatus: null,
+      wrongTokenUrl: false,
+    };
+  }
+  return {
+    kind: "unavailable",
+    retryable: true,
+    failureReason: `TOKEN_${failureReasonFromError(cause)}`,
+    tokenHttpStatus: null,
+    wrongTokenUrl: false,
+  };
+}
+
+/*
+ * ─── A bounded reason for an error ─────────────────────────────────────────
+ *
+ * Here rather than in northbound/failure-reason.ts (which re-exports it) so
+ * the classifier above can use it without importing the connection resolver,
+ * and with it Prisma, into a module client bundles reach.
+ */
+
+const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
+
+/**
+ * The upstream never answered: why, as a bounded code — the error's own
+ * `code` (ENOTFOUND, ECONNREFUSED, CERT_HAS_EXPIRED), else the first one down
+ * its `cause` chain, TIMEOUT for our own abort, or `fallback` for anything
+ * that fails the shape: a message that is not an upper-case token may contain
+ * a host.
+ *
+ * THREE LEVELS, NOT ONE. undici puts the socket's code on the TypeError's
+ * cause, and the SAML exchange wraps that TypeError once more so its message
+ * cannot carry the token URL — one level down found nothing, so the same reset
+ * socket was TOKEN_ECONNRESET on a client-credentials connection and
+ * TOKEN_FETCH_FAILED on a SuccessFactors one.
+ */
+export function failureReasonFromError(err: unknown, fallback = "FETCH_FAILED"): string {
+  if (err instanceof Error && err.name === "AbortError") return "TIMEOUT";
+  let current: unknown = err;
+  for (let depth = 0; depth < 3 && current; depth++) {
+    const code = codeOf(current);
+    if (code) return code;
+    current = causeOf(current);
+  }
+  return fallback;
+}
+
+function causeOf(err: unknown): unknown {
+  return err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
+}
+
+function codeOf(v: unknown): string | null {
+  if (!v || typeof v !== "object") return null;
+  const code = (v as { code?: unknown }).code;
+  return typeof code === "string" && CODE.test(code) ? code : null;
 }

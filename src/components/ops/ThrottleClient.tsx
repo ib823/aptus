@@ -34,7 +34,7 @@ import { count, DEFAULT_OPS_WINDOW_HOURS, FeedAsAt, OpsWindowPicker, useOpsFeed 
 interface Bucket {
   id: string;
   key: string;
-  keyedBy: "client IP" | "credential";
+  keyedBy: "client IP" | "credential" | "presented credential";
   limit: number;
   windowMs: number;
   observable: boolean;
@@ -213,7 +213,7 @@ function ThrottleBody({
           ))}
         </div>
 
-        <ProvenanceStrip claim="Two of these can never show usage">
+        <ProvenanceStrip claim="The edge buckets can never show usage">
           {provenance.edgeBucketsAreNotObservable}
         </ProvenanceStrip>
       </OpsCard>

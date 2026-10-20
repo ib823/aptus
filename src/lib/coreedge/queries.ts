@@ -1261,6 +1261,9 @@ export async function lastLaneCall(
       solutionId,
       interfaceId,
       dryRun: false,
+      // Nor a replay (P0.5): it re-served an older call's outcome, whose own
+      // row is the one that says what the lane did.
+      replayed: false,
       externalId: { not: "-schema-" },
       OR: laneEnvironmentAliases(environment).map((alias) => ({
         environment: { equals: alias, mode: "insensitive" as const },

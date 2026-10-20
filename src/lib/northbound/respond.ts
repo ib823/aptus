@@ -15,6 +15,13 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
+import type { RateLimitResult } from "@/lib/security/rate-limit";
+import {
+  isLimiterOutage,
+  LIMITER_UNAVAILABLE_MESSAGE,
+  retryAfterSeconds,
+} from "@/lib/security/rate-limit-response";
+
 export type NorthboundErrorCode =
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
@@ -39,6 +46,12 @@ export type NorthboundErrorCode =
   | "CONFLICT"
   | "UPSTREAM_TIMEOUT"
   | "UPSTREAM_ERROR"
+  /**
+   * The rate limiter could not be asked, so the call was refused for safety:
+   * 503 with Retry-After, nothing sent to SAP. Never RATE_LIMITED — that says
+   * THIS credential used its budget, and during an outage nobody had (A44).
+   */
+  | "LIMITER_UNAVAILABLE"
   | "INTERNAL";
 
 export function newCorrelationId(): string {
@@ -63,6 +76,43 @@ export function northboundError(
       },
     },
   );
+}
+
+/** The audit row's failureReason for a call refused because the limiter was down. */
+export const FAILURE_REASON_LIMITER_UNAVAILABLE = "LIMITER_UNAVAILABLE";
+
+/**
+ * A per-credential throttle refused the call: what to answer, and what to
+ * audit. The routes that limit a credential all go through this, so a limiter
+ * outage cannot be told to one of them as throttling (audit A44).
+ *
+ *   limited     — 429 RATE_LIMITED with Retry-After: this credential used its
+ *                 budget. Audited 429, which the traffic screen calls
+ *                 throttled and the throttled incident counts.
+ *   unavailable — 503 LIMITER_UNAVAILABLE with Retry-After. Audited 503 with
+ *                 failureReason LIMITER_UNAVAILABLE, so neither the throttle
+ *                 view nor the throttled incident sees it, and the
+ *                 upstream-errors incident leaves it out by that reason: SAP
+ *                 was not called.
+ */
+export function northboundThrottleRefusal(
+  rate: RateLimitResult,
+  correlationId: string,
+  limitedMessage: string,
+): { status: 429 | 503; failureReason: string | null; response: NextResponse } {
+  const headers = { "retry-after": retryAfterSeconds(rate) };
+  if (isLimiterOutage(rate)) {
+    return {
+      status: 503,
+      failureReason: FAILURE_REASON_LIMITER_UNAVAILABLE,
+      response: northboundError("LIMITER_UNAVAILABLE", LIMITER_UNAVAILABLE_MESSAGE, 503, correlationId, headers),
+    };
+  }
+  return {
+    status: 429,
+    failureReason: null,
+    response: northboundError("RATE_LIMITED", limitedMessage, 429, correlationId, headers),
+  };
 }
 
 /** The single, deliberately uninformative response for every auth failure. */

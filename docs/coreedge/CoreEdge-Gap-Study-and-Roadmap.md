@@ -946,6 +946,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Acceptance:
   - A table-driven test of token-endpoint answer × auth type × path checks status, reason and retry advice against the developer guide's retry table.
   - A flooding key cannot throttle another key.
+- Decision: machine routes are keyed at the edge by a hash of the presented bearer (600 a minute) and then a per-IP backstop (6,000 a minute) that only a key its own bucket admitted can spend; a call with no bearer, and every browser route, keep the old per-IP buckets. `COREEDGE_MACHINE_RATE_LIMIT=ip` restores the old keying as a rollback. A limiter outage still fails closed on every route class, as today, but answers `503 LIMITER_UNAVAILABLE` with `Retry-After` instead of 429, and is audited 503 with that reason, which the throttle view and both incident rules leave out. Token-endpoint reasons are now one `TOKEN_*` vocabulary for both auth types; rows written before keep their old codes (`docs/runbooks/coreedge-rate-limits.md`).
 
 **P0.6 Make Ariba truthful (A71-A75).** Size S. Depends on: none.
 - Problem:

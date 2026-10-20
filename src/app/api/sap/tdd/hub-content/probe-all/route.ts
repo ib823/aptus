@@ -17,6 +17,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAdminError, requireAuthenticated } from "@/lib/auth/admin-guard";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { isLimiterOutage, limiterUnavailableResponse } from "@/lib/security/rate-limit-response";
 import { isStudioBuilder } from "@/lib/studio/rbac";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -218,6 +219,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     PROBE_ALL_LIMIT,
   );
   if (!gate.allowed) {
+    // Not "ran moments ago" when the limiter is down (audit A44).
+    if (isLimiterOutage(gate)) return limiterUnavailableResponse(gate);
     return NextResponse.json(
       {
         error: {

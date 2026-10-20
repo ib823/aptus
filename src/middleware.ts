@@ -1,7 +1,23 @@
 /** Middleware: Bridge NextAuth JWT sessions + API rate limiting */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { extractBearer } from "@/lib/northbound/bearer";
+import {
+  checkRateLimit,
+  getClientIp,
+  isLiveSapTenantRoute,
+  isMachineApiRoute,
+  machineCredentialKey,
+  machineRateLimitMode,
+  RATE_LIMITS,
+  type RateLimitResult,
+} from "@/lib/security/rate-limit";
+import {
+  isLimiterOutage,
+  limiterUnavailableResponse,
+  LIMITER_UNAVAILABLE_MESSAGE,
+  retryAfterSeconds,
+} from "@/lib/security/rate-limit-response";
 import { getCspWithNonce } from "@/lib/pwa/security-headers";
 // The Workbench route allow-list lives in lib so it can be tested. Anything
 // missing from it is redirected away before auth or RBAC ever run.
@@ -76,6 +92,76 @@ const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
  * split above: use WORKBENCH_ONLY when there is exactly one host and it
  * should present only the Workbench. */
 const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
+
+/**
+ * The edge limit for an authenticated MACHINE route (audit A43, P0.5), or null
+ * when the request takes the ordinary per-IP API buckets instead.
+ *
+ * WHY NOT THE IP. Every /api/* call used to spend `api:<method>:<ip>`, so one
+ * credential looping from a vendor's server spent the whole address's
+ * allowance, and every other customer's credential behind that egress was
+ * refused here — before its own route, with no correlation id and no audit
+ * row — though its own budget was untouched. A machine call carrying a bearer
+ * is now counted against THAT credential (a hash of it; the route still
+ * authenticates it), and then against a high per-address backstop that only a
+ * flood of random keys can reach.
+ *
+ * THE ORDER IS THE ISOLATION. The backstop is checked only once the
+ * credential's own bucket admitted the call, so a runaway key — refused at its
+ * own ceiling — spends at most that ceiling of its address's backstop.
+ *
+ * A machine call with NO bearer is not a credential at all; it keeps the
+ * per-IP bucket it always had (and the route answers it 401).
+ */
+async function machineRouteLimit(
+  request: NextRequest,
+  pathname: string,
+  clientIp: string,
+): Promise<{ result: RateLimitResult; by: "credential" | "address" } | null> {
+  if (!isMachineApiRoute(pathname) || machineRateLimitMode() !== "credential") return null;
+  const bearer = extractBearer(request.headers.get("authorization"));
+  if (!bearer) return null;
+  const own = await checkRateLimit(await machineCredentialKey(bearer), RATE_LIMITS.machineCredential);
+  if (!own.allowed) return { result: own, by: "credential" };
+  const backstop = await checkRateLimit(`machine-ip:${clientIp}`, RATE_LIMITS.machineIpBackstop);
+  if (!backstop.allowed) return { result: backstop, by: "address" };
+  return { result: { ...own, remaining: Math.min(own.remaining, backstop.remaining) }, by: "credential" };
+}
+
+/**
+ * A machine route's refusal, in the broker's own envelope (respond.ts): the
+ * caller is an application that branches on `error.code` and quotes the
+ * correlation id, so it gets both, from the edge as from the route. Nothing is
+ * audited here — middleware has no database — and the id says as much to
+ * whoever looks it up and finds no row: the call never reached the broker.
+ */
+function machineRefusal(result: RateLimitResult, by: "credential" | "address"): NextResponse {
+  const correlationId = crypto.randomUUID();
+  const outage = isLimiterOutage(result);
+  return NextResponse.json(
+    {
+      error: outage
+        ? { code: "LIMITER_UNAVAILABLE", message: LIMITER_UNAVAILABLE_MESSAGE, correlationId }
+        : {
+            code: "RATE_LIMITED",
+            message:
+              by === "credential"
+                ? "Too many requests for this client credential."
+                : "Too many requests from this address.",
+            correlationId,
+          },
+    },
+    {
+      status: outage ? 503 : 429,
+      headers: {
+        "x-correlation-id": correlationId,
+        "cache-control": "no-store",
+        "Retry-After": retryAfterSeconds(result),
+        "X-RateLimit-Remaining": "0",
+      },
+    },
+  );
+}
 
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
@@ -249,6 +335,17 @@ async function handleRequest(
 
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
+
+      const machine = await machineRouteLimit(request, pathname, clientIp);
+      if (machine) {
+        if (!machine.result.allowed) {
+          return withObservabilityHeaders(machineRefusal(machine.result, machine.by), requestId, requestStart);
+        }
+        const response = NextResponse.next({ request: { headers: requestHeaders } });
+        response.headers.set("X-RateLimit-Remaining", String(machine.result.remaining));
+        return withObservabilityHeaders(response, requestId, requestStart);
+      }
+
       // The governance step-up is not a sign-in: its caller already holds a
       // session, and its routes limit each person themselves. In the shared
       // per-IP sign-in bucket, approvers behind one office address would
@@ -283,6 +380,12 @@ async function handleRequest(
           : `api:${request.method}:${clientIp}`;
 
       const result = await checkRateLimit(key, config);
+
+      // An outage is not throttling (audit A44): the limiter fails closed in
+      // production, and the refusal says why — 503, never 429.
+      if (isLimiterOutage(result)) {
+        return withObservabilityHeaders(limiterUnavailableResponse(result), requestId, requestStart);
+      }
 
       if (!result.allowed) {
         const rateLimitResponse = new NextResponse(

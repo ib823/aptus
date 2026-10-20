@@ -39,11 +39,33 @@ interface RateLimitConfig {
   windowMs: number;
 }
 
-interface RateLimitResult {
+export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   resetMs: number;
+  /**
+   * WHY a refused request was refused; absent when it was allowed.
+   *
+   *   limited     — this bucket is spent. The caller is told 429 and when to
+   *                 come back.
+   *   unavailable — the shared backend could not be asked, so nothing was
+   *                 counted and nobody was over any limit. The request is still
+   *                 refused in production (see checkRateLimit), but it must be
+   *                 said as 503 LIMITER_UNAVAILABLE, never 429 (audit A44): the
+   *                 two came back in one shape, so a Redis outage told every
+   *                 credential it was throttled, was audited as 429, and
+   *                 raised the throttled incident against callers who had done
+   *                 nothing. Tell them apart with isLimiterOutage
+   *                 (rate-limit-response.ts).
+   */
+  reason?: "limited" | "unavailable";
 }
+
+/**
+ * How long a caller refused during a limiter outage is told to wait. Not the
+ * bucket's window: nothing was counted, so there is no window to wait out.
+ */
+export const LIMITER_UNAVAILABLE_RETRY_MS = 30_000;
 
 function toWindowDuration(windowMs: number): `${number} s` {
   const seconds = Math.max(1, Math.ceil(windowMs / 1000));
@@ -95,6 +117,7 @@ function checkRateLimitInMemory(
       allowed: false,
       remaining: 0,
       resetMs: oldestInWindow + config.windowMs - now,
+      reason: "limited",
     };
   }
 
@@ -123,6 +146,7 @@ export async function checkRateLimit(
         allowed: result.success,
         remaining: result.remaining,
         resetMs: Math.max(result.reset - Date.now(), 0),
+        ...(result.success ? {} : { reason: "limited" as const }),
       };
     } catch (error) {
       if (!warnedAboutBackendFailure) {
@@ -135,8 +159,12 @@ export async function checkRateLimit(
       // guards (auth brute-force, SAP-tenant amplification). Denying for the
       // duration of the outage is the safer trade for those routes. In dev we
       // fall through to the in-memory limiter so local work is unaffected.
+      //
+      // REFUSED, AND SAID AS AN OUTAGE (audit A44). The refusal is unchanged;
+      // the reason is what lets every caller answer 503 LIMITER_UNAVAILABLE
+      // rather than tell the caller it was throttled.
       if (process.env.NODE_ENV === "production") {
-        return { allowed: false, remaining: 0, resetMs: config.windowMs };
+        return { allowed: false, remaining: 0, resetMs: LIMITER_UNAVAILABLE_RETRY_MS, reason: "unavailable" };
       }
     }
   }
@@ -239,7 +267,75 @@ export const RATE_LIMITS = {
    * system on every call.
    */
   northbound: { limit: 60, windowMs: 60 * 1000 },
+  /**
+   * The edge bucket for an authenticated MACHINE route, keyed by the credential
+   * PRESENTED (a hash of the bearer, see machineCredentialKey) rather than the
+   * caller's address (audit A43, P0.5). A ceiling, not the budget: the route's
+   * own per-credential buckets (`northbound`, 60 reads and 60 writes a minute)
+   * refuse long before it, with an audit row. It exists so a runaway key is
+   * stopped at the edge without spending anyone else's allowance.
+   */
+  machineCredential: { limit: 600, windowMs: 60 * 1000 },
+  /**
+   * The per-address BACKSTOP behind machineCredential: the only thing a flood
+   * of random keys (each its own bucket) runs into. Ten credentials' worth of
+   * ceiling, so one runaway key — refused at its own ceiling first — spends at
+   * most a tenth of it, and a vendor serving many customers from one egress
+   * address is not throttled by its own fleet.
+   */
+  machineIpBackstop: { limit: 6000, windowMs: 60 * 1000 },
 } as const;
+
+/**
+ * Authenticated MACHINE routes: called by an application, an event sender, a
+ * CI runner or an agent with a bearer credential, never by a browser session.
+ * Only `/api/northbound` exists today; the rest are the paths the roadmap
+ * reserves for machine callers (the twin, event ingest, the management API,
+ * governed outbound routes, MCP), listed now so each is limited per credential
+ * from its first deploy instead of inheriting the per-IP browser bucket.
+ */
+export const MACHINE_API_PREFIXES = [
+  "/api/northbound",
+  "/api/twin",
+  "/api/events/ingest",
+  "/api/mgmt",
+  "/api/outbound",
+  "/api/mcp",
+] as const;
+
+/** Whole path segments only: `/api/mcp` is a machine route, `/api/mcpx` is not. */
+export function isMachineApiRoute(pathname: string): boolean {
+  return MACHINE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/**
+ * How the edge keys a machine route, from COREEDGE_MACHINE_RATE_LIMIT.
+ *
+ *   credential (default) — per presented credential, with the per-IP backstop.
+ *   ip                   — the old shared per-IP API buckets. A rollback
+ *                          switch, nothing more: it brings A43 back.
+ *
+ * Anything else reads as the default. Read per request rather than at load.
+ */
+export function machineRateLimitMode(): "credential" | "ip" {
+  return process.env.COREEDGE_MACHINE_RATE_LIMIT?.trim().toLowerCase() === "ip" ? "ip" : "credential";
+}
+
+/**
+ * The edge bucket key for a presented bearer credential.
+ *
+ * A HASH, NEVER THE CREDENTIAL. The key is stored in Redis and can surface in
+ * its logs and metrics; a raw bearer there would be a credential leak for a
+ * window's lifetime. SHA-256 through Web Crypto (this runs on the Edge), cut to
+ * 128 bits: wide enough that two live keys never share a bucket, and not the
+ * full digest SolutionClient.tokenHash stores, so the Redis key is not a lookup
+ * key into that table either.
+ */
+export async function machineCredentialKey(bearer: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bearer));
+  const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `machine:cred:${hex.slice(0, 32)}`;
+}
 
 /**
  * Routes that reach the live SAP tenant and therefore belong in the tight

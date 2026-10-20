@@ -28,13 +28,9 @@ export function hashClientToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
-/** Pull the bearer credential out of an Authorization header. */
-export function extractBearer(header: string | null): string | null {
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  const token = match?.[1]?.trim();
-  return token && token.length > 0 ? token : null;
-}
+// Re-exported so every route keeps its import; the parser lives where the edge
+// middleware can reach it too (see bearer.ts).
+export { extractBearer } from "@/lib/northbound/bearer";
 
 export interface AuthenticatedClient {
   clientId: string;
