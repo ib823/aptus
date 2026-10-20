@@ -109,6 +109,13 @@ WHERE e."correlationId" = '<id from x-correlation-id>';
 imports a SAP-writing helper (`createSapEntitySetRecord`,
 `deleteSapEntityByLocation`, `runCapabilityWriteTest`) and does not
 `await beginPlatformAudit(...)` before calling it and `completePlatformAudit(...)`
-after. It also fails for a new lib module that wraps one of those helpers, and
-for a new POST, PUT, PATCH, MERGE or DELETE in the modules that talk to SAP,
-until someone classifies it. Follow `src/app/api/sap/tdd/write/route.ts`.
+after. The `catch` around `beginPlatformAudit` must end with
+`return platformAuditUnavailable()` (or rethrow): a catch that logs and carries
+on, or a `.catch()` on the promise, fails the test, because the route would then
+write to SAP with no row. Imports are resolved to files, so an `@/` path, a
+relative path and a folder `index.ts` count the same. The test also fails for a
+new lib module that wraps or re-exports one of those helpers (a barrel is a
+wrapper), for a file that names a helper without importing it from the module
+that defines it, and for a new POST, PUT, PATCH, MERGE or DELETE in the modules
+that talk to SAP, until someone classifies it. Follow
+`src/app/api/sap/tdd/write/route.ts`.
