@@ -235,6 +235,37 @@ apart:
 an integration lies to its users, and it is the reason this distinction is
 carried all the way from the probe to the generated client.
 
+### Every status, and whether to retry it
+
+One meaning per status and `error.code`, so your retry logic can branch on
+them. Every error body is `{ "error": { "code", "message", "correlationId" } }`;
+quote the `correlationId` (also the `x-correlation-id` header) when you ask for
+help.
+
+<!-- retry-table: tests/unit/northbound/token-failure-retry-table.test.ts reads this table; keep one row per status and code. -->
+| Status | `error.code` | Means | Retry? |
+|---|---|---|---|
+| `400` | `VALIDATION_ERROR` | The request is not valid, or the feed's own definition is incomplete (no dataset, no service) | **No.** Fix the request, or the feed in Studio |
+| `401` | `UNAUTHENTICATED` | The token is missing, unknown, revoked or expired | **No.** Fix the token |
+| `403` | `FORBIDDEN` | Not set up: no approved grant for this call; or the customer's SAP connection cannot sign in — a credential is missing, its token endpoint refused it, or its token URL is wrong; or SAP itself refused (401/403) | **No.** Fix access or the connection, then call again |
+| `403` | `CONNECTION_NOT_CONFIGURED` | The customer has not connected that SAP system for your environment | **No.** The customer connects it |
+| `404` | `NOT_FOUND` | No such interface for your credential, or the dataset does not exist on the tenant | **No.** |
+| `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
+| `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |
+| `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
+| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it | **Yes, after `Retry-After`.** Slow this key down |
+| `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
+| `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
+| `503` | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits, so it refused the call for safety. Nothing was sent to SAP, and your budget was not spent | **Yes, after `Retry-After`.** |
+| `504` | `UPSTREAM_TIMEOUT` | The tenant, or the connection's token endpoint, did not answer in time | **Yes, with backoff.** A write that timed out after it was sent returns the same answer under its key; see *Idempotency is not optional* |
+
+**Branch on `error.code`, not only on the status.** A `429 RATE_LIMITED` is
+about your own credential; a `429 RATE_LIMITED_ADDRESS` is about the address
+you call from. Neither is ever sent for an outage: when the limiter itself is
+down you get `503 LIMITER_UNAVAILABLE`, which says nothing about your rate.
+When SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`, so back
+off on a `502` as well, not only on a `429`.
+
 ---
 
 ## Interface status and reads
@@ -249,6 +280,29 @@ Reads check the interface's status too, asymmetrically and on purpose:
   builder's statement that new traffic should stop; an interface kept for the
   record must not quietly keep serving it. Discovery agrees: a deprecated
   interface is never advertised as callable.
+
+---
+
+## One grant, one interface
+
+An approved grant authorises **one interface, on one SAP product**: the
+interface the request was raised against. Adding an interface for the same
+service on another SAP system (an on-premise system beside S/4HANA Cloud, say)
+does not inherit the approval; request access for it as well. A grant still
+names its environment and operation, so a READ grant in SANDBOX authorises
+neither a write nor PROD.
+
+Grants approved before this rule (P0.1) were bound to the one interface they
+matched. One that matched none or several is flagged for re-approval on the
+CoreEdge requests board and keeps working until the deployment switches to
+strict binding (`COREEDGE_GRANT_BINDING=strict`). After that its calls are
+refused with `403 GRANT_NEEDS_REAPPROVAL`: ask for access again from the
+interface, and do not retry.
+
+An interface that is ACTIVE stays behind the activation checks when its
+contract changes: switching an active interface to a write, or changing its
+entity set, runs the same checks as activating it and is audited as a
+promotion.
 
 ---
 
@@ -302,7 +356,7 @@ So: **reuse the same key when you retry.** The rules are:
 | First call with a key | The write happens |
 | Same key, same payload and SAP destination | The **recorded outcome**, replayed — SAP is not touched again |
 | Same key, **different** payload or destination | `409` — a different write requires a different intent/key |
-| Same key, still in flight | `409` — one intent, one write |
+| Same key, still in flight | `409` with `Retry-After` — one intent, one write. Retry with the same key after `Retry-After` to get the outcome |
 | Key older than 24h | Treated as a fresh request |
 
 Failures are recorded too. If a write was refused with a `403`, retrying the same
@@ -380,8 +434,42 @@ existing connections are not touched. Use OAuth SAML bearer instead
   browser bundle.
 - The person who **owns** a solution cannot issue its credential; a colleague
   must. Same second-pair-of-eyes rule as approving access.
-- Rotating replaces the token immediately, with no overlap window. Revoking
-  stops it now and keeps the audit history.
+- **The prefix says where a key reaches.** A PROD key starts `ce_live_`; a
+  SANDBOX, DEV or TEST key starts `ce_test_`. Keys issued before these prefixes
+  start with plain `ce_` and keep working until they expire. CoreEdge never
+  reads the prefix to authenticate you, so nothing breaks when your key's
+  prefix changes at its next rotation.
+- **TEST and PROD keys expire.** The issuer chooses the date, up to 90 days
+  ahead. A PROD key cannot be issued without one: the request is refused with
+  400. A TEST key issued without one gets the default of 90 days. SANDBOX and
+  DEV keys may still be issued with no expiry. A TEST or PROD key issued before
+  this rule may have no expiry. It keeps working, and the Studio and the
+  Operations screens show it as **no expiry - set one** until it is rotated.
+  The write key (`cew_`) is stored on the same credential, so it stops when the
+  runtime key does. It does not come back when an expired or revoked key is
+  renewed: ask for a new write key after the renewal. Studio does not issue a
+  write key on a TEST or PROD key that has no expiry: rotate the key first.
+- **Rotating overlaps.** Rotating mints a new key with a fresh lifetime. The
+  key it replaces keeps working for 24 hours, or until it would have expired if
+  that is sooner. The response, the claim screen and the Studio table show the
+  exact time as `previousValidUntil`. Deploy the new key inside that window and
+  no call fails. Only the immediately previous key overlaps: if you rotate twice
+  in a day, the first key stops at the second rotation. A key that had already
+  stopped (revoked, deactivated or expired) does not come back for the window.
+  Re-issuing for an environment, or collecting a claim link for a lane that
+  already has a working key, is a rotation and overlaps the same way. The
+  exception is a re-issue that names a different SAP client: the old key
+  stops at once, so it never reads a client it was not issued for.
+- **The overlap can be switched off.** If your platform team sets the overlap
+  to 0 hours, rotating replaces the key at once. The rotation response says
+  "the previous token stopped working immediately": deploy the new key
+  straight away.
+- **A leak is a revoke, not a rotation.** Revoking ends the current key **and**
+  the previous one in the same moment, and keeps the audit history. Then issue
+  a new key.
+- **Scan for leaks.** The patterns that match every CoreEdge credential, for
+  GitHub secret scanning, gitleaks or a log filter, are in
+  `docs/coreedge/secret-scanning.md`.
 
 Every call your application makes is recorded against the credential that made
 it, so a leaked token can be traced to exactly what it touched and revoked

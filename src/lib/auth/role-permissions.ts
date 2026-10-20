@@ -226,6 +226,26 @@ export const ROLE_CAPABILITIES = {
     canViewAllAssessments: false,
     isAreaLocked: false,
   },
+  // A self-service developer workspace (P0.13). Its reach is Studio's Discover,
+  // the catalogue and the sandbox tenant, none of which this matrix speaks to;
+  // the one capability here is inviting colleagues into the same workspace,
+  // and the invite route narrows that to this role alone.
+  sandbox_developer: {
+    canCreateAssessment: false,
+    canEditAssessment: false,
+    canDeleteAssessment: false,
+    canManageStakeholders: false,
+    canManageOrganization: false,
+    canInviteUsers: true,
+    canTransitionStatus: false,
+    canEditStepResponses: false,
+    canEditGapResolutions: false,
+    canEditRegisters: false,
+    canApproveGaps: false,
+    canSignOff: false,
+    canViewAllAssessments: false,
+    isAreaLocked: false,
+  },
 } as const satisfies Record<UserRole, RoleCapabilities>;
 
 /**

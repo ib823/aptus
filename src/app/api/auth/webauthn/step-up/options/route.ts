@@ -30,12 +30,16 @@ import { getSessionToken, issueStepUpChallenge, validateSession } from "@/lib/au
 import { STEP_UP_CODES } from "@/lib/auth/step-up-codes";
 import { generateAuthenticationChallenge } from "@/lib/auth/webauthn";
 import { getUserCredentials } from "@/lib/auth/webauthn-db";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { checkRateLimit, getClientIp, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
+import { isLimiterOutage, limiterUnavailableResponse } from "@/lib/security/rate-limit-response";
 import { ERROR_CODES } from "@/types/api";
 
 export const dynamic = "force-dynamic";
 
-function tooMany(resetMs: number): NextResponse {
+function tooMany(result: RateLimitResult): NextResponse {
+  // A limiter outage is not "too many attempts" (audit A44).
+  if (isLimiterOutage(result)) return limiterUnavailableResponse(result);
+  const { resetMs } = result;
   return NextResponse.json(
     { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
     { status: 429, headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) } },
@@ -44,7 +48,7 @@ function tooMany(resetMs: number): NextResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ipCheck = await checkRateLimit(`webauthn-step-up:ip:${getClientIp(request.headers)}`, RATE_LIMITS.stepUpPerIp);
-  if (!ipCheck.allowed) return tooMany(ipCheck.resetMs);
+  if (!ipCheck.allowed) return tooMany(ipCheck);
 
   const token = await getSessionToken();
   const user = token ? await validateSession(token) : null;
@@ -56,7 +60,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const userCheck = await checkRateLimit(`webauthn-step-up:user:${user.id}`, RATE_LIMITS.auth);
-  if (!userCheck.allowed) return tooMany(userCheck.resetMs);
+  if (!userCheck.allowed) return tooMany(userCheck);
 
   const credentials = await getUserCredentials(user.id);
   if (credentials.length === 0) {

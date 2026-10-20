@@ -19,6 +19,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
+import { liveKeyWhere } from "@/lib/northbound/key-policy";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 import { missingOwners } from "@/lib/studio/solutions";
@@ -29,6 +30,7 @@ export async function GET(_request: NextRequest) {
   const guard = await requireControlTower();
   if (!guard.ok) return guard.response;
 
+  const now = new Date();
   const [rows, interfaceGroups, credentialGroups] = await Promise.all([
     prisma.solution.findMany({
       where: opsWhere(guard.actor, {}),
@@ -53,9 +55,15 @@ export async function GET(_request: NextRequest) {
       where: opsWhere(guard.actor, {}),
       _count: { _all: true },
     }),
+    /*
+     * LIVE means "authenticates now" — the predicate the broker applies
+     * (key-policy.ts). This counted `isActive` and unrevoked only, so a
+     * solution whose every key had expired still read "has a live
+     * credential" (P0.11).
+     */
     prisma.solutionClient.groupBy({
       by: ["solutionId"],
-      where: opsWhere(guard.actor, { isActive: true, revokedAt: null }),
+      where: opsWhere(guard.actor, liveKeyWhere(now)),
       _count: { _all: true },
     }),
   ]);

@@ -160,6 +160,60 @@ describe("the nightly sweep", () => {
   });
 });
 
+/*
+ * WAVE 1A INTEGRATION REVIEW. The nightly owner sweep (P0.1, A69) moves an
+ * ACTIVE app whose owner left to RESTRICTED, and RESTRICTED stops no runtime
+ * call: its keys and traffic keep running. The lane sweep took ACTIVE apps
+ * only, so from that night a live integration's lanes were never checked
+ * again, and the board said "the app is not live" about an app serving
+ * production traffic.
+ */
+describe("a RESTRICTED app still carries traffic, so its lanes are still checked", () => {
+  /** The solution query as Postgres would answer it: by the status filter it was given. */
+  function solutionsByStatus(rows: { status: string; [field: string]: unknown }[]) {
+    mocks.findSolutions.mockImplementation(({ where }: { where: { status?: string | { in: string[] } } }) => {
+      const s = where.status;
+      return Promise.resolve(
+        rows.filter((r) => s === undefined || (typeof s === "string" ? r.status === s : s.in.includes(r.status))),
+      );
+    });
+  }
+
+  it("the nightly sweep checks a RESTRICTED app's feeds, and never a DRAFT or RETIRED one's", async () => {
+    solutionsByStatus([
+      { id: "sol_r", organizationId: "org_a", status: "RESTRICTED", interfaces: [feed("if_r", PATH_A)] },
+      { id: "sol_d", organizationId: "org_a", status: "DRAFT", interfaces: [feed("if_d", PATH_B)] },
+      { id: "sol_x", organizationId: "org_a", status: "RETIRED", interfaces: [feed("if_x", PATH_B)] },
+    ]);
+    const result = await sweepLaneChecks(new Date("2026-10-20T04:30:00Z"));
+    expect(result.checked).toBe(1);
+    expect(mocks.readEntitySet.mock.calls.map((c) => (c[0] as { servicePath: string }).servicePath)).toEqual([
+      PATH_A,
+    ]);
+  });
+
+  it("the lane board does not call a RESTRICTED app's lane unchecked because the app is not live", async () => {
+    const f = feed("if_a", PATH_A);
+    solutionsByStatus([{ id: "sol_1", slug: "app", name: "App", status: "RESTRICTED", interfaces: [f] }]);
+    mocks.findGrants.mockResolvedValue([
+      {
+        solutionId: "sol_1",
+        externalId: f.externalId,
+        operation: "READ",
+        environment: "DEV",
+        decision: "APPROVED",
+        expiresAt: null,
+        revokedAt: null,
+        createdAt: new Date(),
+      },
+    ]);
+    const lanes = await listLanes("org_a");
+    const dev = lanes.find((l) => l.environment === "DEV")!;
+    // Unchecked only because the sweep has not reached it yet, never as "not live".
+    expect(dev.verdict).toMatchObject({ unchecked: "notRunYet" });
+  });
+});
+
 describe("the manual re-check", () => {
   it("re-checks a custom feed on its own path", async () => {
     mocks.findInterface.mockResolvedValue(feed("if_a", PATH_A));

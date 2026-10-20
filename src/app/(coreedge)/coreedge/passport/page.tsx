@@ -6,8 +6,9 @@ import { OpsTable } from "@/components/coreedge/OpsTable";
 import { EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { listPassport } from "@/lib/coreedge/queries";
-import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
+import { GATE_GLYPHS, KEY_STATE_GATES } from "@/lib/coreedge/status-vocabulary";
 import { getCurrentUser } from "@/lib/auth/session";
+import { KEY_STATE_LABELS } from "@/lib/northbound/key-policy";
 
 import { CoreEdgeShell } from "../CoreEdgeShell";
 
@@ -30,6 +31,11 @@ import { CoreEdgeShell } from "../CoreEdgeShell";
  * describes, which is a different question. On the one screen whose whole job
  * is telling a client exactly what is readable, a plausible substitute would be
  * worse than an admission.
+ *
+ * THE KEY COLUMN SAYS WHETHER ANYTHING CAN LEAVE NOW (P0.11). An approval is
+ * what may be read; the key is whether the app can read it today. An expired
+ * or revoked key reads as exactly that, never as live, and a TEST or PROD key
+ * with no expiry is live but flagged "no expiry - set one".
  */
 
 export const metadata: Metadata = { title: "Passport" };
@@ -117,6 +123,15 @@ export default async function PassportPage(): Promise<ReactNode> {
             ),
           },
           { key: "ends", header: "Access ends", cell: (r) => dateLine(r.accessEnds) },
+          {
+            key: "key",
+            header: "Key",
+            cell: (r) => (
+              <span>
+                {GATE_GLYPHS[KEY_STATE_GATES[r.keyState]]} {KEY_STATE_LABELS[r.keyState]}
+              </span>
+            ),
+          },
         ]}
       />
 

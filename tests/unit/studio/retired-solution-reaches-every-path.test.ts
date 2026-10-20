@@ -39,8 +39,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const client = {
     interface: { findFirst: mocks.findFirstInterface },
     solution: { findFirst: mocks.findFirstSolution },
     solutionClient: {
@@ -49,11 +49,19 @@ vi.mock("@/lib/db/prisma", () => ({
       upsert: mocks.upsertClient,
       update: mocks.updateClient,
     },
+    // Every owner named here is a live member of the organization (A69).
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id })),
+    },
     apiAccessGrant: { findMany: mocks.findManyGrants },
     configAudit: { create: mocks.createAudit },
     keyClaimLink: { updateMany: mocks.closeLinks },
-  },
-}));
+  };
+  // Each key change is one transaction under the app lock (P0.1).
+  return {
+    prisma: { ...client, $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ ...client, $queryRaw: async () => [] }) },
+  };
+});
 vi.mock("@/lib/northbound/access", () => ({
   resolveReadableInterface: mocks.resolveReadableInterface,
 }));
@@ -78,7 +86,15 @@ const IFACE = {
   entitySet: "A_BusinessPartner",
 };
 
-const LIVE_TEST_CLIENT = { id: "cli_test", environment: "TEST", sapClient: null, expiresAt: null };
+/** Live, and inside its expiry: a TEST key must have one (P0.11), and the write key follows it. */
+const LIVE_TEST_CLIENT = {
+  id: "cli_test",
+  environment: "TEST",
+  sapClient: null,
+  isActive: true,
+  revokedAt: null,
+  expiresAt: new Date(Date.now() + 30 * 86_400_000),
+};
 
 /** A solution whose owners are all named and none of them is the caller. */
 const OWNED_SOLUTION = {
@@ -201,7 +217,14 @@ describe("the write key is not minted onto a dead credential", () => {
 
   it("seals onto the unexpired credential when one environment's has lapsed", async () => {
     mocks.findManyClients.mockResolvedValue([
-      { id: "cli_dev", environment: "DEV", sapClient: null, expiresAt: new Date(Date.now() - 60_000) },
+      {
+        id: "cli_dev",
+        environment: "DEV",
+        sapClient: null,
+        isActive: true,
+        revokedAt: null,
+        expiresAt: new Date(Date.now() - 60_000),
+      },
       LIVE_TEST_CLIENT,
     ]);
 
@@ -209,7 +232,39 @@ describe("the write key is not minted onto a dead credential", () => {
     const out = await json(await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body)));
 
     expect(out.data?.writeKey).toBe("cew_generated");
-    expect(mocks.setWriteCredential).toHaveBeenCalledWith(expect.anything(), "cli_test", "cew_generated");
+    expect(mocks.setWriteCredential).toHaveBeenCalledWith(expect.anything(), "cli_test", "cew_generated", {
+      issuerId: BUILDER.id,
+    });
+  });
+
+  it("refuses a write key onto a TEST key with no expiry — it would never end either (P0.11)", async () => {
+    mocks.findManyClients.mockResolvedValue([{ ...LIVE_TEST_CLIENT, expiresAt: null }]);
+
+    const res = await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body));
+    const out = await json(res);
+
+    expect(res.status).toBe(400);
+    expect(out.error?.message).toMatch(/no expiry/i);
+    expect(out.error?.message).toMatch(/Rotate the credential first/);
+    expect(out.error?.message).toMatch(/keeps working for up to 24 hours/);
+    expect(mocks.setWriteCredential).not.toHaveBeenCalled();
+  });
+
+  // Review round 2: the advice read "keeps working for 0 hours ... so nothing
+  // fails" with the overlap switched off, where the rotation cuts over at once.
+  it("does not promise an overlap that is switched off", async () => {
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    try {
+      mocks.findManyClients.mockResolvedValue([{ ...LIVE_TEST_CLIENT, expiresAt: null }]);
+
+      const out = await json(await issueWriteKey(post("http://localhost/api/studio/clients/write-credential", body)));
+
+      expect(out.error?.message).toMatch(/Rotate the credential first/);
+      expect(out.error?.message).not.toMatch(/nothing fails|0 hours/);
+      expect(out.error?.message).toMatch(/stops at once/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("an expiry in the future is still live", async () => {

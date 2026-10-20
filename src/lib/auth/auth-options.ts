@@ -1,5 +1,6 @@
 /** NextAuth configuration — magic link authentication via Brevo */
 
+import { headers } from "next/headers";
 import type { NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
@@ -8,8 +9,119 @@ import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
+import {
+  checkSignupCallerLimit,
+  checkSignupEmailLimit,
+  createDeveloperWorkspaceUser,
+  mayCreateDeveloperWorkspace,
+} from "@/lib/auth/developer-workspace";
 import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 import { safeRelativePath } from "@/lib/http/safe-relative-path";
+import { getClientIp } from "@/lib/security/client-ip";
+
+/**
+ * The account a first sign-in creates (NextAuth calls this only after the
+ * magic link was clicked, so the address is proven).
+ *
+ * NOBODY BECOMES PLATFORM ADMIN HERE. This used to make the very first account
+ * on an empty database `platform_admin`, so on a fresh instance whoever
+ * reached the sign-in page first owned it — a race a stranger could win. The
+ * first administrator is now claimed with the one-time bootstrap token
+ * (lib/auth/bootstrap.ts, COREEDGE_BOOTSTRAP_TOKEN); everyone else is created
+ * as before. An instance that already has an administrator (production does)
+ * never took that branch, so nothing changes for it.
+ *
+ * With developer sign-up open (lib/auth/developer-workspace.ts) a new person
+ * gets their own workspace and the sandbox developer role instead of an
+ * organization-less `consultant`. Off, which is the default, it is exactly the
+ * account this created before.
+ */
+export async function createFirstSignInUser(data: {
+  email: string;
+  emailVerified?: Date | null;
+  name?: string | null;
+  image?: string | null;
+}) {
+  if (mayCreateDeveloperWorkspace(data.email).allowed) {
+    return createDeveloperWorkspaceUser({ ...data, emailVerified: data.emailVerified ?? null });
+  }
+  return prisma.user.create({
+    data: {
+      email: data.email,
+      emailVerified: data.emailVerified ?? null,
+      name: data.name || data.email.split("@")[0] || "User",
+      image: data.image ?? null,
+      role: "consultant",
+    },
+  });
+}
+
+/**
+ * Who may get an account at their first sign-in: the registration policy, and
+ * with developer sign-up open, the developer domain list too. The signIn
+ * callback below asks this; /api/auth/signup's developer branch asks
+ * `mayCreateDeveloperWorkspace`, which this admits whenever it does, so a link
+ * a sign-up sends is never one the callback then refuses.
+ */
+export function mayRegisterOnFirstSignIn(email: string): { allowed: boolean; reason?: string } {
+  const developer = mayCreateDeveloperWorkspace(email);
+  if (developer.allowed) return developer;
+  return canRegister(email);
+}
+
+/**
+ * The caller's address for the sign-up bucket, read the way the edge reads it
+ * (`getClientIp`). NextAuth's route runs inside the request, so the headers
+ * are there; outside one (a script) every caller shares "unknown", which
+ * limits rather than lets through.
+ */
+async function signupCallerIp(): Promise<string> {
+  try {
+    return getClientIp(await headers());
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Spend the sign-up buckets before a link goes to an address that has no
+ * account yet WHILE DEVELOPER SIGN-UP IS OPEN: such a link creates a
+ * workspace when clicked, so it is a sign-up, and P0.13 limits sign-ups per
+ * caller address and per email. An existing account's sign-in link is never
+ * limited here, so nobody already on the host can be locked out by it.
+ * Throws (NextAuth answers EmailSignin) when a bucket has had its share.
+ *
+ * OFF, NOTHING IS SPENT (review round 2). The per-email bucket was spent for
+ * every new address whatever the mode, and /api/auth/signup spends the same
+ * bucket for any caller who names an address, so five anonymous requests an
+ * hour kept a new employee's first sign-in link refused on the deployed
+ * default. Off, a new address's link keeps exactly the limits it had.
+ */
+async function limitSignupLinks(email: string): Promise<void> {
+  if (!mayCreateDeveloperWorkspace(email).allowed) return;
+  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
+  if (existing) return;
+  // The caller's bucket is the one /api/auth/signup spends at the edge
+  // (developer-workspace.ts, `checkSignupCallerLimit`).
+  const caller = await checkSignupCallerLimit(await signupCallerIp());
+  if (!caller.allowed) {
+    console.warn(`[AUTH] sign-up link refused for this caller — ${caller.outage ? "limiter unavailable" : "limited"}`);
+    throw new Error(
+      caller.outage
+        ? "Sign-up limits cannot be checked right now. Try again shortly."
+        : "Too many sign-ups from this network. Try again later.",
+    );
+  }
+  const limit = await checkSignupEmailLimit(email);
+  if (!limit.allowed) {
+    console.warn(`[AUTH] sign-up link refused for a new address — ${limit.outage ? "limiter unavailable" : "limited"}`);
+    throw new Error(
+      limit.outage
+        ? "Sign-up limits cannot be checked right now. Try again shortly."
+        : "Too many sign-up links for this address. Try again later.",
+    );
+  }
+}
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -20,19 +132,7 @@ function getAdapter(): Adapter {
   const baseAdapter = PrismaAdapter(prisma);
   return {
     ...baseAdapter,
-    createUser: async (data: { email: string; emailVerified?: Date | null; name?: string | null; image?: string | null }) => {
-      const userCount = await prisma.user.count();
-      const role = userCount === 0 ? "platform_admin" : "consultant";
-      return prisma.user.create({
-        data: {
-          email: data.email,
-          emailVerified: data.emailVerified ?? null,
-          name: data.name || data.email.split("@")[0] || "User",
-          image: data.image ?? null,
-          role,
-        },
-      });
-    },
+    createUser: createFirstSignInUser,
     /**
      * Session methods are intentionally no-ops because we use a custom session
      * system (src/lib/auth/session.ts) instead of NextAuth's built-in sessions.
@@ -58,6 +158,7 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
+        await limitSignupLinks(email);
         if (!process.env.SMTP_USER) {
           if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
             console.warn(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
@@ -203,8 +304,9 @@ export const authOptions: NextAuthOptions = {
         return existingUser.isActive;
       }
 
-      // 3. If user is NEW, enforce the security policy
-      const policy = canRegister(email);
+      // 3. If user is NEW, enforce the security policy — widened only by an
+      // explicitly opened developer sign-up, whose account can govern nothing.
+      const policy = mayRegisterOnFirstSignIn(email);
       if (!policy.allowed) {
         console.warn(
           `[AUTH/signIn] denied: registration policy — ${email}: ${policy.reason}`,

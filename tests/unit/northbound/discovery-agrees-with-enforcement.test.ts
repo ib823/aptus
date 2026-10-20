@@ -30,12 +30,16 @@ const mocks = vi.hoisted(() => ({
   touch: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    interface: { findMany: mocks.findManyInterfaces, findFirst: mocks.findFirstInterface },
-    apiAccessGrant: { findMany: mocks.findManyGrants },
-  },
-}));
+// Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
+vi.mock("@/lib/db/prisma", async () => {
+  const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
+  return {
+    prisma: {
+      interface: { findMany: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findManyInterfaces(...a)), findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
+      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+    },
+  };
+});
 
 vi.mock("@/lib/northbound/auth", () => ({
   authenticateClientToken: mocks.authenticate,

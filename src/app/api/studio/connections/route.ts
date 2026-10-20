@@ -31,6 +31,7 @@
  * shown to a member of that same organization.
  */
 
+import { Prisma } from "@prisma/client";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -45,6 +46,7 @@ import {
 import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
+  type SapEnvironment,
 } from "@/lib/sap-public/environment";
 import { parseSamlPrivateKey, SamlKeyError, XML_ILLEGAL_CHARACTER } from "@/lib/sap-public/saml-assertion";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
@@ -351,6 +353,48 @@ function deploymentTenantKeys(productKey: string): string[] {
   }
 }
 
+/**
+ * The ACTIVE connection the binding could not tell apart from this one: same
+ * product, same declared environment, same SAP client. Shared by POST (a new
+ * or replaced row) and PATCH (reactivating a row), so the two doors refuse
+ * the same twin in the same words — the database's partial unique index
+ * (migration 20260731010000) backs both, but surfaces as an opaque 500.
+ */
+async function findActiveTwin(target: {
+  organizationId: string;
+  product: string;
+  environment: SapEnvironment;
+  client: string | null;
+  /** The row itself: by key on a save (a re-save replaces it), by id on a toggle. */
+  excluding: { key: string } | { id: string };
+}): Promise<{ key: string; label: string } | null> {
+  return prisma.sapConnection.findFirst({
+    where: {
+      organizationId: target.organizationId,
+      product: target.product,
+      isActive: true,
+      environment: target.environment,
+      client: target.client,
+      NOT: target.excluding,
+    },
+    select: { key: true, label: true },
+  });
+}
+
+function twinRefusal(
+  twin: { key: string; label: string },
+  target: { product: string; environment: string; client: string | null },
+  subject: string,
+): string {
+  const where = target.client ? `${target.environment} client ${target.client}` : target.environment;
+  return (
+    `"${twin.label}" (${twin.key}) is already the active ${where} connection for this product. ` +
+    `Two connections the binding cannot tell apart would make every ${target.environment} request ambiguous, ` +
+    `so neither would be served. Deactivate that one first, or give ${subject} a different environment` +
+    `${PRODUCTS_WITH_CLIENT.has(target.product) ? " or SAP client" : ""}.`
+  );
+}
+
 async function requireBuilder(): Promise<{ error: ReturnType<typeof studioError> } | Actor> {
   const user = await getCurrentUser();
   if (!user) return { error: studioError("UNAUTHENTICATED", "Sign in required.") };
@@ -489,25 +533,17 @@ export async function POST(request: NextRequest) {
    */
   const environment = normalizeEnvironment(input.environment);
   if (environment) {
-    const twin = await prisma.sapConnection.findFirst({
-      where: {
-        organizationId,
-        product: input.product,
-        isActive: true,
-        environment,
-        client: input.client ?? null,
-        NOT: { key },
-      },
-      select: { key: true, label: true },
+    const twin = await findActiveTwin({
+      organizationId,
+      product: input.product,
+      environment,
+      client: input.client ?? null,
+      excluding: { key },
     });
     if (twin) {
-      const where = input.client ? `${environment} client ${input.client}` : environment;
       return studioError(
         "VALIDATION_ERROR",
-        `"${twin.label}" (${twin.key}) is already the active ${where} connection for this product. ` +
-          `Two connections the binding cannot tell apart would make every ${environment} request ambiguous, ` +
-          `so neither would be served. Deactivate that one first, or give this one a different environment` +
-          `${PRODUCTS_WITH_CLIENT.has(input.product) ? " or SAP client" : ""}.`,
+        twinRefusal(twin, { product: input.product, environment, client: input.client ?? null }, "this one"),
       );
     }
   }
@@ -649,9 +685,32 @@ export async function PATCH(request: NextRequest) {
   // toggle another's connection.
   const existing = await prisma.sapConnection.findFirst({
     where: { id, organizationId },
-    select: { id: true, writeEnabled: true, isActive: true },
+    select: {
+      id: true,
+      writeEnabled: true,
+      isActive: true,
+      product: true,
+      environment: true,
+      client: true,
+    },
   });
   if (!existing) return studioError("NOT_FOUND", "Connection not found.");
+
+  /*
+   * ACTIVATING A TWIN IS A TYPED 409, NOT AN EMPTY 500 (P0.1, A52). POST
+   * refuses a second active connection the binding could not tell apart; this
+   * toggle — what Studio's "Activate" sends — did not, so reactivating B
+   * after A had replaced it hit the partial unique index and Next answered a
+   * bare 500 with no body. Same lookup and words as POST; CONFLICT, because
+   * the request is well-formed and the other row's state is what stands in
+   * the way.
+   */
+  const activating = isActive === true && !existing.isActive;
+  if (activating && existing.environment) {
+    const target = { product: existing.product, environment: existing.environment, client: existing.client ?? null };
+    const twin = await findActiveTwin({ organizationId, ...target, excluding: { id: existing.id } });
+    if (twin) return studioError("CONFLICT", twinRefusal(twin, target, "this connection"));
+  }
 
   // Enabling writes needs a write secret, which lives sealed and unreadable from
   // here. Flipping the switch on a connection that never had one would produce a
@@ -680,14 +739,27 @@ export async function PATCH(request: NextRequest) {
     if (!stepUp.ok) return stepUp.response;
   }
 
-  const updated = await prisma.sapConnection.update({
-    where: { id: existing.id, organizationId },
-    data: {
-      ...(isActive === undefined ? {} : { isActive }),
-      ...(writeEnabled === undefined ? {} : { writeEnabled }),
-    },
-    select: { id: true, isActive: true, writeEnabled: true },
-  });
+  let updated: { id: string; isActive: boolean; writeEnabled: boolean };
+  try {
+    updated = await prisma.sapConnection.update({
+      where: { id: existing.id, organizationId },
+      data: {
+        ...(isActive === undefined ? {} : { isActive }),
+        ...(writeEnabled === undefined ? {} : { writeEnabled }),
+      },
+      select: { id: true, isActive: true, writeEnabled: true },
+    });
+  } catch (error) {
+    // A twin activated between the check above and this write: the index
+    // decides the race, and the loser gets the same typed refusal.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return studioError(
+        "CONFLICT",
+        "Another connection for the same product, environment and SAP client was activated a moment ago. Reload to see it; deactivate it first if this one should serve.",
+      );
+    }
+    throw error;
+  }
 
   await writeConfigAudit({
     organizationId,

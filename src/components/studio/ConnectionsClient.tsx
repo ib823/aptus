@@ -138,8 +138,10 @@ export function ConnectionsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, isActive }),
       });
-      const json = (await res.json()) as { error?: { message?: string } };
-      if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
+      // Parsed defensively: a response with no JSON body must surface as a
+      // sentence, never as "Unexpected end of JSON input" (A52).
+      const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+      if (!res.ok) throw new Error(json?.error?.message ?? `The change could not be saved (HTTP ${res.status}).`);
       router.refresh();
       setToggling(null);
     } catch (err) {

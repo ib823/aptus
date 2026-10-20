@@ -17,12 +17,16 @@ const mocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
   lockSolution: vi.fn(),
   commit: vi.fn(),
+  findManyInterfaces: vi.fn(),
+  findFirstInterface: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => {
   const client = {
     solution: { findFirst: mocks.findFirstSolution },
+    // The interfaces a request is bound to (P0.1, lib/studio/grant-binding.ts).
+    interface: { findMany: mocks.findManyInterfaces, findFirst: mocks.findFirstInterface },
     apiAccessGrant: {
       create: mocks.createGrant,
       findFirst: mocks.findFirstGrant,
@@ -86,6 +90,59 @@ beforeEach(() => {
   // decision is the one that landed.
   mocks.updateManyGrant.mockResolvedValue({ count: 1 });
   mocks.createAudit.mockResolvedValue({ id: "a_1" });
+  // One interface uses the requested service and operation, so the request binds to it.
+  mocks.findManyInterfaces.mockResolvedValue([{ id: "if_1", sapProduct: "s4hana" }]);
+  mocks.findFirstInterface.mockResolvedValue(null);
+});
+
+describe("a request is bound to one interface and its SAP product (P0.1, A47)", () => {
+  it("binds a request that names the service to the one interface using it", async () => {
+    const res = await POST(req(VALID_REQUEST));
+    expect(res.status).toBe(201);
+    expect(mocks.createGrant.mock.calls[0]?.[0]?.data).toMatchObject({ interfaceId: "if_1", sapProduct: "s4hana" });
+    expect(mocks.findManyInterfaces).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: "org_a", solutionId: "sol_1", externalId: "API_BUSINESS_PARTNER", operation: "READ" },
+      }),
+    );
+  });
+
+  it("refuses when two interfaces on different SAP systems use it, and writes nothing", async () => {
+    mocks.findManyInterfaces.mockResolvedValue([
+      { id: "if_1", sapProduct: "s4hana" },
+      { id: "if_2", sapProduct: "s4hana-onprem" },
+    ]);
+    const res = await POST(req(VALID_REQUEST));
+    expect(res.status).toBe(400);
+    expect(mocks.createGrant).not.toHaveBeenCalled();
+  });
+
+  it("takes the service, operation and product from the named interface, scoped to the tenant and the app", async () => {
+    mocks.findFirstInterface.mockResolvedValue({
+      id: "if_9",
+      externalId: "API_BUSINESS_PARTNER",
+      operation: "READ",
+      sapProduct: "s4hana-onprem",
+    });
+    const res = await POST(req({ ...VALID_REQUEST, interfaceId: "if_9" }));
+    expect(res.status).toBe(201);
+    expect(mocks.findFirstInterface).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "if_9", organizationId: "org_a", solutionId: "sol_1" } }),
+    );
+    expect(mocks.createGrant.mock.calls[0]?.[0]?.data).toMatchObject({ interfaceId: "if_9", sapProduct: "s4hana-onprem" });
+  });
+
+  it("refuses a body whose service does not match the named interface", async () => {
+    mocks.findFirstInterface.mockResolvedValue({
+      id: "if_9",
+      externalId: "API_SALES_ORDER_SRV",
+      operation: "READ",
+      sapProduct: "s4hana",
+    });
+    const res = await POST(req({ ...VALID_REQUEST, interfaceId: "if_9" }));
+    expect(res.status).toBe(400);
+    expect(mocks.createGrant).not.toHaveBeenCalled();
+  });
 });
 
 describe("raising a request", () => {

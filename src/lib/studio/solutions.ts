@@ -41,30 +41,6 @@ export function missingOwners(o: Ownership): string[] {
   return missing;
 }
 
-/**
- * Why this person may not issue this solution's runtime credential, or null.
- *
- * The two-human rule that `clients/route.ts` enforces on Studio's issue and
- * rotate, as a predicate other doors can share: all three owners named FIRST
- * (on an unowned solution the second check is vacuously true — [null, null,
- * null] contains nobody), and then the issuer is none of them.
- *
- * It exists because the CoreEdge claim link minted the same credential and
- * checked only the sender's role. A sole owner refused in Studio could send
- * themselves a link and collect a live PROD key, which is the very
- * self-issuance the Studio rule names.
- */
-export function refuseCredentialIssuer(
-  o: Ownership,
-  issuerId: string,
-): "ownersMissing" | "issuerIsOwner" | null {
-  if (missingOwners(o).length > 0) return "ownersMissing";
-  if ([o.technicalOwnerId, o.businessOwnerId, o.supportOwnerId].includes(issuerId)) {
-    return "issuerIsOwner";
-  }
-  return null;
-}
-
 /** The three accountability slots, in the order the UI shows them. */
 export const OWNER_FIELDS = ["technicalOwnerId", "businessOwnerId", "supportOwnerId"] as const;
 export type OwnerField = (typeof OWNER_FIELDS)[number];

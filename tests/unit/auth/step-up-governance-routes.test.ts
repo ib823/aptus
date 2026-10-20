@@ -99,6 +99,7 @@ import { POST as studioWriteKey } from "@/app/api/studio/clients/write-credentia
 import { PATCH as studioConnectionsPatch, POST as studioConnectionsPost } from "@/app/api/studio/connections/route";
 import { PATCH as controlTowerDecide } from "@/app/api/control-tower/grants/route";
 import { POST as controlTowerRevoke } from "@/app/api/control-tower/grants/[grantId]/revoke/route";
+import { POST as adminCreateOrganization } from "@/app/api/admin/organizations/route";
 
 const RUN = `step-up-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -192,12 +193,29 @@ async function grant(
   solutionId: string,
   shape: { decision?: "REQUESTED" | "APPROVED"; operation?: "READ" | "CREATE"; environment?: string } = {},
 ): Promise<string> {
+  // Bound to an interface, as every grant is since P0.1 (lib/studio/grant-binding.ts).
+  const operation = shape.operation ?? "READ";
+  const iface = await prisma.interface.create({
+    data: {
+      organizationId: ORG,
+      solutionId,
+      name: "Sales orders",
+      sapProduct: "s4hana",
+      externalId: "API_SALES_ORDER_SRV",
+      operation,
+      entitySet: "A_SalesOrder",
+      mode: operation === "READ" ? "READ" : "WRITE",
+    },
+    select: { id: true },
+  });
   const g = await prisma.apiAccessGrant.create({
     data: {
       organizationId: ORG,
       solutionId,
+      interfaceId: iface.id,
+      sapProduct: "s4hana",
       externalId: "API_SALES_ORDER_SRV",
-      operation: shape.operation ?? "READ",
+      operation,
       environment: shape.environment ?? "TEST",
       justification: "Read sales orders for the portal.",
       requestedById: `${RUN}-requester`,
@@ -407,6 +425,16 @@ const ROUTES: readonly RouteCase[] = [
     wrote: async (ctx) =>
       (await prisma.sapConnection.findFirst({ where: { id: ctx.connectionId!, organizationId: ORG } }))?.isActive === true,
   },
+  {
+    // P0.13: creating a tenant is a platform-level governance act.
+    name: "POST /api/admin/organizations",
+    action: "org.create",
+    person: ADMIN,
+    okStatus: 201,
+    seed: async () => ({ name: `${RUN} organization ${randomUUID().slice(0, 8)}` }),
+    call: (ctx) => adminCreateOrganization(post("http://localhost/x", { name: ctx.name, orgType: "client" })),
+    wrote: async (ctx) => (await prisma.organization.count({ where: { name: ctx.name! } })) > 0,
+  },
 ];
 
 async function stepUpMissingRows(action: string, targetActor: string) {
@@ -430,6 +458,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
       await prisma.user.create({ data: { ...person, name: person.role, organizationId: ORG } });
       await signIn(person);
     }
+    // The app's owners are live members: a departed owner fills no slot (A69).
+    for (const id of Object.values(OWNERS)) {
+      await prisma.user.create({ data: { id, email: `${id}@abeam.test`, name: "Owner", role: "consultant", organizationId: ORG } });
+    }
     for (const person of [BUILDER, ADMIN]) {
       await prisma.webAuthnCredential.create({
         data: {
@@ -444,13 +476,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
   });
 
   afterAll(async () => {
-    const userIds = [BUILDER.id, ADMIN.id, NO_PASSKEY.id];
+    const userIds = [BUILDER.id, ADMIN.id, NO_PASSKEY.id, ...Object.values(OWNERS)];
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.webAuthnCredential.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.keyClaimLink.deleteMany({ where: { organizationId: ORG } });
+    await prisma.platformGovernanceAudit.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.delete({ where: { id: ORG } });
+    await prisma.organization.deleteMany({ where: { name: { startsWith: RUN } } });
     await prisma.$disconnect();
   });
 
@@ -648,6 +682,29 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("governance routes need a fresh 
     const res = await studioDecide(post("http://localhost/x", { grantId, decision: "APPROVED" }, "PATCH"));
 
     expect(res.status).toBe(200);
+  });
+
+  it("creating an organization is admin-only and leaves a platform audit row naming who made it", async () => {
+    vi.stubEnv("COREEDGE_STEP_UP", "off");
+    const name = `${RUN} audited organization`;
+
+    as(BUILDER);
+    expect((await adminCreateOrganization(post("http://localhost/x", { name }))).status).toBe(403);
+    expect(await prisma.organization.count({ where: { name } })).toBe(0);
+
+    as(ADMIN);
+    const res = await adminCreateOrganization(post("http://localhost/x", { name, contactEmail: "IT@Acme.example" }));
+    expect(res.status).toBe(201);
+    const org = ((await res.json()) as { data: { id: string; slug: string; orgType: string } }).data;
+    expect(org.orgType).toBe("client");
+    expect(org.slug).toMatch(/audited-organization/);
+    const row = await prisma.organization.findUnique({ where: { id: org.id } });
+    expect(row).toMatchObject({ type: "client", orgType: "client", contactEmail: "it@acme.example" });
+
+    const audit = await prisma.platformGovernanceAudit.findFirst({
+      where: { entityType: "Organization", entityId: org.id, action: "CREATE" },
+    });
+    expect(audit).toMatchObject({ actorId: ADMIN.id, after: expect.objectContaining({ name }) });
   });
 
   it("the step-up routes need a session", async () => {

@@ -37,6 +37,7 @@ import {
   ExpiryRunway,
   SegregationVerdict,
 } from "@/components/control-tower/GovernanceChrome";
+import { NO_EXPIRY_LABEL, NO_EXPIRY_MEANING } from "@/lib/northbound/key-policy";
 
 interface DelegatedActionSpec {
   id: string;
@@ -55,6 +56,10 @@ interface RegisterCredential {
   label: string;
   environment: string;
   state: "active" | "expired" | "revoked";
+  /** TEST and PROD keys must expire (P0.11); absent from an older payload. */
+  expiryRequired?: boolean;
+  /** A live key that must expire and does not. */
+  lacksRequiredExpiry?: boolean;
   segregation: { issuerWasAnOwner: boolean; ownershipComplete: boolean } | null;
   lastObservedUseAt: string | null;
   expiresAt: string | null;
@@ -70,6 +75,7 @@ interface CredentialsPayload {
     withWriteSecret: number;
     issuedByAnOwner: number;
     neverExpires: number;
+    noRequiredExpiry?: number;
   };
   delegatedActions: DelegatedActionSpec[];
   provenance: {
@@ -139,6 +145,12 @@ function CredentialsBody({ data }: { data: CredentialsPayload }) {
           value={count(counts.neverExpires)}
           basis="active, with no end date"
         />
+        <Stat
+          label="No expiry - set one"
+          value={count(counts.noRequiredExpiry ?? 0)}
+          basis="TEST or PROD keys, which must now expire — rotate to set one"
+          tone={(counts.noRequiredExpiry ?? 0) > 0 ? "attention" : "default"}
+        />
       </div>
 
       {credentials.length === 0 ? (
@@ -189,10 +201,14 @@ function CredentialsBody({ data }: { data: CredentialsPayload }) {
                 <SegregationVerdict segregation={c.segregation} />
               </td>
               <td style={opsCellStyle}>
-                {/* A credential's expiry is not a grant's: an unbounded read
-                    credential is normal, so no expiry is an absence here and
-                    not a defect. */}
-                <ExpiryRunway expiresAt={c.expiresAt} unboundedIsLegitimate />
+                {/* SANDBOX and DEV keys may run without an expiry, so there no
+                    expiry is an absence and not a defect. A TEST or PROD key
+                    must expire (P0.11): one without is flagged until rotated. */}
+                {c.lacksRequiredExpiry ? (
+                  <OpsChip tone="attention" label={NO_EXPIRY_LABEL} meaning={NO_EXPIRY_MEANING} />
+                ) : (
+                  <ExpiryRunway expiresAt={c.expiresAt} unboundedIsLegitimate />
+                )}
               </td>
               <td style={{ ...opsCellStyle, textAlign: "right" }}>
                 {action ? (

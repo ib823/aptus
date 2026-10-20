@@ -131,8 +131,17 @@ describe("credential handling is explained where a developer will look", () => {
     expect(GUIDE.toLowerCase()).toContain("cannot issue its credential");
   });
 
-  it("says rotation has no overlap window", () => {
-    expect(GUIDE.toLowerCase()).toContain("no overlap window");
+  it("says rotation overlaps, and that a leak is a revoke, which ends both keys (P0.11)", () => {
+    expect(GUIDE).toContain("**Rotating overlaps.**");
+    expect(GUIDE).toContain("keeps working for 24 hours");
+    expect(GUIDE).toContain("**A leak is a revoke, not a rotation.**");
+  });
+
+  it("says TEST and PROD keys expire, and how to spot one that does not (P0.11)", () => {
+    expect(GUIDE).toContain("**TEST and PROD keys expire.**");
+    expect(GUIDE).toContain("no expiry - set one");
+    expect(GUIDE).toContain("`ce_live_`");
+    expect(GUIDE).toContain("`ce_test_`");
   });
 });
 

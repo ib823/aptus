@@ -17,22 +17,17 @@
  * our own abort, or HTTP_<status> for an answered request. Anything that fails
  * the shape collapses to FETCH_FAILED rather than being passed through — a
  * message that does not match /^[A-Z][A-Z0-9_]+$/ is exactly the kind of string
- * that might contain a host.
+ * that might contain a host. A failure of the CREDENTIAL step is TOKEN_* when a
+ * retry may help (see credentialStepOutcome).
  *
  * The client-facing `detail` stays generic. This is additive, alongside it.
  */
 
 import { TOKEN_REQUEST_TIMEOUT_MS } from "@/lib/sap-public/connection-resolver";
-import { SamlBearerExchangeError } from "@/lib/sap-public/oauth-saml-bearer";
-import { credentialFailureKind, OAuthTokenRequestError } from "@/lib/sap-public/upstream-failure";
+import { credentialFailure, failureReasonFromError } from "@/lib/sap-public/upstream-failure";
 
-const CODE = /^[A-Z][A-Z0-9_]{1,39}$/;
-
-/** The upstream never answered: why, as a bounded code. */
-export function failureReasonFromError(err: unknown): string {
-  if (err instanceof Error && err.name === "AbortError") return "TIMEOUT";
-  return codeOf(err) ?? codeOf(causeOf(err)) ?? "FETCH_FAILED";
-}
+// Lives beside the classifier that needs it; re-exported so callers keep this path.
+export { failureReasonFromError };
 
 /** The upstream answered with a non-success status, or null when it succeeded. */
 export function failureReasonFromHttp(status: number): string | null {
@@ -45,66 +40,40 @@ export const FAILURE_REASON_INVALID_BODY = "INVALID_UPSTREAM_BODY";
 /**
  * The broker's outcome when the CREDENTIAL STEP failed — before any request
  * reached the tenant (audit A08, A55). Shared by the read and the write so the
- * two cannot draw the line differently.
+ * two cannot draw the line differently, and drawn by credentialFailure
+ * (upstream-failure.ts), the one classifier every surface asks (P0.5):
  *
- *   NEEDS_SETUP — the connection cannot produce a credential, or the token
- *                 endpoint refused it: fixed in Studio, so not worth a retry.
- *   TIMEOUT     — the token endpoint did not answer within ITS limit, which is
- *                 the one named; the tenant's read timeout never started.
- *   ERROR       — the token endpoint failed or could not be reached.
+ *   NEEDS_SETUP (403) — the connection cannot produce a credential, or the
+ *                       token endpoint refused it or is the wrong URL: fixed in
+ *                       Studio, so not worth a retry.
+ *   TIMEOUT     (504) — the token endpoint did not answer within ITS limit,
+ *                       which is the one named; the tenant's never started.
+ *                       Retryable; TOKEN_TIMEOUT.
+ *   ERROR       (502) — the token endpoint answered 408, 429, a 5xx or a 2xx
+ *                       without a token, or could not be reached. Retryable;
+ *                       TOKEN_HTTP_<n>, TOKEN_NO_TOKEN or TOKEN_<code>.
  *
  * `detail` is generic on purpose, like every broker detail: SuccessFactors'
  * own words are for the connection's administrators on the Test result, not
- * for the app calling the broker. `failureReason` keeps the typed error's code;
- * FETCH_FAILED — "the upstream never answered" — becomes its own code, so the
- * audit row says it was the token step that did not answer, not the tenant.
- * So does any other code a token endpoint that could not be reached leaves
- * (ECONNRESET, ENOTFOUND, UND_ERR_SOCKET): prefixed TOKEN_, because on its own
- * it is word for word the row an unreachable TENANT leaves, and correlation
- * lookup, broker traffic and the server log all sent triage there.
- *
- * ONLY AN OUTAGE IS WORTH A RETRY. A token endpoint that answered 408, 429 or
- * a 5xx is briefly unwell, and so is one that answered 2xx without a token —
- * SuccessFactors serves its maintenance page as a 200, and the Studio Test
- * (publicSamlFailure) calls that the endpoint failing, so the broker must not
- * call it a configuration fault. Any other answer without a token — a 404 or
- * 405 from a wrong path, a 3xx to a login page — is the token URL pointing at
- * the wrong thing, and no retry cures it: NEEDS_SETUP, saying to check the
- * token URL, and recorded as TOKEN_URL_HTTP_<n> so the audit row carries the
- * diagnosis the detail gives. A token timeout is TOKEN_TIMEOUT, never the bare
- * TIMEOUT a tenant that did not answer leaves.
+ * for the app calling the broker. A wrong token URL says so, because no retry
+ * cures it and "fix the connection" alone would not say which field.
  */
 export function credentialStepOutcome(err: unknown): {
   status: "NEEDS_SETUP" | "TIMEOUT" | "ERROR";
   detail: string;
   failureReason: string;
 } {
-  const reason = failureReasonFromError(err);
-  const answered = tokenEndpointAnswer(err);
-  const kind =
-    answered === null ? credentialFailureKind(err) : isTokenEndpointOutage(answered) ? "unavailable" : "refused";
-  const wrongUrl = wrongTokenUrlAnswer(err);
-  const failureReason =
-    wrongUrl !== null
-      ? `TOKEN_URL_HTTP_${wrongUrl}`
-      : kind === "timeout"
-        ? "TOKEN_TIMEOUT"
-        : reason === "FETCH_FAILED"
-          ? "CREDENTIAL_UNAVAILABLE"
-          : kind === "unavailable" && answered === null
-            ? `TOKEN_${reason}`
-            : reason;
-  switch (kind) {
-    case "refused": {
+  const failure = credentialFailure(err);
+  const { failureReason } = failure;
+  switch (failure.kind) {
+    case "refused":
       return {
         status: "NEEDS_SETUP",
-        detail:
-          wrongUrl !== null
-            ? `The connection's token endpoint answered HTTP ${wrongUrl} without issuing a token, so the tenant was not called. Check the connection's token URL in Studio.`
-            : "The connection's credentials could not be used (a credential is missing, or the token endpoint refused it), so the tenant was not called. Fix the connection in Studio.",
+        detail: failure.wrongTokenUrl
+          ? `The connection's token endpoint answered HTTP ${failure.tokenHttpStatus} without issuing a token, so the tenant was not called. Check the connection's token URL in Studio.`
+          : "The connection's credentials could not be used (a credential is missing, or the token endpoint refused it), so the tenant was not called. Fix the connection in Studio.",
         failureReason,
       };
-    }
     case "timeout":
       return {
         status: "TIMEOUT",
@@ -123,20 +92,8 @@ export function credentialStepOutcome(err: unknown): {
 
 /** What the connection's token endpoint answered, when it answered and issued no token. */
 export function tokenEndpointAnswer(err: unknown): number | null {
-  return err instanceof OAuthTokenRequestError || err instanceof SamlBearerExchangeError ? err.httpStatus : null;
+  return credentialFailure(err).tokenHttpStatus;
 }
-
-/** The token endpoint is briefly unwell, and the same request may work later. */
-function isTokenEndpointOutage(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500 || (status >= 200 && status < 300);
-}
-
-/**
- * Token-endpoint answers that refuse the credential itself: RFC 6749's 400
- * (invalid_grant, an assertion SuccessFactors will not take) and 401
- * (invalid_client, a rotated secret), and a gateway's 403.
- */
-const CREDENTIAL_REFUSED = new Set([400, 401, 403]);
 
 /**
  * The status, when the token endpoint answered without a token in a way that
@@ -144,16 +101,6 @@ const CREDENTIAL_REFUSED = new Set([400, 401, 403]);
  * is briefly unwell: a 404 or 405, a 3xx to a login page. Null otherwise.
  */
 export function wrongTokenUrlAnswer(err: unknown): number | null {
-  const status = tokenEndpointAnswer(err);
-  return status !== null && !CREDENTIAL_REFUSED.has(status) && !isTokenEndpointOutage(status) ? status : null;
-}
-
-function causeOf(err: unknown): unknown {
-  return err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
-}
-
-function codeOf(v: unknown): string | null {
-  if (!v || typeof v !== "object") return null;
-  const code = (v as { code?: unknown }).code;
-  return typeof code === "string" && CODE.test(code) ? code : null;
+  const failure = credentialFailure(err);
+  return failure.wrongTokenUrl ? failure.tokenHttpStatus : null;
 }

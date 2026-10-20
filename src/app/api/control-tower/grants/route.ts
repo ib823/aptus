@@ -34,6 +34,7 @@ import { prisma } from "@/lib/db/prisma";
 import { opsLimit, opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { bindingForDecision, needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
 import {
   evaluateDecision,
   grantsRead,
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
    * (revoked → lapsed → expiring-soon → pending → live) in SQL, with the same
    * precedence, so a row is counted in exactly one bucket.
    */
-  const [total, pendingCount, expiringSoonCount, lapsedCount, revokedCount, unboundedCount, rows, byDecision, solutions] = await Promise.all([
+  const [total, pendingCount, expiringSoonCount, lapsedCount, revokedCount, unboundedCount, needsReapprovalCount, rows, byDecision, solutions] = await Promise.all([
     prisma.apiAccessGrant.count({ where }),
     prisma.apiAccessGrant.count({
       where: opsWhere(guard.actor, {
@@ -103,6 +104,16 @@ export async function GET(request: NextRequest) {
         expiresAt: null,
       }),
     }),
+    // Unbound legacy grants that still authorise something (P0.1, A47): each
+    // one needs re-approval against the interface it is for.
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, {
+        interfaceId: null,
+        revokedAt: null,
+        decision: { notIn: ["REQUESTED" as const, "REJECTED" as const] },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      }),
+    }),
     prisma.apiAccessGrant.findMany({
       where,
       select: {
@@ -121,6 +132,10 @@ export async function GET(request: NextRequest) {
         revokedAt: true,
         revokedById: true,
         revokedReason: true,
+        interfaceId: true,
+        sapProduct: true,
+        unboundReason: true,
+        unboundLastUsedAt: true,
       },
       // Pending first: the queue is the thing this screen exists for.
       orderBy: [{ decision: "asc" }, { createdAt: "desc" }],
@@ -167,6 +182,26 @@ export async function GET(request: NextRequest) {
       revokedAt: g.revokedAt ? g.revokedAt.toISOString() : null,
       revokedById: g.revokedById,
       revokedReason: g.revokedReason,
+
+      /**
+       * WHICH INTERFACE, ON WHICH SAP SYSTEM (P0.1, A47). A bound grant
+       * authorises exactly one interface on one product. An unbound one is a
+       * legacy grant the backfill could not bind: it keeps the old matching
+       * until COREEDGE_GRANT_BINDING is strict, and needs re-approval —
+       * flagged here, where approvers look, with when it was last used.
+       */
+      binding:
+        g.interfaceId !== null
+          ? { bound: true as const, interfaceId: g.interfaceId, sapProduct: g.sapProduct }
+          : {
+              bound: false as const,
+              // A pending request is bound by its decision (or the approval is
+              // refused), so only a settled, still-live grant needs re-approval.
+              needsReapproval: needsReapproval(g, now),
+              reason: g.unboundReason,
+              label: unboundGrantLabel(g.unboundReason),
+              lastUsedAt: g.unboundLastUsedAt ? g.unboundLastUsedAt.toISOString() : null,
+            },
 
       /**
        * What this decision authorises AT RUNTIME, computed with the same
@@ -216,6 +251,7 @@ export async function GET(request: NextRequest) {
       lapsed: lapsedCount,
       revoked: revokedCount,
       unbounded: unboundedCount,
+      needsReapproval: needsReapprovalCount,
     },
     truncated: total > rows.length,
     provenance: {
@@ -322,6 +358,12 @@ export async function PATCH(request: NextRequest) {
         externalId: true,
         solutionId: true,
         expiresAt: true,
+        interfaceId: true,
+        sapProduct: true,
+        // A flagged legacy request is never bound by a guess, nor to an
+        // interface added after it was raised (lib/studio/grant-binding.ts).
+        unboundReason: true,
+        createdAt: true,
         // The app's owners, for OWN_APP: an owner may not approve their own app,
         // and being a platform admin is no more an exemption than for SELF_APPROVAL.
         solution: {
@@ -358,6 +400,11 @@ export async function PATCH(request: NextRequest) {
       return { refusal: studioError(code, verdict.message) };
     }
 
+    // The decision binds the request to its one interface, or an approval is
+    // refused (P0.1, A47): see lib/studio/grant-binding.ts.
+    const bound = await bindingForDecision(tx, grant, input.decision);
+    if (!bound.ok) return { refusal: studioError("CONFLICT", bound.message) };
+
     // The passkey last, once every rule has passed (lib/auth/step-up.ts). The
     // row's own tenant, because a global admin has none of their own. Checked
     // here, recorded after the transaction: the record needs a pooled
@@ -384,6 +431,7 @@ export async function PATCH(request: NextRequest) {
         decision: input.decision,
         decidedById: user.id,
         decidedAt,
+        ...(bound.binding ? { ...bound.binding, unboundReason: null } : {}),
       },
     });
     if (settled.count === 0) {
@@ -395,11 +443,11 @@ export async function PATCH(request: NextRequest) {
         ),
       };
     }
-    return { grant, decidedAt };
+    return { grant, decidedAt, binding: bound.binding };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt } = decided;
+  const { grant, decidedAt, binding } = decided;
 
   const before = { decision: grant.decision, decidedById: null, decidedAt: null };
 
@@ -415,6 +463,8 @@ export async function PATCH(request: NextRequest) {
     externalId: grant.externalId,
     solutionId: grant.solutionId,
     expiresAt: grant.expiresAt,
+    interfaceId: binding?.interfaceId ?? grant.interfaceId,
+    sapProduct: binding?.sapProduct ?? grant.sapProduct,
   };
 
   await writeConfigAudit({

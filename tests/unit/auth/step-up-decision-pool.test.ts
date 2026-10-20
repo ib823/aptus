@@ -88,10 +88,26 @@ async function pendingGrant(): Promise<string> {
     },
     select: { id: true },
   });
+  // Bound to an interface, as every grant is since P0.1 (lib/studio/grant-binding.ts).
+  const iface = await prisma.interface.create({
+    data: {
+      organizationId: ORG,
+      solutionId: s.id,
+      name: "Sales orders",
+      sapProduct: "s4hana",
+      externalId: "API_SALES_ORDER_SRV",
+      operation: "READ",
+      entitySet: "A_SalesOrder",
+      mode: "READ",
+    },
+    select: { id: true },
+  });
   const g = await prisma.apiAccessGrant.create({
     data: {
       organizationId: ORG,
       solutionId: s.id,
+      interfaceId: iface.id,
+      sapProduct: "s4hana",
       externalId: "API_SALES_ORDER_SRV",
       operation: "READ",
       environment: "TEST",

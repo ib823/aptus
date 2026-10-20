@@ -26,6 +26,15 @@
  *      authenticateClientToken uses: a key sealed onto an expired credential
  *      can never be presented, because the bearer token it travels with is
  *      already refused.
+ *   5b. that credential has an expiry, where one is mandatory (P0.11): the
+ *      write key is sealed on the same row and lives as long as the row's
+ *      credential (a routine rotation renews both: write keys have no overlap,
+ *      so ending one there would make every rotation a write outage), so
+ *      minting one onto a TEST or PROD key issued before
+ *      expiry was mandatory would hand out a write key that never ends. The
+ *      refusal says to rotate first, and what the rotation does to the token
+ *      in use: it keeps working through the overlap, or — with the overlap
+ *      switched off — stops at once. COREEDGE_KEY_EXPIRY=off lifts it.
  *   6. a LIVE WRITE grant covers the credential's environment: APPROVED (or
  *      SANDBOX_ONLY in SANDBOX), CREATE/UPDATE, unexpired, unrevoked. A write
  *      key with no live write grant would be a secret that authorises nothing
@@ -49,6 +58,15 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db/prisma";
+import { KeyIssuerRefused, refuseKeyIssuer, type KeyIssuerRefusal } from "@/lib/northbound/issue";
+import {
+  isKeyLive,
+  keyExpiryMode,
+  lacksRequiredExpiry,
+  liveKeyWhere,
+  rotationOverlapHours,
+  rotationOverlapSentence,
+} from "@/lib/northbound/key-policy";
 import { generateWriteCredential, setWriteCredential } from "@/lib/northbound/write-credential";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -60,10 +78,42 @@ import {
   type GrantOperation,
 } from "@/lib/studio/grants";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+const RETIRED_REFUSAL =
+  "This solution is RETIRED, so authentication refuses every call it makes. A write key " +
+  "issued now would authorise nothing today and everything the moment someone reactivates " +
+  "the solution. Reactivate it first if the integration is meant to run.";
+
+/**
+ * The owner gate's refusal, in this route's words — the same sentences
+ * whether it was found by the early check or by the re-check under the app
+ * lock in `setWriteCredential`.
+ */
+function issuerRefusal(refusal: KeyIssuerRefusal) {
+  switch (refusal.reason) {
+    case "solutionGone":
+      return studioError("NOT_FOUND", "Solution not found.");
+    case "solutionRetired":
+      return studioError("FORBIDDEN", RETIRED_REFUSAL);
+    case "ownersMissing":
+      return studioError(
+        "FORBIDDEN",
+        `This solution has no ${refusal.missing.join(", ")}. Assign owners before issuing its write key — ` +
+          "a write into a client's ledger needs an accountability record more than anything else does." +
+          (refusal.departed
+            ? " A slot whose owner has been deactivated or has left the organization counts as empty."
+            : ""),
+      );
+    case "issuerIsOwner":
+      return studioError(
+        "FORBIDDEN",
+        "You own this solution, so you cannot issue its write key. Ask a colleague to issue it.",
+      );
+  }
+}
 
 const bodySchema = z.object({
   solutionId: z.string().min(1),
@@ -107,46 +157,29 @@ export async function POST(request: NextRequest) {
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
 
-  if (solution.status === "RETIRED") {
-    return studioError(
-      "FORBIDDEN",
-      "This solution is RETIRED, so authentication refuses every call it makes. A write key " +
-        "issued now would authorise nothing today and everything the moment someone reactivates " +
-        "the solution. Reactivate it first if the integration is meant to run.",
-    );
-  }
+  if (solution.status === "RETIRED") return studioError("FORBIDDEN", RETIRED_REFUSAL);
 
-  const missing = missingOwners(solution);
-  if (missing.length > 0) {
-    return studioError(
-      "FORBIDDEN",
-      `This solution has no ${missing.join(", ")}. Assign owners before issuing its write key — ` +
-        "a write into a client's ledger needs an accountability record more than anything else does.",
-    );
-  }
-
-  const isOwner = [
-    solution.technicalOwnerId,
-    solution.businessOwnerId,
-    solution.supportOwnerId,
-  ].includes(user.id);
-  if (isOwner) {
-    return studioError(
-      "FORBIDDEN",
-      "You own this solution, so you cannot issue its write key. Ask a colleague to issue it.",
-    );
-  }
+  // Owners first, then the issuer is none of them — on LIVE owners: a slot
+  // whose owner was deactivated or left the organization counts as empty
+  // (P0.1, A69), because nobody there can answer for the key. Asked early so
+  // the refusal comes before the passkey; asked again under the app lock with
+  // the write (`setWriteCredential`), because an owner-slot PATCH can land in
+  // between (review round 2).
+  const refusal = await refuseKeyIssuer(prisma, scope.organizationId, solution.id, user.id);
+  if (refusal !== null) return issuerRefusal(refusal);
 
   // The write key seals onto ONE of the solution's runtime credential rows —
   // the one for the environment the caller named, or the only live one.
   const issuedAt = new Date();
+  // Live by the one predicate authentication uses (key-policy.ts), in the
+  // query and again on the rows, so the filter cannot drift from the broker.
   const liveClients = (
     await prisma.solutionClient.findMany({
-      where: scopedWhere(scope, { solutionId: solution.id, isActive: true, revokedAt: null }),
-      select: { id: true, environment: true, expiresAt: true },
+      where: scopedWhere(scope, { solutionId: solution.id, ...liveKeyWhere(issuedAt) }),
+      select: { id: true, environment: true, isActive: true, revokedAt: true, expiresAt: true },
       orderBy: { createdAt: "asc" },
     })
-  ).filter((c) => c.expiresAt === null || c.expiresAt.getTime() > issuedAt.getTime());
+  ).filter((c) => isKeyLive(c, issuedAt));
   if (liveClients.length === 0) {
     return studioError(
       "FORBIDDEN",
@@ -166,6 +199,20 @@ export async function POST(request: NextRequest) {
       parsed.data.environment
         ? `This solution has no live runtime credential for ${parsed.data.environment} (it holds: ${held}). Issue one for that environment first, or name one it holds.`
         : `This solution holds live credentials for ${held}. Say which environment the write key is for — a key sealed onto an unnamed one would authorise writes nobody chose.`,
+    );
+  }
+
+  // 5b. The write key lives as long as the bearer token it is sealed beside,
+  //     so that token must have an end where one is mandatory (P0.11).
+  if (keyExpiryMode() === "enforce" && lacksRequiredExpiry(client, issuedAt)) {
+    return studioError(
+      "VALIDATION_ERROR",
+      `The ${client.environment} credential has no expiry, and a write key sealed on it would never end either. ` +
+        // The overlap follows the setting: with it switched off the rotation
+        // cuts over at once, and "nothing fails" would send someone to break
+        // their running integration (review round 2).
+        `Rotate the credential first to give it one — ${rotationOverlapSentence(rotationOverlapHours())} — ` +
+        "then issue the write key.",
     );
   }
 
@@ -202,7 +249,13 @@ export async function POST(request: NextRequest) {
   if (!stepUp.ok) return stepUp.response;
 
   const rawKey = generateWriteCredential();
-  const sealed = await setWriteCredential(scope, client.id, rawKey);
+  let sealed: boolean;
+  try {
+    sealed = await setWriteCredential(scope, client.id, rawKey, { issuerId: user.id });
+  } catch (err) {
+    if (err instanceof KeyIssuerRefused) return issuerRefusal(err.refusal);
+    throw err;
+  }
   if (!sealed) return studioError("NOT_FOUND", "Credential not found.");
 
   await writeConfigAudit({
@@ -218,6 +271,8 @@ export async function POST(request: NextRequest) {
       clientId: client.id,
       solutionId: solution.id,
       environment: client.environment,
+      // It ends when the bearer token it is sealed beside ends (P0.11).
+      expiresAt: client.expiresAt,
     },
   });
 
@@ -226,6 +281,8 @@ export async function POST(request: NextRequest) {
       solutionId: solution.id,
       clientId: client.id,
       environment: client.environment,
+      // The write key stops with the credential it is sealed on.
+      expiresAt: client.expiresAt,
       writeKey: rawKey,
       warning:
         "Copy this write key now — it is sealed server-side and cannot be shown again. " +

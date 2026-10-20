@@ -946,6 +946,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Acceptance:
   - A table-driven test of token-endpoint answer × auth type × path checks status, reason and retry advice against the developer guide's retry table.
   - A flooding key cannot throttle another key.
+- Decision: machine routes are keyed at the edge by a hash of the presented bearer (600 a minute) and then a per-IP backstop (6,000 a minute) that only a key its own bucket admitted can spend; an address whose presented keys fail to authenticate more than 60 times a minute is refused at the edge before any lookup (`machine-authfail:<ip>`), so made-up keys cannot buy more database lookups than the old per-IP bucket allowed; refusals by the address say `429 RATE_LIMITED_ADDRESS`, distinct from a credential's `429 RATE_LIMITED`; a call with no bearer, and every browser route, keep the old per-IP buckets. `COREEDGE_MACHINE_RATE_LIMIT=ip` restores the old keying as a rollback. A limiter outage still fails closed on every route class, as today, but answers `503 LIMITER_UNAVAILABLE` with `Retry-After` instead of 429, and is audited 503 with that reason, which the throttle view and both incident rules leave out. Token-endpoint reasons are now one `TOKEN_*` vocabulary for both auth types; rows written before keep their old codes (`docs/runbooks/coreedge-rate-limits.md`).
 
 **P0.6 Make Ariba truthful (A71-A75).** Size S. Depends on: none.
 - Problem:
@@ -1024,6 +1025,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - PROD without an expiry returns 400.
   - Zero failed calls across a rotation inside the overlap.
   - Expired keys never show as live.
+- Status: shipped in Phase 0b. The settings are `COREEDGE_KEY_EXPIRY` (default `enforce`, applied only when a key is minted), `COREEDGE_KEY_MAX_TTL_DAYS` and `COREEDGE_KEY_DEFAULT_TTL_DAYS` (both default 90) and `COREEDGE_KEY_ROTATION_OVERLAP_HOURS` (default 24). Existing keys keep working, and those with no expiry are flagged "no expiry - set one". Operator steps are in `docs/runbooks/coreedge-credential-hygiene.md` and the scanning patterns in `docs/coreedge/secret-scanning.md`. Registration with GitHub's partner programme [E56] is still open.
 
 **P0.12 MFA step-up on governance routes; tenant guard in throw mode.** Size M. Depends on: none.
 - Problem: the `/coreedge` layout (`src/app/(coreedge)/layout.tsx:43-46`) and the CoreEdge API routes (decide, issue, rotate, revoke, claim link, write enable, secret save) do not check MFA. The tenant guard defaults to log in production unless `TENANT_SCOPE_GUARD` is set (`src/lib/db/tenant-guard.ts:93-98`); the production value is [unverified]. MFA is passkey-only and optional: it is enforced only when the organisation's policy is `required` or the user opted in (`src/lib/auth/permissions.ts:355-374`), so most approvers have no passkey to step up with. The passkey relying-party ID comes from the host name (`src/lib/auth/webauthn.ts:33`), so moving to a custom domain would invalidate every enrolled passkey.
@@ -1055,6 +1057,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Value: the first minute of time to first call.
 - Code: `src/lib/auth/auth-options.ts`, `src/app/api/auth/signup/route.ts`, `src/app/api/admin/*`, `src/middleware.ts:70-141`, `src/lib/routing/workbench-paths.ts`, `src/lib/email/brevo.ts`.
 - Acceptance: on production, a new email address reaches Discover and invites a colleague with no database access; a stranger cannot claim a fresh instance.
+- Decision: open sign-up is a setting, `COREEDGE_DEVELOPER_SIGNUP=open` (default off: `/signup` and magic-link sign-in admit and create exactly what they did, and a typo reads as off), with an optional domain list (`COREEDGE_DEVELOPER_SIGNUP_DOMAINS`). Open, a new person's first clicked sign-in link (from `/signup/developer` or the sign-in page) creates their own organization and a new, narrowest role, `sandbox_developer`, in one transaction; nothing is written before the click. The role opens Studio to read (Discover, the catalogue) and live-reads SANDBOX tenants only, the deployment's own tenant included, so the API Hub sandbox is declared as a SANDBOX deployment tenant; it is false for every governance gate (decide or request access, issue/rotate/revoke a key, claim links, write keys, connections at any environment, apps, feeds, account and organization administration) and invites sandbox developers only, with pending invitations counted as seats. Sign-up is limited to 10 an hour per caller address and 5 an hour per email address. Members and invitations live at `/coreedge/members`, reachable under `WORKBENCH_ONLY`. `POST /api/admin/organizations` is platform-admin only with step-up `org.create` and a `PlatformGovernanceAudit` row. The first platform admin is claimed at `/coreedge/bootstrap` with `COREEDGE_BOOTSTRAP_TOKEN` (32+ characters, constant-time, single use by recorded hash, every attempt audited, step-up `platform.bootstrap`, refused whenever an active admin exists); nobody is made admin by signing in first. SMTP: 465 is implicit TLS, every other port must STARTTLS (`docs/runbooks/developer-onboarding.md`).
 
 **P0.14 Extract the governed pipeline and wire the modules already built.** Size L. Depends on: P0.1, P0.5, P1.1.
 - Problem: the check sequence is hand-copied across the read, write and broker-run routes and console reads. Four tested modules are not imported anywhere. Most Workbench console routes reach SAP outside it (P0.14b).
@@ -2102,11 +2105,13 @@ lifecycle stages are scored separately (0, 1, 2); lifecycleFull counts the 2s
 
 **Fixed** in batches 1 and 2 (commits `c31a385c` and `33d0ef86`): A00-A13, A20-A28, A31-A37, A39-A41, A48, A49, A53-A55, A64-A68.
 
+**Fixed in P0.1** (Phase 0b): A46, A47, A52, A69, with the batch-1 residual races (owner lock on every key change and claim link; key write and link close in one transaction). Operator steps: `docs/runbooks/coreedge-grant-binding.md`.
+
 **Open (33)**, each assigned to a roadmap item:
 
 | Findings | Subject | Item |
 |---|---|---|
-| A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 |
+| A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 (fixed) |
 | A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 |
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 |

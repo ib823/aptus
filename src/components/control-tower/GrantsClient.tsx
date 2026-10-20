@@ -31,6 +31,7 @@ import {
   opsCellStyle,
 } from "@/components/ops/OpsChrome";
 import { count, FeedAsAt, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import {
   Authorises,
@@ -58,6 +59,19 @@ interface Grant {
   unbounded: boolean;
   revokedAt: string | null;
   revokedReason: string | null;
+  /**
+   * Which interface and SAP product the grant covers (P0.1). Unbound is a
+   * legacy grant that needs re-approval; optional so an older payload renders.
+   */
+  binding?:
+    | { bound: true; interfaceId: string; sapProduct: string | null }
+    | {
+        bound: false;
+        needsReapproval: boolean;
+        reason: string | null;
+        label: string;
+        lastUsedAt: string | null;
+      };
 }
 
 interface GrantsPayload {
@@ -70,6 +84,8 @@ interface GrantsPayload {
     lapsed: number;
     revoked: number;
     unbounded: number;
+    /** Live legacy grants bound to no interface — each needs re-approval (P0.1). */
+    needsReapproval?: number;
   };
   /** True when `grants` is a page of a larger set — the counts above are not. */
   truncated: boolean;
@@ -191,6 +207,26 @@ function GrantsBody({
         </ProvenanceStrip>
       </OpsCard>
 
+      {(counts.needsReapproval ?? 0) > 0 ? (
+        <OpsCard>
+          <div style={{ padding: "13px 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ flex: "none", paddingTop: 1 }}>
+              <OpsChip tone="bad" label={`${counts.needsReapproval} need re-approval`} />
+            </span>
+            <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
+              These grants were approved before a grant named the one interface it covers, and they
+              match none or several of their app&apos;s interfaces — so one approval reaches every SAP
+              system that offers the same service. They keep working until the deployment switches to
+              strict binding, and are refused after that.
+              <br />
+              <br />
+              <strong>Ask for each to be raised again from the interface it is for, approve that,
+              then revoke the old grant.</strong> Each row below says when it was last used.
+            </p>
+          </div>
+        </OpsCard>
+      ) : null}
+
       {counts.unbounded > 0 ? (
         <OpsCard>
           <div style={{ padding: "13px 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -247,7 +283,23 @@ function GrantRow({
         · {grant.operation}
         <div style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
           {grant.solutionName ?? grant.solutionId} · {grant.environment}
+          {grant.binding?.bound && grant.binding.sapProduct ? (
+            <>
+              {" · "}
+              <ProductLabel product={grant.binding.sapProduct} size={14} mutedName />
+            </>
+          ) : null}
         </div>
+        {grant.binding && !grant.binding.bound && grant.binding.needsReapproval ? (
+          <div style={{ marginTop: 4 }}>
+            <OpsChip tone="bad" label={grant.binding.label} />
+            <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "var(--ink-muted)" }}>
+              {grant.binding.lastUsedAt
+                ? `last used ${grant.binding.lastUsedAt.slice(0, 10)}`
+                : "not used since grants were bound"}
+            </span>
+          </div>
+        ) : null}
       </td>
       <td style={opsCellStyle}>
         {/* A lapsed grant KEEPS its decision chip, muted. Recolouring it would

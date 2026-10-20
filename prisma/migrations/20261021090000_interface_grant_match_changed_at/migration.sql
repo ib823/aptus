@@ -1,0 +1,25 @@
+-- Interface.grantMatchChangedAt (P0.1, wave 1a final review).
+--
+-- When a PATCH last changed an interface's externalId or operation, the two
+-- fields an access grant is matched on. An unbound legacy grant's cut-off is
+-- judged on the later of createdAt and this stamp (grantMatchSince in
+-- src/lib/studio/grant-binding.ts), so moving an interface that existed
+-- before the deploy onto an unbound grant's tuple counts as adding one, which
+-- legacy refuses (audit A47).
+--
+-- WHY ITS OWN MIGRATION, AND WHY THIS TIMESTAMP. The column was first added
+-- inside 20261022000000_grant_interface_binding after a preview database had
+-- already applied that file, and Prisma never re-runs an applied migration, so
+-- the preview database would have been left without it. A new migration is
+-- applied there like any other pending one. It sorts before
+-- 20261022000000 because that migration's backfill reads the column on a
+-- database built from history; Prisma applies a pending migration even when a
+-- later one has already run.
+--
+-- NOTHING STOPS ON DEPLOY: a nullable column, NULL on every existing row, which
+-- the code before the deploy never reads.
+--
+-- Backout: ALTER TABLE "Interface" DROP COLUMN "grantMatchChangedAt";
+
+-- AlterTable
+ALTER TABLE "Interface" ADD COLUMN     "grantMatchChangedAt" TIMESTAMP(3);

@@ -19,13 +19,17 @@ const mocks = vi.hoisted(() => ({
   findManyGrants: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    solutionClient: { findFirst: mocks.findFirstClient, update: mocks.updateClient },
-    interface: { findFirst: mocks.findFirstInterface },
-    apiAccessGrant: { findMany: mocks.findManyGrants },
-  },
-}));
+// Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
+vi.mock("@/lib/db/prisma", async () => {
+  const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
+  return {
+    prisma: {
+      solutionClient: { findFirst: mocks.findFirstClient, update: mocks.updateClient },
+      interface: { findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
+      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+    },
+  };
+});
 
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import {
@@ -96,15 +100,25 @@ describe("the write credential is a SECOND secret", () => {
   // The row the CALLING token resolved to. Verification is per credential row
   // (AD-11: one credential per environment), so the lookup is by client id and
   // the AAD is rebuilt from the row's own solution.
-  const row = (secretsCiphertext: string | null) => ({
+  const row = (secretsCiphertext: string | null, expiresAt: Date | null = null) => ({
     id: "client_1",
     solutionId: "sol_1",
     secretsCiphertext,
+    isActive: true,
+    revokedAt: null,
+    expiresAt,
   });
 
   it("accepts the correct key", async () => {
     mocks.findFirstClient.mockResolvedValue(row(sealed()));
     expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(true);
+  });
+
+  it("ends when the credential it is sealed on expires — the correct key no longer verifies (P0.11)", async () => {
+    mocks.findFirstClient.mockResolvedValue(row(sealed(), new Date(Date.now() - 60_000)));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
+    mocks.findFirstClient.mockResolvedValue({ ...row(sealed()), revokedAt: new Date() });
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
   });
 
   it("rejects a wrong key", async () => {

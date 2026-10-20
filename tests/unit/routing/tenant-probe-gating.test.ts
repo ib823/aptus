@@ -110,7 +110,10 @@ describe("the guard says no to the right people", () => {
     const { ALL_USER_ROLES } = await import("@/types/assessment");
 
     const admitted = ALL_USER_ROLES.filter((r) => canAccessStudio(r));
-    expect(admitted.sort()).toEqual(["consultant", "platform_admin"].sort());
+    // sandbox_developer is the deliberate widening (P0.13): it may cause a live
+    // read, and every read route caps it at SANDBOX tenants
+    // (decideSandboxDeveloperRead, tests/unit/api/sap-sandbox-developer-ceiling).
+    expect(admitted.sort()).toEqual(["consultant", "platform_admin", "sandbox_developer"].sort());
 
     // The four that lost access, named so a future widening is a deliberate edit
     // to this list rather than a silent drift in a predicate.
@@ -178,5 +181,65 @@ describe("refuseUnlessMayProbeTenant refuses", () => {
 
     expect(await refuseUnlessMayProbeTenant(), `${role} builds interfaces and must probe`).toBeNull();
     vi.doUnmock("@/lib/auth/session");
+  });
+});
+
+/**
+ * THE SANDBOX DEVELOPER IS REFUSED UNLESS THE ROUTE CAPS IT (P0.13 review).
+ *
+ * `canAccessStudio` admits the sandbox developer, so this guard admitted it on
+ * every live-read route — and each route then had to remember to cap it at
+ * SANDBOX itself. `/api/sap/ariba/call` did not, and a stranger from an open
+ * sign-up ran a live read of the deployment's real Ariba realm. The guard now
+ * refuses the role by default; a route that applies the ceiling says so.
+ */
+describe("the guard and the sandbox developer", () => {
+  async function guardAs(role: string) {
+    vi.resetModules();
+    vi.doMock("@/lib/auth/session", () => ({
+      getCurrentUser: async () => ({ id: "u1", role }),
+    }));
+    const mod = await import("@/lib/sap-public/probe-guard");
+    vi.doUnmock("@/lib/auth/session");
+    return mod.refuseUnlessMayProbeTenant;
+  }
+
+  it("refuses a sandbox developer with 403 on a route that does not cap it", async () => {
+    const guard = await guardAs("sandbox_developer");
+    const res = await guard();
+    expect(res, "a route that never applies the SANDBOX ceiling must not admit the role").not.toBeNull();
+    expect(res!.status).toBe(403);
+    const body = (await res!.json()) as { error: { code: string; message: string; correlationId: string } };
+    expect(body.error.code).toBe("FORBIDDEN");
+    expect(body.error.message).toMatch(/Sandbox/);
+    expect(body.error.correlationId).toBeTruthy();
+  });
+
+  it("admits a sandbox developer on a route that applies the ceiling itself", async () => {
+    const guard = await guardAs("sandbox_developer");
+    expect(await guard({ appliesSandboxDeveloperCeiling: true })).toBeNull();
+  });
+
+  it.each(["consultant", "platform_admin"])("leaves %s as it was, either way", async (role) => {
+    const guard = await guardAs(role);
+    expect(await guard()).toBeNull();
+    expect(await guard({ appliesSandboxDeveloperCeiling: true })).toBeNull();
+  });
+
+  it("is told a route caps the role only by a route that really does", () => {
+    const claims: string[] = [];
+    for (const file of routeFiles(API)) {
+      const src = stripSource(readFileSync(file, "utf8"), "comments");
+      if (!src.includes("appliesSandboxDeveloperCeiling")) continue;
+      claims.push(relative(ROOT, file));
+      expect(
+        src.includes("decideSandboxDeveloperRead"),
+        `${relative(ROOT, file)} tells the probe guard it caps a sandbox developer at SANDBOX, ` +
+          "but never calls decideSandboxDeveloperRead",
+      ).toBe(true);
+    }
+    // The six TDD read routes; Ariba is deliberately not among them.
+    expect(claims.length).toBeGreaterThanOrEqual(6);
+    expect(claims.some((f) => f.includes("ariba"))).toBe(false);
   });
 });

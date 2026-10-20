@@ -11,6 +11,14 @@ const LEGACY_ROLE_MAP: Record<string, UserRole> = {
 };
 
 /**
+ * Every legacy value a stored `role` may still hold. For a database query that
+ * needs the stored values a rule accepts — a query cannot call
+ * `isAdminRoleName`, so the values are filtered through it instead
+ * (lib/auth/bootstrap.ts).
+ */
+export const LEGACY_ROLE_NAMES: readonly string[] = Object.keys(LEGACY_ROLE_MAP);
+
+/**
  * All valid UserRole values — used for runtime validation in mapLegacyRole.
  *
  * DERIVED, and it used to be hand-written. As a hand-written `Set<string>` a

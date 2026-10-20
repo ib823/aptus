@@ -62,6 +62,9 @@ export interface CorrelatedCall {
 function hopFor(status: number, bindingRefusal: string | null, failureReason: string | null): CorrelatedCall["brokenHop"] {
   if (status === 401) return "key";
   if (status === 429) return "key";
+  // Refused at the throttle because the limiter could not be asked (P0.5):
+  // the same hop as a 429, and nothing reached SAP.
+  if (failureReason === "LIMITER_UNAVAILABLE") return "key";
   if (status === 403 && bindingRefusal !== null) return "binding";
   if (status === 403) {
     // A grant refusal is the Access hop; an SAP refusal is the read.
@@ -75,7 +78,17 @@ function hopFor(status: number, bindingRefusal: string | null, failureReason: st
   return "sapDataRead";
 }
 
-function describeOutcome(status: number, rowCount: number | null): string {
+function describeOutcome(status: number, rowCount: number | null, failureReason: string | null): string {
+  if (failureReason === "LIMITER_UNAVAILABLE") {
+    return "CoreEdge could not check its rate limits, so the call was refused for safety. Nothing was sent to SAP.";
+  }
+  // The credential step's own failures (credentialFailure): SAP was never
+  // asked, so "SAP returned an error" would send the reader to the tenant.
+  if (status >= 500 && failureReason?.startsWith("TOKEN_")) {
+    return status === 504
+      ? "The connection's token endpoint did not answer in time. Nothing was sent to SAP."
+      : "The connection's token endpoint failed or could not be reached. Nothing was sent to SAP.";
+  }
   if (status >= 200 && status < 300) {
     if (rowCount === 0) return "SAP answered successfully and had nothing to return.";
     if (rowCount === null) return "Succeeded.";
@@ -144,7 +157,7 @@ export async function lookupCorrelationId(
       environment: parseLaneEnvironment(row.environment),
       environmentRaw: row.environment,
       brokenHop: hopFor(row.status, row.bindingRefusal, row.failureReason),
-      outcome: describeOutcome(row.status, row.rowCount),
+      outcome: describeOutcome(row.status, row.rowCount, row.failureReason),
       rowCount: row.rowCount,
       durationMs: row.durationMs,
       dryRun: row.dryRun,

@@ -14,25 +14,30 @@
  *           → resolve the client's OWN SapConnection
  *             → read → honest status → audit
  *
- * RATE LIMITED PER TOKEN, in this route rather than in middleware. Middleware
- * keys by IP, which is wrong here twice over: a deployed application calls from
- * a handful of server addresses, so an IP key would let one busy customer
- * throttle another, and would let a stolen token hide behind a shared address.
- * Keyed by the resolved client, a runaway or leaked credential throttles only
- * itself — and the audit says exactly which one. Middleware's generic apiRead
- * ceiling still stands behind it as an unauthenticated-flood backstop.
+ * RATE LIMITED PER TOKEN, here and at the edge. An IP key is wrong for this
+ * route twice over: a deployed application calls from a handful of server
+ * addresses, so an IP key would let one busy customer throttle another, and
+ * would let a stolen token hide behind a shared address. Keyed by the resolved
+ * client, a runaway or leaked credential throttles only itself — and the audit
+ * says exactly which one. The middleware in front is keyed the same way, by
+ * the credential presented (audit A43): it used to spend a per-IP bucket on
+ * every call, which undid this isolation before the route ran. Its per-IP
+ * ceiling is now a high backstop only; a flood of made-up keys is held by the
+ * failed-lookup bucket each 401 here spends (northbound/auth-failures.ts).
  */
 
 import type { NextRequest } from "next/server";
 
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
 import {
   newCorrelationId,
   northboundError,
   northboundOk,
+  northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -49,9 +54,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   const correlationId = newCorrelationId();
 
   // 1 — authenticate. Every failure mode collapses to one 401 for the caller.
-  const auth = await authenticateClientToken(extractBearer(request.headers.get("authorization")));
+  const bearer = extractBearer(request.headers.get("authorization"));
+  const auth = await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
+    // A key matching no row spends the address's failed-lookup budget, which
+    // the edge reads first; a real key that refuses is bounded by its own.
+    await noteFailedCredential(request.headers, bearer, auth.reason);
     return unauthenticated(correlationId);
   }
   const client = auth.client;
@@ -61,7 +70,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // not an address a dozen customers might share.
   const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
-    const retryAfter = Math.ceil(rate.resetMs / 1000);
+    // 429 for this credential's own use, 503 when the limiter is down (A44).
+    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests for this client credential.");
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -69,18 +79,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       operation: "READ",
       externalId: "-",
       environment: client.environment,
-      status: 429,
+      status: refusal.status,
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      failureReason: refusal.failureReason,
     });
-    return northboundError(
-      "RATE_LIMITED",
-      "Too many requests for this client credential.",
-      429,
-      correlationId,
-      { "retry-after": String(retryAfter) },
-    );
+    return refusal.response;
   }
 
   const { id } = await ctx.params;

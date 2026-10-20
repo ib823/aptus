@@ -298,6 +298,14 @@ describe("key states", () => {
     ).toBe("keyNotValid");
   });
 
+  it("never draws an expired key as live (P0.11)", () => {
+    const v = deriveLaneStatus(
+      withFacts({ key: { exists: true, isActive: true, revokedAt: null, expiresAt: RECENT } }),
+    );
+    expect(v.status).toBe("keyNotValid");
+    expect(v.because).toContain("expired");
+  });
+
   it("refuses a retired app at the key hop, whatever else is true", () => {
     const v = deriveLaneStatus(withFacts({ appRetired: true }));
     expect(v.status).toBe("keyNotValid");

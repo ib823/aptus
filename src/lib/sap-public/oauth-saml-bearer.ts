@@ -89,15 +89,63 @@ interface OAuthTokenResponse {
 }
 
 /**
- * True when a token endpoint's status REFUSES the request as it was sent — any
- * 4xx but 408 (it timed out) and 429 (it is throttling). That is a setup
- * problem, fixed in the connection: the client id, the secret, the assertion,
- * the company id or the token URL. A 5xx, a 408 or a 429 is the endpoint
- * failing, and nothing was refused. Shared by the SAML and client-credentials
- * exchanges so the two cannot draw the line in different places.
+ * True when a token endpoint that answered WITHOUT a token is briefly unwell,
+ * so the same request may work later: 408 (it timed out), 429 (it is
+ * throttling), any 5xx, and a 2xx with no token — SuccessFactors serves its
+ * maintenance page as a 200. Nothing was refused.
+ */
+export function isTokenEndpointOutage(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500 || (status >= 200 && status < 300);
+}
+
+/**
+ * True when a token endpoint's status REFUSES the request as it was sent: a
+ * setup problem, fixed in the connection — the client id, the secret, the
+ * assertion, the company id or the token URL. Every answer that is not an
+ * outage: any 4xx but 408 and 429, and a 3xx, which is the token URL pointing
+ * at a login page, not an endpoint failing.
+ *
+ * THE COMPLEMENT OF isTokenEndpointOutage, by construction. The two were drawn
+ * separately — this one as "4xx but 408 and 429" — so a 3xx was an outage to
+ * the Studio Test and the console (retry later) and a wrong token URL to the
+ * broker (fix the connection). Shared by the SAML and client-credentials
+ * exchanges and by every caller, so none can draw the line elsewhere (P0.5).
  */
 export function isTokenRefusal(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+  return !isTokenEndpointOutage(status);
+}
+
+/**
+ * Token-endpoint answers that refuse the CREDENTIAL itself: RFC 6749's 400
+ * (invalid_grant, an assertion SuccessFactors will not take) and 401
+ * (invalid_client, a rotated secret), and a gateway's 403. Every other refusal
+ * — a 404 or 405 from a wrong path, a 3xx to a login page — says the token URL
+ * points at the wrong thing.
+ */
+export function isCredentialRefusal(status: number): boolean {
+  return status === 400 || status === 401 || status === 403;
+}
+
+/**
+ * The bounded failure reason for a token endpoint that answered without a
+ * token — one vocabulary for both exchanges, all TOKEN_*, so an audit row says
+ * the token step failed, not the tenant, whichever auth type it was:
+ *
+ *   TOKEN_REJECTED       the credential was refused (400, 401, 403)
+ *   TOKEN_URL_HTTP_<n>   the token URL is wrong (404, 405, a 3xx, …)
+ *   TOKEN_NO_TOKEN       a 2xx without a token
+ *   TOKEN_HTTP_<n>       the endpoint failing (408, 429, 5xx)
+ *
+ * They were OAUTH_TOKEN_REJECTED / SAML_BEARER_REJECTED, OAUTH_TOKEN_MISSING /
+ * SAML_BEARER_NO_TOKEN and OAUTH_TOKEN_HTTP_<n> / SAML_BEARER_HTTP_<n>: two
+ * spellings of each fact, depending on the auth type. Rows written before
+ * P0.5 keep the old codes; the connection's auth type is on the connection.
+ */
+export function tokenAnswerReason(status: number): string {
+  if (isCredentialRefusal(status)) return "TOKEN_REJECTED";
+  if (isTokenRefusal(status)) return `TOKEN_URL_HTTP_${status}`;
+  if (status >= 200 && status < 300) return "TOKEN_NO_TOKEN";
+  return `TOKEN_HTTP_${status}`;
 }
 
 /**
@@ -123,7 +171,8 @@ export class SamlBearerExchangeError extends Error {
   /**
    * The failure reason an audit row carries. A refusal and an outage were one
    * code, so a SuccessFactors maintenance window was audited as a credential
-   * rejection; they are now told apart by the status.
+   * rejection; they are told apart by the status, in the vocabulary the
+   * client-credentials exchange shares (tokenAnswerReason).
    */
   readonly code: string;
   constructor(
@@ -133,11 +182,7 @@ export class SamlBearerExchangeError extends Error {
   ) {
     super(message);
     this.name = "SamlBearerExchangeError";
-    this.code = isTokenRefusal(httpStatus)
-      ? "SAML_BEARER_REJECTED"
-      : httpStatus >= 200 && httpStatus < 300
-        ? "SAML_BEARER_NO_TOKEN"
-        : `SAML_BEARER_HTTP_${httpStatus}`;
+    this.code = tokenAnswerReason(httpStatus);
   }
 }
 
@@ -501,7 +546,12 @@ export async function exchangeSamlBearerAssertion(
        * to rotate a key pair that was correct.
        */
       let publicDetail: string;
-      if (isTokenRefusal(res.status)) {
+      if (isTokenRefusal(res.status) && !isCredentialRefusal(res.status)) {
+        // A 404, a 405, a 3xx to a login page: the URL, not the key pair or
+        // the user id, so the configuration hint below would send the
+        // administrator to the wrong field.
+        publicDetail = `SuccessFactors' token URL answered HTTP ${res.status} without issuing a token${words} Check the connection's token URL.`;
+      } else if (isTokenRefusal(res.status)) {
         const hint = signsOwnAssertion(c)
           ? "CoreEdge signed a fresh assertion, so the usual causes are a private key that does not match the " +
             "certificate registered for this API key, a user id SuccessFactors does not know, or a wrong company id."

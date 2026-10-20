@@ -11,6 +11,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as IssueModule from "@/lib/northbound/issue";
+
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   grantFindFirst: vi.fn(),
@@ -25,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   lockSolution: vi.fn(),
   commit: vi.fn(),
 }));
+/** Owner ids that are no longer live members (deactivated or moved away). */
+const departedUsers = vi.hoisted(() => new Set<string>());
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => {
@@ -32,6 +36,13 @@ vi.mock("@/lib/db/prisma", () => {
     apiAccessGrant: { findFirst: mocks.grantFindFirst, updateMany: mocks.grantUpdateMany },
     solution: { findFirst: mocks.solutionFindFirst },
     solutionClient: { findFirst: mocks.clientFindFirst },
+    // A pending request matches one interface, so its decision binds it (P0.1).
+    interface: { findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }] },
+    // Owners are live members unless named departed (A69, owner-liveness.ts).
+    user: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.filter((id) => !departedUsers.has(id)).map((id) => ({ id })),
+    },
     // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
     // Outside a transaction the lock would commit and release at once, so taking
     // it on the client instead of on `tx` is a failure, not a pass.
@@ -53,7 +64,11 @@ vi.mock("@/lib/db/prisma", () => {
     },
   };
 });
-vi.mock("@/lib/northbound/issue", () => ({ revokeClientToken: mocks.revokeClientToken }));
+// The real owner gate (refuseKeyIssuer), over the mocked client; only the revocation is stubbed.
+vi.mock("@/lib/northbound/issue", async (orig) => ({
+  ...(await orig<typeof IssueModule>()),
+  revokeClientToken: mocks.revokeClientToken,
+}));
 vi.mock("@/lib/northbound/claim-link", () => ({ createClaimLink: mocks.createClaimLink }));
 vi.mock("@/lib/ops/lane-check-sweep", () => ({ recheckOneLane: mocks.recheckOneLane }));
 vi.mock("@/lib/security/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
@@ -391,6 +406,19 @@ describe("POST /api/coreedge/keys/claim-link", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.appNeedsOwners);
     expect(mocks.createClaimLink).not.toHaveBeenCalled();
+  });
+
+  it("refuses an app one of whose owners has been deactivated or has left (A69)", async () => {
+    mocks.getCurrentUser.mockResolvedValue(ADMIN);
+    departedUsers.add("u_biz");
+    try {
+      const res = await sendLink(req({ solutionId: "s1", environment: "PROD" }) as never);
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.message).toBe(CLAIM_LINK_COPY.appNeedsOwners);
+      expect(mocks.createClaimLink).not.toHaveBeenCalled();
+    } finally {
+      departedUsers.clear();
+    }
   });
 });
 

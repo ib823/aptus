@@ -2,7 +2,9 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { refuseWorkspaceInvitee } from "@/lib/auth/developer-workspace";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { refuseAcceptForExistingAccount } from "@/lib/auth/org-invites";
 import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
@@ -77,6 +79,36 @@ export async function POST(
   const existingUser = await prisma.user.findUnique({
     where: { email: invitation.email },
   });
+
+  // Accepting overwrites an existing account's role and reactivates it. Three
+  // cases must never happen this way (lib/auth/org-invites.ts), now that
+  // anyone with a workspace can send an invitation to any address.
+  const acceptRefusal = existingUser
+    ? refuseAcceptForExistingAccount(existingUser.role, invitation.role, existingUser.isActive)
+    : null;
+  if (acceptRefusal) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.CONFLICT, message: acceptRefusal } },
+      { status: 409 },
+    );
+  }
+
+  // A NEW account from a developer workspace's invitation is admitted only
+  // as the host would admit the address by itself, judged now: an invitation
+  // sent before sign-up was closed must not open it again (wave 1a final
+  // review, developer-workspace.ts `refuseWorkspaceInvitee`).
+  if (!existingUser) {
+    const inviter = invitation.invitedBy
+      ? await prisma.user.findUnique({ where: { id: invitation.invitedBy }, select: { role: true } })
+      : null;
+    const inviteeRefusal = refuseWorkspaceInvitee(inviter?.role ?? null, invitation.role, invitation.email);
+    if (inviteeRefusal) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: inviteeRefusal } },
+        { status: 403 },
+      );
+    }
+  }
 
   const now = new Date();
   let user: { id: string; email: string; name: string; role: string; organizationId: string | null };

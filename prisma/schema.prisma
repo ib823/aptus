@@ -914,11 +914,20 @@ model Interface {
   /// DRAFT | ACTIVE | DEPRECATED
   status String @default("DRAFT")
 
+  /// When a PATCH last changed what a grant is matched on (externalId or
+  /// operation); null while it is unchanged since createdAt. An unbound legacy
+  /// grant's cut-off is judged on whichever is later (grant-binding.ts,
+  /// `grantMatchSince`), so moving an old interface onto an unbound grant's
+  /// tuple is "added since the deploy", not a pre-deploy interface.
+  grantMatchChangedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  solution  Solution   @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  solution  Solution         @relation(fields: [solutionId], references: [id], onDelete: Cascade)
   testCases TestCase[]
+  /// The grants bound to this interface (ApiAccessGrant.interfaceId).
+  grants    ApiAccessGrant[]
 
   @@index([organizationId, externalId])
   @@index([solutionId])
@@ -1064,7 +1073,7 @@ model SapServiceHealth {
 model CronRunLog {
   id  String @id @default(cuid())
   /// northbound-reap | northbound-retention | connection-probes | analytics | trials
-  /// | coreedge-usage | lane-checks
+  /// | coreedge-usage | lane-checks | owner-liveness
   job String
 
   startedAt   DateTime
@@ -1146,12 +1155,48 @@ model ApiAccessGrant {
   /// stated reason is unreviewable.
   revokedReason String?
 
+  /// The ONE interface this grant authorises (P0.1, A47), and its SAP product.
+  ///
+  /// A grant used to store only (solution, externalId, operation,
+  /// environment), and the broker re-derived authority from that tuple — so a
+  /// builder who later added an interface with the same externalId on another
+  /// SAP product (s4hana-onprem beside s4hana) was authorised on that system by
+  /// an approval nobody gave for it. A bound grant authorises exactly this
+  /// interface, on exactly this product, and nothing else.
+  ///
+  /// NULL only on a LEGACY grant the P0.1 backfill could not bind: it matched
+  /// no interface, or several (`unboundReason`). Such a grant needs
+  /// re-approval and is flagged where approvers look. Until the operator sets
+  /// COREEDGE_GRANT_BINDING=strict it keeps today's tuple matching, so no call
+  /// that worked before the deploy stops; every request and decision since
+  /// P0.1 is bound (lib/studio/grant-binding.ts).
+  interfaceId String?
+  sapProduct  String?
+  /// Why a legacy grant is unbound: NO_MATCH | AMBIGUOUS. Null on a bound
+  /// grant, and on an unbound one the backfill has not yet looked at.
+  unboundReason String?
+  /// When an UNBOUND grant last authorised a broker call — the durable signal
+  /// that strict binding would refuse traffic. Written at most hourly per
+  /// grant. Null: never used since P0.1.
+  unboundLastUsedAt DateTime?
+  /// Under COREEDGE_GRANT_BINDING=legacy an unbound grant is honoured only on
+  /// interfaces created at or before this instant: the P0.1 deploy, written
+  /// by its migration on every grant it left unbound. An interface added since
+  /// carried no traffic before the deploy, so honouring the old tuple there
+  /// would only widen the approval — A47 again. Null on a grant the old code
+  /// created during the rollout; its own createdAt stands in.
+  unboundCutoffAt   DateTime?
+
   createdAt DateTime @default(now())
 
-  solution Solution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
-  revoker  User?    @relation("ApiAccessGrantsRevoked", fields: [revokedById], references: [id])
+  solution  Solution   @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  interface Interface? @relation(fields: [interfaceId], references: [id], onDelete: Cascade)
+  revoker   User?      @relation("ApiAccessGrantsRevoked", fields: [revokedById], references: [id])
 
   @@index([organizationId, solutionId])
+  // The broker's grant lookup for a bound grant, and the FK side of the
+  // Interface cascade.
+  @@index([interfaceId])
   // The runtime access check filters on this on every call, and the common
   // case — not revoked — is the cheap half.
   @@index([revokedAt])
@@ -1294,6 +1339,31 @@ model SolutionClient {
   label       String
   /// SHA-256 of the issued token. The raw value is never persisted.
   tokenHash   String @unique
+  /// The non-secret prefix the current token was minted with (P0.11):
+  /// `ce_live_` for PROD, `ce_test_` for every other environment. Rows minted
+  /// before P0.11 read `ce_`, the legacy prefix, which keeps working until the
+  /// key expires. Stored so a screen can show the real prefix of a masked key
+  /// without ever holding the key. Display only: authentication never reads
+  /// it. After a code rollback the code before P0.11 can re-key a row without
+  /// writing it, which leaves it stale (runbook: coreedge-credential-hygiene).
+  tokenPrefix String @default("ce_")
+  /// ROTATION OVERLAP (P0.11). When a live key is replaced, the hash of the
+  /// key it replaced moves here and keeps authenticating until
+  /// `previousValidUntil`, so a deployment can switch to the new key without
+  /// a failed call. Only the immediately previous key overlaps: a second
+  /// rotation inside the window ends the first one. Revocation ends both.
+  /// `@unique` because authentication looks a row up BY it, exactly as it does
+  /// by `tokenHash` (a narrow isUnscopedByDesign entry in tenant-guard.ts).
+  previousTokenHash  String?   @unique
+  /// When the previous key stops working. Null when there is no previous key.
+  previousValidUntil DateTime?
+  /// The `tokenHash` the overlap was opened FOR — the key that replaced
+  /// `previousTokenHash`, written in the same update. The previous key is
+  /// accepted only while this still equals `tokenHash`, so any later change of
+  /// the current key that did not write the overlap with it (a build from
+  /// before P0.11, after a rollback, knows nothing of these columns) ends the
+  /// window instead of inheriting it.
+  overlapForTokenHash String?
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
   environment String
 
@@ -1329,6 +1399,8 @@ model SolutionClient {
   updatedAt   DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Every key this row has dropped from `tokenHash` and `previousTokenHash`.
+  retiredTokens RetiredClientToken[]
 
   /// The upsert key for `issueClientToken`, and it CONTAINS the organization:
   /// the update branch rotates the token hash and revives a revoked
@@ -1338,6 +1410,32 @@ model SolutionClient {
   @@index([organizationId])
   @@index([organizationId, solutionId])
   @@index([tokenHash])
+}
+
+/// The hash of a runtime key its row no longer holds (P0.11, wave 1a final
+/// review): written in the same update that drops it from
+/// `SolutionClient.tokenHash` or `previousTokenHash` — a re-issue after a
+/// revocation, a second rotation, any rotation with the overlap switched off.
+///
+/// WHY. Authentication found such a key nowhere and called it UNKNOWN_TOKEN,
+/// and an unknown key spends its caller ADDRESS's failed-lookup bucket
+/// (`machine-authfail:<ip>`). So a leaked key still retried by a stale
+/// deployment behind a shared egress, after the revoke-then-reissue the
+/// runbook prescribes, locked every other tenant's valid key on that address
+/// out at the edge. Looked up here, it resolves to its row and is refused as
+/// REVOKED or ROTATED_OUT: a real key that refuses, which its own credential
+/// bucket bounds. Never authenticates anything. `@id` because authentication
+/// looks a row up BY it (a narrow isUnscopedByDesign entry in tenant-guard.ts).
+model RetiredClientToken {
+  tokenHash      String   @id
+  clientId       String
+  organizationId String
+  retiredAt      DateTime @default(now())
+
+  client SolutionClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([organizationId])
 }
 
 /// Per-call audit for the northbound broker. APPEND-ONLY: there is no update or

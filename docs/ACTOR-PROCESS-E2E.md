@@ -89,7 +89,8 @@ The Platform Admin has unrestricted access to every feature and is responsible f
 
 ```
 1. SIGN UP & BOOTSTRAP
-   ├─ First user to register automatically becomes Platform Admin
+   ├─ Claims Platform Admin with the one-time bootstrap token at /coreedge/bootstrap
+   │  (nobody becomes Platform Admin by signing in first)
    ├─ Onboarding: Welcome → Review org settings → Invite team → Explore admin dashboard
    └─ Redirect: /admin
 

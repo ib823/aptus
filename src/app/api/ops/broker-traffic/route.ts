@@ -119,8 +119,10 @@ export async function GET(request: NextRequest) {
       }),
       prisma.northboundAuditEvent.count({ where: { ...where, replayed: true } }),
       // `classify` calls a 2xx with zero rows "empty", which no status code can
-      // express on its own. Counted separately so the ok/empty split stays exact.
-      prisma.northboundAuditEvent.count({ where: { ...where, status: { lt: 400 }, rowCount: 0 } }),
+      // express on its own. Counted separately so the ok/empty split stays exact
+      // — over the same rows as the breakdown it is subtracted from, so not
+      // over replays, which have their own bucket (P0.5).
+      prisma.northboundAuditEvent.count({ where: { ...where, status: { lt: 400 }, rowCount: 0, replayed: false } }),
       prisma.northboundAuditEvent.groupBy({ by: ["solutionId"], where, _count: { _all: true } }),
       prisma.northboundAuditEvent.groupBy({ by: ["clientTokenId"], where, _count: { _all: true } }),
       // Refused at auth, throttle or the grant gate: no connection was ever

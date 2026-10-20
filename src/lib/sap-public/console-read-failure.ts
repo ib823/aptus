@@ -23,7 +23,7 @@ import {
   failureReasonFromError,
   failureReasonFromHttp,
 } from "@/lib/northbound/failure-reason";
-import { credentialFailureKind, SapCredentialError, SapHttpError } from "@/lib/sap-public/upstream-failure";
+import { credentialFailure, SapCredentialError, SapHttpError } from "@/lib/sap-public/upstream-failure";
 
 export interface ConsoleReadFailure {
   /** The audit row's status. A 5xx only when the tenant failed or never answered. */
@@ -43,8 +43,11 @@ export interface ConsoleReadFailure {
  */
 export function consoleReadFailure(err: unknown, fallbackMessage: string): ConsoleReadFailure {
   if (err instanceof SapCredentialError) {
-    const failureReason = failureReasonFromError(err.cause);
-    if (credentialFailureKind(err) === "refused") {
+    // The broker's classifier, so the console and the broker cannot disagree
+    // about one token endpoint's answer — and its reason is TOKEN_*, never the
+    // bare TIMEOUT or OAUTH_TOKEN_HTTP_<n> that read like the tenant (P0.5).
+    const { kind, failureReason } = credentialFailure(err);
+    if (kind === "refused") {
       return {
         auditStatus: 403,
         failureReason,

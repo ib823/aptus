@@ -73,7 +73,7 @@ describe("a credential that cannot be used is NEEDS_SETUP (403), not a 502 to re
     const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
     expect(r.status).toBe("NEEDS_SETUP");
     expect(httpStatusFor(r.status)).toBe(403);
-    expect(r.failureReason).toBe("OAUTH_TOKEN_REJECTED");
+    expect(r.failureReason).toBe("TOKEN_REJECTED");
     expect(r.httpStatus).toBeNull();
     expect(r.detail).toMatch(/credentials could not be used.*tenant was not called/);
     expect(r.detail).not.toContain("hana.ondemand.com");
@@ -84,7 +84,7 @@ describe("a credential that cannot be used is NEEDS_SETUP (403), not a 502 to re
     token(new Response('{"errorMessage":"The assertion has expired"}', { status: 400 }));
     const r = await readEntitySet({ connection: sfPreSigned(), ...READ }, tenant as unknown as typeof fetch);
     expect(r.status).toBe("NEEDS_SETUP");
-    expect(r.failureReason).toBe("SAML_BEARER_REJECTED");
+    expect(r.failureReason).toBe("TOKEN_REJECTED");
     // SuccessFactors' own words are for the Test result, not the calling app.
     expect(r.detail).not.toContain("expired");
     expect(tenant).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("the token endpoint FAILING stays an upstream error — nothing was ref
     const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
     expect(r.status).toBe("ERROR");
     expect(httpStatusFor(r.status)).toBe(502);
-    expect(r.failureReason).toBe("OAUTH_TOKEN_HTTP_503");
+    expect(r.failureReason).toBe("TOKEN_HTTP_503");
     expect(r.detail).toMatch(/token endpoint could not issue a token/);
     expect(tenant).not.toHaveBeenCalled();
   });
@@ -123,13 +123,13 @@ describe("the token endpoint FAILING stays an upstream error — nothing was ref
   it("a SuccessFactors maintenance 503 → ERROR, never a credential rejection", async () => {
     token(new Response("", { status: 503 }));
     const r = await readEntitySet({ connection: sfPreSigned(), ...READ }, tenant as unknown as typeof fetch);
-    expect(r).toMatchObject({ status: "ERROR", failureReason: "SAML_BEARER_HTTP_503" });
+    expect(r).toMatchObject({ status: "ERROR", failureReason: "TOKEN_HTTP_503" });
   });
 
   it("an unreachable token endpoint says it was the token step, not the tenant", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
     const r = await readEntitySet({ connection: conn(), ...READ }, tenant as unknown as typeof fetch);
-    expect(r).toMatchObject({ status: "ERROR", failureReason: "CREDENTIAL_UNAVAILABLE" });
+    expect(r).toMatchObject({ status: "ERROR", failureReason: "TOKEN_FETCH_FAILED" });
   });
 
   it("so does one whose socket left its own code — prefixed, never the tenant's bare ECONNREFUSED", async () => {
@@ -223,7 +223,7 @@ describe("the write path draws the same line", () => {
     const r = await writeEntitySet({ connection: conn(), ...WRITE }, tenant as unknown as typeof fetch);
     expect(r.status).toBe("NEEDS_SETUP");
     expect(writeHttpStatusFor(r.status)).toBe(403);
-    expect(r.failureReason).toBe("OAUTH_TOKEN_REJECTED");
+    expect(r.failureReason).toBe("TOKEN_REJECTED");
     expect(r.detail).toContain("The write was not applied.");
     expect(tenant).not.toHaveBeenCalled();
   });

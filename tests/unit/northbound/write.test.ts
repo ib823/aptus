@@ -187,7 +187,7 @@ describe("a credential that fails before anything is sent (A25)", () => {
     const r = await writeEntitySet({ ...input, connection: oauth }, f);
     expect(r.status).toBe("NEEDS_SETUP");
     expect(r.attempted).toBe(false);
-    expect(r.failureReason).toBe("OAUTH_TOKEN_REJECTED");
+    expect(r.failureReason).toBe("TOKEN_REJECTED");
     // Only the token endpoint was contacted; no CSRF GET, no POST.
     expect(token).toHaveBeenCalledTimes(1);
     expect(f).not.toHaveBeenCalled();
@@ -250,10 +250,10 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
   });
 
   it.each([
-    ["client-credentials", 503, "OAUTH_TOKEN_HTTP_503", oauth],
-    ["client-credentials", 429, "OAUTH_TOKEN_HTTP_429", oauth],
-    ["SAML bearer", 503, "SAML_BEARER_HTTP_503", saml],
-    ["SAML bearer", 429, "SAML_BEARER_HTTP_429", saml],
+    ["client-credentials", 503, "TOKEN_HTTP_503", oauth],
+    ["client-credentials", 429, "TOKEN_HTTP_429", oauth],
+    ["SAML bearer", 503, "TOKEN_HTTP_503", saml],
+    ["SAML bearer", 429, "TOKEN_HTTP_429", saml],
   ])("a %s token endpoint answering %i is a 502 to retry, not a 403", async (_label, code, reason, conn) => {
     const token = vi.fn(async () => page(code));
     vi.stubGlobal("fetch", token);
@@ -277,8 +277,9 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     // TENANT's row, and sent triage there.
     ["client-credentials", "TOKEN_ECONNRESET", oauth],
     // The SAML exchange wraps fetch's TypeError to keep the URL out of the
-    // message, so the socket's own code is one level further down.
-    ["SAML bearer", "CREDENTIAL_UNAVAILABLE", saml],
+    // message, so the socket's own code is one level further down — and is
+    // still found there (P0.5): one reset socket, one reason, either auth type.
+    ["SAML bearer", "TOKEN_ECONNRESET", saml],
   ])("a %s token endpoint that resets the connection is a 502 to retry (%s)", async (_label, reason, conn) => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(reset())));
     const f = vi.fn();
@@ -308,12 +309,12 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
   });
 
   it.each([
-    ["client-credentials", 400, "OAUTH_TOKEN_REJECTED", oauth],
-    ["client-credentials", 401, "OAUTH_TOKEN_REJECTED", oauth],
-    ["client-credentials", 403, "OAUTH_TOKEN_REJECTED", oauth],
-    ["SAML bearer", 400, "SAML_BEARER_REJECTED", saml],
-    ["SAML bearer", 401, "SAML_BEARER_REJECTED", saml],
-    ["SAML bearer", 403, "SAML_BEARER_REJECTED", saml],
+    ["client-credentials", 400, "TOKEN_REJECTED", oauth],
+    ["client-credentials", 401, "TOKEN_REJECTED", oauth],
+    ["client-credentials", 403, "TOKEN_REJECTED", oauth],
+    ["SAML bearer", 400, "TOKEN_REJECTED", saml],
+    ["SAML bearer", 401, "TOKEN_REJECTED", saml],
+    ["SAML bearer", 403, "TOKEN_REJECTED", saml],
   ])("a %s token endpoint refusing the credential (%i) is still NEEDS_SETUP", async (_label, code, reason, conn) => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "invalid_client" }, { status: code })));
     const r = await writeEntitySet({ ...input, connection: conn }, vi.fn());
@@ -338,7 +339,7 @@ describe("a token endpoint that is down is an outage, not a setup problem", () =
     vi.stubGlobal("fetch", vi.fn(async () => page(408)));
     const r = await writeEntitySet({ ...input, connection: oauth }, vi.fn());
     expect(r.status).toBe("ERROR");
-    expect(r.failureReason).toBe("OAUTH_TOKEN_HTTP_408");
+    expect(r.failureReason).toBe("TOKEN_HTTP_408");
     expect(r.detail).toContain("Retry later");
   });
 });
@@ -396,8 +397,8 @@ describe("a token URL that answers without a token is a setup problem, not an ou
 
 describe("a token endpoint answering 200 without a token is failing, not misconfigured", () => {
   it.each([
-    ["client-credentials", "OAUTH_TOKEN_MISSING"],
-    ["SAML bearer", "SAML_BEARER_NO_TOKEN"],
+    ["client-credentials", "TOKEN_NO_TOKEN"],
+    ["SAML bearer", "TOKEN_NO_TOKEN"],
   ] as const)("a %s maintenance page (HTTP 200) is ERROR 502, retryable, key released", async (label, reason) => {
     // SuccessFactors serves maintenance as a 200; the Studio Test calls that the
     // endpoint failing, and the broker draws the same line.

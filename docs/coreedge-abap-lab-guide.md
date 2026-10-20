@@ -124,7 +124,7 @@ not mean every SAP release has been tested end to end.
 | Capability | Condition |
 |---|---|
 | Northbound create (POST) | Two of the required steps have no screen yet. Enabling writes on a connection and minting the write key both need a direct API call (Appendix B). |
-| Onboarding developers | Needs the admin screens, which are reachable only when `WORKBENCH_ONLY` is unset, or a direct API call (section 4.7). |
+| Onboarding developers | The first platform admin is claimed once with a bootstrap token (`COREEDGE_BOOTSTRAP_TOKEN`). After that, an organization's administrators invite people at `/coreedge/members`, which stays reachable when `WORKBENCH_ONLY` is set. Creating an organization on such a host needs a direct API call (section 4.7; `docs/runbooks/developer-onboarding.md`). |
 | SAP services beyond the curated ones | A platform admin must load the SAP API catalogue first (section 4.8). OData V4 service paths are guessed, so they may be wrong (section 6.1). |
 | SuccessFactors | In-app SAML-bearer signing exists. The code itself says it has not been verified against a live tenant (`src/lib/sap-public/connection-resolver.ts:646-653`). Discover cannot create an interface the broker can serve. Register your own API with the path `/odata/v2` instead (section 5.6). |
 | S/4HANA on-premise or SAP Cloud ERP Private (RISE) | Only from an instance hosted inside your network. The system needs a DNS name, `SAP_HOST_ALLOWLIST_EXTRA` set, and an HTTPS certificate that Node trusts (section 5.5). |
@@ -139,9 +139,11 @@ not mean every SAP release has been tested end to end.
 - X.509/mTLS client certificates, principal propagation, SAP Cloud Connector, an outbound HTTP proxy, or a custom CA option in code.
 - Field mapping or field selection. The Interfaces screen labels mapping as "v2".
 - Ariba through a stored connection, in practice.
-- The user-admin screens on the shared production host. `/signup` and the invite
-  API stay reachable there, so whether self-service works depends on that host's
-  registration policy, which could not be checked (section 3).
+- A screen to create organizations on the shared production host. Members and
+  invitations are at `/coreedge/members` there, and an organization is created
+  with `POST /api/admin/organizations`. Whether a stranger can sign up there
+  depends on that host's registration policy and on `COREEDGE_DEVELOPER_SIGNUP`
+  (section 3).
 - A KMS-backed SAP credential key, and key rotation.
 - Writes in the Test Console. Write, discovery and schema calls in the starter kit. An ABAP starter kit.
 
@@ -155,7 +157,7 @@ not mean every SAP release has been tested end to end.
 | SAP systems it can call | Internet-facing SAP cloud tenants | Internet-facing SAP cloud tenants | Cloud tenants (given outbound internet access), plus on-premise and Private Edition systems reached by DNS name |
 | Fixed outbound IP, for SAP-side IP allow-lists | No. Vercel's outbound addresses are not fixed (`docs/runbooks/successfactors-saml-signing.md`, section 1, step 4) | No (Vercel's paid options were not checked) | Yes, your network's |
 | Can your SAP system call it (ABAP as consumer)? | Yes, over the internet | Yes, over the internet | Only SAP systems that can reach it |
-| How users are onboarded | Production runs single-host Workbench mode, which redirects the user-admin screens away (`src/middleware.ts:113-140`). `/signup` and `/invitations/` are on its allow-list, and API routes pass through (`src/lib/routing/workbench-paths.ts:63,81`; `src/middleware.ts:113-121`). Self-service sign-up and the invite API therefore depend on production's registration policy (`src/app/api/auth/signup/route.ts:58-61`), which could not be checked. Ask the owner. | Through the admin screens, provided `WORKBENCH_ONLY` is left unset | Same as B |
+| How users are onboarded | Production runs single-host Workbench mode, which redirects the portal's user-admin screens away (`src/middleware.ts`). `/coreedge/members`, `/signup` and `/invitations/` stay reachable (`src/lib/routing/workbench-paths.ts`), so an organization's administrators invite people there. Self-service sign-up depends on production's registration policy (`src/lib/auth/auth-config.ts`), and developer workspaces exist only if the owner has set `COREEDGE_DEVELOPER_SIGNUP=open` (`docs/runbooks/developer-onboarding.md`). Ask the owner. | Through `/coreedge/members`, or the admin screens when `WORKBENCH_ONLY` is left unset | Same as B |
 | Can you change the code? | No | Yes | Yes |
 | Data | Shared with the presales product. `SECURITY.md:28-30` says the live deployment holds real third-party engagement data. | Your own | Your own |
 | Licence | Ask the owner | Written permission needed | Written permission needed |
@@ -205,7 +207,7 @@ Work through the steps in order. Each step names the person who usually does it.
 | PostgreSQL | 15 or later, because a migration uses `NULLS NOT DISTINCT`. CI uses 16. No extensions are needed. | `prisma/migrations/20260731010000_connection_binding_tuple/migration.sql`; `.github/workflows/ci.yml:27-28` |
 | SMTP relay | STARTTLS on port 587. Implicit TLS on port 465 is not supported, because `secure: false` is hard-coded. | `src/lib/email/brevo.ts:5-15` |
 | Public HTTPS host name | Required. Session cookies are `secure` in production. | `src/lib/auth/session.ts:246-259` |
-| Upstash Redis (REST) | Required by the production preflight. A plain TCP Redis is not supported. If Upstash cannot be reached, every `/api` call returns 429 (option C notes in 4.5). | `scripts/check-production-env.js:17-34`; `src/lib/security/rate-limit.ts:15,132-139` |
+| Upstash Redis (REST) | Required by the production preflight. A plain TCP Redis is not supported. If Upstash cannot be reached, every non-exempt `/api` call returns 503 `LIMITER_UNAVAILABLE` (option C notes in 4.5). | `scripts/check-production-env.js:17-34`; `src/lib/security/rate-limit.ts:15,132-139` |
 | A scheduler | Vercel Cron (option B), or cron, systemd timers or a Kubernetes CronJob (option C). | `vercel.json:4-29` |
 
 The repository has no Dockerfile and no standalone Next.js build, so option C
@@ -276,19 +278,14 @@ The last three commands repeat what the Vercel build runs (`package.json:23`).
 On option B, Vercel runs the migration and the last three commands on every
 deployment. Installing dependencies is Vercel's own step.
 
-**Do not run `pnpm db:seed` before step 1 of section 4.7.** CoreEdge does not
-need the presales content it loads, and the build does not run it. Its last step
-creates a `consultant` user, `affirm-curation@abeam.local`, whenever the shipped
-curation has reviewed items, and it has five (`prisma/seed.ts:56`;
+**You do not need `pnpm db:seed`.** CoreEdge does not need the presales content
+it loads, and the build does not run it. Its last step creates a `consultant`
+user, `affirm-curation@abeam.local`, whenever the shipped curation has reviewed
+items, and it has five (`prisma/seed.ts:56`;
 `prisma/seeds/value-stream/chapters.ts:11-27`; `curation-model/chapters/curated.json`).
-The first magic-link sign-in then becomes a plain `consultant` instead of
-`platform_admin` (`src/lib/auth/auth-options.ts:24-25`), and nobody can open
-`/admin`, invite users or rebuild the catalogue. If that has already happened,
-promote the owner directly in the lab database:
-
-```sql
-UPDATE "User" SET role = 'platform_admin' WHERE email = '<owner email>';
-```
+That user does not affect who becomes platform admin: nobody becomes one by
+signing in first, and the first admin is claimed with a one-time token (step 1
+of section 4.7).
 
 ### 4.5 Build and run
 
@@ -349,7 +346,7 @@ pnpm start                                                 # listens on port 300
 - **Rate-limit backend.** The host needs HTTPS egress to the Upstash REST
   endpoint, and the code has no proxy setting (section 3). In production, any
   Upstash error makes the limiter fail **closed**, so an unreachable or blocked
-  Upstash turns every non-exempt `/api/*` call, northbound included, into 429
+  Upstash turns every non-exempt `/api/*` call, northbound included, into 503 `LIMITER_UNAVAILABLE`
   (`src/lib/security/rate-limit.ts:132-139`; `src/middleware.ts:243-296`). For a
   single-process VM with no internet egress, leave `UPSTASH_*` unset. The
   in-memory limiter then works, because there is only one process
@@ -382,17 +379,29 @@ on Vercel's Hobby plan they run within the hour, not at the minute (section 4.5)
 
 ### 4.7 First accounts: the order matters
 
-The **first user ever created by a magic-link sign-in becomes `platform_admin`**.
-Every later one becomes `consultant` **with no organization**, and Studio refuses
-such users (`src/lib/auth/auth-options.ts:23-34`; `rbac.ts:170-176`). `/signup`
-creates an organization plus a `partner_lead`, never a platform admin
-(`src/app/api/auth/signup/route.ts:89-121`). `pnpm db:seed` **does** create a
-user (section 4.4), so run it, if at all, only after step 1.
+**Nobody becomes `platform_admin` by signing in.** A new magic-link user becomes
+`consultant` **with no organization**, and Studio refuses such users
+(`src/lib/auth/auth-options.ts`, `createFirstSignInUser`; `rbac.ts`). With
+`COREEDGE_DEVELOPER_SIGNUP=open` they get a developer workspace as
+`sandbox_developer` instead. `/signup` creates an organization plus a
+`partner_lead`, never a platform admin (`src/app/api/auth/signup/route.ts`).
+The first platform admin of an instance that has none is claimed once, with a
+bootstrap token (`src/lib/auth/bootstrap.ts`; `docs/runbooks/developer-onboarding.md`,
+"The first platform admin of a new instance").
 
-1. **Platform owner.** Before you share the URL, open `/login`, enter your email
-   address and follow the link. You are now `platform_admin`. Check that `/admin`
-   opens. Set `AUTH_ALLOWED_DOMAINS` beforehand so that nobody outside your
-   domain can register first.
+1. **Platform owner.** Before you share the URL:
+   - Generate a token of at least 32 characters (`openssl rand -hex 32`), set
+     it as `COREEDGE_BOOTSTRAP_TOKEN` and redeploy. A shorter token counts as
+     no token. Set `AUTH_ALLOWED_DOMAINS` too, so that nobody outside your
+     domain can register.
+   - Open `/login`, enter your email address and follow the link. You are now
+     a `consultant` with no organization.
+   - Open `/coreedge/bootstrap` and enter the token. Under
+     `COREEDGE_STEP_UP=enforce` you enrol a passkey first. You are now
+     `platform_admin`. Check that `/admin` opens.
+   - Unset `COREEDGE_BOOTSTRAP_TOKEN` and redeploy. The token cannot be used
+     a second time anyway: the claim records its hash, and while an admin
+     exists every claim is refused.
 2. **Lab lead.** Use a different email address. Open `/signup` and enter the
    lab's organization name. You become `partner_lead` of a new organization on a
    trial plan. A trial organization can invite only while it has fewer than
@@ -413,9 +422,11 @@ user (section 4.4), so run it, if at all, only after step 1.
      **Support** user for Operations Center.
    - Each invitee accepts at `/invitations/<token>`. Accepting creates the user
      with that role and organization (`src/app/api/invitations/[token]/accept/route.ts`).
-   - `/organization/users` lists users but has no invite button
-     (`src/app/(portal)/organization/users/page.tsx:25`). A lab lead who wants to
-     invite people without the platform owner uses the API call in Appendix B.
+   - A lab lead invites people without the platform owner at
+     `/coreedge/members`, which lists the members and pending invitations and
+     has the invite form, also when `WORKBENCH_ONLY` is set. The portal's
+     `/organization/users` lists users but has no invite button
+     (`src/app/(portal)/organization/users/page.tsx`).
 4. **Lock registration.** Once everyone has accepted, set
    `AUTH_INVITATION_ONLY=true` and `AUTH_WHITELIST_BYPASS=false`, then redeploy.
    Invited users are not affected, because they already exist when they sign in
@@ -1053,10 +1064,11 @@ it.
 | 403 | `FORBIDDEN` | CoreEdge refused: no live grant, grant expired or revoked, or wrong write key; writes are not enabled on the connection (any Studio-form save turns them off, section 5.8); the interface is not ACTIVE (writes) or is DEPRECATED (reads); the interface's operation does not match the route (a CREATE interface on `/data`, a READ interface on `/data/write`) (`src/lib/northbound/access.ts:146-162,298-314`; `src/app/api/northbound/interfaces/[id]/data/write/route.ts:248-256`). Or SAP itself answered 401/403. Also: the connection's stored credential is unusable or its token endpoint refused it, and SAP was never called (`src/lib/northbound/read.ts:166-172`). | Do not retry. Fix the cause the message names: in Studio, with the Appendix B call, in the grant, or in the SAP arrangement. CoreEdge's own refusals are never stored under the key. A 401/403 from SAP on a write **is** stored and replayed for 24 hours, so after fixing the SAP side, send under a **new** key. SAP refused, so nothing was created. |
 | 403 | `CONNECTION_NOT_CONFIGURED` | No connection bound to the credential's environment, two connections match (the credential names no SAP client), or none carries the credential's SAP client (`src/lib/sap-public/connection-resolver.ts:414-429`) | Fix the connection or the credential's SAP client. Do not retry. |
 | 404 | `NOT_FOUND` | Interface not found for this solution, or SAP returned 404 | Check the interface id and the service activation |
-| 409 | `CONFLICT` | Key reused with a different payload, or the first request is still in flight | Use a new key only for a new intent |
+| 409 | `CONFLICT` | With a `retry-after` header: the first request under this key is still in flight. Without one: the key was used with a different payload or destination | In flight: wait for `retry-after` and retry with the **same** key, which returns the first request's outcome; never re-send under a new key. Different payload: use a new key only for a new intent |
 | 422 | `VALIDATION_ERROR` | SAP rejected the payload (writes) | Fix the payload. Do not retry unchanged. |
 | 429 | `RATE_LIMITED` | More than 60 calls per minute for this credential. Reads and writes have separate budgets (`src/lib/security/rate-limit.ts:234`). Discovery and schema calls spend the read budget too. | Wait for the `retry-after` seconds. Only `/data` and `/data/write` send it; assume 60 s otherwise. |
-| 429 | `RATE_LIMIT_EXCEEDED` | The per-IP limit in the middleware, for the whole calling host: 300 GET or 120 POST per minute on `/api/*`. Every ABAP program behind the same SAP egress IP shares it. In production an unreachable Upstash gives this answer to every call. The body has no `correlationId`, and there is no `x-correlation-id` header (`src/middleware.ts:243-296`). | Wait for `Retry-After`. Treat any 429 as retryable; do not branch only on `RATE_LIMITED`. |
+| 429 | `RATE_LIMITED_ADDRESS` | A limit on the calling host's address, not on the credential, applied in the middleware before the route runs: more than 6,000 calls a minute from that address across every credential, or more than 60 calls a minute from it with a credential that failed to authenticate (`src/middleware.ts`, `machineRouteLimit`). Every ABAP program behind the same SAP egress IP shares it. The body has a `correlationId`, but no audit row exists for it. | Wait for `Retry-After`. Lowering one program's rate does not help; look for a program sending a wrong or revoked token. A call with no `Authorization` header at all still meets the old per-IP limit (300 GET or 120 POST a minute), answered `RATE_LIMIT_EXCEEDED`. |
+| 503 | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits (in production, Upstash unreachable), so it refused the call. Nothing was sent to SAP. | Wait for `Retry-After` and retry. It says nothing about your call rate. |
 | 502 | `UPSTREAM_ERROR` | SAP or its token endpoint failed. For reads also: SAP answered with a status other than 200, 401, 403 or 404, for example 400 because the entity set needs a key, a filter or parameters CoreEdge cannot send, or SAP answered 200 with something that is not OData JSON, such as a login page (`src/lib/northbound/read.ts:123-127,200-208`). For writes also: SAP's 408 and 429, which mean SAP did not process the write. | Reads: retry with backoff a few times only. If the 502 persists, quote the correlation id: an SAP rejection or a non-OData answer does not clear on retry. Writes: see "Retrying a failed write" below. |
 | 504 | `UPSTREAM_TIMEOUT` | SAP did not answer in time. It can also be the connection's token endpoint. | Reads: retry. Writes: see below. |
 
@@ -1327,8 +1339,9 @@ is logged.
    store natively, such as OAuth client credentials.
 7. An ABAP sample in the starter kit.
 8. Screens for enabling writes and minting the write key.
-9. A screen to create organizations and invite users while `WORKBENCH_ONLY` is
-   set.
+9. A screen to create organizations while `WORKBENCH_ONLY` is set. Inviting
+   users there is at `/coreedge/members`; creating an organization is
+   `POST /api/admin/organizations` (`docs/runbooks/developer-onboarding.md`).
 10. A KMS-backed key with versioning and rotation.
 
 ### Who to ask

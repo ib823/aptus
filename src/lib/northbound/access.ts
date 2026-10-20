@@ -15,6 +15,12 @@
  *   4. The grant must not have expired. Expiry is evaluated at CALL time, not
  *      by a sweep job — otherwise an expired grant keeps working until some
  *      background task happens to run, which makes the expiry date decorative.
+ *   5. The grant must be BOUND to this interface, on this interface's SAP
+ *      product (P0.1, A47). One approval used to authorise every interface of
+ *      the solution that shared its service id and operation, including one
+ *      added later on another SAP system. A legacy grant the P0.1 backfill
+ *      could not bind keeps the old matching until COREEDGE_GRANT_BINDING is
+ *      strict; see lib/studio/grant-binding.ts.
  *
  * v1 serves READ only. A WRITE-mode interface is refused here rather than
  * quietly downgraded, because silently turning a write request into a read is a
@@ -22,6 +28,16 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import {
+  grantBindingMode,
+  grantsForInterfaceWhere,
+  grantsUsableUnder,
+  isBoundTo,
+  isUsableUnder,
+  recordUnboundGrantUse,
+  type GrantBindingMode,
+  type GrantedInterface,
+} from "@/lib/studio/grant-binding";
 import {
   grantsRead,
   grantsWrite,
@@ -88,11 +104,85 @@ export type AccessRefusal =
    * asymmetry stays deliberate for DRAFT (premature ≠ wrong) and ends for
    * DEPRECATED: deprecation is a statement that new traffic should stop.
    */
-  | "INTERFACE_DEPRECATED";
+  | "INTERFACE_DEPRECATED"
+  /**
+   * The only grant that would authorise this call is a legacy grant bound to
+   * no interface, and COREEDGE_GRANT_BINDING is strict (P0.1, A47). It needs
+   * re-approval against the interface it is for.
+   */
+  | "GRANT_NEEDS_REAPPROVAL";
 
 export type AccessResult =
   | { ok: true; iface: AccessibleInterface }
   | { ok: false; reason: AccessRefusal; message: string };
+
+/** What the grant lookup selects: the decision, its end, and its binding. */
+const GRANT_SELECT = {
+  id: true,
+  decision: true,
+  expiresAt: true,
+  operation: true,
+  revokedAt: true,
+  interfaceId: true,
+  sapProduct: true,
+  unboundLastUsedAt: true,
+  // An unbound grant's legacy cut-off, and its stand-in (grant-binding.ts).
+  createdAt: true,
+  unboundCutoffAt: true,
+} as const;
+
+interface FetchedGrant {
+  id?: string;
+  decision: string;
+  expiresAt: Date | null;
+  operation?: string;
+  revokedAt?: Date | null;
+  interfaceId?: string | null;
+  sapProduct?: string | null;
+  unboundLastUsedAt?: Date | null;
+  createdAt: Date;
+  unboundCutoffAt: Date | null;
+}
+
+/**
+ * Would an unbound grant the mode set aside have authorised this call? Under
+ * strict, any unbound grant; under legacy, one whose cut-off predates this
+ * interface. Then the refusal names re-approval rather than a missing grant —
+ * the remedy is different, and so is who acts.
+ */
+function setAsideAGrant(
+  grants: readonly FetchedGrant[],
+  iface: GrantedInterface,
+  mode: GrantBindingMode,
+  authorises: (g: FetchedGrant) => boolean,
+  now: Date,
+): boolean {
+  return grants.some(
+    (g) =>
+      !isUsableUnder(g, iface, mode) &&
+      authorises(g) &&
+      g.revokedAt == null &&
+      (g.expiresAt === null || g.expiresAt.getTime() > now.getTime()),
+  );
+}
+
+const NEEDS_REAPPROVAL_MESSAGE =
+  "The access grant for this capability was approved before grants were bound to one interface, and this deployment does not honour such grants on this interface. Ask for it to be approved again against this interface.";
+
+/**
+ * After a call is authorised: if no BOUND grant was among the live ones, the
+ * call rode on legacy matching alone, and that is recorded (at most hourly per
+ * grant) as the signal strict binding would refuse it.
+ */
+async function noteLegacyAuthority(
+  scope: TenantScope,
+  live: readonly FetchedGrant[],
+  iface: GrantedInterface,
+  now: Date,
+): Promise<void> {
+  if (live.some((g) => isBoundTo(g, iface))) return;
+  await recordUnboundGrantUse(prisma, scope.organizationId, live, now);
+}
 
 /**
  * May this client WRITE through this interface, right now?
@@ -133,6 +223,9 @@ export async function resolveWritableInterface(
       odataVersion: true,
       serviceVerifiedAt: true,
       serviceVerifications: true,
+      // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+      createdAt: true,
+      grantMatchChangedAt: true,
     },
   });
 
@@ -178,22 +271,22 @@ export async function resolveWritableInterface(
     };
   }
 
-  const grants = await prisma.apiAccessGrant.findMany({
-    where: scopedWhere(scope, {
-      solutionId,
-      externalId: iface.externalId,
-      operation: iface.operation,
-      environment,
-    }),
-    select: { decision: true, expiresAt: true, operation: true, revokedAt: true },
+  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
+    // Bound to THIS interface on its product, or (legacy) unbound — see check 5.
+    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
+    select: GRANT_SELECT,
   });
 
+  const bindingMode = grantBindingMode();
   // A READ grant never authorises a write.
-  const writeGrants = grants.filter((g) => g.operation === "CREATE" || g.operation === "UPDATE");
-  const granting = writeGrants.filter((g) =>
-    grantsWrite(g.decision as GrantDecision, environment as GrantEnvironment),
-  );
+  const authorisesWrite = (g: FetchedGrant) =>
+    (g.operation === "CREATE" || g.operation === "UPDATE") &&
+    grantsWrite(g.decision as GrantDecision, environment as GrantEnvironment);
+  const granting = grantsUsableUnder(grants, iface, bindingMode).filter(authorisesWrite);
   if (granting.length === 0) {
+    if (setAsideAGrant(grants, iface, bindingMode, authorisesWrite, now)) {
+      return { ok: false, reason: "GRANT_NEEDS_REAPPROVAL", message: NEEDS_REAPPROVAL_MESSAGE };
+    }
     return {
       ok: false,
       reason: "NO_APPROVED_GRANT",
@@ -227,6 +320,7 @@ export async function resolveWritableInterface(
       message: `The WRITE grant for this capability in ${environment} has expired.`,
     };
   }
+  await noteLegacyAuthority(scope, live, iface, now);
 
   return {
     ok: true,
@@ -274,6 +368,9 @@ export async function resolveReadableInterface(
       odataVersion: true,
       serviceVerifiedAt: true,
       serviceVerifications: true,
+      // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+      createdAt: true,
+      grantMatchChangedAt: true,
     },
   });
 
@@ -313,21 +410,21 @@ export async function resolveReadableInterface(
     };
   }
 
-  const grants = await prisma.apiAccessGrant.findMany({
-    // scopedWhere injects the organization; the rest narrows within it.
-    where: scopedWhere(scope, {
-      solutionId,
-      externalId: iface.externalId,
-      operation: iface.operation,
-      environment,
-    }),
-    select: { decision: true, expiresAt: true, revokedAt: true },
+  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
+    // scopedWhere injects the organization; the rest narrows within it, to
+    // grants bound to THIS interface on its product or (legacy) unbound.
+    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
+    select: GRANT_SELECT,
   });
 
-  const granting = grants.filter((g) =>
-    grantsRead(g.decision as GrantDecision, environment as GrantEnvironment),
-  );
+  const bindingMode = grantBindingMode();
+  const authorisesRead = (g: FetchedGrant) =>
+    grantsRead(g.decision as GrantDecision, environment as GrantEnvironment);
+  const granting = grantsUsableUnder(grants, iface, bindingMode).filter(authorisesRead);
   if (granting.length === 0) {
+    if (setAsideAGrant(grants, iface, bindingMode, authorisesRead, now)) {
+      return { ok: false, reason: "GRANT_NEEDS_REAPPROVAL", message: NEEDS_REAPPROVAL_MESSAGE };
+    }
     return {
       ok: false,
       reason: "NO_APPROVED_GRANT",
@@ -360,6 +457,7 @@ export async function resolveReadableInterface(
       message: `The access grant for this capability in ${environment} has expired.`,
     };
   }
+  await noteLegacyAuthority(scope, live, iface, now);
 
   return {
     ok: true,

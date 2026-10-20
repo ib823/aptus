@@ -85,13 +85,17 @@ async function sendLink(environment = "PROD"): Promise<string> {
   return link.rawToken;
 }
 
-async function issueInStudio(expiresAt: Date | null = null) {
+/**
+ * A Studio issue. A PROD key must name its expiry (P0.11), so one is given
+ * unless the test chooses its own: sixty days from whatever "now" is.
+ */
+async function issueInStudio(expiresAt?: Date, environment: "PROD" | "DEV" = "PROD") {
   return issueClientToken(SCOPE, {
     solutionId: "sol_1",
-    label: "prod",
-    environment: "PROD",
+    label: environment.toLowerCase(),
+    environment,
     createdById: STUDIO_ISSUER,
-    expiresAt,
+    expiresAt: expiresAt ?? new Date(Date.now() + 60 * DAY),
   });
 }
 
@@ -412,6 +416,28 @@ describe("A37 · revoking a credential destroys its write key", () => {
     }
   });
 
+  // P0.11 review round 1: an expired row counted as live for this rule, so
+  // renewing it — the console's own advice for an expired key — handed the
+  // lapsed `cew_` key a fresh 90-day life beside the new runtime key.
+  it("an EXPIRED credential's write key does not come back with its renewal (P0.11)", async () => {
+    for (const renew of ["issue", "rotate", "claim"] as const) {
+      laneStore.clients = [];
+      laneStore.links = [];
+      const issued = await liveKeyWithWriteKey();
+      // The key reached its mandatory expiry: both keys are dead now.
+      Object.assign(lane()!, { expiresAt: at(-0.5) });
+      moveTo(at(0));
+      expect(await verifyWriteCredential(SCOPE, issued.id, WRITE_KEY), renew).toBe(false);
+
+      if (renew === "issue") await issueInStudio();
+      if (renew === "rotate") await rotateClientToken(SCOPE, issued.id);
+      if (renew === "claim") expect((await claimKey(await sendLink())).ok).toBe(true);
+
+      expect(lane()!.secretsCiphertext ?? null, renew).toBeNull();
+      expect(await verifyWriteCredential(SCOPE, issued.id, WRITE_KEY), renew).toBe(false);
+    }
+  });
+
   it("rotating a LIVE key keeps its write key — rotation is not a compromise", async () => {
     const issued = await liveKeyWithWriteKey();
     moveTo(at(0));
@@ -442,12 +468,23 @@ describe("A48 · renewing an expired key gives a key that works", () => {
     expect(await authenticateClientToken(rotated!.rawToken)).toMatchObject({ ok: true });
   });
 
-  it("keeps an expiry that has not passed yet", async () => {
+  it("keeps an expiry that has not passed yet, where expiry is not mandatory (DEV)", async () => {
+    moveTo(at(-1));
+    await issueInStudio(at(30), "DEV");
+    moveTo(at(0));
+    expect((await claimKey(await sendLink("DEV"))).ok).toBe(true);
+    expect(laneStore.clients.find((c) => c.environment === "DEV")!.expiresAt).toEqual(at(30));
+  });
+
+  it("gives a PROD key a fresh default lifetime from the claim (P0.11)", async () => {
     moveTo(at(-1));
     await issueInStudio(at(30));
     moveTo(at(0));
-    expect((await claimKey(await sendLink())).ok).toBe(true);
-    expect(lane()!.expiresAt).toEqual(at(30));
+    const result = await claimKey(await sendLink());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(lane()!.expiresAt).toEqual(at(90));
+    expect(result.expiresAt).toEqual(at(90));
   });
 });
 
@@ -471,6 +508,82 @@ describe("A01 · ownership is asked again when the link is opened", () => {
     expect(await claimKey(link)).toEqual({ ok: false, refusal: "OWNERS_MISSING" });
     expect(laneStore.clients).toHaveLength(0);
   });
+
+  it("refuses when an owner has since been deactivated or left — a departed owner fills no slot (A69)", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    laneStore.departedUsers.add("u_biz");
+
+    moveTo(at(1));
+    expect(await claimKey(link)).toEqual({ ok: false, refusal: "OWNERS_MISSING" });
+    expect(laneStore.clients).toHaveLength(0);
+  });
+
+  // Review round 2: liveness was asked of the owners only. A sender
+  // deactivated (or moved away) after sending still minted a PROD key, with
+  // the ISSUE row naming someone who can no longer answer for it.
+  it("refuses when the SENDER has since been deactivated or left, and closes the link with why", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    laneStore.departedUsers.add(SENDER);
+
+    moveTo(at(1));
+    expect(await inspectClaimLink(link)).toEqual({ ok: false, refusal: "SENDER_DEPARTED" });
+    expect(await claimKey(link)).toEqual({ ok: false, refusal: "SENDER_DEPARTED" });
+    expect(laneStore.clients).toHaveLength(0);
+    expect(onlyLink()).toMatchObject({
+      claimedAt: null,
+      revokedReason: "The person who sent the link is no longer an active member of the organization.",
+    });
+  });
+
+  it("refuses to SEND a link for an app with a departed owner, and writes nothing", async () => {
+    laneStore.departedUsers.add("u_sup");
+    await expect(sendLink()).rejects.toMatchObject({
+      name: "KeyIssuerRefused",
+      refusal: { reason: "ownersMissing", departed: true },
+    });
+    expect(laneStore.links).toHaveLength(0);
+  });
+});
+
+describe("P0.1 · every key change and claim takes the app's owner lock first", () => {
+  it("send, claim, issue, rotate, write key and revoke each lock the Solution row", async () => {
+    moveTo(at(0));
+    const link = await sendLink();
+    moveTo(at(1));
+    await claimKey(link);
+    const issued = await issueInStudio();
+    await rotateClientToken(SCOPE, issued.id);
+    expect(await setWriteCredential(SCOPE, issued.id, "cew_locked", { issuerId: STUDIO_ISSUER })).toBe(true);
+    await revokeClientToken(SCOPE, issued.id);
+
+    expect(laneStore.locks).toHaveLength(6);
+    expect(laneStore.locks.every(([org, sol]) => org === ORG && sol === "sol_1")).toBe(true);
+  });
+
+  // Review round 2: the write key was sealed with a plain update after the
+  // route's unlocked owner check, so a reclaim landing in between let the
+  // issuer own the app and mint its write key.
+  it("the write key re-checks its issuer under the lock, and writes nothing when refused", async () => {
+    moveTo(at(0));
+    const issued = await issueInStudio();
+    laneStore.solutions[0]!.supportOwnerId = STUDIO_ISSUER;
+
+    await expect(
+      setWriteCredential(SCOPE, issued.id, "cew_refused", { issuerId: STUDIO_ISSUER }),
+    ).rejects.toMatchObject({ name: "KeyIssuerRefused", refusal: { reason: "issuerIsOwner" } });
+    expect(lane()!.secretsCiphertext ?? null).toBeNull();
+  });
+
+  it("the write key is never sealed onto a credential revoked before the lock was held", async () => {
+    moveTo(at(0));
+    const issued = await issueInStudio();
+    await revokeClientToken(SCOPE, issued.id);
+
+    expect(await setWriteCredential(SCOPE, issued.id, "cew_late", { issuerId: STUDIO_ISSUER })).toBe(false);
+    expect(lane()!.secretsCiphertext ?? null).toBeNull();
+  });
 });
 
 describe("retiring the app closes its links in every environment", () => {
@@ -483,5 +596,87 @@ describe("retiring the app closes its links in every environment", () => {
 
     expect(await closePendingClaimLinks({ organizationId: ORG, solutionId: "sol_1" }, "The app was retired.")).toBe(2);
     expect(laneStore.links.every((l) => l.revokedReason === "The app was retired.")).toBe(true);
+  });
+});
+
+describe("P0.11 review round 2 · what a replacement leaves of the old key", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  async function issueBound(sapClient: string | null) {
+    return issueClientToken(SCOPE, {
+      solutionId: "sol_1",
+      label: "prod",
+      environment: "PROD",
+      sapClient,
+      createdById: STUDIO_ISSUER,
+      expiresAt: new Date(Date.now() + 60 * DAY),
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("a re-issue that names another SAP client cuts the old key off at once", async () => {
+    moveTo(at(0));
+    const first = await issueBound("100");
+    moveTo(at(1));
+    const second = await issueBound("200");
+
+    expect(second.previousValidUntil).toBeNull();
+    expect(await authenticateClientToken(first.rawToken)).toMatchObject({ ok: false });
+    expect(await authenticateClientToken(second.rawToken)).toMatchObject({ ok: true, client: { sapClient: "200" } });
+  });
+
+  it("a re-issue that keeps the SAP client still overlaps", async () => {
+    moveTo(at(0));
+    const first = await issueBound("100");
+    moveTo(at(1));
+    const second = await issueBound("100");
+
+    expect(second.previousValidUntil).toEqual(new Date(at(1).getTime() + DAY));
+    expect(await authenticateClientToken(first.rawToken)).toMatchObject({ ok: true, client: { sapClient: "100" } });
+  });
+
+  it("the claim screen names when a key that expires inside the window stops, not the full overlap", async () => {
+    moveTo(at(-1));
+    await issueInStudio(new Date(at(0).getTime() + 2 * HOUR));
+    moveTo(at(0));
+    const link = await sendLink();
+
+    const preview = await inspectClaimLink(link);
+    expect(preview).toMatchObject({ ok: true, replacedKey: { overlapHours: 24 } });
+    if (!preview.ok) return;
+    expect(preview.replacedKey?.stopsAt).toEqual(new Date(at(0).getTime() + 2 * HOUR));
+
+    // And the claim keeps exactly that promise.
+    const claimed = await claimKey(link);
+    expect(claimed.ok && claimed.previousValidUntil).toEqual(preview.replacedKey?.stopsAt);
+  });
+
+  it("the claim screen promises the full overlap only to a key that outlives it", async () => {
+    moveTo(at(-1));
+    await issueInStudio(at(30));
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({
+      ok: true,
+      replacedKey: { overlapHours: 24, stopsAt: null },
+    });
+  });
+
+  it("the claim screen says the old key stops at once when the overlap is switched off", async () => {
+    vi.stubEnv("COREEDGE_KEY_ROTATION_OVERLAP_HOURS", "0");
+    moveTo(at(-1));
+    await issueInStudio(at(30));
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({
+      ok: true,
+      replacedKey: { overlapHours: 0, stopsAt: null },
+    });
+  });
+
+  it("the claim screen names no replaced key on an empty lane", async () => {
+    moveTo(at(0));
+    expect(await inspectClaimLink(await sendLink())).toMatchObject({ ok: true, replacedKey: null });
   });
 });

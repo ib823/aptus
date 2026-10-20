@@ -37,7 +37,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { canAccessStudio } from "@/lib/studio/rbac";
+import { canAccessStudio, isSandboxDeveloper } from "@/lib/studio/rbac";
 import { ERROR_CODES } from "@/types/api";
 
 /**
@@ -67,7 +67,27 @@ import { ERROR_CODES } from "@/types/api";
  * requirement and it needs its own narrow affordance — a designated demo tenant
  * with its own quota — not the removal of this check for every tenant at once.
  */
-export async function refuseUnlessMayProbeTenant(): Promise<NextResponse | null> {
+export interface ProbeGuardOptions {
+  /**
+   * This route holds a sandbox developer to SANDBOX tenants itself, with
+   * `decideSandboxDeveloperRead` (console-read-guard.ts), so the guard may let
+   * the role through. Leave it unset everywhere else.
+   */
+  readonly appliesSandboxDeveloperCeiling?: boolean;
+}
+
+/**
+ * THE SANDBOX DEVELOPER IS REFUSED UNLESS THE ROUTE SAYS IT CAPS THE ROLE.
+ * `canAccessStudio` admits it (roadmap P0.13), so this guard admitted it on
+ * every live-read route, and each route then had to remember to hold it to
+ * SANDBOX. `/api/sap/ariba/call` never did: a stranger from an open sign-up
+ * could run an OAuth exchange and a live read of the deployment's real Ariba
+ * realm, naming any realm they liked. So the default is now the safe one; a
+ * route opts in with `appliesSandboxDeveloperCeiling`, and
+ * tests/unit/routing/tenant-probe-gating.test.ts holds every route that does to
+ * calling `decideSandboxDeveloperRead`.
+ */
+export async function refuseUnlessMayProbeTenant(options: ProbeGuardOptions = {}): Promise<NextResponse | null> {
   // The old `_envPrefix` parameter was accepted and ignored — an argument that
   // LOOKS like it scopes the guard per tenant but does nothing is worse than
   // none, because a reader trusts the scoping it implies. The guard is
@@ -99,6 +119,21 @@ export async function refuseUnlessMayProbeTenant(): Promise<NextResponse | null>
           message:
             "Reading a connected SAP tenant is limited to Developer Studio roles. " +
             "Your role can view what was found, but not cause a new read.",
+          correlationId: randomUUID(),
+        },
+      },
+      { status: 403 },
+    );
+  }
+
+  if (isSandboxDeveloper(user.role) && options.appliesSandboxDeveloperCeiling !== true) {
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.FORBIDDEN,
+          message:
+            "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host " +
+            "provides. This read has no Sandbox system behind it.",
           correlationId: randomUUID(),
         },
       },
