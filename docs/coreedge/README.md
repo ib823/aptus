@@ -54,3 +54,5 @@ instead.
 - **The KMS gap** — see `SAP-CONNECTION-KEYSTONE-RUNBOOK.md` alongside this file.
 
 For how to actually use the platform, see `docs/coreedge-developer-guide.md`.
+For what changes for callers of the northbound API, version by version, see
+`api-changelog.md` alongside this file.

@@ -40,6 +40,7 @@ import {
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
+import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import {
   connectionRefusalMessage,
@@ -50,7 +51,15 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+/**
+ * Served as every supported version of the northbound API, at
+ * /api/northbound/* and at /api/northbound/v1/* (which re-exports this):
+ * versioned-route.ts resolves CoreEdge-Version, stamps it on the response,
+ * and names the version and path on every audit row this call writes (P1.10).
+ */
+export const GET = withNorthboundVersion(readData);
+
+async function readData(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const correlationId = newCorrelationId();
 
   // 1 — authenticate. Every failure mode collapses to one 401 for the caller.

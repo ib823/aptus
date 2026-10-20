@@ -42,6 +42,7 @@ import {
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
+import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
 import { writeEntitySet, writeHttpStatusFor } from "@/lib/northbound/write";
 import {
@@ -54,6 +55,14 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Served as every supported version of the northbound API, at
+ * /api/northbound/* and at /api/northbound/v1/* (which re-exports this):
+ * versioned-route.ts resolves CoreEdge-Version, stamps it on the response,
+ * and names the version and path on every audit row this call writes (P1.10).
+ */
+export const POST = withNorthboundVersion(writeData);
 
 /**
  * How long a retry of a still-running write is told to wait. Short: most writes
@@ -81,7 +90,7 @@ const bodySchema = z.object({
   entity: z.string().max(200).optional(),
 });
 
-export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+async function writeData(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const correlationId = newCorrelationId();
 
   // 1 — authenticate the read identity.

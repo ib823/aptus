@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { machineAuthFailureKey } from "@/lib/northbound/auth-failures";
 import { extractBearer } from "@/lib/northbound/bearer";
+import { edgeVersionHeaders, isNorthboundPath, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import {
   checkRateLimit,
   getClientIp,
@@ -172,8 +173,17 @@ const MACHINE_REFUSAL_MESSAGES: Record<MachineRefusalBy, string> = {
  * ADDRESS — the backstop, or the failed-lookup bucket — which another key, or
  * another tenant on a shared egress, may have spent; backing off a key that
  * never used its budget does not help, and the developer guide says so.
+ *
+ * A NORTHBOUND REFUSAL STATES ITS VERSION (P1.10), as every route response
+ * does, so a client reading `CoreEdge-Version` meets no gap at the edge. When
+ * the requested version would itself be refused, none is stated: that 400 is
+ * the route's to send once the caller is within its limits.
  */
-function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResponse {
+function machineRefusal(
+  result: RateLimitResult,
+  by: MachineRefusalBy,
+  versionHeaders: Record<string, string> = {},
+): NextResponse {
   const correlationId = crypto.randomUUID();
   const outage = isLimiterOutage(result);
   return NextResponse.json(
@@ -193,6 +203,7 @@ function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResp
         "cache-control": "no-store",
         "Retry-After": retryAfterSeconds(result),
         "X-RateLimit-Remaining": "0",
+        ...versionHeaders,
       },
     },
   );
@@ -374,7 +385,14 @@ async function handleRequest(
       const machine = await machineRouteLimit(request, pathname, clientIp);
       if (machine) {
         if (!machine.result.allowed) {
-          return withObservabilityHeaders(machineRefusal(machine.result, machine.by), requestId, requestStart);
+          const versionHeaders = isNorthboundPath(pathname)
+            ? edgeVersionHeaders(request.headers.get(VERSION_HEADER))
+            : {};
+          return withObservabilityHeaders(
+            machineRefusal(machine.result, machine.by, versionHeaders),
+            requestId,
+            requestStart,
+          );
         }
         const response = NextResponse.next({ request: { headers: requestHeaders } });
         response.headers.set("X-RateLimit-Remaining", String(machine.result.remaining));
