@@ -53,6 +53,9 @@ describe("the sign-up bucket", () => {
     expect((await middleware(post("/api/auth/signup", "10.9.0.3"))).status).not.toBe(429);
   });
 
+  // At the edge, which cannot tell a new address from an existing one. A NEW
+  // address's link spends `signup:<ip>` where it is sent, while developer
+  // sign-up is open (tests/unit/auth/signup-link-ip-limit.test.ts).
   it("an ordinary sign-in stays in the shared auth bucket", async () => {
     await middleware(post("/api/auth/signin/email", "10.9.0.4"));
     expect(seen.map((s) => s.key)).toEqual(["auth:10.9.0.4"]);

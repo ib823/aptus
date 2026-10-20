@@ -6,7 +6,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEVELOPER_WORKSPACE_INVITES_PER_DAY,
   invitableRoles,
+  inviteSendBudget,
+  managedInvitationRole,
+  mayManageInvitation,
   mayManageOrgMembers,
   mayViewOrgMembers,
   pendingInvitesCountAsSeats,
@@ -82,5 +86,28 @@ describe("accepting an invitation as an existing account", () => {
   it("every other invitation works as before", () => {
     expect(refuseAcceptForExistingAccount("consultant", "project_manager")).toBeNull();
     expect(refuseAcceptForExistingAccount("viewer", "partner_lead")).toBeNull();
+  });
+});
+
+describe("what a sandbox developer's invite rights reach (review round 1)", () => {
+  it("is held to a daily send budget that nobody else is", () => {
+    expect(inviteSendBudget("sandbox_developer")).toBe(DEVELOPER_WORKSPACE_INVITES_PER_DAY);
+    for (const role of ["partner_lead", "client_admin", "platform_admin"]) {
+      expect(inviteSendBudget(role), role).toBeNull();
+    }
+  });
+
+  it("manages sandbox developer invitations only", () => {
+    const developer = { role: "sandbox_developer", organizationId: ORG };
+    expect(managedInvitationRole(developer)).toBe("sandbox_developer");
+    expect(mayManageInvitation(developer, { role: "sandbox_developer" })).toBe(true);
+    expect(mayManageInvitation(developer, { role: "client_admin" })).toBe(false);
+    expect(mayManageInvitation(developer, { role: "viewer" })).toBe(false);
+  });
+
+  it.each(["partner_lead", "client_admin", "platform_admin"])("leaves %s managing every invitation", (role) => {
+    const member = { role, organizationId: ORG };
+    expect(managedInvitationRole(member)).toBeNull();
+    expect(mayManageInvitation(member, { role: "client_admin" })).toBe(true);
   });
 });

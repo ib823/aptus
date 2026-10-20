@@ -1,5 +1,6 @@
 /** NextAuth configuration — magic link authentication via Brevo */
 
+import { headers } from "next/headers";
 import type { NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
@@ -9,12 +10,14 @@ import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
 import {
+  checkSignupCallerLimit,
   checkSignupEmailLimit,
   createDeveloperWorkspaceUser,
   mayCreateDeveloperWorkspace,
 } from "@/lib/auth/developer-workspace";
 import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 import { safeRelativePath } from "@/lib/http/safe-relative-path";
+import { getClientIp } from "@/lib/security/client-ip";
 
 /**
  * The account a first sign-in creates (NextAuth calls this only after the
@@ -67,6 +70,20 @@ export function mayRegisterOnFirstSignIn(email: string): { allowed: boolean; rea
 }
 
 /**
+ * The caller's address for the sign-up bucket, read the way the edge reads it
+ * (`getClientIp`). NextAuth's route runs inside the request, so the headers
+ * are there; outside one (a script) every caller shares "unknown", which
+ * limits rather than lets through.
+ */
+async function signupCallerIp(): Promise<string> {
+  try {
+    return getClientIp(await headers());
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Spend the per-address sign-up bucket before a link goes to an address that
  * has no account yet: such a link is a sign-up, and P0.13 limits sign-ups per
  * email as well as per caller address. An existing account's sign-in link is
@@ -76,6 +93,21 @@ export function mayRegisterOnFirstSignIn(email: string): { allowed: boolean; rea
 async function limitSignupLinks(email: string): Promise<void> {
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
   if (existing) return;
+  // With developer sign-up open this link creates a workspace when clicked,
+  // so it spends the caller's sign-up bucket too, the one /api/auth/signup
+  // spends at the edge (developer-workspace.ts, `checkSignupCallerLimit`).
+  // Off, a new address's link keeps exactly the limits it had.
+  if (mayCreateDeveloperWorkspace(email).allowed) {
+    const caller = await checkSignupCallerLimit(await signupCallerIp());
+    if (!caller.allowed) {
+      console.warn(`[AUTH] sign-up link refused for this caller — ${caller.outage ? "limiter unavailable" : "limited"}`);
+      throw new Error(
+        caller.outage
+          ? "Sign-up limits cannot be checked right now. Try again shortly."
+          : "Too many sign-ups from this network. Try again later.",
+      );
+    }
+  }
   const limit = await checkSignupEmailLimit(email);
   if (!limit.allowed) {
     console.warn(`[AUTH] sign-up link refused for a new address — ${limit.outage ? "limiter unavailable" : "limited"}`);

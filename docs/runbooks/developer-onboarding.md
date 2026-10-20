@@ -37,6 +37,11 @@ Nothing changes for production by default.
   - An invitation can no longer remove a platform admin's role, and a
     developer workspace's invitation can no longer replace another account's
     role.
+  - The invite response no longer contains the invitation token. Only the
+    invitee's email carries it. Nothing on screen used it.
+  - `/coreedge/members` shows the member list only to roles that the
+    member-list API already allowed: admins, `partner_lead`, `client_admin`,
+    `consultant` and `sandbox_developer`.
 - **SMTP.** Production uses Brevo on 587, which offers STARTTLS, so mail is
   sent as before. Unlike before, the connection now fails if a relay on 587
   does not offer STARTTLS, so the password is never sent in the clear.
@@ -54,7 +59,10 @@ with them in it as `sandbox_developer`. That role can do the following:
   (`decideSandboxDeveloperRead` in `src/lib/sap-public/console-read-guard.ts`).
   It applies to the deployment's own tenant as well, which other roles may
   read without a grant. The Studio tenant switcher shows them only the
-  SANDBOX tenants.
+  SANDBOX tenants. Any other live-read route refuses the role outright:
+  `refuseUnlessMayProbeTenant` refuses a sandbox developer unless the route
+  passes `appliesSandboxDeveloperCeiling`. `/api/sap/ariba/call` does not
+  pass it, because an Ariba realm declares no landscape.
 - Invite colleagues into their own workspace as sandbox developers, at
   `/coreedge/members`.
 
@@ -110,13 +118,23 @@ created in `/admin/users`, as before.
 
 **Abuse controls:**
 
-- 10 sign-up requests an hour per caller address, at the edge.
+- 10 sign-ups an hour per caller address, in one `signup:<ip>` bucket for
+  both ways in. The edge spends it on `POST /api/auth/signup`. The sign-in
+  link for a new address spends it too (`checkSignupCallerLimit`, in the
+  link's `sendVerificationRequest`), so `POST /api/auth/signin/email` is no
+  way around it. A sign-in link for an existing account never spends it. With
+  the setting off, nothing spends it except `/api/auth/signup`, as before.
 - 5 an hour per email address, for both ways in.
 - A limiter outage refuses sign-up with `503 LIMITER_UNAVAILABLE`, failing
   closed.
 - A workspace starts with the trial seat limit of 5. Pending invitations count
-  as seats while they are pending, so a workspace cannot email an unlimited
-  number of addresses.
+  as seats while they are pending.
+- When a sandbox developer sends an invitation, the organization may send at
+  most 10 sandbox developer invitations in any 24 hours
+  (`DEVELOPER_WORKSPACE_INVITES_PER_DAY`), counting revoked, expired and
+  accepted ones. Revoking frees a seat but not a send, so invite-then-revoke
+  cannot be used to email an unlimited number of addresses. Past the budget,
+  the invite route answers `429`. Administrators are not limited by it.
 
 **To turn it off**, unset `COREEDGE_DEVELOPER_SIGNUP`. Workspaces already
 created keep working. New addresses are then admitted by the registration
@@ -134,9 +152,19 @@ Who may do what is decided in one place, `src/lib/auth/org-invites.ts`:
 
 - **Invite:** a platform admin, in any organization. A `partner_lead`,
   `client_admin` or `sandbox_developer`, in their own organization only.
-- **Read the member list:** the same people, plus a `consultant`.
+- **Read the member list:** the same people, plus a `consultant`. The
+  members screen asks the same question. Anyone else sees a sentence that
+  says who can see the list.
 - **Which role can be offered:** a sandbox developer can invite only sandbox
   developers. Everyone else is limited by the role hierarchy, as before.
+- **Which invitations can be seen and revoked:** a sandbox developer sees and
+  revokes only sandbox developer invitations. This matters when a client
+  admin invites a sandbox developer into a real customer organization: the
+  developer cannot see or revoke the admins' invitations. Everyone else sees
+  and revokes every invitation in their organization, as before.
+- **Accepting:** the token travels only in the invitee's email. The invite
+  response does not include it, so an inviter cannot accept on someone
+  else's behalf.
 
 The CoreEdge Home screen links to the members screen, and so does Discover for
 a developer.

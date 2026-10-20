@@ -4,7 +4,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
-import { mayManageOrgMembers } from "@/lib/auth/org-invites";
+import { managedInvitationRole, mayManageInvitation, mayManageOrgMembers } from "@/lib/auth/org-invites";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -37,8 +37,11 @@ export async function GET(
     );
   }
 
+  // A sandbox developer sees the sandbox developer invitations only, never an
+  // administrator's (lib/auth/org-invites.ts, `managedInvitationRole`).
+  const onlyRole = managedInvitationRole(user);
   const invitations = await prisma.orgInvitation.findMany({
-    where: { organizationId: orgId, status: "pending" },
+    where: { organizationId: orgId, status: "pending", ...(onlyRole ? { role: onlyRole } : {}) },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -98,6 +101,18 @@ export async function DELETE(
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Invitation not found" } },
       { status: 404 },
+    );
+  }
+
+  if (!mayManageInvitation(user, invitation)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.FORBIDDEN,
+          message: "A sandbox developer can revoke sandbox developer invitations only.",
+        },
+      },
+      { status: 403 },
     );
   }
 

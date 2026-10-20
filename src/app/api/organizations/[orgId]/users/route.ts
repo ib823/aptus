@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import {
+  DEVELOPER_WORKSPACE_INVITE_WINDOW_MS,
+  inviteSendBudget,
   mayManageOrgMembers,
   mayViewOrgMembers,
   pendingInvitesCountAsSeats,
@@ -183,6 +185,32 @@ export async function POST(
     );
   }
 
+  // A sandbox developer's sends are held to a daily budget that revoking does
+  // not refund (lib/auth/org-invites.ts), so the seat rule above cannot be
+  // cycled into an open mail relay. Counted from the table, so it holds
+  // across instances and restarts.
+  const budget = inviteSendBudget(role);
+  if (budget !== null) {
+    const sentToday = await prisma.orgInvitation.count({
+      where: {
+        organizationId: orgId,
+        role: "sandbox_developer",
+        createdAt: { gt: new Date(Date.now() - DEVELOPER_WORKSPACE_INVITE_WINDOW_MS) },
+      },
+    });
+    if (sentToday >= budget) {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.RATE_LIMITED,
+            message: `This workspace has sent its ${budget} invitations for today, including any revoked. Try again tomorrow.`,
+          },
+        },
+        { status: 429 },
+      );
+    }
+  }
+
   // Check if user already belongs to another org
   const existingUser = await prisma.user.findUnique({
     where: { email: parsed.data.email },
@@ -212,6 +240,11 @@ export async function POST(
     );
   }
 
+  // THE TOKEN NEVER LEAVES IN THE RESPONSE. It is the invitee's proof that
+  // they hold the mailbox — accepting needs no session — so it goes to that
+  // mailbox and nowhere else. This returned the whole row, token included,
+  // which let an inviter accept for any address they named; harmless while
+  // only administrators could invite, and not once an open sign-up could.
   const invitation = await prisma.orgInvitation.create({
     data: {
       organizationId: orgId,
@@ -221,6 +254,7 @@ export async function POST(
       token,
       expiresAt,
     },
+    select: { id: true, email: true, role: true, status: true, expiresAt: true, createdAt: true },
   });
 
   await logDecision({

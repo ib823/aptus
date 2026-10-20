@@ -35,10 +35,12 @@
  * half-made workspace to clean up.
  *
  * ABUSE. Asking for a workspace is limited per address
- * (`checkSignupEmailLimit`, here) and per caller address (middleware's
- * `signup:` bucket on POST /api/auth/signup). An invitation sent from a
- * workspace counts against its seats while it is pending
- * (lib/auth/org-invites.ts), so an open sign-up is not an open mail relay.
+ * (`checkSignupEmailLimit`, here) and per caller address (the `signup:`
+ * bucket: middleware's on POST /api/auth/signup, `checkSignupCallerLimit` on a
+ * new address's sign-in link). An invitation sent from a workspace counts
+ * against its seats while it is pending, and against a daily send budget that
+ * revoking does not refund (lib/auth/org-invites.ts), so an open sign-up is
+ * not an open mail relay.
  */
 
 import { createHash } from "node:crypto";
@@ -180,6 +182,27 @@ export type SignupEmailLimit =
 export async function checkSignupEmailLimit(email: string): Promise<SignupEmailLimit> {
   const digest = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
   const result = await checkRateLimit(`signup-email:${digest}`, RATE_LIMITS.signupPerEmail);
+  if (result.allowed) return { allowed: true };
+  return { allowed: false, outage: isLimiterOutage(result), result };
+}
+
+/**
+ * Spend one sign-up from this caller's address: the SAME `signup:<ip>` bucket
+ * the edge spends on POST /api/auth/signup (middleware), so the limit is one
+ * budget whichever route asked for the link.
+ *
+ * WHY THE EDGE ALONE WAS NOT ENOUGH. With sign-up open, a new address gets a
+ * workspace from the ordinary sign-in page too, and NextAuth's
+ * POST /api/auth/signin/email sat in the shared `auth:<ip>` bucket at 30 a
+ * minute: about 180 times the sign-ups an hour this bucket allows. The edge
+ * cannot tell a new address from an existing one (it has no body and no
+ * database), so the sign-in path spends it where the address is known — the
+ * link's `sendVerificationRequest` (auth-options.ts). /api/auth/signup sends
+ * its link with `sendMagicLink`, which does not pass through there, so nothing
+ * is spent twice.
+ */
+export async function checkSignupCallerLimit(clientIp: string): Promise<SignupEmailLimit> {
+  const result = await checkRateLimit(`signup:${clientIp}`, RATE_LIMITS.signupPerIp);
   if (result.allowed) return { allowed: true };
   return { allowed: false, outage: isLimiterOutage(result), result };
 }

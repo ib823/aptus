@@ -414,7 +414,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let dataProbeRan = false;
   let dataProbeRefusal: string | null = null;
   if (tenant && dataProbe && user) {
-    const probeRefusal = await refuseUnlessMayProbeTenant();
+    const probeRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
     if (probeRefusal) return probeRefusal;
     const correlationId = newCorrelationId();
     const conn = resolvedTenant?.connection ?? null;

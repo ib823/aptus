@@ -18,7 +18,10 @@
  * count active members only, so an invitation was free until accepted and an
  * open sign-up could have mailed any number of addresses from this host's
  * domain. For a sandbox developer's workspace the pending ones count too.
- * Other organizations keep the rule they had.
+ * Other organizations keep the rule they had. Because revoking frees a seat,
+ * a sandbox developer's sends are also held to a daily budget
+ * (`inviteSendBudget`), and it manages sandbox developer invitations only
+ * (`managedInvitationRole`).
  */
 
 import { isAdminRoleName, mapLegacyRole } from "@/lib/auth/role-migration";
@@ -79,6 +82,48 @@ export function invitableRoles(inviterRole: string): UserRole[] {
 /** Do this inviter's pending invitations count against the seats? */
 export function pendingInvitesCountAsSeats(inviterRole: string): boolean {
   return mapLegacyRole(inviterRole) === "sandbox_developer";
+}
+
+/**
+ * How many sandbox developer invitations an organization may SEND in any 24
+ * hours when a sandbox developer sends one, whatever became of them.
+ *
+ * THE SEAT RULE ALONE WAS NOT A SEND LIMIT. Revoking an invitation frees its
+ * seat at once, so invite → revoke → invite mailed any number of addresses
+ * from this host's domain, each carrying the inviter's own free-text name and
+ * workspace name. This counts every invitation created in the window —
+ * pending, revoked, expired or accepted — so revoking frees a seat but never
+ * a send. Ten is a team's worth in a day; an administrator who needs more
+ * sends them (they are not limited by this).
+ */
+export const DEVELOPER_WORKSPACE_INVITES_PER_DAY = 10;
+export const DEVELOPER_WORKSPACE_INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** The send budget this inviter is held to, or null when none applies. */
+export function inviteSendBudget(inviterRole: string): number | null {
+  return mapLegacyRole(inviterRole) === "sandbox_developer" ? DEVELOPER_WORKSPACE_INVITES_PER_DAY : null;
+}
+
+/**
+ * The invitations this member may see and revoke, as a filter on their role,
+ * or null for every invitation in the organization.
+ *
+ * A SANDBOX DEVELOPER MANAGES SANDBOX DEVELOPER INVITATIONS ONLY. In its own
+ * workspace that is all there is. But an organization's administrators can
+ * invite a sandbox developer into a real customer organization, and
+ * `mayManageOrgMembers` alone then let it list every pending invitation —
+ * emails, roles, inviter — and revoke the client admin's invitation of the
+ * next client admin. It manages what it could have sent, and nothing else.
+ */
+export function managedInvitationRole(user: Member): UserRole | null {
+  if (isAdminRoleName(user.role)) return null;
+  return mapLegacyRole(user.role) === "sandbox_developer" ? "sandbox_developer" : null;
+}
+
+/** May this member revoke this particular invitation (already in their org)? */
+export function mayManageInvitation(user: Member, invitation: { readonly role: string }): boolean {
+  const only = managedInvitationRole(user);
+  return only === null || mapLegacyRole(invitation.role) === only;
 }
 
 /**

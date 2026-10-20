@@ -98,7 +98,9 @@ export function isStudioBuilder(role: string | null | undefined): boolean {
  * (Discover, the catalogue, the shared SAP API Hub sandbox tenant) and is
  * false for every mutation below, so each governance route refuses it on the
  * gate it already has. Its live reads are capped at SANDBOX tenants as well
- * (console-read-guard.ts, `refuseOutsideSandbox`).
+ * (console-read-guard.ts, `decideSandboxDeveloperRead`), and the probe guard
+ * refuses it on any live-read route that does not apply that cap
+ * (probe-guard.ts, `appliesSandboxDeveloperCeiling`).
  */
 export function isSandboxDeveloper(role: string | null | undefined): boolean {
   return role === "sandbox_developer";

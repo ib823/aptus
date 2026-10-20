@@ -78,7 +78,7 @@ export async function GET(
    * customer's system is limited to Studio roles, and everyone else falls
    * through to the stored probe below, which is what the list renders from.
    */
-  const mayProbe = (await refuseUnlessMayProbeTenant()) === null;
+  const mayProbe = (await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true })) === null;
   /*
    * RESOLVED WHETHER OR NOT A LIVE PROBE IS ALLOWED, because the STORED read
    * below runs either way and has to be filed under the right owner. This is a
