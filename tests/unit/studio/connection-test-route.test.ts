@@ -149,6 +149,34 @@ describe("secrets that will not open", () => {
     expect(mocks.updateConnection.mock.calls[0]![0].where.id).toBe("conn_1");
     expect(mocks.updateConnection.mock.calls[0]![0].data).toEqual({ lastValidationStatus: "GROUP_UNREADABLE" });
   });
+
+  it("the status it records names the builder in the audit, as every other path does (round 5)", async () => {
+    // Recording UNREADABLE changes the row on every screen and raises the
+    // unhealthy-connection incident: "who flipped it at 14:07" must have an
+    // answer. No request reached SAP, and the row says so.
+    ownSecretBroken();
+    await call();
+    expect(mocks.writeConfigAudit).toHaveBeenCalledTimes(1);
+    expect(mocks.writeConfigAudit).toHaveBeenCalledWith({
+      organizationId: "org_a",
+      actorId: "u_1",
+      entityType: "Connection",
+      entityId: "conn_1",
+      action: "TEST_CONNECT",
+      after: { status: "UNREADABLE", reachedSap: false },
+    });
+  });
+
+  it("nothing recorded (re-saved meanwhile): no status change, so no audit row", async () => {
+    ownSecretBroken();
+    mocks.updateConnection.mockResolvedValue({ count: 0 });
+    mocks.findFirstConnection.mockImplementation(async (args: { select?: Record<string, boolean> }) =>
+      args.select?.revision ? { lastValidationStatus: "OK", revision: 4 } : ROW,
+    );
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+  });
 });
 
 describe("the manual test leaves a trace", () => {

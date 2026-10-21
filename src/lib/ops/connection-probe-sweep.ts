@@ -457,7 +457,17 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
 export type ProbeOneOutcome =
   | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
   | { outcome: "not-found" }
-  | { outcome: "unreadable"; detail: string }
+  | {
+      outcome: "unreadable";
+      detail: string;
+      /**
+       * The status this call wrote on the row, when it wrote one (P0.2 review
+       * round 5): a caller that answers for a person — the Studio test —
+       * audits the change under that person. Absent when nothing was written
+       * (every row opened on its own, or the row was re-saved meanwhile).
+       */
+      recorded?: typeof CONNECTION_UNREADABLE_STATUS | typeof CONNECTION_GROUP_UNREADABLE_STATUS;
+    }
   | { outcome: "superseded"; detail: string };
 
 /**
@@ -495,16 +505,15 @@ export async function recordUnreadableOne(
   // nothing can be attributed. Said, not recorded; the next probe looks again.
   if (unopenable.length === 0) return { outcome: "unreadable", detail: ownSentence };
 
-  await swapProbeStatus(
-    self.row.id,
-    organizationId,
-    self.row.lastValidationStatus,
-    self.opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS,
-    self.row.revision,
-  );
-  if (!self.opens) return { outcome: "unreadable", detail: ownSentence };
+  const status = self.opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS;
+  const write = await swapProbeStatus(self.row.id, organizationId, self.row.lastValidationStatus, status, self.row.revision);
+  const recorded: Pick<Extract<ProbeOneOutcome, { outcome: "unreadable" }>, "recorded"> = write.recorded
+    ? { recorded: status }
+    : {};
+  if (!self.opens) return { outcome: "unreadable", detail: ownSentence, ...recorded };
   return {
     outcome: "unreadable",
+    ...recorded,
     detail:
       `This connection's own secret opens, but another active connection for this product will not ` +
       `(${unopenable.map((l) => `"${l}"`).join(", ")}), so CoreEdge refuses every call for the product. ` +

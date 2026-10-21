@@ -40,6 +40,7 @@ import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import {
+  clearUnreadableOnceGroupOpens,
   isAllowedApiKeyHeader,
   normalizeEnvironment,
   upsertSapConnection,
@@ -775,6 +776,13 @@ export async function PATCH(request: NextRequest) {
       );
     }
     throw error;
+  }
+
+  // Deactivating is the other remedy a "will not open" answer names: once the
+  // product's set opens without this row, its siblings stop reading refused
+  // (P0.2 review round 5; connection-resolver.ts clearUnreadableOnceGroupOpens).
+  if (existing.isActive && !updated.isActive) {
+    await clearUnreadableOnceGroupOpens(organizationId, existing.product);
   }
 
   await writeConfigAudit({

@@ -19,6 +19,7 @@
  */
 import { createHash } from "crypto";
 
+import { CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_API_KEY_HEADER,
@@ -797,7 +798,63 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
     await tx.sapServiceHealth.deleteMany(dropped);
     return saved;
   });
+  // A re-save is the remedy the "will not open" answer names: the siblings it
+  // was standing in the way of stop reading refused (P0.2 review round 5).
+  await clearUnreadableOnceGroupOpens(input.organizationId, input.product);
   return redactConnection(row);
+}
+
+/**
+ * THE GROUP OPENS AGAIN: ITS "WILL NOT OPEN" STATUSES STOP STANDING (P0.2
+ * review round 5).
+ *
+ * The broker fails closed on an (organization, product) set whose secrets will
+ * not all open, so the probe writers record UNREADABLE on the row that will
+ * not open and GROUP_UNREADABLE on each sibling that does. The answer they
+ * give says what to do: re-save that connection's secrets, or deactivate it.
+ * Both change that row alone — so after the fix the broker served every call
+ * again while the healthy siblings kept GROUP_UNREADABLE until the next
+ * nightly probe, up to 24 hours: "unreadable" on Operations, Studio and SAP
+ * systems, a MAJOR unhealthy-connection incident, and an operator told their
+ * fix had not worked. The reverse of A.3.
+ *
+ * So the two places a row can leave or mend the set — the re-save above and
+ * Studio's deactivate toggle — ask the broker's own question afterwards: does
+ * the set open now (`resolveSapConnections`, the read the binding path fails
+ * closed on)? When it does, no active row of it is unreadable any more, and
+ * the statuses that said so are cleared to "never tested" — not to OK: no
+ * probe has run. `lastValidatedAt` (the last time SAP answered) and the probe
+ * history the drift alert is judged against are left alone. When the set
+ * still will not open (another sibling is broken too), nothing changes: the
+ * broker still refuses, and the statuses still say so.
+ *
+ * Compare-and-set on the status itself, so a probe that recorded a real
+ * outcome in the meantime is never overwritten. Returns how many rows changed.
+ */
+export async function clearUnreadableOnceGroupOpens(organizationId: string, product: string): Promise<number> {
+  const unopenable = { in: [...CONNECTION_NOT_PROBED_STATUSES] };
+  const marked = await prisma.sapConnection.findMany({
+    where: { organizationId, product, isActive: true, lastValidationStatus: unopenable },
+    select: { id: true },
+  });
+  if (marked.length === 0) return 0;
+  try {
+    await resolveSapConnections(organizationId, product);
+  } catch {
+    // Still will not open: the statuses are still true.
+    return 0;
+  }
+  const cleared = await prisma.sapConnection.updateMany({
+    where: {
+      id: { in: marked.map((m) => m.id) },
+      organizationId,
+      product,
+      isActive: true,
+      lastValidationStatus: unopenable,
+    },
+    data: { lastValidationStatus: null },
+  });
+  return cleared.count;
 }
 
 /** Strip secrets + host for anything that crosses the client boundary. */

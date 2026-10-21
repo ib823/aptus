@@ -22,7 +22,11 @@
  *      so the operator is not sent to re-enter a secret that is fine;
  *   4. the Studio "Test connectivity" judges the group the same way, so it
  *      cannot write a fresh OK over GROUP_UNREADABLE while the broker
- *      refuses every call for the product (P0.2 review round 4).
+ *      refuses every call for the product (P0.2 review round 4);
+ *   5. the remedy that answer names (re-save or deactivate the row that will
+ *      not open) clears GROUP_UNREADABLE on the healthy siblings at once, so
+ *      the screens stop saying "refused" while the broker serves, and the
+ *      Studio test audits the status it records (P0.2 review round 5).
  *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
@@ -107,7 +111,12 @@ vi.mock("@/lib/coreedge/journey", async (importOriginal) => {
 });
 
 import { POST as studioTest } from "@/app/api/studio/connections/[id]/test/route";
-import { connectionHealthVerdict } from "@/lib/coreedge/freshness";
+import { PATCH as patchConnections } from "@/app/api/studio/connections/route";
+import {
+  CONNECTION_NEEDS_ATTENTION,
+  CONNECTION_NOT_PROBED_STATUSES,
+  connectionHealthVerdict,
+} from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { probeOneConnection, sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
 import { countedProbeEvents } from "@/lib/ops/probe-event-source";
@@ -387,6 +396,101 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       expect((await stored(bad.id))?.lastValidationStatus).toBe("UNREADABLE");
       // The sibling was not the one asked about: left as it was.
       expect((await stored(good.id))?.lastValidationStatus).toBeNull();
+    });
+
+    it("Studio 'Test connectivity' that records GROUP_UNREADABLE names the builder in the audit (round 5)", async () => {
+      // The 409 path changes the row's status — it raises the unhealthy-
+      // connection incident and flips the row on every screen — so who caused
+      // it must be answerable, as on every other path of the route.
+      const { good } = await brokenSibling();
+
+      const res = await studioTestOf(good.id);
+
+      expect(res.status).toBe(409);
+      expect(hooks.writeConfigAudit).toHaveBeenCalledTimes(1);
+      expect(hooks.writeConfigAudit).toHaveBeenCalledWith({
+        organizationId: org,
+        actorId: "u_builder",
+        entityType: "Connection",
+        entityId: good.id,
+        action: "TEST_CONNECT",
+        after: { status: "GROUP_UNREADABLE", reachedSap: false },
+      });
+    });
+
+    /** The incidents route's count of unhealthy connections (UNHEALTHY). */
+    const unhealthyCount = () =>
+      prisma.sapConnection.count({
+        where: {
+          organizationId: org,
+          isActive: true,
+          lastValidationStatus: { in: [...CONNECTION_NEEDS_ATTENTION, ...CONNECTION_NOT_PROBED_STATUSES] },
+        },
+      });
+
+    const patchConnection = (body: Record<string, unknown>) =>
+      patchConnections(
+        new Request("http://localhost/api/studio/connections", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }) as never,
+      );
+
+    it("re-saving the broken sibling clears GROUP_UNREADABLE on the healthy one (round 5)", async () => {
+      // The 409 says "re-save that connection's secrets, or deactivate it".
+      // Done: the broker serves again — and the healthy sibling must stop
+      // reading refused, and stop raising the incident, before the next
+      // nightly probe (up to 24 h later).
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+      const before = await stored(good.id);
+
+      await save("acme-dev", "https://dev.example.com");
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toMatchObject({ ok: true });
+      const after = await stored(good.id);
+      // "Never tested", not refused; the last success time and the drift
+      // history are left as they were.
+      expect(after).toMatchObject({ lastValidationStatus: null, lastValidatedAt: before!.lastValidatedAt });
+      expect(connectionHealthVerdict(after!, new Date())).toBe("neverTested");
+      expect(await unhealthyCount()).toBe(0);
+    });
+
+    it("deactivating the broken sibling in Studio clears GROUP_UNREADABLE on the healthy one (round 5)", async () => {
+      const { good, bad } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+
+      const res = await patchConnection({ id: bad.id, isActive: false });
+
+      expect(res.status).toBe(200);
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toMatchObject({ ok: true });
+      const after = await stored(good.id);
+      expect(after?.lastValidationStatus).toBeNull();
+      expect(connectionHealthVerdict(after!, new Date())).toBe("neverTested");
+      expect(await unhealthyCount()).toBe(0);
+    });
+
+    it("while another sibling still will not open, GROUP_UNREADABLE stays: the broker still refuses (round 5)", async () => {
+      const { good } = await brokenSibling();
+      const other = await save("acme-qa", "https://qa.example.com");
+      await prisma.sapConnection.update({
+        where: { id: other.id, organizationId: org },
+        data: { secretsCiphertext: "v1:not-a-sealed-bundle" },
+      });
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+
+      await save("acme-dev", "https://dev.example.com");
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+      expect((await stored(other.id))?.lastValidationStatus).toBe("UNREADABLE");
     });
 
     it("once the broken sibling is deactivated, the Studio test records the 200 again", async () => {

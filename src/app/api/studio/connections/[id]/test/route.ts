@@ -94,6 +94,21 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
     });
     const refused = await recordUnreadableOne(organizationId, row);
     if (refused.outcome === "not-found") return studioError("NOT_FOUND", "Connection not found.");
+    // THE STATUS IT RECORDED HAS AN AUTHOR (P0.2 review round 5). Writing
+    // UNREADABLE / GROUP_UNREADABLE flips the row on every screen and raises
+    // the unhealthy-connection incident; like every other path of this route,
+    // the change is audited under the builder who pressed Test, marked as
+    // never having reached SAP. Nothing written, nothing to attribute.
+    if (refused.outcome === "unreadable" && refused.recorded) {
+      await writeConfigAudit({
+        organizationId,
+        actorId: user.id,
+        entityType: "Connection",
+        entityId: row.id,
+        action: "TEST_CONNECT",
+        after: { status: refused.recorded, reachedSap: false },
+      });
+    }
     return studioError("CONFLICT", refused.detail);
   }
   if (!resolved) return studioError("NOT_FOUND", "Connection not found.");

@@ -120,7 +120,18 @@ on its own to find which one is at fault. That row reads `UNREADABLE`; a
 sibling whose own secret opens reads `GROUP_UNREADABLE` ("another connection
 for this product will not open"), which counts the same way. The fix is to
 re-save or deactivate the row marked `UNREADABLE`; re-saving a
-`GROUP_UNREADABLE` row changes nothing. If every row opens on its own, the
+`GROUP_UNREADABLE` row changes nothing. Once the fix is made (the re-save, or
+Studio's Deactivate), the product's remaining active rows are opened again as
+the broker opens them; when they all open, their `UNREADABLE` /
+`GROUP_UNREADABLE` statuses are cleared at once to "never tested" (not OK: no
+probe has run; `lastValidatedAt` and the probe history are kept), so the
+siblings stop reading refused and leave the unhealthy-connections incident
+without waiting for the next nightly probe. If another row still will not
+open, they keep their status, because the broker still refuses. A fix made
+outside Studio (for example restoring a previous encryption key in the
+environment) is picked up by the next probe. When "Test connectivity"
+records either status it writes a `TEST_CONNECT` audit row naming the
+builder, marked `reachedSap: false`. If every row opens on its own, the
 failure was not a secret and nothing is written. Neither status is a probe
 outcome, so neither counts as "was healthy" for the drift email. Studio's
 "Test connectivity" opens the whole product group the same way before it
