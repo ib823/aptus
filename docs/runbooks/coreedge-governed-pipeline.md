@@ -41,11 +41,14 @@ the call. A static test (`tests/unit/governed/pipeline.test.ts`) fails if
 **A transport per connection.** `SapConnection.transport` (migration
 `20261025020000_sap_connection_transport`, backout beside it) is `DIRECT` or
 `TWIN`. `src/lib/governed/transport.ts` defines the minimal `Transport` (a
-`fetch`, and whether it reaches SAP). `DIRECT` is the platform's fetch, as
-before. `TWIN` is the stub the Tenant Twin (P1.6) plugs into with
-`registerTwinEngine(engine)`; until an engine is registered a TWIN connection
-is refused at `bindConnection` with `TRANSPORT_UNAVAILABLE` and its fetch never
-reaches the network. Nothing in the product sets TWIN yet.
+`fetch`, the credential step that builds the auth headers, and whether it
+reaches SAP). `DIRECT` is the platform's fetch and the executors' own
+credential step, as before. `TWIN` is the stub the Tenant Twin (P1.6) plugs
+into with `registerTwinEngine(engine)`; its credential step builds no headers,
+so no OAuth or SAML token is exchanged and the engine sees no credential.
+Until an engine is registered a TWIN connection is refused at `bindConnection`
+with `TRANSPORT_UNAVAILABLE` and its fetch never reaches the network. Nothing
+in the product sets TWIN yet.
 
 **The circuit breaker is wired.** See
 [`coreedge-circuit-breaker.md`](coreedge-circuit-breaker.md).
@@ -69,12 +72,17 @@ client's Basis team.
 
 Re-saving a connection (POST `/api/studio/connections` with the same product
 and key) is how its secret is rotated. When the row being replaced is active and
-its last Test was OK, the route now, after step-up and before writing anything:
+its secret is working, meaning its last Test was OK or a lane has proven a read
+through it (`LaneCheck`), the route now, after step-up and before writing
+anything:
 
 1. signs in with the new credentials (a token is issued, or a header built, and
    SAP does not answer 401);
 2. reads the service metadata from the connection's probe path (the request the
-   Test button sends);
+   Test button sends). Required only when the last Test was OK: a probe path
+   whose `$metadata` the arrangement does not release (last Test `NOT_FOUND`),
+   or a sweep that met a timeout (`TIMEOUT`), is not held against the new
+   secret, which is then judged by step 3;
 3. reads one row from the newest dataset a lane has proven readable through this
    connection (`LaneCheck`), as the broker reads it. With no proven read there
    is nothing to compare against and this step is not run.
@@ -86,7 +94,9 @@ working secret keeps serving. If all pass the secret is stored and the save's
 audit row says `rotationProbed: true`.
 
 Not probed, and saved exactly as before: a new connection, a deactivated one,
-and one whose last Test was not OK (nothing working to protect).
+one SAP last refused (last Test `UNAUTHORIZED`: the secret is broken, which is
+when it gets rotated), and one whose last Test was not OK with no lane having
+read through it (nothing working to protect).
 
 **If SAP is down while a secret must be changed** (for example the old password
 was revoked at SAP and the host is also unreachable): deactivate the connection,
@@ -115,9 +125,15 @@ migration drops it, which loses nothing (every row is `DIRECT`).
 
 - P1.6 (Tenant Twin) registers its engine with `registerTwinEngine` and marks a
   connection `transport: TWIN`. Before it lets anyone do that, the nightly lane
-  sweep, the connection probe and the Workbench console reads must route through
-  `transportFor(connection)` too: today they call `fetch` directly and would
-  send a TWIN connection's request to its `baseUrl`.
+  sweep, the connection probe, the rotation probe and the Workbench console
+  reads must route through `transportFor(connection)` too, for both the data
+  request and the credential step (`transport.fetch` and
+  `transport.authHeaders`): today they call `fetch` and
+  `buildAuthHeadersFromConnection` directly, so they would send a TWIN
+  connection's request to its `baseUrl` and its client secret or SAML
+  assertion to its real token endpoint. The governed read and write already
+  do both (`tests/unit/governed/twin-transport-credentials.test.ts` checks
+  every auth type makes no global fetch).
 - P4.1 adds the dispatcher, connector and integration-suite transports on the
   same interface, and moves `sapFetch` and the Ariba connector onto it.
 - P0.14b brings the remaining Workbench console routes onto the pipeline.

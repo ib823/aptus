@@ -329,13 +329,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   // 9 — write. Timed around the upstream call only — see the read route.
-  const startedAt = Date.now();
-  const result = await callSapWrite(
+  const { result, durationMs } = await callSapWrite(
     bound.value,
     { servicePath: service.path, entitySet, payload: parsed.data.record },
     circuit.value,
   );
-  const durationMs = Date.now() - startedAt;
   const status = writeHttpStatusFor(result.status);
 
   let response: NextResponse;

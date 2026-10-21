@@ -75,6 +75,11 @@ export interface CircuitRecord {
   readonly probeInFlight: boolean;
   /** When that probe was let through, for PROBE_LEASE_MS. */
   readonly probeStartedAt: number | null;
+  /**
+   * When an outcome last changed this circuit. In a shared store an outcome
+   * that changes nothing else (a success on a clean, closed circuit) is not
+   * written, so this is not the time of the latest call.
+   */
   readonly lastOutcomeAt: number | null;
 }
 
@@ -332,6 +337,17 @@ function deserialise(raw: string | null): CircuitRecord {
   }
 }
 
+/** Everything that decides a call, `lastOutcomeAt` aside. */
+function sameState(a: CircuitRecord, b: CircuitRecord): boolean {
+  return (
+    a.state === b.state &&
+    a.consecutiveFailures === b.consecutiveFailures &&
+    a.openedAt === b.openedAt &&
+    a.probeInFlight === b.probeInFlight &&
+    a.probeStartedAt === b.probeStartedAt
+  );
+}
+
 /** How many times a contended compare-and-set is retried before the breaker gives up on that write. */
 const CAS_ATTEMPTS = 5;
 
@@ -388,7 +404,16 @@ export function createCircuitBreaker(store: CircuitStore, options: { onStoreErro
           const current = deserialise(raw);
           // A success on a circuit with nothing recorded changes nothing worth a write.
           if (raw === null && outcome === "ok") return;
-          const serialised = serialise(applyOutcome(current, outcome, now));
+          const next = applyOutcome(current, outcome, now);
+          /*
+           * NOR DOES AN OUTCOME THAT LEAVES THE STATE AS IT WAS: a success on
+           * a closed circuit with no failures, a refusal on a closed one.
+           * Only `lastOutcomeAt` would change, and writing it would cost an
+           * Upstash command on every call and renew the record's expiry
+           * forever, so a busy connection's record would never expire.
+           */
+          if (raw !== null && sameState(current, next)) return;
+          const serialised = serialise(next);
           if (raw === serialised) return;
           if (await store.compareAndSet(key, raw, serialised)) return;
         }

@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 4 — the same read function the broker calls, against the BOUND connection.
-  const result = await callSapRead(
+  const { result } = await callSapRead(
     bound.value,
     { servicePath: service.path, entitySet: target.value.entitySet, limit: input.limit ?? 10 },
     circuit.value,

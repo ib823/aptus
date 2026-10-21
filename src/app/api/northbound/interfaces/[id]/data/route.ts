@@ -142,10 +142,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // Timed around the UPSTREAM call only. Measuring from the top of the handler
   // would fold our own auth, grant and binding work into a number the operations
   // console labels "how slow is this tenant", which would be a quietly wrong
-  // answer to the question actually being asked.
-  const startedAt = Date.now();
-  const result = await callSapRead(bound.value, { servicePath: service.path, entitySet, limit }, circuit.value);
-  const durationMs = Date.now() - startedAt;
+  // answer to the question actually being asked. Nor the breaker's own store:
+  // callSapRead times the executor, before it reports to the breaker.
+  const { result, durationMs } = await callSapRead(bound.value, { servicePath: service.path, entitySet, limit }, circuit.value);
   const status = httpStatusFor(result.status);
 
   await audit.record(status, {

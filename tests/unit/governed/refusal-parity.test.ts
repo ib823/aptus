@@ -356,6 +356,11 @@ beforeEach(async () => {
   // An open circuit for the one connection every case binds to: it refuses
   // only where a case enforces the breaker, and is observed everywhere else.
   for (let i = 0; i < FAILURE_THRESHOLD; i++) await governedCircuitBreaker().recordOutcome("connection:conn_1", "timeout");
+  // And the console's own circuit for it, in the viewer's organization (the
+  // preview never counts into, or reads, the production one).
+  for (let i = 0; i < FAILURE_THRESHOLD; i++) {
+    await governedCircuitBreaker().recordOutcome("console:org_a:connection:conn_1", "timeout");
+  }
 });
 afterAll(() => {
   __setGovernedCircuitStore(null);
@@ -404,5 +409,35 @@ describe("the default breaker observes and never refuses", () => {
   it.each(["read", "write", "preview"] as const)("an open circuit lets %s through when not enforced", async (route) => {
     const { status } = await call(route);
     expect([200, 201]).toContain(status);
+  });
+});
+
+/*
+ * THE AUDITED DURATION IS SAP'S, NOT REDIS'S. Operations shows durationMs as
+ * "how slow is this tenant" and the correlation search as "Took", so it is
+ * timed around the upstream call only. Reporting the outcome to the breaker
+ * is one or two round trips to Upstash; they must not be folded in, or a slow
+ * Redis reads as a slow SAP tenant. Driven with a store that takes 150 ms per
+ * command and an SAP stand-in that answers at once.
+ */
+describe("the audited duration leaves out the breaker's store", () => {
+  class SlowStore extends MemoryCircuitStore {
+    override async read(key: string) {
+      await new Promise((r) => setTimeout(r, 150));
+      return super.read(key);
+    }
+    override async compareAndSet(key: string, expected: string | null, next: string) {
+      await new Promise((r) => setTimeout(r, 150));
+      return super.compareAndSet(key, expected, next);
+    }
+  }
+
+  it.each(["read", "write", "preview"] as const)("on %s", async (route) => {
+    __setGovernedCircuitStore(new SlowStore({ shared: true }));
+    const { status } = await call(route);
+    expect([200, 201]).toContain(status);
+    const row = h.audits.at(-1) as { durationMs?: number | null };
+    expect(typeof row.durationMs).toBe("number");
+    expect(row.durationMs!).toBeLessThan(100);
   });
 });

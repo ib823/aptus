@@ -515,8 +515,7 @@ export async function containKey(
   if (mode === "off") return passed(NO_CIRCUIT);
   const breaker = governedCircuitBreaker();
   const decision = await breaker.beforeCall(key);
-  const permit: CircuitPermit = { record: (outcome) => breaker.recordOutcome(key, outcome) };
-  if (decision.allowed) return passed(permit);
+  if (decision.allowed) return passed({ record: (outcome) => breaker.recordOutcome(key, outcome) });
   if (mode === "observe") {
     console.warn("[circuit] would refuse", {
       circuit: key,
@@ -525,7 +524,16 @@ export async function containKey(
       correlationId,
       shared: breaker.shared,
     });
-    return passed(permit);
+    /*
+     * THE CALL GOES AHEAD, ITS OUTCOME IS NOT RECORDED. Enforcing, this call
+     * would never have reached SAP, so it would have recorded nothing; were
+     * its success recorded here, it would close the circuit at once and
+     * every later call in the cooldown would log nothing. Recording nothing
+     * keeps the stored circuit on the enforce timeline, so the would-refuse
+     * lines count exactly the calls enforce would refuse — which is what the
+     * runbook's decision to enforce is made from.
+     */
+    return passed(NO_CIRCUIT);
   }
   const retry = String(Math.max(1, decision.retryAfterSeconds ?? 1));
   return refused(
@@ -553,30 +561,61 @@ export function circuitOutcomeForWrite(status: NorthboundWriteStatus): CallOutco
   return "refused";
 }
 
-/** A console read: answered, or failed with the status it is audited under. */
-export function circuitOutcomeForStatus(status: number): CallOutcome {
-  if (status >= 200 && status < 300) return "ok";
-  if (status === 504) return "timeout";
-  if (status >= 500) return "upstream-error";
+/**
+ * A console read: answered, or failed, with the status it is audited under
+ * and the HTTP status SAP itself gave (null when SAP gave none: a timeout, a
+ * host that could not be reached, a credential that could not be used).
+ *
+ * THE CALLER CHOSE THE QUERY. On the Workbench preview the builder names the
+ * entity set, so SAP's own 4xx answer (a parameterised set asked without its
+ * parameters, a set the arrangement does not release) says the question was
+ * wrong, not that the system is failing — the write's REJECTED, not ERROR.
+ * The audit row still records it as 502 (console-read-failure.ts); the
+ * circuit counts it as a refusal. Only SAP's 5xx, a timeout, or a system that
+ * could not be reached counts against the system.
+ */
+export function circuitOutcomeForConsoleRead(auditStatus: number, sapStatus: number | null): CallOutcome {
+  if (auditStatus >= 200 && auditStatus < 300) return "ok";
+  if (sapStatus !== null && sapStatus >= 400 && sapStatus < 500) return "refused";
+  if (auditStatus === 504) return "timeout";
+  if (auditStatus >= 500) return "upstream-error";
   return "refused";
 }
 
 /* ── callSap ──────────────────────────────────────────────────────────── */
 
 /**
+ * What a call to SAP returns: the executor's result, and how long the
+ * upstream call took — timed around the executor only, before the outcome is
+ * reported to the breaker. Operations shows this as "how slow is this
+ * tenant" and the correlation search as "Took"; reporting to the breaker is
+ * one or two Upstash round trips, and folding them in would show a slow
+ * Redis as a slow SAP tenant.
+ */
+export interface SapCall<R> {
+  readonly result: R;
+  readonly durationMs: number;
+}
+
+/**
  * The read, through the connection's transport, with its outcome reported to
  * the breaker. A DIRECT connection is called exactly as before the transport
- * existed: the executor's own default fetch.
+ * existed: the executor's own default fetch and credential step. Any other
+ * transport supplies both, so a TWIN call exchanges no token either.
  */
 export async function callSapRead(
   bound: Pick<Bound, "connection" | "transport">,
   input: { servicePath: string; entitySet: string; limit: number },
   permit: CircuitPermit,
-): Promise<NorthboundReadResult> {
+): Promise<SapCall<NorthboundReadResult>> {
   const args = { connection: bound.connection, ...input };
-  const result = await (bound.transport.kind === "DIRECT" ? readEntitySet(args) : readEntitySet(args, bound.transport.fetch));
+  const startedAt = Date.now();
+  const result = await (bound.transport.kind === "DIRECT"
+    ? readEntitySet(args)
+    : readEntitySet(args, bound.transport.fetch, bound.transport.authHeaders));
+  const durationMs = Date.now() - startedAt;
   await permit.record(circuitOutcomeForRead(result.status));
-  return result;
+  return { result, durationMs };
 }
 
 /** The write, likewise. */
@@ -584,9 +623,13 @@ export async function callSapWrite(
   bound: Pick<Bound, "connection" | "transport">,
   input: { servicePath: string; entitySet: string; payload: Record<string, unknown> },
   permit: CircuitPermit,
-): Promise<NorthboundWriteResult> {
+): Promise<SapCall<NorthboundWriteResult>> {
   const args = { connection: bound.connection, ...input };
-  const result = await (bound.transport.kind === "DIRECT" ? writeEntitySet(args) : writeEntitySet(args, bound.transport.fetch));
+  const startedAt = Date.now();
+  const result = await (bound.transport.kind === "DIRECT"
+    ? writeEntitySet(args)
+    : writeEntitySet(args, bound.transport.fetch, bound.transport.authHeaders));
+  const durationMs = Date.now() - startedAt;
   await permit.record(circuitOutcomeForWrite(result.status));
-  return result;
+  return { result, durationMs };
 }

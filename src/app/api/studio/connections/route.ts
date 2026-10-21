@@ -46,7 +46,13 @@ import {
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { decideRotation } from "@/lib/sap-public/rotation";
-import { probeRotation, provenReadTarget, rotationProbeApplies } from "@/lib/sap-public/rotation-probe";
+import {
+  probeRotation,
+  provenReadTarget,
+  rotationProbeApplies,
+  rotationProbeMayApply,
+  rotationRequirements,
+} from "@/lib/sap-public/rotation-probe";
 import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
@@ -610,18 +616,23 @@ export async function POST(request: NextRequest) {
    * PROBE BEFORE SWAP (P0.14, rotation.ts). Re-saving a connection is how its
    * secret is rotated, and this used to write the new one unconditionally: a
    * mistyped password took every lane on that system down until someone
-   * noticed. Now, when the row being replaced is active and its last probe
-   * was OK, the new credentials are tried first — sign in, read the metadata,
-   * read one row of a dataset this connection has proven — with nothing
-   * written. Only if every step passes is the secret stored; otherwise the
-   * working one keeps serving and the form says which step failed.
+   * noticed. Now, when the row being replaced is active and its secret is
+   * working — its last probe was OK, or a lane has proven a read through it
+   * (a sweep's one TIMEOUT does not make a working secret fair game) — the
+   * new credentials are tried first, with nothing written: sign in, read the
+   * metadata if the old secret could, read one row of a dataset this
+   * connection has proven. Only if every step passes is the secret stored;
+   * otherwise the working one keeps serving and the form says which step
+   * failed.
    *
    * After step-up, so nothing reaches SAP for a caller who has not passed it.
-   * A new, deactivated or never-proven connection saves exactly as before;
-   * COREEDGE_ROTATION_PROBE=off turns the probe off.
+   * A new, deactivated or never-proven connection, and one SAP last refused
+   * (UNAUTHORIZED), saves exactly as before; COREEDGE_ROTATION_PROBE=off
+   * turns the probe off.
    */
   let rotationProbed = false;
-  if (existing && rotationProbeApplies(existing)) {
+  const readTarget = existing && rotationProbeMayApply(existing) ? await provenReadTarget(organizationId, existing.id) : null;
+  if (existing && rotationProbeApplies(existing, readTarget)) {
     const candidate: ResolvedSapConnection = {
       source: "db",
       id: existing.id,
@@ -639,9 +650,9 @@ export async function POST(request: NextRequest) {
       environment,
       client: input.client ?? null,
     };
-    const readTarget = await provenReadTarget(organizationId, existing.id);
-    const probe = await probeRotation(candidate, readTarget);
-    const decision = decideRotation(probe, new Date(), { dataReadRequired: readTarget !== null });
+    const required = rotationRequirements(existing, readTarget);
+    const probe = await probeRotation(candidate, readTarget, undefined, { metadataRequired: required.metadataRequired });
+    const decision = decideRotation(probe, new Date(), required);
     if (!decision.swap) {
       // The attempt is on the record — which step stopped it, never what was typed.
       await writeConfigAudit({

@@ -7,8 +7,13 @@
  *   observe  (the default) the breaker counts every SAP outcome, opens and
  *            half-opens exactly as it would when enforcing, and logs
  *            `[circuit] would refuse` where it would have refused. It never
- *            refuses a call. So a deploy with it changes no answer any caller
- *            gets: a call that works today keeps working.
+ *            refuses a call. A call it would have refused still goes to SAP,
+ *            but its outcome is not recorded, since enforcing it would never
+ *            have been made: so the stored circuit follows the enforce
+ *            timeline, and the would-refuse lines count exactly the calls
+ *            enforce would refuse (tests/unit/governed/
+ *            circuit-observe-parity.test.ts). A deploy with it changes no
+ *            answer any caller gets: a call that works today keeps working.
  *   enforce  an open circuit refuses the call before anything is sent to
  *            SAP: 503 CIRCUIT_OPEN with Retry-After, audited with the failure
  *            reason CIRCUIT_OPEN. Switch it on per
@@ -101,4 +106,23 @@ export function circuitKeyForConnection(connectionId: string): string {
 
 export function circuitKeyForDeploymentTenant(envPrefix: string, tenantKey: string): string {
   return `deployment:${envPrefix}:${tenantKey}`;
+}
+
+/**
+ * The circuit a Workbench console read of a system belongs to: the system's
+ * key, inside the reading organization's own console scope.
+ *
+ * NOT THE PRODUCTION CIRCUIT, AND NOT SHARED ACROSS ORGANIZATIONS. A console
+ * read's query is the builder's choice, and a deployment tenant (S4_TDD_*)
+ * belongs to no organization: every organization may preview it. Were the
+ * console to count its outcomes into the system's own circuit, one
+ * organization's previews could refuse another's for 30 s at a time, and a
+ * builder's previews of a stored connection could refuse the deployed
+ * application's production reads on it (the northbound routes use
+ * `circuitKeyForConnection`). So the console has a circuit of its own per
+ * organization and system: a console reading a failing system is still
+ * refused fast, and what it counts reaches nobody else.
+ */
+export function circuitKeyForConsoleRead(organizationScope: string, systemKey: string): string {
+  return `console:${organizationScope}:${systemKey}`;
 }

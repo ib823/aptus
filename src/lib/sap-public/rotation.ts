@@ -79,13 +79,20 @@ export type RotationDecision =
  * product has always allowed on no evidence that the old secret is better.
  * Then a data read that did not run is not required; one that ran and failed
  * still refuses.
+ *
+ * `metadataRequired` (default true) is the same rule for the metadata step:
+ * when the working secret's last probe never read the metadata (its probe
+ * path is not in the arrangement, or the probe met a timeout) but a lane
+ * proved a read, the new secret is judged by that read instead. A sign-in
+ * failure always refuses, and so does a failed data read.
  */
 export function decideRotation(
   probe: RotationProbe,
   now: Date = new Date(),
-  options: { readonly dataReadRequired?: boolean } = {},
+  options: { readonly dataReadRequired?: boolean; readonly metadataRequired?: boolean } = {},
 ): RotationDecision {
   const dataReadRequired = options.dataReadRequired ?? true;
+  const metadataRequired = options.metadataRequired ?? true;
   if (!probe.signIn.ok) {
     return {
       swap: false,
@@ -106,7 +113,7 @@ export function decideRotation(
         "The metadata check did not run, so the new credential is unproven. Nothing was changed.",
     };
   }
-  if (!probe.metadata.ok) {
+  if (!probe.metadata.ok && metadataRequired) {
     return {
       swap: false,
       probe,

@@ -8,8 +8,18 @@ Roadmap item P0.14 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 ## What it does
 
 One circuit per SAP system: per stored connection on the northbound read and
-write and the Studio Test Console, and per stored connection or deployment
-tenant on the Workbench preview.
+write and the Studio Test Console.
+
+The Workbench preview has circuits of its own, one per organization and
+system (stored connection or deployment tenant), under
+`coreedge:circuit:console:<organization>:<system>`. The builder chooses the
+preview's entity set, so its outcomes must not reach anyone else: a builder's
+previews never count into the circuit that guards the deployed application's
+calls, and one organization's previews of the shared deployment tenant
+(`S4_TDD_*`) never refuse another organization's. SAP's own 4xx answer to a
+preview (a parameterised entity set asked without its parameters, a set the
+arrangement does not release) counts as a refusal, not a failure, though the
+audit row still records it as 502.
 
 | Event | What the circuit does |
 |---|---|
@@ -21,8 +31,8 @@ tenant on the Workbench preview.
 
 The state is shared by every instance through Upstash Redis
 (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, the store the rate
-limiter uses), under keys `coreedge:circuit:<system>` that expire after 24
-hours untouched. Every change is a compare-and-set, so concurrent instances do
+limiter uses), under keys `coreedge:circuit:<system>` that expire 24 hours
+after the circuit last changed. Every change is a compare-and-set, so concurrent instances do
 not lose a failure. Without Upstash each instance keeps its own circuits (five
 failures that instance saw itself). If Redis cannot be asked, the call goes
 ahead as if there were no breaker, and the error is logged once per instance
@@ -32,27 +42,36 @@ ahead as if there were no breaker, and the error is logged once per instance
 
 | Value | Behaviour |
 |---|---|
-| `observe` (default, and any value not listed) | Counts and opens as above, logs `[circuit] would refuse` with the circuit, its state, the correlation id and whether the store is shared, and lets the call through. Nothing any caller sees changes. |
+| `observe` (default, and any value not listed) | Counts and opens as above, logs `[circuit] would refuse` with the circuit, its state, the correlation id and whether the store is shared, and lets the call through. Nothing any caller sees changes. A call it would have refused is not counted (enforcing, it would never have reached SAP), so the stored circuit follows the same timeline as under `enforce` and there is one `would refuse` line for every call `enforce` would refuse. |
 | `enforce` | An open circuit refuses the call before anything is sent to SAP: `503 CIRCUIT_OPEN` with `Retry-After`, an audit row with `failureReason: CIRCUIT_OPEN` (the upstream-errors incident leaves it out, as SAP was not called), and the Test Console shows it as the refusal the deployed application would get. A write refused this way releases its `Idempotency-Key`. A replay of a stored write is still answered: it never calls SAP. |
 | `off` | Not consulted. No Redis reads or writes. |
 
 ## What happens on deploy
 
-Nothing a caller can see. The default is `observe`, which never refuses. The
-only new work per call is one Redis read before the call to SAP and, after a
-failure, a compare-and-set; a success on a circuit with no record writes
-nothing.
+Nothing a caller can see. The default is `observe`, which never refuses.
+
+The new work per governed call, with Upstash configured, is two Redis reads:
+one before the call to SAP and one after it, when its outcome is recorded.
+A compare-and-set (one more command) is sent only when the circuit changes:
+a failure, the circuit opening or closing, a half-open probe being taken or
+ending. A success on a closed circuit with no failures, and a refusal on a
+closed circuit, write nothing, so a healthy connection's record is not renewed
+and expires 24 hours after its last change. Size the Upstash plan for two
+commands per governed call plus the rate limiter's own; the instance is shared
+with the limiter.
 
 ## Switching it on
 
 1. Leave `observe` on for at least a week of normal traffic, with Upstash
    configured (otherwise each instance judges alone and the logs say
    `shared: false`).
-2. Search the logs for `[circuit] would refuse`. Every entry should fall inside
-   a real SAP outage (the same window shows 502 and 504 rows for that
-   connection in Operations, or the customer confirms one). An entry outside an
-   outage means a system that fails often enough to trip it while serving: find
-   out why before enforcing, because enforcing would refuse its calls.
+2. Search the logs for `[circuit] would refuse`. Each entry is one call that
+   `enforce` would have refused (a `console:` circuit is a Workbench preview's,
+   not the deployed application's). Every entry should fall inside a real SAP
+   outage (the same window shows 502 and 504 rows for that connection in
+   Operations, or the customer confirms one). An entry outside an outage means
+   a system that fails often enough to trip it while serving: find out why
+   before enforcing, because enforcing would refuse its calls.
 3. Set `COREEDGE_CIRCUIT_BREAKER=enforce` and redeploy.
 4. After the deploy, look up any `503 CIRCUIT_OPEN` a developer quotes with the
    correlation-id search in Operations: it names the connection hop and says
@@ -69,4 +88,5 @@ breaker is consulted.
 The next call after the 30 seconds probes it and closes it on success. There is
 no operator button yet to close one early (`closeEarly` exists in
 `circuit-breaker.ts` for this instance's memory only). To clear a shared one by
-hand, delete its key in Upstash: `DEL coreedge:circuit:connection:<connection id>`.
+hand, delete its key in Upstash: `DEL coreedge:circuit:connection:<connection id>`
+(a preview's: `DEL coreedge:circuit:console:<organization id>:connection:<connection id>`).

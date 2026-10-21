@@ -11,7 +11,13 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { decideRotation } from "@/lib/sap-public/rotation";
-import { probeRotation, rotationProbeApplies, rotationProbeEnabled } from "@/lib/sap-public/rotation-probe";
+import {
+  probeRotation,
+  rotationProbeApplies,
+  rotationProbeEnabled,
+  rotationProbeMayApply,
+  rotationRequirements,
+} from "@/lib/sap-public/rotation-probe";
 
 const EDMX =
   '<?xml version="1.0"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx"></edmx:Edmx>';
@@ -104,21 +110,55 @@ describe("the probe", () => {
     expect(probe.metadata?.ok).toBe(false);
     expect(decideRotation(probe, new Date(), { dataReadRequired: false }).swap).toBe(false);
   });
+
+  /*
+   * A $metadata the working secret never read (its probe path is not in the
+   * arrangement: NOT_FOUND) is not held against the new one. Its proof is
+   * the lane's read, so the read still runs, and decides.
+   */
+  it("judges by the proven read when the old secret never read the metadata", async () => {
+    const right = await probeRotation(candidate(), READ, sap(404, 200), { metadataRequired: false });
+    expect(right.metadata?.ok).toBe(false);
+    expect(right.dataRead?.ok).toBe(true);
+    expect(decideRotation(right, new Date(), { metadataRequired: false, dataReadRequired: true }).swap).toBe(true);
+
+    const refused = await probeRotation(candidate(), READ, sap(404, 403), { metadataRequired: false });
+    const d = decideRotation(refused, new Date(), { metadataRequired: false, dataReadRequired: true });
+    expect(d.swap).toBe(false);
+    if (!d.swap) expect(d.failedAt).toBe("data-read");
+
+    // A 401 is still a sign-in failure, whatever the metadata requirement.
+    const typo = await probeRotation(candidate(), READ, sap(401, 200), { metadataRequired: false });
+    expect(decideRotation(typo, new Date(), { metadataRequired: false, dataReadRequired: true }).swap).toBe(false);
+  });
 });
 
 describe("when the probe runs", () => {
-  it("only when replacing an active connection whose last probe was OK", () => {
-    expect(rotationProbeApplies(null, {})).toBe(false);
-    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "OK" }, {})).toBe(true);
-    expect(rotationProbeApplies({ isActive: false, lastValidationStatus: "OK" }, {})).toBe(false);
-    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: null }, {})).toBe(false);
-    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "UNAUTHORIZED" }, {})).toBe(false);
+  it("when replacing an active connection whose last probe was OK, or that a lane has proven a read through", () => {
+    expect(rotationProbeApplies(null, null, {})).toBe(false);
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "OK" }, null, {})).toBe(true);
+    expect(rotationProbeApplies({ isActive: false, lastValidationStatus: "OK" }, READ, {})).toBe(false);
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: null }, null, {})).toBe(false);
+    // A sweep's blip, or a probe path the arrangement does not release, while
+    // the lanes read: the secret is working.
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "TIMEOUT" }, READ, {})).toBe(true);
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "NOT_FOUND" }, READ, {})).toBe(true);
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "TIMEOUT" }, null, {})).toBe(false);
+    // SAP last refused the secret: it is broken, and rotating it must not be blocked.
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "UNAUTHORIZED" }, READ, {})).toBe(false);
+    expect(rotationProbeMayApply({ isActive: true, lastValidationStatus: "UNAUTHORIZED" }, {})).toBe(false);
+  });
+
+  it("asks the new secret to prove what the old one proved", () => {
+    expect(rotationRequirements({ lastValidationStatus: "OK" }, null)).toEqual({ metadataRequired: true, dataReadRequired: false });
+    expect(rotationRequirements({ lastValidationStatus: "OK" }, READ)).toEqual({ metadataRequired: true, dataReadRequired: true });
+    expect(rotationRequirements({ lastValidationStatus: "NOT_FOUND" }, READ)).toEqual({ metadataRequired: false, dataReadRequired: true });
   });
 
   it("COREEDGE_ROTATION_PROBE=off turns it off; anything else leaves it on", () => {
     expect(rotationProbeEnabled({})).toBe(true);
     expect(rotationProbeEnabled({ COREEDGE_ROTATION_PROBE: "of" })).toBe(true);
     expect(rotationProbeEnabled({ COREEDGE_ROTATION_PROBE: "OFF" })).toBe(false);
-    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "OK" }, { COREEDGE_ROTATION_PROBE: "off" })).toBe(false);
+    expect(rotationProbeApplies({ isActive: true, lastValidationStatus: "OK" }, READ, { COREEDGE_ROTATION_PROBE: "off" })).toBe(false);
   });
 });

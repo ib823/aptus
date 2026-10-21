@@ -41,15 +41,25 @@ const ORG = `${RUN}-org`;
 const USER = { id: `${RUN}-dev`, email: `${RUN}-dev@abeam.com`, name: "Dev", role: "consultant", organizationId: ORG, authMethod: "session" };
 
 /** The one password this SAP system accepts, as it changes over the test. */
-const sap = { password: "Working-Password-1" };
+// And whether the probe path's $metadata is released to it: a data service
+// can work while its $metadata is not in the communication arrangement.
+const sap = { password: "Working-Password-1", metadataStatus: 200 };
 const EDMX =
   '<?xml version="1.0"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx"></edmx:Edmx>';
 
-const fakeSap = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+const fakeSap = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
   const auth = new Headers(init?.headers).get("authorization") ?? "";
   const expected = `Basic ${Buffer.from(`COMM_USER:${sap.password}`).toString("base64")}`;
   if (auth !== expected) return new Response("", { status: 401 });
-  return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
+  if (String(url).includes("$metadata")) {
+    return sap.metadataStatus === 200
+      ? new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } })
+      : new Response("", { status: sap.metadataStatus });
+  }
+  return new Response(JSON.stringify({ d: { results: [{ PurchaseOrder: "4500000001" }] } }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 });
 
 const save = (key: string, password: string, environment = "DEV") =>
@@ -92,6 +102,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
   afterAll(async () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    await prisma.laneCheck.deleteMany({ where: { organizationId: ORG } });
     await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
@@ -133,6 +144,96 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
     sap.password = "Working-Password-2";
     expect((await save(key, "Working-Password-2")).status).toBe(200);
     expect((await resolveSapConnection(ORG, "s4hana", key))?.secrets.password).toBe("Working-Password-2");
+  });
+
+  /*
+   * WORKING IS NOT ONLY "THE LAST TEST WAS OK" (review of P0.14). A sweep
+   * that met a transient SAP timeout records TIMEOUT; a probe path whose
+   * $metadata is not in the arrangement records NOT_FOUND while the data
+   * service serves every lane. Either way the secret is working, as a lane's
+   * proven read through this connection shows, and a typo must still not
+   * replace it. The new secret must prove what the old one proved: the read,
+   * and the metadata only where the old one passed it.
+   */
+  it.each([
+    ["TIMEOUT", 200, "TEST"],
+    ["NOT_FOUND", 404, "PROD"],
+  ] as const)("a typo does not replace a working secret whose last probe read %s", async (lastStatus, metadataStatus, environment) => {
+    sap.password = "Lane-Password-1";
+    sap.metadataStatus = 200;
+    const key = `${RUN}-lane-${environment.toLowerCase()}`;
+    expect((await save(key, "Lane-Password-1", environment)).status).toBe(200);
+    const row = await stored(key);
+    const solution = await prisma.solution.create({
+      data: {
+        organizationId: ORG,
+        name: "Rotation lane",
+        slug: `${key}-app`,
+        classification: "CLIENT_APP",
+        businessProblem: "Rotation probe test.",
+        dataClass: "INTERNAL",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    const iface = await prisma.interface.create({
+      data: {
+        organizationId: ORG,
+        solutionId: solution.id,
+        name: "Purchase orders",
+        sapProduct: "s4hana",
+        externalId: "purchase-orders",
+        operation: "READ",
+        entitySet: "A_PurchaseOrder",
+        mode: "READ",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    // A lane has read through this connection: the secret is working...
+    await prisma.laneCheck.create({
+      data: {
+        organizationId: ORG,
+        solutionId: solution.id,
+        interfaceId: iface.id,
+        environment,
+        connectionId: row!.id,
+        readStatus: "OK",
+        readAt: new Date(),
+        readRowCount: 1,
+      },
+    });
+    // ...though the connection's last probe did not read OK.
+    await prisma.sapConnection.updateMany({
+      where: { id: row!.id, organizationId: ORG },
+      data: { isActive: true, lastValidationStatus: lastStatus, lastValidatedAt: new Date() },
+    });
+    sap.metadataStatus = metadataStatus;
+    const before = await stored(key);
+
+    const refused = await save(key, "Lane-Pasword-typo", environment);
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: { message: string } }).error.message).toContain("Nothing was changed");
+    expect((await stored(key))!.secretsCiphertext).toBe(before!.secretsCiphertext);
+    expect((await resolveSapConnection(ORG, "s4hana", key))?.secrets.password).toBe("Lane-Password-1");
+
+    // The right new password still swaps, though (NOT_FOUND) it cannot read
+    // a $metadata the working secret never read either.
+    sap.password = "Lane-Password-2";
+    expect((await save(key, "Lane-Password-2", environment)).status).toBe(200);
+    expect((await resolveSapConnection(ORG, "s4hana", key))?.secrets.password).toBe("Lane-Password-2");
+    sap.metadataStatus = 200;
+  });
+
+  it("does not probe a secret SAP last refused (UNAUTHORIZED): there is nothing working to protect", async () => {
+    sap.password = "Other-Password";
+    const key = `${RUN}-lane-test`;
+    const row = await stored(key);
+    await prisma.sapConnection.updateMany({ where: { id: row!.id, organizationId: ORG }, data: { isActive: true, lastValidationStatus: "UNAUTHORIZED" } });
+    fakeSap.mockClear();
+    expect((await save(key, "Whatever-1", "TEST")).status).toBe(200);
+    expect(fakeSap).not.toHaveBeenCalled();
+    expect((await resolveSapConnection(ORG, "s4hana", key))?.secrets.password).toBe("Whatever-1");
   });
 
   it("does not probe a new connection, or one that has never passed a test", async () => {

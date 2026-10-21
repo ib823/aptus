@@ -17,15 +17,25 @@
  *
  * ON THE GOVERNED PIPELINE (P0.14). The two ceilings are the pipeline's
  * `authorise` step and its typed refusals (src/lib/governed/pipeline.ts), and
- * the read passes the same `contain` step as the broker: the circuit breaker
- * for this SAP system, which observes unless COREEDGE_CIRCUIT_BREAKER=enforce.
+ * the read passes a `contain` step of its own: the console's circuit breaker
+ * for this SAP system and this organization, which observes unless
+ * COREEDGE_CIRCUIT_BREAKER=enforce. Not the broker's circuit: the builder
+ * chooses this read's query, so it must not be able to refuse production
+ * calls or another organization's previews (containment.ts
+ * circuitKeyForConsoleRead), and SAP's 4xx answer to it is not counted as a
+ * failure (pipeline.ts circuitOutcomeForConsoleRead).
  * The read itself still goes through the Workbench connector (`sapFetch`),
  * which P4.1 moves onto the pipeline's Transport.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { circuitKeyForConnection, circuitKeyForDeploymentTenant } from "@/lib/governed/containment";
-import { circuitOutcomeForStatus, containKey, refusal, type Refusal } from "@/lib/governed/pipeline";
+import {
+  circuitKeyForConnection,
+  circuitKeyForConsoleRead,
+  circuitKeyForDeploymentTenant,
+} from "@/lib/governed/containment";
+import { circuitOutcomeForConsoleRead, containKey, refusal, type Refusal } from "@/lib/governed/pipeline";
+import { SapHttpError } from "@/lib/sap-public/upstream-failure";
 import {
   getSapProduct,
   previewSapEntitySet,
@@ -188,11 +198,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // The circuit for this SAP system (pipeline.ts contain): the connection's
-  // own, or the deployment tenant's. Observes only unless
-  // COREEDGE_CIRCUIT_BREAKER=enforce.
+  // The console's circuit for this SAP system (pipeline.ts contain): the
+  // connection's or the deployment tenant's, inside this organization's own
+  // console scope — never the circuit the northbound routes use, and never
+  // another organization's (containment.ts circuitKeyForConsoleRead).
+  // Observes only unless COREEDGE_CIRCUIT_BREAKER=enforce.
   const circuit = await containKey(
-    conn ? circuitKeyForConnection(conn.id) : circuitKeyForDeploymentTenant(product.envPrefix, tenant.key),
+    circuitKeyForConsoleRead(
+      viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+      conn ? circuitKeyForConnection(conn.id) : circuitKeyForDeploymentTenant(product.envPrefix, tenant.key),
+    ),
     correlationId,
   );
   if (!circuit.ok) return refuse(circuit.refusal);
@@ -200,15 +215,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const startedAt = Date.now();
   try {
     const preview = await previewSapEntitySet(product.envPrefix, tenant, service, entity, limit);
+    // Timed before the breaker hears of it: its store is not SAP.
+    const durationMs = Date.now() - startedAt;
     // The status SAP actually gave (audit A26). A 403 for an entity set the
     // arrangement does not release is SAP answering correctly, and recording
     // it as 502 raised the tenant-errors incident against a healthy tenant.
     // Only its refusals, though: SAP's 429 recorded as 429 raised the
     // 'throttled' incident instead — see answeredReadAuditStatus.
     const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
-    await circuit.value.record(circuitOutcomeForStatus(auditStatus));
+    await circuit.value.record(circuitOutcomeForConsoleRead(auditStatus, preview.status));
     await audit(auditStatus, preview.rows.length, {
-      durationMs: Date.now() - startedAt,
+      durationMs,
       failureReason: failureReasonFromHttp(preview.status),
     });
     /*
@@ -235,11 +252,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Log server-side; return a generic message — or, for a refusal SAP gave
     // or a credential CoreEdge could not use, the fixed sentence that says
     // which (see consoleReadFailure).
+    const durationMs = Date.now() - startedAt;
     console.error("[sap/tdd/preview] request failed:", error);
     const failure = consoleReadFailure(error, "SAP preview request failed");
-    await circuit.value.record(circuitOutcomeForStatus(failure.auditStatus));
+    await circuit.value.record(
+      circuitOutcomeForConsoleRead(failure.auditStatus, error instanceof SapHttpError ? error.status : null),
+    );
     await audit(failure.auditStatus, null, {
-      durationMs: Date.now() - startedAt,
+      durationMs,
       failureReason: failure.failureReason,
     });
     return NextResponse.json(

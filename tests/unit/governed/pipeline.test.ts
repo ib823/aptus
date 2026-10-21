@@ -10,10 +10,15 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { circuitBreakerMode, circuitKeyForConnection, circuitKeyForDeploymentTenant } from "@/lib/governed/containment";
 import {
+  circuitBreakerMode,
+  circuitKeyForConnection,
+  circuitKeyForConsoleRead,
+  circuitKeyForDeploymentTenant,
+} from "@/lib/governed/containment";
+import {
+  circuitOutcomeForConsoleRead,
   circuitOutcomeForRead,
-  circuitOutcomeForStatus,
   circuitOutcomeForWrite,
   PIPELINE_STEPS,
   refusal,
@@ -107,6 +112,8 @@ describe("containment: COREEDGE_CIRCUIT_BREAKER", () => {
   it("keys one circuit per SAP system", () => {
     expect(circuitKeyForConnection("c1")).toBe("connection:c1");
     expect(circuitKeyForDeploymentTenant("S4_TDD", "default")).toBe("deployment:S4_TDD:default");
+    // A console read counts into its own organization's console circuit, never production's.
+    expect(circuitKeyForConsoleRead("org_a", circuitKeyForConnection("c1"))).toBe("console:org_a:connection:c1");
   });
 
   it("counts only a sick system's answers as failures", () => {
@@ -120,10 +127,13 @@ describe("containment: COREEDGE_CIRCUIT_BREAKER", () => {
     expect(circuitOutcomeForWrite("CREATED")).toBe("ok");
     expect(circuitOutcomeForWrite("REJECTED")).toBe("refused");
     expect(circuitOutcomeForWrite("ERROR")).toBe("upstream-error");
-    expect(circuitOutcomeForStatus(200)).toBe("ok");
-    expect(circuitOutcomeForStatus(403)).toBe("refused");
-    expect(circuitOutcomeForStatus(504)).toBe("timeout");
-    expect(circuitOutcomeForStatus(502)).toBe("upstream-error");
+    expect(circuitOutcomeForConsoleRead(200, 200)).toBe("ok");
+    expect(circuitOutcomeForConsoleRead(403, 403)).toBe("refused");
+    // SAP's 4xx to a query the builder chose is audited 502, and is not a failure.
+    expect(circuitOutcomeForConsoleRead(502, 400)).toBe("refused");
+    expect(circuitOutcomeForConsoleRead(502, 500)).toBe("upstream-error");
+    expect(circuitOutcomeForConsoleRead(504, null)).toBe("timeout");
+    expect(circuitOutcomeForConsoleRead(502, null)).toBe("upstream-error");
   });
 });
 

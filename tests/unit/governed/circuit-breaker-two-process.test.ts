@@ -314,4 +314,37 @@ describe("the Upstash adapter", () => {
     await one.recordOutcome("connection:c", "ok", 0);
     expect(redis.calls).toHaveLength(0);
   });
+
+  /*
+   * THE DEFAULT'S REAL COST. Once a circuit has a record (one failure ever),
+   * a success that leaves it closed with no failures must not write: a write
+   * per success is an extra Upstash command on every governed call, and each
+   * write renews the record's 24-hour expiry, so on a busy connection it would
+   * never expire. A refusal on a closed circuit changes nothing either.
+   */
+  it("writes nothing for an outcome that leaves a record closed and clean, so the record can expire", async () => {
+    const redis = fakeRedis();
+    const one = createCircuitBreaker(upstashCircuitStore(redis));
+    await one.recordOutcome("connection:c", "timeout", 0); // write: one failure
+    await one.recordOutcome("connection:c", "ok", 1); // write: back to zero
+    expect(redis.calls).toHaveLength(2);
+    for (let t = 2; t < 12; t++) {
+      await one.beforeCall("connection:c", t);
+      await one.recordOutcome("connection:c", "ok", t);
+    }
+    for (let t = 12; t < 15; t++) await one.recordOutcome("connection:c", "refused", t);
+    expect(redis.calls).toHaveLength(2);
+  });
+
+  it("still writes a refusal that ends a half-open probe", async () => {
+    const redis = fakeRedis();
+    const one = createCircuitBreaker(upstashCircuitStore(redis));
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await one.recordOutcome("connection:c", "timeout", 0);
+    expect((await one.beforeCall("connection:c", 31_000)).allowed).toBe(true); // the probe
+    const before = redis.calls.length;
+    await one.recordOutcome("connection:c", "refused", 31_001);
+    expect(redis.calls.length).toBe(before + 1);
+    // The probe's lease is released: the next call may probe at once.
+    expect((await one.beforeCall("connection:c", 31_002)).allowed).toBe(true);
+  });
 });
