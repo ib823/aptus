@@ -117,6 +117,17 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 import type { SessionUser } from "@/types/assessment";
 
 export const dynamic = "force-dynamic";
+/*
+ * A SAVE MAY WAIT ON SAP (wave 2 integration review round 2). Re-saving a
+ * working connection with new credentials probes them first (P0.14,
+ * rotation-probe.ts): a token exchange, the $metadata and a one-row read, in
+ * series. The probe stops at ROTATION_PROBE_DEADLINE_MS (40 s), the token
+ * exchange at TOKEN_REQUEST_TIMEOUT_MS (10 s); this leaves 40 s for step-up,
+ * the judgement and the write. Without it a platform default below the probe
+ * time cut the function off: a bare 504, nothing saved, no refusal audited.
+ * Held to the deadline by tests/unit/sap-public/rotation-probe.test.ts.
+ */
+export const maxDuration = 90;
 
 /*
  * EVERY CONNECTABLE PRODUCT — the OData registry PLUS Ariba. The picker offers
@@ -551,6 +562,8 @@ interface SaveJudgement {
     revision: number;
     /** Whether the secret being replaced is working today: decides the rotation probe (P0.14). */
     lastValidationStatus: string | null;
+    /** When a probe of these settings last answered OK; cleared by every save (rotation-probe.ts `rotationEvidence`). */
+    lastValidatedAt: Date | null;
   } | null;
   writableAfter: boolean;
   targetChanges: WriteTargetField[];
@@ -591,8 +604,10 @@ async function judgeSave(
       revision: true,
       // isActive and lastValidationStatus say whether the secret being
       // replaced is working today, which decides whether the new one is
-      // probed first (P0.14).
+      // probed first (P0.14). lastValidatedAt: a probe answered OK since the
+      // last save, which a later transient status does not undo (review round 2).
       lastValidationStatus: true,
+      lastValidatedAt: true,
     },
   });
 

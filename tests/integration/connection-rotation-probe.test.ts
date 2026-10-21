@@ -198,6 +198,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
         interfaceId: iface.id,
         environment,
         connectionId: row!.id,
+        // What the read proved, as P0.2's sweep stamps it: an unstamped row
+        // proves nothing (wave 2 integration review round 2).
+        entitySet: "A_PurchaseOrder",
+        interfaceVersion: 1,
         readStatus: "OK",
         readAt: new Date(),
         readRowCount: 1,

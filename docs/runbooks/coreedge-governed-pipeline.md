@@ -115,10 +115,44 @@ was wrong. If all pass the secret is stored and the save's audit row says
 **The proof outlives the save.** Every re-save clears the probe status and drops
 the connection's lane checks (P0.2: they were made with the settings the save
 replaced). So the save's audit row records what the stored credentials are
-proven to do, `rotationProof: { revision, metadata, readInterfaceId }`, keyed by
-the connection revision that save wrote, and the next save reads it back. A
-typo in the save right after a probed rotation is therefore still probed and
-refused. A Test or the nightly probe writes a newer status, which then decides.
+proven to do, `rotationProof: { revision, metadata, read }`, keyed by the
+connection revision that save wrote, and the next save reads it back. `read`
+names exactly what was read: the interface, its version, the service path, the
+entity set and when it was proven. A typo in the save right after a probed
+rotation is therefore still probed and refused.
+
+**Evidence counts only while it is true** (wave 2 integration review round 2):
+
+- A proven read (a lane's `LaneCheck` row, or the read a save carried) counts
+  only on the terms the lane board uses (P0.2): the row's entity set and
+  interface version are the feed's today, it was proven within the lane TTL
+  (24 hours: the nightly sweep re-proves every lane still served), the app
+  carries traffic (`ACTIVE` or `RESTRICTED`) and the feed is not `DEPRECATED`.
+  An edited feed, a retired app, a lapsed lane or a lane row written before
+  P0.2 stamped what it read is not held against the new secret: no secret was
+  proven on what the broker would read now. The newest row that still counts is
+  used.
+- A later Test or nightly probe status replaces the metadata proof only when it
+  is about the credential: `OK` confirms it, `UNAUTHORIZED` (the secret is
+  broken; the probe is then off), `NOT_FOUND` and `NO_PROBE_PATH` (the working
+  secret no longer reads the `$metadata` either, so it is not demanded of the
+  new one) set it aside. `TIMEOUT`, `ERROR`, `UNREADABLE` and
+  `GROUP_UNREADABLE` say nothing about this credential, and the proof stands:
+  a probe that answered OK since the last save (`lastValidatedAt`) or the
+  carried proof still protects the next save.
+
+**A save may wait on SAP.** A probed save makes up to three SAP requests in
+series (a token exchange for OAuth, the `$metadata`, one row), so it takes as
+long as SAP takes to answer them. The whole probe stops at 40 seconds
+(`ROTATION_PROBE_DEADLINE_MS` in `src/lib/sap-public/rotation-probe.ts`): what
+SAP has not answered by then is refused as "SAP did not answer" and audited
+like any other refusal. The token exchange keeps its own 10-second limit. The
+route declares `maxDuration = 90` (seconds) so the platform does not cut the
+function off first; the crons already declare 300, so the project's plan
+allows it. **Open item:** confirm the production Vercel plan and its function
+duration limit (roadmap D11, recorded there as unverified). If the plan's
+maximum were below 90 seconds the deploy would say so; the probe itself never
+needs more than the deadline plus one token exchange.
 
 Not probed, and saved exactly as before:
 
@@ -155,7 +189,8 @@ and redeploy; only the exact word `off` turns the probe off.
   (the message then says SAP did not answer; save again once it does, or use
   the deactivate, save, reactivate path above). A save that keeps the
   credentials, or re-points the connection to another system, is not probed
-  and saves as before.
+  and saves as before. A probed save takes as long as SAP takes to answer the
+  probe, never more than 40 seconds plus a token exchange (above).
 - Operations and the SAP system screen each gain a section; nothing is removed.
 
 ## Rolling back

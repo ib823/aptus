@@ -5,11 +5,14 @@
  * the probe runs at all.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
-import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
+import { TOKEN_REQUEST_TIMEOUT_MS, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { decideRotation } from "@/lib/sap-public/rotation";
 import {
   carriedProof,
@@ -19,6 +22,7 @@ import {
   rotationProbeApplies,
   rotationProbeEnabled,
   rotationProbeMayApply,
+  ROTATION_PROBE_DEADLINE_MS,
   rotationRequirements,
   sameSignInCredentials,
 } from "@/lib/sap-public/rotation-probe";
@@ -45,7 +49,14 @@ const candidate = (overrides: Partial<ResolvedSapConnection> = {}): ResolvedSapC
   ...overrides,
 });
 
-const READ = { interfaceId: "iface_1", servicePath: "/sap/opu/odata/sap/API_X", entitySet: "A_X" };
+const PROVEN_AT = new Date("2026-10-21T08:00:00.000Z");
+const READ = {
+  interfaceId: "iface_1",
+  interfaceVersion: 3,
+  servicePath: "/sap/opu/odata/sap/API_X",
+  entitySet: "A_X",
+  provenAt: PROVEN_AT,
+};
 
 /** SAP: metadata and the data read each answer as told. */
 function sap(metadata: number, data: number): typeof fetch {
@@ -146,7 +157,13 @@ describe("the probe", () => {
  */
 describe("the probe with no probe path", () => {
   const ecc = () => candidate({ product: "ecc", apiPath: null });
-  const ZREAD = { interfaceId: "iface_z", servicePath: "/sap/opu/odata/sap/ZORDERS_SRV", entitySet: "ZOrderSet" };
+  const ZREAD = {
+    interfaceId: "iface_z",
+    interfaceVersion: 1,
+    servicePath: "/sap/opu/odata/sap/ZORDERS_SRV",
+    entitySet: "ZOrderSet",
+    provenAt: PROVEN_AT,
+  };
 
   it("judges a correct secret by the proven read, and swaps", async () => {
     const fetchImpl = vi.fn(sap(200, 200));
@@ -225,12 +242,32 @@ describe("when the probe runs", () => {
     const carriedMetadata = { metadata: true, read: null };
     expect(rotationProbeApplies({ isActive: true, lastValidationStatus: null }, evidence(null, null, carriedMetadata), {})).toBe(true);
     expect(evidence(null, null, carriedMetadata)).toEqual({ metadata: true, read: null });
-    // A probe since then said the metadata did not read: that is newer.
-    expect(evidence("TIMEOUT", null, carriedMetadata).metadata).toBe(false);
+    // A later status that says nothing about the credential keeps the proof
+    // (wave 2 integration review round 2): SAP not answering, or a sealed set
+    // this platform could not open (for the group marker, not even this row's).
+    for (const status of ["TIMEOUT", "ERROR", "UNREADABLE", "GROUP_UNREADABLE"]) {
+      expect(evidence(status, null, carriedMetadata).metadata).toBe(true);
+      expect(rotationProbeApplies({ isActive: true, lastValidationStatus: status }, evidence(status, null, carriedMetadata), {})).toBe(true);
+    }
+    // One that says the working secret no longer reads the $metadata sets it aside:
+    // demanding it of the new secret would refuse a correct rotation.
+    expect(evidence("NOT_FOUND", null, carriedMetadata).metadata).toBe(false);
+    expect(evidence("NO_PROBE_PATH", null, carriedMetadata).metadata).toBe(false);
+    expect(evidence("UNAUTHORIZED", null, carriedMetadata).metadata).toBe(false);
     // A carried read counts like a lane's; a lane's own read is preferred.
     const carriedRead = { metadata: false, read: { ...READ, interfaceId: "iface_carried" } };
     expect(evidence(null, null, carriedRead).read?.interfaceId).toBe("iface_carried");
     expect(evidence(null, READ, carriedRead).read).toBe(READ);
+  });
+
+  it("counts a probe that answered OK since the last save, whatever transient status came after", () => {
+    const sinceSave = (status: string | null) =>
+      rotationEvidence({ lastValidationStatus: status, lastValidatedAt: PROVEN_AT }, null, null);
+    expect(sinceSave("TIMEOUT").metadata).toBe(true);
+    expect(sinceSave("GROUP_UNREADABLE").metadata).toBe(true);
+    expect(sinceSave("NOT_FOUND").metadata).toBe(false);
+    // No OK since the save, and a TIMEOUT: nothing proven, as before.
+    expect(rotationEvidence({ lastValidationStatus: "TIMEOUT", lastValidatedAt: null }, null, null).metadata).toBe(false);
   });
 
   it("asks the new secret to prove what the old one proved", () => {
@@ -257,16 +294,27 @@ describe("what a save proves, and what it carries", () => {
   } as const;
 
   it("records only what the probe proved, for the revision the save wrote", () => {
-    expect(proofFromProbe(4, passed, READ)).toEqual({ revision: 4, metadata: true, readInterfaceId: "iface_1" });
-    expect(proofFromProbe(4, { ...passed, dataRead: null }, null)).toEqual({ revision: 4, metadata: true, readInterfaceId: null });
+    const now = new Date("2026-10-21T09:30:00.000Z");
+    // The read is recorded as what it was, proven now by this probe.
+    const provenNow = {
+      interfaceId: "iface_1",
+      interfaceVersion: 3,
+      servicePath: "/sap/opu/odata/sap/API_X",
+      entitySet: "A_X",
+      provenAt: now.toISOString(),
+    };
+    expect(proofFromProbe(4, passed, READ, now)).toEqual({ revision: 4, metadata: true, read: provenNow });
+    expect(proofFromProbe(4, { ...passed, dataRead: null }, null, now)).toEqual({ revision: 4, metadata: true, read: null });
     const readOnly = { ...passed, metadata: { step: "metadata", ok: false, detail: "404" } } as const;
-    expect(proofFromProbe(4, readOnly, READ)).toEqual({ revision: 4, metadata: false, readInterfaceId: "iface_1" });
+    expect(proofFromProbe(4, readOnly, READ, now)).toEqual({ revision: 4, metadata: false, read: provenNow });
   });
 
   it("a save that kept the credentials carries the evidence; the metadata only at the same probe path", () => {
     const ev = rotationEvidence({ lastValidationStatus: "OK" }, READ, null);
-    expect(carriedProof(7, ev, { probePathUnchanged: true })).toEqual({ revision: 7, metadata: true, readInterfaceId: "iface_1" });
-    expect(carriedProof(7, ev, { probePathUnchanged: false })).toEqual({ revision: 7, metadata: false, readInterfaceId: "iface_1" });
+    // Carried with the time it was proven: a save that proves nothing new does not make an old read fresh.
+    const carriedRead = { ...READ, provenAt: PROVEN_AT.toISOString() };
+    expect(carriedProof(7, ev, { probePathUnchanged: true })).toEqual({ revision: 7, metadata: true, read: carriedRead });
+    expect(carriedProof(7, ev, { probePathUnchanged: false })).toEqual({ revision: 7, metadata: false, read: carriedRead });
     expect(carriedProof(7, rotationEvidence({ lastValidationStatus: "OK" }, null, null), { probePathUnchanged: false })).toBeNull();
   });
 
@@ -278,5 +326,57 @@ describe("what a save proves, and what it carries", () => {
     expect(sameSignInCredentials(stored, candidate({ authType: "bearer", secrets: { username: "COMM_USER", password: "pw" } }))).toBe(false);
     // A stored row that could not be opened is never "the same".
     expect(sameSignInCredentials(null, stored)).toBe(false);
+  });
+});
+
+/*
+ * THE PROBE HAS ONE DEADLINE (wave 2 integration review round 2). Sign-in,
+ * $metadata and the one-row read run in series inside the connections route;
+ * at their own timeouts that is up to about 70 s, and a platform that cuts the
+ * function off first leaves the builder a bare 504 with no refusal audited.
+ * The whole probe now stops at ROTATION_PROBE_DEADLINE_MS, and what SAP did
+ * not answer by then is refused as SAP not answering. The route's
+ * maxDuration covers the deadline, a token exchange and the database work.
+ */
+describe("the probe's deadline", () => {
+  /** SAP that never answers: each request waits until it is aborted. */
+  const silent = vi.fn(
+    (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal?.aborted) return reject(new DOMException("aborted", "AbortError"));
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
+  );
+
+  it("stops a probe SAP does not answer at the deadline, refused as SAP not answering", async () => {
+    const started = Date.now();
+    const probe = await probeRotation(candidate({ timeoutMs: 30_000 }), READ, silent as unknown as typeof fetch, {
+      deadlineMs: 50,
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(probe.metadata).toMatchObject({ ok: false, unavailable: true });
+    const d = decideRotation(probe);
+    expect(d.swap).toBe(false);
+    if (!d.swap) expect(d.reason).toContain("SAP did not answer");
+  }, 4_000);
+
+  it("stops the data read at the deadline too, with no probe path", async () => {
+    const probe = await probeRotation(candidate({ product: "ecc", apiPath: null, timeoutMs: 30_000 }), READ, silent as unknown as typeof fetch, {
+      metadataRequired: false,
+      deadlineMs: 50,
+    });
+    expect(probe.dataRead).toMatchObject({ ok: false, unavailable: true });
+  }, 4_000);
+
+  it("the connections route allows the whole probe, a token exchange and the save to finish", () => {
+    const route = readFileSync(join(process.cwd(), "src/app/api/studio/connections/route.ts"), "utf8");
+    const declared = /^export const maxDuration = (\d+);$/m.exec(route);
+    expect(declared).not.toBeNull();
+    const seconds = Number(declared![1]);
+    // The deadline, plus one token exchange begun just before it, plus 30 s for step-up, judgement and the write.
+    expect(seconds * 1000).toBeGreaterThanOrEqual(ROTATION_PROBE_DEADLINE_MS + TOKEN_REQUEST_TIMEOUT_MS + 30_000);
+    // Under the longest duration this project already declares (the crons' 300 s).
+    expect(seconds).toBeLessThanOrEqual(300);
   });
 });

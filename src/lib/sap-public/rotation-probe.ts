@@ -32,6 +32,16 @@
  * it did not change them — on its audit row, keyed by the revision it wrote
  * (`RotationProof`). The next save reads it back for that revision only.
  *
+ * EVIDENCE COUNTS ONLY WHILE IT IS TRUE (review round 2). A proven read is
+ * held against the new secret only while it still describes a read the
+ * broker makes, on the terms P0.2's board uses: the feed's version and
+ * dataset now, fresh within the lane TTL, an app that carries traffic
+ * (`liveReadTarget`). The newest OK row, whatever it proved, refused correct
+ * rotations on edited feeds and retired apps. And a later probe status
+ * replaces the metadata proof only when it is about the credential
+ * (`SETS_METADATA_PROOF_ASIDE`): a sweep's one TIMEOUT left the next typo
+ * unprobed. The probe as a whole has one deadline (`probeRotation`).
+ *
  * ONLY A CHANGED CREDENTIAL ON THE SAME SYSTEM IS PROBED (review round 1).
  * A re-save that leaves the sign-in credentials as they are (a label fix, the
  * write secret added to switch writes on) has nothing to prove, and a SAP
@@ -65,6 +75,8 @@
  * the credential.
  */
 
+import { LANE_PROOF_TTL_MS } from "@/lib/coreedge/freshness";
+import { isLaneCheckedApp } from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { resolveReadDefinition } from "@/lib/northbound/read-definition";
 import { readEntitySet, type NorthboundReadResult } from "@/lib/northbound/read";
@@ -73,6 +85,14 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { fetchMetadataDocument, resolveProbePath } from "@/lib/studio/connection-health";
 
 import type { ProbeStepResult, RotationProbe } from "./rotation";
+
+/**
+ * How long the whole probe may wait on SAP (wave 2 integration review round
+ * 2). The connections route's maxDuration is set above this plus one token
+ * exchange (TOKEN_REQUEST_TIMEOUT_MS) and the save's own database work, so a
+ * SAP that does not answer is an audited refusal, never a platform 504.
+ */
+export const ROTATION_PROBE_DEADLINE_MS = 40_000;
 
 /** Off only when the operator says so; any other value, a typo included, probes. */
 export function rotationProbeEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -94,20 +114,38 @@ export function rotationProbeMayApply(
   return existing.isActive === true && existing.lastValidationStatus !== "UNAUTHORIZED";
 }
 
-/** The dataset the data-read step reads: one proven readable through this connection. */
+/**
+ * The dataset the data-read step reads: one proven readable through this
+ * connection, and exactly what was proven (wave 2 integration review round 2).
+ * A proof is about one feed definition: the version and dataset it was made
+ * at, read at one service path, at one time.
+ */
 export interface RotationReadTarget {
-  /** The interface whose read proved it: what a save's proof records. */
+  /** The interface whose read proved it. */
   readonly interfaceId: string;
+  /** The feed version the read was proven at: every change to its dataset or service bumps it. */
+  readonly interfaceVersion: number;
   readonly servicePath: string;
   readonly entitySet: string;
+  /** When the read was proven. It counts for LANE_PROOF_TTL_MS, as the lane's own evidence does. */
+  readonly provenAt: Date;
 }
 
 /** What the working secret is proven to do: the facts the probe gate decides from. */
 export interface RotationEvidence {
-  /** It read the probe path's $metadata: its last probe was OK, or the save that stored it proved it. */
+  /** It read the probe path's $metadata: a probe since the last save was OK, or the save that stored it proved it. */
   readonly metadata: boolean;
   /** A dataset it read: a lane's proven read, or the one the save that stored it read. */
   readonly read: RotationReadTarget | null;
+}
+
+/** A proven read as a save's audit row records it: JSON, so the time is a string. */
+export interface RotationProofRead {
+  readonly interfaceId: string;
+  readonly interfaceVersion: number;
+  readonly servicePath: string;
+  readonly entitySet: string;
+  readonly provenAt: string;
 }
 
 /** What a save proved about the credentials it stored (its audit row's `rotationProof`). */
@@ -115,24 +153,44 @@ export interface RotationProof {
   /** The revision the save wrote: the proof is about that revision's settings and nothing later. */
   readonly revision: number;
   readonly metadata: boolean;
-  readonly readInterfaceId: string | null;
+  readonly read: RotationProofRead | null;
 }
 
 /**
- * The evidence, from the row's own status, the lanes' proven read and the
- * proof carried from the save that stored the secret. A probe status written
- * after that save (by a Test or the nightly sweep) is newer, and decides the
- * metadata on its own; only a status no probe has written since (null) defers
- * to the carried proof.
+ * A probe status that sets the earlier metadata proof aside: SAP refused the
+ * secret (UNAUTHORIZED, which also turns the probe off), or the working
+ * secret no longer reads the probe path's $metadata (NOT_FOUND: the
+ * arrangement stopped releasing it; NO_PROBE_PATH). Demanding of the new
+ * secret what the old one can no longer do would refuse a correct rotation.
+ *
+ * Every other status says nothing about the credential (wave 2 integration
+ * review round 2): TIMEOUT and ERROR are SAP not answering, UNREADABLE and
+ * GROUP_UNREADABLE are this platform not opening a sealed set (the group
+ * marker is not even about this row's own secret). Under those the earlier
+ * proof stands; letting one of them replace it unprotected the connection, so
+ * the next typo replaced a working secret.
+ */
+const SETS_METADATA_PROOF_ASIDE: ReadonlySet<string> = new Set(["UNAUTHORIZED", "NOT_FOUND", "NO_PROBE_PATH"]);
+
+/**
+ * The evidence, from the row's own probe record, the lanes' proven read and
+ * the proof carried from the save that stored the secret.
+ *
+ * The metadata is proven when the last probe was OK, or when it was proven
+ * since the last save (a probe since then answered OK: `lastValidatedAt`,
+ * which only a real 200 sets and every save clears; or the save itself proved
+ * it: carried) and no later status set that proof aside
+ * (`SETS_METADATA_PROOF_ASIDE`).
  */
 export function rotationEvidence(
-  existing: { readonly lastValidationStatus?: string | null },
+  existing: { readonly lastValidationStatus?: string | null; readonly lastValidatedAt?: Date | null },
   laneRead: RotationReadTarget | null,
   carried: { readonly metadata: boolean; readonly read: RotationReadTarget | null } | null,
 ): RotationEvidence {
   const status = existing.lastValidationStatus ?? null;
+  const provenSinceSave = (existing.lastValidatedAt ?? null) !== null || carried?.metadata === true;
   return {
-    metadata: status === "OK" || (status === null && carried?.metadata === true),
+    metadata: status === "OK" || (provenSinceSave && (status === null || !SETS_METADATA_PROOF_ASIDE.has(status))),
     read: laneRead ?? carried?.read ?? null,
   };
 }
@@ -175,11 +233,29 @@ export function sameSignInCredentials(
   return JSON.stringify(signIn(stored.secrets)) === JSON.stringify(signIn(candidate.secrets));
 }
 
-/** The proof a passing probe gives the credentials it let through: what it actually proved. */
-export function proofFromProbe(revision: number, probe: RotationProbe, read: RotationReadTarget | null): RotationProof | null {
+function proofRead(read: RotationReadTarget): RotationProofRead {
+  return {
+    interfaceId: read.interfaceId,
+    interfaceVersion: read.interfaceVersion,
+    servicePath: read.servicePath,
+    entitySet: read.entitySet,
+    provenAt: read.provenAt.toISOString(),
+  };
+}
+
+/**
+ * The proof a passing probe gives the credentials it let through: what it
+ * actually proved. Its read was proven now, by this probe.
+ */
+export function proofFromProbe(
+  revision: number,
+  probe: RotationProbe,
+  read: RotationReadTarget | null,
+  now: Date = new Date(),
+): RotationProof | null {
   const metadata = probe.metadata?.ok === true;
-  const readInterfaceId = probe.dataRead?.ok === true && read ? read.interfaceId : null;
-  return metadata || readInterfaceId ? { revision, metadata, readInterfaceId } : null;
+  const proven = probe.dataRead?.ok === true && read ? proofRead({ ...read, provenAt: now }) : null;
+  return metadata || proven ? { revision, metadata, read: proven } : null;
 }
 
 /**
@@ -193,60 +269,180 @@ export function carriedProof(
   options: { readonly probePathUnchanged: boolean },
 ): RotationProof | null {
   const metadata = evidence.metadata && options.probePathUnchanged;
-  const readInterfaceId = evidence.read?.interfaceId ?? null;
-  return metadata || readInterfaceId ? { revision, metadata, readInterfaceId } : null;
+  // Carried as proven, with the time it was proven: a save that changes
+  // nothing proves nothing new, so it does not make an old read fresh.
+  const read = evidence.read ? proofRead(evidence.read) : null;
+  return metadata || read ? { revision, metadata, read } : null;
 }
 
 const PROVEN_READ = ["OK", "EMPTY"];
 
-/** The dataset an interface reads, as the broker would read it; null when it cannot be resolved. */
-async function readTargetForInterface(organizationId: string, interfaceId: string): Promise<RotationReadTarget | null> {
-  const iface = await prisma.interface.findFirst({
-    where: { id: interfaceId, organizationId },
-    select: { sapProduct: true, externalId: true, entitySet: true, servicePath: true, odataVersion: true },
-  });
-  const product = iface ? getSapProduct(iface.sapProduct) : null;
-  if (!iface || !product) return null;
-  const definition = await resolveReadDefinition(product, iface);
-  return definition.ok ? { interfaceId, servicePath: definition.service.path, entitySet: definition.entitySet } : null;
+/** At most this many recent lane rows are walked for one that still describes its feed. */
+const LANE_ROWS_WALKED = 20;
+
+/** What a proven read claims, before it is held against the feed as it is now. */
+interface ReadClaim {
+  readonly interfaceId: string;
+  readonly interfaceVersion: number;
+  readonly entitySet: string;
+  readonly provenAt: Date;
+  /** The service path the read was made at, when it was recorded (a save's proof); a lane row records none. */
+  readonly servicePath?: string;
 }
 
-/** The newest dataset a lane has proven readable through this connection (LaneCheck). */
+/** The feed fields a claim is held against. */
+const CLAIM_FEED_SELECT = {
+  id: true,
+  version: true,
+  status: true,
+  sapProduct: true,
+  externalId: true,
+  entitySet: true,
+  servicePath: true,
+  odataVersion: true,
+  solution: { select: { status: true } },
+} as const;
+
+interface ClaimFeed {
+  readonly id: string;
+  readonly version: number;
+  readonly status: string;
+  readonly sapProduct: string;
+  readonly externalId: string;
+  readonly entitySet: string | null;
+  readonly servicePath: string | null;
+  readonly odataVersion: string | null;
+  readonly solution: { readonly status: string };
+}
+
+/**
+ * Does this proven read still describe a read the broker makes, and if so
+ * which (wave 2 integration review round 2)? It counts only while P0.2's board
+ * would count the same evidence (lane-authorisation.ts `laneEvidence`,
+ * freshness.ts LANE_PROOF_TTL_MS):
+ *
+ *   fresh     proven within LANE_PROOF_TTL_MS. The nightly sweep re-proves
+ *             every lane still served, so a live lane's read stays fresh, and
+ *             a row the sweep no longer refreshes (a retired app, a lapsed
+ *             grant: A70) ages out instead of standing for ever;
+ *   same feed the feed's version and dataset now (an edited feed is a
+ *             different read: no secret was proven on the new dataset);
+ *   served    the app carries traffic (ACTIVE, RESTRICTED) and the feed is
+ *             not DEPRECATED, which the broker refuses;
+ *   same path a recorded service path is the one the feed resolves to today.
+ *
+ * Anything else proves nothing about the read the new secret would make, and
+ * holding it against the new secret refused correct rotations.
+ */
+async function liveReadTarget(claim: ReadClaim, feed: ClaimFeed | null, now: Date): Promise<RotationReadTarget | null> {
+  if (now.getTime() - claim.provenAt.getTime() > LANE_PROOF_TTL_MS) return null;
+  if (!feed || feed.version !== claim.interfaceVersion || feed.entitySet !== claim.entitySet) return null;
+  if (feed.status === "DEPRECATED" || !isLaneCheckedApp(feed.solution.status)) return null;
+  const product = getSapProduct(feed.sapProduct);
+  if (!product) return null;
+  const definition = await resolveReadDefinition(product, feed);
+  if (!definition.ok || definition.entitySet !== claim.entitySet) return null;
+  if (claim.servicePath !== undefined && definition.service.path !== claim.servicePath) return null;
+  return {
+    interfaceId: claim.interfaceId,
+    interfaceVersion: claim.interfaceVersion,
+    servicePath: definition.service.path,
+    entitySet: definition.entitySet,
+    provenAt: claim.provenAt,
+  };
+}
+
+/**
+ * The newest dataset a lane has proven readable through this connection
+ * (LaneCheck) that still counts (`liveReadTarget`). Rows are walked newest
+ * first, so one set aside does not hide an older one that counts. A row
+ * written before checks recorded their dataset and feed version (NULL keys,
+ * pre-P0.2) proves nothing here, as on the board: what it proved is not
+ * known, and the next sweep stamps it.
+ */
 export async function provenReadTarget(
   organizationId: string,
   connectionId: string,
+  now: Date = new Date(),
 ): Promise<RotationReadTarget | null> {
-  const lane = await prisma.laneCheck.findFirst({
-    where: { organizationId, connectionId, readStatus: { in: PROVEN_READ } },
+  const rows = await prisma.laneCheck.findMany({
+    where: {
+      organizationId,
+      connectionId,
+      readStatus: { in: PROVEN_READ },
+      entitySet: { not: null },
+      interfaceVersion: { not: null },
+      readAt: { gte: new Date(now.getTime() - LANE_PROOF_TTL_MS) },
+    },
     orderBy: { readAt: "desc" },
-    select: { interfaceId: true },
+    take: LANE_ROWS_WALKED,
+    select: { interfaceId: true, entitySet: true, interfaceVersion: true, readAt: true },
   });
-  return lane ? readTargetForInterface(organizationId, lane.interfaceId) : null;
+  if (rows.length === 0) return null;
+  const feeds = await prisma.interface.findMany({
+    where: { organizationId, id: { in: [...new Set(rows.map((r) => r.interfaceId))] } },
+    select: CLAIM_FEED_SELECT,
+  });
+  const byId = new Map<string, ClaimFeed>(feeds.map((f) => [f.id, f]));
+  for (const row of rows) {
+    if (row.entitySet === null || row.interfaceVersion === null || row.readAt === null) continue;
+    const claim: ReadClaim = {
+      interfaceId: row.interfaceId,
+      interfaceVersion: row.interfaceVersion,
+      entitySet: row.entitySet,
+      provenAt: row.readAt,
+    };
+    const target = await liveReadTarget(claim, byId.get(row.interfaceId) ?? null, now);
+    if (target) return target;
+  }
+  return null;
 }
 
-function parseProof(after: unknown, revision: number): RotationProof | null {
+function parseProofRead(value: unknown): Required<ReadClaim> | null {
+  if (typeof value !== "object" || value === null) return null;
+  const r = value as Record<string, unknown>;
+  const provenAt = typeof r.provenAt === "string" ? new Date(r.provenAt) : null;
+  if (
+    typeof r.interfaceId !== "string" ||
+    typeof r.interfaceVersion !== "number" ||
+    typeof r.servicePath !== "string" ||
+    typeof r.entitySet !== "string" ||
+    provenAt === null ||
+    Number.isNaN(provenAt.getTime())
+  ) {
+    return null;
+  }
+  return {
+    interfaceId: r.interfaceId,
+    interfaceVersion: r.interfaceVersion,
+    servicePath: r.servicePath,
+    entitySet: r.entitySet,
+    provenAt,
+  };
+}
+
+function parseProof(after: unknown, revision: number): { readonly metadata: boolean; readonly read: ReadClaim | null } | null {
   if (typeof after !== "object" || after === null) return null;
   const proof = (after as { rotationProof?: unknown }).rotationProof;
   if (typeof proof !== "object" || proof === null) return null;
   const p = proof as Record<string, unknown>;
   if (p.revision !== revision) return null;
-  return {
-    revision,
-    metadata: p.metadata === true,
-    readInterfaceId: typeof p.readInterfaceId === "string" && p.readInterfaceId.length > 0 ? p.readInterfaceId : null,
-  };
+  return { metadata: p.metadata === true, read: parseProofRead(p.read) };
 }
 
 /**
  * What the save that wrote this revision proved about its credentials, read
  * back from that save's audit row. Null when it proved nothing, or recorded
  * nothing (a re-point, an unprobed save): every save bumps the revision, so a
- * proof is never read for settings it was not made with.
+ * proof is never read for settings it was not made with. Its read counts only
+ * while it still describes the feed (`liveReadTarget`): an edited feed, a
+ * retired app or an old proof is not held against the next secret.
  */
 export async function carriedRotationProof(
   organizationId: string,
   connectionId: string,
   revision: number,
+  now: Date = new Date(),
 ): Promise<{ readonly metadata: boolean; readonly read: RotationReadTarget | null } | null> {
   const audit = await prisma.configAudit.findFirst({
     where: {
@@ -261,18 +457,31 @@ export async function carriedRotationProof(
   });
   const proof = parseProof(audit?.after, revision);
   if (!proof) return null;
-  const read = proof.readInterfaceId ? await readTargetForInterface(organizationId, proof.readInterfaceId) : null;
+  let read: RotationReadTarget | null = null;
+  if (proof.read) {
+    const feed = await prisma.interface.findFirst({
+      where: { id: proof.read.interfaceId, organizationId },
+      select: CLAIM_FEED_SELECT,
+    });
+    read = await liveReadTarget(proof.read, feed, now);
+  }
   return proof.metadata || read ? { metadata: proof.metadata, read } : null;
 }
 
 /** All the evidence the gate decides from, for the row the save replaces. */
 export async function loadRotationEvidence(
   organizationId: string,
-  existing: { readonly id: string; readonly revision: number; readonly lastValidationStatus: string | null },
+  existing: {
+    readonly id: string;
+    readonly revision: number;
+    readonly lastValidationStatus: string | null;
+    readonly lastValidatedAt: Date | null;
+  },
+  now: Date = new Date(),
 ): Promise<RotationEvidence> {
   const [laneRead, carried] = await Promise.all([
-    provenReadTarget(organizationId, existing.id),
-    carriedRotationProof(organizationId, existing.id, existing.revision),
+    provenReadTarget(organizationId, existing.id, now),
+    carriedRotationProof(organizationId, existing.id, existing.revision, now),
   ]);
   return rotationEvidence(existing, laneRead, carried);
 }
@@ -305,14 +514,42 @@ function readRefusedSignIn(row: NorthboundReadResult): boolean {
  * still runs, because that read is the proof the old secret had. That holds
  * when there is no probe path at all (review round 1): the read then also
  * decides the sign-in.
+ *
+ * ONE DEADLINE FOR THE WHOLE PROBE (wave 2 integration review round 2). The
+ * steps run in series inside the connections route, each under its own
+ * timeout (metadata up to 30 s, the read up to 30 s, plus a token exchange):
+ * about 70 s at worst, and a platform that cut the function off first left a
+ * bare 504 with no refusal audited. Every SAP request the probe sends now
+ * also stops at `deadlineMs` (ROTATION_PROBE_DEADLINE_MS), so what SAP has
+ * not answered by then is a step SAP did not answer (`unavailable`), refused
+ * and audited by the route like any other. The token exchange keeps its own
+ * limit (TOKEN_REQUEST_TIMEOUT_MS), which the route's maxDuration also covers.
  */
 export async function probeRotation(
   candidate: ResolvedSapConnection,
   read: RotationReadTarget | null,
   fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
-  options: { readonly metadataRequired?: boolean } = {},
+  options: { readonly metadataRequired?: boolean; readonly deadlineMs?: number } = {},
 ): Promise<RotationProbe> {
-  const metadataRequired = options.metadataRequired ?? true;
+  const deadline = new AbortController();
+  // abort() with no reason: the request rejects as an AbortError, which both
+  // steps already classify as TIMEOUT.
+  const timer = setTimeout(() => deadline.abort(), options.deadlineMs ?? ROTATION_PROBE_DEADLINE_MS);
+  const bounded: typeof fetch = (input, init) =>
+    fetchImpl(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal });
+  try {
+    return await probeSteps(candidate, read, bounded, options.metadataRequired ?? true);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probeSteps(
+  candidate: ResolvedSapConnection,
+  read: RotationReadTarget | null,
+  fetchImpl: typeof fetch,
+  metadataRequired: boolean,
+): Promise<RotationProbe> {
   const path = resolveProbePath(candidate);
   if (!path) {
     // No probe path: the metadata step cannot run. Said as the metadata step,
