@@ -32,6 +32,24 @@
  *              so no error is raised or logged) and the stored outcome is
  *              read.
  *
+ *   console 4 — today 3 (P0.14b review round 3): a Workbench console read
+ *              that makes one call to SAP — the preview, the operations
+ *              dashboard, a capability or catalogue probe, Probe all's run,
+ *              an Ariba call — on a stored connection: the connection, the
+ *              organization's console row, and the platform-scope row with
+ *              its outcome in one statement (audit/platform-audit.ts
+ *              `consoleReadInsert`; a nested create was five, a transaction
+ *              included, and took a preview from 2 to 7). Refused by the
+ *              environment ceiling: 4, the grant lookup added. A deployment
+ *              tenant has no connection to read: 2. A route that makes two
+ *              calls (the entity list with its probe fan-out) records each
+ *              call's two rows. Work a route adds besides the call (Probe
+ *              all's catalogue query and per-service result writes, the
+ *              capability probe's own audit) is that route's, not the
+ *              pipeline's. tests/integration/governed-db-budget.test.ts
+ *              asserts a served and a refused preview and the operations
+ *              dashboard.
+ *
  * OCCASIONAL STATEMENTS, outside the steady state and each bounded. Counted
  * as Prisma sends them: `createMany` and `updateMany` are BEGIN, the
  * statement and COMMIT, three round trips, so none of these uses them except
@@ -69,6 +87,12 @@ export const DB_BUDGET = {
   read: 4,
   /** A write through the pipeline, created, refused or replayed. */
   write: 5,
+  /**
+   * A Workbench console read that makes one call to SAP (P0.14b): the
+   * preview, the operations dashboard, a capability or catalogue probe, an
+   * Ariba call, served or refused by a console step.
+   */
+  consoleRead: 4,
 } as const;
 
 export type BudgetedOperation = keyof typeof DB_BUDGET;

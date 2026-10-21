@@ -54,6 +54,7 @@ import {
   mentionedTargets,
   routeFindings,
   routeReaches,
+  untracedGovernedCalls,
   type SapGraph,
   type SourceInput,
 } from "../../helpers/sap-reach";
@@ -226,6 +227,11 @@ function auditFindings(g: SapGraph, file: string, src = SOURCES.find((s) => s.fi
   const used = mentionedTargets(g, file);
   const findings: string[] = [];
   if (/\.callSap\s*\(/.test(src) && !used.has(AUDIT.console)) findings.push("calls callSap( without opening the call with openConsoleCall");
+  // Each call, not the file: a mention of openConsoleCall elsewhere does not
+  // make `{ callSap: (fn) => fn() }.callSap(...)` a console call (review round 3).
+  for (const c of untracedGovernedCalls(g, file, PIPELINE_MODULES)) {
+    findings.push(`calls ${c.method}( on ${c.receiver} (line ${c.line}), which is not a console call opened with openConsoleCall`);
+  }
   if (/\.callSapWrite\s*\(/.test(src) && !(used.has(AUDIT.begin) && used.has(AUDIT.complete))) {
     findings.push("sends a write without P0.7's beginPlatformAudit / completePlatformAudit");
   }
@@ -373,8 +379,8 @@ describe("the check itself", () => {
   const ROUTE = "src/app/api/sap/tdd/new/route.ts";
   const PIPE = new Set(["src/lib/governed/console.ts"]);
 
-  function check(routeSrc: string) {
-    const g = buildSapGraph([CONNECTOR, CONSOLE, BARREL, RENAMED, { file: ROUTE, src: routeSrc }], {
+  function check(routeSrc: string, extra: readonly SourceInput[] = []) {
+    const g = buildSapGraph([CONNECTOR, CONSOLE, BARREL, RENAMED, ...extra, { file: ROUTE, src: routeSrc }], {
       sapFetchers: new Set(["src/lib/sap-public/tdd-connector.ts#sapFetch"]),
       cuts: new Set(),
     });
@@ -431,10 +437,76 @@ describe("the check itself", () => {
 
   it("fails a route that calls fetch itself, and one on the pipeline that writes no row", () => {
     expect(check(`export async function POST() { return fetch("https://my000001-api.s4hana.cloud.sap/x"); }`).findings).toEqual(["fetch"]);
+    // A receiver that is not a console call is not the pipeline (review round 3):
+    // the call inside it is a finding, and so is the receiver.
     const unaudited = check(`import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
       export async function GET(call: { callSap(f: () => unknown): unknown }) { return call.callSap(() => previewSapEntitySet("x")); }`);
-    expect(unaudited.findings).toEqual([]);
+    expect(unaudited.findings).toEqual(["previewSapEntitySet"]);
     expect(unaudited.audit).toContain("calls callSap( without opening the call with openConsoleCall");
+  });
+
+  /*
+   * P0.14b review round 3: two shapes the check reported compliant once the
+   * file mentioned openConsoleCall anywhere.
+   */
+  describe("only a console call opened in the route is the pipeline", () => {
+    const head = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+      import { openConsoleCall } from "@/lib/governed/console";`;
+    const governedPost = `export async function POST() { const call = openConsoleCall(); return call.callSap(() => previewSapEntitySet("x")); }`;
+    const HANDLERS: SourceInput = {
+      file: "src/lib/sap-public/handlers.ts",
+      src: `import { previewSapEntitySet } from "./tdd-connector";
+        export async function GET() { return previewSapEntitySet("x"); }`,
+    };
+
+    it.each([
+      ["re-exported with export { GET } from", `export { GET } from "@/lib/sap-public/handlers";`],
+      ["imported, then exported", `import { GET } from "@/lib/sap-public/handlers";\nexport { GET };`],
+      ["imported under another name, then exported as GET", `import { GET as handler } from "@/lib/sap-public/handlers";\nexport { handler as GET };`],
+    ])("fails a SAP-reaching handler from src/lib %s, beside a governed POST", (_name, exportLine) => {
+      const r = check(`${head}\n${exportLine}\n${governedPost}`, [HANDLERS]);
+      expect(r.reaches).toBe(true);
+      expect(r.findings.length).toBeGreaterThan(0);
+    });
+
+    it("passes a handler re-exported from src/lib that does not reach SAP", () => {
+      const QUIET: SourceInput = { file: "src/lib/health/handlers.ts", src: `export async function GET() { return new Response("ok"); }` };
+      const r = check(`${head}\nexport { GET } from "@/lib/health/handlers";\n${governedPost}`, [QUIET]);
+      expect(r).toEqual({ reaches: true, findings: [], audit: [] });
+    });
+
+    it.each([
+      [
+        "an object literal with a callSap method",
+        `const direct = { callSap: (fn: () => Promise<unknown>) => fn() };
+         return direct.callSap(() => previewSapEntitySet("x"));`,
+      ],
+      [
+        "a let first opened as a console call, then replaced",
+        `let other = openConsoleCall();
+         other = { callSap: (fn: () => Promise<unknown>) => fn() } as never;
+         return other.callSap(() => previewSapEntitySet("x"));`,
+      ],
+      [
+        "a name a console call is assigned to in one handler and something else in another",
+        `return call.callSap(() => previewSapEntitySet("x")); }
+         export async function PUT() { const call = { callSap: (fn: () => Promise<unknown>) => fn() };
+         return call.callSap(() => previewSapEntitySet("y"));`,
+      ],
+    ])("fails a callSap on %s, in a file that opens a console call elsewhere", (_name, body) => {
+      const r = check(`${head}\nexport async function GET() { const call = openConsoleCall(); await call.callSap(async () => 1); ${body} }`);
+      expect(r.reaches).toBe(true);
+      expect(r.findings).toContain("previewSapEntitySet");
+      expect(r.audit.some((f) => /not a console call opened with openConsoleCall/.test(f))).toBe(true);
+    });
+
+    it("still passes a console call awaited, or opened through a namespace import", () => {
+      expect(
+        check(`import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+          import * as governed from "@/lib/governed/console";
+          export async function GET() { const call = await governed.openConsoleCall(); return call.callSap(() => previewSapEntitySet("x")); }`),
+      ).toEqual({ reaches: true, findings: [], audit: [] });
+    });
   });
 
   /*

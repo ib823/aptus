@@ -61,14 +61,14 @@
  * rows never do.
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { failureReasonFromError, failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { newCorrelationId } from "@/lib/northbound/respond";
 import { ERROR_CODES } from "@/types/api";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /** What a person did. One value per route that changes SAP data. */
 export const PLATFORM_AUDIT_ACTIONS = ["SAP_WORKBENCH_WRITE", "SAP_WORKBENCH_WRITE_TEST"] as const;
@@ -354,42 +354,48 @@ export interface PlatformConsoleReadInput {
 }
 
 /**
- * Record one console read: the event and its outcome in ONE statement (a
- * nested create), after the call. Never throws: a read is not refused, nor its
- * answer lost, because the trail could not be written — the organization's
- * console row follows the same rule (northbound/audit.ts). Logged loudly.
+ * The statement that writes one console read: the event and its outcome in
+ * ONE round trip, a data-modifying CTE (P0.14b review round 3).
+ *
+ * It was a nested `create`, which Prisma sends as BEGIN, INSERT event, INSERT
+ * outcome, SELECT and COMMIT: five round trips and a transaction on the
+ * response path of every console call, so a warm preview sent 7 statements
+ * where it had sent 2, over the read budget (governed/db-budget.ts). One
+ * statement is atomic in PostgreSQL without a transaction around it, so the
+ * event is still never stored without its outcome. The ids are made here
+ * (the model's `cuid()` default is Prisma's, not the database's); both `at`
+ * columns take the database default, as the nested create left them to.
+ */
+export function consoleReadInsert(input: PlatformConsoleReadInput, ids = { event: randomUUID(), outcome: randomUUID() }): Prisma.Sql {
+  const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
+  const reason = input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null;
+  return Prisma.sql`/* governed:console-read-audit */
+    WITH "event" AS (
+      INSERT INTO "PlatformAuditEvent"
+        ("id", "action", "actorUserId", "actorEmail", "actorRole", "actorOrganizationId", "product", "tenantKey",
+         "tenantLabel", "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId")
+      VALUES (${ids.event}, ${PLATFORM_CONSOLE_READ_ACTION}, ${input.actor.id}, ${input.actor.email}, ${input.actor.role},
+        ${input.actor.organizationId}, ${input.target.product}, ${input.target.tenantKey}, ${input.target.tenantLabel ?? null},
+        ${input.target.serviceKey}, ${input.target.servicePath ?? null}, ${input.target.entitySet}, ${payloadSha256},
+        ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId})
+      RETURNING "id"
+    )
+    INSERT INTO "PlatformAuditOutcome" ("id", "eventId", "outcome", "sapStatus", "reason", "detail", "durationMs")
+    SELECT ${ids.outcome}, "event"."id", ${input.outcome}, ${input.status}::integer, ${reason},
+      ${JSON.stringify(input.detail)}::jsonb, ${input.durationMs ?? null}::integer
+    FROM "event"`;
+}
+
+/**
+ * Record one console read: the event and its outcome in ONE statement
+ * (`consoleReadInsert`), after the call. Never throws: a read is not refused,
+ * nor its answer lost, because the trail could not be written — the
+ * organization's console row follows the same rule (northbound/audit.ts).
+ * Logged loudly.
  */
 export async function recordPlatformConsoleRead(input: PlatformConsoleReadInput): Promise<void> {
-  const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
   try {
-    await prisma.platformAuditEvent.create({
-      data: {
-        action: PLATFORM_CONSOLE_READ_ACTION,
-        actorUserId: input.actor.id,
-        actorEmail: input.actor.email,
-        actorRole: input.actor.role,
-        actorOrganizationId: input.actor.organizationId,
-        product: input.target.product,
-        tenantKey: input.target.tenantKey,
-        tenantLabel: input.target.tenantLabel ?? null,
-        serviceKey: input.target.serviceKey,
-        servicePath: input.target.servicePath ?? null,
-        entitySet: input.target.entitySet,
-        payloadSha256,
-        payloadFields,
-        correlationId: input.correlationId,
-        result: {
-          create: {
-            outcome: input.outcome,
-            sapStatus: input.status,
-            reason: input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null,
-            detail: input.detail,
-            durationMs: input.durationMs ?? null,
-          },
-        },
-      },
-      select: { id: true },
-    });
+    await prisma.$executeRaw(consoleReadInsert(input));
   } catch (err) {
     console.error("[platform-audit] could not record a console read", {
       actorUserId: input.actor.id,

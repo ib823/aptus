@@ -54,6 +54,8 @@ vi.mock("@/lib/db/prisma", () => ({
     sapConnection: { findMany: mocks.connectionFindMany },
     apiAccessGrant: { findMany: mocks.grantFindMany },
     northboundAuditEvent: { create: mocks.auditCreate },
+    // The console's platform-scope row (P0.14b): one statement, not under test here.
+    $executeRaw: async () => 1,
     // P0.8: a V4 address's proof on the probed tenant.
     catalogueAddressVerification: { upsert: mocks.verificationUpsert, deleteMany: mocks.verificationDeleteMany },
   },

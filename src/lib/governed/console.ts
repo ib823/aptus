@@ -199,6 +199,8 @@ export class ConsoleCall {
   private authorised = false;
   private bound = false;
   private permit: CircuitPermit | null = null;
+  /** The permit was used by `callSap` or given back by `release`: nothing more to settle. */
+  private permitSettled = false;
   private hostCheck: HostCheck | null = null;
 
   constructor(private readonly input: ConsoleCallInput) {
@@ -318,6 +320,7 @@ export class ConsoleCall {
       throw new ConsolePipelineError("callSap() before authorise(), bind() and contain() passed");
     }
     const permit = this.permit;
+    this.permitSettled = true;
     const startedAt = Date.now();
     let result: ConsoleSapResult<T>;
     let outcome: ConsoleOutcome;
@@ -332,6 +335,26 @@ export class ConsoleCall {
     await permit.record(outcome.circuit ?? circuitOutcomeForConsoleRead(outcome.status, outcome.sapStatus ?? null));
     await this.record(outcome, { durationMs: result.durationMs, blocked: null });
     return result;
+  }
+
+  /**
+   * GIVE THE CIRCUIT'S PERMIT BACK UNUSED (P0.14b review round 3). A route
+   * that passed `contain()` and then answers without calling SAP — Probe all's
+   * 429, its limiter outage, a database read that threw — must call this on
+   * the way out. Past the cooldown, `contain()` took the circuit's ONE
+   * half-open trial; unreleased, it stayed held for PROBE_LEASE_MS, and every
+   * other console read of that system by the organization was refused
+   * (enforce) or logged as "would refuse" (observe) although nothing tested
+   * the system. The breaker's neutral "refused" settles the trial and counts
+   * nothing either way. No row is written: nothing was sent to SAP. A no-op
+   * when no permit is held or `callSap` already settled it, so it is safe on
+   * every exit path.
+   */
+  async release(): Promise<void> {
+    const permit = this.permit;
+    if (!permit || this.permitSettled) return;
+    this.permitSettled = true;
+    await permit.record("refused");
   }
 
   /**

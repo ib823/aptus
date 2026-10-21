@@ -73,6 +73,10 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
+// The Workbench console's session (P0.14b review round 3): who previews.
+const session = vi.hoisted(() => ({ user: null as null | Record<string, unknown> }));
+vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => session.user }));
+
 // after(): collected, so the statements it runs are counted apart.
 vi.mock("next/server", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -84,6 +88,8 @@ vi.mock("next/server", async (importOriginal) => ({
 import { PrismaClient } from "@prisma/client";
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
+import { GET as consoleOperationsRoute } from "@/app/api/sap/tdd/operations/route";
+import { GET as consolePreviewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
@@ -299,6 +305,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       environment: "DEV",
       writeEnabled: true,
     });
+    // The console's PROD connection, read with no grant: refused by its ceiling.
+    await upsertSapConnection({
+      organizationId: ORG,
+      product: "s4hana",
+      key: `${RUN}-prod`,
+      label: "S/4HANA PROD",
+      baseUrl: "https://my000003-api.s4hana.cloud.sap",
+      authType: "basic",
+      secrets: { username: "COMM_USER", password: "not-a-real-password" },
+      environment: "PROD",
+    });
+    session.user = { id: ids.user, email: `${RUN}@abeam.com`, name: "Dev", role: "consultant", organizationId: ORG, authMethod: "session", mfaVerified: true };
 
     // A warm instance: one call made, its milestone recorded.
     forgetRecordedJourneyMilestones();
@@ -310,6 +328,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: ORG } });
+    // The console's platform rows (append-only in the code; a test's own rows are removed here).
+    const platform = await prisma.platformAuditEvent.findMany({ where: { actorUserId: ids.user }, select: { id: true } });
+    await prisma.platformAuditOutcome.deleteMany({ where: { eventId: { in: platform.map((p) => p.id) } } });
+    await prisma.platformAuditEvent.deleteMany({ where: { id: { in: platform.map((p) => p.id) } } });
     await prisma.northboundIdempotencyKey.deleteMany({ where: { organizationId: ORG } });
     await prisma.developerJourneyEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
@@ -460,6 +482,46 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     const conflict = await count(() => write(tokens.live, ids.write, key, { SupplierInvoice: "other" }));
     expect(conflict.status).toBe(409);
     expect(conflict.errors).toEqual([]);
+  });
+
+  /*
+   * P0.14b REVIEW ROUND 3. A Workbench console read is a read through the
+   * pipeline too, and P0.14b added its platform-scope row: written as a nested
+   * create, it was BEGIN, two INSERTs, a SELECT and COMMIT, so a warm preview
+   * of a DEV connection sent 7 statements where it had sent 2. The row is one
+   * statement now; the console's budget is stated in db-budget.ts.
+   */
+  describe("the Workbench console (P0.14b)", () => {
+    const S4 = "product=s4hana";
+    const PO = "service=purchase-orders&entity=A_PurchaseOrder";
+    const consoleGet = (route: (r: NextRequest) => Promise<Response>, url: string) => () => route(new NextRequest(`http://localhost${url}`));
+
+    it("a served preview stays within the console budget, its platform row in one statement", async () => {
+      const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-dev&${PO}&limit=2`));
+      expect(c.status, report("console preview", c)).toBe(200);
+      expect(c.total, report("console preview", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+      expect(c.response.filter((s) => /^(BEGIN|COMMIT)\b/i.test(s)), report("console preview", c)).toEqual([]);
+      expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console preview", c)).toHaveLength(1);
+      // ...and the row is whole: the event with its outcome.
+      const row = await prisma.platformAuditEvent.findFirst({
+        where: { actorUserId: ids.user, serviceKey: "purchase-orders" },
+        include: { result: true },
+        orderBy: { at: "desc" },
+      });
+      expect(row?.result?.outcome).toBe("SUCCEEDED");
+    });
+
+    it("a preview refused by the environment ceiling stays within the console budget", async () => {
+      const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-prod&${PO}`));
+      expect(c.status, report("console preview refused", c)).toBe(403);
+      expect(c.total, report("console preview refused", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+    });
+
+    it("a fan-out (the operations dashboard) stays within the console budget", async () => {
+      const c = await count(consoleGet(consoleOperationsRoute, `/api/sap/tdd/operations?${S4}&tenant=${RUN}-dev&refresh=1`));
+      expect(c.status, report("console operations", c)).toBe(200);
+      expect(c.total, report("console operations", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+    });
   });
 
   it("holds no transaction open while SAP is called", () => {

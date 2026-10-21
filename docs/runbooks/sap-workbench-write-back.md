@@ -63,9 +63,18 @@ first SAP call (for the write-test, before the `$metadata` read as well):
 | `LEFT_BEHIND` | A write-test created its record and could not delete it | The record is still in SAP. Its address is in `detail.location`; delete it in SAP |
 | *(no outcome row)* | Recorded before SAP was called, outcome never saved | If older than 15 minutes, treat as `OUTCOME_UNKNOWN` |
 
-Both tables are append-only: there is no update or delete in the code
-(`tests/unit/northbound/dod-gaps.test.ts` asserts it), and the database allows
+The write-back's rows (`SAP_WORKBENCH_WRITE`, `SAP_WORKBENCH_WRITE_TEST`) are
+never updated or deleted, at any age: there is no update of either table in
+the code, and the only delete is limited to the console's read rows
+(`tests/unit/northbound/dod-gaps.test.ts` asserts both). The database allows
 one outcome per event (`eventId` is unique).
+
+The same two tables also hold the Workbench console's read rows
+(`SAP_CONSOLE_READ`, P0.14b). Those are deleted by the nightly
+northbound-retention job (`src/lib/northbound/retention.ts`
+`sweepConsoleReads`) once they are older than
+`NORTHBOUND_AUDIT_RETENTION_DAYS`, with the organization's copy of the same
+read; see `docs/runbooks/coreedge-console-pipeline.md`.
 
 ## If the audit cannot be written
 

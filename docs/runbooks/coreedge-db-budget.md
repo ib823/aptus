@@ -12,8 +12,24 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Read refused by its key (revoked, expired, rotated out, dropped, unknown) | 4 | 1 | the key; no audit row, as before |
 | Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the claim that finds the key held, and the stored outcome) |
 
+| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run, an Ariba call), stored connection | **4** | 3 | the connection, the organization's console row, the platform-scope row with its outcome in one statement |
+| The same, refused by the environment ceiling (TEST, PROD or undeclared without a grant) | 4 | 4 | the connection, the grant lookup, the two rows |
+| The same, on a deployment tenant | 4 | 2 | the two rows |
+
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
+
+**The console's platform row is one statement** (P0.14b review round 3).
+`recordPlatformConsoleRead` wrote the `PlatformAuditEvent` and its
+`PlatformAuditOutcome` as a nested create, which Prisma sends as BEGIN, two
+INSERTs, a SELECT and COMMIT, so a warm preview of a stored DEV connection
+sent 7 statements where it had sent 2 before P0.14b. It is now one
+data-modifying CTE (`consoleReadInsert`, `src/lib/audit/platform-audit.ts`):
+atomic without a transaction, so an event is still never stored without its
+outcome. A console route that makes two SAP calls (the entity list with its
+probe fan-out) writes each call's two rows; work a route does besides the
+call (Probe all's catalogue query and result writes, the capability probe's
+own audit) is the route's own and is not counted against the pipeline.
 
 **Why a write has its own budget.** The Idempotency-Key must be claimed
 before SAP is called (so a duplicate never reaches SAP) and its outcome stored

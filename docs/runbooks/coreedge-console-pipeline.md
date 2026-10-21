@@ -24,7 +24,14 @@ write-test) open a console call (`openConsoleCall`,
 | audit | automatic: every refusal above and every `callSap` | none |
 
 `callSap` refuses to run (a programming error, `ConsolePipelineError`) until
-the three steps have passed. The write-back opens its call in `write` mode and
+the three steps have passed. A route that passes `contain()` and then answers
+without calling SAP (Probe all's 429 or limiter outage, or its catalogue query
+throwing) gives the circuit's permit back with `release()` (review round 3):
+past the cooldown `contain()` takes the circuit's one half-open trial, and
+held, it refused (enforce) or logged as "would refuse" (observe) the
+organization's other console reads of that system for 60 s although nothing
+was sent. `release()` records the breaker's neutral outcome, which counts
+nothing either way and writes no row. The write-back opens its call in `write` mode and
 sends through `callSapWrite(handle, fn)`, which takes the handle of the row
 P0.7's fail-closed `beginPlatformAudit` wrote; P0.7's begin/complete pair is
 still the write's whole trail.
@@ -37,7 +44,9 @@ principal `console`, for the signed-in person. Each call writes:
   reader with no organization reading the deployment tenant is filed under
   `-deployment-`). Ariba calls have no organization row, as before.
 - NEW: one platform-scope row, `PlatformAuditEvent` with action
-  `SAP_CONSOLE_READ` and its `PlatformAuditOutcome` in the same statement:
+  `SAP_CONSOLE_READ` and its `PlatformAuditOutcome` in the same statement
+  (one round trip, no transaction: `consoleReadInsert`; the console's
+  database budget is in `docs/runbooks/coreedge-db-budget.md`):
   the person (id, email, role, organization), the product, tenant, service or
   fan-out sentinel, entity set, a fingerprint of the parameters chosen (never
   their values), the correlation id the person was given (the same one as on
@@ -68,7 +77,11 @@ suffix or `SAP_HOST_ALLOWLIST_EXTRA`. Stored connections are not re-checked.
 **The no-side-doors test (A.3 #9).** `tests/unit/security/no-side-doors.test.ts`
 builds a call graph of `src/` (`tests/helpers/sap-reach.ts`) and fails when a
 route reaches SAP outside the pipeline, or on the pipeline without an audit
-row, unless the route is on its reviewed exemption list. Every `route.ts` under
+row, unless the route is on its reviewed exemption list. Only a `callSap` on a
+`const` the route initialised from `openConsoleCall` counts as the pipeline,
+and every such call's receiver is checked, not the file's mention of
+`openConsoleCall`; a SAP-reaching handler the route re-exports from another
+module is reported, since its body is not walked (review round 3). Every `route.ts` under
 `src/app` is a route, route groups included; a page, a layout, any other
 server component, a server action or middleware that reaches SAP fails it
 outright. It runs in CI as part

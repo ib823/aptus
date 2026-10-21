@@ -282,6 +282,17 @@ describe("#8 · the audit trail is append-only", () => {
     // may, to say why those rows are kept.
     expect(stripSource(retention, "comments")).not.toMatch(/SAP_WORKBENCH_WRITE/);
   });
+
+  it("and the write-back runbook says so, rather than that the platform tables are never deleted from (review round 3)", () => {
+    // An operator reading P0.7's runbook was told both tables are append-only
+    // with no delete in the code, citing this file, after the console's read
+    // rows began to be swept from them.
+    const runbook = read("docs/runbooks/sap-workbench-write-back.md").replace(/\s+/g, " ");
+    expect(runbook).not.toMatch(/Both tables are append-only: there is no update or delete in the code/);
+    expect(runbook).toMatch(/SAP_CONSOLE_READ/);
+    expect(runbook).toMatch(/sweepConsoleReads/);
+    expect(runbook).toMatch(/NORTHBOUND_AUDIT_RETENTION_DAYS/);
+  });
 });
 
 /* ── #9 · the per-token northbound bucket actually throttles ───────────────── */

@@ -174,7 +174,7 @@ vi.mock("@/lib/db/prisma", () => ({
     solutionClient: { findMany: async () => [{ id: "client_1", environment: "DEV", sapClient: null, expiresAt: null }] },
     sapHubContent: { findFirst: async () => null },
     // The console's platform-scope row (P0.14b); its insert is not under test here.
-    platformAuditEvent: { create: async () => ({ id: "pae_1" }) },
+    $executeRaw: async () => 1,
   },
 }));
 vi.mock("@/lib/sap-public/probe-guard", () => ({ refuseUnlessMayProbeTenant: async () => null }));

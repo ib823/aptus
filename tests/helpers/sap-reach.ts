@@ -29,6 +29,11 @@
  * module-local helper, is followed into only where it is mentioned outside
  * those callbacks — the code that runs is the code that is followed.
  *
+ * The receiver counts, not the method name (review round 3): `callSap` is the
+ * pipeline only on a `const` the route initialised from `openConsoleCall`
+ * (`consoleCallNames`), and a handler the route re-exports from another
+ * module that reaches SAP is reported, since its body is never walked here.
+ *
  * A mention inside a governed callback is governed only while it runs there:
  * a SAP-reaching function value the callback returns, assigns out or pushes
  * onto something outside it would run after `callSap` recorded its outcome,
@@ -388,6 +393,118 @@ function isFunctionLike(n: ts.Node): n is ts.FunctionLikeDeclaration {
 /** A console call's governed step: what is passed to it runs inside the pipeline. */
 const GOVERNED_METHODS = new Set(["callSap", "callSapWrite"]);
 
+/** The functions, exported by a pipeline module, that open a console call. */
+export const CONSOLE_OPENERS: ReadonlySet<string> = new Set(["openConsoleCall"]);
+
+/** Through what passes a value on unchanged: parentheses, `await`, `as`, `!`. */
+function unwrap(e: ts.Expression): ts.Expression {
+  let cur = e;
+  while (
+    ts.isParenthesizedExpression(cur) ||
+    ts.isAwaitExpression(cur) ||
+    ts.isAsExpression(cur) ||
+    ts.isSatisfiesExpression(cur) ||
+    ts.isNonNullExpression(cur) ||
+    ts.isTypeAssertionExpression(cur)
+  ) {
+    cur = cur.expression;
+  }
+  return cur;
+}
+
+/**
+ * THE NAMES IN A ROUTE FILE THAT CERTAINLY HOLD A CONSOLE CALL (P0.14b review
+ * round 3). A `.callSap(...)` is the pipeline only when its receiver is one:
+ * an object literal with a `callSap` method, or a parameter typed like one,
+ * runs the callback with no ceiling, no circuit and no row.
+ *
+ * A name qualifies when EVERY declaration of it anywhere in the file — a
+ * variable, a parameter, a destructured binding, a function or class, a catch
+ * variable — is a `const` initialised by a call (awaited or not) to an opener
+ * a pipeline module exports, named directly or through a namespace import.
+ * Scopes are not modelled: a name declared otherwise anywhere in the file is
+ * not trusted anywhere in it, which over-reports rather than under-reports.
+ */
+export function consoleCallNames(
+  graph: SapGraph,
+  file: string,
+  pipelineModules: ReadonlySet<string>,
+  openers: ReadonlySet<string> = CONSOLE_OPENERS,
+): Set<string> {
+  const mod = graph.modules.get(file);
+  const verdict = new Map<string, boolean>();
+  if (!mod) return new Set();
+  const isOpener = (callee: ts.Expression): boolean => {
+    let ref: Ref | null = null;
+    if (ts.isIdentifier(callee)) {
+      const imp = mod.imports.get(callee.text);
+      if (imp && imp.name !== "*") ref = { kind: "import", module: imp.module, name: imp.name };
+    } else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+      const ns = mod.imports.get(callee.expression.text);
+      if (ns && ns.name === "*") ref = { kind: "import", module: ns.module, name: callee.name.text };
+    }
+    if (!ref) return false;
+    return graph.targets(file, ref).some((t) => {
+      const [targetFile, name] = [t.slice(0, t.indexOf("#")), t.slice(t.indexOf("#") + 1)];
+      return pipelineModules.has(targetFile) && openers.has(name);
+    });
+  };
+  const note = (name: string, ok: boolean) => verdict.set(name, (verdict.get(name) ?? true) && ok);
+  const visit = (n: ts.Node): void => {
+    if (ts.isVariableDeclaration(n)) {
+      const isConst = ts.isVariableDeclarationList(n.parent) && (n.parent.flags & ts.NodeFlags.Const) !== 0;
+      const init = n.initializer ? unwrap(n.initializer) : undefined;
+      const opened = isConst && ts.isIdentifier(n.name) && !!init && ts.isCallExpression(init) && isOpener(init.expression);
+      for (const nm of bindingNames(n.name)) note(nm, opened);
+    } else if (ts.isParameter(n) || ts.isBindingElement(n)) {
+      for (const nm of bindingNames(n.name)) note(nm, false);
+    } else if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassDeclaration(n) || ts.isClassExpression(n)) && n.name) {
+      note(n.name.text, false);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(mod.sf);
+  // An imported name is a declaration too: never a console call opened here.
+  for (const name of mod.imports.keys()) note(name, false);
+  return new Set([...verdict].filter(([, ok]) => ok).map(([name]) => name));
+}
+
+/** Whether `n` is `x.callSap(...)` / `x.callSapWrite(...)`, whatever `x` is. */
+function isGovernedMethodCall(n: ts.Node): n is ts.CallExpression & { expression: ts.PropertyAccessExpression } {
+  return ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && GOVERNED_METHODS.has(n.expression.name.text);
+}
+
+/**
+ * Every `.callSap(...)` / `.callSapWrite(...)` in a route file whose receiver
+ * is not a name `consoleCallNames` trusts: the audit check reports each, since
+ * a call made on anything else writes no console row.
+ */
+export function untracedGovernedCalls(
+  graph: SapGraph,
+  file: string,
+  pipelineModules: ReadonlySet<string>,
+): Array<{ readonly method: string; readonly receiver: string; readonly line: number }> {
+  const mod = graph.modules.get(file);
+  if (!mod) return [];
+  const trusted = consoleCallNames(graph, file, pipelineModules);
+  const out: Array<{ method: string; receiver: string; line: number }> = [];
+  const visit = (n: ts.Node): void => {
+    if (isGovernedMethodCall(n)) {
+      const receiver = unwrap(n.expression.expression);
+      if (!(ts.isIdentifier(receiver) && trusted.has(receiver.text))) {
+        out.push({
+          method: n.expression.name.text,
+          receiver: n.expression.expression.getText(mod.sf),
+          line: mod.sf.getLineAndCharacterOfPosition(n.getStart(mod.sf)).line + 1,
+        });
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(mod.sf);
+  return out;
+}
+
 export interface RouteFinding {
   readonly handler: string;
   /** The name mentioned, and the binding it resolves to. */
@@ -405,6 +522,7 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
   if (!mod) return [];
   const findings: RouteFinding[] = [];
   const followed = new Set<ts.Node>();
+  const consoleCalls = consoleCallNames(graph, file, pipelineModules);
 
   /** The SAP-reaching binding a reference names, outside the pipeline's own modules; null when none. */
   const reachingTarget = (ref: Ref): string | null => {
@@ -594,8 +712,13 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
     };
     collectInner(node);
     const innerNodes = new Set(inner.values());
-    const isGoverned = (n: ts.Node): n is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
-      ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && GOVERNED_METHODS.has(n.expression.name.text);
+    // Only a console call this route opened is the pipeline (review round 3):
+    // `{ callSap: (fn) => fn() }.callSap(...)` runs its callback ungoverned.
+    const isGoverned = (n: ts.Node): n is ts.CallExpression & { expression: ts.PropertyAccessExpression } => {
+      if (!isGovernedMethodCall(n)) return false;
+      const receiver = unwrap(n.expression.expression);
+      return ts.isIdentifier(receiver) && consoleCalls.has(receiver.text);
+    };
     /** Whether an inner function of this handler reaches SAP, through anything it mentions. */
     const innerReachCache = new Map<string, boolean>();
     const innerReaches = (name: string): boolean => {
@@ -677,7 +800,21 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
     for (const key of graph.resolveExport(file, method)) {
       const name = key.slice(key.indexOf("#") + 1);
       const b = mod.bindings.get(name);
-      if (b && key.startsWith(`${file}#`)) follow(b.node, method);
+      if (b && key.startsWith(`${file}#`)) {
+        follow(b.node, method);
+        continue;
+      }
+      /*
+       * A HANDLER THIS FILE RE-EXPORTS FROM ANOTHER MODULE (review round 3):
+       * `export { GET } from "@/lib/…"`, or an import exported as GET. Its
+       * body is not this route's to walk, and src/lib is no side entrance, so
+       * it was never checked at all. One that reaches SAP outside a pipeline
+       * module is a finding: define the handler in the route file, where it
+       * is checked, or exempt the route.
+       */
+      if (!key.startsWith(`${file}#`) && graph.reaching.has(key) && !pipelineModules.has(key.slice(0, key.indexOf("#")))) {
+        findings.push({ handler: method, via: `export ${method}`, target: `${key} (a handler re-exported from another module)`, line: 1 });
+      }
     }
   }
   for (const name of mod.bindings.keys()) {

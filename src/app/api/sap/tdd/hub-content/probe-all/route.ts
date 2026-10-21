@@ -201,9 +201,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // The console's circuit, before the rate limit too (P0.14b review): enforcing,
   // a run an open circuit refuses never reaches the tenant, so it must not spend
   // the tenant's ten-minute window either. The permit is recorded only inside
-  // callSap, so taking it here changes nothing else; the product check above
-  // comes first so a request refused for what it asks never takes the circuit's
-  // half-open trial (a 429 below holds it at most PROBE_LEASE_MS).
+  // callSap; the product check above comes first so a request refused for what
+  // it asks never takes the circuit's half-open trial. Past the cooldown
+  // contain() takes that trial, so every exit below that does not reach
+  // callSap (the 429, the limiter outage, a throw from the catalogue query)
+  // gives it back with call.release() (review round 3): held, it refused the
+  // organization's other console reads of this system for PROBE_LEASE_MS
+  // although nothing was sent to SAP.
   const contained = await call.contain();
   if (!contained.ok) return refuse(contained.refusal);
 
@@ -232,6 +236,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     PROBE_ALL_LIMIT,
   );
   if (!gate.allowed) {
+    await call.release();
     // Not "ran moments ago" when the limiter is down (audit A44).
     if (isLimiterOutage(gate)) return limiterUnavailableResponse(gate);
     return NextResponse.json(
@@ -261,10 +266,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // P0.8: `sap-s4-*` wrapper rows are excluded at the query AND by isProbeable
   // below. Their addresses are malformed by construction; probing them filed
   // a 404 per wrapper under the tenant and counted them as probeable services.
-  const rows = await prisma.sapHubContent.findMany({
-    where: probeAllCandidateWhere(scope.where, { includeDeprecated }),
-    select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
-  });
+  const rows = await prisma.sapHubContent
+    .findMany({
+      where: probeAllCandidateWhere(scope.where, { includeDeprecated }),
+      select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
+    })
+    .catch(async (error: unknown) => {
+      await call.release();
+      throw error;
+    });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).
   const targets = rows.filter((r) =>
     isProbeable({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }),
