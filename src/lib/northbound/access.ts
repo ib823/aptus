@@ -117,7 +117,7 @@ export type AccessResult =
   | { ok: false; reason: AccessRefusal; message: string };
 
 /** What the grant lookup selects: the decision, its end, and its binding. */
-const GRANT_SELECT = {
+export const GRANT_SELECT = {
   id: true,
   decision: true,
   expiresAt: true,
@@ -353,25 +353,7 @@ export async function resolveReadableInterface(
   // Scoped by construction: the id cannot escape the token's organization.
   const iface = await prisma.interface.findFirst({
     where: scopedById(scope, interfaceId),
-    select: {
-      id: true,
-      name: true,
-      externalId: true,
-      sapProduct: true,
-      entitySet: true,
-      operation: true,
-      mode: true,
-      version: true,
-      status: true,
-      solutionId: true,
-      servicePath: true,
-      odataVersion: true,
-      serviceVerifiedAt: true,
-      serviceVerifications: true,
-      // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
-      createdAt: true,
-      grantMatchChangedAt: true,
-    },
+    select: READABLE_INTERFACE_SELECT,
   });
 
   if (!iface) {
@@ -382,6 +364,103 @@ export async function resolveReadableInterface(
     };
   }
 
+  // Checked again by the decision; asked here first so an interface the row
+  // alone refuses (a sibling's, a write, a deprecated one) never costs a grant
+  // query.
+  const refused = interfaceReadRefusal(iface, solutionId);
+  if (refused) return refused;
+
+  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
+    // scopedWhere injects the organization; the rest narrows within it, to
+    // grants bound to THIS interface on its product or (legacy) unbound.
+    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
+    select: GRANT_SELECT,
+  });
+
+  const decision = decideReadAccess(iface, solutionId, environment, grants, now);
+  if (!decision.ok) return decision;
+  await noteLegacyAuthority(scope, decision.authorising, iface, now);
+  return { ok: true, iface: decision.iface };
+}
+
+/** The interface fields the read decision judges. */
+export interface ReadableInterfaceRow extends GrantedInterface {
+  name: string;
+  entitySet: string | null;
+  mode: string;
+  version: number;
+  status: string;
+  solutionId: string;
+  servicePath?: string | null;
+  odataVersion?: string | null;
+  serviceVerifiedAt?: Date | null;
+  serviceVerifications?: unknown;
+}
+
+/** What the read decision selects of an interface; discovery selects the same. */
+export const READABLE_INTERFACE_SELECT = {
+  id: true,
+  name: true,
+  externalId: true,
+  sapProduct: true,
+  entitySet: true,
+  operation: true,
+  mode: true,
+  version: true,
+  status: true,
+  solutionId: true,
+  servicePath: true,
+  odataVersion: true,
+  serviceVerifiedAt: true,
+  serviceVerifications: true,
+  // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
+  createdAt: true,
+  grantMatchChangedAt: true,
+} as const;
+
+/** The grant fields the read decision judges; GRANT_SELECT selects them. */
+export type ReadDecisionGrant = FetchedGrant;
+
+/** A read decision, with the grants that authorised it when it was granted. */
+export type ReadDecision =
+  | { ok: true; iface: AccessibleInterface; authorising: readonly FetchedGrant[] }
+  | { ok: false; reason: AccessRefusal; message: string };
+
+/**
+ * THE READ DECISION, WITHOUT I/O (P0.4, A42). Given the interface row and the
+ * grants fetched for it (`grantsForInterfaceWhere`, or `grantFetchedFor` over a
+ * batch), may this solution's credential in `environment` read it?
+ *
+ * One function so the data route, the Test Console's dry run and discovery's
+ * `callable` cannot disagree: discovery fetches the solution's grants once and
+ * asks this per interface, where it used to keep its own copy of the rules —
+ * which is how it came to advertise refused feeds as callable.
+ */
+export function decideReadAccess(
+  iface: ReadableInterfaceRow,
+  solutionId: string,
+  environment: string,
+  grants: readonly FetchedGrant[],
+  now: Date,
+  bindingMode: GrantBindingMode = grantBindingMode(),
+): ReadDecision {
+  const refused = interfaceReadRefusal(iface, solutionId);
+  if (refused) return refused;
+
+  const authorisesRead = (g: FetchedGrant) =>
+    grantsRead(g.decision as GrantDecision, environment as GrantEnvironment);
+  return decideOnGrants(iface, environment, grants, now, bindingMode, authorisesRead);
+}
+
+/**
+ * The refusals the interface row decides alone, before any grant is looked at
+ * — so the read path never spends a grant query on them. Mode is the harder
+ * gate: a write interface is refused here whatever its grants say.
+ */
+function interfaceReadRefusal(
+  iface: ReadableInterfaceRow,
+  solutionId: string,
+): Extract<ReadDecision, { ok: false }> | null {
   if (iface.solutionId !== solutionId) {
     // Same message as "not found" on purpose — a client must not be able to
     // discover which interfaces exist outside its own solution.
@@ -409,17 +488,18 @@ export async function resolveReadableInterface(
       message: "This interface has been deprecated. Ask the solution's builder for its replacement.",
     };
   }
+  return null;
+}
 
-  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
-    // scopedWhere injects the organization; the rest narrows within it, to
-    // grants bound to THIS interface on its product or (legacy) unbound.
-    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
-    select: GRANT_SELECT,
-  });
-
-  const bindingMode = grantBindingMode();
-  const authorisesRead = (g: FetchedGrant) =>
-    grantsRead(g.decision as GrantDecision, environment as GrantEnvironment);
+/** The grant half of the read decision. */
+function decideOnGrants(
+  iface: ReadableInterfaceRow,
+  environment: string,
+  grants: readonly FetchedGrant[],
+  now: Date,
+  bindingMode: GrantBindingMode,
+  authorisesRead: (g: FetchedGrant) => boolean,
+): ReadDecision {
   const granting = grantsUsableUnder(grants, iface, bindingMode).filter(authorisesRead);
   if (granting.length === 0) {
     if (setAsideAGrant(grants, iface, bindingMode, authorisesRead, now)) {
@@ -457,10 +537,10 @@ export async function resolveReadableInterface(
       message: `The access grant for this capability in ${environment} has expired.`,
     };
   }
-  await noteLegacyAuthority(scope, live, iface, now);
 
   return {
     ok: true,
+    authorising: live,
     iface: {
       id: iface.id,
       name: iface.name,

@@ -20,6 +20,11 @@ import {
   type HubStatus,
   HUB_STATUSES,
   deprecationTooltip,
+  deprecationHint,
+  catalogueAddress,
+  catalogueAddressFamily,
+  KNOWN_V4_SERVICE_PATHS,
+  SF_ODATA_V2_ROOT,
 } from "@/lib/sap-public/hub-content";
 
 describe("classifyApiTypeById (honest, no broken-path types)", () => {
@@ -245,13 +250,110 @@ describe("all 14 content types map to an honest un-probed status", () => {
 
 describe("isProbeable", () => {
   it("only API / CDS_VIEW on OData V2/V4 are probeable", () => {
-    expect(isProbeable({ contentType: "API", apiType: "ODATAV2" })).toBe(true);
-    expect(isProbeable({ contentType: "API", apiType: "ODATAV4" })).toBe(true);
-    expect(isProbeable({ contentType: "CDS_VIEW", apiType: "ODATAV2" })).toBe(true);
-    expect(isProbeable({ contentType: "API", apiType: "SOAP" })).toBe(false);
-    expect(isProbeable({ contentType: "API", apiType: null })).toBe(false);
-    expect(isProbeable({ contentType: "EVENT", apiType: "ODATAV2" })).toBe(false);
-    expect(isProbeable({ contentType: "BADI", apiType: "ODATAV2" })).toBe(false);
+    expect(isProbeable({ contentType: "API", apiType: "ODATAV2", externalId: "API_X_SRV" })).toBe(true);
+    expect(isProbeable({ contentType: "API", apiType: "ODATAV4", externalId: "CE_X_0001" })).toBe(true);
+    expect(isProbeable({ contentType: "CDS_VIEW", apiType: "ODATAV2", externalId: "C_X" })).toBe(true);
+    expect(isProbeable({ contentType: "API", apiType: "SOAP", externalId: "X_IN" })).toBe(false);
+    expect(isProbeable({ contentType: "API", apiType: null, externalId: "X" })).toBe(false);
+    expect(isProbeable({ contentType: "EVENT", apiType: "ODATAV2", externalId: "X" })).toBe(false);
+    expect(isProbeable({ contentType: "BADI", apiType: "ODATAV2", externalId: "X" })).toBe(false);
+  });
+
+  /*
+   * P0.8 — the comment above isProbeable always said `sap-s4-*` wrappers were
+   * not probeable; the body never checked. 148 production rows (50 V2, 98 V4)
+   * were offered for probing with malformed addresses.
+   */
+  it("a `sap-s4-*` wrapper row is never probeable, whatever its apiType", () => {
+    for (const apiType of ["ODATAV2", "ODATAV4"]) {
+      expect(isProbeable({ contentType: "API", apiType, externalId: "sap-s4-CE_RETAILSEASON_0001-v1" })).toBe(false);
+      expect(isProbeable({ contentType: "API", apiType, externalId: "SAP-S4-API_X_SRV-v2" })).toBe(false);
+    }
+  });
+
+  it("nothing is probeable per-API outside the S/4 family (SuccessFactors shares one root; ECC/Ariba have none)", () => {
+    const sfV2 = { contentType: "API" as const, apiType: "ODATAV2", externalId: "PLTUserManagement" };
+    expect(isProbeable(sfV2, "successfactors")).toBe(false);
+    expect(isProbeable(sfV2, "none")).toBe(false);
+  });
+});
+
+describe("catalogueAddress — one derivation, and what it promises (P0.8)", () => {
+  const api = (apiType: string | null, externalId: string) => ({ contentType: "API" as const, apiType, externalId });
+
+  it("S/4 V2 is SAP's naming convention; V4 is a known binding or a derived guess", () => {
+    expect(catalogueAddress(api("ODATAV2", "API_X_SRV"))).toEqual({
+      path: "/sap/opu/odata/sap/API_X_SRV",
+      protocol: "ODATAV2",
+      basis: "convention",
+    });
+    expect(catalogueAddress(api("ODATAV4", "CE_PURCHASEORDER_0001"))).toEqual({
+      path: KNOWN_V4_SERVICE_PATHS.CE_PURCHASEORDER_0001,
+      protocol: "ODATAV4",
+      basis: "known-binding",
+    });
+    expect(catalogueAddress(api("ODATAV4", "CE_BANK_0003"))).toEqual({
+      path: "/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003",
+      protocol: "ODATAV4",
+      basis: "derived",
+    });
+  });
+
+  it("a wrapper, SOAP, REST or untyped row has no address", () => {
+    expect(catalogueAddress(api("ODATAV4", "sap-s4-CE_RETAILSEASON_0001-v1"))).toBeNull();
+    expect(catalogueAddress(api("ODATAV2", "sap-s4-API_CLOUD_PRINT_PULL_SRV-v1"))).toBeNull();
+    expect(catalogueAddress(api("SOAP", "X_IN"))).toBeNull();
+    expect(catalogueAddress(api("REST", "X"))).toBeNull();
+    expect(catalogueAddress(api(null, "X"))).toBeNull();
+  });
+
+  it("SuccessFactors OData V2 APIs live under the one /odata/v2 root; its V4 and REST APIs get no guess", () => {
+    expect(catalogueAddress(api("ODATAV2", "PLTUserManagement"), "successfactors")).toEqual({
+      path: SF_ODATA_V2_ROOT,
+      protocol: "ODATAV2",
+      basis: "product-root",
+    });
+    expect(catalogueAddress(api("ODATAV4", "ClockInClockOutIntegration"), "successfactors")).toBeNull();
+    expect(catalogueAddress(api("REST", "PLTScim"), "successfactors")).toBeNull();
+    // Never an S/4 path for a SuccessFactors row.
+    expect(catalogueAddress(api("ODATAV2", "RCMCandidate"), "successfactors")?.path).not.toContain("/sap/opu/");
+  });
+
+  it("ECC and Ariba (family none) derive nothing", () => {
+    expect(catalogueAddress(api("ODATAV2", "API_X_SRV"), "none")).toBeNull();
+  });
+
+  it("the family follows the product's catalogue scope", () => {
+    expect(catalogueAddressFamily({ key: "s4hana", edition: "PUBLIC" })).toBe("s4");
+    expect(catalogueAddressFamily({ key: "cloud-erp-private", edition: "PRIVATE" })).toBe("s4");
+    expect(catalogueAddressFamily({ key: "ecc", edition: "ON_PREM" })).toBe("none");
+    expect(catalogueAddressFamily({ key: "successfactors", edition: null })).toBe("successfactors");
+    expect(catalogueAddressFamily({ key: "ariba", edition: null })).toBe("none");
+  });
+});
+
+describe("resolveHubStatus — wrappers and SuccessFactors (P0.8)", () => {
+  it("a wrapper's stored outcome (from its malformed address) never sets a badge", () => {
+    const wrapper = { contentType: "API" as const, apiType: "ODATAV4", externalId: "sap-s4-CE_X_0001-v1" };
+    expect(resolveHubStatus(wrapper)).toBe("NOT_PROBEABLE");
+    expect(resolveHubStatus(wrapper, new Map([[wrapper.externalId, 404]]))).toBe("NOT_PROBEABLE");
+    expect(resolveHubStatus(wrapper, new Map([[wrapper.externalId, 200]]))).toBe("NOT_PROBEABLE");
+    // SAP's retirement still wins.
+    expect(resolveHubStatus({ ...wrapper, hubState: "DEPRECATED" })).toBe("DEPRECATED");
+  });
+
+  it("a SuccessFactors OData row is NOT_PROBEABLE, not 'not checked — open to probe'", () => {
+    const sf = { contentType: "API" as const, apiType: "ODATAV2", externalId: "PLTUserManagement" };
+    expect(resolveHubStatus(sf, undefined, "successfactors")).toBe("NOT_PROBEABLE");
+    expect(resolveHubStatus(sf, undefined, "s4")).toBe("NOT_CHECKED");
+  });
+});
+
+describe("deprecationHint — the line every deprecated row shows (P0.8)", () => {
+  it("names SAP's successor, or says none is recorded and where to look — never invents one", () => {
+    expect(deprecationHint("CE_PURCHASEORDER_0001")).toContain("successor: CE_PURCHASEORDER_0001");
+    expect(deprecationHint(null)).toMatch(/no successor is recorded/);
+    expect(deprecationHint(undefined)).toMatch(/api\.sap\.com/);
   });
 });
 
@@ -316,6 +418,15 @@ describe("hubApiToService", () => {
   it("maps an OData V4 API to a best-effort odata4 path (so it can reach ACTIVATED)", () => {
     const svc = hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003" });
     expect(svc!.path).toBe("/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003");
+  });
+
+  it("returns null for a `sap-s4-*` wrapper, and says how each address was obtained (P0.8)", () => {
+    expect(hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "sap-s4-CE_X_0001-v1" })).toBeNull();
+    expect(hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003" })?.addressBasis).toBe("derived");
+    expect(hubApiToService({ ...base, contentType: "API", apiType: "ODATAV2", externalId: "API_X" })?.addressBasis).toBe("convention");
+    expect(
+      hubApiToService({ ...base, contentType: "API", apiType: "ODATAV2", externalId: "PLTUserManagement" }, "successfactors"),
+    ).toMatchObject({ key: "PLTUserManagement", path: "/odata/v2", protocol: "ODATAV2", addressBasis: "product-root" });
   });
 
   it("returns null for events, grouped CDS package rows (apiType CDS), SOAP, and null-type", () => {

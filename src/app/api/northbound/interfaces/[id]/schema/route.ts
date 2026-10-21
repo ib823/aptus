@@ -9,6 +9,14 @@
  * Same authorization as the data read, minus the grant requirement: knowing the
  * SHAPE of an interface your own solution defined is not access to the client's
  * data. The grant governs reading records, which is what actually matters.
+ *
+ * NEVER AN OLDER CONTRACT'S SHAPE (P0.4, A38). A changed entity set bumps the
+ * version; this route used to answer the new entity set and version with the
+ * schema captured from the old one, under `schemaCaptured: true`. It now
+ * serves a captured schema only when its stamp matches the interface's
+ * current version and entity set (contract-provenance.ts), and otherwise says
+ * which of the three it is: never captured, captured under an earlier
+ * contract, or of a contract that cannot be established.
  */
 
 import type { NextRequest } from "next/server";
@@ -25,7 +33,11 @@ import {
 } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { servedResponseSchema } from "@/lib/studio/schema-capture";
+import {
+  currentResponseSchema,
+  responseSchemaState,
+  withheldArtifactNote,
+} from "@/lib/studio/contract-provenance";
 import { scopedById } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -104,6 +116,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     return northboundError("NOT_FOUND", "No such interface.", 404, correlationId);
   }
 
+  const schemaState = responseSchemaState(iface.responseSchema, iface);
+
   await recordNorthboundCall({
     organizationId: client.organizationId,
     solutionId: client.solutionId,
@@ -128,13 +142,20 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       mode: iface.mode,
       version: iface.version,
       requestSchema: iface.requestSchema,
-      // As the served rows can satisfy it: a schema captured before the broker
-      // stripped SAP's envelope still requires V2's deferred navigations, which
-      // no served row carries. See servedResponseSchema.
-      responseSchema: servedResponseSchema(iface.responseSchema),
-      // Said out loud because a null schema is a real state, not a bug: it means
-      // nobody has run this interface in the Test Console yet.
-      schemaCaptured: iface.responseSchema !== null,
+      // Of THIS contract only, and as the served rows can satisfy it: a schema
+      // captured before the broker stripped SAP's envelope still requires V2's
+      // deferred navigations, which no served row carries (servedResponseSchema).
+      responseSchema: currentResponseSchema(iface.responseSchema, iface),
+      // Said out loud because a null schema is a real state, not a bug: nobody
+      // has captured one for this contract yet.
+      schemaCaptured: schemaState === "current",
+      // Why there is none, when there is none: "none" (never captured),
+      // "stale" (captured under an earlier contract) or "unverified" (captured
+      // before captures were stamped, contract unknown). Additive.
+      schemaState,
+      ...(schemaState === "stale" || schemaState === "unverified"
+        ? { schemaNote: withheldArtifactNote(schemaState, iface) }
+        : {}),
     },
     correlationId,
   );

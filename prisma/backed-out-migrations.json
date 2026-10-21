@@ -1,0 +1,4 @@
+{
+  "//": "Migrations backed out of production and removed from main on purpose (P0.17, docs/runbooks/coreedge-release.md step 6). Add \"<migration_name>\": \"<UTC date>, <who>, <why>, <incident or PR>\" in the pull request that removes the directory. A fixed version returns under a new name. pnpm migrations:check allows exactly these removals.",
+  "migrations": {}
+}

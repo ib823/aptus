@@ -100,6 +100,45 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
     expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_SEED_IMPORTED" });
   });
 
+  /*
+   * P0.8 — the projection never copied SAP's lifecycle, so after a Rebuild
+   * every API row's hubState was null and the deprecated ones read as live.
+   */
+  it("carries SAP's lifecycle onto the catalogue row, and never erases it from a reference that has none", async () => {
+    const modified = new Date("2026-07-01T00:00:00.000Z");
+    mocks.apiFindMany.mockResolvedValue([
+      {
+        ...API_ROWS[0],
+        hubState: "DEPRECATED",
+        hubVersion: "1.4.0",
+        hubModifiedAt: modified,
+        hubSubType: "ODATA",
+        catalogueRelease: "2608",
+        successorExternalId: "CE_PURCHASEORDER_0001",
+      },
+      // A reference imported before the lifecycle columns: nulls.
+      { ...API_ROWS[1], hubState: null, hubVersion: null, hubModifiedAt: null, hubSubType: null, catalogueRelease: null, successorExternalId: null },
+    ]);
+    await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }));
+    const byId = (externalId: string) =>
+      mocks.upsert.mock.calls.find((c) => c![0].where.contentType_externalId.externalId === externalId)![0];
+
+    const po = byId("API_PURCHASEORDER_PROCESS_SRV");
+    for (const half of [po.create, po.update]) {
+      expect(half).toMatchObject({
+        hubState: "DEPRECATED",
+        hubVersion: "1.4.0",
+        hubModifiedAt: modified,
+        catalogueRelease: "2608",
+        successorExternalId: "CE_PURCHASEORDER_0001",
+      });
+    }
+    const bp = byId("API_BUSINESS_PARTNER");
+    for (const key of ["hubState", "hubVersion", "hubModifiedAt", "successorExternalId"]) {
+      expect(key in bp.update, key).toBe(false);
+    }
+  });
+
   it("a rebuild PRESERVES a row's stored tenant probes (does not reset Activated)", async () => {
     /*
      * UPDATED FOR A23. This case used to assert that the upsert's update carried

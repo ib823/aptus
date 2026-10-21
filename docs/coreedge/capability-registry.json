@@ -1,0 +1,3061 @@
+{
+  "generatedBy": "src/lib/coreedge/capability-registry.ts (pnpm coreedge:registry)",
+  "method": "Each cell is scored from the code: none when the capability is not implemented; partial when it is, with a material limit or without recorded evidence; full when it is implemented with no limit and tests and a document exist (roadmap section 2.3). See src/lib/coreedge/capability-registry.ts.",
+  "headlineHosting": "SHARED",
+  "facts": {
+    "brokerTechs": [
+      "ODATA_V2",
+      "ODATA_V4"
+    ],
+    "odataProducts": [
+      "s4hana",
+      "successfactors",
+      "cloud-erp-private",
+      "s4hana-onprem",
+      "ecc"
+    ],
+    "catalogueTechs": {
+      "s4hana": [
+        "ODATA_V2",
+        "ODATA_V4"
+      ],
+      "successfactors": [
+        "ODATA_V2"
+      ],
+      "cloud-erp-private": [
+        "ODATA_V2",
+        "ODATA_V4"
+      ],
+      "s4hana-onprem": [
+        "ODATA_V2",
+        "ODATA_V4"
+      ],
+      "ecc": []
+    },
+    "servicePathOrigins": [
+      "CUSTOMER_CUSTOM",
+      "PARTNER"
+    ],
+    "publicHostSuffixes": 15,
+    "privateHostsRefused": true,
+    "keyProviders": [
+      "env"
+    ],
+    "grantBindingDefault": "legacy",
+    "starterKitFiles": [
+      "README.md",
+      "openapi.json",
+      "client.ts",
+      ".env.example",
+      ".gitignore",
+      "package.json",
+      "demo.mjs",
+      "mock.mjs",
+      "fixtures.json"
+    ]
+  },
+  "coreedgeToday": {
+    "targetTech": [
+      {
+        "row": "S4_PUBLIC",
+        "col": "ODATA_V2",
+        "status": "full",
+        "note": "OData V2 on s4hana. Live: The S/4HANA Cloud Public demo tenant answered V2 reads (roadmap R1 section 7).",
+        "basis": [
+          "Product \"s4hana\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V2 services."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "ODATA_V4",
+        "status": "partial",
+        "note": "OData V4 on s4hana. Non-curated V4 service paths are derived from the API id and read unverified until a probe of that exact path answers 200 (hub-content.ts catalogueAddress; P0.8), and the curated V4 purchase-order service answered 403 on the demo tenant.",
+        "basis": [
+          "Product \"s4hana\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V4 services."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "ODATA_V2",
+        "status": "partial",
+        "note": "OData V2 on cloud-erp-private. Never run end to end: a RISE system is reachable only from a copy inside its network (see network).",
+        "basis": [
+          "Product \"cloud-erp-private\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V2 services."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "ODATA_V4",
+        "status": "partial",
+        "note": "OData V4 on cloud-erp-private. Never run end to end; non-curated V4 paths are derived and unverified until a probe answers 200 (hub-content.ts catalogueAddress).",
+        "basis": [
+          "Product \"cloud-erp-private\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V4 services."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "ODATA_V2",
+        "status": "partial",
+        "note": "OData V2 on s4hana-onprem. Never run end to end: on-premise is reachable only from a copy inside its network.",
+        "basis": [
+          "Product \"s4hana-onprem\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V2 services."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "ODATA_V4",
+        "status": "partial",
+        "note": "OData V4 on s4hana-onprem. Never run end to end; non-curated V4 paths are derived and unverified until a probe answers 200 (hub-content.ts catalogueAddress).",
+        "basis": [
+          "Product \"s4hana-onprem\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V4 services."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "ODATA_V2",
+        "status": "partial",
+        "note": "OData V2 on ecc. ECC ships no service list (tdd-connector.ts), so only services registered by path work; never run end to end.",
+        "basis": [
+          "Product \"ecc\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists no OData V2 service; a service registered by path (P1.1, service-path.ts) may carry OData V2."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "ODATA_V4",
+        "status": "partial",
+        "note": "OData V4 on ecc. Services registered by path only; never run end to end.",
+        "basis": [
+          "Product \"ecc\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists no OData V4 service; a service registered by path (P1.1, service-path.ts) may carry OData V4."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "ODATA_V2",
+        "status": "partial",
+        "note": "OData V2 on successfactors. Three curated keys, Hub OData V2 ids at the /odata/v2 root (resolve-hub-service.ts; P0.8) and registered paths; SAML bearer, the login SAP keeps after 20 Nov 2026, is not proven live (P0.9).",
+        "basis": [
+          "Product \"successfactors\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists OData V2 services."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "ODATA_V4",
+        "status": "partial",
+        "note": "OData V4 on successfactors. Registered paths only; no SuccessFactors V4 service has been called.",
+        "basis": [
+          "Product \"successfactors\" is in SAP_ODATA_PRODUCTS (tdd-connector.ts).",
+          "Its catalogue lists no OData V4 service; a service registered by path (P1.1, service-path.ts) may carry OData V4."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "Product \"ariba\" is not an OData product on the broker (tdd-connector.ts getSapProduct).",
+        "basis": [
+          "Product \"ariba\" is not an OData product on the broker (tdd-connector.ts getSapProduct)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "Product \"ariba\" is not an OData product on the broker (tdd-connector.ts getSapProduct).",
+        "basis": [
+          "Product \"ariba\" is not an OData product on the broker (tdd-connector.ts getSapProduct)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      }
+    ],
+    "techPattern": [
+      {
+        "row": "ODATA_V2",
+        "col": "SYNC_READ",
+        "status": "partial",
+        "note": "OData V2 read. Reads send only $top and $format and return at most 100 rows: no filter, key, select, expand or paging (read.ts).",
+        "basis": [
+          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts)."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "SYNC_CREATE",
+        "status": "partial",
+        "note": "OData V2 create. Never verified against a live tenant (P1.8).",
+        "basis": [
+          "POST /api/northbound/interfaces/[id]/data/write (writeEntitySet, write.ts) with a write key and an Idempotency-Key."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "The executor performs CREATE only; access.ts refuses any other operation (OPERATION_NOT_SUPPORTED). No PATCH, DELETE or action.",
+        "basis": [
+          "The executor performs CREATE only; access.ts refuses any other operation (OPERATION_NOT_SUPPORTED). No PATCH, DELETE or action."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No subscription or webhook route: /api/events/ingest is a reserved rate-limit prefix with no route.",
+        "basis": [
+          "No subscription or webhook route: /api/events/ingest is a reserved rate-limit prefix with no route."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No route for a call SAP starts: /api/outbound is a reserved prefix with no route; the broker only calls into SAP.",
+        "basis": [
+          "No route for a call SAP starts: /api/outbound is a reserved prefix with no route; the broker only calls into SAP."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "One call reaches one API; there is no flow or mapping engine.",
+        "basis": [
+          "One call reaches one API; there is no flow or mapping engine."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No $batch in read.ts or write.ts, and reads stop at 100 rows.",
+        "basis": [
+          "No $batch in read.ts or write.ts, and reads stop at 100 rows."
+        ]
+      },
+      {
+        "row": "ODATA_V2",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No EDI, AS2 or partner profiles.",
+        "basis": [
+          "No EDI, AS2 or partner profiles."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "SYNC_READ",
+        "status": "partial",
+        "note": "OData V4 read. Reads send only $top and $format and return at most 100 rows: no filter, key, select, expand or paging (read.ts).",
+        "basis": [
+          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts)."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "SYNC_CREATE",
+        "status": "partial",
+        "note": "OData V4 create. V4 create is unit-tested only and has never been verified against a live tenant (P1.8).",
+        "basis": [
+          "POST /api/northbound/interfaces/[id]/data/write (writeEntitySet, write.ts) with a write key and an Idempotency-Key."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "The executor performs CREATE only; access.ts refuses any other operation (OPERATION_NOT_SUPPORTED). No PATCH, DELETE or action.",
+        "basis": [
+          "The executor performs CREATE only; access.ts refuses any other operation (OPERATION_NOT_SUPPORTED). No PATCH, DELETE or action."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No subscription or webhook route: /api/events/ingest is a reserved rate-limit prefix with no route.",
+        "basis": [
+          "No subscription or webhook route: /api/events/ingest is a reserved rate-limit prefix with no route."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No route for a call SAP starts: /api/outbound is a reserved prefix with no route; the broker only calls into SAP.",
+        "basis": [
+          "No route for a call SAP starts: /api/outbound is a reserved prefix with no route; the broker only calls into SAP."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "One call reaches one API; there is no flow or mapping engine.",
+        "basis": [
+          "One call reaches one API; there is no flow or mapping engine."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No $batch in read.ts or write.ts, and reads stop at 100 rows.",
+        "basis": [
+          "No $batch in read.ts or write.ts, and reads stop at 100 rows."
+        ]
+      },
+      {
+        "row": "ODATA_V4",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No EDI, AS2 or partner profiles.",
+        "basis": [
+          "No EDI, AS2 or partner profiles."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SOAP",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "REST",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "RFC_BAPI",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "IDOC",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "EVENTS",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "FILE_SFTP",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      }
+    ],
+    "network": [
+      {
+        "row": "PUBLIC_INTERNET",
+        "col": "",
+        "status": "full",
+        "note": "Internet-facing SAP cloud hosts. Live: Internet-facing SAP cloud hosts answered from the hosted instance (R1 section 7).",
+        "basis": [
+          "15 SAP host suffixes are allow-listed (sap-host-allowlist.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SIDE_IP_ALLOWLIST",
+        "col": "",
+        "status": "none",
+        "note": "The hosted instance has no fixed egress address: no egress setting exists in the code, Vercel egress is dynamic unless Static IPs are bought [E47], and none is recorded for production (P4.4). SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1).",
+        "basis": [
+          "The hosted instance has no fixed egress address: no egress setting exists in the code, Vercel egress is dynamic unless Static IPs are bought [E47], and none is recorded for production (P4.4).",
+          "SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+        ]
+      },
+      {
+        "row": "PRIVATE_NETWORK",
+        "col": "",
+        "status": "none",
+        "note": "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names. SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1).",
+        "basis": [
+          "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names.",
+          "SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+        ]
+      }
+    ],
+    "origin": [
+      {
+        "row": "SAP_STANDARD",
+        "col": "",
+        "status": "partial",
+        "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Reads send only $top and return at most 100 rows (read.ts).",
+        "basis": [
+          "SAP-published services resolve through the curated list or the Hub catalogue copy (resolve-hub-service.ts)."
+        ]
+      },
+      {
+        "row": "CUSTOMER_CUSTOM",
+        "col": "",
+        "status": "partial",
+        "note": "Customer-built services. Reads send only $top and return at most 100 rows (read.ts). No Z* or YY1_* call is recorded against a live tenant.",
+        "basis": [
+          "Z* and YY1_* services are registered by service path and verified from $metadata per environment (service-path.ts, service-verifications.ts; P1.1)."
+        ]
+      },
+      {
+        "row": "PARTNER",
+        "col": "",
+        "status": "partial",
+        "note": "Partner-built services. Reads send only $top and return at most 100 rows (read.ts). No partner service is recorded against a live tenant.",
+        "basis": [
+          "A partner's namespaced Gateway service is registered by path on the same terms (service-path.ts; P1.1)."
+        ]
+      }
+    ],
+    "sapAuth": [
+      {
+        "row": "BASIC",
+        "col": "",
+        "status": "full",
+        "note": "BASIC toward SAP. Live: The demo tenant's communication user (R1 section 7).",
+        "basis": [
+          "Connection auth type \"basic\" (connection-resolver.ts SapAuthType)."
+        ]
+      },
+      {
+        "row": "OAUTH_CLIENT_CREDENTIALS",
+        "col": "",
+        "status": "full",
+        "note": "OAUTH_CLIENT_CREDENTIALS toward SAP. Tested and documented; no material limit.",
+        "basis": [
+          "Connection auth type \"oauth-client-credentials\" (connection-resolver.ts SapAuthType)."
+        ]
+      },
+      {
+        "row": "OAUTH_SAML_BEARER",
+        "col": "",
+        "status": "partial",
+        "note": "OAUTH_SAML_BEARER toward SAP. The assertion is built for SuccessFactors (saml-assertion.ts) and has not been proven against a live tenant (P0.9).",
+        "basis": [
+          "Connection auth type \"oauth-saml-bearer\" (connection-resolver.ts SapAuthType)."
+        ]
+      },
+      {
+        "row": "X509_MTLS",
+        "col": "",
+        "status": "none",
+        "note": "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key).",
+        "basis": [
+          "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key)."
+        ]
+      },
+      {
+        "row": "PRINCIPAL_PROPAGATION",
+        "col": "",
+        "status": "none",
+        "note": "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type).",
+        "basis": [
+          "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type)."
+        ]
+      },
+      {
+        "row": "API_KEY",
+        "col": "",
+        "status": "partial",
+        "note": "API_KEY toward SAP. A header key works (api-key-header.ts) but cannot be combined with OAuth, which Ariba needs (connection-resolver.ts).",
+        "basis": [
+          "Connection auth type \"api-key\" (connection-resolver.ts SapAuthType)."
+        ]
+      }
+    ],
+    "consumerAuth": [
+      {
+        "row": "JS_TS",
+        "col": "STATIC_BEARER",
+        "status": "full",
+        "note": "Static bearer key. Tested and documented; no material limit.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts).",
+          "The starter kit writes a TypeScript client (scaffold.ts client.ts)."
+        ]
+      },
+      {
+        "row": "JS_TS",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "JS_TS",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "JS_TS",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "PYTHON",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No Python SDK or sample: the starter kit generates TypeScript only (scaffold.ts).",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "PYTHON",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "PYTHON",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "PYTHON",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "JAVA",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No Java SDK or sample: the starter kit generates TypeScript only (scaffold.ts).",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "JAVA",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "JAVA",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "JAVA",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "DOTNET",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No .NET SDK or sample: the starter kit generates TypeScript only (scaffold.ts).",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "DOTNET",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "DOTNET",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "DOTNET",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "ABAP_ONPREM",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. SM59 stores no static header, so the header is set in code; no ABAP sample.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_ONPREM",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_ONPREM",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_ONPREM",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "ABAP_CLOUD",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. Whether a communication arrangement can store a static header is unconfirmed; no ABAP sample.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_CLOUD",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_CLOUD",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "ABAP_CLOUD",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "LOW_CODE",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. OpenAPI 3.1 import into low-code tools (e.g. Power Platform) is unverified.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "LOW_CODE",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "LOW_CODE",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "LOW_CODE",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "AI_AGENT",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No MCP server or tool schema: /api/mcp is a reserved prefix with no route.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "AI_AGENT",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "AI_AGENT",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "AI_AGENT",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "HUMAN_TESTER",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. The Test Console reads only, at most 50 rows (broker-run route); otherwise a manual curl.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "HUMAN_TESTER",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "HUMAN_TESTER",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "HUMAN_TESTER",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "row": "DISCOVER",
+        "col": "",
+        "status": "partial",
+        "note": "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8). No discovery from the tenant's own Gateway catalogue (P1.2).",
+        "basis": [
+          "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8)."
+        ]
+      },
+      {
+        "row": "DESIGN_MAP",
+        "col": "",
+        "status": "partial",
+        "note": "An interface names API, entity set and operation; schema capture (schema-capture.ts). No field mapping or flow design.",
+        "basis": [
+          "An interface names API, entity set and operation; schema capture (schema-capture.ts)."
+        ]
+      },
+      {
+        "row": "MOCK_TEST_BEFORE_CODE",
+        "col": "",
+        "status": "partial",
+        "note": "The starter kit ships a mock server and fixtures (scaffold.ts mock.mjs); the Test Console runs dry reads. Fixtures carry one scenario per broker outcome with the broker's own status, and are published only for the contract they were captured under (fixtures.ts, contract-provenance.ts; P0.4). No saved collections, assertions or write tests.",
+        "basis": [
+          "The starter kit ships a mock server and fixtures (scaffold.ts mock.mjs); the Test Console runs dry reads.",
+          "Fixtures carry one scenario per broker outcome with the broker's own status, and are published only for the contract they were captured under (fixtures.ts, contract-provenance.ts; P0.4)."
+        ]
+      },
+      {
+        "row": "DEVELOP_SDK_CODEGEN",
+        "col": "",
+        "status": "partial",
+        "note": "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4). TypeScript only, reads only.",
+        "basis": [
+          "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4)."
+        ]
+      },
+      {
+        "row": "CI_PRECOMMIT_GOVERNANCE",
+        "col": "",
+        "status": "none",
+        "note": "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only.",
+        "basis": [
+          "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only."
+        ]
+      },
+      {
+        "row": "DEPLOY_PROMOTE_ENVIRONMENTS",
+        "col": "",
+        "status": "partial",
+        "note": "Per-environment connections, grants and keys (SANDBOX, DEV, TEST, PROD). Promotion is manual repetition; PROD is not gated on TEST (P3.4).",
+        "basis": [
+          "Per-environment connections, grants and keys (SANDBOX, DEV, TEST, PROD)."
+        ]
+      },
+      {
+        "row": "RUN_MONITOR_ALERT",
+        "col": "",
+        "status": "partial",
+        "note": "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts). No real-time alerts and no owner paging (P3.7).",
+        "basis": [
+          "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts)."
+        ]
+      },
+      {
+        "row": "GOVERN_AUDIT_COMPLY",
+        "col": "",
+        "status": "partial",
+        "note": "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention. Holes still open by default: COREEDGE_GRANT_BINDING defaults to legacy, COREEDGE_STEP_UP to warn, and a failed broker audit insert is logged and swallowed (audit.ts; P3.10).",
+        "basis": [
+          "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention."
+        ]
+      },
+      {
+        "row": "SECRETS_KEYS",
+        "col": "",
+        "status": "partial",
+        "note": "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts). The only key provider built in is \"env\": the master key is an environment variable, no KMS (key-provider.ts; P0.10).",
+        "basis": [
+          "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts)."
+        ]
+      },
+      {
+        "row": "SAP_UPGRADE_IMPACT",
+        "col": "",
+        "status": "partial",
+        "note": "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8). Most deprecated APIs name no successor (the Hub's Successors field is behind its login), and no impact alert reaches interface owners (P3.8).",
+        "basis": [
+          "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8)."
+        ]
+      },
+      {
+        "row": "SELF_HOST_SETUP",
+        "col": "",
+        "status": "partial",
+        "note": "pnpm build and pnpm start run in CI. No container image, standalone output or self-host runbook (P4.5).",
+        "basis": [
+          "pnpm build and pnpm start run in CI."
+        ]
+      },
+      {
+        "row": "AI_ASSIST",
+        "col": "",
+        "status": "none",
+        "note": "No AI in CoreEdge: /api/mcp is a reserved prefix with no route, and the AI orchestrator serves only the portal.",
+        "basis": [
+          "No AI in CoreEdge: /api/mcp is a reserved prefix with no route, and the AI orchestrator serves only the portal."
+        ]
+      },
+      {
+        "row": "ONBOARDING_TIME_TO_FIRST_CALL",
+        "col": "",
+        "status": "partial",
+        "note": "Developer workspace sign-up (P0.13, COREEDGE_DEVELOPER_SIGNUP). Time to first call and to first real call are measured, median and p90 against A.3 #1 and #2 (journey.ts, journey-metrics.ts; P2.12). No twin to call first; a real first call waits for a second person's approval and SAP set-up.",
+        "basis": [
+          "Developer workspace sign-up (P0.13, COREEDGE_DEVELOPER_SIGNUP).",
+          "Time to first call and to first real call are measured, median and p90 against A.3 #1 and #2 (journey.ts, journey-metrics.ts; P2.12)."
+        ]
+      },
+      {
+        "row": "PROVIDER_BUILD_TRANSPORT",
+        "col": "",
+        "status": "partial",
+        "note": "A Z* or YY1_* service is registered by path and verified from $metadata per environment (service-verifications.ts; P1.1). Building the service and transporting it stay in SAP; nothing re-verifies or gates it on promotion (P3.4).",
+        "basis": [
+          "A Z* or YY1_* service is registered by path and verified from $metadata per environment (service-verifications.ts; P1.1)."
+        ]
+      },
+      {
+        "row": "API_VERSIONING",
+        "col": "",
+        "status": "none",
+        "note": "The northbound routes are unversioned (no /api/northbound/v1, no version header, no Deprecation or Sunset header, no changelog; P1.10). Interfaces carry a version number and DEPRECATED refuses reads, but nothing tells a consumer.",
+        "basis": [
+          "The northbound routes are unversioned (no /api/northbound/v1, no version header, no Deprecation or Sunset header, no changelog; P1.10). Interfaces carry a version number and DEPRECATED refuses reads, but nothing tells a consumer."
+        ]
+      },
+      {
+        "row": "PERFORMANCE_TEST",
+        "col": "",
+        "status": "none",
+        "note": "No load test of the broker: tests/performance holds synthetic portal benchmarks, and no twin exists to load (A.3 #14).",
+        "basis": [
+          "No load test of the broker: tests/performance holds synthetic portal benchmarks, and no twin exists to load (A.3 #14)."
+        ]
+      },
+      {
+        "row": "SUPPORT_INCIDENT",
+        "col": "",
+        "status": "partial",
+        "note": "Incidents (ops/incidents.ts) and the daily probe email to org admins. Nobody is paged, there is no status page and no consumer ticket intake.",
+        "basis": [
+          "Incidents (ops/incidents.ts) and the daily probe email to org admins."
+        ]
+      },
+      {
+        "row": "RETIRE",
+        "col": "",
+        "status": "partial",
+        "note": "Revoking a key ends the current and the previous key; dropped keys are kept as RetiredClientToken; a RETIRED solution is refused at runtime (auth.ts); audit retention (retention.ts). No evidence archive at retirement and no clean-up of fixtures or twin data.",
+        "basis": [
+          "Revoking a key ends the current and the previous key; dropped keys are kept as RetiredClientToken; a RETIRED solution is refused at runtime (auth.ts); audit retention (retention.ts)."
+        ]
+      }
+    ]
+  },
+  "networkByHosting": {
+    "SHARED": [
+      {
+        "row": "PUBLIC_INTERNET",
+        "col": "",
+        "status": "full",
+        "note": "Internet-facing SAP cloud hosts. Live: Internet-facing SAP cloud hosts answered from the hosted instance (R1 section 7).",
+        "basis": [
+          "15 SAP host suffixes are allow-listed (sap-host-allowlist.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SIDE_IP_ALLOWLIST",
+        "col": "",
+        "status": "none",
+        "note": "The hosted instance has no fixed egress address: no egress setting exists in the code, Vercel egress is dynamic unless Static IPs are bought [E47], and none is recorded for production (P4.4). SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1).",
+        "basis": [
+          "The hosted instance has no fixed egress address: no egress setting exists in the code, Vercel egress is dynamic unless Static IPs are bought [E47], and none is recorded for production (P4.4).",
+          "SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+        ]
+      },
+      {
+        "row": "PRIVATE_NETWORK",
+        "col": "",
+        "status": "none",
+        "note": "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names. SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1).",
+        "basis": [
+          "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names.",
+          "SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+        ]
+      }
+    ],
+    "DEDICATED": [
+      {
+        "row": "PUBLIC_INTERNET",
+        "col": "",
+        "status": "full",
+        "note": "Internet-facing SAP cloud hosts. Live: Internet-facing SAP cloud hosts answered from the hosted instance (R1 section 7).",
+        "basis": [
+          "15 SAP host suffixes are allow-listed (sap-host-allowlist.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SIDE_IP_ALLOWLIST",
+        "col": "",
+        "status": "partial",
+        "note": "A fixed egress address the SAP side can allow-list. Never tested against an SAP system that allow-lists addresses.",
+        "basis": [
+          "A dedicated deployment can buy Vercel Static IPs for its own project [E47]; no code change is needed."
+        ]
+      },
+      {
+        "row": "PRIVATE_NETWORK",
+        "col": "",
+        "status": "none",
+        "note": "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names. SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1).",
+        "basis": [
+          "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names.",
+          "SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+        ]
+      }
+    ],
+    "SELF_HOSTED": [
+      {
+        "row": "PUBLIC_INTERNET",
+        "col": "",
+        "status": "full",
+        "note": "Internet-facing SAP cloud hosts. Live: Internet-facing SAP cloud hosts answered from the hosted instance (R1 section 7).",
+        "basis": [
+          "15 SAP host suffixes are allow-listed (sap-host-allowlist.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SIDE_IP_ALLOWLIST",
+        "col": "",
+        "status": "partial",
+        "note": "A fixed egress address the SAP side can allow-list. Never tested against an SAP system that allow-lists addresses.",
+        "basis": [
+          "A self-hosted copy calls out from the operator's own address."
+        ]
+      },
+      {
+        "row": "PRIVATE_NETWORK",
+        "col": "",
+        "status": "partial",
+        "note": "A self-hosted copy inside the customer network. DNS names only (IP literals refused), no custom CA or proxy, and never tested end to end.",
+        "basis": [
+          "A copy inside the network reaches a private DNS name added with SAP_HOST_ALLOWLIST_EXTRA (sap-host-allowlist.ts)."
+        ]
+      }
+    ],
+    "CONNECTOR": [
+      {
+        "row": "PUBLIC_INTERNET",
+        "col": "",
+        "status": "none",
+        "note": "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today.",
+        "basis": [
+          "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today."
+        ]
+      },
+      {
+        "row": "SAP_SIDE_IP_ALLOWLIST",
+        "col": "",
+        "status": "none",
+        "note": "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today.",
+        "basis": [
+          "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today."
+        ]
+      },
+      {
+        "row": "PRIVATE_NETWORK",
+        "col": "",
+        "status": "none",
+        "note": "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today.",
+        "basis": [
+          "No CoreEdge connector exists (P4.2); this hosting mode cannot be deployed today."
+        ]
+      }
+    ]
+  },
+  "extended": {
+    "targetTech": [
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "ODATA_V2",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "ODATA_V4",
+        "status": "none",
+        "note": "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS).",
+        "basis": [
+          "No connector product serves this target (tdd-connector.ts SAP_ODATA_PRODUCTS)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "SOAP",
+        "status": "none",
+        "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "REST",
+        "status": "none",
+        "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "RFC_BAPI",
+        "status": "none",
+        "note": "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No RFC/BAPI executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "IDOC",
+        "status": "none",
+        "note": "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No IDoc executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "EVENTS",
+        "status": "none",
+        "note": "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No event executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "FILE_SFTP",
+        "status": "none",
+        "note": "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts).",
+        "basis": [
+          "No file or SFTP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "S4_PUBLIC",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "S4_PRIVATE_RISE",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "S4_ONPREM",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "ECC",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SUCCESSFACTORS",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "ARIBA",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "CONCUR",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "BTP_SERVICE",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "NON_SAP_SAAS",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_SALES_SERVICE_CLOUD",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_FIELDGLASS",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_IBP",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_BYDESIGN",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_BUSINESS_ONE",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "DATA_PRODUCT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "SAP_COMMERCE_CLOUD",
+        "col": "BINARY_MEDIA",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      }
+    ],
+    "techPattern": [
+      {
+        "row": "DATA_PRODUCT",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "DATA_PRODUCT",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only.",
+        "basis": [
+          "Data products are a catalogue type (DATA_PRODUCT in prisma/schema.prisma), but the broker has no way to call one; it reads and creates over OData only."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "SYNC_READ",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "SYNC_CREATE",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "SYNC_UPDATE_DELETE_ACTION",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "EVENT_TO_APP",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "SAP_CALLS_OUT",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "A2A_FLOW_WITH_MAPPING",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "BULK_BATCH",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      },
+      {
+        "row": "BINARY_MEDIA",
+        "col": "B2B_EDI",
+        "status": "none",
+        "note": "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it.",
+        "basis": [
+          "The broker carries JSON only: write.ts sends application/json and read.ts parses JSON, so no OData media stream or attachment passes through it."
+        ]
+      }
+    ],
+    "consumerAuth": [
+      {
+        "row": "GO",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No Go SDK or sample: the starter kit generates TypeScript only (scaffold.ts).",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "GO",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "GO",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "GO",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "PHP",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. No PHP SDK or sample: the starter kit generates TypeScript only (scaffold.ts).",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "PHP",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "PHP",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "PHP",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "MOBILE",
+        "col": "STATIC_BEARER",
+        "status": "none",
+        "note": "A long-lived ce_ key compiled into a distributed app is a leaked key; there is no user-delegated login for one to use instead.",
+        "basis": [
+          "A long-lived ce_ key compiled into a distributed app is a leaked key; there is no user-delegated login for one to use instead."
+        ]
+      },
+      {
+        "row": "MOBILE",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "MOBILE",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "MOBILE",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "SAP_CAP",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. A CAP remote service can send the header through a BTP destination [E63]; no sample.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "SAP_CAP",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "SAP_CAP",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "SAP_CAP",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      },
+      {
+        "row": "SAP_BUILD",
+        "col": "STATIC_BEARER",
+        "status": "partial",
+        "note": "Static bearer key. SAP Build reaches it through a BTP destination with a header; no sample.",
+        "basis": [
+          "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUILD",
+        "col": "OAUTH_CLIENT_CREDENTIALS",
+        "status": "none",
+        "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts).",
+        "basis": [
+          "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUILD",
+        "col": "MTLS",
+        "status": "none",
+        "note": "No client-certificate handling on the northbound routes (auth.ts).",
+        "basis": [
+          "No client-certificate handling on the northbound routes (auth.ts)."
+        ]
+      },
+      {
+        "row": "SAP_BUILD",
+        "col": "USER_DELEGATED_OIDC",
+        "status": "none",
+        "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey.",
+        "basis": [
+          "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+        ]
+      }
+    ]
+  }
+}

@@ -79,6 +79,35 @@ jobs:
       - name: ESLint strict check
         run: pnpm lint:strict
 
+      # P0.15: CoreEdge's capabilities are scored from the code, and the gap
+      # study quotes the simulator. Fails when the generated registry JSON or a
+      # generated block in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is
+      # stale, or when its sections 1 and 3 type a coverage figure into prose
+      # outside a block. Plain Node and tsx, no database; a few seconds.
+      - name: CoreEdge capability registry and roadmap figures
+        run: pnpm coreedge:check
+
+      # P0.16: the CoreEdge documents (and the CoreEdge code's comments) may not
+      # call a feature the capability registry marks shipped "planned", "not
+      # yet built", "coming soon" and the like. Also fails when a feature's code
+      # anchor in src/lib/coreedge/shipped-features.ts is gone. No database; a
+      # second or two. See docs/runbooks/coreedge-doc-claims.md.
+      - name: CoreEdge documents match the code
+        run: pnpm coreedge:doc-claims
+
+      # The broker's governance decision against the decision-table oracle
+      # (docs/runbooks/coreedge-governance-decision-table.md), over more than
+      # 10,000 generated cases. In-memory, no database; a few seconds. It runs
+      # again inside the unit tests below; this step names it when it fails.
+      - name: Governance property test
+        run: pnpm test:property
+
+      # The starter kit's client.ts is compiled in the developer's repository,
+      # never by the type check above (it is a generated string). This compiles
+      # it under --strict and the stricter flags beside it (P0.4).
+      - name: Generated client compiles under strict
+        run: pnpm check:scaffold-client
+
       - name: Unit tests
         run: pnpm test --run
         env:

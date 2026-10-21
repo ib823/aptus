@@ -89,4 +89,5 @@ export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
   { key: "connections", label: "Connection register", href: "/control-tower/connections", available: true },
   { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: true },
   { key: "usage", label: "CoreEdge usage", href: "/control-tower/usage", available: true },
+  { key: "journey", label: "Time to first call", href: "/control-tower/journey", available: true },
 ] as const;

@@ -66,9 +66,14 @@ describe("Control Tower states that revocation exists", () => {
 
 describe("discovery and the ledger read the same revocation fact", () => {
   it("northbound discovery selects and filters revokedAt", () => {
+    // Discovery selects the read decision's own grant fields and asks that
+    // decision (P0.4, A42), so the revocation fact is the data route's.
     const route = read("src/app/api/northbound/interfaces/route.ts");
-    expect(route).toContain("revokedAt: true");
-    expect(route).toContain("g.revokedAt == null");
+    expect(route).toContain("select: { ...GRANT_SELECT, externalId: true }");
+    expect(read("src/lib/northbound/read-verdict.ts")).toContain("decideReadAccess(");
+    const access = read("src/lib/northbound/access.ts");
+    expect(access).toMatch(/export const GRANT_SELECT = \{[^}]*revokedAt: true/);
+    expect(access).toContain("g.revokedAt == null");
   });
 
   it("the Studio grants GET returns the revocation fields", () => {

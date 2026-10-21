@@ -1,5 +1,11 @@
 # CCC BUILD BIBLE v2 — CoreEdge Developer Studio v1 (reality-reconciled, no assumptions)
 
+<!-- doc-claims: historical -->
+> **Historical build specification.** Kept for provenance (`docs/coreedge/README.md`): it
+> says what was to be built, as the team understood it then, not what CoreEdge does today.
+> For today, see `docs/coreedge/capability-registry.json` (scored from the code), the roadmap
+> (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`) and `docs/coreedge-developer-guide.md`.
+
 Supersedes v1. This version fixes the two false premises the CCC/Fable recon caught (keystone not in the
 repo; roles Developer/Support don't exist) and resolves the six design decisions and the token/context
 details, so nothing is left to guess. Paste this whole document into Claude Code against `aptus` and attach

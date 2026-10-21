@@ -25,7 +25,7 @@ import type * as Resolver from "@/lib/sap-public/connection-resolver";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 
 const { mocks, state, BASE, TOKEN_URL } = vi.hoisted(() => ({
-  mocks: { reserve: vi.fn(), complete: vi.fn(), release: vi.fn(), audit: vi.fn() },
+  mocks: { reserve: vi.fn(), complete: vi.fn(), release: vi.fn(), audit: vi.fn(), firstCall: vi.fn() },
   state: { connection: null as unknown as ResolvedSapConnection },
   BASE: "https://my404711-api.s4hana.cloud.sap",
   TOKEN_URL: "https://tenant.authentication.eu10.hana.ondemand.com/oauth/token",
@@ -48,6 +48,7 @@ vi.mock("@/lib/northbound/auth", () => ({
 }));
 vi.mock("@/lib/northbound/write-credential", () => ({ verifyWriteCredential: async () => true }));
 vi.mock("@/lib/northbound/audit", () => ({ recordNorthboundCall: mocks.audit }));
+vi.mock("@/lib/coreedge/journey", () => ({ noteFirstCall: mocks.firstCall }));
 vi.mock("@/lib/security/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   RATE_LIMITS: { northbound: {} },
@@ -389,5 +390,25 @@ describe("a replay is audited as a replay (A03)", () => {
     sap({ GET: handshake, POST: created });
     expect((await post()).status).toBe(201);
     expect(lastAudit()).toMatchObject({ status: 201, replayed: false, connectionId: "conn_1" });
+  });
+});
+
+describe("the app's first call (P2.12)", () => {
+  it("a fresh write reports its outcome to the first-call guard; a replay does not", async () => {
+    sap({ GET: handshake, POST: created });
+    expect((await post()).status).toBe(201);
+    expect(mocks.firstCall).toHaveBeenCalledWith({
+      organizationId: "org_a",
+      solutionId: "sol_1",
+      environment: "SANDBOX",
+      channel: "broker",
+      status: 201,
+    });
+
+    mocks.firstCall.mockClear();
+    mocks.reserve.mockResolvedValueOnce({ outcome: "replay", status: 201, body: { data: { created: true } } });
+    sap({});
+    expect((await post()).status).toBe(201);
+    expect(mocks.firstCall).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,7 @@
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { connectionRefusalMessage, resolveSapConnection } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -107,6 +108,14 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
       durationMs: result.durationMs,
       source: "test",
     },
+  });
+  // A connection's first good probe ends its SAP set-up wait (P2.12).
+  await noteConnectionProbe({
+    organizationId,
+    connectionId: row.id,
+    environment: row.environment,
+    status: result.status,
+    actorUserId: user.id,
   });
 
   await writeConfigAudit({

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { GateStrip } from "@/components/coreedge/GateStrip";
+import { JourneyTiles } from "./JourneyTiles";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { ProvenAt } from "@/components/coreedge/primitives/ProvenAt";
 import { StatusChip } from "@/components/coreedge/StatusChip";
@@ -16,6 +17,7 @@ import {
   operationsAllHealthy,
 } from "@/lib/coreedge/copy";
 import { proofAge } from "@/lib/coreedge/freshness";
+import { JOURNEY_COPY, loadJourneySummary } from "@/lib/coreedge/journey";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import {
   GATE_GLYPHS,
@@ -70,10 +72,16 @@ export default async function OperationsBoard(): Promise<ReactNode> {
   }
 
   const now = new Date();
-  const [allLanes, traffic, sweep] = await Promise.all([
+  const [allLanes, traffic, sweep, journey] = await Promise.all([
     listLanes(user.organizationId),
     listLaneTraffic(user.organizationId, now),
     lastLaneSweep(),
+    // A measurement must not take the board down with it: if it cannot be
+    // read, the board says so and every lane above still renders.
+    loadJourneySummary(user.organizationId, now).catch((err: unknown) => {
+      console.warn("[coreedge/operations] time to first call could not be read", err);
+      return null;
+    }),
   ]);
 
   const lanes = allLanes.sort((a, b) => {
@@ -265,6 +273,19 @@ export default async function OperationsBoard(): Promise<ReactNode> {
           },
         ]}
       />
+
+      {/*
+        TIME TO FIRST CALL (P2.12), for this organization: how long its own
+        workspace took to its first call, and each of its apps to its first
+        call on a real system, against the roadmap's targets. Below the lanes,
+        because it describes how the organization got here rather than what
+        needs a human now.
+      */}
+      {journey === null ? (
+        <p className="max-w-prose text-sm text-ink-soft">{JOURNEY_COPY.unreadable}</p>
+      ) : (
+        <JourneyTiles summary={journey} />
+      )}
 
       <nav aria-label="Operations sections" className="flex flex-wrap gap-4">
         <a href="/coreedge/operations/keys" className="text-sm text-ink-soft underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy">

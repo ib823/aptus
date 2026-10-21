@@ -30,6 +30,7 @@ import {
 } from "@/lib/sap-public/current-connections";
 import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct, getSapServices, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
+import { responseSchemaState } from "@/lib/studio/contract-provenance";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
 
@@ -217,7 +218,7 @@ export default async function StudioInterfacesPage({
     status: r.status as StudioInterface["status"],
     mappingVersion: r.mappingVersion,
     hasRequestSchema: r.requestSchema !== null,
-    hasResponseSchema: r.responseSchema !== null,
+    responseSchemaState: responseSchemaState(r.responseSchema, r),
     solutionId: r.solutionId,
     solutionName: r.solution.name,
     // Your own API has no curated suggestion — Verify lists its real datasets.

@@ -19,7 +19,9 @@
  *   HUB_IMPORT_FILE=path/to/file.json pnpm sap:hub:import
  *   HUB_IMPORT_DRY_RUN=1 pnpm sap:hub:import
  *
- * Idempotent: upsert by (contentType, externalId). Never deletes/mutates API rows.
+ * Idempotent: upsert by (contentType, externalId). Never deletes API rows; on
+ * API rows it writes only SAP's lifecycle columns, from the committed API
+ * catalogue snapshot (P0.8 — the same stamp vercel-build applies).
  */
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
@@ -32,6 +34,11 @@ import {
   type NormalizedHubContent,
 } from "../src/lib/sap-public/hub-import";
 import { hubLifecycleFields } from "../src/lib/sap-public/hub-import";
+import {
+  applyHubLifecycle,
+  HUB_LIFECYCLE_SNAPSHOT_PATH,
+  parseHubLifecycleSnapshot,
+} from "../src/lib/sap-public/hub-lifecycle-snapshot";
 
 const prisma = new PrismaClient();
 
@@ -199,8 +206,26 @@ async function main(): Promise<void> {
     }
   }
 
+  /*
+   * P0.8 — SAP's API lifecycle (state, version, successor) from the committed
+   * API catalogue snapshot, the same stamp vercel-build applies on deploy, so a
+   * database built locally from these files shows the deprecated APIs too.
+   * Existing rows and lifecycle columns only — see hub-lifecycle-snapshot.ts.
+   */
+  let lifecycle: { apiReferenceRows: number; hubContentRows: number } | null = null;
+  const snapshotFile = path.resolve(process.cwd(), HUB_LIFECYCLE_SNAPSHOT_PATH);
+  if (!DRY_RUN && existsSync(snapshotFile)) {
+    const snapshot = parseHubLifecycleSnapshot(JSON.parse(readFileSync(snapshotFile, "utf-8")));
+    lifecycle = await applyHubLifecycle(prisma, snapshot.records);
+  }
+
   console.log("\n[import-sap-hub-content] === Import complete ===");
   if (scopeBackfilled > 0) console.log(`  Scope codes backfilled from SapApiReference: ${scopeBackfilled}`);
+  if (lifecycle) {
+    console.log(
+      `  API lifecycle stamped from ${HUB_LIFECYCLE_SNAPSHOT_PATH}: ${lifecycle.apiReferenceRows} reference, ${lifecycle.hubContentRows} catalogue rows`,
+    );
+  }
   console.log(`  Inserted: ${inserted}`);
   console.log(`  Updated:  ${updated}`);
   console.log(`  Skipped:  ${skipped}`);

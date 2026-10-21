@@ -35,6 +35,7 @@ import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import {
   API_CATALOG_REPO_PATH,
+  apiLifecycleFields,
   normalizeRow,
   parseJson,
 } from "@/lib/sap-public/api-reference-import";
@@ -173,6 +174,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       rawMetadataJson: norm.rawJson as Prisma.InputJsonValue,
       etag: null,
       lastFetchedAt: new Date(),
+      // P0.8 — the Hub's lifecycle (state, version, successor). This import
+      // dropped it, so a deployment refreshed through the guided import still
+      // had no deprecation data; the laptop script always wrote it.
+      ...apiLifecycleFields(norm),
     };
 
     const existingId = existing.get(norm.apiId);

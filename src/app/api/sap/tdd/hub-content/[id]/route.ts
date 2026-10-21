@@ -18,12 +18,21 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
 import {
+  catalogueAddress,
+  catalogueAddressFamily,
   hubApiToService,
   hubAvailabilityQualifier,
+  isProbeable,
   readStoredProbe,
   resolveHubStatus,
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
+import {
+  addressVerificationScope,
+  currentAddressVerification,
+  readAddressVerifications,
+  recordAddressProbe,
+} from "@/lib/sap-public/catalogue-address-verification";
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
@@ -103,14 +112,42 @@ export async function GET(
           tenantKey,
         })
       : null;
-  const service = hubApiToService({
-    contentType,
-    apiType: item.apiType,
-    externalId: item.externalId,
-    title: item.title,
-    packageId: item.packageId,
-    communicationScenarios: item.communicationScenarios,
-  });
+  /*
+   * P0.8 — THE ROW'S ADDRESS UNDER ITS OWN PRODUCT'S RULES, and a live probe
+   * only when that address is the service's own. This built the S/4 path for
+   * every row whatever the product, so expanding a SuccessFactors API probed
+   * /sap/opu/odata/sap/<id> on a SuccessFactors host (404 by construction) and
+   * badged it "Not found"; a `sap-s4-*` wrapper was probed at a malformed
+   * address the same way. A SuccessFactors API's address is the shared
+   * /odata/v2 root, so its probe would say nothing about that API either.
+   */
+  const family = catalogueAddressFamily(product);
+  const itemRow = { contentType, apiType: item.apiType, externalId: item.externalId };
+  const address = catalogueAddress(itemRow, family);
+  const service = isProbeable(itemRow, family)
+    ? hubApiToService(
+        {
+          ...itemRow,
+          title: item.title,
+          packageId: item.packageId,
+          communicationScenarios: item.communicationScenarios,
+        },
+        family,
+      )
+    : null;
+  // Only for a signed-in viewer, as on the list: what answered on a tenant is
+  // an observation about that tenant, never shown to a caller we cannot attribute.
+  const verificationScope =
+    viewer && resolvedTenant && tenantKey && probeKey
+      ? addressVerificationScope({
+          source: resolvedTenant.source,
+          organizationId: viewer?.organizationId ?? null,
+          product: product.key,
+          tenantKey,
+          connectionId: resolvedTenant.connection?.id ?? null,
+          baseUrl: resolvedTenant.tenant.baseUrl,
+        })
+      : null;
 
   let probeStatus: number | null = null;
   let ladder: string | null = null;
@@ -199,6 +236,13 @@ export async function GET(
         // Never shown as this service's status: the tenant was not asked, so
         // the stored probe below stands instead, as for a probe that threw.
         if (!result.credentialError) {
+          // A 200 on a V4 address verifies it on this system; a 404 withdraws it.
+          await recordAddressProbe(verificationScope, {
+            service,
+            status: result.status,
+            actorUserId: viewer.id,
+            method: "detail-probe",
+          });
           probeStatus = result.status;
           ladder = result.ladder ?? null;
           entities = result.entities ?? null;
@@ -249,7 +293,18 @@ export async function GET(
   const status = resolveHubStatus(
     { contentType, apiType: item.apiType, externalId: item.externalId, hubState: item.hubState },
     outcomes,
+    family,
   );
+
+  // P0.8 — whether this V4 address has answered 200 on THIS system (read after
+  // the live probe above, so its own 200 counts).
+  let verifiedAt: string | null = null;
+  if (address?.protocol === "ODATAV4" && verificationScope) {
+    const stored = await readAddressVerifications(verificationScope, [item.externalId]);
+    verifiedAt =
+      currentAddressVerification(stored.get(item.externalId), { path: address.path, scope: verificationScope })?.toISOString() ??
+      null;
+  }
 
   // Blueprint steps, if the export carried any (PROCESS_BLUEPRINT / SCENARIO).
   const raw = item.rawMetadataJson as { steps?: unknown } | null;
@@ -277,6 +332,9 @@ export async function GET(
         hubVersion: item.hubVersion,
         successorExternalId: item.successorExternalId ?? successorFor(item.externalId),
       },
+      address: address
+        ? { path: address.path, protocol: address.protocol, basis: address.basis, verifiedAt }
+        : null,
       status,
       availabilityNote: hubAvailabilityQualifier(contentType),
       ladder,

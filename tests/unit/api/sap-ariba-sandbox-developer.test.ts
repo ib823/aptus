@@ -10,7 +10,8 @@
  * declares no landscape, so there is no SANDBOX to cap at: the role is
  * refused outright, by the real guard.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as AribaConnector from "@/lib/sap-public/ariba-connector";
 
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -18,7 +19,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
-vi.mock("@/lib/sap-public/ariba-connector", () => ({
+// The real request validation (P0.6), so the builder case below names an
+// endpoint and a realm the deployment actually serves.
+vi.mock("@/lib/sap-public/ariba-connector", async (importActual) => ({
+  ...(await importActual<typeof AribaConnector>()),
   isAribaConfigured: () => true,
   callAribaEndpoint: mocks.callAribaEndpoint,
 }));
@@ -27,11 +31,17 @@ vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: vi.fn() }));
 import { GET } from "@/app/api/sap/ariba/call/route";
 
 const get = () =>
-  ({ nextUrl: new URL("http://localhost/api/sap/ariba/call?endpoint=/sourcing-projects&realm=customer-prod") }) as never;
+  ({ nextUrl: new URL("http://localhost/api/sap/ariba/call?endpoint=sourcing-projects&realm=customer-prod") }) as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.callAribaEndpoint.mockResolvedValue({ status: 200, data: [] });
+  vi.stubEnv("ARIBA_REALMS_JSON", "");
+  vi.stubEnv("ARIBA_REALM", "customer-prod");
+  mocks.callAribaEndpoint.mockResolvedValue({ status: 200, stage: "request", failureReason: null, rows: [] });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("GET /api/sap/ariba/call", () => {

@@ -12,10 +12,16 @@
  * Studio adds two things on top: the business-domain lens, and the ability to
  * turn a discovered service into a governed Interface draft.
  *
- * "Add to interface" creates a DRAFT and nothing more. It grants no access —
- * access is decided separately through an ApiAccessGrant, and nothing is callable
- * at runtime in v1 at all. The dialog says so, because a developer who believes
- * this button granted them production access is a developer about to be surprised.
+ * "Add to interface" creates a DRAFT and nothing more. It grants no access.
+ * A runtime call through the northbound API needs an ApiAccessGrant for that
+ * interface, operation and environment, raised separately and decided by a
+ * second person (src/lib/northbound/access.ts), and a write needs an ACTIVE
+ * interface on top. The dialog says so, because a developer who believes this
+ * button granted them production access is a developer about to be surprised.
+ *
+ * A service the catalogue does not list (a customer's own Z* or YY1_*) is not
+ * added here: the page links to "Register your own API", which registers it by
+ * its service path (P1.1).
  */
 
 import { useCallback, useState } from "react";

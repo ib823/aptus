@@ -153,6 +153,47 @@ describe("the import itself", () => {
     expect(sfCreate?.data.appliesToPublic).toBe(false);
   });
 
+  /*
+   * P0.8 — this import dropped the Hub lifecycle fields the laptop script
+   * always wrote, so a deployment refreshed through it still showed no
+   * deprecated APIs.
+   */
+  it("writes SAP's lifecycle (state, version, successor) onto the reference row", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            apis: [
+              {
+                apiId: "API_PURCHASEORDER_PROCESS_SRV",
+                product: "SAPS4HANACloud",
+                status: "DEPRECATED",
+                hubState: "DEPRECATED",
+                hubVersion: "1.4.0",
+                hubModifiedAt: "2026-07-01T00:00:00.000Z",
+                hubSubType: "ODATA",
+                catalogueRelease: "1.4.0",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const res = await POST(req({ confirmation: CONFIRMATION }) as never);
+    expect(res.status).toBe(200);
+    const created = mocks.refCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(created.data).toMatchObject({
+      hubState: "DEPRECATED",
+      hubVersion: "1.4.0",
+      hubSubType: "ODATA",
+      // The SAP-named successor from sap-references/api-successors.json.
+      successorExternalId: "CE_PURCHASEORDER_0001",
+    });
+    expect((created.data.hubModifiedAt as Date).toISOString()).toBe("2026-07-01T00:00:00.000Z");
+  });
+
   it("reports an unfinished file via nextOffset rather than leaving it inferred", async () => {
     const apis = Array.from({ length: 5 }, (_, i) => ({ apiId: `API_${i}`, product: "SAP S/4HANA Cloud" }));
     vi.stubGlobal(

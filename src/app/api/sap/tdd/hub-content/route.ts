@@ -35,11 +35,22 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { probeTenantCapabilities } from "@/lib/sap-public/capability-probe";
 import { hubCatalogueScope, mergeProbeTargets, type HubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
-import type { SapOdataProduct } from "@/lib/sap-public/tdd-connector";
+import type { SapOdataProduct, SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
+import {
+  addressVerificationScope,
+  currentAddressVerification,
+  readAddressVerifications,
+  recordAddressProbe,
+  type AddressVerificationScope,
+  type StoredAddressVerification,
+} from "@/lib/sap-public/catalogue-address-verification";
 import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
+  catalogueAddress,
+  catalogueAddressFamily,
   hubApiToService,
+  isProbeable,
   hubAvailabilityQualifier,
   isHubContentType,
   isProbeStale,
@@ -90,6 +101,8 @@ async function probeActivatedApiIds(
   probed: number;
   /** The one-row data GETs that left for the tenant on top of `probed`. */
   dataReads: number;
+  /** Each answered probe with the service it asked about — for the V4 address record (P0.8). */
+  observed: Array<{ service: SapServiceDefinition; status: number }>;
 }> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
   /*
@@ -104,16 +117,19 @@ async function probeActivatedApiIds(
   const editionWhere = scope.kind === "edition" ? scope.where : null;
   // Sample both V2 (reliable path) and V4 (best-effort path) so V4 rows can also
   // reach ACTIVATED — alphabetical ordering alone never reaches the CE_* (V4) set.
+  // P0.8: `sap-s4-*` wrapper rows have no address of their own, so they are
+  // left out of the sample rather than spending its slots on null services.
+  const notWrapper = { NOT: { externalId: { startsWith: "sap-s4-", mode: "insensitive" as const } } };
   const [v2rows, v4rows] = editionWhere
     ? await Promise.all([
         prisma.sapHubContent.findMany({
-          where: { ...editionWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
+          where: { ...editionWhere, ...notWrapper, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
           select,
           orderBy: { externalId: "asc" },
           take: 45,
         }),
         prisma.sapHubContent.findMany({
-          where: { ...editionWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV4" },
+          where: { ...editionWhere, ...notWrapper, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV4" },
           select,
           orderBy: { externalId: "asc" },
           take: 25,
@@ -127,7 +143,9 @@ async function probeActivatedApiIds(
   // `service` equals the SapHubContent externalId, not the display key.
   const curated = getSapServices(product).map((s) => ({ ...s, key: serviceApiId(s) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
-  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0, dataReads: 0 };
+  if (targets.length === 0) {
+    return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0, dataReads: 0, observed: [] };
+  }
   const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });
   // Keep the FULL outcome (HTTP status) per probed service — not just the 200s —
   // so the badge can distinguish 200/403/404, and un-probed stays NOT_CHECKED.
@@ -136,11 +154,15 @@ async function probeActivatedApiIds(
   // 47 activated rows show correct CRUD in the list WITHOUT a click, and the
   // collapsed chip matches the expanded detail exactly.
   const capabilities = new Map<string, { read: boolean; write: boolean }>();
+  const byKey = new Map(targets.map((t) => [t.key, t]));
+  const observed: Array<{ service: SapServiceDefinition; status: number }> = [];
   for (const r of results) {
     // A row whose credential could not be obtained says nothing about the
     // service (audit A28); left out, the stored outcome stands for it.
     if (r.credentialError) continue;
     outcomes.set(r.service, r.status);
+    const service = byKey.get(r.service);
+    if (service) observed.push({ service, status: r.status });
     if (r.entities && r.entities.length > 0) capabilities.set(r.service, deriveReadWrite(r.entities));
   }
   return {
@@ -149,6 +171,7 @@ async function probeActivatedApiIds(
     capabilities,
     probed: targets.length,
     dataReads: results.filter((r) => r.dataStatus !== undefined).length,
+    observed,
   };
 }
 
@@ -170,7 +193,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const typeParam = params.get("contentType");
   const contentType: HubContentType | null = typeParam && isHubContentType(typeParam) ? typeParam : null;
   const statusParam = (params.get("status") ?? "ALL").toUpperCase();
-  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "PROBE_FAILED", "NOT_PROBEABLE", "AVAILABLE", "REFERENCE"];
+  // Every bucket the facets offer. DEPRECATED was missing, so its facet fell
+  // back to ALL and listed the whole catalogue under "Deprecated".
+  const VALID_STATUS: HubStatus[] = HUB_STATUSES;
   const status: HubStatus | "ALL" = (VALID_STATUS as string[]).includes(statusParam) ? (statusParam as HubStatus) : "ALL";
   const q = (params.get("q") ?? "").trim();
   // Source/domain facets (rawMetadataJson.raw): "sap" = SAP-only (exclude
@@ -233,6 +258,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       : null;
 
   const scope = hubCatalogueScope(product);
+  // P0.8 — which address rules this product's rows follow (S/4 per-service
+  // paths, the SuccessFactors root, or none).
+  const family = catalogueAddressFamily(product);
+  /*
+   * P0.8 — WHERE THIS VIEWER'S V4 ADDRESS PROOFS ARE FILED: the same tenant
+   * the stored probes are read for, so an anonymous caller (no probeKey) has
+   * none and every V4 address reads "unverified" to them.
+   */
+  const verificationScope: AddressVerificationScope | null =
+    probeKey && resolvedTenant && tenantKey
+      ? addressVerificationScope({
+          source: resolvedTenant.source,
+          organizationId: user?.organizationId ?? null,
+          product: product.key,
+          tenantKey,
+          connectionId: resolvedTenant.connection?.id ?? null,
+          baseUrl: resolvedTenant.tenant.baseUrl,
+        })
+      : null;
   if (scope.kind === "none") {
     return NextResponse.json({
       data: {
@@ -459,6 +503,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       try {
         const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);
         await audit(200, r.probed + r.dataReads, { durationMs: Date.now() - startedAt });
+        // A live 200 on a V4 address is the proof that address is right on
+        // this system (P0.8); a 404 withdraws an earlier one.
+        for (const o of r.observed) {
+          await recordAddressProbe(verificationScope, {
+            service: o.service,
+            status: o.status,
+            actorUserId: user.id,
+            method: "catalogue-overlay",
+          });
+        }
         for (const [k, v] of r.outcomes) outcomes.set(k, v);
         for (const [k, v] of r.capabilities) capabilities.set(k, v);
         dataConfirmed = r.dataConfirmed;
@@ -475,14 +529,65 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // pre-filter the paged query by status (uniform for all 7 statuses).
   const byStatus = emptyByStatus();
   const idsByStatus = Object.fromEntries(HUB_STATUSES.map((s) => [s, [] as string[]])) as Record<HubStatus, string[]>;
+  /*
+   * P0.8 — THE V4 ADDRESS PROOFS for this system, read after the overlay so a
+   * 200 it just observed counts. Only for a viewer with a tenant (see
+   * verificationScope); the read is one indexed query per page load.
+   */
+  const verifications: Map<string, StoredAddressVerification> = verificationScope
+    ? await readAddressVerifications(verificationScope)
+    : new Map();
+  const verifiedAtFor = (path: string, externalId: string): string | null => {
+    if (!verificationScope) return null;
+    return (
+      currentAddressVerification(verifications.get(externalId), { path, scope: verificationScope })?.toISOString() ?? null
+    );
+  };
+
+  /*
+   * THE "CALLABLE" COUNT IS COUNTED FROM THE SAME RULE PROBE-ALL APPLIES.
+   * It was a database count of every API/CDS row with an OData apiType, so it
+   * included the `sap-s4-*` wrapper rows (malformed addresses) and the
+   * deprecated rows Probe all skips, and the confirmation dialog promised a
+   * number of probes the run would never make. Both now come from
+   * isProbeable + the deprecated skip (P0.8).
+   */
+  let probeableRuntime = 0;
+  let probeableV4 = 0;
+  let probeableV4Verified = 0;
   for (const r of allRows) {
     const s = resolveHubStatus(
       { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId, hubState: r.hubState },
       outcomes,
+      family,
     );
     byStatus[s]++;
     idsByStatus[s].push(r.externalId);
+    const row = { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId };
+    if (scope.kind === "edition" && r.hubState !== "DEPRECATED" && isProbeable(row, family)) {
+      probeableRuntime++;
+      const address = catalogueAddress(row, family);
+      if (address?.protocol === "ODATAV4") {
+        probeableV4++;
+        if (verifiedAtFor(address.path, r.externalId)) probeableV4Verified++;
+      }
+    }
   }
+
+  /** The address an item would be called at, its basis, and its proof on this system. */
+  const itemAddress = (r: { contentType: string; apiType: string | null; externalId: string }) => {
+    const address = catalogueAddress(
+      { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId },
+      family,
+    );
+    if (!address) return null;
+    return {
+      path: address.path,
+      protocol: address.protocol,
+      basis: address.basis,
+      verifiedAt: address.protocol === "ODATAV4" ? verifiedAtFor(address.path, r.externalId) : null,
+    };
+  };
 
   // ── build the WHERE from filters (status pre-filters via the classified ids) ──
   const and: Prisma.SapHubContentWhereInput[] = [scopeWhere];
@@ -558,7 +663,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     hubState: r.hubState,
     hubVersion: r.hubVersion,
     successorExternalId: r.successorExternalId ?? successorFor(r.externalId),
-    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId, hubState: r.hubState }, outcomes),
+    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId, hubState: r.hubState }, outcomes, family),
+    // P0.8 — the address CoreEdge would call, how it was obtained, and (for
+    // OData V4) whether a probe of exactly it has answered 200 on THIS system.
+    // A null verifiedAt is "unverified here", and the screen says so.
+    address: itemAddress(r),
     availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),
     dataConfirmed: dataConfirmed.has(r.externalId),
     // Real read/write for the ~60 probed rows (else undefined → "not probed").
@@ -598,17 +707,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const byType: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
   for (const g of grouped) byType[g.contentType] = g._count._all;
 
-  // Honest scorecard denominator: discrete probeable runtime services (API + CDS
-  // as OData V2 reliably, or V4 best-effort) — NOT events, NOT grouped CDS sums.
-  // For a product-tag scope this is ZERO by construction: hubApiToService's
-  // paths are S/4 conventions, and manufacturing SF/Ariba URLs would count
-  // services as probeable that 404 by design (dynamic-catalog.ts's own rule).
-  const probeableRuntime =
-    scope.kind === "edition"
-      ? await prisma.sapHubContent.count({
-          where: { ...scopeWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
-        })
-      : 0;
+  // Honest scorecard denominator (`probeableRuntime`, counted above): discrete
+  // probeable runtime services (API + CDS as OData V2 reliably, or V4
+  // best-effort) — NOT events, NOT grouped CDS sums, NOT `sap-s4-*` wrappers,
+  // NOT the deprecated rows Probe all skips. For a product-tag scope this is
+  // ZERO by construction: a SuccessFactors row's address is the shared
+  // /odata/v2 root, and a 200 from it says nothing about one API.
 
   // Line-of-business counts, so a business-domain lens can offer the domains that
   // ACTUALLY exist with their real sizes, instead of a hardcoded taxonomy that
@@ -631,7 +735,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       limit,
       // `dataProbe` is whether the live overlay RAN, not whether it was asked
       // for — see the console-ceiling note on the overlay above.
-      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, stale, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe: dataProbeRan, dataProbeRefusal },
+      counts: {
+        byType,
+        byTypeItems,
+        byTypeDeprecated,
+        aiApis,
+        byStatus,
+        byLob,
+        probeableRuntime,
+        // P0.8: of the probeable services, how many are OData V4 (a derived
+        // address) and how many of those a probe has verified on this system.
+        probeableV4,
+        probeableV4Verified,
+        probed,
+        stale,
+        lastProbedAt,
+        dataConfirmed: dataConfirmed.size,
+        dataProbe: dataProbeRan,
+        dataProbeRefusal,
+      },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
