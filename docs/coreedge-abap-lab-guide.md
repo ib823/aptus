@@ -1437,6 +1437,17 @@ Every call needs `Authorization: Bearer ce_...`.
 | `GET /api/northbound/interfaces/{id}/data?limit=N` | Read. N is between 1 and 100. | Yes |
 | `POST /api/northbound/interfaces/{id}/data/write` | Create. Also needs `X-CoreEdge-Write-Key` and `Idempotency-Key`. | Yes |
 
+Every path above is also served under `/api/northbound/v1` (for example
+`/api/northbound/v1/interfaces/{id}/data`), by the same code. An SM59 path
+prefix of `/api/northbound` or `/api/northbound/v1` behaves identically.
+Every response names its API version in `CoreEdge-Version` (today `2026-10`);
+your program may send that header to pin the version, and need not. The
+versions, the deprecation policy and the `Deprecation` and `Sunset` headers are
+in the developer guide (*API versions and deprecation*) and
+`docs/coreedge/api-changelog.md`. The samples in section 6.2 and exercise 1 are
+replayed against both paths and every supported version on every CI run
+(`tests/integration/northbound-consumer-replay.test.ts`).
+
 The success envelope is `{ "data": ... }`. The error envelope is
 `{ "error": { "code", "message", "correlationId" } }`. Every response from the
 northbound route handlers carries `x-correlation-id` and `cache-control: no-store`

@@ -60,6 +60,12 @@ export type NorthboundErrorCode =
    * THIS credential used its budget, and during an outage nobody had (A44).
    */
   | "LIMITER_UNAVAILABLE"
+  /**
+   * The request pinned a `CoreEdge-Version` this deployment does not serve:
+   * unknown, or retired at its Sunset date. 400, refused before anything else
+   * runs, with `supportedVersions` beside the message (versioned-route.ts).
+   */
+  | "UNSUPPORTED_VERSION"
   | "INTERNAL";
 
 export function newCorrelationId(): string {

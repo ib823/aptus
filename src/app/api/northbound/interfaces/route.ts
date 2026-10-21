@@ -22,13 +22,22 @@ import {
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
+import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+/**
+ * Served as every supported version of the northbound API, at
+ * /api/northbound/* and at /api/northbound/v1/* (which re-exports this):
+ * versioned-route.ts resolves CoreEdge-Version, stamps it on the response,
+ * and names the version and path on every audit row this call writes (P1.10).
+ */
+export const GET = withNorthboundVersion(listInterfaces);
+
+async function listInterfaces(request: NextRequest) {
   const correlationId = newCorrelationId();
 
   const bearer = extractBearer(request.headers.get("authorization"));

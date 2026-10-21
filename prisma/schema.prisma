@@ -1691,6 +1691,15 @@ model NorthboundAuditEvent {
   /// — earlier replays were never marked, and cannot now be told apart.
   replayed Boolean @default(false)
 
+  /// Which dated version of the northbound API served the call ("2026-10"),
+  /// and the base path it came in on: "/api/northbound/v1", or the original
+  /// "/api/northbound", which is the same implementation (roadmap P1.10).
+  /// Stamped from the version wrapper's context in the same insert, so it
+  /// costs no query. NULL for rows written before P1.10, and for calls no
+  /// northbound version served (console reads, Test Console dry runs).
+  apiVersion  String?
+  apiBasePath String?
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])
