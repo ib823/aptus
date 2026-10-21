@@ -37,7 +37,7 @@ import { compileInEnvelope, VERIFY_WAIT_MS, withEnvelopeSlot } from "@/lib/contr
 import type { CompiledService, RenderSubject } from "@/lib/contracts/pipeline";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
-import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
+import { DEFAULT_TIMEOUT_MS, fetchMetadataDocument, MAX_TIMEOUT_MS, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
 
 /**
  * The service roots that describe a whole tenant and answer
@@ -184,8 +184,9 @@ function compileOrRefuse(
   entitySet: string | null,
   subject: RenderSubject | null,
   tenant: string | null,
+  deadlineAt: number,
 ): Promise<CompiledService> {
-  return compileInEnvelope(body, entitySet, subject, tenant);
+  return compileInEnvelope(body, entitySet, subject, tenant, deadlineAt);
 }
 
 function versionLabel(v: ODataVersion): string {
@@ -218,6 +219,37 @@ export interface VerifyServiceInput {
   subject?: RenderSubject | null;
   /** The organisation verifying: its share of verifies and of the compiler's envelope (envelope.ts). */
   organizationId?: string | null;
+  /**
+   * When the request must have its answer (ms since the epoch): the turn's
+   * wait and the compile are bounded by it (see VERIFY_REQUEST_BUDGET_MS);
+   * omitted, VERIFY_REQUEST_BUDGET_MS from now.
+   */
+  deadlineAt?: number | null;
+}
+
+/**
+ * ONE DEADLINE FOR THE WHOLE VERIFY (structural hardening round 4). The
+ * route's platform limit (maxDuration, 60 s) was shorter than the waits the
+ * envelope allows in sequence — the verify turn (20 s), the SAP read (up to
+ * 30 s), the compile slot (15 s) and the compile (15 s), the diff at record
+ * time (10 s + 10 s, up to three times) — so a slow SAP and a busy compiler
+ * had the platform cut the request off with a 504, nothing answered, audited
+ * or recorded. Now the verify has this much from the moment the request
+ * starts, and every wait and run inside it is clamped to what is left: the
+ * turn waits only while the SAP read would still fit after it, the SAP read
+ * keeps its own timeout, and the compile and the record's diff get the rest;
+ * past it they are refused BUSY, the contract is NOT_COMPILED, and the
+ * verify answers as it did before the compiler existed. What remains of the
+ * platform's limit (VERIFY_RESPONSE_MARGIN_MS) is for a worker cut at the
+ * deadline to exit and for the route's own writes.
+ */
+export const VERIFY_REQUEST_BUDGET_MS = 45_000;
+/** What the route keeps beyond the verify's budget: a worker's exit grace (5 s) and the route's own writes and audit. */
+export const VERIFY_RESPONSE_MARGIN_MS = 15_000;
+
+/** The SAP read's own timeout for this connection (connection-health.ts). */
+function fetchTimeoutMs(connection: ResolvedSapConnection): number {
+  return Math.min(connection.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
 }
 
 export const VERIFY_BUSY_DETAIL =
@@ -229,14 +261,24 @@ export const VERIFY_BUSY_DETAIL =
  * and works on it; with no gate, one builder sent twenty at once, seventeen
  * were refused a compile slot and each then read the whole description on
  * this thread. Now a verify holds a turn (envelope.ts, the `verify` pool)
- * from before SAP is asked for the description until it has answered: one at
- * a time per organisation, a few more waiting, and past that BUSY at once —
- * nothing fetched, nothing read. Across organisations it is the compile
- * slots behind it that bound the work.
+ * from before SAP is asked for the description until it has answered, a few
+ * more waiting, and past that BUSY at once — nothing fetched, nothing read.
+ * Across organisations it is the compile slots behind it that bound the work.
+ *
+ * SEVERAL TURNS PER ORGANISATION, NOT ONE (structural hardening round 4).
+ * The turn is held across the SAP read, so with one per organisation a
+ * single hung system — a DEV tenant running to its 30 s timeout — made every
+ * teammate's verify of a healthy system wait 20 s and answer BUSY, SAP never
+ * asked. An organisation now holds ENVELOPE_VERIFY_TENANT_RUNNING turns: what
+ * the turn bounds is the descriptions it holds in flight (that many × 8 MiB),
+ * and a slow system takes one of them, not all.
  */
 export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl: typeof fetch = fetch): Promise<ServiceVerifyResult> {
   const started = Date.now();
-  const turn = await withEnvelopeSlot("verify", input.organizationId ?? null, VERIFY_WAIT_MS, () => verifyOnce(input, fetchImpl));
+  const deadlineAt = input.deadlineAt ?? started + VERIFY_REQUEST_BUDGET_MS;
+  // Wait for a turn only while the SAP read, at its own timeout, would still end inside the verify's deadline.
+  const wait = Math.max(0, Math.min(VERIFY_WAIT_MS, deadlineAt - Date.now() - fetchTimeoutMs(input.connection)));
+  const turn = await withEnvelopeSlot("verify", input.organizationId ?? null, wait, () => verifyOnce(input, fetchImpl, deadlineAt));
   if (turn.ok) return turn.value;
   return {
     status: "BUSY",
@@ -254,7 +296,7 @@ export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl
   };
 }
 
-async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch): Promise<ServiceVerifyResult> {
+async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, deadlineAt: number): Promise<ServiceVerifyResult> {
   const target = metadataTarget(input);
   const datasetNeeded = isTenantWideRootAskedWhole(input, target.scope);
   const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {
@@ -322,7 +364,7 @@ async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch): P
    * the older readers below still list the datasets — so no service that
    * verified yesterday stops verifying today.
    */
-  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null, input.organizationId ?? null);
+  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null, input.organizationId ?? null, deadlineAt);
   /*
    * THE DATASETS, AS A BOUNDED SUMMARY (datasets.ts, structural hardening
    * round 3): the first MAX_STORED_ENTITY_SETS names, how many there are,

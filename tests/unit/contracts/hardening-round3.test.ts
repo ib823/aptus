@@ -31,6 +31,7 @@ import {
   ENVELOPE_RENDER_TENANT_WAITING,
   ENVELOPE_TENANT_RUNNING,
   ENVELOPE_TENANT_WAITING,
+  ENVELOPE_VERIFY_TENANT_RUNNING,
   envelopeQueueState,
   withEnvelopeSlot,
 } from "@/lib/contracts/envelope";
@@ -129,21 +130,21 @@ describe("the verify: turns, a bounded summary, and no description-sized work on
         { connection: CONNECTION, servicePath: "/sap/opu/odata/sap/Z_SRV", declaredVersion: "V2", entitySet: "T1", organizationId },
         fetchImpl as unknown as typeof fetch,
       );
-    const burst = Array.from({ length: 6 }, () => verify("org_burst"));
+    const burst = Array.from({ length: 7 }, () => verify("org_burst"));
     await new Promise((resolve) => setTimeout(resolve, 100));
-    // One at a time: SAP has been asked once, whatever the burst.
-    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_TENANT_RUNNING);
+    // Its share at a time (round 4: a few, so one slow system does not hold them all), whatever the burst.
+    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_VERIFY_TENANT_RUNNING);
     // Another organisation is not held up by it.
     const other = verify("org_other");
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_TENANT_RUNNING + 1);
+    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_VERIFY_TENANT_RUNNING + 1);
     release();
     const results = await Promise.all(burst);
     const busy = results.filter((r) => r.status === "BUSY");
-    expect(busy).toHaveLength(6 - ENVELOPE_TENANT_RUNNING - ENVELOPE_TENANT_WAITING);
+    expect(busy).toHaveLength(7 - ENVELOPE_VERIFY_TENANT_RUNNING - ENVELOPE_TENANT_WAITING);
     for (const r of busy) expect(r).toMatchObject({ verified: false, httpStatus: null, entitySets: [], auditStatus: 429 });
     // The refused ones never reached SAP; the ones that waited their turn verified.
-    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_TENANT_RUNNING + ENVELOPE_TENANT_WAITING + 1);
+    expect(fetchImpl).toHaveBeenCalledTimes(ENVELOPE_VERIFY_TENANT_RUNNING + ENVELOPE_TENANT_WAITING + 1);
     for (const r of results.filter((x) => x.status !== "BUSY")) expect(r).toMatchObject({ status: "OK", verified: true });
     expect((await other).status).toBe("OK");
     expect(envelopeQueueState("verify")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });

@@ -13,7 +13,7 @@
 
 import { LIMITS } from "@/lib/contracts/budget";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { currentSnapshotSummaries, snapshotContracts, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, snapshotContractTexts, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -24,7 +24,13 @@ export interface CompiledForDoc {
   snapshotId: string;
   contentHash: string;
   compiledAt: string;
+  /**
+   * The contract — carried as its stored text until a render parses it
+   * (render-input.ts): read its `source` above, never this, on the request thread.
+   */
   contract: InterfaceContract;
+  /** Compiled from a description, or sampled rows (the snapshot's own column). */
+  source: "METADATA" | "SAMPLED";
   /** Its canonical bytes: what its read path's budget is a function of (budget.ts). */
   irBytes: number;
 }
@@ -158,7 +164,8 @@ export async function loadDocContracts(
   scope: TenantScope,
   plan: DocPlan,
 ): Promise<{ ok: true; compiled: Map<string, CompiledForDoc> } | DocInputsTooLarge> {
-  const snapshots = await snapshotContracts(scope, plan.summaries);
+  // As their stored text: handed to a render, never parsed here (snapshotContractTexts).
+  const snapshots = await snapshotContractTexts(scope, plan.summaries);
   let total = 0;
   for (const s of snapshots.values()) total += s.irBytes;
   if (total > plan.limit) return { ok: false, reason: "TOO_LARGE", bytes: total, limit: plan.limit };
@@ -170,6 +177,7 @@ export async function loadDocContracts(
       contentHash: s.contentHash,
       compiledAt: s.createdAt.toISOString(),
       contract: s.contract,
+      source: s.source,
       irBytes: s.irBytes,
     });
   }

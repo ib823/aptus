@@ -86,7 +86,7 @@ function ordered(rows: Row[], orderBy: unknown): Row[] {
 }
 
 vi.mock("@/lib/db/prisma", async () => {
-  const { capturedSchemaFactRows } = await import("../../helpers/captured-schema-facts");
+  const { capturedSchemaFactRows, isSnapshotIrTextQuery, snapshotIrTextRows } = await import("../../helpers/captured-schema-facts");
   const table = (name: "interfaces" | "snapshots" | "solutions" | "grants") => ({
     findFirst: async ({ where, select, orderBy }: { where?: Row; select?: Row; orderBy?: unknown }) => {
       const hit = ordered(db[name].filter((r) => matches(r, where)), orderBy)[0];
@@ -122,7 +122,8 @@ vi.mock("@/lib/db/prisma", async () => {
       mockFixture: { findMany: async () => [] },
       configAudit: { create: mocks.audit },
       // capturedSchemaFacts (response-schema-states.ts): the stamp and size of each stored schema.
-      $queryRaw: async (q: unknown) => capturedSchemaFactRows(db.interfaces, q),
+      // And the IRs a read path hands to its render, as their stored text (snapshot.ts, snapshotIrTexts).
+      $queryRaw: async (q: unknown) => (isSnapshotIrTextQuery(q) ? snapshotIrTextRows(db.snapshots, q) : capturedSchemaFactRows(db.interfaces, q)),
     },
   };
 });

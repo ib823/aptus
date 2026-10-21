@@ -39,7 +39,7 @@
  * Pure and deterministic: the same input renders the same document.
  */
 
-import { chargeJson, jsonBytesUpTo, jsonText, LIMITS, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
+import { chargeJson, jsonBytesUpTo, jsonText, LIMITS, renderCheckpoint, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
 import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
@@ -341,6 +341,8 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   });
 
   for (const iface of input.interfaces) {
+    // The render clock, once per interface, whether or not a budget was given (budget.ts, round 4).
+    renderCheckpoint();
     // What this interface adds, charged to the build budget before it joins the document.
     const own = { schemas: {} as Record<string, JsonSchema>, paths: {} as Record<string, Obj> };
     const stem = stemFor(toTypeName(iface.entitySet ?? iface.name));

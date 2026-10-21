@@ -87,7 +87,7 @@ import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/re
 import { scopedById } from "@/lib/studio/tenant-scope";
 import { BudgetExceeded, chargeJson, LIMITS, OutputBudget, schemaLimit } from "@/lib/contracts/budget";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
-import { currentSnapshotSummaries, snapshotContracts } from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, snapshotContractTexts } from "@/lib/contracts/snapshot";
 
 export const dynamic = "force-dynamic";
 /** A large contract's schemas render in a worker thread (lib/contracts/read-render.ts): Node.js only. */
@@ -232,7 +232,8 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
     const r = await renderReadPathLazy(
       { inputBytes: servable.irBytes },
       async (): Promise<ReadLoad<"GONE" | "TOO_LARGE">> => {
-        const read = (await snapshotContracts(client.scope, new Map([[iface.id, servable]]))).get(iface.id) ?? null;
+        // Its IR as its stored text, parsed where it renders (snapshotContractTexts).
+        const read = (await snapshotContractTexts(client.scope, new Map([[iface.id, servable]]))).get(iface.id) ?? null;
         if (!read) return { ok: false, refusal: "GONE" };
         // A row that predates the kept size, measured now.
         if (!inBudget(read.irBytes)) return { ok: false, refusal: "TOO_LARGE" };

@@ -50,7 +50,7 @@ function apply(row: Row, data: Row): void {
 }
 
 vi.mock("@/lib/db/prisma", async () => {
-  const { capturedSchemaFactRows, fixtureFactRows, isFixtureFactsQuery } = await import("../../helpers/captured-schema-facts");
+  const { capturedSchemaFactRows, fixtureBodyTextRows, fixtureFactRows, isFixtureBodiesQuery, isFixtureFactsQuery } = await import("../../helpers/captured-schema-facts");
   const prisma: Row = {
     interface: {
       findFirst: async ({ where }: { where: Row }) =>
@@ -114,7 +114,13 @@ vi.mock("@/lib/db/prisma", async () => {
   (prisma.interface as Row).findMany = async ({ where }: { where: Row }) =>
     store.iface && matches(store.iface, where) ? [{ id: store.iface.id, responseSchema: store.iface.responseSchema ?? null }] : [];
   prisma.$queryRaw = async (q: unknown) =>
-    isFixtureFactsQuery(q) ? fixtureFactRows(store.fixtures, q) : store.iface ? capturedSchemaFactRows([store.iface], q) : [];
+    isFixtureBodiesQuery(q)
+      ? fixtureBodyTextRows(store.fixtures, q)
+      : isFixtureFactsQuery(q)
+        ? fixtureFactRows(store.fixtures, q)
+        : store.iface
+          ? capturedSchemaFactRows([store.iface], q)
+          : [];
   prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
   return { prisma };
 });
@@ -163,6 +169,7 @@ import {
 import { servedFixture, servedFixtures, SCENARIO_STATUS } from "@/lib/studio/fixtures";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
 import { LIMITS } from "@/lib/contracts/budget";
+import { isFixtureBodiesQuery } from "../../helpers/captured-schema-facts";
 
 const ctx = { params: Promise.resolve({ id: "if_1" }) };
 const post = (url: string, body: unknown) =>
@@ -410,7 +417,7 @@ describe("a fixture is bounded where it is written and where the kit reads it", 
 
   it("the kit reads fixtures by size first: one past what a kit carries is named, too large, and its body is never read", async () => {
     const { prisma } = await import("@/lib/db/prisma");
-    const reads = vi.spyOn(prisma.mockFixture, "findMany");
+    const reads = vi.spyOn(prisma, "$queryRaw");
     const stamp = { interfaceVersion: 1, entitySet: "A_BusinessPartner", sourceStatus: 200, capturedAt: new Date() };
     store.fixtures.push(
       { id: "fx_huge", organizationId: "org_a", interfaceId: "if_1", scenario: "data", status: 200, body: { records: [{ Photo: "A".repeat(LIMITS.fixture.storedTextBytes) }] }, ...stamp },
@@ -428,7 +435,10 @@ describe("a fixture is bounded where it is written and where the kit reads it", 
     expect(fixtures.withheld).toEqual([{ scenario: "data", reason: expect.stringContaining("larger than the 8 MB") as string }]);
     expect(files.find((f) => f.path === "README.md")!.contents).toContain("larger than the recorded fixtures a\nstarter kit carries");
     // Only the bodies that fit were asked for.
-    const asked = reads.mock.calls.flatMap(([args]) => ((args as { where: { id?: { in: string[] } } }).where.id?.in ?? ["<all>"]));
+    // (The bodies are read as their stored text: fixture-store.ts, structural hardening round 4.)
+    const asked = reads.mock.calls
+      .filter(([q]) => isFixtureBodiesQuery(q))
+      .flatMap(([q]) => ((q as unknown as { values: unknown[] }).values ?? []).slice(2));
     expect(asked).toEqual(["fx_empty"]);
   });
 });

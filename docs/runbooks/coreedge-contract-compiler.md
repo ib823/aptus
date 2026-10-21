@@ -433,6 +433,51 @@ is bounded too:
   Node's built-ins, and `scripts/check-runtime-assets.mjs --built` starts the
   worker, with a real job, from a copy of each spawning route's trace.
 
+**Structural hardening, round 4.** Again the shared mechanisms, not shapes
+(`tests/unit/contracts/hardening-round4.test.ts`):
+
+- **Each organisation pays for its own inline renders.** The request thread's
+  render share was one bucket: one builder downloading a large kit five times
+  a second spent it (and every overrun was charged to it), and every other
+  tenant's 1 ms `/schema` went to the envelope, a worker per read. Each
+  organisation now also draws on a part of its own (50 ms, refilled at 60 ms
+  a second); a render's deadline is the lesser of the two, and what it took is
+  charged to both.
+- **The render clock is read on a time basis, through every stage.** The
+  deadline is ambient for the whole render (`withRenderDeadline`,
+  `renderTick` in `budget.ts`) and looked at from every charge, size walk and
+  builder loop, so a 1,016-interface document stops at a 10 ms grant instead
+  of after 300-550 ms. A render on the request thread writes at most 4 MiB
+  before it is handed on. A solution document is routed by its interfaces
+  too (2 KiB each), never as "0 bytes".
+- **Stored JSON crosses into a worker as its text.** Fixture bodies
+  (`body::text`) and the IRs a read or a diff hands on (`ir::text`) are read
+  as text, counted by their length and parsed in the worker
+  (`src/lib/contracts/render-input.ts`); a kit with 7.4 MB of small-record
+  fixtures stalled the event loop 467 ms before, and a record's diff against
+  four 1.9 MB contracts about 300 ms. What a render may be handed is 16 MiB
+  (a stored IR's text is up to twice its canonical size).
+- **The isolates fit the instance.** The compile and render pools held two
+  isolates each, four at their heap caps beside a 617 MiB server on a 2 GB
+  Hobby instance. Every job now also holds one of `envelopeIsolateSlots()`
+  isolate slots, derived from the instance's memory
+  (`COREEDGE_INSTANCE_MEMORY_MB`, default 2,048, never above the cgroup
+  limit) less 768 MB for the server, divided by the largest isolate's
+  footprint: two on Hobby. One organisation holds at most one at a time.
+- **A verify has one deadline.** The waits inside a verify added up to about
+  110 s against the route's `maxDuration` of 60 s. The verify now has 45 s
+  from the start of the request; the turn waits only while the SAP read would
+  still fit, and the compile and the record's diff are clamped to what is
+  left (refused `BUSY`, contract `NOT_COMPILED`, past it). 15 s are kept for a
+  cut worker's exit and the route's writes.
+- **Several verifies per organisation may read at once.** One turn per
+  organisation, held through the SAP read, let one hung DEV tenant make
+  every teammate's verify `BUSY`. An organisation now holds three turns (as
+  many as its compiles can run or wait for).
+- **The dataset picker says when the list is cut.** A service with more than
+  500 datasets lists the first 500; the panel says "Showing the first 500 of
+  600 datasets" and takes any other name typed in.
+
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with
 `NODE_OPTIONS=--max-old-space-size=8192`, and real `POST verify-service`

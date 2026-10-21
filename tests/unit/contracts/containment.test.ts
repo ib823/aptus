@@ -597,18 +597,24 @@ describe("structural hardening, round 2", () => {
     expect(envelopeIsolates().peak).toBe(before);
   });
 
-  it("renders have slots of their own: a read is not queued behind every compile", async () => {
+  it("renders have slots of their own: a read is not refused behind every compile, and waits only for an isolate", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    const compiles = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }));
+    // Two other organisations' compiles hold both compile slots — and, the instance's isolates
+    // being shared since round 4 (envelopeIsolateSlots), the isolates they need.
+    const compiles = ["org_b", "org_c"].map((tenant) =>
+      runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }, { tenant }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(envelopeQueueState("compile").running).toBe(ENVELOPE_CONCURRENCY);
     const r = await renderReadPathLazy({ inputBytes: null }, () => Promise.resolve({ ok: true as const, input: schemaInput(LIMITS.schema.cap) }), {
       tenant: "org_a",
     });
+    // Its render slot was its own; it waited for an isolate, and was served.
     expect(r).toMatchObject({ ok: true, where: "envelope" });
-    // Both compile slots were taken all along.
-    expect(envelopeQueueState("compile").running).toBe(ENVELOPE_CONCURRENCY);
     await Promise.all(compiles);
     expect(envelopeQueueState("render")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
+    expect(envelopeQueueState("isolate")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
   }, 300_000);
 
   it("rendered text is spliced in verbatim: the answer is what JSON.stringify writes of the value", () => {

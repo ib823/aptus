@@ -28,14 +28,29 @@
  *     anything is loaded, measured or copied for it — a read path hands in
  *     a loader, not a loaded input (runLoadedInEnvelope) — so a job refused
  *     BUSY has cost the request thread nothing, and waiting for a slot costs
- *     nothing either.
+ *     nothing either;
+ *   - ONE ISOLATE BUDGET FOR THE INSTANCE (structural hardening round 4):
+ *     however many pools hand out slots, at most envelopeIsolateSlots()
+ *     isolates live at once, sized so that they, each at its heap cap, and
+ *     the server itself fit the instance's memory (instanceMemoryMb) — a
+ *     compile pool and a render pool of two each held four, 1.7 GB of
+ *     isolates beside a 600 MB server on a 2 GB instance;
+ *   - TEXT, NOT OBJECT GRAPHS (structural hardening round 4): stored JSON a
+ *     job is handed crosses as its text (render-input.ts), counted by its
+ *     length and parsed in the worker, so what the request thread pays to
+ *     hand a job over is a copy of strings, not a walk and a structured
+ *     clone of everything in them;
+ *   - A CALLER'S OWN DEADLINE (structural hardening round 4): a job may be
+ *     given the time its request has left (deadlineAt), which bounds its
+ *     wait for a slot and its run together, so a verify answers inside the
+ *     request's own limit instead of being cut off by the platform.
  *
  * Whatever runs past any of them ends as a typed refusal (RESOURCE_LIMIT,
  * BUSY, UNAVAILABLE), which the verify reports as a contract that was not
  * compiled (NOT_COMPILED) while the verify itself answers exactly as it did
  * before the compiler existed. Never an out-of-memory, a crash or a blocked
- * event loop: the request thread only copies the description in and a
- * bounded result out (pipeline.ts says what crosses).
+ * event loop: the request thread only copies the description (or stored
+ * texts) in and a bounded result out (pipeline.ts says what crosses).
  *
  * The worker is spawned per job and terminated after it, so its memory goes
  * back when the job ends however the job ended — and the job's slot is free
@@ -69,7 +84,8 @@ import { fileURLToPath } from "node:url";
 import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
-import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
+import { LIMITS } from "@/lib/contracts/budget";
+import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 import type { CompiledService, EnvelopeRefusal, Job, JobOutput, RenderSubject } from "@/lib/contracts/pipeline";
 
@@ -177,6 +193,19 @@ export const ENVELOPE_RENDER_TENANT_WAITING = 16;
 export const ENVELOPE_VERIFY_CONCURRENCY = 16;
 export const ENVELOPE_VERIFY_QUEUE = 64;
 export const VERIFY_WAIT_MS = 20_000;
+/**
+ * HOW MANY OF ONE ORGANISATION'S VERIFIES MAY READ AT ONCE (structural
+ * hardening round 4). Round 3 let one at a time hold the turn — through the
+ * SAP read itself — so one interface whose SAP hung for its 30 s timeout made
+ * every teammate's verify of a healthy system wait 20 s and answer BUSY,
+ * SAP never asked. The turn bounds the descriptions an organisation holds in
+ * flight (at most this many × LIMITS.sourceBytes), not one at a time: as
+ * many as its compiles can run or wait for (ENVELOPE_TENANT_RUNNING +
+ * ENVELOPE_TENANT_WAITING), so a slow system holds one of them and the
+ * others still read, and none of them is refused a compile for want of a
+ * place in the queue.
+ */
+export const ENVELOPE_VERIFY_TENANT_RUNNING = 3;
 
 /**
  * ONE ORGANISATION'S SHARE. The slots and the queue are the process's, and
@@ -231,32 +260,93 @@ interface Pool {
   readonly queue: number;
   /** How many of one organisation's jobs may wait at once. */
   readonly tenantWaiting: number;
+  /** How many of one organisation's jobs may run at once. */
+  readonly tenantRunning: number;
   running: number;
   readonly runningByTenant: Map<string, number>;
   readonly waiting: Waiter[];
 }
 
-const pool = (concurrency: number, queue: number, tenantWaiting: number): Pool => ({
+const pool = (concurrency: number, queue: number, tenantWaiting: number, tenantRunning: number = ENVELOPE_TENANT_RUNNING): Pool => ({
   concurrency,
   queue,
   tenantWaiting,
+  tenantRunning,
   running: 0,
   runningByTenant: new Map(),
   waiting: [],
 });
 
-/** Compiles, prepares and diffs share one pool; read-path renders have their own; verifies take a turn in a third. */
+/**
+ * THE INSTANCE'S MEMORY, AND THE ISOLATES IT HOLDS (structural hardening
+ * round 4). Each pool's slots were sized on their own — two compiles, two
+ * renders — so one instance could hold four isolates, each allowed its whole
+ * heap cap: 4 × 432 MB measured beside a 617 MB server, 2.3 GB, on a Vercel
+ * Hobby function instance that has 2 GB and cannot be given more. Past it the
+ * platform kills the instance, and every tenant's in-flight request with it:
+ * exactly what "the worst a description can do to memory is end its own
+ * worker" must exclude.
+ *
+ * So every job, whatever its pool, also holds one of envelopeIsolateSlots()
+ * isolate slots while its worker lives, and that number is DERIVED from the
+ * instance's memory: what is left after the server's own headroom, divided by
+ * the most one isolate may hold (its heap cap and its overhead). The
+ * instance's memory is the deployment's (COREEDGE_INSTANCE_MEMORY_MB), or
+ * 2,048 MB — the Hobby plan's fixed instance — and never more than the
+ * process's own cgroup limit when Node reports one (process.constrainedMemory).
+ * One organisation holds at most one isolate at a time, so another always
+ * has one.
+ */
+export const DEFAULT_INSTANCE_MEMORY_MB = 2048;
+/** What the server itself holds beside the isolates: 617 MiB measured (next-server with the contract routes loaded), and margin. */
+export const SERVER_HEADROOM_MB = 768;
+/** What an isolate holds beyond its heap (its own code, stacks, buffers): about 7 MB measured; this is the allowance. */
+export const ISOLATE_OVERHEAD_MB = 32;
+const INSTANCE_MB_RANGE = [512, 65_536] as const;
+
+/** The memory the instance has, in MB (see above). */
+export function instanceMemoryMb(): number {
+  let mb = envInt("COREEDGE_INSTANCE_MEMORY_MB", INSTANCE_MB_RANGE) ?? DEFAULT_INSTANCE_MEMORY_MB;
+  const constrained = typeof process.constrainedMemory === "function" ? process.constrainedMemory() : 0;
+  if (Number.isFinite(constrained) && constrained > 0) mb = Math.min(mb, Math.floor(constrained / (1024 * 1024)));
+  return mb;
+}
+
+/** The most memory one isolate may hold, in MB: the largest heap cap of any job kind, and its overhead. */
+export function isolateFootprintMb(): number {
+  let heap = 0;
+  for (const kind of Object.keys(ENVELOPE_LIMITS) as Job["kind"][]) heap = Math.max(heap, heapLimitBytes(envelopeLimitsFor(kind)));
+  return Math.ceil(heap / (1024 * 1024)) + ISOLATE_OVERHEAD_MB;
+}
+
+/** How many isolates may live at once in this process: as many as the instance's memory holds beside the server, at least one. */
+export function envelopeIsolateSlots(): number {
+  const room = instanceMemoryMb() - SERVER_HEADROOM_MB;
+  return Math.max(1, Math.min(ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY, Math.floor(room / isolateFootprintMb())));
+}
+
+/**
+ * Compiles, prepares and diffs share one pool; read-path renders have their
+ * own; verifies take a turn in a third; and every job's worker holds one of
+ * the instance's isolate slots (above) while it lives.
+ */
 const POOLS = {
   compile: pool(ENVELOPE_CONCURRENCY, ENVELOPE_QUEUE, ENVELOPE_TENANT_WAITING),
   render: pool(ENVELOPE_RENDER_CONCURRENCY, ENVELOPE_RENDER_QUEUE, ENVELOPE_RENDER_TENANT_WAITING),
-  verify: pool(ENVELOPE_VERIFY_CONCURRENCY, ENVELOPE_VERIFY_QUEUE, ENVELOPE_TENANT_WAITING),
+  verify: pool(ENVELOPE_VERIFY_CONCURRENCY, ENVELOPE_VERIFY_QUEUE, ENVELOPE_TENANT_WAITING, ENVELOPE_VERIFY_TENANT_RUNNING),
+  // Every job that holds a compile or a render slot may wait here, so the queue is theirs together.
+  isolate: pool(
+    envelopeIsolateSlots(),
+    ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY,
+    ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY,
+  ),
 };
 export type EnvelopePool = keyof typeof POOLS;
 const poolOf = (kind: Job["kind"]): EnvelopePool => (kind === "render" ? "render" : "compile");
 
 /** May a job of this tenant take a slot now (its organisation's share allowing)? */
 function withinShare(p: Pool, tenant: string | null): boolean {
-  return tenant === null || (p.runningByTenant.get(tenant) ?? 0) < ENVELOPE_TENANT_RUNNING;
+  return tenant === null || (p.runningByTenant.get(tenant) ?? 0) < p.tenantRunning;
 }
 
 function occupy(p: Pool, tenant: string | null): void {
@@ -476,15 +566,18 @@ function construct(input: WorkerInput, limits: EnvelopeLimits): Worker {
  * LIMITS.renderInput, which every input a read path stores fits by
  * construction. A description (compile) is a string, copied whole in one
  * step, and the reader already capped it (LIMITS.sourceBytes). Measured only
- * once the job holds its slot, so a refused job is never measured.
+ * once the job holds its slot, so a refused job is never measured. Stored
+ * JSON handed in as its text (render-input.ts) is counted by its length,
+ * never walked: the walk covers only the job's own structure.
  */
 function overInputBound(job: Job): boolean {
   const cap = LIMITS.contract.cap;
-  if (job.kind === "prepare") return jsonBytesUpTo(job.input.contract, cap) > cap;
-  if (job.kind === "render") return jsonBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes;
+  if (job.kind === "prepare") return inputBytesUpTo(job.input.contract, cap) > cap;
+  if (job.kind === "render") return inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes;
   if (job.kind === "diff") {
+    // A stored IR crosses as its jsonb text, at most twice its canonical bytes (render-input.ts).
     const n = (Array.isArray(job.input.previous) ? job.input.previous.length : 0) + 1;
-    return jsonBytesUpTo(job.input, n * cap) > n * cap;
+    return inputBytesUpTo(job.input, 2 * n * cap) > 2 * n * cap;
   }
   return false;
 }
@@ -509,7 +602,17 @@ function inputRefusal<J extends Job>(job: J, since: number): EnvelopeResult<JobO
 export interface EnvelopeOptions {
   /** The organisation the job is for: its share of the slots and the queue (ENVELOPE_TENANT_*). */
   tenant?: string | null;
+  /**
+   * The time (ms since the epoch) by which the caller must have its answer —
+   * its request's own limit (structural hardening round 4). The wait for a
+   * slot and the run together end by then; a job cut short by it is BUSY
+   * (cause REQUEST_DEADLINE_CAUSE), never a description that needs too much.
+   */
+  deadlineAt?: number | null;
 }
+
+/** The cause of a refusal because the caller's own deadline (deadlineAt) came first. */
+export const REQUEST_DEADLINE_CAUSE = "request-deadline";
 
 /**
  * Hold one of a pool's slots while `body` runs, waiting for one at most
@@ -577,15 +680,29 @@ export async function runLoadedInEnvelope<K extends Job["kind"]>(
   opts: EnvelopeOptions = {},
 ): Promise<EnvelopeResult<JobOutput<K>> | null> {
   const queuedAt = Date.now();
-  // Waiting counts against the deadline too: a verify never waits longer than a compile may run.
-  const r = await withEnvelopeSlot(poolOf(kind), opts.tenant ?? null, limits.deadlineMs, async () => {
+  const tenant = opts.tenant ?? null;
+  const deadlineAt = opts.deadlineAt ?? null;
+  /** What is left of the caller's own time, capped at `ms`. */
+  const within = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
+  // A job waits for its slot at most its own deadline (and never past the caller's), then runs at most its deadline.
+  const wait = within(limits.deadlineMs);
+  if (wait <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
+  const r = await withEnvelopeSlot(poolOf(kind), tenant, wait, async () => {
     const job = await load();
     if (job === null) return null;
     if (overInputBound(job)) return inputRefusal(job, queuedAt) as EnvelopeResult<JobOutput<K>>;
-    // Answered once its worker has exited, so the slot is never free while its isolate lives (EXIT_GRACE_MS).
-    return runWorker<JobOutput<K>>(job, limits, queuedAt);
+    // Then one of the instance's isolates (envelopeIsolateSlots), waited for within the same time.
+    const isolateWait = within(limits.deadlineMs - (Date.now() - queuedAt));
+    if (isolateWait <= 0) return refuse<JobOutput<K>>("BUSY", kind, queuedAt, deadlineAt === null ? undefined : REQUEST_DEADLINE_CAUSE);
+    const ran = await withEnvelopeSlot("isolate", tenant, isolateWait, () => {
+      const runMs = within(limits.deadlineMs);
+      if (runMs <= 0) return Promise.resolve(refuse<JobOutput<K>>("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE));
+      // Answered once its worker has exited, so neither slot is free while its isolate lives (EXIT_GRACE_MS).
+      return runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
+    });
+    return ran.ok ? ran.value : refuse<JobOutput<K>>("BUSY", kind, queuedAt);
   });
-  return r.ok ? r.value : refuse("BUSY", kind, queuedAt);
+  return r.ok ? r.value : refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
 }
 
 /**
@@ -601,8 +718,9 @@ export async function compileInEnvelope(
   entitySet: string | null,
   subject: RenderSubject | null,
   tenant: string | null = null,
+  deadlineAt: number | null = null,
 ): Promise<CompiledService> {
-  const r = await runInEnvelope({ kind: "compile", input: { body, entitySet, subject } }, undefined, { tenant });
+  const r = await runInEnvelope({ kind: "compile", input: { body, entitySet, subject } }, undefined, { tenant, deadlineAt });
   if (r.ok) return r.value;
   if (r.reason === "INTERNAL") {
     console.error("[contracts] compile failed", { error: "INTERNAL" });
@@ -618,7 +736,12 @@ function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, ca
   return { ok: false, reason, detail: DETAIL[reason], ms, ...(cause ? { cause } : {}) };
 }
 
-function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number): Promise<EnvelopeResult<T>> {
+/**
+ * `cutByCaller`: the run's deadline is the caller's (deadlineAt), shorter than
+ * the job's own — a job that meets it was not given its time, so it is BUSY,
+ * not RESOURCE_LIMIT.
+ */
+function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCaller = false): Promise<EnvelopeResult<T>> {
   return new Promise((resolve) => {
     let result: EnvelopeResult<T> | null = null;
     let worker: Worker | undefined;
@@ -648,7 +771,10 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number): Promise<
       }
       answer();
     };
-    const timer = setTimeout(() => settle(refuse("RESOURCE_LIMIT", job.kind, since, "deadline")), limits.deadlineMs);
+    const timer = setTimeout(
+      () => settle(cutByCaller ? refuse("BUSY", job.kind, since, REQUEST_DEADLINE_CAUSE) : refuse("RESOURCE_LIMIT", job.kind, since, "deadline")),
+      limits.deadlineMs,
+    );
     spawn(job, limits).then(
       (w) => {
         worker = w;

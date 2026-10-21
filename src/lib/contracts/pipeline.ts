@@ -41,8 +41,10 @@ import {
   kitLimit,
   LIMITS,
   OutputBudget,
+  renderCheckpoint,
   type RenderLimits,
   schemaLimit,
+  withRenderDeadline,
   writeJson,
 } from "@/lib/contracts/budget";
 import { contractDigest } from "@/lib/contracts/canonical";
@@ -54,6 +56,7 @@ import { standaloneSchemas } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { buildNorthboundOpenApi, documentJson, type NorthboundDocInput, type OpenApiVersion } from "@/lib/contracts/openapi";
 import { renderedRequestSchema } from "@/lib/contracts/request-schema";
+import { hydrateJsonTexts } from "@/lib/contracts/render-input";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildScaffold, safeName, type ScaffoldFixture, type ScaffoldInterface, type WithheldFixture } from "@/lib/studio/scaffold";
 
@@ -391,7 +394,9 @@ export function compiledServiceOf(r: CompileResult, entitySet: string | null, su
   return { ok: true, format: r.format, odataVersion: r.ir.odataVersion, datasets, sourceLength: r.sourceLength, dataset };
 }
 
-export function diffJob(input: DiffJobInput): DiffJobOutput {
+export function diffJob(stored: DiffJobInput): DiffJobOutput {
+  // The IRs cross as their stored text (render-input.ts): parsed here, in the worker.
+  const input = hydrateJsonTexts(stored);
   return input.previous.map((prev) => {
     const d = diffContracts(prev, input.next);
     return { bump: d.bump, stored: storedDiff(d) };
@@ -404,28 +409,45 @@ export function diffJob(input: DiffJobInput): DiffJobOutput {
  * worker render the same bytes (read-render.ts). Each text is written by the
  * one budgeted writer, so a render past its budget stops there.
  */
-export function renderForRead(input: RenderJobInput, deadline: number | null = null): RenderedForRead {
+export function renderForRead(stored: RenderJobInput, deadline: number | null = null): RenderedForRead {
+  /*
+   * On the request thread (a deadline), the whole render runs under it — the
+   * stored texts' parse, every build stage and every write (budget.ts, the
+   * render clock) — and writes at most LIMITS.inlineRender.outputBytes before
+   * it is handed to the envelope (TIME), so no single native write is larger
+   * than that (structural hardening round 4).
+   */
+  const soft = deadline === null ? Number.POSITIVE_INFINITY : LIMITS.inlineRender.outputBytes;
+  const budgetFor = (name: "schema" | "kit" | "document") => new OutputBudget(name, stored.limit, deadline, soft);
   try {
-    switch (input.path) {
-      case "schema": {
-        const budget = new OutputBudget("schema", input.limit, deadline);
-        const schemas = standaloneSchemas(input.contract, toTypeName(input.entitySet));
-        const requestSchema = renderedRequestSchema(input.requestSchema, input.iface, { id: input.snapshotId, schemas });
-        return { ok: true, texts: [jsonText(schemas, budget), jsonText(requestSchema, budget)] };
+    return withRenderDeadline(deadline, () => {
+      // Stored JSON carried as its text (render-input.ts) is parsed here, under the clock.
+      const input = hydrateJsonTexts(stored);
+      renderCheckpoint();
+      switch (input.path) {
+        case "schema": {
+          const budget = budgetFor("schema");
+          const schemas = standaloneSchemas(input.contract, toTypeName(input.entitySet));
+          renderCheckpoint();
+          const requestSchema = renderedRequestSchema(input.requestSchema, input.iface, { id: input.snapshotId, schemas });
+          return { ok: true, texts: [jsonText(schemas, budget), jsonText(requestSchema, budget)] };
+        }
+        case "kit": {
+          const budget = budgetFor("kit");
+          const files = buildScaffold(input.iface, input.baseUrl, input.fixtures, input.withheld, budget);
+          renderCheckpoint();
+          // The files' contents were charged as they were written; their JSON escapes are a bounded multiple of them.
+          return { ok: true, texts: [JSON.stringify(files)] };
+        }
+        case "document": {
+          const doc = buildNorthboundOpenApi({ ...input.doc, safe: safeName, budget: budgetFor("document") });
+          renderCheckpoint();
+          return { ok: true, texts: [documentJson(doc, budgetFor("document"))] };
+        }
       }
-      case "kit": {
-        const budget = new OutputBudget("kit", input.limit, deadline);
-        const files = buildScaffold(input.iface, input.baseUrl, input.fixtures, input.withheld, budget);
-        // The files' contents were charged as they were written; their JSON escapes are a bounded multiple of them.
-        return { ok: true, texts: [JSON.stringify(files)] };
-      }
-      case "document": {
-        const doc = buildNorthboundOpenApi({ ...input.doc, safe: safeName, budget: new OutputBudget("document", input.limit, deadline) });
-        return { ok: true, texts: [documentJson(doc, new OutputBudget("document", input.limit, deadline))] };
-      }
-    }
+    });
   } catch (err) {
-    if (err instanceof BudgetExceeded) return { ok: false, reason: err.budget === "time" ? "TIME" : "TOO_LARGE", limit: input.limit };
+    if (err instanceof BudgetExceeded) return { ok: false, reason: err.budget === "time" ? "TIME" : "TOO_LARGE", limit: stored.limit };
     throw err;
   }
 }

@@ -71,6 +71,8 @@ export async function recordVerifiedContract(input: {
   environment: string;
   connectionId: string;
   actorId: string;
+  /** When the request must have its answer (ms since the epoch): the record's envelope jobs end by then. */
+  deadlineAt?: number | null;
 }): Promise<ContractOutcome> {
   const { iface, compiled } = input;
   if (!compiled) return { status: "NOT_COMPILED", detail: "The service's description was not read in full." };
@@ -99,6 +101,7 @@ export async function recordVerifiedContract(input: {
       environment: input.environment,
       connectionId: input.connectionId,
       createdById: input.actorId,
+      deadlineAt: input.deadlineAt ?? null,
     });
     if (outcome.status === "TOO_LARGE") {
       return {

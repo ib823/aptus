@@ -29,6 +29,21 @@
  *     what the bucket holds. A burst of reads — cheap or expensive, of any
  *     shape, found or not — holds the thread for at most one clock at a time
  *     and a fixed share of every second; the rest render in the envelope.
+ *   - AND EACH ORGANISATION'S PART OF IT (round 4). One bucket for the
+ *     process let one builder's large downloads spend it, overruns and all,
+ *     so every other tenant's 1 ms read went to the envelope — a worker per
+ *     read. Each organisation now draws on a part of its own as well
+ *     (LIMITS.inlineRender.tenantMs), and pays for what its renders took:
+ *     one tenant spends at most its part, and the rest of the share is left
+ *     to the others' cheap reads.
+ *   - A CLOCK THAT IS READ (round 4). The deadline is the render's, ambient,
+ *     and looked at on a time basis through every stage — the stored texts'
+ *     parse, the schema and document builders, every charge and size walk
+ *     (budget.ts, the render clock) — and a render here writes at most
+ *     LIMITS.inlineRender.outputBytes: so one that meets its clock stops
+ *     within about the grant, not after building a whole document. A
+ *     solution document is routed by its interfaces too (documentInputBytes),
+ *     never as "0 bytes" for interfaces that have no contract.
  *   - SLOT FIRST (round 3). A read that renders in the envelope takes its
  *     render slot before anything is loaded, measured or copied for it: the
  *     route hands in a loader (renderReadPathLazy), and the loader runs only
@@ -48,9 +63,10 @@
 
 import { randomUUID } from "node:crypto";
 
-import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
+import { LIMITS } from "@/lib/contracts/budget";
 import { INPUT_CAUSE, runLoadedInEnvelope } from "@/lib/contracts/envelope";
 import { renderForRead, type RenderedText, type RenderJobInput } from "@/lib/contracts/pipeline";
+import { inputBytesUpTo } from "@/lib/contracts/render-input";
 
 export type ReadRender =
   | { ok: true; texts: RenderedText[]; where: "request" | "envelope" }
@@ -68,31 +84,103 @@ export type ReadLoad<R> = { ok: true; input: RenderJobInput } | { ok: false; ref
 /** The least render time an inline render starts with; with less in the bucket, the read renders in the envelope. */
 const MIN_INLINE_MS = 10;
 
-/** THE REQUEST THREAD'S SHARE of render time (see the header): milliseconds, refilled at sharePerSecondMs. */
-const share = { ms: LIMITS.inlineRender.ms as number, at: Date.now() };
+/** A token bucket of render time: milliseconds, holding at most `cap`, refilled at `perSecond`. */
+interface Bucket {
+  ms: number;
+  at: number;
+}
 
-function refill(): void {
+function refill(b: Bucket, cap: number, perSecond: number, now: number): void {
+  b.ms = Math.min(cap, b.ms + ((now - b.at) * perSecond) / 1000);
+  b.at = now;
+}
+
+/** THE REQUEST THREAD'S SHARE of render time (see the header). */
+const share: Bucket = { ms: LIMITS.inlineRender.ms, at: Date.now() };
+
+/**
+ * EACH ORGANISATION'S PART OF IT (structural hardening round 4; budget.ts,
+ * LIMITS.inlineRender.tenantMs). One bucket for the whole process let one
+ * builder's large downloads spend it — and every overrun was charged to it —
+ * so every other tenant's 1 ms /schema read went to the envelope, a worker
+ * per read, two at a time for the whole process. Now a render starts here
+ * only while its organisation's bucket has time too, its deadline is the
+ * lesser of the two, and what it took (overrun and all) is charged to both:
+ * an organisation that spends its part renders in the envelope until it
+ * refills, and the thread's share is left to the others. A read with no
+ * organisation (a test, a script) draws on the thread's share alone.
+ *
+ * A bucket that has refilled is the same as none, so it is forgotten; the
+ * map holds only the organisations that rendered here within the last
+ * second or so (pruned when it grows past TENANT_BUCKETS_PRUNE_AT).
+ */
+const tenantShares = new Map<string, Bucket>();
+const TENANT_BUCKETS_PRUNE_AT = 1024;
+
+function tenantBucket(tenant: string, now: number): Bucket {
+  let b = tenantShares.get(tenant);
+  if (!b) {
+    if (tenantShares.size >= TENANT_BUCKETS_PRUNE_AT) {
+      for (const [k, v] of tenantShares) {
+        refill(v, LIMITS.inlineRender.tenantMs, LIMITS.inlineRender.tenantSharePerSecondMs, now);
+        if (v.ms >= LIMITS.inlineRender.tenantMs) tenantShares.delete(k);
+      }
+    }
+    b = { ms: LIMITS.inlineRender.tenantMs, at: now };
+    tenantShares.set(tenant, b);
+  }
+  refill(b, LIMITS.inlineRender.tenantMs, LIMITS.inlineRender.tenantSharePerSecondMs, now);
+  return b;
+}
+
+/** The deadline an inline render of `tenant` may have now, in ms: 0 when the thread's share or the organisation's part is spent. */
+function inlineGrant(tenant: string | null): number {
   const now = Date.now();
-  share.ms = Math.min(LIMITS.inlineRender.ms, share.ms + ((now - share.at) * LIMITS.inlineRender.sharePerSecondMs) / 1000);
-  share.at = now;
+  refill(share, LIMITS.inlineRender.ms, LIMITS.inlineRender.sharePerSecondMs, now);
+  let ms = Math.min(share.ms, LIMITS.inlineRender.ms);
+  if (tenant !== null) ms = Math.min(ms, tenantBucket(tenant, now).ms);
+  return ms >= MIN_INLINE_MS ? ms : 0;
 }
 
-/** The deadline an inline render may have now, in ms: 0 when the thread's share is spent. */
-function inlineGrant(): number {
-  refill();
-  return share.ms >= MIN_INLINE_MS ? Math.min(share.ms, LIMITS.inlineRender.ms) : 0;
+/** What an inline render took, charged to the thread's share and to its organisation's part. */
+function spend(tenant: string | null, ms: number): void {
+  const now = Date.now();
+  refill(share, LIMITS.inlineRender.ms, LIMITS.inlineRender.sharePerSecondMs, now);
+  share.ms -= ms;
+  if (tenant !== null) tenantBucket(tenant, now).ms -= ms;
 }
 
-/** For a test: the request thread's share of render time left now (ms), and a way to spend it. */
-export function requestThreadShare(spend = 0): number {
-  refill();
-  share.ms -= spend;
+/**
+ * For a test: the request thread's share of render time left now (ms), after
+ * spending `spend` of it — or, given a tenant, that organisation's part of it.
+ */
+export function requestThreadShare(spendMs = 0, tenant?: string): number {
+  const now = Date.now();
+  if (tenant !== undefined) {
+    const b = tenantBucket(tenant, now);
+    b.ms -= spendMs;
+    return b.ms;
+  }
+  refill(share, LIMITS.inlineRender.ms, LIMITS.inlineRender.sharePerSecondMs, now);
+  share.ms -= spendMs;
   return share.ms;
 }
 
 /** Whether a read of this much stored input is tried on the request thread at all (before the share is asked). */
 export function rendersOnRequestThread(inputBytes: number | null): boolean {
   return inputBytes !== null && inputBytes <= LIMITS.inlineRender.inputBytes;
+}
+
+/**
+ * What a solution document's stored input is counted as when it is routed:
+ * its contracts and captured schemas, and LIMITS.inlineRender.perInterfaceBytes
+ * for each interface — whose names, grants and notes it renders whether or
+ * not it has a contract — so a document of a thousand interfaces with no
+ * contract is not "0 bytes" (structural hardening round 4). Null when a
+ * size was not kept.
+ */
+export function documentInputBytes(storedBytes: number | null, interfaces: number): number | null {
+  return storedBytes === null ? null : storedBytes + interfaces * LIMITS.inlineRender.perInterfaceBytes;
 }
 
 /**
@@ -109,19 +197,19 @@ export async function renderReadPathLazy<R>(
   opts: { tenant: string | null },
 ): Promise<ReadRender | { ok: false; reason: "REFUSED"; refusal: R }> {
   let input: RenderJobInput | null = null;
-  if (rendersOnRequestThread(plan.inputBytes) && inlineGrant() > 0) {
+  if (rendersOnRequestThread(plan.inputBytes) && inlineGrant(opts.tenant) > 0) {
     const l = await load();
     if (!l.ok) return { ok: false, reason: "REFUSED", refusal: l.refusal };
     input = l.input;
     // Asked again: other reads may have spent the share while this one loaded.
-    const ms = inlineGrant();
+    const ms = inlineGrant(opts.tenant);
     if (ms > 0) {
       const started = Date.now();
       let r: ReturnType<typeof renderForRead>;
       try {
         r = renderForRead(input, started + ms);
       } finally {
-        share.ms -= Date.now() - started;
+        spend(opts.tenant, Date.now() - started);
       }
       if (r.ok) return { ok: true, texts: r.texts, where: "request" };
       if (r.reason === "TOO_LARGE") return { ok: false, reason: "TOO_LARGE", limit: r.limit };
@@ -161,7 +249,7 @@ export async function renderReadPathLazy<R>(
 /** renderReadPathLazy for an input already in hand (a test, a small value): its size measured up to the inline bound. */
 export async function renderReadPath(input: RenderJobInput, opts: { tenant: string | null }): Promise<ReadRender> {
   const r = await renderReadPathLazy<never>(
-    { inputBytes: jsonBytesUpTo(input, LIMITS.inlineRender.inputBytes) },
+    { inputBytes: inputBytesUpTo(input, LIMITS.inlineRender.inputBytes) },
     () => Promise.resolve({ ok: true, input }),
     opts,
   );

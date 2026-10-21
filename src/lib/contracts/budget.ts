@@ -34,10 +34,14 @@
  *                  and served (by /schema, the kit and the document alike)
  *                  only while its served JSON is ≤ 520 KiB
  *   request thread a read path renders here only from ≤ 512 KiB of stored
- *                  input, within 100 ms, and only while the thread's share of
- *                  render time (250 ms a second) has time left; anything
- *                  else runs in the envelope (read-render.ts), on ≤ 12 MiB
- *                  of input — every stored input fits it by construction
+ *                  input (2 KiB more per interface of a document), within
+ *                  100 ms read on a time basis, writing ≤ 4 MiB, and only
+ *                  while the thread's share of render time (250 ms a second)
+ *                  and its organisation's part of it (60 ms a second) have
+ *                  time left; anything else runs in the envelope
+ *                  (read-render.ts), on ≤ 16 MiB of input, stored JSON
+ *                  carried as its text — every stored input fits it by
+ *                  construction
  *   fixture        ≤ 4.5 MiB of compact JSON, from a request body as large;
  *                  a kit reads fixtures only while their stored text adds up
  *                  to ≤ 8 MiB, and names the others as too large
@@ -126,17 +130,49 @@ export const LIMITS = {
    * cheap it would have been, so no burst of reads — expensive or not, found
    * or not — holds the thread for longer than one clock.
    */
-  inlineRender: { inputBytes: 512 * KiB, ms: 100, sharePerSecondMs: 250 },
+  inlineRender: {
+    inputBytes: 512 * KiB,
+    ms: 100,
+    sharePerSecondMs: 250,
+    /**
+     * ONE ORGANISATION'S PART OF THAT SHARE (structural hardening round 4).
+     * The share was one bucket for the whole process: one builder downloading
+     * a large kit five times a second spent it, every overrun was charged to
+     * it, and every other tenant's 1 ms /schema read went to the envelope —
+     * a worker per read. Now each organisation draws on a bucket of its own
+     * too (holding at most `tenantMs`, refilled at `tenantSharePerSecondMs`),
+     * a render's deadline is the lesser of the two, and its whole cost —
+     * overrun included — is charged to both: one organisation can spend at
+     * most a fraction of the thread's share, and the rest stays for the
+     * others.
+     */
+    tenantMs: 50,
+    tenantSharePerSecondMs: 60,
+    /**
+     * What an interface adds to a solution document's input when routing it
+     * (its names and grants; about 11 KB of document each): a document of
+     * many interfaces without contracts is not "0 bytes" and never cheap.
+     */
+    perInterfaceBytes: 2 * KiB,
+    /**
+     * The most bytes a render on the request thread writes: past it the
+     * render is handed to the envelope (a soft budget, OutputBudget), so the
+     * native writer's single uninterruptible call is bounded too.
+     */
+    outputBytes: 4 * MiB,
+  },
   /**
    * What a render job in the envelope may be handed: every input a read path
-   * stores fits it by construction — a contract (2 MiB), a captured schema as
-   * served (520 KiB), fixtures as a kit reads them (8 MiB of stored text,
+   * stores fits it by construction — a contract (2 MiB canonical; carried as
+   * its stored text, at most twice that), a captured schema as served
+   * (520 KiB), fixtures as a kit reads them (8 MiB of stored text,
    * LIMITS.fixture) and the interfaces' names and grants (1.5 MiB more than
    * the 1,016 a document carries need) — so it refuses only what was stored
    * before those bounds, and says so (INPUT_TOO_LARGE), never as the
-   * output's budget.
+   * output's budget. Stored JSON crosses as its text and is counted by its
+   * length, never walked on the request thread (render-input.ts, round 4).
    */
-  renderInput: { bytes: 12 * MiB },
+  renderInput: { bytes: 16 * MiB },
   /**
    * A recorded fixture (capture-fixture): its body is at most `bytes` of
    * compact JSON, from a request body of at most `requestBytes`; a kit reads
@@ -184,14 +220,68 @@ export class BudgetExceeded extends Error {
   }
 }
 
-/** How many charges pass between two looks at the clock. */
-const CLOCK_EVERY = 1024;
+/**
+ * THE RENDER CLOCK (structural hardening round 4). A read path rendered on
+ * the request thread runs under a deadline; round 3 read that deadline once
+ * every 1,024 charges (and every 4,096 nodes of one size walk), so a render
+ * whose work was not charging bytes — a solution document's 1,016 small
+ * parts, each charged once after it was built, a schema tree built before
+ * its first byte was written — never looked at the clock at all, and a 10 ms
+ * grant blocked the thread for half a second.
+ *
+ * So the deadline is AMBIENT for the whole render (withRenderDeadline: a
+ * render is synchronous, so nothing else runs while it is set), and it is
+ * read on a time basis, not a count basis: renderTick() — called by every
+ * budget charge, every size walk, and every builder's per-property and
+ * per-interface loop — looks at the clock at least once every TICK_EVERY
+ * calls, and every look that finds the deadline passed ends the render with
+ * the typed refusal (BudgetExceeded "time"). A builder that forgot a tick is
+ * still caught at its next charge or walk; the envelope (no deadline) pays a
+ * comparison per call.
+ */
+let ambientDeadline: number | null = null;
+let ticks = 0;
+/** Calls of renderTick between two looks at the clock: a look is ~30 ns, a tick's worth of work far more. */
+const TICK_EVERY = 16;
+
+/** Run `fn` with `deadline` (ms since the epoch; null for none) as the render's ambient deadline. */
+export function withRenderDeadline<T>(deadline: number | null, fn: () => T): T {
+  const previous = ambientDeadline;
+  // An inner deadline never extends an outer one.
+  ambientDeadline = deadline === null ? previous : previous === null ? deadline : Math.min(previous, deadline);
+  try {
+    return fn();
+  } finally {
+    ambientDeadline = previous;
+  }
+}
+
+/** Look at the clock, now and then: BudgetExceeded("time") once the ambient deadline has passed. */
+export function renderTick(): void {
+  if (ambientDeadline === null || ++ticks % TICK_EVERY !== 0) return;
+  renderCheckpoint();
+}
+
+/** Look at the clock now, whatever the count (a stage boundary). */
+export function renderCheckpoint(): void {
+  if (ambientDeadline === null) return;
+  const now = Date.now();
+  if (now > ambientDeadline) throw new BudgetExceeded("time", ambientDeadline, now);
+}
 
 /**
  * Bytes, counted as they are written, refused past `limit`. Optionally a
- * wall-clock deadline too (ms since the epoch), checked every CLOCK_EVERY
- * charges: a read path that renders far slower than its bytes justify stops
- * with the same typed refusal.
+ * wall-clock deadline too (ms since the epoch), read on the render clock's
+ * basis (above) — and the render's ambient deadline is honoured whether or
+ * not the budget was given one: a read path that renders far slower than its
+ * bytes justify stops with the same typed refusal.
+ *
+ * And optionally a SOFT limit (structural hardening round 4): past it the
+ * render is not refused for its size but handed on, as a render past its
+ * clock is (BudgetExceeded "time") — what bounds the bytes, and so the native
+ * writer's uninterruptible work, of a render on the request thread
+ * (LIMITS.inlineRender.outputBytes) without changing what the envelope may
+ * render under the same budget.
  */
 export class OutputBudget {
   spent = 0;
@@ -201,14 +291,19 @@ export class OutputBudget {
     readonly budget: BudgetName,
     readonly limit: number,
     private readonly deadline: number | null = null,
+    private readonly softLimit: number = Number.POSITIVE_INFINITY,
   ) {}
 
   charge(bytes: number): void {
     this.spent += bytes;
-    if (this.spent > this.limit) throw new BudgetExceeded(this.budget, this.limit, this.spent);
-    if (this.deadline !== null && ++this.charges % CLOCK_EVERY === 0 && Date.now() > this.deadline) {
-      throw new BudgetExceeded("time", this.deadline, Date.now());
-    }
+    if (this.spent > this.limit || this.spent > this.softLimit) throw this.exceeded(this.spent);
+    if (++this.charges % TICK_EVERY === 0) this.checkClock();
+  }
+
+  /** The refusal for having spent `spent`: the budget's own past its limit, a hand-over ("time") past the soft one. */
+  exceeded(spent: number): BudgetExceeded {
+    if (spent > this.limit) return new BudgetExceeded(this.budget, this.limit, spent);
+    return new BudgetExceeded("time", this.softLimit, spent);
   }
 
   /** Charge a string's UTF-8 length. */
@@ -217,17 +312,26 @@ export class OutputBudget {
   }
 
   get remaining(): number {
-    return Math.max(0, this.limit - this.spent);
+    return Math.max(0, Math.min(this.limit, this.softLimit) - this.spent);
   }
 
   /** No limit and no deadline: nothing for a writer to stop at. */
   get unbounded(): boolean {
-    return this.limit === Number.POSITIVE_INFINITY && this.deadline === null;
+    return (
+      this.limit === Number.POSITIVE_INFINITY &&
+      this.softLimit === Number.POSITIVE_INFINITY &&
+      this.deadline === null &&
+      ambientDeadline === null
+    );
   }
 
-  /** Look at the clock now: for work that is not writing bytes (compactSize's walk). */
+  /** Look at the clock now — its own deadline and the render's: for work that is not writing bytes (compactSize's walk). */
   checkClock(): void {
-    if (this.deadline !== null && Date.now() > this.deadline) throw new BudgetExceeded("time", this.deadline, Date.now());
+    const deadline =
+      this.deadline === null ? ambientDeadline : ambientDeadline === null ? this.deadline : Math.min(this.deadline, ambientDeadline);
+    if (deadline === null) return;
+    const now = Date.now();
+    if (now > deadline) throw new BudgetExceeded("time", deadline, now);
   }
 }
 
@@ -462,8 +566,8 @@ function quotedBytes(s: string): number {
   return PLAIN.test(s) ? s.length + 2 : utf8Length(JSON.stringify(s));
 }
 
-/** Nodes the size walk visits between two looks at a budget's clock. */
-const CLOCK_EVERY_NODES = 4096;
+/** Nodes the size walk visits between two looks at a budget's clock (and the render's). */
+const CLOCK_EVERY_NODES = 256;
 
 /**
  * THE EXACT UTF-8 LENGTH OF JSON.stringify(value), compact, refused
@@ -479,13 +583,15 @@ const CLOCK_EVERY_NODES = 4096;
  * number is null; a BigInt throws TypeError, and a cycle meets the depth
  * cap (BudgetExceeded) where JSON.stringify would throw.
  */
-function compactSize(value: unknown, budget: OutputBudget): number {
+function compactSize(value: unknown, budget: OutputBudget, opaque?: (v: object) => number | null): number {
   const limit = budget.remaining;
   let n = 0;
   let nodes = 0;
+  // Every walk looks at the clock before it starts, whatever its size (round 4).
+  budget.checkClock();
   const add = (k: number) => {
     n += k;
-    if (n > limit) throw new BudgetExceeded(budget.budget, budget.limit, budget.spent + n);
+    if (n > limit) throw budget.exceeded(budget.spent + n);
   };
   /** Adds what `raw` writes, and whether it wrote anything at all (an object member may be left out). */
   const size = (raw: unknown, key: string | number, depth: number, inArray: boolean): boolean => {
@@ -518,6 +624,12 @@ function compactSize(value: unknown, budget: OutputBudget): number {
     }
     if (depth >= LIMITS.jsonDepth) throw new BudgetExceeded("depth", LIMITS.jsonDepth, depth);
     if (++nodes % CLOCK_EVERY_NODES === 0) budget.checkClock();
+    // A value counted by its own size, without walking it (a stored text, render-input.ts).
+    const own = opaque?.(v as object);
+    if (own !== undefined && own !== null) {
+      add(own);
+      return true;
+    }
     add(2);
     if (Array.isArray(v)) {
       for (let i = 0; i < v.length; i++) {
@@ -579,6 +691,21 @@ export function measureJson(value: unknown, limit: number = Number.POSITIVE_INFI
   }
   writeJson(value, budget, null, opts);
   return budget.spent;
+}
+
+/**
+ * jsonBytesUpTo with some values counted by `opaque` instead of walked: the
+ * size of what the value would be with each of them taken as that many bytes.
+ */
+export function jsonBytesUpToWith(value: unknown, limit: number, opaque: (v: object) => number | null): number {
+  const budget = new OutputBudget("measure", limit);
+  try {
+    budget.charge(compactSize(value, budget, opaque));
+    return budget.spent;
+  } catch (err) {
+    if (err instanceof BudgetExceeded && err.budget === "measure") return err.spent;
+    throw err;
+  }
 }
 
 /** The size of JSON.stringify(value), or a number above `limit` once it is known to be past it. */

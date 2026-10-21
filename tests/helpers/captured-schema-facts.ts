@@ -12,7 +12,7 @@ type Row = Record<string, unknown>;
 /** Whether a raw query is fixtureFacts's (fixture-store.ts), not capturedSchemaFacts's. */
 export function isFixtureFactsQuery(query: unknown): boolean {
   const q = query as { sql?: string; strings?: readonly string[] } | null;
-  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"MockFixture"');
+  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"MockFixture"') && !isFixtureBodiesQuery(query);
 }
 
 /**
@@ -39,7 +39,7 @@ export function fixtureFactRows(rows: readonly Row[], query: unknown): Row[] {
 }
 
 export function capturedSchemaFactRows(rows: readonly Row[], query: unknown): Row[] {
-  if (isFixtureFactsQuery(query)) return [];
+  if (isFixtureFactsQuery(query) || isFixtureBodiesQuery(query) || isSnapshotIrTextQuery(query)) return [];
   const values = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
   const [org, ...ids] = values;
   return rows
@@ -57,4 +57,32 @@ export function capturedSchemaFactRows(rows: readonly Row[], query: unknown): Ro
         stampEntitySet: stamp && typeof stamp === "object" && typeof stamp.entitySet === "string" ? stamp.entitySet : null,
       };
     });
+}
+
+/** Whether a raw query reads snapshots' IRs as their text (snapshot.ts, snapshotIrTexts). */
+export function isSnapshotIrTextQuery(query: unknown): boolean {
+  const q = query as { sql?: string; strings?: readonly string[] } | null;
+  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"ContractSnapshot"');
+}
+
+/** What the database answers snapshotIrTexts's query with: each row's IR as JSON text. Values: the organisation, then the ids. */
+export function snapshotIrTextRows(rows: readonly Row[], query: unknown): Row[] {
+  const [org, ...ids] = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
+  return rows
+    .filter((r) => (r.organizationId === undefined || r.organizationId === org) && ids.includes(r.id))
+    .map((r) => ({ id: r.id, ir: JSON.stringify(r.ir) }));
+}
+
+/** Whether a raw query reads fixture bodies as their text (fixture-store.ts, fixtureBodies). */
+export function isFixtureBodiesQuery(query: unknown): boolean {
+  const q = query as { sql?: string; strings?: readonly string[] } | null;
+  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"body"::text AS');
+}
+
+/** What the database answers fixtureBodies's query with. Values: the organisation, the interface, then the ids. */
+export function fixtureBodyTextRows(rows: readonly Row[], query: unknown): Row[] {
+  const [org, interfaceId, ...ids] = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
+  return rows
+    .filter((r) => r.organizationId === org && r.interfaceId === interfaceId && ids.includes(r.id))
+    .map((r) => ({ id: r.id, body: JSON.stringify(r.body) }));
 }

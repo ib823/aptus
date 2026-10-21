@@ -18,6 +18,7 @@
 import { Prisma } from "@prisma/client";
 
 import { LIMITS } from "@/lib/contracts/budget";
+import { jsonTextRef } from "@/lib/contracts/render-input";
 import { prisma } from "@/lib/db/prisma";
 
 export interface FixtureFacts {
@@ -64,12 +65,20 @@ export function fixturesWithinBound<F extends { bytes: number }>(
   return { kept, tooLarge };
 }
 
-/** The bodies of the listed fixtures, by id (a fixture deleted meanwhile is simply absent). */
+/**
+ * The bodies of the listed fixtures, by id (a fixture deleted meanwhile is
+ * simply absent), AS THEIR STORED TEXT (structural hardening round 4): a kit
+ * hands them to its render, often in the envelope, so they are never parsed,
+ * walked or structured-cloned on the request thread — read as `body::text`
+ * and carried as references to it (render-input.ts), parsed where the kit is
+ * rendered.
+ */
 export async function fixtureBodies(organizationId: string, interfaceId: string, ids: readonly string[]): Promise<Map<string, unknown>> {
   if (ids.length === 0) return new Map();
-  const rows = await prisma.mockFixture.findMany({
-    where: { organizationId, interfaceId, id: { in: [...ids] } },
-    select: { id: true, body: true },
-  });
-  return new Map(rows.map((r) => [r.id, r.body as unknown]));
+  const rows = await prisma.$queryRaw<{ id: string; body: string }[]>(Prisma.sql`
+    SELECT "id", "body"::text AS "body"
+    FROM "MockFixture"
+    WHERE "organizationId" = ${organizationId} AND "interfaceId" = ${interfaceId} AND "id" IN (${Prisma.join([...ids])})
+  `);
+  return new Map(rows.map((r) => [r.id, jsonTextRef<unknown>(r.body)]));
 }

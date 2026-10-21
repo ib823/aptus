@@ -65,7 +65,7 @@ import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { MAX_STORED_ENTITY_SETS, verifyServiceMetadata } from "@/lib/studio/service-verify";
+import { MAX_STORED_ENTITY_SETS, VERIFY_REQUEST_BUDGET_MS, verifyServiceMetadata } from "@/lib/studio/service-verify";
 import { measuredSubject } from "@/lib/contracts/pipeline";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
@@ -77,10 +77,16 @@ export const dynamic = "force-dynamic";
  */
 export const runtime = "nodejs";
 /**
- * Room for the SAP read and a compile up to its own deadline (15 s,
- * envelope.ts) on a platform whose default function limit is shorter: the
- * envelope, not the platform, should be what stops a slow compile, so the
- * verify still answers.
+ * The platform's limit for this request. The verify itself has
+ * VERIFY_REQUEST_BUDGET_MS of it (service-verify.ts): every wait and run
+ * inside — the verify turn, the SAP read, the compile slot and the compile,
+ * the record's diff — is clamped to what is left of that budget, so the
+ * envelope, not the platform, is what stops a slow compile, and the verify
+ * answers, audits and records inside this limit (structural hardening round
+ * 4: the waits added up to about 110 s against 60, and the platform cut the
+ * request off with a 504). The rest (VERIFY_RESPONSE_MARGIN_MS) is for a
+ * worker cut at the deadline to exit and for the writes below;
+ * tests/unit/contracts/hardening-round4.test.ts holds the sum to this.
  */
 export const maxDuration = 60;
 
@@ -94,6 +100,8 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  // The verify's own deadline, from the moment the request starts (see maxDuration).
+  const deadlineAt = Date.now() + VERIFY_REQUEST_BUDGET_MS;
   const user = await getCurrentUser();
   if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
   if (!canAccessStudio(user.role)) return studioError("FORBIDDEN", "Developer Studio is role-gated.");
@@ -231,6 +239,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     subject: iface.entitySet ? measuredSubject({ ...iface, entitySet: iface.entitySet }) : null,
     // Its organisation's share of the compiler, so another's verifies cannot crowd it out.
     organizationId: scope.organizationId,
+    deadlineAt,
   });
 
   await recordConsoleRead({
@@ -335,6 +344,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         environment,
         connectionId: connection.id,
         actorId: user.id,
+        deadlineAt,
       })
     : null;
 

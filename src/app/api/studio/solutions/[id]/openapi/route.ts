@@ -60,7 +60,7 @@ import {
   planDocInputs,
 } from "@/lib/contracts/doc-inputs";
 import { multiInterfaceInfoVersion, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
-import { renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
+import { documentInputBytes, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError } from "@/lib/studio/api";
@@ -145,14 +145,15 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    */
   let limit = 0;
   const rendered = await renderReadPathLazy(
-    { inputBytes: plan.contractBytes === null ? null : plan.contractBytes + capturedBytes },
+    // Routed by what it carries, and by how many interfaces it renders (documentInputBytes).
+    { inputBytes: documentInputBytes(plan.contractBytes === null ? null : plan.contractBytes + capturedBytes, interfaces.length) },
     async (): Promise<ReadLoad<number>> => {
       const contracts = await loadDocContracts(scope, plan);
       if (!contracts.ok) return { ok: false, refusal: contracts.limit };
       const compiledById = contracts.compiled;
       // Rows that predate the kept size were measured as they were read: the same bound, again.
       let carriedNow = capturedBytes;
-      for (const c of compiledById.values()) if (c.contract.source === "METADATA") carriedNow += c.irBytes;
+      for (const c of compiledById.values()) if (c.source === "METADATA") carriedNow += c.irBytes;
       if (carriedNow > MAX_DOCUMENT_CONTRACT_BYTES) return { ok: false, refusal: MAX_DOCUMENT_CONTRACT_BYTES };
       // 3. Only those, each inside the captured-schema bound.
       const captures = await readCurrentCapturedSchemas(organizationId, sampledOnly, facts);
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const docInterfaces = interfaces.map((i) => {
         const compiled = compiledById.get(i.id);
         let contract: ContractForDoc;
-        if (compiled && compiled.contract.source === "METADATA") {
+        if (compiled && compiled.source === "METADATA") {
           contract = {
             source: "metadata",
             contract: compiled.contract,

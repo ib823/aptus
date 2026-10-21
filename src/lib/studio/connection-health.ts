@@ -54,8 +54,8 @@ export interface ConnectionHealthResult {
   durationMs: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 10_000;
-const MAX_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = 10_000;
+export const MAX_TIMEOUT_MS = 30_000;
 
 /**
  * The path to probe: the connection's explicit `apiPath` if set, else the first

@@ -74,6 +74,7 @@ import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { nextSemver, semverParts, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
 import { runInEnvelope } from "@/lib/contracts/envelope";
+import { jsonTextRef } from "@/lib/contracts/render-input";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import type { DiffJobOutput, EnvelopeRefusal } from "@/lib/contracts/pipeline";
 import { prisma } from "@/lib/db/prisma";
@@ -170,10 +171,27 @@ async function diffsInEnvelope(
   scope: TenantScope,
   previous: InterfaceContract[],
   next: InterfaceContract,
+  deadlineAt: number | null,
 ): Promise<{ ok: true; value: DiffJobOutput } | { ok: false; reason: EnvelopeRefusal }> {
-  // Under the organisation's share of the envelope (envelope.ts).
-  const r = await runInEnvelope({ kind: "diff", input: { previous, next } }, undefined, { tenant: scope.organizationId });
+  // Under the organisation's share of the envelope (envelope.ts), and inside the caller's own deadline.
+  const r = await runInEnvelope({ kind: "diff", input: { previous, next } }, undefined, { tenant: scope.organizationId, deadlineAt });
   return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
+}
+
+/**
+ * The IRs of these rows AS THEIR STORED TEXT (structural hardening round 4):
+ * a diff only hands them to its worker, so they are never parsed, walked or
+ * structured-cloned on this thread — read as `ir::text`, carried as
+ * references to it (render-input.ts) and parsed in the worker. By id.
+ */
+async function snapshotIrTexts(scope: TenantScope, ids: readonly string[]): Promise<Map<string, InterfaceContract>> {
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<{ id: string; ir: string }[]>(Prisma.sql`
+    SELECT "id", "ir"::text AS "ir"
+    FROM "ContractSnapshot"
+    WHERE "organizationId" = ${scope.organizationId} AND "id" IN (${Prisma.join([...ids])})
+  `);
+  return new Map(rows.map((r) => [r.id, jsonTextRef<InterfaceContract>(r.ir)]));
 }
 
 export async function recordContractSnapshot(input: {
@@ -189,6 +207,8 @@ export async function recordContractSnapshot(input: {
   environment?: string | null;
   connectionId?: string | null;
   createdById?: string | null;
+  /** When the caller must have its answer (ms since the epoch): the envelope's jobs end by then (envelope.ts). */
+  deadlineAt?: number | null;
 }): Promise<RecordOutcome> {
   const { scope, iface, contract } = input;
   const environment = input.environment ?? null;
@@ -196,7 +216,11 @@ export async function recordContractSnapshot(input: {
   if (!prepared) {
     // Digested under the contract budget, then rendered under every read
     // path's (budget.ts), in the envelope: refused before anything is stored.
-    const r = await runInEnvelope({ kind: "prepare", input: { contract, subject: null } }, undefined, { tenant: scope.organizationId });
+    const r = await runInEnvelope(
+      { kind: "prepare", input: { contract, subject: null } },
+      undefined,
+      { tenant: scope.organizationId, deadlineAt: input.deadlineAt ?? null },
+    );
     if (!r.ok) return { status: "REFUSED", reason: r.reason, detail: r.detail };
     if (!r.value.ok) {
       return r.value.reason === "TOO_LARGE"
@@ -236,11 +260,8 @@ export async function recordContractSnapshot(input: {
       // for its first verify, whichever environment's newest row it is
       // nearest to (the smallest bump, the newer on a tie).
       const candidates = own ? [own] : await environmentHeads(scope, iface.id);
-      const irs = await prisma.contractSnapshot.findMany({
-        where: scopedWhere(scope, { id: { in: [...new Set([...candidates, latest].map((c) => c.id))] } }),
-        select: { id: true, ir: true },
-      });
-      const irById = new Map(irs.map((r) => [r.id, r.ir]));
+      // As their text: handed to the diff's worker, never parsed here (snapshotIrTexts).
+      const irById = await snapshotIrTexts(scope, [...new Set([...candidates, latest].map((c) => c.id))]);
       const latestIr = irById.get(latest.id);
       const present = candidates.filter((row) => irById.has(row.id));
       if (present.length === 0 || !latestIr) continue; // removed meanwhile: read again
@@ -248,8 +269,10 @@ export async function recordContractSnapshot(input: {
       const onLineToo = !present.some((row) => row.id === latest.id);
       const compared = await diffsInEnvelope(
         scope,
-        [...present, ...(onLineToo ? [latest] : [])].map((row) => irById.get(row.id) as unknown as InterfaceContract),
-        contract,
+        [...present, ...(onLineToo ? [latest] : [])].map((row) => irById.get(row.id)!),
+        // The new contract as its text too: one native write here, and one copy of a string into the worker.
+        jsonTextRef<InterfaceContract>(JSON.stringify(contract)),
+        input.deadlineAt ?? null,
       );
       if (!compared.ok) {
         return {
@@ -438,6 +461,28 @@ export async function snapshotContracts(
     // A row recorded before its size was kept is measured now, by the budgeted
     // writer, which stops just past the bound: readers refuse anything over it.
     out.set(interfaceId, { ...c, contract, irBytes: c.irBytes ?? jsonBytesUpTo(contract, MAX_CONTRACT_BYTES) });
+  }
+  return out;
+}
+
+/**
+ * snapshotContracts for a read path that only hands the IRs to a render
+ * (structural hardening round 4): each IR whose size was kept is read AS ITS
+ * TEXT (`ir::text`) and carried as a reference to it (render-input.ts) — never
+ * parsed, walked or structured-cloned on the request thread; the render parses
+ * it, in the envelope or inside the request thread's own render clock. A row
+ * that predates the kept size is read and measured as before.
+ */
+export async function snapshotContractTexts(
+  scope: TenantScope,
+  chosen: ReadonlyMap<string, CurrentSnapshotSummary>,
+): Promise<Map<string, CurrentSnapshot & { irBytes: number }>> {
+  const sized = new Map([...chosen].filter(([, c]) => c.irBytes !== null));
+  const out = await snapshotContracts(scope, new Map([...chosen].filter(([, c]) => c.irBytes === null)));
+  const texts = await snapshotIrTexts(scope, [...sized.values()].map((c) => c.id));
+  for (const [interfaceId, c] of sized) {
+    const contract = texts.get(c.id);
+    if (contract) out.set(interfaceId, { ...c, contract, irBytes: c.irBytes! });
   }
   return out;
 }

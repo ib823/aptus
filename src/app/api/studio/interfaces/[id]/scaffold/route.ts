@@ -163,7 +163,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         iface.id,
         sized.kept.map((f) => f.id),
       );
-      // Each as the broker would answer it, one per scenario (fixtures.ts, A57).
+      // Each as the broker would answer it, one per scenario (fixtures.ts, A57); a body is its stored text until the kit renders.
       const fixtures = servedFixtures(
         sized.kept.filter((f) => bodies.has(f.id)).map((f) => ({ ...f, body: bodies.get(f.id) })),
       );
