@@ -772,6 +772,14 @@ model SapConnection {
   lastValidationStatus String?
   isActive             Boolean   @default(true)
 
+  /// How the governed pipeline reaches this system (P0.14,
+  /// src/lib/governed/transport.ts). DIRECT, the default and the value every
+  /// existing row was given, is the public internet through the platform's own
+  /// fetch: what every connection has always been. TWIN is the Tenant Twin
+  /// (P1.6), refused until a twin engine is registered. Nothing in the product
+  /// writes TWIN yet. P4.1 adds the connector and integration-suite kinds.
+  transport SapTransport @default(DIRECT)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1959,6 +1967,12 @@ enum SapEnvironment {
   DEV
   TEST
   PROD
+}
+
+/// How a SapConnection is reached (P0.14). See SapConnection.transport.
+enum SapTransport {
+  DIRECT
+  TWIN
 }
 
 enum SolutionKind {

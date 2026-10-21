@@ -96,6 +96,13 @@ export interface ResolvedSapConnection {
    * can share a baseUrl and differ only here.
    */
   client: string | null;
+  /**
+   * How the governed pipeline reaches this system (P0.14,
+   * src/lib/governed/transport.ts). Optional so a connection built by a
+   * caller that predates the column reads as DIRECT, which every stored row
+   * is unless P1.6 marks it TWIN.
+   */
+  transport?: "DIRECT" | "TWIN";
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -189,6 +196,7 @@ async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnec
     timeoutMs: r.timeoutMs,
     environment: r.environment,
     client: r.client,
+    transport: r.transport,
   };
 }
 

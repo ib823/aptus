@@ -353,6 +353,38 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
       /\b(?:TTFC|TTFRC) (?:tiles?|funnel|metrics?)\b/,
     ],
   },
+  {
+    id: "governed-pipeline",
+    name: "One governed pipeline with named steps and typed refusals",
+    roadmap: "P0.14",
+    cells: [READ, CREATE, GOVERN],
+    code: { file: "src/lib/governed/pipeline.ts", exports: ["PIPELINE_STEPS", "REFUSAL_STATUS", "refusal"] },
+    terms: [/\bgoverned pipeline\b/i, /\bREFUSAL_STATUS\b/, /\bsrc\/lib\/governed\/pipeline\.ts\b/],
+  },
+  {
+    id: "circuit-breaker",
+    name: "A circuit breaker per SAP system on every governed call",
+    roadmap: "P0.14",
+    cells: ["lifecycle:RUN_MONITOR_ALERT"],
+    code: { file: "src/lib/governed/containment.ts", exports: ["circuitBreakerMode", "governedCircuitBreaker"] },
+    terms: [/\bcircuit[- ]breakers?\b/i, /\bCOREEDGE_CIRCUIT_BREAKER\b/, /\bCIRCUIT_OPEN\b/],
+  },
+  {
+    id: "probe-before-swap",
+    name: "A rotated SAP connection secret probed before it replaces a working one",
+    roadmap: "P0.14",
+    cells: [SECRETS],
+    code: { file: "src/lib/sap-public/rotation-probe.ts", exports: ["probeRotation", "rotationProbeApplies"] },
+    terms: [/\bprobe[- ]before[- ]swap\b/i, /\bCOREEDGE_ROTATION_PROBE\b/],
+  },
+  {
+    id: "correlation-search",
+    name: "Find a call by its correlation id in Operations",
+    roadmap: "P0.14",
+    cells: ["lifecycle:RUN_MONITOR_ALERT"],
+    code: { file: "src/lib/coreedge/correlation-lookup.ts", exports: ["lookupCorrelationId"] },
+    terms: [/\bcorrelation[- ]id (?:search|lookup)\b/i],
+  },
 ];
 
 /* ── status, from the registry ────────────────────────────────────────── */

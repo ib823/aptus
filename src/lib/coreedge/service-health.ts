@@ -34,6 +34,50 @@ export interface ServiceVerdict {
   readonly provenAt: Date | null;
 }
 
+const METADATA_STATUSES: ReadonlySet<string> = new Set(["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"]);
+const READ_STATUSES: ReadonlySet<string> = new Set(["OK", "EMPTY", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR"]);
+
+/**
+ * A stored SapServiceHealth row as facts (P0.14, wired to the SAP system
+ * screen). The columns are strings, written by the lane sweep
+ * (lane-check-sweep.ts), so two values need reading rather than casting:
+ *
+ *   - a metadata status outside the five (the probe's NO_PROBE_PATH) is no
+ *     metadata fact at all: nothing was asked, which is "never checked";
+ *   - a read answered 401 (the ledger's UNAUTHORIZED) means SAP rejected our
+ *     sign-in. That is the metadata hop's fact — the credential, the platform
+ *     admin's, every lane on the system — whatever the metadata column says,
+ *     so it is reported there rather than as one dataset's refusal.
+ */
+export function serviceHealthFacts(row: {
+  readonly metadataStatus: string | null;
+  readonly metadataAt: Date | null;
+  readonly readStatus: string | null;
+  readonly readAt: Date | null;
+  readonly readRowCount: number | null;
+}): ServiceHealthFacts {
+  if (row.readStatus === "UNAUTHORIZED") {
+    return {
+      metadataStatus: "UNAUTHORIZED",
+      metadataAt: row.readAt,
+      readStatus: null,
+      readAt: null,
+      readRowCount: null,
+    };
+  }
+  return {
+    metadataStatus:
+      row.metadataStatus !== null && METADATA_STATUSES.has(row.metadataStatus)
+        ? (row.metadataStatus as MetadataStatus)
+        : null,
+    metadataAt: row.metadataAt,
+    // Any other answer the ledger recorded failed without a refusal: ERROR.
+    readStatus: row.readStatus === null ? null : READ_STATUSES.has(row.readStatus) ? (row.readStatus as ReadStatus) : "ERROR",
+    readAt: row.readAt,
+    readRowCount: row.readRowCount,
+  };
+}
+
 /**
  * Resolve one service's health to a lane status.
  *

@@ -64,7 +64,10 @@ describe.each(Object.entries(ROUTES))("%s", (name, file) => {
   it("audits the refusal, not only the success", () => {
     // A refusal is the interesting row: repeated 403s from one actor against one
     // landscape is the pattern worth seeing.
-    expect(src).toMatch(/await audit\([^)]*403|audit\(403/);
+    // Since P0.14 the preview refuses through the governed pipeline's typed
+    // refusals, each audited at its own status (always 403 for the ceilings):
+    // `await audit(r.status, …)` inside the route's `refuse`.
+    expect(src).toMatch(/await audit\([^)]*403|audit\(403|await audit\(r\.status/);
   });
 
   it("stays in the tight sapLive throttle bucket", () => {

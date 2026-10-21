@@ -14,9 +14,18 @@
  *
  * THE ENTITY SET IS NO LONGER THE CALLER'S TO CHOOSE on the governed path (audit
  * E16) — see the comment on `entity` below for the one case that remains and why.
+ *
+ * ON THE GOVERNED PIPELINE (P0.14). The two ceilings are the pipeline's
+ * `authorise` step and its typed refusals (src/lib/governed/pipeline.ts), and
+ * the read passes the same `contain` step as the broker: the circuit breaker
+ * for this SAP system, which observes unless COREEDGE_CIRCUIT_BREAKER=enforce.
+ * The read itself still goes through the Workbench connector (`sapFetch`),
+ * which P4.1 moves onto the pipeline's Transport.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { circuitKeyForConnection, circuitKeyForDeploymentTenant } from "@/lib/governed/containment";
+import { circuitOutcomeForStatus, containKey, refusal, type Refusal } from "@/lib/governed/pipeline";
 import {
   getSapProduct,
   previewSapEntitySet,
@@ -53,8 +62,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // A preview is a LIVE READ of a customer tenant, not a catalogue lookup, so
   // the gate is a role and not merely a session. See refuseUnlessMayProbeTenant.
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
-  if (refusal) return refusal;
+  const roleRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  if (roleRefusal) return roleRefusal;
 
   const tenantKey = request.nextUrl.searchParams.get("tenant") ?? "";
   const viewer = await getCurrentUser();
@@ -137,16 +146,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       connectionEnvironment: conn?.environment ?? null,
       ...extra,
     });
+  // A refusal of the governed pipeline (pipeline.ts): audited as a console
+  // read, answered in this route's envelope with the correlation id.
+  const refuse = async (r: Refusal) => {
+    await audit(r.status, null, r.audit.failureReason === undefined ? {} : { failureReason: r.audit.failureReason });
+    return NextResponse.json(
+      { error: { code: r.code, message: r.message, correlationId } },
+      { status: r.status, ...(Object.keys(r.headers).length ? { headers: { ...r.headers } } : {}) },
+    );
+  };
 
   // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
   // (P0.13). Every other role passes straight through it.
   const sandboxOnly = decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn });
   if (!sandboxOnly.allowed) {
-    await audit(403, null);
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
-      { status: 403 },
-    );
+    return refuse(refusal("authorise", "SANDBOX_ONLY", sandboxOnly.message ?? ""));
   }
 
   /*
@@ -170,19 +184,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       environment: conn.environment,
     });
     if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        {
-          error: {
-            code: ERROR_CODES.FORBIDDEN,
-            message: decision.message,
-            correlationId,
-          },
-        },
-        { status: 403 },
-      );
+      return refuse(refusal("authorise", decision.refusal ?? "NO_APPROVED_GRANT", decision.message ?? ""));
     }
   }
+
+  // The circuit for this SAP system (pipeline.ts contain): the connection's
+  // own, or the deployment tenant's. Observes only unless
+  // COREEDGE_CIRCUIT_BREAKER=enforce.
+  const circuit = await containKey(
+    conn ? circuitKeyForConnection(conn.id) : circuitKeyForDeploymentTenant(product.envPrefix, tenant.key),
+    correlationId,
+  );
+  if (!circuit.ok) return refuse(circuit.refusal);
 
   const startedAt = Date.now();
   try {
@@ -193,6 +206,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Only its refusals, though: SAP's 429 recorded as 429 raised the
     // 'throttled' incident instead — see answeredReadAuditStatus.
     const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
+    await circuit.value.record(circuitOutcomeForStatus(auditStatus));
     await audit(auditStatus, preview.rows.length, {
       durationMs: Date.now() - startedAt,
       failureReason: failureReasonFromHttp(preview.status),
@@ -223,6 +237,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // which (see consoleReadFailure).
     console.error("[sap/tdd/preview] request failed:", error);
     const failure = consoleReadFailure(error, "SAP preview request failed");
+    await circuit.value.record(circuitOutcomeForStatus(failure.auditStatus));
     await audit(failure.auditStatus, null, {
       durationMs: Date.now() - startedAt,
       failureReason: failure.failureReason,

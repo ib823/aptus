@@ -43,30 +43,34 @@ describe("the per-credential throttle", () => {
     // of a dry run is that it costs what the real call costs, so a console
     // session that would exhaust the application's budget exhausts it here and
     // the builder finds out in Studio rather than in production.
-    expect(src).toContain("checkRateLimit(`northbound:${client.id}`");
+    // Since P0.14 through the governed pipeline's rateLimit step, which
+    // spends RATE_LIMITS.northbound.
+    expect(src).toContain("rateLimit(`northbound:${client.id}`");
     expect(src).toContain("RATE_LIMITS.northbound");
+    expect(flat(read("src/lib/governed/pipeline.ts"))).toContain("checkRateLimit(bucket, RATE_LIMITS.northbound)");
   });
 
   it("uses the same key shape as the data route", () => {
     const dataSrc = flat(read(DATA_ROUTE));
-    expect(dataSrc).toContain("checkRateLimit(`northbound:${client.clientId}`");
+    expect(dataSrc).toContain("rateLimit(`northbound:${client.clientId}`");
   });
 
   it("audits the 429 rather than refusing silently", () => {
     // Every northbound route writes a row before refusing; a throttle nobody can
     // see is indistinguishable from an integration that stopped calling.
-    const m = /if \(!rate\.allowed\) \{([\s\S]*?)\n  \}/.exec(code(read(BROKER_RUN)));
+    const m = /if \(!rate\.ok\) \{([\s\S]*?)\n  \}/.exec(code(read(BROKER_RUN)));
     expect(m, "the throttle branch must exist").toBeTruthy();
-    expect(m![1]).toContain("recordNorthboundCall");
-    // 429 for the credential's own budget; 503 when the limiter is down (A44).
-    expect(m![1]).toContain("status: outage ? 503 : 429");
-    expect(m![1]).toContain("dryRun: true");
+    // The refusal's own status: 429 for the credential's own budget, 503 when
+    // the limiter is down (A44) — pipeline.ts REFUSAL_STATUS.
+    expect(m![1]).toContain("await audit.refused(rate.refusal)");
+    // On the dry-run audit the whole run writes through.
+    expect(flat(read(BROKER_RUN))).toMatch(/new GovernedAudit\( \{[^}]*dryRun: true/);
   });
 
   it("throttles AFTER the credential resolves, so the key is the credential", () => {
     const s = flat(read(BROKER_RUN));
     const credentialAt = s.indexOf("const client = liveClients[0]");
-    const throttleAt = s.indexOf("checkRateLimit(`northbound:");
+    const throttleAt = s.indexOf("rateLimit(`northbound:");
     expect(credentialAt).toBeGreaterThan(-1);
     expect(throttleAt).toBeGreaterThan(credentialAt);
   });

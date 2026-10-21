@@ -70,8 +70,22 @@ export type RotationDecision =
  * A step that was never attempted is `null`, not a failure. If sign-in fails
  * there is nothing to say about metadata, and reporting it as failed would blame
  * the service for a password.
+ *
+ * `dataReadRequired` (P0.14, default true): the new secret must prove what the
+ * working one proved, and no more. The save path (rotation-probe.ts) reads one
+ * row from a dataset this connection has a proven read of; when it has none,
+ * the working secret never proved a read either, and refusing the new one for
+ * not doing something the old one never did would block a rotation the
+ * product has always allowed on no evidence that the old secret is better.
+ * Then a data read that did not run is not required; one that ran and failed
+ * still refuses.
  */
-export function decideRotation(probe: RotationProbe, now: Date = new Date()): RotationDecision {
+export function decideRotation(
+  probe: RotationProbe,
+  now: Date = new Date(),
+  options: { readonly dataReadRequired?: boolean } = {},
+): RotationDecision {
+  const dataReadRequired = options.dataReadRequired ?? true;
   if (!probe.signIn.ok) {
     return {
       swap: false,
@@ -103,6 +117,9 @@ export function decideRotation(probe: RotationProbe, now: Date = new Date()): Ro
     };
   }
 
+  if (probe.dataRead === null && !dataReadRequired) {
+    return { swap: true, probe, graceUntil: new Date(now.getTime() + GRACE_WINDOW_MS) };
+  }
   if (probe.dataRead === null) {
     return {
       swap: false,

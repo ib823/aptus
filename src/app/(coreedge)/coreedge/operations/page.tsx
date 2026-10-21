@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { GateStrip } from "@/components/coreedge/GateStrip";
+import { CorrelationSearch } from "./CorrelationSearch";
 import { JourneyTiles } from "./JourneyTiles";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { ProvenAt } from "@/components/coreedge/primitives/ProvenAt";
@@ -16,6 +17,7 @@ import {
   LANE_SWEEP_NOT_RECORDED,
   operationsAllHealthy,
 } from "@/lib/coreedge/copy";
+import { lookupCorrelationId } from "@/lib/coreedge/correlation-lookup";
 import { proofAge } from "@/lib/coreedge/freshness";
 import { JOURNEY_COPY, loadJourneySummary } from "@/lib/coreedge/journey";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
@@ -58,7 +60,11 @@ const URGENCY: Readonly<Record<string, number>> = {
   "gate-ok": 4,
 };
 
-export default async function OperationsBoard(): Promise<ReactNode> {
+export default async function OperationsBoard({
+  searchParams,
+}: {
+  readonly searchParams?: Promise<{ readonly correlationId?: string | string[] }>;
+}): Promise<ReactNode> {
   const user = await getCurrentUser();
   if (!user) redirect("/presales/login");
   if (user.organizationId === null) {
@@ -72,7 +78,11 @@ export default async function OperationsBoard(): Promise<ReactNode> {
   }
 
   const now = new Date();
-  const [allLanes, traffic, sweep, journey] = await Promise.all([
+  // The correlation-id search (P0.14): one id, looked up in this
+  // organization only. Bounded so a pasted paragraph is not sent as a query.
+  const raw = (await searchParams)?.correlationId;
+  const correlationQuery = (Array.isArray(raw) ? raw[0] : raw)?.trim().slice(0, 100) ?? "";
+  const [allLanes, traffic, sweep, journey, correlation] = await Promise.all([
     listLanes(user.organizationId),
     listLaneTraffic(user.organizationId, now),
     lastLaneSweep(),
@@ -82,6 +92,7 @@ export default async function OperationsBoard(): Promise<ReactNode> {
       console.warn("[coreedge/operations] time to first call could not be read", err);
       return null;
     }),
+    correlationQuery === "" ? Promise.resolve(null) : lookupCorrelationId(user.organizationId, correlationQuery, now),
   ]);
 
   const lanes = allLanes.sort((a, b) => {
@@ -126,6 +137,12 @@ export default async function OperationsBoard(): Promise<ReactNode> {
           than Live.
         </p>
       ) : null}
+
+      {/*
+        A CALL BY ITS ID, before the lanes: whoever opens this page holding a
+        correlation id a developer quoted has one question, and it is this.
+      */}
+      <CorrelationSearch query={correlationQuery} outcome={correlation} />
 
       {/*
         WHAT THE NIGHTLY CHECK ACTUALLY DID, above the statuses it produced.

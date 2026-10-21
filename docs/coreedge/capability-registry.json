@@ -1796,27 +1796,30 @@
         "row": "RUN_MONITOR_ALERT",
         "col": "",
         "status": "partial",
-        "note": "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts). No real-time alerts and no owner paging (P3.7).",
+        "note": "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts). A correlation-id search in Operations (correlation-lookup.ts), per-service verdicts and owners on the SAP system screen (service-health.ts), and a circuit breaker per SAP system on every governed call that observes until COREEDGE_CIRCUIT_BREAKER=enforce (governed/containment.ts; P0.14). No real-time alerts and no owner paging (P3.7).",
         "basis": [
-          "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts)."
+          "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts).",
+          "A correlation-id search in Operations (correlation-lookup.ts), per-service verdicts and owners on the SAP system screen (service-health.ts), and a circuit breaker per SAP system on every governed call that observes until COREEDGE_CIRCUIT_BREAKER=enforce (governed/containment.ts; P0.14)."
         ]
       },
       {
         "row": "GOVERN_AUDIT_COMPLY",
         "col": "",
         "status": "partial",
-        "note": "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention. Holes still open by default: COREEDGE_GRANT_BINDING defaults to legacy, COREEDGE_STEP_UP to warn, and a failed broker audit insert is logged and swallowed (audit.ts; P3.10).",
+        "note": "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention. One governed pipeline with named steps and one refusal table for the northbound read and write, the Test Console run and the Workbench preview (governed/pipeline.ts; P0.14). Holes still open by default: COREEDGE_GRANT_BINDING defaults to legacy, COREEDGE_STEP_UP to warn, and a failed broker audit insert is logged and swallowed (audit.ts; P3.10).",
         "basis": [
-          "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention."
+          "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention.",
+          "One governed pipeline with named steps and one refusal table for the northbound read and write, the Test Console run and the Workbench preview (governed/pipeline.ts; P0.14)."
         ]
       },
       {
         "row": "SECRETS_KEYS",
         "col": "",
         "status": "partial",
-        "note": "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts). The only key provider built in is \"env\": the master key is an environment variable, no KMS (key-provider.ts; P0.10).",
+        "note": "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts). A rotated SAP connection secret is probed (sign-in, metadata, one proven read) before it replaces a working one (rotation-probe.ts; P0.14). The only key provider built in is \"env\": the master key is an environment variable, no KMS (key-provider.ts; P0.10).",
         "basis": [
-          "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts)."
+          "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts).",
+          "A rotated SAP connection secret is probed (sign-in, metadata, one proven read) before it replaces a working one (rotation-probe.ts; P0.14)."
         ]
       },
       {

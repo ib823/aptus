@@ -43,7 +43,10 @@ import {
   isAllowedApiKeyHeader,
   normalizeEnvironment,
   upsertSapConnection,
+  type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { decideRotation } from "@/lib/sap-public/rotation";
+import { probeRotation, provenReadTarget, rotationProbeApplies } from "@/lib/sap-public/rotation-probe";
 import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
@@ -487,7 +490,9 @@ export async function POST(request: NextRequest) {
 
   const existing = await prisma.sapConnection.findFirst({
     where: { organizationId, product: input.product, key },
-    select: { id: true },
+    // isActive and lastValidationStatus say whether the secret being replaced
+    // is working today, which decides whether the new one is probed first.
+    select: { id: true, isActive: true, lastValidationStatus: true },
   });
 
   /*
@@ -586,6 +591,72 @@ export async function POST(request: NextRequest) {
   });
   if (!stepUp.ok) return stepUp.response;
 
+  const secrets = {
+    ...(input.username ? { username: input.username } : {}),
+    ...(input.password ? { password: input.password } : {}),
+    ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
+    ...(input.clientId ? { clientId: input.clientId } : {}),
+    ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+    ...(input.companyId ? { companyId: input.companyId } : {}),
+    ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+    ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
+    ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
+    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+    ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
+    ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+  };
+
+  /*
+   * PROBE BEFORE SWAP (P0.14, rotation.ts). Re-saving a connection is how its
+   * secret is rotated, and this used to write the new one unconditionally: a
+   * mistyped password took every lane on that system down until someone
+   * noticed. Now, when the row being replaced is active and its last probe
+   * was OK, the new credentials are tried first — sign in, read the metadata,
+   * read one row of a dataset this connection has proven — with nothing
+   * written. Only if every step passes is the secret stored; otherwise the
+   * working one keeps serving and the form says which step failed.
+   *
+   * After step-up, so nothing reaches SAP for a caller who has not passed it.
+   * A new, deactivated or never-proven connection saves exactly as before;
+   * COREEDGE_ROTATION_PROBE=off turns the probe off.
+   */
+  let rotationProbed = false;
+  if (existing && rotationProbeApplies(existing)) {
+    const candidate: ResolvedSapConnection = {
+      source: "db",
+      id: existing.id,
+      organizationId,
+      product: input.product,
+      key,
+      label: input.label,
+      baseUrl: input.baseUrl.replace(/\/+$/, ""),
+      authType: input.authType,
+      secrets,
+      oauthTokenUrl: input.oauthTokenUrl ?? null,
+      writeEnabled: input.writeEnabled ?? false,
+      apiPath: input.apiPath ?? null,
+      timeoutMs: input.timeoutMs ?? null,
+      environment,
+      client: input.client ?? null,
+    };
+    const readTarget = await provenReadTarget(organizationId, existing.id);
+    const probe = await probeRotation(candidate, readTarget);
+    const decision = decideRotation(probe, new Date(), { dataReadRequired: readTarget !== null });
+    if (!decision.swap) {
+      // The attempt is on the record — which step stopped it, never what was typed.
+      await writeConfigAudit({
+        organizationId,
+        actorId: userId,
+        entityType: "Connection",
+        entityId: existing.id,
+        action: "TEST_CONNECT",
+        after: { event: "connection_rotation_refused", product: input.product, key, failedAt: decision.failedAt },
+      });
+      return studioError("VALIDATION_ERROR", decision.reason);
+    }
+    rotationProbed = true;
+  }
+
   let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
   try {
     saved = await upsertSapConnection({
@@ -595,20 +666,7 @@ export async function POST(request: NextRequest) {
       label: input.label,
       baseUrl: input.baseUrl,
       authType: input.authType,
-      secrets: {
-        ...(input.username ? { username: input.username } : {}),
-        ...(input.password ? { password: input.password } : {}),
-        ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
-        ...(input.clientId ? { clientId: input.clientId } : {}),
-        ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-        ...(input.companyId ? { companyId: input.companyId } : {}),
-        ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
-        ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
-        ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
-        ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-        ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
-        ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
-      },
+      secrets,
       oauthTokenUrl: input.oauthTokenUrl ?? null,
       environment,
       client: input.client ?? null,
@@ -655,6 +713,8 @@ export async function POST(request: NextRequest) {
       environment,
       writeEnabled: input.writeEnabled ?? false,
       secretsRotated: true,
+      // The new secret was proven against SAP before it replaced a working one.
+      ...(rotationProbed ? { rotationProbed: true } : {}),
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });

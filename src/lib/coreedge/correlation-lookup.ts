@@ -65,6 +65,9 @@ function hopFor(status: number, bindingRefusal: string | null, failureReason: st
   // Refused at the throttle because the limiter could not be asked (P0.5):
   // the same hop as a 429, and nothing reached SAP.
   if (failureReason === "LIMITER_UNAVAILABLE") return "key";
+  // Refused by the circuit breaker (P0.14): the call was bound to its
+  // connection and stopped there, because that SAP system had been failing.
+  if (failureReason === "CIRCUIT_OPEN") return "binding";
   if (status === 403 && bindingRefusal !== null) return "binding";
   if (status === 403) {
     // A grant refusal is the Access hop; an SAP refusal is the read.
@@ -81,6 +84,9 @@ function hopFor(status: number, bindingRefusal: string | null, failureReason: st
 function describeOutcome(status: number, rowCount: number | null, failureReason: string | null): string {
   if (failureReason === "LIMITER_UNAVAILABLE") {
     return "CoreEdge could not check its rate limits, so the call was refused for safety. Nothing was sent to SAP.";
+  }
+  if (failureReason === "CIRCUIT_OPEN") {
+    return "The SAP system behind this connection had failed repeatedly, so the circuit breaker refused the call. Nothing was sent to SAP.";
   }
   // The credential step's own failures (credentialFailure): SAP was never
   // asked, so "SAP returned an error" would send the reader to the tenant.

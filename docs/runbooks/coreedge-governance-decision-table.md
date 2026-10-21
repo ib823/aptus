@@ -157,6 +157,14 @@ Only the organisation's **active** connections for the interface's product count
 
 ## Then
 
+The circuit breaker for the bound connection's SAP system is asked (the
+governed pipeline's `contain` step, P0.14). Under the default
+`COREEDGE_CIRCUIT_BREAKER=observe` it never refuses. Under `enforce`, an open
+circuit answers `503 CIRCUIT_OPEN` with Retry-After and nothing is sent to SAP;
+on the write route this comes after the idempotency key's replay and conflict
+answers, and releases the key (docs/runbooks/coreedge-circuit-breaker.md). The
+property test runs with the default, so its oracle has no row for it.
+
 The broker calls SAP: `200` for a read, `201` for a create (or SAP's own error).
 
 ## Containment today
@@ -173,6 +181,7 @@ What an operator can do to stop calls, and the stage that then refuses them:
 | Deactivate the connection | 7.3 (or the next row of stage 7) |
 | Switch writes off on the connection | 8 |
 | Switch `COREEDGE_GRANT_BINDING` to `strict` | 6.1 |
+| Switch `COREEDGE_CIRCUIT_BREAKER` to `enforce` (refuses only while a system is failing) | Then |
 
 A scoped stop switch (FREEZE, READ_ONLY, THROTTLE) is P3.6 and not built.
 

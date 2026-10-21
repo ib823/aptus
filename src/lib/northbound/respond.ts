@@ -60,6 +60,13 @@ export type NorthboundErrorCode =
    * THIS credential used its budget, and during an outage nobody had (A44).
    */
   | "LIMITER_UNAVAILABLE"
+  /**
+   * The circuit breaker for the SAP system behind the bound connection is
+   * open (P0.14): 503 with Retry-After, nothing sent to SAP. Answered only
+   * when COREEDGE_CIRCUIT_BREAKER=enforce; the default observes and never
+   * refuses (lib/governed/containment.ts).
+   */
+  | "CIRCUIT_OPEN"
   | "INTERNAL";
 
 export function newCorrelationId(): string {

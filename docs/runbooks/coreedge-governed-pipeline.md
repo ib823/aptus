@@ -1,0 +1,123 @@
+# Runbook: The governed pipeline (P0.14)
+
+Roadmap item P0.14 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
+8.2): extract the governed pipeline and wire the modules already built.
+
+## What changed
+
+**One pipeline, named steps, one refusal table.** The check sequence that was
+copied into the northbound read and write routes, the Studio Test Console run
+and the Workbench preview now lives once, in `src/lib/governed/pipeline.ts`:
+
+| Step | What it decides | Refusals (HTTP status) |
+|---|---|---|
+| `authenticate` | The bearer key, and on a write the write key; the signed-in person on a console read | `UNAUTHENTICATED` (401), `WRITE_CREDENTIAL_INVALID` (403) |
+| `rateLimit` | The credential's own bucket | `RATE_LIMITED` (429), `LIMITER_UNAVAILABLE` (503) |
+| `resolveInterface` | The interface the call names, the write's Idempotency-Key and body, the dataset | `INTERFACE_NOT_FOUND`, `NOT_THIS_SOLUTION` (404); `IDEMPOTENCY_KEY_INVALID`, `BODY_INVALID`, `NO_ENTITY_SET`, `SERVICE_PATH_INVALID`, `SERVICE_UNRESOLVED`, `ENTITY_NOT_YOURS_TO_CHOOSE`, `CUSTOM_SERVICE_UNVERIFIED` (400); `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_FLIGHT` (409) |
+| `authorise` | The grant binding (`access.ts`, `grant-binding.ts`), or the console's ceiling | grant reasons (403), `OPERATION_NOT_SUPPORTED` (400), `SANDBOX_ONLY`, `UNDECLARED_ENVIRONMENT` (403) |
+| `bindConnection` | The customer's own connection for the credential's environment and SAP client, and its transport | every binding reason (403), `WRITES_DISABLED` (403), `TRANSPORT_UNAVAILABLE` (503) |
+| `contain` | The circuit breaker for that SAP system | `CIRCUIT_OPEN` (503, only when enforced) |
+| `callSap` | The read or write, through the connection's transport | none: SAP's answer is reported as it was |
+| `audit` | One `NorthboundAuditEvent` per call that passed authentication | none |
+
+`REFUSAL_STATUS` in the same file is the one table of reason to status; every
+refusal is built from it, so no route can answer a reason with a different
+status. Each route keeps its own order, wording and audit rows.
+
+**No behaviour change.** `tests/fixtures/governed-pipeline/golden-audit-rows.json`
+was recorded from the four routes before the port (49 scenarios: every
+refusal they reach, served calls, SAP failures, replays) and
+`tests/integration/governed-pipeline-golden.test.ts` checks the ported routes
+against it: status, code, message, Retry-After and every audit row, with `id`,
+`at`, `correlationId` and `durationMs` removed.
+`tests/unit/governed/refusal-parity.test.ts` drives each route into every
+refusal it can reach and checks the table.
+
+**No transaction is held open across a call to SAP.** No step opens one; the
+write's idempotency key is reserved and completed in separate statements around
+the call. A static test (`tests/unit/governed/pipeline.test.ts`) fails if
+`$transaction` appears in the pipeline or a ported route.
+
+**A transport per connection.** `SapConnection.transport` (migration
+`20261025020000_sap_connection_transport`, backout beside it) is `DIRECT` or
+`TWIN`. `src/lib/governed/transport.ts` defines the minimal `Transport` (a
+`fetch`, and whether it reaches SAP). `DIRECT` is the platform's fetch, as
+before. `TWIN` is the stub the Tenant Twin (P1.6) plugs into with
+`registerTwinEngine(engine)`; until an engine is registered a TWIN connection
+is refused at `bindConnection` with `TRANSPORT_UNAVAILABLE` and its fetch never
+reaches the network. Nothing in the product sets TWIN yet.
+
+**The circuit breaker is wired.** See
+[`coreedge-circuit-breaker.md`](coreedge-circuit-breaker.md).
+
+**A rotated secret is probed before it replaces a working one**
+(`src/lib/sap-public/rotation-probe.ts`, `rotation.ts`). See below.
+
+**Operations has a correlation-id search** (`/coreedge/operations`, "Find a call
+by its correlation id"), on `src/lib/coreedge/correlation-lookup.ts`. It reads
+only the viewer's own organization's rows, shows the call's outcome, the hop it
+stopped at, its service, environment, row count and duration, and never a
+payload.
+
+**The SAP system screen shows each service's verdict and who fixes it**
+(`/coreedge/sap-systems/<id>`, columns "Status" and "Who fixes it"), from
+`src/lib/coreedge/service-health.ts`: a sign-in refused goes to the platform
+admin, a refused dataset to the client's SAP admin, an unanswered system to the
+client's Basis team.
+
+## Probe before swap
+
+Re-saving a connection (POST `/api/studio/connections` with the same product
+and key) is how its secret is rotated. When the row being replaced is active and
+its last Test was OK, the route now, after step-up and before writing anything:
+
+1. signs in with the new credentials (a token is issued, or a header built, and
+   SAP does not answer 401);
+2. reads the service metadata from the connection's probe path (the request the
+   Test button sends);
+3. reads one row from the newest dataset a lane has proven readable through this
+   connection (`LaneCheck`), as the broker reads it. With no proven read there
+   is nothing to compare against and this step is not run.
+
+If a step fails the save is refused (`400 VALIDATION_ERROR`, the message says
+which step and that nothing changed), a `TEST_CONNECT` config-audit row records
+`connection_rotation_refused` and the failed step (never the secret), and the
+working secret keeps serving. If all pass the secret is stored and the save's
+audit row says `rotationProbed: true`.
+
+Not probed, and saved exactly as before: a new connection, a deactivated one,
+and one whose last Test was not OK (nothing working to protect).
+
+**If SAP is down while a secret must be changed** (for example the old password
+was revoked at SAP and the host is also unreachable): deactivate the connection,
+save the new secret, then reactivate it. Or set `COREEDGE_ROTATION_PROBE=off`
+and redeploy; only the exact word `off` turns the probe off.
+
+## What happens on deploy
+
+- The migration adds `SapConnection.transport` with the default `DIRECT` on
+  every row. No row changes behaviour.
+- The four routes answer and audit exactly as before (the golden test).
+- `COREEDGE_CIRCUIT_BREAKER` defaults to `observe`: counted and logged, never
+  refused.
+- `COREEDGE_ROTATION_PROBE` defaults to on. It refuses only a save that would
+  replace a proven-working secret with one SAP does not accept; no call path is
+  affected. A save that worked today and is refused tomorrow is exactly a
+  mistyped or unauthorised rotated secret.
+- Operations and the SAP system screen each gain a section; nothing is removed.
+
+## Rolling back
+
+Code first; the column is never read by the old code. `backout.sql` beside the
+migration drops it, which loses nothing (every row is `DIRECT`).
+
+## For P1.6 and P4.1
+
+- P1.6 (Tenant Twin) registers its engine with `registerTwinEngine` and marks a
+  connection `transport: TWIN`. Before it lets anyone do that, the nightly lane
+  sweep, the connection probe and the Workbench console reads must route through
+  `transportFor(connection)` too: today they call `fetch` directly and would
+  send a TWIN connection's request to its `baseUrl`.
+- P4.1 adds the dispatcher, connector and integration-suite transports on the
+  same interface, and moves `sapFetch` and the Ariba connector onto it.
+- P0.14b brings the remaining Workbench console routes onto the pipeline.

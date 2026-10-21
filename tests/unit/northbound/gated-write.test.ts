@@ -31,6 +31,7 @@ vi.mock("@/lib/db/prisma", async () => {
   };
 });
 
+import { REFUSAL_STATUS } from "@/lib/governed/pipeline";
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import {
   generateWriteCredential,
@@ -289,11 +290,14 @@ describe("the write route answers an unsupported operation as a definition gap",
   ).replace(/\/\*[\s\S]*?\*\//g, " ");
 
   it("maps OPERATION_NOT_SUPPORTED to 400, not to the 403 that says 'fix access'", () => {
-    expect(src).toMatch(/access\.reason === "OPERATION_NOT_SUPPORTED"\s*\?\s*400/);
+    // One table for every governed route since P0.14 (pipeline.ts), and the
+    // write route takes its access refusal from it.
+    expect(REFUSAL_STATUS.OPERATION_NOT_SUPPORTED).toBe(400);
+    expect(src).toContain('authorise("WRITE"');
   });
 
   it("decides access before any idempotency key is reserved, so a refused UPDATE leaves none", () => {
-    expect(src.indexOf("resolveWritableInterface(")).toBeGreaterThan(-1);
-    expect(src.indexOf("resolveWritableInterface(")).toBeLessThan(src.indexOf("reserveIdempotencyKey("));
+    expect(src.indexOf('authorise("WRITE"')).toBeGreaterThan(-1);
+    expect(src.indexOf('authorise("WRITE"')).toBeLessThan(src.indexOf("reserveIdempotencyKey("));
   });
 });
