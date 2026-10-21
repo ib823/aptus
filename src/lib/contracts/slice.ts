@@ -16,8 +16,19 @@
  * would hold more than twice the members of the whole description plus a
  * fixed allowance, which no description whose inheritance is ordinary comes
  * near: real base chains are short and shared by few types.
+ *
+ * IN BYTES TOO. Counting members is not enough: one base property with a
+ * 300,000-character label, folded into 2,000 derived types, is 2,000 members
+ * and 600 MB of canonical JSON. The copies share the string, so the slice
+ * itself stayed small; the digest then serialised all of it before the size
+ * check could refuse it, and threw (P1 wave A review). So each copy is also
+ * charged its own JSON length — measured once per declaration — and the slice
+ * is refused once the copies alone exceed MAX_CONTRACT_BYTES: canonical JSON
+ * is never shorter than that, so such a contract could never be stored, and
+ * nothing that could have been is refused here.
  */
 
+import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import {
   CONTRACT_IR_VERSION,
   type ContractIR,
@@ -47,32 +58,54 @@ function membersOf(ir: ContractIR): number {
   return n;
 }
 
-class SliceTooLarge extends Error {}
+class SliceTooLarge extends Error {
+  constructor(readonly by: "members" | "bytes") {
+    super(by);
+  }
+}
 
 export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceResult {
   const limit = 2 * membersOf(ir) + SLICE_MEMBER_ALLOWANCE;
   try {
-    return slice(ir, entitySetName, limit);
+    return slice(ir, entitySetName, limit, MAX_CONTRACT_BYTES);
   } catch (err) {
     if (!(err instanceof SliceTooLarge)) throw err;
     return {
       ok: false,
       reason: "TOO_LARGE",
-      detail: `The dataset "${entitySetName}" reaches more than ${limit} members once its types' base types are folded in.`,
+      detail:
+        err.by === "members"
+          ? `The dataset "${entitySetName}" reaches more than ${limit} members once its types' base types are folded in.`
+          : `The dataset "${entitySetName}" would be larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB once its types' base types are folded in.`,
     };
   }
 }
 
-function slice(ir: ContractIR, entitySetName: string, limit: number): SliceResult {
+function slice(ir: ContractIR, entitySetName: string, limit: number, byteLimit: number): SliceResult {
   let spent = 0;
   const spend = (n: number) => {
     spent += n;
-    if (spent > limit) throw new SliceTooLarge();
+    if (spent > limit) throw new SliceTooLarge("members");
+  };
+  let bytes = 0;
+  /** Each declaration's JSON length, measured once however many times it is folded. */
+  const sizes = new WeakMap<object, number>();
+  const spendBytes = (x: object) => {
+    let n = sizes.get(x);
+    if (n === undefined) {
+      n = JSON.stringify(x).length;
+      sizes.set(x, n);
+    }
+    bytes += n;
+    if (bytes > byteLimit) throw new SliceTooLarge("bytes");
   };
   /** Copies of each list, in order, with the budget spent before each is made; never a spread of a long array. */
   const copyInto = <T extends object>(into: T[], from: readonly T[]) => {
     spend(from.length);
-    for (const x of from) into.push({ ...x });
+    for (const x of from) {
+      spendBytes(x);
+      into.push({ ...x });
+    }
   };
 
   const set = ir.entitySets.find((s) => s.name === entitySetName);

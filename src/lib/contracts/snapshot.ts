@@ -25,6 +25,15 @@
  *     interface's latest bumped by that diff, so versions stay one ordered
  *     line. An environment going BACK to an older contract of its
  *     own is a new version — a field that disappeared is still a change.
+ *   - THE LINE DECIDES THE BUMP TOO. The new row follows the interface's
+ *     latest on the line, and the line is what /schema, the OpenAPI and the
+ *     kit serve as current. So the bump is the larger of the two: against
+ *     the environment's own row, and against the latest. Diffed only against
+ *     its own row, an environment whose own row was older than the latest
+ *     (it had caught up to the latest without writing a row) recorded "one
+ *     field added", a minor, for a contract that had also lost a field the
+ *     latest had — and a consumer pinned to ^1.1 lost it in 1.2.0 (P1 wave
+ *     A review). The recorded diff is the one that decided the bump.
  *
  * A contract larger than MAX_CONTRACT_BYTES is never stored (TOO_LARGE): it
  * would be read back on every /schema call.
@@ -43,7 +52,7 @@
 
 import { Prisma } from "@prisma/client";
 
-import { contractDigest } from "@/lib/contracts/canonical";
+import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { diffContracts, nextSemver, semverParts, type ContractDiff } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { prisma } from "@/lib/db/prisma";
@@ -70,11 +79,8 @@ export type RecordOutcome =
   | { status: "UNCHANGED"; snapshot: SnapshotSummary }
   | { status: "TOO_LARGE"; bytes: number };
 
-/**
- * The largest contract stored, as canonical JSON. A slice of a real dataset is
- * tens of kilobytes; one this size is a description built to be expensive.
- */
-export const MAX_CONTRACT_BYTES = 4 * 1024 * 1024;
+/** The largest contract stored, as canonical JSON (defined beside the digest it bounds). */
+export { MAX_CONTRACT_BYTES };
 
 const SUMMARY_SELECT = {
   id: true,
@@ -162,7 +168,7 @@ export async function recordContractSnapshot(input: {
       for (const r of rows) if (!heads.has(r.environment)) heads.set(r.environment, r);
       const candidates = own ? [own] : [...heads.values()];
       const irs = await prisma.contractSnapshot.findMany({
-        where: scopedWhere(scope, { id: { in: candidates.map((c) => c.id) } }),
+        where: scopedWhere(scope, { id: { in: [...new Set([...candidates, latest].map((c) => c.id))] } }),
         select: { id: true, ir: true },
       });
       const irById = new Map(irs.map((r) => [r.id, r.ir]));
@@ -173,7 +179,14 @@ export async function recordContractSnapshot(input: {
         const d = diffContracts(ir as unknown as InterfaceContract, contract);
         if (!best || bumpRank(d.bump) < bumpRank(best.diff.bump)) best = { row, diff: d };
       }
-      if (!best) continue; // removed meanwhile: read again
+      const latestIr = irById.get(latest.id);
+      if (!best || !latestIr) continue; // removed meanwhile: read again
+      // And against the row it follows on the line (see the header): never a
+      // smaller bump than what the line itself changed.
+      if (best.row.id !== latest.id) {
+        const onLine = diffContracts(latestIr as unknown as InterfaceContract, contract);
+        if (bumpRank(onLine.bump) > bumpRank(best.diff.bump)) best = { row: latest, diff: onLine };
+      }
       diff = best.diff;
       if (diff.bump === null) {
         // Same structure, different hash or service: say so, as a patch.

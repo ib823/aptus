@@ -166,13 +166,63 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     expect(caughtUp).toMatchObject({ status: "UNCHANGED", snapshot: { semver: "1.1.0" } });
 
     // Another logon language relabels the same structure: a patch against the nearest contract, then stable.
-    const german = prod();
+    // (Relabelling the line's newest contract: TEST relabelling PROD's older
+    // one would also drop ZZ1_NewField from the line, which is major.)
+    const german = dev();
     german.entityType.properties[0]!.label = "Kundenauftrag";
     const test1 = await recordContractSnapshot({ scope, iface, contract: german, environment: "TEST" });
     expect(test1).toMatchObject({ status: "RECORDED", snapshot: { semver: "1.1.1" }, diff: { bump: "patch" } });
     const test2 = await recordContractSnapshot({ scope, iface, contract: german, environment: "TEST" });
     expect(test2).toMatchObject({ status: "UNCHANGED", snapshot: { semver: "1.1.1" } });
     expect(await recordContractSnapshot({ scope, iface, contract: dev(), environment: "DEV" })).toMatchObject({ status: "UNCHANGED" });
+  });
+
+  it("a version never drops a field the version before it on the line had, without a major bump", async () => {
+    // PROD's own newest row is older than the line's newest, which another
+    // environment recorded and PROD has since caught up to. Diffed only
+    // against PROD's own row, D was "one field added" (minor), and the line
+    // went 1.1.0 (with ZZ1_F2) → 1.2.0 (without it).
+    const iface = await newInterface("line");
+    const A = salesOrder;
+    const withField = (name: string) => () => {
+      const c = salesOrder();
+      c.entityType.properties.push({ name, type: "Edm.String", nullable: true });
+      return c;
+    };
+    const B = withField("ZZ1_F2");
+    const D = withField("ZZ1_F3");
+    const seen: string[] = [];
+    for (const [environment, contract] of [
+      ["PROD", A],
+      ["DEV", B],
+      ["PROD", B],
+      ["PROD", D],
+      ["DEV", D],
+    ] as const) {
+      const r = await recordContractSnapshot({ scope, iface, contract: contract(), environment });
+      if (r.status === "TOO_LARGE") throw new Error("too large");
+      seen.push(`${environment}:${r.status}:${r.snapshot.semver}${r.status === "RECORDED" && r.diff ? `:${r.diff.bump}` : ""}`);
+    }
+    expect(seen).toEqual([
+      "PROD:RECORDED:1.0.0",
+      "DEV:RECORDED:1.1.0:minor",
+      "PROD:UNCHANGED:1.1.0",
+      "PROD:RECORDED:2.0.0:major",
+      "DEV:UNCHANGED:2.0.0",
+    ]);
+    const rows = await prisma.contractSnapshot.findMany({
+      where: { organizationId: ORG, interfaceId: iface.id },
+      orderBy: [{ semverMajor: "asc" }, { semverMinor: "asc" }, { semverPatch: "asc" }],
+      select: { semver: true, ir: true, diff: true },
+    });
+    const names = (ir: unknown) => new Set((ir as InterfaceContract).entityType.properties.map((p) => p.name));
+    for (let i = 1; i < rows.length; i++) {
+      const [before, after] = [names(rows[i - 1]!.ir), names(rows[i]!.ir)];
+      const lost = [...before].some((n) => !after.has(n));
+      if (lost) expect(rows[i]!.semver.split(".")[0]).not.toBe(rows[i - 1]!.semver.split(".")[0]);
+    }
+    // The recorded diff says what the line lost.
+    expect(JSON.stringify(rows.at(-1)!.diff)).toContain("ZZ1_F2 was removed.");
   });
 
   it("an environment going back to an older contract of its own is still a new version", async () => {

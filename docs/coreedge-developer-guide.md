@@ -80,13 +80,13 @@ The documents describe the wire format: on an OData V2 service an `Int64`,
 `Decimal` or date arrives as a string (`"/Date(1717171717000)/"`), on V4 as a
 number or an RFC 3339 string. Only the operations CoreEdge serves are drawn as
 paths; `x-coreedge-interfaces[].operations` says which others the service
-allows and when CoreEdge will serve them. Both documents list
-`/api/northbound/v1` first in `servers` and the original `/api/northbound`
-second (one implementation), take the optional `CoreEdge-Version` header on
-every operation, name it on every answer with `Deprecation` and `Sunset`, and
+allows and when CoreEdge will serve them. Both documents list the original
+`/api/northbound` first in `servers` and `/api/northbound/v1` second (one
+implementation), take the optional `CoreEdge-Version` header on every
+operation, name it on every answer with `Deprecation` and `Sunset`, and
 document `400 UNSUPPORTED_VERSION` and `GET /versions` (see *API versions and
-deprecation*). A kit downloaded from Studio calls the `v1` path; one downloaded
-before calls the original path, which keeps working.
+deprecation*). A kit downloaded from Studio calls the original path; kits and
+documents move to `v1` in a later release.
 
 ### Testing offline
 
@@ -303,13 +303,14 @@ help.
 | `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
 | `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it | **Yes, after `Retry-After`.** Slow this key down |
 | `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
+| `429` | `RATE_LIMIT_EXCEEDED` | **Your address** is over the edge's ordinary per-address limit (300 GET or 120 POST a minute). Only a call that no per-credential limit covers meets it: `GET /versions`, a call with no `Authorization` header, or every call while per-credential limits are switched off | **Yes, after `Retry-After`.** Send your token on every call |
 | `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
 | `503` | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits, so it refused the call for safety. Nothing was sent to SAP, and your budget was not spent | **Yes, after `Retry-After`.** |
 | `504` | `UPSTREAM_TIMEOUT` | The tenant, or the connection's token endpoint, did not answer in time | **Yes, with backoff.** A write that timed out after it was sent returns the same answer under its key; see *Idempotency is not optional* |
 
 **Branch on `error.code`, not only on the status.** A `429 RATE_LIMITED` is
-about your own credential; a `429 RATE_LIMITED_ADDRESS` is about the address
-you call from. Neither is ever sent for an outage: when the limiter itself is
+about your own credential; a `429 RATE_LIMITED_ADDRESS` or
+`RATE_LIMIT_EXCEEDED` is about the address you call from. Neither is ever sent for an outage: when the limiter itself is
 down you get `503 LIMITER_UNAVAILABLE`, which says nothing about your rate.
 When SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`, so back
 off on a `502` as well, not only on a `429`.
@@ -325,9 +326,12 @@ change. Every version and every change to it is in the changelog,
 
 **Two paths, one API.** `/api/northbound/v1/*` and the original
 `/api/northbound/*` are the same implementation: the same limits, the same
-credential checks, the same grants, the same audit trail. Use the `v1` path in
-new code. The original path keeps working; it is not deprecated, and if it ever
-is, that follows the policy below like any other change.
+credential checks, the same grants, the same audit trail. Generated kits and
+documents still point at the original path: the `v1` path is new in this
+release, and a deployment rolled back to the one before would not serve it.
+They switch to `v1` in a later release, and you can call either today. The
+original path is not deprecated, and if it ever is, that follows the policy
+below like any other change.
 
 **The version header.** Every response carries `CoreEdge-Version`, naming the
 version that served it (today `2026-10`). To pin a version, send the same

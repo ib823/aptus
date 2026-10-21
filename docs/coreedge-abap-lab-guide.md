@@ -249,7 +249,7 @@ Keep them in your secrets manager.
 | `DIRECT_DATABASE_URL` | Required. The Prisma CLI refuses to run without it (`prisma/schema.prisma:5-9`). | Yes | The same as `DATABASE_URL` when no connection pooler is used. With a pooler (typical on option B), the direct, unpooled URL, which migrations use. |
 | `NEXTAUTH_SECRET` | Required | Yes | From 4.2 |
 | `NEXTAUTH_URL` | Required | No | Your public `https://` URL |
-| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request, on the versioned path `/api/northbound/v1` (`src/app/api/studio/interfaces/[id]/scaffold/route.ts:72-77`), so check `COREEDGE_BASE_URL` in a downloaded kit. A kit downloaded before P1.10 carries `/api/northbound`, which serves the same API. |
+| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request, on the original path `/api/northbound` (`src/app/api/studio/interfaces/[id]/scaffold/route.ts`), so check `COREEDGE_BASE_URL` in a downloaded kit. The versioned `/api/northbound/v1` serves the same API; kits move to it in a later release. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Required in practice. Without `SMTP_USER`, a production instance sends no magic link and nobody can sign in (`auth-options.ts:60-68`). | `SMTP_PASS` is | Your relay. Optionally set `EMAIL_SENDER_NAME` too, so that emails do not carry the original branding. |
 | `SAP_CONNECTION_ENCRYPTION_KEY` | Required for CoreEdge. The preflight only warns, but without it no SAP connection can be saved. | Yes | From 4.2 |
 | `CRON_SECRET` | Required by the production preflight. With it unset, every scheduled job refuses all callers (`src/lib/ops/cron.ts:28-33`). | Yes | From 4.2 |
@@ -1095,8 +1095,10 @@ it.
   send again under a new key.
 
 Always log `x-correlation-id`, for example in the application log (BAL). It is
-the key that links your call to the CoreEdge audit trail. The middleware's
-`RATE_LIMIT_EXCEEDED` answer is the one response without it.
+the key that links your call to the CoreEdge audit trail. Every northbound
+answer carries it, the middleware's `RATE_LIMIT_EXCEEDED` and
+`LIMITER_UNAVAILABLE` included; for those no audit row exists, because the
+call never reached the broker.
 
 ### 6.3 ADT tooling: the bundled abap-mcp server
 
@@ -1439,7 +1441,9 @@ Every call needs `Authorization: Bearer ce_...`.
 
 Every path above is also served under `/api/northbound/v1` (for example
 `/api/northbound/v1/interfaces/{id}/data`), by the same code. An SM59 path
-prefix of `/api/northbound` or `/api/northbound/v1` behaves identically.
+prefix of `/api/northbound` or `/api/northbound/v1` behaves identically. Set
+new destinations to `/api/northbound` for now: `v1` is new in this release,
+and a CoreEdge rolled back to the release before would not serve it.
 Every response names its API version in `CoreEdge-Version` (today `2026-10`);
 your program may send that header to pin the version, and need not. The
 versions, the deprecation policy and the `Deprecation` and `Sunset` headers are
@@ -1451,8 +1455,10 @@ replayed against both paths and every supported version on every CI run
 The success envelope is `{ "data": ... }`. The error envelope is
 `{ "error": { "code", "message", "correlationId" } }`. Every response from the
 northbound route handlers carries `x-correlation-id` and `cache-control: no-store`
-(`src/lib/northbound/respond.ts:60-61,84-86`). The middleware's per-IP 429
-`RATE_LIMIT_EXCEEDED` answers before the route and carries neither (section 6.2).
+(`src/lib/northbound/respond.ts`, `northboundError`). The middleware's
+refusals on a northbound path use the same envelope and both headers,
+including the per-IP 429 `RATE_LIMIT_EXCEEDED`, which answers before the
+route (section 6.2; `src/middleware.ts`, `machineRefusal`).
 
 A DRAFT interface is still served for reads, with the header
 `x-coreedge-interface-status: DRAFT`. Writes require ACTIVE and return 403

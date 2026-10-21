@@ -240,6 +240,82 @@ describe("an entity type's openness", () => {
     expect(diffContracts(open, base()).bump).toBe("major");
     expect(diffContracts(base(), open).bump).toBe("minor");
   });
+
+  it("a complex type follows the same rule: its schema refuses dynamic properties once closed", () => {
+    const withAddress = (open: boolean) =>
+      changed((c) => {
+        c.complexTypes.push({
+          name: "Addr",
+          qualifiedName: "ns.Addr",
+          properties: [{ name: "City", type: "Edm.String", nullable: true }],
+          navigations: [],
+          ...(open ? { openType: true as const } : {}),
+        });
+        c.entityType.properties.push({ name: "Address", type: "ns.Addr", nullable: true });
+      });
+    expect(diffContracts(withAddress(true), withAddress(false))).toMatchObject({
+      bump: "major",
+      changes: [{ bump: "major", at: "complexType:Addr" }],
+    });
+    expect(diffContracts(withAddress(false), withAddress(true))).toMatchObject({
+      bump: "minor",
+      changes: [{ bump: "minor", at: "complexType:Addr" }],
+    });
+    expect(diffContracts(withAddress(true), withAddress(true)).bump).toBeNull();
+  });
+});
+
+describe("overloads of one name", () => {
+  const V4 = (body: string) =>
+    '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+    `<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">${body}</Schema></edmx:DataServices></edmx:Edmx>`;
+  const RELEASE_ONE = '<Action Name="Release" IsBound="true"><Parameter Name="it" Type="ns.T"/><Parameter Name="Reason" Type="Edm.String"/></Action>';
+  const RELEASE_MANY =
+    '<Action Name="Release" IsBound="true"><Parameter Name="it" Type="Collection(ns.T)"/><Parameter Name="Date" Type="Edm.Date"/></Action>';
+  const contract = (extra: string, ops: string): InterfaceContract => {
+    const r = compileContract(
+      V4(
+        `<EntityType Name="T"><Key><PropertyRef Name="K"/></Key><Property Name="K" Type="Edm.String" Nullable="false"/>${extra}</EntityType>` +
+          ops +
+          '<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>',
+      ),
+    );
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "S");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  };
+
+  it("are each compared with their own overload, never with the last one of the name", () => {
+    const both = RELEASE_ONE + RELEASE_MANY;
+    const d = diffContracts(contract("", both), contract('<Property Name="New" Type="Edm.String"/>', both));
+    expect(d).toEqual({ bump: "minor", changes: [{ bump: "minor", at: "property:New", change: "New was added." }] });
+    expect(diffContracts(contract("", both), contract("", RELEASE_MANY + RELEASE_ONE)).bump).toBeNull();
+  });
+
+  it("an overload removed is major and one added is minor, on its own", () => {
+    const removed = diffContracts(contract("", RELEASE_ONE + RELEASE_MANY), contract("", RELEASE_MANY));
+    expect(removed.bump).toBe("major");
+    expect(removed.changes).toHaveLength(1);
+    expect(removed.changes[0]).toMatchObject({ bump: "major", at: "operation:Release" });
+    const added = diffContracts(contract("", RELEASE_MANY), contract("", RELEASE_ONE + RELEASE_MANY));
+    expect(added.bump).toBe("minor");
+    expect(added.changes).toHaveLength(1);
+  });
+
+  it("one overload's own change is still found", () => {
+    const tighter = '<Action Name="Release" IsBound="true"><Parameter Name="it" Type="ns.T"/><Parameter Name="Reason" Type="Edm.String" Nullable="false"/></Action>';
+    const d = diffContracts(contract("", RELEASE_ONE + RELEASE_MANY), contract("", tighter + RELEASE_MANY));
+    expect(d).toEqual({
+      bump: "major",
+      changes: [{ bump: "major", at: "operation:Release", change: "Its parameter Reason is now required." }],
+    });
+  });
+
+  it("a single operation gaining an optional parameter is still minor, not a removal and an addition", () => {
+    const more = '<Action Name="Release" IsBound="true"><Parameter Name="it" Type="ns.T"/><Parameter Name="Reason" Type="Edm.String"/><Parameter Name="Note" Type="Edm.String"/></Action>';
+    expect(diffContracts(contract("", RELEASE_ONE), contract("", more)).bump).toBe("minor");
+  });
 });
 
 describe("semver arithmetic", () => {

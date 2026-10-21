@@ -37,6 +37,14 @@ export type NorthboundErrorCode =
    */
   | "RATE_LIMITED_ADDRESS"
   /**
+   * The ordinary per-IP API bucket refused the call at the edge: GET
+   * /versions (which needs no credential), a call with no bearer, or any call
+   * while COREEDGE_MACHINE_RATE_LIMIT=ip. The code every /api/* route has
+   * always sent for it, kept so callers that branch on it keep working. Sent
+   * only by the edge (middleware.ts, machineRefusal).
+   */
+  | "RATE_LIMIT_EXCEEDED"
+  /**
    * The customer's SAP connection cannot be bound for this call — none is
    * configured for the product, none declares the credential's environment, or
    * the candidates are ambiguous.

@@ -479,10 +479,11 @@ describe("the starter kit and the solution document use the compiled contract", 
     expect(validateOpenApi31(v31).errors).toEqual([]);
     expect(validateOpenApi30(v30).errors).toEqual([]);
     expect(Object.keys(v31.paths)).toEqual(["/interfaces/if_1/data/write", "/interfaces/if_1/schema", "/versions"]);
-    // The kit calls the versioned path (P1.10); its documents list the original second.
-    expect(files.find((f) => f.path === ".env.example")!.contents).toContain("COREEDGE_BASE_URL=http://localhost/api/northbound/v1\n");
+    // The kit calls the path every deployment serves, the one an Instant
+    // Rollback returns to included; its documents list v1 second (P1 wave A review).
+    expect(files.find((f) => f.path === ".env.example")!.contents).toContain("COREEDGE_BASE_URL=http://localhost/api/northbound\n");
     for (const doc of [v31, v30]) {
-      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound/v1", "http://localhost/api/northbound"]);
+      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound", "http://localhost/api/northbound/v1"]);
     }
     expect(v31.components.schemas.SalesOrder_Create.required).toEqual(["SoldToParty", "PurchaseOrderByCustomer"]);
     expect(v31["x-coreedge-interfaces"][0].contract).toMatchObject({ source: "metadata", semver: "1.0.0" });
@@ -518,7 +519,7 @@ describe("the starter kit and the solution document use the compiled contract", 
         "/interfaces/if_2/schema",
         "/versions",
       ]);
-      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound/v1", "http://localhost/api/northbound"]);
+      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound", "http://localhost/api/northbound/v1"]);
       const if2 = doc["x-coreedge-interfaces"].find((i: Row) => i.id === "if_2");
       // A contract is recorded per interface: if_2 has not been verified itself.
       expect(if2.contract).toEqual({ source: "none" });

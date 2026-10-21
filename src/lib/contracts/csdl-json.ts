@@ -44,6 +44,15 @@ function str(v: Json | undefined): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/**
+ * A scalar as text; anything else is not one, and is left out. Never
+ * `String(v)` on an object: `{"toString":1}` makes it throw, and the verify
+ * that compiled the document answered 500 (P1 wave A review).
+ */
+function scalarText(v: Json | undefined): string | undefined {
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : undefined;
+}
+
 /** A JSON annotation value → the IR's value shape; depth-bounded. */
 function annotationValue(v: Json, depth = 0): AnnotationValue {
   if (depth > MAX_ANNOTATION_DEPTH) return "";
@@ -84,7 +93,8 @@ function facets(obj: JsonObject): Partial<IrProperty> {
   const scale = obj.$Scale;
   if (typeof scale === "number" && Number.isInteger(scale)) out.scale = scale;
   else if (scale === "variable" || scale === "floating") out.scale = scale;
-  if (obj.$DefaultValue !== undefined && obj.$DefaultValue !== null) out.defaultValue = String(obj.$DefaultValue);
+  const defaultValue = scalarText(obj.$DefaultValue);
+  if (defaultValue !== undefined) out.defaultValue = defaultValue;
   return out;
 }
 
@@ -220,9 +230,11 @@ function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
         }
         mergeAnnotations(annotations, qn, annotationsOf(member, aliases));
       } else if (member.$Kind === "EnumType") {
-        const members = Object.entries(member)
-          .filter(([k]) => !k.startsWith("$") && !k.includes("@"))
-          .map(([k, v]) => ({ name: k, value: String(v) }));
+        const members = Object.entries(member).flatMap(([k, v]) => {
+          if (k.startsWith("$") || k.includes("@")) return [];
+          const value = scalarText(v);
+          return value === undefined ? [] : [{ name: k, value }];
+        });
         budget.spend(members.length);
         enumTypes.push({
           name,

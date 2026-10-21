@@ -78,6 +78,14 @@ export function normalizeContract(c: InterfaceContract): InterfaceContract {
   };
 }
 
+/**
+ * The largest contract stored, as canonical JSON (snapshot.ts). A slice of a
+ * real dataset is tens of kilobytes; one this size is a description built to
+ * be expensive. Here, beside the size it bounds, so the slice (slice.ts) can
+ * refuse a contract this large before anything serialises it.
+ */
+export const MAX_CONTRACT_BYTES = 4 * 1024 * 1024;
+
 /** sha256 over the canonical JSON of the normalized contract, hex. */
 export function contractHash(c: InterfaceContract): string {
   return contractDigest(c).hash;

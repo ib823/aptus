@@ -159,6 +159,22 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
   return null;
 }
 
+/**
+ * The compile, as a refusal when the compiler throws. It is meant to refuse,
+ * never throw, on anything a SAP system can answer; a bug that throws
+ * anyway must not turn the verify into a 500 — the verdict then comes from
+ * the older readers, as for any refused document, and the error is logged
+ * by its name only (P1 wave A review).
+ */
+function compileOrRefuse(body: string): CompileResult {
+  try {
+    return compileContract(body);
+  } catch (err) {
+    console.error("[contracts] compile failed", { error: err instanceof Error ? err.name : "unknown" });
+    return { ok: false, reason: "INVALID_CSDL", detail: "The service description could not be read as a service description." };
+  }
+}
+
 function versionLabel(v: ODataVersion): string {
   return v === "V4" ? "OData V4" : "OData V2";
 }
@@ -250,7 +266,7 @@ export async function verifyServiceMetadata(
    * the older readers below still list the datasets — so no service that
    * verified yesterday stops verifying today.
    */
-  const compiled = compileContract(r.body);
+  const compiled = compileOrRefuse(r.body);
   const entitySets = compiled.ok
     ? // A singleton is one record, not a dataset the broker can page through.
       [...new Set(compiled.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name))]

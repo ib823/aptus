@@ -57,7 +57,13 @@ sends or receives changed, except the additions marked *Added*.
   prefix is never read to authenticate.
 - Rate limits are per credential (60 reads and 60 writes a minute) with an
   address backstop: `429 RATE_LIMITED` or `429 RATE_LIMITED_ADDRESS`, and
-  `503 LIMITER_UNAVAILABLE` when the limiter cannot be asked.
+  `503 LIMITER_UNAVAILABLE` when the limiter cannot be asked. A call no
+  per-credential limit covers (`GET /versions`, or one with no
+  `Authorization` header) meets the per-address `429 RATE_LIMIT_EXCEEDED`.
+- *Added:* the edge's per-address `429 RATE_LIMIT_EXCEEDED` and its `503
+  LIMITER_UNAVAILABLE` carry `correlationId`, `x-correlation-id` and
+  `cache-control: no-store` on the northbound paths, like every other answer.
+  The code is unchanged.
 - A grant authorises the one interface it was approved for (P0.1).
 - *Added:* `GET /interfaces/{id}/schema` also returns `contract` (where the
   contract came from, its semantic version and its JSON Schemas), and
@@ -65,4 +71,7 @@ sends or receives changed, except the additions marked *Added*.
   interface's record once its service is verified (P1.3). Every field that was
   there before means what it meant. The starter kit's `openapi.json` and
   `openapi-3.0.json` describe the `CoreEdge-Version` header, `400
-  UNSUPPORTED_VERSION` and both base paths, `/api/northbound/v1` first.
+  UNSUPPORTED_VERSION` and both base paths. Generated kits and documents
+  still point at `/api/northbound`, which every deployment serves; they
+  move to `/api/northbound/v1` in a later release, once a deployment that
+  serves it is the one a rollback would return to.

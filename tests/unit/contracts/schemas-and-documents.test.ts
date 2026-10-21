@@ -233,10 +233,11 @@ describe("the northbound document", () => {
       discovery: true,
       interfaces: [iface({ id: "if_r" }), iface({ id: "if_c", operation: "CREATE", mode: "WRITE" })],
     }) as Doc;
-    // The versioned path is the recommended server; the original stays listed.
+    // Both paths; the one every deployment serves first, because a generator
+    // picks the first and a rollback target does not serve v1 (P1 wave A review).
     expect(doc.servers.map((s: { url: string }) => s.url)).toEqual([
-      "https://coreedge.example/api/northbound/v1",
       "https://coreedge.example/api/northbound",
+      "https://coreedge.example/api/northbound/v1",
     ]);
     expect(doc.components.parameters.CoreEdgeVersion).toMatchObject({ name: "CoreEdge-Version", in: "header", required: false });
     expect(doc.components.parameters.CoreEdgeVersion.description).toContain(NORTHBOUND_API_VERSIONS[0]!.version);
@@ -268,8 +269,12 @@ describe("the northbound document", () => {
   it("lists a base URL that is not a CoreEdge path as given", () => {
     expect(northboundServers("http://localhost:4010")).toEqual([{ url: "http://localhost:4010" }]);
     expect(northboundServers("https://ce.example/api/northbound/").map((s) => s.url)).toEqual([
-      "https://ce.example/api/northbound/v1",
       "https://ce.example/api/northbound",
+      "https://ce.example/api/northbound/v1",
+    ]);
+    expect(northboundServers("https://ce.example/api/northbound/v1").map((s) => s.url)).toEqual([
+      "https://ce.example/api/northbound",
+      "https://ce.example/api/northbound/v1",
     ]);
   });
 

@@ -151,14 +151,34 @@ async function machineRouteLimit(
   return { result: { ...own, remaining: Math.min(own.remaining, backstop.remaining) }, by: "credential" };
 }
 
-/** Whose limit refused a machine call at the edge. */
-type MachineRefusalBy = "credential" | "address" | "failed-credentials";
+/**
+ * Whose limit refused a machine call at the edge. "per-ip" is the ordinary
+ * per-IP API bucket, which a northbound call meets when machineRouteLimit
+ * does not apply: GET /versions (no credential needed), a call with no
+ * bearer, or every call with COREEDGE_MACHINE_RATE_LIMIT=ip.
+ */
+type MachineRefusalBy = "credential" | "address" | "failed-credentials" | "per-ip";
 
 const MACHINE_REFUSAL_MESSAGES: Record<MachineRefusalBy, string> = {
   credential: "Too many requests for this client credential.",
   address: "Too many requests from this address.",
   "failed-credentials":
     "Too many requests with an unrecognised client credential from this address. Calls from this address are refused until the window frees room.",
+  "per-ip": "Too many requests. Please try again later.",
+};
+
+/**
+ * The code each refusal is sent with. The per-IP bucket keeps the code it
+ * has always sent on every /api/* route, RATE_LIMIT_EXCEEDED, because ABAP
+ * programs and SDKs written against the lab guide branch on it; on a
+ * northbound path it now arrives in the northbound envelope (a correlation
+ * id, no-store), as the generated OpenAPI documents it (P1 wave A review).
+ */
+const MACHINE_REFUSAL_CODES: Record<MachineRefusalBy, string> = {
+  credential: "RATE_LIMITED",
+  address: "RATE_LIMITED_ADDRESS",
+  "failed-credentials": "RATE_LIMITED_ADDRESS",
+  "per-ip": "RATE_LIMIT_EXCEEDED",
 };
 
 /**
@@ -191,7 +211,7 @@ function machineRefusal(
       error: outage
         ? { code: "LIMITER_UNAVAILABLE", message: LIMITER_UNAVAILABLE_MESSAGE, correlationId }
         : {
-            code: by === "credential" ? "RATE_LIMITED" : "RATE_LIMITED_ADDRESS",
+            code: MACHINE_REFUSAL_CODES[by],
             message: MACHINE_REFUSAL_MESSAGES[by],
             correlationId,
           },
@@ -451,6 +471,14 @@ async function handleRequest(
           : `api:${request.method}:${clientIp}`;
 
       const result = await checkRateLimit(key, config);
+
+      // A northbound caller is an application that quotes a correlation id,
+      // and the generated OpenAPI documents every refusal in the northbound
+      // envelope: the per-IP 429 and 503 on its paths answer in it too, with
+      // the same codes (P1 wave A review).
+      if (!result.allowed && isNorthboundPath(pathname)) {
+        return withObservabilityHeaders(machineRefusal(result, "per-ip", versionHeaders), requestId, requestStart);
+      }
 
       // An outage is not throttling (audit A44): the limiter fails closed in
       // production, and the refusal says why — 503, never 429.

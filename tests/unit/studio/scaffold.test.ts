@@ -87,9 +87,11 @@ describe("OpenAPI document", () => {
     expect(schema!.additionalProperties).toBe(true);
   });
 
-  it("uses the deployment it is given, the versioned path first (P1.10)", () => {
+  it("uses the deployment it is given, both paths, the one every deployment serves first", () => {
+    // Not v1 first yet: the deployment a rollback returns to does not serve
+    // it (P1 wave A review).
     const servers = (base: string) => (JSON.parse(buildOpenApi(IFACE, base)) as { servers: { url: string }[] }).servers.map((s) => s.url);
-    const both = ["https://acme.internal/api/northbound/v1", "https://acme.internal/api/northbound"];
+    const both = ["https://acme.internal/api/northbound", "https://acme.internal/api/northbound/v1"];
     expect(servers("https://acme.internal/api/northbound")).toEqual(both);
     expect(servers("https://acme.internal/api/northbound/v1")).toEqual(both);
     expect(servers("https://acme.internal/api/northbound/v1/")).toEqual(both);
@@ -97,8 +99,9 @@ describe("OpenAPI document", () => {
     expect(servers("http://localhost:4010")).toEqual(["http://localhost:4010"]);
   });
 
-  it("generates for the versioned path by default, and describes the version header", () => {
-    expect((doc.servers as { url: string }[])[0]!.url).toBe("https://coreedge.example/api/northbound/v1");
+  it("generates for the original path by default, and describes the version header", () => {
+    expect((doc.servers as { url: string }[])[0]!.url).toBe("https://coreedge.example/api/northbound");
+    expect(buildEnvExample()).toContain("COREEDGE_BASE_URL=https://coreedge.example/api/northbound\n");
     const components = doc.components as { parameters: Record<string, { name: string; in: string; required: boolean }> };
     expect(components.parameters.CoreEdgeVersion).toMatchObject({ name: "CoreEdge-Version", in: "header", required: false });
   });

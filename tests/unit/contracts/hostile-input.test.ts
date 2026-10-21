@@ -8,7 +8,10 @@
 
 import { describe, expect, it } from "vitest";
 
+import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
+import type { InterfaceContract } from "@/lib/contracts/ir";
+import { buildContractSchemas, standaloneSchemas } from "@/lib/contracts/json-schema";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { DEFAULT_XML_LIMITS, parseXml } from "@/lib/contracts/xml";
 import { buildTypeScriptClient } from "@/lib/studio/scaffold";
@@ -315,5 +318,137 @@ describe("descriptions that make a lookup quadratic", () => {
     );
     expect(kit.value).toContain("p59999?: Record<string, unknown> | null;");
     expect(kit.ms).toBeLessThan(BUDGET_MS);
+  });
+});
+
+/*
+ * P1 wave A integration review: documents that pass every compiler bound and
+ * still hurt what reads the compiled contract back.
+ */
+describe("compiled contracts that are expensive to read back", () => {
+  const BUDGET_MS = 5000;
+  const timed = <T>(fn: () => T): { value: T; ms: number } => {
+    const started = performance.now();
+    const value = fn();
+    return { value, ms: performance.now() - started };
+  };
+
+  it("thousands of types sharing one Name get their component names in linear time", () => {
+    // Each type probed one suffix per earlier namesake: 36 s of CPU at this
+    // size, paid on every GET /schema, every OpenAPI build and every kit.
+    const n = 30_000;
+    const doc =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+      '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm"><EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="n${i}.T"/>`).join("") +
+      '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.E"/></EntityContainer></Schema>' +
+      Array.from({ length: n }, (_, i) => `<Schema Namespace="n${i}" xmlns="http://docs.oasis-open.org/odata/ns/edm"><ComplexType Name="T"/></Schema>`).join("") +
+      "</edmx:DataServices></edmx:Edmx>";
+    const r = compileContract(doc);
+    if (!r.ok) throw new Error(r.detail);
+    const slice = sliceForEntitySet(r.ir, "S");
+    if (!slice.ok) throw new Error(slice.detail);
+    // Small enough to be stored, so this is what /schema would serve.
+    expect(contractDigest(slice.contract).bytes).toBeLessThan(MAX_CONTRACT_BYTES);
+    const built = timed(() => standaloneSchemas(slice.contract, "S"));
+    expect(built.ms).toBeLessThan(BUDGET_MS);
+    // Every type still has a name of its own, in the contract's order.
+    const defs = Object.keys((built.value.record.$defs ?? {}) as Record<string, unknown>);
+    expect(defs).toHaveLength(n);
+    expect(defs.slice(0, 3)).toEqual(["S_T", "S_T2", "S_T3"]);
+    expect(defs.at(-1)).toBe(`S_T${n}`);
+  }, 60_000);
+
+  it("a suffixed name never lands on a type that already has that name", () => {
+    const doc =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+      '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm"><EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      '<Property Name="a" Type="a.T"/><Property Name="b" Type="ns.T2"/><Property Name="c" Type="c.T"/><Property Name="d" Type="d.T"/>' +
+      '</EntityType><ComplexType Name="T2"/><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.E"/></EntityContainer></Schema>' +
+      ["a", "c", "d"].map((ns) => `<Schema Namespace="${ns}" xmlns="http://docs.oasis-open.org/odata/ns/edm"><ComplexType Name="T"/></Schema>`).join("") +
+      "</edmx:DataServices></edmx:Edmx>";
+    const r = compileContract(doc);
+    if (!r.ok) throw new Error(r.detail);
+    const slice = sliceForEntitySet(r.ir, "S");
+    if (!slice.ok) throw new Error(slice.detail);
+    const built = buildContractSchemas(slice.contract, { dialect: "2020-12", stem: "S", ref: (x) => x });
+    const named = Object.entries(built.schemas)
+      .filter(([name]) => name.startsWith("S_T"))
+      .map(([name, s]) => `${String(s["x-odata-type"])}=${name}`)
+      .sort();
+    expect(named).toEqual(["a.T=S_T", "c.T=S_T3", "d.T=S_T4", "ns.T2=S_T2"]);
+  });
+
+  it("one long label on a base type folded into thousands of types is refused at the slice, never multiplied", () => {
+    // Each folded copy shared the label string, so the slice was small in
+    // memory and passed the member budget; its canonical JSON then wrote the
+    // label 2,000 times (600 MB) before its size was checked, and threw.
+    const n = 2000;
+    const label = "L".repeat(300_000);
+    const doc =
+      '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">' +
+      '<edmx:DataServices m:DataServiceVersion="2.0"><Schema Namespace="ns" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">' +
+      `<ComplexType Name="B"><Property Name="b" Type="Edm.String" sap:label="${label}"/></ComplexType>` +
+      Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.B"/>`).join("") +
+      '<EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="S" EntityType="ns.E"/></EntityContainer>' +
+      "</Schema></edmx:DataServices></edmx:Edmx>";
+    expect(doc.length).toBeLessThan(DEFAULT_XML_LIMITS.maxBytes);
+    const r = compileContract(doc);
+    if (!r.ok) throw new Error(r.detail);
+    const slice = timed(() => sliceForEntitySet(r.ir, "S"));
+    expect(slice.ms).toBeLessThan(BUDGET_MS);
+    expect(slice.value).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+  }, 60_000);
+
+  it("whatever the slice accepts has a canonical form in proportion to the description", () => {
+    // Just under the old trigger: a few long labels folded a few times.
+    const label = "L".repeat(50_000);
+    const doc =
+      EDMX_HEAD +
+      `<ComplexType Name="B"><Property Name="b" Type="Edm.String"><Annotation Term="Org.OData.Core.V1.Description" String="${label}"/></Property></ComplexType>` +
+      Array.from({ length: 5 }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.B"/>`).join("") +
+      '<EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: 5 }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.E"/></EntityContainer>' +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    if (!r.ok) throw new Error(r.detail);
+    const slice = sliceForEntitySet(r.ir, "S");
+    if (!slice.ok) throw new Error(slice.detail);
+    expect(slice.contract.complexTypes).toHaveLength(5);
+    let bytes = -1;
+    expect(() => (bytes = contractDigest(slice.contract as InterfaceContract).bytes)).not.toThrow();
+    expect(bytes).toBeLessThan(16 * doc.length);
+  });
+});
+
+describe("CSDL JSON values that are not scalars", () => {
+  it.each([
+    ["an enum member's value", '{"$Version":"4.0","ns":{"En":{"$Kind":"EnumType","A":{"toString":1},"B":1}}}'],
+    ["a property's $DefaultValue", '{"$Version":"4.0","ns":{"T":{"$Kind":"EntityType","$Key":["P"],"P":{"$DefaultValue":{"toString":1}}}}}'],
+    [
+      "a type definition's $DefaultValue",
+      '{"$Version":"4.0","ns":{"D":{"$Kind":"TypeDefinition","$UnderlyingType":"Edm.String","$DefaultValue":{"toString":1}},"T":{"$Kind":"EntityType","$Key":["P"],"P":{"$Type":"ns.D"}}}}',
+    ],
+  ])("%s that cannot be made a string is left out; the compile never throws", (_what, doc) => {
+    let r: ReturnType<typeof compileContract> | undefined;
+    expect(() => (r = compileContract(doc))).not.toThrow();
+    if (!r?.ok) throw new Error(r?.detail);
+    for (const en of r.ir.enumTypes) expect(en.members).toEqual([{ name: "B", value: "1" }]);
+    for (const t of r.ir.entityTypes) for (const p of t.properties) expect(p.defaultValue).toBeUndefined();
+  });
+
+  it("a scalar $DefaultValue and enum value are still read", () => {
+    const r = compileContract(
+      '{"$Version":"4.0","ns":{"En":{"$Kind":"EnumType","A":0,"B":"2"},"T":{"$Kind":"EntityType","$Key":["P"],"P":{"$DefaultValue":false},"Q":{"$Type":"Edm.Int32","$DefaultValue":7}}}}',
+    );
+    if (!r.ok) throw new Error(r.detail);
+    expect(r.ir.enumTypes[0]!.members).toEqual([
+      { name: "A", value: "0" },
+      { name: "B", value: "2" },
+    ]);
+    expect(r.ir.entityTypes[0]!.properties.map((p) => p.defaultValue)).toEqual(["false", "7"]);
   });
 });

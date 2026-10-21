@@ -27,7 +27,7 @@ import {
   type OpenApiVersion,
   type SampledSchema,
 } from "@/lib/contracts/openapi";
-import { supportedVersions, V1_BASE_PATH, VERSION_HEADER } from "@/lib/northbound/version-policy";
+import { supportedVersions, UNVERSIONED_BASE_PATH, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
 import { FIXTURE_SCENARIOS, stripFixtureEnvelope } from "@/lib/studio/fixtures";
 
@@ -35,12 +35,16 @@ export { toTypeName };
 
 /**
  * The base URL a kit is generated for when the caller names none: the
- * versioned path (P1.10), which the developer guide tells new code to use.
- * Studio's download passes its own origin with the same path. Kits generated
- * before carry the original /api/northbound, which keeps working: one
- * implementation serves both.
+ * original path, which Studio's download also uses with its own origin.
+ *
+ * NOT YET THE VERSIONED PATH (P1 wave A review). /api/northbound/v1 ships in
+ * this release; the deployment a Vercel Instant Rollback returns to does not
+ * serve it, so a kit that called it would get a 404 page on every call after
+ * a rollback. Kits move to v1 in a later release, once a deployment that
+ * serves it is the rollback target; the kit's OpenAPI lists v1 as the second
+ * server meanwhile. One implementation serves both.
  */
-export const DEFAULT_KIT_BASE_URL = `https://coreedge.example${V1_BASE_PATH}`;
+export const DEFAULT_KIT_BASE_URL = `https://coreedge.example${UNVERSIONED_BASE_PATH}`;
 
 /** The version an unpinned call is served today, as the kit's examples name it. */
 function defaultVersionName(): string {
@@ -618,9 +622,9 @@ way an integration lies to its users.
 
 ## API versions
 
-This kit calls the versioned path, \`/api/northbound/v1\`. The original
-\`/api/northbound\` path is the same implementation and keeps working, so a kit
-generated before carries on as it is.
+This kit calls \`/api/northbound\`. The versioned path, \`/api/northbound/v1\`,
+is the same implementation (the same versions, credentials and limits); kits
+switch to it in a later release, and this one keeps working.
 
 Every answer names the API version that served it in the \`CoreEdge-Version\`
 header (\`apiVersion\` in the client's read result). Send the same header to pin

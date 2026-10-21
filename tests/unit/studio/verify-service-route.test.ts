@@ -425,6 +425,25 @@ describe("every wrong answer is named, and none is recorded", () => {
     );
   });
 
+  it("a CSDL JSON answer the compiler cannot read is answered as before the compiler, never a 500 (P1 wave A review)", async () => {
+    // "<Edmx>" passes the EDMX sniff; the enum member's value is an object
+    // whose toString is not a function, which String() throws on.
+    mocks.findIface.mockResolvedValue(iface({ odataVersion: "V4" }));
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('{"$Version":"4.0","x":"<Edmx>","ns":{"En":{"$Kind":"EnumType","A":{"toString":1}}}}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    expect(d.verified).toBe(false);
+    expect(d.status).toBe("ENTITY_SET_MISSING");
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
   it("401 → UNAUTHORIZED, audited as 401", async () => {
     fetchMock.mockImplementation(async () => new Response("", { status: 401 }));
     const d = await data(await verify());

@@ -45,7 +45,7 @@ import {
   type IrProperty,
   type ODataVersion,
 } from "@/lib/contracts/ir";
-import { toTypeName } from "@/lib/contracts/names";
+import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 
 export type SchemaDialect = "2020-12" | "oas30";
 
@@ -216,17 +216,15 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
    * one schema overwrote another and properties pointed at the wrong, closed
    * one. The names this module and the northbound document give the record,
    * its bodies and results are taken first; a type that still collides gets a
-   * numeric suffix, in the contract's own order.
+   * numeric suffix, in the contract's own order — in linear time
+   * (nameAllocator), because this runs on every /schema call.
    */
-  const used = new Set<string>([stem, ...RESERVED_SUFFIXES.map((s) => `${stem}_${s}`)]);
+  const allocate = nameAllocator([stem, ...RESERVED_SUFFIXES.map((s) => `${stem}_${s}`)]);
   const componentOf = new Map<string, string>();
-  for (const t of [...contract.complexTypes, ...contract.enumTypes]) {
-    if (componentOf.has(t.qualifiedName)) continue;
-    const base = `${stem}_${toTypeName(t.name)}`;
-    let name = base;
-    for (let i = 2; used.has(name); i++) name = `${base}${i}`;
-    used.add(name);
-    componentOf.set(t.qualifiedName, name);
+  for (const list of [contract.complexTypes, contract.enumTypes]) {
+    for (const t of list) {
+      if (!componentOf.has(t.qualifiedName)) componentOf.set(t.qualifiedName, allocate(`${stem}_${toTypeName(t.name)}`));
+    }
   }
   const complexName = (ct: { qualifiedName: string }) => componentOf.get(ct.qualifiedName)!;
   const enumName = (en: { qualifiedName: string }) => componentOf.get(en.qualifiedName)!;

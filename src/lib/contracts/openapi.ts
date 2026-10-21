@@ -25,9 +25,10 @@
  * the error envelope with every code the broker can send, per status, and the
  * internal refusal reasons behind them (northbound-errors.ts).
  *
- * EVERY VERSION AND BOTH PATHS (P1.10). The documents list the versioned base
- * path (/api/northbound/v1) first in `servers`, as the one to use in new code,
- * and the original path second: one implementation serves both. Every
+ * EVERY VERSION AND BOTH PATHS (P1.10). The documents list both base paths in
+ * `servers` — the original first, because a generator picks the first and
+ * every deployment serves it, the versioned (/api/northbound/v1) second: one
+ * implementation serves both (see northboundServers). Every
  * operation takes the optional CoreEdge-Version request header and every
  * answer names its version in the same header (with Deprecation, Sunset and
  * Link once a deprecation is announced); a version the deployment does not
@@ -40,7 +41,7 @@
 
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
-import { toTypeName } from "@/lib/contracts/names";
+import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 import { ALL_ERROR_CODES, NORTHBOUND_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS } from "@/lib/contracts/northbound-errors";
 import type { NorthboundErrorCode } from "@/lib/northbound/respond";
 import {
@@ -129,10 +130,14 @@ export interface ServerEntry {
  * The `servers` a northbound document lists for a base URL (P1.10).
  *
  * A base URL on either northbound path names a deployment: the document then
- * lists `/api/northbound/v1` first — what the developer guide tells new code
- * to call, and the server generators pick by default — and the original path
- * second, which keeps working. Any other base URL (a local mock, a proxy in
- * front of CoreEdge) is listed as given: its paths are not ours to rewrite.
+ * lists the original `/api/northbound` first — the one server generators
+ * pick by default — and `/api/northbound/v1` second. Not v1 first, yet (P1
+ * wave A review): v1 ships in this release, and the deployment an Instant
+ * Rollback returns to does not serve it, so a client generated against it
+ * would get a 404 page on every call after a rollback. v1 moves first in a
+ * later release, once a deployment that serves it is the rollback target.
+ * Any other base URL (a local mock, a proxy in front of CoreEdge) is listed
+ * as given: its paths are not ours to rewrite.
  */
 export function northboundServers(baseUrl: string): ServerEntry[] {
   const trimmed = baseUrl.replace(/\/+$/, "");
@@ -144,12 +149,13 @@ export function northboundServers(baseUrl: string): ServerEntry[] {
   if (origin === null) return [{ url: baseUrl }];
   return [
     {
-      url: `${origin}${V1_BASE_PATH}`,
-      description: "The versioned path. Use it in new code.",
+      url: `${origin}${UNVERSIONED_BASE_PATH}`,
+      description: "The original path. Every deployment serves it.",
     },
     {
-      url: `${origin}${UNVERSIONED_BASE_PATH}`,
-      description: "The original path: the same implementation, the same versions and the same credentials. It keeps working.",
+      url: `${origin}${V1_BASE_PATH}`,
+      description:
+        "The versioned path: the same implementation, the same versions and the same credentials. Generated clients move to it in a later release.",
     },
   ];
 }
@@ -188,7 +194,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   const paths: Record<string, Obj> = {};
   // The document's own schemas are named first: a dataset called Error must
   // not overwrite the error envelope.
-  const usedStems = new Set<string>(DOCUMENT_SCHEMA_NAMES);
+  const stemFor = nameAllocator(DOCUMENT_SCHEMA_NAMES);
   const docInterfaces: Obj[] = [];
 
   const header = (name: string) => ({ [name]: ref("headers", headerComponent(name)) });
@@ -246,7 +252,15 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       "x-coreedge-error-codes": [{ code: "UNSUPPORTED_VERSION", status: 400, action: NORTHBOUND_ERROR_CODES.UNSUPPORTED_VERSION.action }],
     },
     Unauthenticated: errorResponse(401, ["UNAUTHENTICATED"], "Missing, unknown, revoked, expired or rotated-out client token — one answer for all of them."),
-    RateLimited: errorResponse(429, ["RATE_LIMITED", "RATE_LIMITED_ADDRESS"], "Rate limited: this credential's budget, or the caller's address.", true),
+    // RATE_LIMIT_EXCEEDED is the edge's ordinary per-address bucket: the only
+    // 429 GET /versions, a call without a bearer, or any call with
+    // per-credential limits switched off can meet (middleware.ts).
+    RateLimited: errorResponse(
+      429,
+      ["RATE_LIMITED", "RATE_LIMITED_ADDRESS", "RATE_LIMIT_EXCEEDED"],
+      "Rate limited: this credential's budget, or the caller's address.",
+      true,
+    ),
     LimiterUnavailable: errorResponse(503, ["LIMITER_UNAVAILABLE"], "The rate limiter could not be asked; nothing reached SAP.", true),
     Internal: errorResponse(500, ["INTERNAL"], "CoreEdge itself failed."),
   };
@@ -258,7 +272,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   });
 
   for (const iface of input.interfaces) {
-    const stem = uniqueStem(toTypeName(iface.entitySet ?? iface.name), usedStems);
+    const stem = stemFor(toTypeName(iface.entitySet ?? iface.name));
     const tag = stem;
     const recordSchemaName = stem;
     let createSchemaName: string | null = null;
@@ -661,13 +675,6 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
     },
     "x-coreedge-interfaces": docInterfaces,
   };
-}
-
-function uniqueStem(base: string, used: Set<string>): string {
-  let stem = base;
-  for (let i = 2; used.has(stem); i++) stem = `${base}${i}`;
-  used.add(stem);
-  return stem;
 }
 
 /**

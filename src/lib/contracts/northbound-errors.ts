@@ -75,6 +75,12 @@ export const NORTHBOUND_ERROR_CODES = {
       "The caller's address is over a limit (the edge's per-address backstop, or too many unrecognised keys from it). Another key on a shared egress may have spent it.",
     action: "Back off for Retry-After seconds; backing off one key may not help.",
   },
+  RATE_LIMIT_EXCEEDED: {
+    statuses: [429],
+    meaning:
+      "The caller's address is over the edge's ordinary per-address limit (300 GET or 120 POST a minute), which a call meets when no per-credential limit applies: GET /versions, a call with no Authorization header, or every call while per-credential limits are switched off.",
+    action: "Back off for Retry-After seconds; send the client token on every call.",
+  },
   LIMITER_UNAVAILABLE: {
     statuses: [503],
     meaning: "The rate limiter could not be asked, so the call was refused for safety. Nothing reached SAP.",

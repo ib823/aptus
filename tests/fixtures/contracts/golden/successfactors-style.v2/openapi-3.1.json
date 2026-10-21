@@ -7,12 +7,12 @@
   },
   "servers": [
     {
-      "url": "https://coreedge.example/api/northbound/v1",
-      "description": "The versioned path. Use it in new code."
+      "url": "https://coreedge.example/api/northbound",
+      "description": "The original path. Every deployment serves it."
     },
     {
-      "url": "https://coreedge.example/api/northbound",
-      "description": "The original path: the same implementation, the same versions and the same credentials. It keeps working."
+      "url": "https://coreedge.example/api/northbound/v1",
+      "description": "The versioned path: the same implementation, the same versions and the same credentials. Generated clients move to it in a later release."
     }
   ],
   "security": [
@@ -1166,7 +1166,7 @@
         ]
       },
       "RateLimited": {
-        "description": "Rate limited: this credential's budget, or the caller's address. Codes: RATE_LIMITED, RATE_LIMITED_ADDRESS.",
+        "description": "Rate limited: this credential's budget, or the caller's address. Codes: RATE_LIMITED, RATE_LIMITED_ADDRESS, RATE_LIMIT_EXCEEDED.",
         "headers": {
           "x-correlation-id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -1213,6 +1213,11 @@
             "code": "RATE_LIMITED_ADDRESS",
             "status": 429,
             "action": "Back off for Retry-After seconds; backing off one key may not help."
+          },
+          {
+            "code": "RATE_LIMIT_EXCEEDED",
+            "status": 429,
+            "action": "Back off for Retry-After seconds; send the client token on every call."
           }
         ]
       },
@@ -2446,6 +2451,7 @@
                   "CONFLICT",
                   "RATE_LIMITED",
                   "RATE_LIMITED_ADDRESS",
+                  "RATE_LIMIT_EXCEEDED",
                   "LIMITER_UNAVAILABLE",
                   "UPSTREAM_TIMEOUT",
                   "UPSTREAM_ERROR",
@@ -2532,6 +2538,13 @@
             ],
             "meaning": "The caller's address is over a limit (the edge's per-address backstop, or too many unrecognised keys from it). Another key on a shared egress may have spent it.",
             "action": "Back off for Retry-After seconds; backing off one key may not help."
+          },
+          "RATE_LIMIT_EXCEEDED": {
+            "statuses": [
+              429
+            ],
+            "meaning": "The caller's address is over the edge's ordinary per-address limit (300 GET or 120 POST a minute), which a call meets when no per-credential limit applies: GET /versions, a call with no Authorization header, or every call while per-credential limits are switched off.",
+            "action": "Back off for Retry-After seconds; send the client token on every call."
           },
           "LIMITER_UNAVAILABLE": {
             "statuses": [

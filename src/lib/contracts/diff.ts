@@ -14,11 +14,13 @@
  *     length, precision or scale got smaller; a capability withdrawn (no
  *     longer creatable, updatable, deletable, filterable, sortable,
  *     addressable, pageable, …) or a filter newly required; a property became
- *     computed or immutable; an open entity type closed.
+ *     computed or immutable; an open entity or complex type closed. An
+ *     operation is compared with its own overload (same name and binding),
+ *     never with another of the same name.
  *   MINOR — something was added or loosened: an optional property,
- *     navigation, operation, enum member or optional parameter added; a
- *     length, precision or scale grew; a capability granted; a closed entity
- *     type opened.
+ *     navigation, operation (or overload), enum member or optional parameter
+ *     added; a length, precision or scale grew; a capability granted; a
+ *     closed entity or complex type opened.
  *   PATCH — only what the contract SAYS about itself changed: labels, quick
  *     info, semantics, display formats, PersonalData annotations, default
  *     values, partners, bindings, an entity type's own name.
@@ -130,7 +132,15 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
   const prevComplex = new Map(prev.complexTypes.map((t) => [t.qualifiedName, t]));
   for (const t of next.complexTypes) {
     const before = prevComplex.get(t.qualifiedName);
-    if (before) diffProperties(`complexType:${t.name}`, before.properties, t.properties, add);
+    if (!before) continue;
+    diffProperties(`complexType:${t.name}`, before.properties, t.properties, add);
+    // Its schema's additionalProperties follows openType (json-schema.ts):
+    // closed, the dynamic properties clients send are refused.
+    if (before.openType === true && t.openType !== true) {
+      add("major", `complexType:${t.name}`, `${t.name} no longer accepts dynamic properties.`);
+    } else if (before.openType !== true && t.openType === true) {
+      add("minor", `complexType:${t.name}`, `${t.name} now accepts dynamic properties.`);
+    }
   }
   const prevEnum = new Map(prev.enumTypes.map((t) => [t.qualifiedName, t]));
   for (const t of next.enumTypes) {
@@ -277,15 +287,73 @@ function diffNavigations(prev: readonly IrNavigation[], next: readonly IrNavigat
   for (const b of next) if (!before.has(b.name)) add("minor", `navigation:${b.name}`, `${b.name} was added.`);
 }
 
-function diffOperations(prev: readonly IrOperation[], next: readonly IrOperation[], add: Add): void {
-  const after = new Map(next.map((o) => [o.name, o]));
-  for (const a of prev) {
-    const at = `operation:${a.name}`;
-    const b = after.get(a.name);
-    if (!b) {
-      add("major", at, `${a.name} was removed.`);
+/**
+ * Which operation of the other contract each one is a version of. A name is
+ * not enough: bound overloads share one (bound to the type, to a collection
+ * of it, to a base type), and comparing each with the last of its name read
+ * unrelated parameters as changed — a major bump for an added optional
+ * property (P1 wave A review). Operations are matched by name and binding;
+ * where that still leaves several on a side (function overloads that differ
+ * by their parameters), by their parameter names as well. One left over is
+ * an overload removed or added.
+ */
+function matchOperations(
+  prev: readonly IrOperation[],
+  next: readonly IrOperation[],
+): { pairs: [IrOperation, IrOperation][]; removed: IrOperation[]; added: IrOperation[] } {
+  const binding = (o: IrOperation) =>
+    `${o.name}\u0000${o.bound === true ? `${o.bindingCollection === true ? "Collection:" : ""}${o.bindingType ?? ""}` : ""}`;
+  const signature = (o: IrOperation) =>
+    `${binding(o)}\u0000${o.parameters
+      .slice(o.bound === true ? 1 : 0)
+      .map((p) => p.name)
+      .sort()
+      .join(",")}`;
+  const group = (ops: readonly IrOperation[], key: (o: IrOperation) => string) => {
+    const out = new Map<string, IrOperation[]>();
+    for (const o of ops) {
+      const k = key(o);
+      const list = out.get(k);
+      if (list) list.push(o);
+      else out.set(k, [o]);
+    }
+    return out;
+  };
+  const pairs: [IrOperation, IrOperation][] = [];
+  const removed: IrOperation[] = [];
+  const added: IrOperation[] = [];
+  const before = group(prev, binding);
+  const after = group(next, binding);
+  for (const [k, as] of before) {
+    const bs = after.get(k) ?? [];
+    if (as.length === 1 && bs.length === 1) {
+      // The ordinary case: one operation of this name and binding, whatever its parameters became.
+      pairs.push([as[0]!, bs[0]!]);
       continue;
     }
+    const bySignature = group(bs, signature);
+    for (const a of as) {
+      const b = bySignature.get(signature(a))?.shift();
+      if (b) pairs.push([a, b]);
+      else removed.push(a);
+    }
+    for (const rest of bySignature.values()) added.push(...rest);
+  }
+  for (const [k, bs] of after) if (!before.has(k)) added.push(...bs);
+  return { pairs, removed, added };
+}
+
+/** " (bound to X)" for a bound operation, so two overloads' changes read apart. */
+function boundTo(o: IrOperation): string {
+  if (o.bound !== true) return "";
+  return ` (bound to ${o.bindingCollection === true ? `Collection(${o.bindingType ?? ""})` : (o.bindingType ?? "")})`;
+}
+
+function diffOperations(prev: readonly IrOperation[], next: readonly IrOperation[], add: Add): void {
+  const { pairs, removed, added } = matchOperations(prev, next);
+  for (const a of removed) add("major", `operation:${a.name}`, `${a.name}${boundTo(a)} was removed.`);
+  for (const [a, b] of pairs) {
+    const at = `operation:${a.name}`;
     if (a.kind !== b.kind || (a.httpMethod ?? "") !== (b.httpMethod ?? "") || (a.bound ?? false) !== (b.bound ?? false)) {
       add("major", at, "How it is invoked changed.");
     }
@@ -304,8 +372,7 @@ function diffOperations(prev: readonly IrOperation[], next: readonly IrOperation
     }
     if ((a.label ?? "") !== (b.label ?? "")) add("patch", at, "Its label changed.");
   }
-  const before = new Set(prev.map((o) => o.name));
-  for (const b of next) if (!before.has(b.name)) add("minor", `operation:${b.name}`, `${b.name} was added.`);
+  for (const b of added) add("minor", `operation:${b.name}`, `${b.name}${boundTo(b)} was added.`);
 }
 
 /** "1.4.2" + "minor" → "1.5.0"; the first version is 1.0.0. An unreadable previous version reads as 0.0.0. */
