@@ -26,8 +26,10 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
   defaultKeyExpiry,
+  keyExpiryMode,
   keyMaxTtlDays,
   keyState,
+  lacksRequiredExpiry,
   overlapIsOpen,
   rotationOverlapHours,
   storedTokenPrefix,
@@ -249,6 +251,7 @@ export default async function StudioAccessPage() {
       .map((r) => `${r.solutionId}::${r.environment}`),
   );
 
+  const expiryEnforced = keyExpiryMode() === "enforce";
   const credentials: CredentialSummary[] = clientRows.map((c) => ({
     id: c.id,
     solutionId: c.solutionId,
@@ -272,6 +275,9 @@ export default async function StudioAccessPage() {
     tokenTail: c.tokenTail,
     writeKeyIssued: withWriteKey.has(c.id),
     writeGrantLive: writeGrantLanes.has(`${c.solutionId}::${c.environment}`),
+    // The write-key route's gate 5b, by its own predicate and mode, so the
+    // row explains the refusal before the click (P0.3 review round 1).
+    writeKeyNeedsExpiry: expiryEnforced && lacksRequiredExpiry(c, now),
   }));
 
   // Marked here so the UI can explain the SoD rule BEFORE it is hit, rather

@@ -22,6 +22,8 @@ import { productName } from "@/lib/studio/product-marks";
 import {
   effectiveDecision,
   grantsRead,
+  grantsWrite,
+  isWriteOperation,
   type GrantDecision,
   type GrantEnvironment,
   type GrantOperation,
@@ -1247,6 +1249,13 @@ export interface PassportRow {
   readonly environment: LaneEnvironment | null;
   readonly environmentRaw: string;
   readonly operation: string;
+  /**
+   * This approval lets the app write into SAP: a CREATE or UPDATE approval
+   * whose decision authorises the write (`grantsWrite`, the broker's
+   * predicate). False for a READ, and for a write approval decided
+   * READ_ONLY, which writes nothing (P0.3 review round 1).
+   */
+  readonly writesIntoSap: boolean;
   readonly approvedBy: string | null;
   readonly approvedAt: Date | null;
   readonly accessEnds: Date | null;
@@ -1336,6 +1345,9 @@ export async function listPassport(organizationId: string, now: Date = new Date(
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
     operation: g.operation,
+    writesIntoSap:
+      isWriteOperation(g.operation.toUpperCase() as GrantOperation) &&
+      grantsWrite(g.decision as GrantDecision, g.environment as GrantEnvironment),
     approvedBy: g.decidedById === null ? null : (userById.get(g.decidedById) ?? null),
     approvedAt: g.decidedAt,
     accessEnds: g.expiresAt,

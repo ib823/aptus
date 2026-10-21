@@ -57,6 +57,7 @@ const credential = (over: Partial<CredentialSummary> = {}): CredentialSummary =>
   tokenTail: "k9Xq",
   writeKeyIssued: false,
   writeGrantLive: true,
+  writeKeyNeedsExpiry: false,
   ...over,
 });
 
@@ -145,8 +146,24 @@ describe("API Access · Issue write key", () => {
     expect(document.body.textContent).toContain("ending not recorded");
   });
 
+  it("is disabled, with its reason, on a TEST or PROD key with no expiry while expiry is enforced (review round 1)", () => {
+    // The route refuses a write key sealed on a key that would never end; the
+    // row says so, instead of leaving the refusal to be the first notice.
+    const c = credential({ environment: "PROD", state: "noExpiry", writeKeyNeedsExpiry: true });
+    const action = writeKeyAction(c, false);
+    expect(action.enabled).toBe(false);
+    expect(action.reason).toMatch(/no expiry/i);
+    expect(action.reason).toMatch(/rotate/i);
+
+    renderCredentials(c);
+    const button = screen.getByRole("button", { name: "Issue write key" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(document.getElementById(button.getAttribute("aria-describedby")!)?.textContent).toMatch(/no expiry/i);
+  });
+
   it("writeKeyAction is the single decision the row renders", () => {
-    expect(writeKeyAction(credential({ state: "noExpiry" }), false).enabled).toBe(true);
+    // With expiry not enforced (COREEDGE_KEY_EXPIRY=off) the route issues it.
+    expect(writeKeyAction(credential({ state: "noExpiry", writeKeyNeedsExpiry: false }), false).enabled).toBe(true);
     expect(writeKeyAction(credential({ writeKeyIssued: true }), false).label).toBe("Replace write key");
   });
 });
@@ -189,6 +206,15 @@ describe("Connections · Allow writes and the write secret", () => {
     fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
     const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
     expect(allow.checked).toBe(true);
+    expect(screen.queryByTestId("writes-off-notice")).toBeNull();
+  });
+
+  it("starts unticked when re-saving a DEACTIVATED connection, so a rotation does not re-arm its writes (review round 1)", () => {
+    openForm([{ ...WRITING, isActive: false }]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
+    expect(allow.checked).toBe(false);
+    // Its writes are not live today, so leaving the box unticked turns nothing off.
     expect(screen.queryByTestId("writes-off-notice")).toBeNull();
   });
 

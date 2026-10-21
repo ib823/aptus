@@ -76,6 +76,14 @@ export interface CredentialSummary {
    * judged by the same predicates (grantsWrite, unexpired, unrevoked).
    */
   writeGrantLive: boolean;
+  /**
+   * The write-key route refuses this credential until it has an expiry: a
+   * TEST or PROD key minted before expiry was mandatory (`noExpiry`) while
+   * COREEDGE_KEY_EXPIRY is enforced — the route's own gate 5b
+   * (`lacksRequiredExpiry`), judged server-side because the mode is (P0.3
+   * review round 1).
+   */
+  writeKeyNeedsExpiry: boolean;
 }
 
 /** What the "Issue write key" control on one credential row may do, and why not. */
@@ -90,10 +98,11 @@ export interface WriteKeyAction {
  * The write-key action for one credential row, from the facts the page holds.
  * Mirrors the route's gates in the order a person can act on them; the route
  * re-checks all of them and the ones this screen cannot see (owners named,
- * the expiry rule, the passkey).
+ * the passkey). The expiry rule is seen: the page judges it with the route's
+ * own predicate and mode (`writeKeyNeedsExpiry`).
  */
 export function writeKeyAction(
-  c: Pick<CredentialSummary, "state" | "environment" | "writeKeyIssued" | "writeGrantLive">,
+  c: Pick<CredentialSummary, "state" | "environment" | "writeKeyIssued" | "writeGrantLive" | "writeKeyNeedsExpiry">,
   viewerOwns: boolean,
 ): WriteKeyAction {
   const label = c.writeKeyIssued ? "Replace write key" : "Issue write key";
@@ -109,6 +118,13 @@ export function writeKeyAction(
       enabled: false,
       label,
       reason: "You own this app, so a colleague who does not own it issues its write key.",
+    };
+  }
+  if (c.writeKeyNeedsExpiry) {
+    return {
+      enabled: false,
+      label,
+      reason: `This ${c.environment} key has no expiry, and a write key sealed on it would never end either. Rotate it first to give it one, then issue its write key.`,
     };
   }
   if (!c.writeGrantLive) {

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
-import { listPassport } from "@/lib/coreedge/queries";
+import { listPassport, type PassportRow } from "@/lib/coreedge/queries";
 import { GATE_GLYPHS, KEY_STATE_GATES } from "@/lib/coreedge/status-vocabulary";
 import { getCurrentUser } from "@/lib/auth/session";
 import { KEY_STATE_LABELS } from "@/lib/northbound/key-policy";
@@ -30,6 +30,13 @@ import { CoreEdgeShell } from "../CoreEdgeShell";
  * the broker applies (`isPassportGrant` in queries.ts): the screen used to
  * list a grant that lapsed in February as current access, for ever.
  *
+ * EVERY ROW SAYS WHETHER IT IS A READ OR A WRITE (P0.3 review round 1). A
+ * READ and a CREATE approval for one feed are two rows; with no Access column
+ * they rendered identically, so a CIO could not tell which one lets the app
+ * write into SAP, or ask for that one to stop. "Writes into SAP" counts the
+ * approvals that do (`writesIntoSap`, the broker's `grantsWrite`): a write
+ * approval decided READ_ONLY writes nothing, and its row says so.
+ *
  * THE FIELDS COLUMN IS BLANK, AND SAYS WHY. X06 shows "12 of 71" on every row
  * and calls it the fact that matters. Nothing in this schema records which
  * fields an approval covers; the nearest available number counts what SAP
@@ -49,6 +56,17 @@ function dateLine(at: Date | null): string {
   return at === null ? "—" : at.toISOString().slice(0, 10);
 }
 
+/** What the approval lets the app do in SAP, in the CIO's words. */
+function accessLine(r: Pick<PassportRow, "operation" | "writesIntoSap">): string {
+  const operation = r.operation.trim().toUpperCase();
+  if (operation === "READ") return "Read";
+  const verb = operation.toLowerCase();
+  if (r.writesIntoSap) return `Write: ${verb}`;
+  // A write approval decided READ_ONLY: in force, so listed, but the broker
+  // refuses every write it would carry.
+  return `${verb.charAt(0).toUpperCase()}${verb.slice(1)} approved read only: no write`;
+}
+
 export default async function PassportPage(): Promise<ReactNode> {
   const user = await getCurrentUser();
   if (!user) redirect("/presales/login");
@@ -66,7 +84,7 @@ export default async function PassportPage(): Promise<ReactNode> {
   const rows = await listPassport(user.organizationId);
   const apps = new Set(rows.map((r) => r.appName)).size;
   const feeds = new Set(rows.map((r) => r.externalId)).size;
-  const writes = rows.filter((r) => r.operation.toUpperCase() !== "READ").length;
+  const writes = rows.filter((r) => r.writesIntoSap).length;
 
   return (
     <CoreEdgeShell
@@ -109,6 +127,7 @@ export default async function PassportPage(): Promise<ReactNode> {
         columns={[
           { key: "app", header: "App", cell: (r) => r.appName },
           { key: "feed", header: "Data feed", cell: (r) => r.feedName },
+          { key: "access", header: "Access", cell: (r) => accessLine(r) },
           {
             key: "fields",
             header: "Fields",

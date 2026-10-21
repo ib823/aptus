@@ -66,7 +66,7 @@ import { readEntitySet } from "@/lib/northbound/read";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { probeConnection } from "@/lib/studio/connection-health";
+import { fetchMetadataDocument } from "@/lib/studio/connection-health";
 
 const SWEEP_CONCURRENCY = 4;
 
@@ -550,25 +550,34 @@ export async function recheckOneLane(
 type MetadataMemo = Map<string, Promise<string>>;
 
 /**
- * Does THIS service describe itself, through this connection? The same probe
- * the Studio test uses (`probeConnection`: credentials, SAP client, redirect
- * rule and EDMX test), pointed at the lane's own service rather than the
- * connection's default probe path (A30).
+ * Does THIS service describe itself, through this connection? The request the
+ * Studio test makes (`fetchMetadataDocument`, which `probeConnection` wraps:
+ * credentials, SAP client, redirect rule and EDMX test), pointed at the lane's
+ * own service rather than the connection's default probe path (A30). Called
+ * directly because the wrapper drops `signedIn`, which the 403 rule below
+ * needs.
  *
- * A 403 is recorded as FORBIDDEN, apart from a 401. The connection probe
- * classifies both as UNAUTHORIZED — for the connection's own probe path that
- * means "the credential or the communication arrangement is not set up" — but
- * asked of one service, a 403 means we signed in and SAP refused THIS
- * service: one lane stops and the client's SAP admin fixes it. Recorded as
- * UNAUTHORIZED, the board and the SAP systems screen would say "every lane on
- * this system stops" and call the platform admin.
+ * A 403 FROM THE TENANT is recorded as FORBIDDEN, apart from a 401. The
+ * connection probe classifies both as UNAUTHORIZED — for the connection's own
+ * probe path that means "the credential or the communication arrangement is
+ * not set up" — but asked of one service, a 403 means we signed in and SAP
+ * refused THIS service: one lane stops and the client's SAP admin fixes it.
+ * Recorded as UNAUTHORIZED, the board and the SAP systems screen would say
+ * "every lane on this system stops" and call the platform admin.
+ *
+ * ONLY WHEN THE TENANT ANSWERED (`signedIn`). A token endpoint, or the
+ * gateway in front of it, that answers 403 arrives as UNAUTHORIZED with
+ * httpStatus 403 too — but then no `$metadata` request was sent at all: the
+ * credential failed, every lane on the system stops, and the platform admin
+ * fixes it. Mapping that 403 to FORBIDDEN sent the client's SAP admin after
+ * an authorisation SAP never got to judge (P0.3 review round 1).
  */
 async function serviceMetadataStatus(
   connection: ResolvedSapConnection,
   servicePath: string,
 ): Promise<string> {
-  const probe = await probeConnection(connection, undefined, { path: servicePath });
-  return probe.httpStatus === 403 ? "FORBIDDEN" : probe.status;
+  const probe = await fetchMetadataDocument(connection, servicePath);
+  return probe.signedIn && probe.httpStatus === 403 ? "FORBIDDEN" : probe.status;
 }
 
 function probeServiceMetadata(

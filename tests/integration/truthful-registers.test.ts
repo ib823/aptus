@@ -211,6 +211,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("truthful registers against real
       expect(rows.map((r) => r.operation).sort()).toEqual(["CREATE", "READ"]);
       // The screen keys rows by this id; app, feed and environment are shared.
       expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+      // And tells them apart: only the CREATE writes into SAP (review round 1).
+      expect(Object.fromEntries(rows.map((r) => [r.operation, r.writesIntoSap]))).toEqual({ READ: false, CREATE: true });
+    });
+
+    it("does not call a write approval decided READ_ONLY a write into SAP", async () => {
+      const solutionId = await app("Read-only write app");
+      await grant(solutionId, { environment: "DEV", operation: "CREATE", decision: "READ_ONLY" });
+
+      const rows = (await listPassport(ORG)).filter((r) => r.appName === "Read-only write app");
+      expect(rows.map((r) => [r.operation, r.writesIntoSap])).toEqual([["CREATE", false]]);
     });
 
     it("counts a system's bound lanes from live grants only", async () => {

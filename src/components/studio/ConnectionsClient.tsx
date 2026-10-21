@@ -13,9 +13,11 @@
  * screen could allow writes on a connection, and every re-save (how
  * credentials are rotated) sent no `writeEnabled` and switched a writing
  * connection's writes off. The form now carries "Allow writes" and the write
- * secret. Re-saving a connection that allows writes starts with the box
- * ticked, so a rotation keeps them on; unticking it says, before Save, that
- * the save turns them off.
+ * secret. Re-saving a connection whose writes are live (active, writes
+ * allowed) starts with the box ticked, so a rotation keeps them on; unticking
+ * it says, before Save, that the save turns them off. A DEACTIVATED
+ * connection starts unticked: a save reactivates the row, so a ticked default
+ * would quietly re-arm writes an operator had stopped (P0.3 review round 1).
  */
 
 import { useRouter } from "next/navigation";
@@ -511,9 +513,15 @@ function ConnectionForm({
   const normalizedKey = sanitizeTenantKey(key);
   const replacing = connections.find((c) => c.product === product && c.key === normalizedKey) ?? null;
   const isNewConnection = replacing === null;
-  const allowWrites = allowWritesChoice ?? Boolean(replacing?.writeEnabled);
+  /**
+   * Writes are live on the row being replaced — active AND allowed, the rule
+   * the route applies. A save always leaves the row active, so defaulting
+   * from `writeEnabled` alone re-armed the writes of a deactivated connection.
+   */
+  const writableToday = Boolean(replacing?.isActive && replacing.writeEnabled);
+  const allowWrites = allowWritesChoice ?? writableToday;
   /** This save would switch off writes the connection allows today. */
-  const turnsWritesOff = Boolean(replacing?.writeEnabled) && !allowWrites;
+  const turnsWritesOff = writableToday && !allowWrites;
   const basicAuthNotice =
     authType === "basic" && isNewConnection ? (basicAuthNotices[product] ?? null) : null;
 

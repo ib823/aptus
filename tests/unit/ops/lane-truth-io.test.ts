@@ -81,6 +81,9 @@ vi.mock("@/lib/northbound/read", () => ({ readEntitySet: mocks.readEntitySet }))
 vi.mock("@/lib/studio/connection-health", async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionHealthModule>()),
   probeConnection: mocks.probeConnection,
+  // The lane sweep asks a service for its $metadata through the request
+  // probeConnection wraps; one stand-in answers for both.
+  fetchMetadataDocument: mocks.probeConnection,
 }));
 vi.mock("@/lib/coreedge/journey", () => ({ noteConnectionProbe: async () => undefined }));
 

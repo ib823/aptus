@@ -208,6 +208,38 @@ describe("the Metadata fact is the lane's own service's (A30)", () => {
     expect(ownerForService(facts, now)).toBe("Client SAP admin");
   });
 
+  it("records a token-endpoint 403 as UNAUTHORIZED: we never signed in, so SAP refused no service (review round 1)", async () => {
+    const TOKEN_URL = "https://auth.example.internal/oauth/token";
+    mocks.resolveSapConnections.mockResolvedValue([
+      {
+        ...CONNECTION,
+        authType: "oauth-client-credentials",
+        secrets: { clientId: "client", clientSecret: "rotated-away" },
+        oauthTokenUrl: TOKEN_URL,
+      },
+    ]);
+    // The token endpoint (or the gateway in front of it) answers 403; any
+    // request that did reach the tenant would be served.
+    sap.mockImplementation(async (url: string | URL) =>
+      String(url).startsWith(TOKEN_URL) ? new Response("forbidden", { status: 403 }) : serveLaneServiceOnly(url),
+    );
+    mocks.readEntitySet.mockResolvedValue({ status: "ERROR", httpStatus: 401, records: [] });
+    const f = feed("if_a", "sol_1");
+    mocks.findInterface.mockResolvedValue({ ...f, solution: { status: "ACTIVE" } });
+    mocks.findGrants.mockResolvedValue([approved(f)]);
+
+    const now = new Date();
+    await recheckOneLane("org_a", "sol_1", "if_a", "DEV", now);
+
+    // The tenant was never asked for $metadata.
+    expect(metadataUrls()).toEqual([]);
+    const health = mocks.upsertServiceHealth.mock.calls[0]![0] as HealthWrite;
+    expect(health.create.metadataStatus).toBe("UNAUTHORIZED");
+    const facts = serviceHealthFactsOf(health.create);
+    expect(verdictForService(facts, now).status).toBe("signInRefused");
+    expect(ownerForService(facts, now)).not.toBe("Client SAP admin");
+  });
+
   it("still records a 401 on the service as UNAUTHORIZED, the sign-in failure it is", async () => {
     sap.mockImplementation(async () => new Response("no", { status: 401 }));
     mocks.readEntitySet.mockResolvedValue({ status: "ERROR", httpStatus: 401, records: [] });

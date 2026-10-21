@@ -500,14 +500,26 @@ export async function POST(request: NextRequest) {
 
   const existing = await prisma.sapConnection.findFirst({
     where: { organizationId, product: input.product, key },
-    // writeEnabled: whether this save turns writes on, or off (P0.3).
-    select: { id: true, writeEnabled: true },
+    // isActive and writeEnabled: whether this save turns writes on, or off (P0.3).
+    select: { id: true, isActive: true, writeEnabled: true },
   });
   const writeEnabled = input.writeEnabled ?? false;
-  /** Writes go from off (or a new row) to on: the governance action. */
-  const enablesWrites = writeEnabled && !(existing?.writeEnabled ?? false);
+  /*
+   * WRITES ARE LIVE ONLY ON AN ACTIVE ROW, judged as PATCH judges them
+   * (`isActive && writeEnabled`). The upsert always leaves the row active, so
+   * re-saving a connection an operator DEACTIVATED, with writes kept on,
+   * makes it writable again. Reading `writeEnabled` alone called that a plain
+   * secret save: the passkey was asked as `connection.save_secrets` and the
+   * audit row said nothing about writes or the reactivation (P0.3 review
+   * round 1).
+   */
+  const writableBefore = existing ? existing.isActive && existing.writeEnabled : false;
+  /** The upsert stores the row active, so writes are live exactly when kept on. */
+  const writableAfter = writeEnabled;
+  /** Writes go from not live (off, deactivated, or a new row) to live: the governance action. */
+  const enablesWrites = writableAfter && !writableBefore;
   /** A re-save of a writing connection that does not keep its writes on. */
-  const disablesWrites = !writeEnabled && (existing?.writeEnabled ?? false);
+  const disablesWrites = writableBefore && !writableAfter;
 
   /*
    * REFUSE A KEY THE DEPLOYMENT ALREADY USES FOR ITS OWN TENANT.
@@ -684,7 +696,9 @@ export async function POST(request: NextRequest) {
       environment,
       writeEnabled,
       // What the save did to writes, so the trail answers "who turned them on/off".
-      ...(existing ? { writeEnabledBefore: existing.writeEnabled } : {}),
+      // isActiveBefore: a save always leaves the row active, so a re-save of
+      // a deactivated connection is a reactivation, and the trail says so.
+      ...(existing ? { writeEnabledBefore: existing.writeEnabled, isActiveBefore: existing.isActive } : {}),
       ...(enablesWrites ? { writesEnabled: true } : {}),
       ...(disablesWrites ? { writesDisabled: true } : {}),
       secretsRotated: true,

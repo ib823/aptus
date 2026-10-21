@@ -28,12 +28,15 @@ catalogue read older than it is, never fresher.
 lane check recorded, under every service on a system, the `$metadata` answer
 of the connection's default probe path (its apiPath or the product's first
 curated service). It now asks the lane's own service, resolved exactly as the
-read is (`probeConnection` with a path), once per connection and service per
-sweep. Asked of one service, a 403 means SAP refused that service after a
-successful sign-in, so it is recorded as `FORBIDDEN` and drawn "SAP refused"
-(owner: the client's SAP admin). It used to be classed with a 401, which the
-board and the SAP systems screen read as "SAP rejected our sign-in, every lane
-on this system stops".
+read is (`fetchMetadataDocument`, the request `probeConnection` makes), once
+per connection and service per sweep. Asked of one service, a 403 from the
+tenant means SAP refused that service after a successful sign-in, so it is
+recorded as `FORBIDDEN` and drawn "SAP refused" (owner: the client's SAP
+admin). It used to be classed with a 401, which the board and the SAP systems
+screen read as "SAP rejected our sign-in, every lane on this system stops".
+Only a tenant's 403 counts: a token endpoint (or its gateway) answering 403
+means CoreEdge never signed in and no `$metadata` request was sent, so it stays
+`UNAUTHORIZED`, "sign-in refused", the platform admin's (review round 1).
 
 **One masked key reference (A45).** The claim page showed the key's last four
 characters and promised "your lane shows only the reference"; the consoles
@@ -61,7 +64,12 @@ it is unrevoked and unexpired by the broker's clock (`effectiveDecision`, then
 subtitle, tiles and legend now say what it lists (approvals in force, reads and
 writes) and what it leaves out. Its rows are keyed by grant: they were keyed by
 app, feed and environment, which a READ and a CREATE approval for one feed
-share, so React could drop one of the two (found in the manual pass).
+share, so React could drop one of the two (found in the manual pass). Each
+row now has an Access column ("Read", "Write: create", "Write: update"), so a
+READ and a CREATE approval for one feed no longer render as two identical
+lines, and the "Writes into SAP" tile counts only approvals the broker lets
+write (`grantsWrite`): a CREATE or UPDATE approval decided READ_ONLY reads
+"... approved read only: no write" and is not counted (review round 1).
 
 **Registers say what the deployment tenant serves (A59).** Control Tower's
 connection register and the Operations connection health view said the
@@ -102,19 +110,28 @@ its first 201 without calling the API by hand:
   asks for a passkey (`write_key.issue`) once `COREEDGE_STEP_UP=enforce`. The
   row offers it only to someone who does not own the app, on a live credential,
   where an approved CREATE or UPDATE grant covers that environment; otherwise
-  the control is disabled with the reason beside it. The route re-checks every
-  gate. The key is shown once.
+  the control is disabled with the reason beside it. A TEST or PROD key with no
+  expiry (minted before expiry was mandatory) is disabled too while
+  `COREEDGE_KEY_EXPIRY` is enforced, with "rotate it first" beside it: the
+  route refuses a write key that would never end (review round 1). The route
+  re-checks every gate. The key is shown once.
 - **Allow writes and the write secret (Studio > Connections).** The form now
   has an "Allow writes" box and, when ticked, a write-secret field. A save that
   turns writes on is audited and stepped up as `connection.enable_writes`
-  (otherwise `connection.save_secrets`, as before).
-- **A re-save keeps writes on.** Re-saving a connection that allows writes (how
-  credentials are rotated) starts with the box ticked; the builder re-enters the
-  write secret like every other secret. Unticking it says, before Save, that the
-  save turns writes off.
+  (otherwise `connection.save_secrets`, as before). "On" means live, as PATCH
+  judges it: the row active AND allowing writes. A save always leaves the row
+  active, so re-saving a DEACTIVATED connection with writes kept on is a save
+  that turns writes on: it is stepped up as `connection.enable_writes`, and its
+  audit row carries `writesEnabled: true` and `isActiveBefore: false` (review
+  round 1).
+- **A re-save keeps writes on.** Re-saving a connection whose writes are live
+  (how credentials are rotated) starts with the box ticked; the builder
+  re-enters the write secret like every other secret. Unticking it says, before
+  Save, that the save turns writes off. A deactivated connection starts
+  unticked, so rotating it does not quietly re-arm writes an operator stopped.
 
 The API is unchanged for its callers: a POST without `writeEnabled` still
-saves writes off. Over a connection that allowed writes, the response now says
+saves writes off. Over a connection whose writes were live, the response now says
 so (`writesTurnedOff: true` and `writesNotice`) and the audit row records
 `writesDisabled: true`; it is not refused, because off is the safe direction
 and refusing would break an API caller that re-saves credentials today. PATCH

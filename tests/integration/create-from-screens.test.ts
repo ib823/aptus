@@ -258,7 +258,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
 
     // What the row offers the colleague: the action, enabled, with nothing to explain.
     expect(
-      writeKeyAction({ state: "active", environment: "DEV", writeKeyIssued: false, writeGrantLive: true }, false),
+      writeKeyAction(
+        { state: "active", environment: "DEV", writeKeyIssued: false, writeGrantLive: true, writeKeyNeedsExpiry: false },
+        false,
+      ),
     ).toEqual({ enabled: true, label: "Issue write key", reason: null });
 
     const minted = await ok<{ writeKey: string; clientId: string; environment: string }>(
