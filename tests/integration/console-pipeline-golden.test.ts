@@ -463,7 +463,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
     const after = JSON.parse(readFileSync(AFTER, "utf8")) as Record<string, Observed>;
     expect(Object.keys(observed)).toEqual(Object.keys(after));
     for (const key of Object.keys(after)) expect(observed[key], key).toEqual(after[key]);
-  });
+    // Every scenario in turn against PostgreSQL: under a second idle, past the
+    // 5 s default under a full parallel run. Timed out, its loop ran on into
+    // the next tests' rows and failed them too.
+  }, 60_000);
 
   /*
    * ONE TEST PER ROUTE MOVED, for the new refusal: with

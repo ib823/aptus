@@ -797,7 +797,8 @@ describe("the check itself", () => {
         expect(routeFindings(g, file, PIPELINE_MODULES), file).toEqual([]);
         expect(auditFindings(g, file), file).toEqual([]);
       }
-    });
+      // It parses all of src/ again: seconds on an idle machine, more under a full parallel run.
+    }, 60_000);
   });
 
   it("ignores a name used only as a type, in a comment or in a string", () => {
