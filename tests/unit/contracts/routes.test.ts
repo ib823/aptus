@@ -87,6 +87,16 @@ function ordered(rows: Row[], orderBy: unknown): Row[] {
 
 vi.mock("@/lib/db/prisma", async () => {
   const { capturedSchemaFactRows, isSnapshotIrTextQuery, snapshotIrTextRows } = await import("../../helpers/captured-schema-facts");
+  const {
+    applyJsonTextUpdate,
+    grantRows,
+    isGrantsQuery,
+    isSnapshotBodiesQuery,
+    isSnapshotSummariesQuery,
+    jsonTextUpdateTable,
+    snapshotBodiesRows,
+    snapshotSummaryRows,
+  } = await import("../../helpers/raw-sql-standin");
   const table = (name: "interfaces" | "snapshots" | "solutions" | "grants") => ({
     findFirst: async ({ where, select, orderBy }: { where?: Row; select?: Row; orderBy?: unknown }) => {
       const hit = ordered(db[name].filter((r) => matches(r, where)), orderBy)[0];
@@ -123,7 +133,20 @@ vi.mock("@/lib/db/prisma", async () => {
       configAudit: { create: mocks.audit },
       // capturedSchemaFacts (response-schema-states.ts): the stamp and size of each stored schema.
       // And the IRs a read path hands to its render, as their stored text (snapshot.ts, snapshotIrTexts).
-      $queryRaw: async (q: unknown) => (isSnapshotIrTextQuery(q) ? snapshotIrTextRows(db.snapshots, q) : capturedSchemaFactRows(db.interfaces, q)),
+      // And what the contract paths ask in one statement each (raw-sql-standin.ts).
+      $queryRaw: async (q: unknown) =>
+        isSnapshotSummariesQuery(q)
+          ? snapshotSummaryRows(db.snapshots, q)
+          : isSnapshotBodiesQuery(q)
+            ? snapshotBodiesRows(db.snapshots, q)
+            : isGrantsQuery(q)
+              ? grantRows(db.grants, q)
+              : isSnapshotIrTextQuery(q)
+                ? snapshotIrTextRows(db.snapshots, q)
+                : capturedSchemaFactRows(db.interfaces, q),
+      // A JSON column written from its text (json-text.ts), in the row's own transaction.
+      $executeRaw: async (q: unknown) => (jsonTextUpdateTable(q) === "ContractSnapshot" ? applyJsonTextUpdate(db.snapshots, q) : 0),
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn((await import("@/lib/db/prisma")).prisma),
     },
   };
 });
@@ -820,6 +843,40 @@ describe("a captured schema is bounded where it is written and where it is read"
     const files = (await data<{ files: { path: string; contents: string }[] }>(kit)).files;
     expect(files.find((f) => f.path === "client.ts")!.contents).toMatch(/larger than a captured schema may be/);
     expect(files.reduce((n, f) => n + f.contents.length, 0)).toBeLessThan(kitLimit(0));
+  });
+
+  /*
+   * Structural hardening, round 5: the kit was budgeted by the current
+   * snapshot's size even when it rendered the captured schema instead — a
+   * SAMPLED snapshot of an earlier, narrow capture (its successor's sampled
+   * contract never recorded: the envelope was busy) budgeted a kit of a wide
+   * capture at a fraction of its size, and refused it TOO_LARGE with advice
+   * that did not apply, while /schema and the solution document served it.
+   */
+  it("a kit is budgeted by what it renders: a stale narrow sampled snapshot beside a wide current capture", async () => {
+    seed({ operation: "READ", mode: "READ" });
+    // The earlier capture: five fields, recorded as the sampled contract 1.0.0.
+    const narrow = await capture(JSON.stringify({ rows: [{ SalesOrder: "1", A: "a", B: "b", C: "c", D: "d" }], interfaceVersion: 2 }));
+    expect(narrow.status).toBe(200);
+    expect(db.snapshots).toHaveLength(1);
+    expect(db.snapshots[0]).toMatchObject({ source: "SAMPLED" });
+    const sampledBytes = db.snapshots[0]!.irBytes as number;
+    // The later capture of the full rows, stored; its sampled contract never recorded.
+    db.interfaces[0]!.responseSchema = storedCapture(2000, 72);
+    expect(Buffer.byteLength(JSON.stringify(db.interfaces[0]!.responseSchema))).toBeLessThan(LIMITS.capturedSchema.bytes);
+
+    const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+    expect(kit.status).toBe(200);
+    const files = (await data<{ files: { path: string; contents: string }[] }>(kit)).files;
+    // What made the old budget wrong: the kit is larger than the sampled snapshot's own budget allows.
+    expect(files.reduce((n, f) => n + Buffer.byteLength(f.contents), 0)).toBeGreaterThan(kitLimit(sampledBytes));
+    expect(files.find((f) => f.path === "client.ts")!.contents).toContain(`F${"1999".padStart(71, "0")}`);
+    // And the read paths agree about the one stored capture.
+    const schema = await schemaRoute();
+    expect(schema.status).toBe(200);
+    expect(Object.keys(((await data<Row>(schema)).responseSchema as { properties: Row }).properties)).toHaveLength(2000);
+    const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
+    expect(doc.status).toBe(200);
   });
 
   it("the solution document is refused past the interfaces one document carries, before any schema is read", async () => {

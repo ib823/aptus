@@ -241,6 +241,39 @@ export class BudgetExceeded extends Error {
  */
 let ambientDeadline: number | null = null;
 let ticks = 0;
+
+/**
+ * WHICH CLOCK A DEADLINE IS READ ON (structural hardening round 5). Wall
+ * time by default: on the request thread, what a render costs is how long
+ * the thread is blocked. A render measured at record time in the envelope
+ * reads its own thread's CPU time instead (withRenderClock, pipeline.ts), so
+ * whether a contract renders "in time" is a property of the contract, not of
+ * how busy the instance was: on wall time the same contract was refused in
+ * two of six identical compiles on a loaded runner.
+ */
+let clock: () => number = Date.now;
+
+/** Run `fn` with every render deadline read on `read` (ms, any origin; deadlines given in it). */
+export function withRenderClock<T>(read: () => number, fn: () => T): T {
+  const previous = clock;
+  clock = read;
+  try {
+    return fn();
+  } finally {
+    clock = previous;
+  }
+}
+
+/**
+ * This thread's CPU time in ms (process.threadCpuUsage: user and system), or
+ * null where Node has no per-thread measure; a worker reads its own thread.
+ */
+export function threadCpuMs(): number | null {
+  const usage = (process as { threadCpuUsage?: () => { user: number; system: number } }).threadCpuUsage;
+  if (typeof usage !== "function") return null;
+  const u = usage.call(process);
+  return (u.user + u.system) / 1000;
+}
 /** Calls of renderTick between two looks at the clock: a look is ~30 ns, a tick's worth of work far more. */
 const TICK_EVERY = 16;
 
@@ -265,7 +298,7 @@ export function renderTick(): void {
 /** Look at the clock now, whatever the count (a stage boundary). */
 export function renderCheckpoint(): void {
   if (ambientDeadline === null) return;
-  const now = Date.now();
+  const now = clock();
   if (now > ambientDeadline) throw new BudgetExceeded("time", ambientDeadline, now);
 }
 
@@ -330,7 +363,7 @@ export class OutputBudget {
     const deadline =
       this.deadline === null ? ambientDeadline : ambientDeadline === null ? this.deadline : Math.min(this.deadline, ambientDeadline);
     if (deadline === null) return;
-    const now = Date.now();
+    const now = clock();
     if (now > deadline) throw new BudgetExceeded("time", deadline, now);
   }
 }

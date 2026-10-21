@@ -44,6 +44,8 @@ import {
   renderCheckpoint,
   type RenderLimits,
   schemaLimit,
+  threadCpuMs,
+  withRenderClock,
   withRenderDeadline,
   writeJson,
 } from "@/lib/contracts/budget";
@@ -52,11 +54,11 @@ import { compileContract, type CompileRefusal, type CompileResult } from "@/lib/
 import { readDatasets, summarizeDatasets, type DatasetSummary } from "@/lib/contracts/datasets";
 import { diffContracts, storedDiff, type Bump, type StoredContractDiff } from "@/lib/contracts/diff";
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
-import { standaloneSchemas } from "@/lib/contracts/json-schema";
+import { contractBodies, standaloneSchemas } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { buildNorthboundOpenApi, documentJson, type NorthboundDocInput, type OpenApiVersion } from "@/lib/contracts/openapi";
 import { renderedRequestSchema } from "@/lib/contracts/request-schema";
-import { hydrateJsonTexts } from "@/lib/contracts/render-input";
+import { hydrateJsonTexts, isJsonTextRef, jsonTextRef } from "@/lib/contracts/render-input";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildScaffold, safeName, type ScaffoldFixture, type ScaffoldInterface, type WithheldFixture } from "@/lib/studio/scaffold";
 
@@ -90,12 +92,38 @@ export interface RenderedSizes {
   schema: number;
   kit: number;
   document: number;
-  /** Wall-clock time all of it took, in the envelope. */
+  /** The time all of it took, on its render clock: the thread's CPU time where Node measures it (renderAndMeasure). */
   ms: number;
 }
 
+/**
+ * What the request thread needs to know of a prepared contract without
+ * reading it (structural hardening round 5): the contract crosses back from
+ * the worker as its JSON text (replyOf), so what the record writes beside it
+ * — and whether a write interface has a body in it — is taken here.
+ */
+export interface ContractFacts {
+  source: InterfaceContract["source"];
+  odataVersion: ODataVersion;
+  irVersion: InterfaceContract["irVersion"];
+  /** Whether it has a create and an update body (contractBodies). */
+  bodies: { create: boolean; update: boolean };
+}
+
+export function contractFacts(contract: InterfaceContract): ContractFacts {
+  return { source: contract.source, odataVersion: contract.odataVersion, irVersion: contract.irVersion, bodies: contractBodies(contract) };
+}
+
 export type PreparedContract =
-  | { ok: true; contract: InterfaceContract; hash: string; bytes: number; rendered: RenderedSizes }
+  | {
+      ok: true;
+      /** From the envelope, a reference to its JSON text (render-input.ts), never an object graph (replyOf). */
+      contract: InterfaceContract;
+      hash: string;
+      bytes: number;
+      rendered: RenderedSizes;
+      facts: ContractFacts;
+    }
   | {
       ok: false;
       reason: "NO_SUCH_ENTITY_SET" | "NO_SUCH_ENTITY_TYPE" | "TOO_LARGE" | "OUTPUT_TOO_LARGE";
@@ -150,8 +178,16 @@ export interface DiffJobInput {
   next: InterfaceContract;
 }
 
-/** One entry per `previous`: the bump, and the diff as a snapshot stores it (bounded, diff.ts). */
-export type DiffJobOutput = { bump: Bump | null; stored: StoredContractDiff }[];
+/**
+ * One entry per `previous`: the bump, the diff as a snapshot stores it
+ * (bounded, diff.ts) — from the envelope, a reference to its JSON text
+ * (replyOf), which the record writes as it is — and the first changes, as
+ * sentences, which the verify reports.
+ */
+export type DiffJobOutput = { bump: Bump | null; stored: StoredContractDiff; headline: string[]; omitted?: number }[];
+
+/** How many of a diff's changes the verify reports (record.ts). */
+export const DIFF_HEADLINE_CHANGES = 10;
 
 /**
  * A read path's render, from what was stored: everything it needs as plain
@@ -281,6 +317,13 @@ const placeholderSubject = (entitySet: string): RenderSubject =>
  * Render every read path's output from `contract` under the budget that read
  * path applies, as both a read and a create interface (the operation decides
  * which bodies are drawn); BudgetExceeded when any of them does not fit.
+ *
+ * ITS TIME IS CPU TIME (structural hardening round 5). RENDER_TIME_BUDGET_MS
+ * is read on this thread's own CPU clock where Node measures it
+ * (threadCpuMs), so a contract's verdict — renders in time, or "would take
+ * too long to render" — is the same on an idle instance and on one another
+ * tenant keeps busy; the job's wall-clock deadline (envelope.ts) still ends
+ * a worker that never yields.
  */
 export function renderAndMeasure(
   contract: InterfaceContract,
@@ -288,7 +331,18 @@ export function renderAndMeasure(
   subject: RenderSubject | null,
   limits: RenderLimits = LIMITS,
 ): RenderedSizes {
-  const started = Date.now();
+  const read: () => number = threadCpuMs() === null ? Date.now : () => threadCpuMs()!;
+  return withRenderClock(read, () => measureEveryReadPath(contract, bytes, subject, limits, read));
+}
+
+function measureEveryReadPath(
+  contract: InterfaceContract,
+  bytes: number,
+  subject: RenderSubject | null,
+  limits: RenderLimits,
+  read: () => number,
+): RenderedSizes {
+  const started = read();
   const deadline = started + RENDER_TIME_BUDGET_MS;
   const base = subject ?? placeholderSubject(contract.entitySet.name);
   const compiled = { semver: "1.0.0", snapshotId: "c".repeat(25), contentHash: "0".repeat(64), compiledAt: new Date(0).toISOString(), contract };
@@ -331,7 +385,7 @@ export function renderAndMeasure(
       document = Math.max(document, docBudget.spent);
     }
   }
-  return { schema, kit, document, ms: Date.now() - started };
+  return { schema, kit, document, ms: read() - started };
 }
 
 /** Digest, then render and measure; the refusals are the budgets that were spent. */
@@ -354,7 +408,7 @@ export function prepareContract(input: PrepareJobInput): PreparedContract {
   }
   try {
     const rendered = renderAndMeasure(contract, digest.bytes, input.subject, input.limits);
-    return { ok: true, contract, hash: digest.hash, bytes: digest.bytes, rendered };
+    return { ok: true, contract, hash: digest.hash, bytes: digest.bytes, rendered, facts: contractFacts(contract) };
   } catch (err) {
     if (err instanceof BudgetExceeded) {
       return {
@@ -399,7 +453,9 @@ export function diffJob(stored: DiffJobInput): DiffJobOutput {
   const input = hydrateJsonTexts(stored);
   return input.previous.map((prev) => {
     const d = diffContracts(prev, input.next);
-    return { bump: d.bump, stored: storedDiff(d) };
+    const stored = storedDiff(d);
+    const headline = stored.changes.slice(0, DIFF_HEADLINE_CHANGES).map((c) => c.change);
+    return { bump: d.bump, stored, headline, ...(stored.omitted !== undefined ? { omitted: stored.omitted } : {}) };
   });
 }
 
@@ -449,6 +505,35 @@ export function renderForRead(stored: RenderJobInput, deadline: number | null = 
   } catch (err) {
     if (err instanceof BudgetExceeded) return { ok: false, reason: err.budget === "time" ? "TIME" : "TOO_LARGE", limit: stored.limit };
     throw err;
+  }
+}
+
+/**
+ * TEXT, NOT OBJECT GRAPHS, ON THE WAY BACK TOO (structural hardening round
+ * 5). A job's reply is structured-cloned to the request thread and rebuilt
+ * there node by node: a 2 MiB prepared contract cost the request thread
+ * 50-170 ms to receive, and Prisma as much again to store, for every
+ * recorded verify; a diff's stored changes up to 1 MiB each. What the
+ * request thread only stores crosses as its JSON text (jsonTextRef), written
+ * here, in the worker: one copy of a string to receive, and stored as it is
+ * (json-text.ts). What it reads — the hash, the sizes, the facts, the
+ * headline — crosses as small values beside it.
+ */
+export function replyOf(job: Job, value: unknown): unknown {
+  const asText = (contract: InterfaceContract): InterfaceContract =>
+    isJsonTextRef(contract) ? contract : jsonTextRef<InterfaceContract>(JSON.stringify(contract));
+  const prepared = (p: PreparedContract | null): PreparedContract | null => (p && p.ok ? { ...p, contract: asText(p.contract) } : p);
+  switch (job.kind) {
+    case "compile": {
+      const c = value as CompiledService;
+      return c.ok ? { ...c, dataset: prepared(c.dataset) } : c;
+    }
+    case "prepare":
+      return prepared(value as PreparedContract);
+    case "diff":
+      return (value as DiffJobOutput).map((d) => ({ ...d, stored: jsonTextRef<StoredContractDiff>(JSON.stringify(d.stored)) }));
+    case "render":
+      return value;
   }
 }
 

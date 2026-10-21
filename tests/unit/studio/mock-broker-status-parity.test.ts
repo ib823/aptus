@@ -69,8 +69,12 @@ const { mocks, IFACE, CONNECTION } = vi.hoisted(() => {
 vi.mock("@/lib/auth/session", () => ({
   getCurrentUser: async () => ({ id: "u1", email: "dev@abeam.com", role: "consultant", organizationId: "org_a", authMethod: "session" }),
 }));
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", async () => {
+  const { applyJsonTextUpdate, jsonTextUpdateTable } = await import("../../helpers/raw-sql-standin");
+  const prisma: Record<string, unknown> = {
+    // A fixture body written from its text (json-text.ts), in the row's own transaction.
+    $executeRaw: async (q: unknown) => (jsonTextUpdateTable(q) === "MockFixture" ? applyJsonTextUpdate(mocks.fixtures, q) : 0),
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
     interface: { findFirst: async () => ({ ...IFACE }) },
     solutionClient: {
       findMany: async () => [{ id: "cl_1", environment: "DEV", sapClient: null, expiresAt: null }],
@@ -89,8 +93,9 @@ vi.mock("@/lib/db/prisma", () => ({
         return row;
       },
     },
-  },
-}));
+  };
+  return { prisma };
+});
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: vi.fn() }));
 vi.mock("@/lib/northbound/auth", () => ({
   authenticateClientToken: async () => ({

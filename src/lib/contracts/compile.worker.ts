@@ -19,7 +19,8 @@
 import v8 from "node:v8";
 import { parentPort, workerData } from "node:worker_threads";
 
-import { runJob, type Job, type RenderedForRead } from "@/lib/contracts/pipeline";
+import { threadCpuMs } from "@/lib/contracts/budget";
+import { replyOf, runJob, type Job, type RenderedForRead } from "@/lib/contracts/pipeline";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 
 function reply(message: WorkerReply, transfer: ArrayBuffer[] = []): void {
@@ -42,14 +43,24 @@ function withTransfer(job: Job, value: unknown): { value: unknown; transfer: Arr
   return { value: { ok: true, texts }, transfer: [...new Set(texts.map((t) => t.buffer as ArrayBuffer))] };
 }
 
+/**
+ * The CPU time this job's thread used (structural hardening round 5): what
+ * the envelope charges the organisation's allowance (envelope-allowance.ts).
+ * Null where Node has no per-thread measure; the envelope then charges the
+ * time the job ran. All of the thread's time, its start and loading
+ * included: every job pays for its own isolate.
+ */
+const cpuSpent = (): number | undefined => threadCpuMs() ?? undefined;
+
 const input = workerData as WorkerInput;
 if (v8.getHeapStatistics().heap_size_limit > input.heapLimitBytes) {
   reply({ ok: false, error: HEAP_NOT_CAPPED });
 } else {
   try {
-    const out = withTransfer(input.job, runJob(input.job));
-    reply({ ok: true, value: out.value }, out.transfer);
+    // What only gets stored crosses back as its text (replyOf, pipeline.ts); a render's texts as bytes.
+    const out = withTransfer(input.job, replyOf(input.job, runJob(input.job)));
+    reply({ ok: true, value: out.value, cpuMs: cpuSpent() }, out.transfer);
   } catch (err) {
-    reply({ ok: false, error: err instanceof Error ? err.name : "unknown" });
+    reply({ ok: false, error: err instanceof Error ? err.name : "unknown", cpuMs: cpuSpent() });
   }
 }

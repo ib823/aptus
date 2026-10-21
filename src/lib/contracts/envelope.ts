@@ -43,7 +43,13 @@
  *   - A CALLER'S OWN DEADLINE (structural hardening round 4): a job may be
  *     given the time its request has left (deadlineAt), which bounds its
  *     wait for a slot and its run together, so a verify answers inside the
- *     request's own limit instead of being cut off by the platform.
+ *     request's own limit instead of being cut off by the platform;
+ *   - AN ALLOWANCE OVER TIME (structural hardening round 5): every job's
+ *     worker time is charged to its organisation's hour and day, and to the
+ *     deployment's day (envelope-allowance.ts); a job of an organisation
+ *     whose allowance is spent is refused BUSY before it takes a slot. And
+ *     the isolates live at once leave the request thread a CPU
+ *     (envelopeIsolateSlots).
  *
  * Whatever runs past any of them ends as a typed refusal (RESOURCE_LIMIT,
  * BUSY, UNAVAILABLE), which the verify reports as a contract that was not
@@ -79,12 +85,14 @@
  * docs/runbooks/coreedge-contract-compiler.md, "Structural containment".
  */
 
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
 import { LIMITS } from "@/lib/contracts/budget";
+import { allowanceRefusalDetail, chargeEnvelopeAllowance, checkEnvelopeAllowance } from "@/lib/contracts/envelope-allowance";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 import type { CompiledService, EnvelopeRefusal, Job, JobOutput, RenderSubject } from "@/lib/contracts/pipeline";
@@ -319,10 +327,31 @@ export function isolateFootprintMb(): number {
   return Math.ceil(heap / (1024 * 1024)) + ISOLATE_OVERHEAD_MB;
 }
 
-/** How many isolates may live at once in this process: as many as the instance's memory holds beside the server, at least one. */
+/**
+ * THE INSTANCE'S CPUS (structural hardening round 5). The isolate budget was
+ * memory's alone: two on a 2 GB Hobby instance, which has one vCPU, so two
+ * hostile compiles and the request thread shared one CPU and every tenant's
+ * requests ran at half speed for as long as the compiles did. Now an isolate
+ * also needs a CPU the request thread is not using: at most one fewer
+ * isolates than the instance has CPUs, and at least one. The CPUs are the
+ * deployment's (COREEDGE_INSTANCE_CPUS — set it where the platform shows the
+ * process more CPUs than its quota gives it), or what Node reports
+ * (os.availableParallelism).
+ */
+export function instanceCpus(): number {
+  return envInt("COREEDGE_INSTANCE_CPUS", [1, 1024]) ?? Math.max(1, os.availableParallelism());
+}
+
+/**
+ * How many isolates may live at once in this process: as many as the
+ * instance's memory holds beside the server, and as its CPUs leave one for
+ * the request thread — at least one.
+ */
 export function envelopeIsolateSlots(): number {
   const room = instanceMemoryMb() - SERVER_HEADROOM_MB;
-  return Math.max(1, Math.min(ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY, Math.floor(room / isolateFootprintMb())));
+  const byMemory = Math.floor(room / isolateFootprintMb());
+  const byCpu = instanceCpus() - 1;
+  return Math.max(1, Math.min(ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY, byMemory, byCpu));
 }
 
 /**
@@ -614,6 +643,9 @@ export interface EnvelopeOptions {
 /** The cause of a refusal because the caller's own deadline (deadlineAt) came first. */
 export const REQUEST_DEADLINE_CAUSE = "request-deadline";
 
+/** The cause of a refusal because the organisation's (or the deployment's) allowance is spent (envelope-allowance.ts). */
+export const ALLOWANCE_CAUSE = "allowance";
+
 /**
  * Hold one of a pool's slots while `body` runs, waiting for one at most
  * `waitMs`: the body's value, or BUSY — at once when the organisation's share
@@ -687,6 +719,14 @@ export async function runLoadedInEnvelope<K extends Job["kind"]>(
   // A job waits for its slot at most its own deadline (and never past the caller's), then runs at most its deadline.
   const wait = within(limits.deadlineMs);
   if (wait <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
+  // The organisation's time over the hour and the day, and the deployment's (envelope-allowance.ts): before any slot.
+  if (tenant !== null) {
+    const allowance = await checkEnvelopeAllowance(tenant);
+    if (!allowance.ok) return refuse("BUSY", kind, queuedAt, ALLOWANCE_CAUSE, allowanceRefusalDetail(allowance));
+  }
+  const charge = (ms: number) => {
+    if (tenant !== null) void chargeEnvelopeAllowance(tenant, ms);
+  };
   const r = await withEnvelopeSlot(poolOf(kind), tenant, wait, async () => {
     const job = await load();
     if (job === null) return null;
@@ -698,7 +738,7 @@ export async function runLoadedInEnvelope<K extends Job["kind"]>(
       const runMs = within(limits.deadlineMs);
       if (runMs <= 0) return Promise.resolve(refuse<JobOutput<K>>("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE));
       // Answered once its worker has exited, so neither slot is free while its isolate lives (EXIT_GRACE_MS).
-      return runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
+      return runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs, charge);
     });
     return ran.ok ? ran.value : refuse<JobOutput<K>>("BUSY", kind, queuedAt);
   });
@@ -730,21 +770,34 @@ export async function compileInEnvelope(
 }
 
 /** `cause`: what ended the job, as a code or an error's name — never a message, which can quote the description. */
-function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, cause?: string): EnvelopeResult<T> {
+function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, cause?: string, detail?: string): EnvelopeResult<T> {
   const ms = Date.now() - since;
   console.error("[contracts] envelope refused", { job: kind, reason, ms, ...(cause ? { cause } : {}) });
-  return { ok: false, reason, detail: DETAIL[reason], ms, ...(cause ? { cause } : {}) };
+  return { ok: false, reason, detail: detail ?? DETAIL[reason], ms, ...(cause ? { cause } : {}) };
 }
 
 /**
  * `cutByCaller`: the run's deadline is the caller's (deadlineAt), shorter than
  * the job's own — a job that meets it was not given its time, so it is BUSY,
  * not RESOURCE_LIMIT.
+ *
+ * `charge`: told once, when the job ends, the worker time it used — the CPU
+ * time its thread measured, or, for a worker ended before it could say, the
+ * time it ran (envelope-allowance.ts).
  */
-function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCaller = false): Promise<EnvelopeResult<T>> {
+function runWorker<T>(
+  job: Job,
+  limits: EnvelopeLimits,
+  since: number,
+  cutByCaller = false,
+  charge: (ms: number) => void = () => {},
+): Promise<EnvelopeResult<T>> {
   return new Promise((resolve) => {
     let result: EnvelopeResult<T> | null = null;
     let worker: Worker | undefined;
+    /** When the worker was made, and the CPU time it reported. */
+    let runningSince: number | null = null;
+    let reportedCpuMs: number | null = null;
     /** The isolate is gone: it exited, or it was never made. */
     let gone = false;
     let grace: ReturnType<typeof setTimeout> | undefined;
@@ -760,6 +813,7 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCall
       if (result !== null) return;
       result = r;
       clearTimeout(timer);
+      charge(reportedCpuMs ?? (runningSince === null ? 0 : Date.now() - runningSince));
       // Its memory goes back now, however the job ended; the slot once it has.
       void worker?.terminate().catch(() => {});
       if (!gone) {
@@ -778,6 +832,7 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCall
     spawn(job, limits).then(
       (w) => {
         worker = w;
+        runningSince = Date.now();
         w.once("exit", (code) => {
           // An exit before any message: killed by a limit V8 enforces without an error event, or a crash.
           if (result === null) settle(refuse(code === 0 ? "INTERNAL" : "RESOURCE_LIMIT", job.kind, since, `exit ${code}`));
@@ -790,6 +845,7 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCall
           return;
         }
         w.once("message", (m: WorkerReply) => {
+          if (typeof m.cpuMs === "number" && Number.isFinite(m.cpuMs)) reportedCpuMs = m.cpuMs;
           if (m.ok) settle({ ok: true, value: m.value as T, ms: Date.now() - since });
           else if (m.error === HEAP_NOT_CAPPED) settle(refuse("UNAVAILABLE", job.kind, since, HEAP_NOT_CAPPED));
           else settle(refuse(isResourceError(m.error, undefined) ? "RESOURCE_LIMIT" : "INTERNAL", job.kind, since, m.error));

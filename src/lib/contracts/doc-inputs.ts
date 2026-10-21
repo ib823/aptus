@@ -16,8 +16,8 @@ import type { InterfaceContract } from "@/lib/contracts/ir";
 import { currentSnapshotSummaries, snapshotContractTexts, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
-import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
-import type { GrantDecision } from "@prisma/client";
+import type { TenantScope } from "@/lib/studio/tenant-scope";
+import { Prisma, type GrantDecision } from "@prisma/client";
 
 export interface CompiledForDoc {
   semver: string;
@@ -142,18 +142,38 @@ export async function planDocInputs(
 
   const grants = new Map<string, { operation: string; environment: string }[]>();
   if (interfaces.length > 0) {
-    const rows = await prisma.apiAccessGrant.findMany({
-      where: scopedWhere(scope, { interfaceId: { in: interfaces.map((i) => i.id) }, revokedAt: null }),
-      select: { interfaceId: true, operation: true, environment: true, decision: true, expiresAt: true },
-    });
+    /*
+     * ONLY WHAT THE DOCUMENT RENDERS, ASKED OF THE DATABASE (structural
+     * hardening round 5). Every non-revoked grant row of the interfaces was
+     * read — REQUESTED and REJECTED ones too, which anyone with Studio access
+     * can create without limit — and dropped here: 100,000 grant requests on
+     * one interface blocked every kit download for half a second. Now the
+     * database filters to unexpired rows whose decision grants something
+     * (APPROVED, READ_ONLY; SANDBOX_ONLY only in SANDBOX), and answers each
+     * (interface, operation, environment, decision) once: at most a few
+     * dozen rows per interface, however many requests were filed. The
+     * operation's own rule (grantsRead, grantsWrite) is applied below, as
+     * before.
+     */
+    const rows = await prisma.$queryRaw<{ interfaceId: string; operation: string; environment: string; decision: string }[]>(Prisma.sql`
+      SELECT DISTINCT "interfaceId", "operation", "environment", "decision"::text AS "decision"
+      FROM "ApiAccessGrant"
+      WHERE "organizationId" = ${scope.organizationId}
+        AND "interfaceId" = ANY(${interfaces.map((i) => i.id)}::text[])
+        AND "revokedAt" IS NULL
+        AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
+        AND ("decision" IN ('APPROVED', 'READ_ONLY') OR ("decision" = 'SANDBOX_ONLY' AND "environment" = 'SANDBOX'))
+      ORDER BY "interfaceId", "operation", "environment", "decision"
+    `);
     for (const i of interfaces) grants.set(i.id, []);
     for (const g of rows) {
-      if (!g.interfaceId) continue;
-      if (g.expiresAt !== null && g.expiresAt.getTime() <= now.getTime()) continue;
       const env = g.environment as GrantEnvironment;
       const decision = g.decision as GrantDecision;
       const live = g.operation === "READ" ? grantsRead(decision, env) : grantsWrite(decision, env);
-      if (live) grants.get(g.interfaceId)?.push({ operation: g.operation, environment: g.environment });
+      const list = grants.get(g.interfaceId);
+      if (live && list && !list.some((x) => x.operation === g.operation && x.environment === g.environment)) {
+        list.push({ operation: g.operation, environment: g.environment });
+      }
     }
   }
   return { ok: true, summaries, grants, contractBytes: unknown ? null : known, limit };

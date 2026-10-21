@@ -72,6 +72,12 @@ export function isJsonTextRef(v: unknown): boolean {
   return isRef(v);
 }
 
+/** The JSON text a reference carries, to store as it is (json-text.ts); a value that is no reference throws. */
+export function jsonTextOf(v: unknown): string {
+  if (!isRef(v)) throw new TypeError("jsonTextOf: not a reference to JSON text");
+  return v[JSON_TEXT];
+}
+
 /**
  * How deep the walks below look for references: they stand in a job's own
  * structure (a document's interfaces' contracts, a kit's fixtures), never

@@ -39,7 +39,7 @@ export function fixtureFactRows(rows: readonly Row[], query: unknown): Row[] {
 }
 
 export function capturedSchemaFactRows(rows: readonly Row[], query: unknown): Row[] {
-  if (isFixtureFactsQuery(query) || isFixtureBodiesQuery(query) || isSnapshotIrTextQuery(query)) return [];
+  if (isFixtureFactsQuery(query) || isFixtureBodiesQuery(query) || isSnapshotIrTextQuery(query) || isOtherContractQuery(query)) return [];
   const values = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
   const [org, ...ids] = values;
   return rows
@@ -62,7 +62,18 @@ export function capturedSchemaFactRows(rows: readonly Row[], query: unknown): Ro
 /** Whether a raw query reads snapshots' IRs as their text (snapshot.ts, snapshotIrTexts). */
 export function isSnapshotIrTextQuery(query: unknown): boolean {
   const q = query as { sql?: string; strings?: readonly string[] } | null;
-  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"ContractSnapshot"');
+  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"ir"::text');
+}
+
+/**
+ * Whether a raw statement is one of the contract paths' others
+ * (raw-sql-standin.ts): a snapshot summary, a snapshot's bodies, the grants,
+ * a JSON column written from its text — never capturedSchemaFacts's.
+ */
+function isOtherContractQuery(query: unknown): boolean {
+  const q = query as { sql?: string; strings?: readonly string[] } | null;
+  const sql = q?.sql ?? q?.strings?.join("") ?? "";
+  return sql.includes('"ContractSnapshot"') || sql.includes('"ApiAccessGrant"') || /^\s*UPDATE /.test(sql);
 }
 
 /** What the database answers snapshotIrTexts's query with: each row's IR as JSON text. Values: the organisation, then the ids. */

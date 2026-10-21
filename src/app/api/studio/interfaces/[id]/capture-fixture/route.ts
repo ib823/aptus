@@ -30,7 +30,8 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
+import { LIMITS } from "@/lib/contracts/budget";
+import { JSON_TEXT_PLACEHOLDER, writeWithJsonText } from "@/lib/db/json-text";
 import { prisma } from "@/lib/db/prisma";
 import { readJsonCapped } from "@/lib/security/bounded-body";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -133,8 +134,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const stamp = { interfaceVersion: iface.version, entitySet: iface.entitySet };
 
   const body = buildFixtureBody(scenario, parsed.data.rows, parsed.data.detail);
-  // What is stored is bounded too (LIMITS.fixture): measured no further than the bound.
-  if (jsonBytesUpTo(body, LIMITS.fixture.bytes) > LIMITS.fixture.bytes) return studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
+  /*
+   * WRITTEN AS ITS TEXT (structural hardening round 5, json-text.ts). The
+   * body is bounded (LIMITS.fixture) and was stored through Prisma, which
+   * serialises a Json value node by node on this thread: a body at the
+   * bound blocked every tenant's requests for 1.4-1.7 s per capture. Now it
+   * is written once, by the native JSON writer — the body came from a
+   * request read up to LIMITS.fixture.requestBytes, so the text is bounded
+   * by construction — measured as that text, and stored as it is.
+   */
+  const bodyText = JSON.stringify(body);
+  if (Buffer.byteLength(bodyText, "utf8") > LIMITS.fixture.bytes) return studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
   const status = SCENARIO_STATUS[scenario];
 
   // Replace any existing recording of this scenario — see the header.
@@ -143,9 +153,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     select: { id: true },
   });
 
+  const select = { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true } as const;
+  // The row through Prisma with a placeholder body, and the body from its text, in one transaction (json-text.ts).
   const saved = existing
-    ? await prisma.mockFixture
-        .update({
+    ? await writeWithJsonText("MockFixture", scope.organizationId, { body: bodyText }, (tx) =>
+        tx.mockFixture.update({
           where: { id: existing.id, organizationId: scope.organizationId },
           // sourceStatus is written on every replace, including back to null when
           // the caller did not send one. A stale provenance stamp left over from a
@@ -153,26 +165,28 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
           // that is no longer the one stored here.
           data: {
             status,
-            body: body as never,
+            body: JSON_TEXT_PLACEHOLDER,
             sourceStatus: parsed.data.sourceStatus ?? null,
             capturedAt: new Date(),
             ...stamp,
           },
-          select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
-        })
-        .catch(vanishedAsNull)
-    : await prisma.mockFixture.create({
-        data: {
-          organizationId: scope.organizationId,
-          interfaceId: iface.id,
-          scenario,
-          status,
-          body: body as never,
-          sourceStatus: parsed.data.sourceStatus ?? null,
-          ...stamp,
-        },
-        select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
-      });
+          select,
+        }),
+      ).catch(vanishedAsNull)
+    : await writeWithJsonText("MockFixture", scope.organizationId, { body: bodyText }, (tx) =>
+        tx.mockFixture.create({
+          data: {
+            organizationId: scope.organizationId,
+            interfaceId: iface.id,
+            scenario,
+            status,
+            body: JSON_TEXT_PLACEHOLDER,
+            sourceStatus: parsed.data.sourceStatus ?? null,
+            ...stamp,
+          },
+          select,
+        }),
+      );
   if (!saved) {
     // The recording found above was deleted before it could be replaced: a
     // Studio PATCH that changes the contract deletes every fixture of the

@@ -478,6 +478,83 @@ is bounded too:
   500 datasets lists the first 500; the panel says "Showing the first 500 of
   600 datasets" and takes any other name typed in.
 
+**Structural hardening, round 5.** The request thread's work around the
+envelope, and the envelope's resources over time
+(`tests/unit/contracts/hardening-round5.test.ts`,
+`tests/integration/hardening-round5.test.ts`):
+
+- **A read is a constant number of statements.** `currentSnapshotSummaries`
+  sent one `findFirst` per interface: a solution document of 1,016
+  interfaces sent 1,016 queries, blocked the request thread for 230-610 ms
+  and held the pool (`connection_limit=5`) while other tenants' queries
+  waited, to `P2024` under a few concurrent downloads. It is now one
+  `DISTINCT ON ("interfaceId")` over the `(interfaceId, semver)` index,
+  answering at most one small row per interface (under 10 ms measured).
+- **A document reads only the grants it renders.** The kit and the solution
+  document loaded every non-revoked grant row of their interfaces —
+  REQUESTED and REJECTED ones too, which anyone with Studio access can file
+  without limit — and dropped them: 100,000 requests blocked each download
+  for half a second. The database now answers only unexpired rows whose
+  decision grants something, distinct per (interface, operation,
+  environment, decision): a few dozen rows per interface at most.
+- **Stored JSON is written as its text** (`src/lib/db/json-text.ts`). Prisma
+  serialises a Json value node by node on the request thread: a fixture at
+  its 4.5 MiB bound blocked it 1.4-1.7 s per capture, a 2 MiB IR and its diff
+  110-280 ms per recorded verify. The row is created through Prisma with a
+  placeholder, and the JSON written as `$text::jsonb` in the same
+  transaction; the fixture's text is one native `JSON.stringify`, and the
+  contract's and the diff's are the worker's.
+- **What the worker only stores crosses back as text**
+  (`pipeline.ts`, `replyOf`). A compile's prepared contract and a diff's
+  stored changes came back as object graphs, rebuilt node by node on the
+  request thread (50-170 ms for a 2 MiB contract). They now come back as
+  their JSON text, beside the small values the record reads — the hash, the
+  sizes, the contract's facts (source, OData version, which write bodies it
+  has) and the diff's bump and first ten changes. Which body a write
+  interface has, when the current snapshot is another verify's, is read with
+  JSON operators in the database (`snapshotBodies`), never by reading its IR.
+- **The envelope has an allowance over time**
+  (`src/lib/contracts/envelope-allowance.ts`). Nothing bounded how much
+  worker time one organisation used in an hour: a builder looping
+  verify-service at the `sapLive` rate against a cheap 7.6 MB description
+  kept one core busy all the time, about one CPU-hour an hour — the Hobby
+  plan's whole month of Active CPU (4 CPU-hours) in four hours, after which
+  every function of the deployment is paused for every tenant. Every job's
+  worker time (its thread's CPU time, `process.threadCpuUsage`, or the time
+  it ran when it was ended by a limit) is now charged to its organisation's
+  clock hour and UTC day and to the deployment's day, in the shared store
+  (Upstash) when one is configured, in the process otherwise and while it
+  cannot be reached. Past any of them a job is refused `BUSY`, cause
+  `allowance`, before it takes a slot: the verify answers as before, its
+  contract `NOT_COMPILED` with when the compiler is available again; a large
+  read is `UNAVAILABLE`. Defaults: 30 s an hour and 60 s a day per
+  organisation, 110 s a day for the deployment (under one CPU-hour in a
+  31-day month), set by `COREEDGE_ENVELOPE_TENANT_SECONDS_PER_HOUR`,
+  `COREEDGE_ENVELOPE_TENANT_SECONDS_PER_DAY` and
+  `COREEDGE_ENVELOPE_DEPLOYMENT_SECONDS_PER_DAY`. A deployment on a plan
+  with more Active CPU (Pro, with Spend Management) raises them; read-path
+  renders are charged too, so a deployment whose consumers read very large
+  contracts' `/schema` often sizes the allowance for them.
+- **The isolates leave the request thread a CPU.** `envelopeIsolateSlots()`
+  is now also at most one fewer than the instance's CPUs, and at least one:
+  one isolate on a one- or two-CPU instance. The CPUs are
+  `COREEDGE_INSTANCE_CPUS`, or what Node reports
+  (`os.availableParallelism`); set it where the platform shows the process
+  more CPUs than its quota (a Hobby function instance has one vCPU).
+- **The record's render-time verdict is CPU time.** `RENDER_TIME_BUDGET_MS`
+  (8 s) was read on the wall clock, so the same 1.76 MB contract was refused
+  "would take too long to render" in two of six identical compiles on a
+  loaded runner. The record-time renders now read their worker thread's CPU
+  clock (`withRenderClock`, `threadCpuMs` in `budget.ts`); the job's
+  wall-clock deadline still ends a worker that never yields.
+- **A kit is budgeted by what it renders.** The kit route budgeted by the
+  current snapshot's kept size even when it rendered the captured schema
+  instead (a SAMPLED snapshot is never rendered by the kit): a stale 696-byte
+  sampled snapshot beside a wide current capture budgeted the kit at a third
+  of its size and refused it, while `/schema` and the solution document
+  served the capture. A METADATA snapshot budgets the kit by its size;
+  otherwise the captured schema it renders does.
+
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with
 `NODE_OPTIONS=--max-old-space-size=8192`, and real `POST verify-service`

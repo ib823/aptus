@@ -167,8 +167,21 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const fixtures = servedFixtures(
         sized.kept.filter((f) => bodies.has(f.id)).map((f) => ({ ...f, body: bodies.get(f.id) })),
       );
+      /*
+       * BUDGETED BY WHAT IT RENDERS (structural hardening round 5), as the
+       * solution document is: the compiled contract's kept size only when the
+       * kit renders it (a METADATA contract, scaffold.ts); otherwise the
+       * captured schema the kit renders. A stale SAMPLED snapshot — 696
+       * bytes, from an earlier narrow capture whose successor was never
+       * recorded — budgeted a kit built from a 2,000-field capture at a
+       * third of its size, and refused it TOO_LARGE while /schema and the
+       * solution document served the same capture.
+       */
+      const rendersCompiled = compiled !== undefined && compiled.source === "METADATA";
       limit = kitLimit(
-        compiled?.irBytes ?? (responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0),
+        rendersCompiled
+          ? compiled.irBytes
+          : Math.max(compiled?.irBytes ?? 0, responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0),
         fixtureBytes,
       );
       return {

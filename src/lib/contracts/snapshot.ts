@@ -72,11 +72,13 @@ import { Prisma } from "@prisma/client";
 
 import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
-import { nextSemver, semverParts, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
+import { nextSemver, semverParts, type Bump, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
 import { runInEnvelope } from "@/lib/contracts/envelope";
-import { jsonTextRef } from "@/lib/contracts/render-input";
+import { contractBodies } from "@/lib/contracts/json-schema";
+import { isJsonTextRef, jsonTextOf, jsonTextRef } from "@/lib/contracts/render-input";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import type { DiffJobOutput, EnvelopeRefusal } from "@/lib/contracts/pipeline";
+import { contractFacts, type ContractFacts, type DiffJobOutput, type EnvelopeRefusal } from "@/lib/contracts/pipeline";
+import { JSON_TEXT_PLACEHOLDER, writeWithJsonText } from "@/lib/db/json-text";
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
@@ -92,12 +94,24 @@ export interface SnapshotSummary {
   createdAt: Date;
 }
 
+/**
+ * What a recorded version's diff says to the verify: its bump and its first
+ * changes (DIFF_HEADLINE_CHANGES), as sentences. The diff itself is stored
+ * as the envelope wrote it, never read back here.
+ */
+export interface RecordedDiff {
+  bump: Bump | null;
+  changes: string[];
+  /** How many changes the stored diff left out (storedDiff); absent when none were. */
+  omitted?: number;
+}
+
 export interface CurrentSnapshot extends SnapshotSummary {
   contract: InterfaceContract;
 }
 
 export type RecordOutcome =
-  | { status: "RECORDED"; snapshot: SnapshotSummary; diff: StoredContractDiff | null }
+  | { status: "RECORDED"; snapshot: SnapshotSummary; diff: RecordedDiff | null }
   | { status: "UNCHANGED"; snapshot: SnapshotSummary }
   | { status: "TOO_LARGE"; bytes: number }
   /** The envelope refused the work (its limits), or a read path's output would not fit its budget: nothing stored. */
@@ -197,20 +211,23 @@ async function snapshotIrTexts(scope: TenantScope, ids: readonly string[]): Prom
 export async function recordContractSnapshot(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string };
+  /** The contract: from the envelope, a reference to its JSON text (pipeline.ts, replyOf), stored as it is. */
   contract: InterfaceContract;
   /**
    * The digest the envelope already took, with the contract rendered and
-   * measured for every read path (pipeline.ts, the verify's compile).
-   * Absent, the contract is prepared in the envelope here.
+   * measured for every read path (pipeline.ts, the verify's compile), and
+   * what it states of itself (facts). Absent, the contract is prepared in
+   * the envelope here.
    */
-  prepared?: { hash: string; bytes: number };
+  prepared?: { hash: string; bytes: number; facts?: ContractFacts };
   environment?: string | null;
   connectionId?: string | null;
   createdById?: string | null;
   /** When the caller must have its answer (ms since the epoch): the envelope's jobs end by then (envelope.ts). */
   deadlineAt?: number | null;
 }): Promise<RecordOutcome> {
-  const { scope, iface, contract } = input;
+  const { scope, iface } = input;
+  let contract = input.contract;
   const environment = input.environment ?? null;
   let prepared = input.prepared;
   if (!prepared) {
@@ -227,11 +244,22 @@ export async function recordContractSnapshot(input: {
         ? { status: "TOO_LARGE", bytes: r.value.bytes ?? MAX_CONTRACT_BYTES + 1 }
         : { status: "REFUSED", reason: r.value.reason, detail: r.value.detail };
     }
-    prepared = { hash: r.value.hash, bytes: r.value.bytes };
+    prepared = { hash: r.value.hash, bytes: r.value.bytes, facts: r.value.facts };
+    // As its text, as the envelope handed it back: stored as it is.
+    contract = r.value.contract;
   }
   // A digest over the bound is never stored, however it was taken.
   if (prepared.bytes > MAX_CONTRACT_BYTES) return { status: "TOO_LARGE", bytes: prepared.bytes };
   const { hash, bytes } = prepared;
+  /*
+   * TEXT, NOT AN OBJECT GRAPH (structural hardening round 5): the contract
+   * is written to its row, and handed to the diff, as its JSON text — the
+   * worker's, when it came from the envelope — never serialised node by node
+   * on this thread (json-text.ts). What the row states beside it comes from
+   * the facts the envelope took.
+   */
+  const irText = isJsonTextRef(contract) ? jsonTextOf(contract) : JSON.stringify(contract);
+  const facts = prepared.facts ?? contractFacts(isJsonTextRef(contract) ? (JSON.parse(irText) as InterfaceContract) : contract);
 
   for (let attempt = 0; attempt < 3; attempt++) {
     // Summaries only, and only the rows the decision needs: each one indexed
@@ -253,7 +281,9 @@ export async function recordContractSnapshot(input: {
     // It counts only if it is past this environment's own.
     if (match && (!own || laterThan(match.semver, own.semver))) return { status: "UNCHANGED", snapshot: summary(match) };
 
-    let stored: StoredContractDiff | null = null;
+    /** The diff the row stores, as its text; what the verify reports of it. */
+    let storedText: string | null = null;
+    let recorded: RecordedDiff | null = null;
     let semver = "1.0.0";
     if (latest) {
       // What this contract is a change OF: the environment's own newest row;
@@ -270,8 +300,8 @@ export async function recordContractSnapshot(input: {
       const compared = await diffsInEnvelope(
         scope,
         [...present, ...(onLineToo ? [latest] : [])].map((row) => irById.get(row.id)!),
-        // The new contract as its text too: one native write here, and one copy of a string into the worker.
-        jsonTextRef<InterfaceContract>(JSON.stringify(contract)),
+        // The new contract as its text too: one copy of a string into the worker.
+        jsonTextRef<InterfaceContract>(irText),
         input.deadlineAt ?? null,
       );
       if (!compared.ok) {
@@ -297,11 +327,10 @@ export async function recordContractSnapshot(input: {
         const onLine = onLineToo ? diffs[present.length]! : diffs[present.findIndex((row) => row.id === latest.id)]!;
         if (bumpRank(onLine.bump) > bumpRank(chosen.diff.bump)) chosen = { row: latest, diff: onLine };
       }
-      // What is stored is bounded whatever the contract (storedDiff, diff.ts, run in the envelope).
-      stored = chosen.diff.stored;
+      // What is stored is bounded whatever the contract (storedDiff, diff.ts, run in the envelope), and crosses as its text.
       if (chosen.diff.bump === null) {
         // Same structure, different hash or service: say so, as a patch.
-        stored = {
+        const restated: StoredContractDiff = {
           bump: "patch",
           changes: [
             chosen.row.externalId !== iface.externalId
@@ -309,38 +338,50 @@ export async function recordContractSnapshot(input: {
               : { bump: "patch", at: "contract", change: "The description was restated without a structural change." },
           ],
         };
+        storedText = JSON.stringify(restated);
+        recorded = { bump: "patch", changes: restated.changes.map((c) => c.change) };
+      } else {
+        storedText = isJsonTextRef(chosen.diff.stored) ? jsonTextOf(chosen.diff.stored) : JSON.stringify(chosen.diff.stored);
+        recorded = {
+          bump: chosen.diff.bump,
+          changes: chosen.diff.headline,
+          ...(chosen.diff.omitted !== undefined ? { omitted: chosen.diff.omitted } : {}),
+        };
       }
-      semver = nextSemver(latest.semver, stored.bump ?? "patch");
+      semver = nextSemver(latest.semver, recorded.bump ?? "patch");
     }
     const [semverMajor, semverMinor, semverPatch] = semverParts(semver);
 
     try {
-      const row = await prisma.contractSnapshot.create({
-        data: {
-          organizationId: scope.organizationId,
-          interfaceId: iface.id,
-          interfaceVersion: iface.version,
-          externalId: iface.externalId,
-          entitySet: iface.entitySet,
-          source: contract.source,
-          odataVersion: contract.odataVersion,
-          semver,
-          semverMajor,
-          semverMinor,
-          semverPatch,
-          contentHash: hash,
-          ir: contract as unknown as Prisma.InputJsonObject,
-          irVersion: contract.irVersion,
-          diff: stored === null ? Prisma.DbNull : (stored as unknown as Prisma.InputJsonObject),
-          irBytes: bytes,
-          environment,
-          connectionId: input.connectionId ?? null,
-          createdById: input.createdById ?? null,
-        },
-        select: SUMMARY_SELECT,
-      });
+      // The IR and the diff written from their text, in the row's own transaction (json-text.ts).
+      const row = await writeWithJsonText("ContractSnapshot", scope.organizationId, { ir: irText, diff: storedText }, (tx) =>
+        tx.contractSnapshot.create({
+          data: {
+            organizationId: scope.organizationId,
+            interfaceId: iface.id,
+            interfaceVersion: iface.version,
+            externalId: iface.externalId,
+            entitySet: iface.entitySet,
+            source: facts.source,
+            odataVersion: facts.odataVersion,
+            semver,
+            semverMajor,
+            semverMinor,
+            semverPatch,
+            contentHash: hash,
+            ir: JSON_TEXT_PLACEHOLDER,
+            irVersion: facts.irVersion,
+            diff: Prisma.DbNull,
+            irBytes: bytes,
+            environment,
+            connectionId: input.connectionId ?? null,
+            createdById: input.createdById ?? null,
+          },
+          select: SUMMARY_SELECT,
+        }),
+      );
       await pruneHistory(scope, iface.id);
-      return { status: "RECORDED", snapshot: summary(row), diff: stored };
+      return { status: "RECORDED", snapshot: summary(row), diff: recorded };
     } catch (err) {
       // Another compile took this version first: read again and decide again.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
@@ -414,31 +455,40 @@ export interface CurrentSnapshotSummary extends SnapshotSummary {
 /**
  * The current snapshot of each interface, by interface id, WITHOUT its IR —
  * so a reader can add up what it would render before reading any of it
- * (doc-inputs.ts). One indexed lookup of one row per interface, however long
- * its history (see the header).
+ * (doc-inputs.ts).
+ *
+ * ONE STATEMENT, HOWEVER MANY INTERFACES (structural hardening round 5).
+ * Round 1 asked for each interface's row with its own indexed lookup, all at
+ * once: a solution document of 1,016 interfaces sent 1,016 queries, blocked
+ * the request thread for 230-610 ms handling them, and held every pooled
+ * connection while other tenants' queries waited (P2024 under a few
+ * concurrent downloads). Now the database picks every interface's newest
+ * row describing it now (describesInterfaceNow) in one DISTINCT ON over the
+ * (interfaceId, semver) index, and answers at most one small row per
+ * interface: a read is a constant number of queries, whatever the count.
  */
 export async function currentSnapshotSummaries(
   scope: TenantScope,
   interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
 ): Promise<Map<string, CurrentSnapshotSummary>> {
   const out = new Map<string, CurrentSnapshotSummary>();
-  const wanted = interfaces.filter((i) => i.entitySet !== null);
+  const wanted = interfaces.filter((i): i is typeof i & { entitySet: string } => i.entitySet !== null);
   if (wanted.length === 0) return out;
 
-  // The newest row describing each interface now (describesInterfaceNow), asked of the database.
-  const hits = await Promise.all(
-    wanted.map((iface) =>
-      prisma.contractSnapshot.findFirst({
-        where: scopedWhere(scope, { interfaceId: iface.id, externalId: iface.externalId, entitySet: iface.entitySet as string }),
-        orderBy: [...NEWEST_FIRST],
-        select: { ...SUMMARY_SELECT, irBytes: true },
-      }),
-    ),
-  );
-  wanted.forEach((iface, n) => {
-    const hit = hits[n];
-    if (hit) out.set(iface.id, { ...summary(hit), irBytes: typeof hit.irBytes === "number" ? hit.irBytes : null });
-  });
+  const rows = await prisma.$queryRaw<(Parameters<typeof summary>[0] & { interfaceId: string; irBytes: number | null })[]>(Prisma.sql`
+    SELECT DISTINCT ON (s."interfaceId")
+      s."interfaceId", s."id", s."semver", s."contentHash", s."source", s."odataVersion", s."entitySet", s."externalId",
+      s."interfaceVersion", s."createdAt", s."irBytes"
+    FROM "ContractSnapshot" s
+    JOIN unnest(${wanted.map((i) => i.id)}::text[], ${wanted.map((i) => i.externalId)}::text[], ${wanted.map((i) => i.entitySet)}::text[])
+      AS w("interfaceId", "externalId", "entitySet")
+      ON s."interfaceId" = w."interfaceId" AND s."externalId" = w."externalId" AND s."entitySet" = w."entitySet"
+    WHERE s."organizationId" = ${scope.organizationId}
+    ORDER BY s."interfaceId", s."semverMajor" DESC, s."semverMinor" DESC, s."semverPatch" DESC
+  `);
+  for (const hit of rows) {
+    out.set(hit.interfaceId, { ...summary(hit), irBytes: typeof hit.irBytes === "number" ? hit.irBytes : null });
+  }
   return out;
 }
 
@@ -463,6 +513,32 @@ export async function snapshotContracts(
     out.set(interfaceId, { ...c, contract, irBytes: c.irBytes ?? jsonBytesUpTo(contract, MAX_CONTRACT_BYTES) });
   }
   return out;
+}
+
+/**
+ * Whether a snapshot's contract has a create and an update body
+ * (contractBodies), read with JSON operators in the database — the two
+ * capabilities and the singleton flag it is decided by — never by reading
+ * its IR onto this thread (structural hardening round 5: a 2 MiB IR read
+ * through Prisma blocked it for 60-80 ms, to answer two booleans). Null
+ * when the row is gone.
+ */
+export async function snapshotBodies(scope: TenantScope, snapshotId: string): Promise<{ create: boolean; update: boolean } | null> {
+  const rows = await prisma.$queryRaw<{ source: string; creatable: string | null; updatable: string | null; singleton: string | null }[]>(Prisma.sql`
+    SELECT "source",
+      "ir"->'entitySet'->'capabilities'->>'creatable' AS "creatable",
+      "ir"->'entitySet'->'capabilities'->>'updatable' AS "updatable",
+      "ir"->'entitySet'->>'singleton' AS "singleton"
+    FROM "ContractSnapshot"
+    WHERE "organizationId" = ${scope.organizationId} AND "id" = ${snapshotId}
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  const flag = (v: string | null) => (v === "true" ? true : v === "false" ? false : undefined);
+  return contractBodies({
+    source: row.source === "SAMPLED" ? "SAMPLED" : "METADATA",
+    entitySet: { capabilities: { creatable: flag(row.creatable), updatable: flag(row.updatable) }, singleton: flag(row.singleton) },
+  } as unknown as InterfaceContract);
 }
 
 /**

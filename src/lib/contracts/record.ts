@@ -24,17 +24,11 @@
 import { Prisma } from "@prisma/client";
 
 import type { Bump } from "@/lib/contracts/diff";
-import { contractBodies } from "@/lib/contracts/json-schema";
 import type { RequestSchemaStamp } from "@/lib/contracts/request-schema";
-import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
+import type { ODataVersion } from "@/lib/contracts/ir";
 import type { CompiledService } from "@/lib/contracts/pipeline";
 import { contractFromSample } from "@/lib/contracts/sampled";
-import {
-  currentSnapshotSummaries,
-  MAX_CONTRACT_BYTES,
-  recordContractSnapshot,
-  snapshotContracts,
-} from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, MAX_CONTRACT_BYTES, recordContractSnapshot, snapshotBodies } from "@/lib/contracts/snapshot";
 import type { CapturedSchema } from "@/lib/studio/schema-capture";
 import { prisma } from "@/lib/db/prisma";
 import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
@@ -96,8 +90,9 @@ export async function recordVerifiedContract(input: {
     const outcome = await recordContractSnapshot({
       scope: input.scope,
       iface: { id: iface.id, version: iface.version, externalId: iface.externalId, entitySet: iface.entitySet },
+      // As its text, as the envelope handed it back (pipeline.ts, replyOf): stored as it is.
       contract: prepared.contract,
-      prepared: { hash: prepared.hash, bytes: prepared.bytes },
+      prepared: { hash: prepared.hash, bytes: prepared.bytes, facts: prepared.facts },
       environment: input.environment,
       connectionId: input.connectionId,
       createdById: input.actorId,
@@ -123,15 +118,20 @@ export async function recordVerifiedContract(input: {
        * body only while that snapshot is still current.
        */
       const current = (await currentSnapshotSummaries(input.scope, [iface])).get(iface.id);
-      let described: { snapshot: { id: string; semver: string; contentHash: string }; contract: InterfaceContract } | null =
-        current && current.id !== outcome.snapshot.id ? null : { snapshot: outcome.snapshot, contract: prepared.contract };
-      if (current && !described) {
-        const read = (await snapshotContracts(input.scope, new Map([[iface.id, current]]))).get(iface.id);
-        if (read && read.source === "METADATA") described = { snapshot: read, contract: read.contract };
+      /*
+       * Whether the contract HAS the body this interface's write sends; the
+       * body itself is never stored (below), so nothing is rendered here —
+       * and no IR is read onto this thread for it (structural hardening
+       * round 5): this verify's from the facts the envelope took, another
+       * snapshot's by two capabilities read in the database (snapshotBodies).
+       */
+      let described: { snapshot: { id: string; semver: string; contentHash: string }; bodies: { create: boolean; update: boolean } } | null =
+        current && current.id !== outcome.snapshot.id ? null : { snapshot: outcome.snapshot, bodies: prepared.facts.bodies };
+      if (current && !described && current.source === "METADATA") {
+        const bodies = await snapshotBodies(input.scope, current.id);
+        if (bodies) described = { snapshot: current, bodies };
       }
-      // Whether the contract HAS the body this interface's write sends; the
-      // body itself is never stored (below), so nothing is rendered here.
-      const bodies = described ? contractBodies(described.contract) : null;
+      const bodies = described ? described.bodies : null;
       const hasBody = bodies !== null && (iface.operation === "UPDATE" ? bodies.update : bodies.create);
       if (hasBody && described) {
         const stamp: RequestSchemaStamp = {
@@ -165,7 +165,7 @@ export async function recordVerifiedContract(input: {
       snapshotId: outcome.snapshot.id,
       semver: outcome.snapshot.semver,
       bump: outcome.status === "RECORDED" ? (outcome.diff?.bump ?? "initial") : null,
-      changes: outcome.status === "RECORDED" ? (outcome.diff?.changes ?? []).slice(0, 10).map((c) => c.change) : [],
+      changes: outcome.status === "RECORDED" ? (outcome.diff?.changes ?? []).slice(0, 10) : [],
       requestSchemaWritten,
     };
   } catch (err) {

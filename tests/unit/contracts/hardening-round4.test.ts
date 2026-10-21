@@ -61,7 +61,8 @@ type Row = Record<string, unknown>;
 /** The rows a test seeds: what the database holds, as Prisma hands them back parsed and as PostgreSQL's ::text gives them. */
 const store = vi.hoisted(() => ({ fixtures: [] as Record<string, unknown>[], snapshots: [] as Record<string, unknown>[] }));
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
+  const { applyJsonTextUpdate, isSnapshotSummariesQuery, jsonTextUpdateTable, snapshotSummaryRows } = await import("../../helpers/raw-sql-standin");
   const matches = (row: Row, where: Row = {}) =>
     Object.entries(where).every(([k, v]) =>
       v !== null && typeof v === "object" && "in" in (v as Row) ? ((v as { in: unknown[] }).in).includes(row[k]) : (row[k] ?? null) === v,
@@ -91,6 +92,7 @@ vi.mock("@/lib/db/prisma", () => {
       $queryRaw: async (q: { strings?: readonly string[]; sql?: string; values?: unknown[] }) => {
         const sql = q.sql ?? q.strings?.join("") ?? "";
         const values = q.values ?? [];
+        if (isSnapshotSummariesQuery(q)) return snapshotSummaryRows(store.snapshots, q);
         if (sql.includes('"MockFixture"')) {
           const [org, iface, ...ids] = values;
           return store.fixtures
@@ -100,6 +102,9 @@ vi.mock("@/lib/db/prisma", () => {
         const [org, ...ids] = values;
         return store.snapshots.filter((r) => r.organizationId === org && ids.includes(r.id)).map((r) => ({ id: r.id, ir: JSON.stringify(r.ir) }));
       },
+      // A JSON column written from its text (json-text.ts), in the row's own transaction.
+      $executeRaw: async (q: unknown) => (jsonTextUpdateTable(q) === "ContractSnapshot" ? applyJsonTextUpdate(store.snapshots, q) : 0),
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn((await import("@/lib/db/prisma")).prisma),
     },
   };
 });
