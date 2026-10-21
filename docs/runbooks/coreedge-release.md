@@ -12,9 +12,9 @@ how each one goes out, how it is checked, and how it is taken back.
 | 1 | Pull request with green `ci.yml` and `migration-integrity.yml` | the checks on the PR |
 | 2 | Migrations additive only (expand/contract), each with written backout SQL | `pnpm migrations:check` (CI gate 0), the rehearsal (CI gate 4) |
 | 3 | A Vercel Preview on its own database | `scripts/verify-preview-db-isolation.sh` PASS; `pnpm migrations:check --database` on the preview database |
-| 4 | Promote: merge to `main` | the production build log; `/api/build` names the merge commit |
+| 4 | Promote: merge to `main`, then run the release's post-promote commands | the production build log; `/api/build` names the merge commit; each post-promote command's output |
 | 5 | Post-deploy check: one SAP-standard read, one `Z*` read, one refused call, audit rows present | `pnpm release:post-deploy-check --markdown`, posted on the merged PR |
-| 6 | Rollback, when needed: Vercel Instant Rollback plus backout SQL | the incident record; `prisma/backed-out-migrations.json` if a migration came out |
+| 6 | Rollback, when needed: Vercel Instant Rollback plus backout SQL; after rolling forward, the post-promote commands again | the incident record; `prisma/backed-out-migrations.json` if a migration came out |
 
 **Every production deploy records the checklist** (step 5) on the pull
 request it came from. A deploy without a recorded PASS is not finished.
@@ -38,7 +38,11 @@ Work on a branch and open a pull request (`CONTRIBUTING.md`, "Workflow").
 - **`migration-integrity.yml`** (runs on every pull request and every push to
   `main`):
   - **Gate 0, the migration protocol** (`pnpm migrations:check --base
-    origin/main`, or the push's parent on `main`): see step 2.
+    origin/<the pull request's base branch>`, or the push's parent on
+    `main`): see step 2. A pull request to `main` is held against
+    `origin/main`; one stacked on a wave branch against that branch, so a
+    wave branch that is behind `main` does not make its stacked pull
+    requests look as if they removed the migrations `main` gained since.
   - Gate 1: the Brownfield reconciliation migration has no destructive
     statement.
   - Gate 2: migration history reproduces `schema.prisma` with zero drift
@@ -141,8 +145,11 @@ migrations to the preview database (step 3), long before `main` has them.
 What enforces it:
 
 - **Against `main` (CI gate 0, hard):** no migration at the cutoff or on
-  `origin/main` (on a push to `main`, the commit before the push) may be
-  modified, renamed or removed. The one exception is a migration recorded in
+  the pull request's base branch (`origin/main` for a pull request to
+  `main`; on a push to `main`, the commit before the push) may be
+  modified, renamed or removed. A stacked pull request reaches `main` only
+  through its base branch, whose own pull request to `main` is held
+  against `origin/main`. The one exception is a migration recorded in
   `prisma/backed-out-migrations.json` (step 6).
 - **Against a database (before promoting):** `pnpm migrations:check
   --database` compares the checksums the database recorded with the files
@@ -256,6 +263,25 @@ curl -sS https://ab-workbench.vercel.app/api/build
 
 must name the merge commit.
 
+### After promotion: the release's own commands
+
+Some migrations change data only once, when `vercel-build` applies them. The
+old build keeps serving for the minutes until `next build` finishes, so
+anything it writes in that window misses what the migration did, and a
+command run **after** promotion catches it up. Each such migration's runbook
+says so; this table is where the release protocol collects them. **Before
+running the post-deploy check, run the command of every migration below that
+this release contains**, against production's direct `DATABASE_URL`:
+
+| Migration | Command (count, then fix) | Why | Runbook |
+|---|---|---|---|
+| `20261023010000_contract_stamps` | `pnpm contracts:stamp`, then, if it reports unstamped captures, `pnpm contracts:stamp --apply` | a schema or fixture captured while the old build served carries no contract stamp, and is withheld as "unverified" (`schemaCaptured: false`, left out of the starter kit) until stamped | `docs/runbooks/coreedge-contract-hygiene.md`, "What happens on deploy" |
+
+Each command is safe to run any number of times. Paste its output into the
+deploy record (step 5) under the post-deploy check. **The rule for new
+migrations:** a migration whose runbook asks for a command after promotion
+adds a row here in the same pull request.
+
 ## Step 5: the post-deploy check
 
 Run it from an operator's machine as soon as `/api/build` names the merge
@@ -318,6 +344,15 @@ correlation ids. A direct push to `main` (only docs and build-only changes,
   back.
 - **Settings incomplete (exit 2):** the check did not run, so nothing is
   verified. Fix the settings and run it; do not record a PASS.
+- **A canary grant refused:** discovery reports the SAP-standard or `Z*`
+  interface "not callable" with `GRANT_EXPIRED`, `GRANT_REVOKED`,
+  `NO_APPROVED_GRANT` or `GRANT_NEEDS_REAPPROVAL` (the line names the
+  canary's grant), and that interface's read answers 403 `FORBIDDEN`. Every
+  grant has an expiry, so the canary's lapse on a date. Open the canary app
+  in Studio, Access. If the grant has expired, been revoked or awaits
+  re-approval, **it is the canary, not the release**: renew it (canary set-up,
+  step 4), record that on the PR and re-run. If the grant shows approved and
+  in date, the release refused a valid grant: roll back.
 
 Who decides, and how fast, is open decision D6. Until it is set: whoever
 promoted decides, and rolls back first when unsure.
@@ -337,10 +372,16 @@ D3 names who owns it and where):
      verified against the lab system;
    - a third read, with **no** grant (the refused call).
 4. DEV access requests for the first two, approved by someone who owns
-   neither (the normal four-eyes rule).
+   neither (the normal four-eyes rule). Every approval carries an expiry
+   (`GRANT_REQUIRES_EXPIRY`), so record the two expiry dates beside the key
+   in the password manager, with a reminder two weeks before. **Renewal:**
+   before the earlier date, raise a new DEV request for each interface and
+   have it approved, again by someone who owns neither; then run the
+   post-deploy check against production once to confirm. A lapsed canary
+   grant fails the check ("If the check fails", "A canary grant refused").
 5. A DEV key, issued with an expiry, kept in the team password manager. It is
    never committed, never put in Vercel, and rotated like any key
-   (`docs/runbooks/coreedge-credential-hygiene.md`).
+   (`docs/runbooks/coreedge-credential-hygiene.md`), before its expiry date.
 6. A read-only database login for the audit lookup (open decision D4),
    proposed:
 
@@ -379,7 +420,11 @@ even while the rolled-back deployment serves. So:
    runs: follow the order in the next section instead;
 2. the fix comes as a new pull request through steps 1-5;
 3. promote it (Vercel, Deployments, "Promote", or `vercel promote <url>`),
-   which turns automatic promotion back on.
+   which turns automatic promotion back on;
+4. after rolling forward, run the post-promote commands of step 4 ("After
+   promotion: the release's own commands") again for every migration in that
+   table that production has applied: the rolled-back build wrote without
+   them while it served.
 
 Then run the post-deploy check against the rolled-back deployment and record
 it on the original pull request, with what happened.
@@ -513,7 +558,8 @@ position is stated.
   provider, not assumed).
 - **D3, the release canary.** Which organization and app, which SAP system and
   environment (proposed: the X5M lab, DEV), who holds the key and how often it
-  is rotated, and whether the preview database gets a canary of its own so
+  is rotated, who renews the canary's grants and for how long each approval
+  runs, and whether the preview database gets a canary of its own so
   step 3 can run the check before promoting.
 - **D4, the audit lookup's database login.** Proposed: the `release_reader`
   role above, with SELECT on `NorthboundAuditEvent` only. Alternative: run the

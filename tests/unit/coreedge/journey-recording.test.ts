@@ -6,9 +6,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ createMany: vi.fn(), findMany: vi.fn() }));
+const db = vi.hoisted(() => ({ createMany: vi.fn(), findMany: vi.fn(), auditFindFirst: vi.fn() }));
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { developerJourneyEvent: { createMany: db.createMany, findMany: db.findMany } },
+  prisma: {
+    developerJourneyEvent: { createMany: db.createMany, findMany: db.findMany },
+    northboundAuditEvent: { findFirst: db.auditFindFirst },
+  },
 }));
 
 import {
@@ -35,6 +38,7 @@ const call = {
 beforeEach(() => {
   db.createMany.mockReset().mockResolvedValue({ count: 1 });
   db.findMany.mockReset().mockResolvedValue([]);
+  db.auditFindFirst.mockReset().mockResolvedValue(null);
   forgetRecordedJourneyMilestones();
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
@@ -223,6 +227,59 @@ describe("reading", () => {
     );
     const summary = await loadJourneySummary("org-1", new Date("2026-10-21T12:00:00Z"));
     expect(summary.truncated).toBe(true);
+  });
+});
+
+describe("an app already calling before the deploy", () => {
+  const now = new Date("2026-10-21T12:00:00Z");
+  const requested = new Date("2026-10-19T09:00:00Z");
+  const journeyRows = [
+    { organizationId: "org-1", kind: "GRANT_REQUESTED", scopeKey: "grant:g1", solutionId: "app-1", environment: "PROD", subjectId: "g1", detail: null, at: requested },
+    { organizationId: "org-1", kind: "GRANT_DECIDED", scopeKey: "grant:g1", solutionId: "app-1", environment: "PROD", subjectId: "g1", detail: "APPROVED", at: new Date("2026-10-19T10:00:00Z") },
+    { organizationId: "org-1", kind: "FIRST_CALL", scopeKey: "call:app-1:PROD", solutionId: "app-1", environment: "PROD", subjectId: null, detail: "broker", at: new Date("2026-10-19T18:00:00Z") },
+  ];
+
+  beforeEach(() => {
+    db.findMany.mockImplementation(async (args: { where: { kind?: string } }) => (args.where.kind === "FIRST_CALL" ? [] : journeyRows));
+  });
+
+  it("asks the audit trail, scoped to the app's organization, for a successful real call before the request", async () => {
+    await loadJourneySummary(null, now);
+    expect(db.auditFindFirst).toHaveBeenCalledTimes(1);
+    const where = db.auditFindFirst.mock.calls[0]![0].where;
+    expect(where).toMatchObject({
+      organizationId: "org-1",
+      solutionId: "app-1",
+      at: { lt: requested },
+      status: { gte: 200, lt: 300 },
+      replayed: false,
+      interfaceId: { not: null },
+    });
+    expect(isUnscopedByDesign("NorthboundAuditEvent", "findFirst", { where })).toBe(false);
+  });
+
+  it("excludes the journey when the audit trail has one", async () => {
+    db.auditFindFirst.mockResolvedValue({ at: new Date("2026-08-01T02:00:00Z") });
+    const summary = await loadJourneySummary("org-1", now);
+    expect(summary.ttfrc).toMatchObject({ excludedAlreadyCalling: 1, completed: 0 });
+  });
+
+  it("measures it from the milestones when the audit read fails", async () => {
+    db.auditFindFirst.mockRejectedValue(new Error("connection reset"));
+    const summary = await loadJourneySummary("org-1", now);
+    expect(summary.ttfrc).toMatchObject({ excludedAlreadyCalling: 0, completed: 1 });
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("audit lookup failed"), expect.anything());
+  });
+
+  it("does not ask about a journey a recorded first call already excludes", async () => {
+    db.findMany.mockImplementation(async (args: { where: { kind?: string } }) =>
+      args.where.kind === "FIRST_CALL"
+        ? [{ ...journeyRows[2]!, scopeKey: "call:app-1:DEV", environment: "DEV", at: new Date("2026-01-01T00:00:00Z") }]
+        : journeyRows,
+    );
+    const summary = await loadJourneySummary("org-1", now);
+    expect(db.auditFindFirst).not.toHaveBeenCalled();
+    expect(summary.ttfrc.excludedAlreadyCalling).toBe(1);
   });
 });
 

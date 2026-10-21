@@ -36,7 +36,10 @@
  *   - Anything before the deploy that added the table: there is no backfill.
  *   - An app that was already calling a real environment before its first
  *     recorded request: it is not on its way to a first call, so it is
- *     excluded and counted as such.
+ *     excluded and counted as such. Recorded first calls say so, and so does
+ *     the retained audit trail (`priorRealCalls`): nothing was backfilled, so
+ *     an app that called for months before the deploy, and raises a request
+ *     before its first call after it, has no FIRST_CALL row to show for it.
  *   - The consumer type (TS, Python, ABAP on-premise …) is not recorded, so
  *     every TTFC journey is judged against 30 minutes.
  */
@@ -292,6 +295,24 @@ export interface JourneySummary {
   readonly funnel: readonly { readonly step: FunnelStep; readonly organizations: number }[];
 }
 
+/**
+ * A successful governed call of an app on a real system known from outside
+ * the milestone table: the retained northbound audit trail. Only its time
+ * matters, and only whether it came before a journey's start.
+ */
+export interface PriorRealCall {
+  readonly organizationId: string;
+  readonly solutionId: string;
+  readonly at: Date;
+}
+
+/** A TTFRC journey in the window that no recorded first call excludes. */
+export interface TtfrcJourneyStart {
+  readonly organizationId: string;
+  readonly solutionId: string;
+  readonly start: Date;
+}
+
 /** A first call an app makes through the governed pipeline. */
 function isAppCall(e: JourneyEventRow): boolean {
   return e.kind === "FIRST_CALL" && (e.detail === "broker" || e.detail === "test-console");
@@ -357,21 +378,71 @@ function gatingRequests(
   return sameEnvironment.length > 0 ? sameEnvironment : decidedByCall;
 }
 
-function computeTtfrc(events: readonly JourneyEventRow[], since: number, now: number): TtfrcSummary {
+function solutionKeyOf(organizationId: string, solutionId: string): string {
+  return `${organizationId}|${solutionId}`;
+}
+
+/** Each app's real-environment requests and real-environment app calls. */
+function realRequestsAndCalls(events: readonly JourneyEventRow[]): {
+  requestsBySolution: Map<string, JourneyEventRow[]>;
+  appCallsBySolution: Map<string, JourneyEventRow[]>;
+} {
   const requestsBySolution = new Map<string, JourneyEventRow[]>();
   const appCallsBySolution = new Map<string, JourneyEventRow[]>();
+  for (const e of events) {
+    if (e.solutionId === null || !isRealEnvironment(e.environment)) continue;
+    const solutionKey = solutionKeyOf(e.organizationId, e.solutionId);
+    if (e.kind === "GRANT_REQUESTED") {
+      requestsBySolution.set(solutionKey, [...(requestsBySolution.get(solutionKey) ?? []), e]);
+    } else if (isAppCall(e)) {
+      appCallsBySolution.set(solutionKey, [...(appCallsBySolution.get(solutionKey) ?? []), e]);
+    }
+  }
+  return { requestsBySolution, appCallsBySolution };
+}
+
+/**
+ * The TTFRC journeys the window shows that no recorded first call excludes:
+ * the ones whose start the audit trail must be asked about (`priorRealCalls`).
+ */
+export function ttfrcJourneyStarts(
+  events: readonly JourneyEventRow[],
+  now: Date,
+  options: { readonly windowDays?: number } = {},
+): TtfrcJourneyStart[] {
+  const since = now.getTime() - (options.windowDays ?? JOURNEY_WINDOW_DAYS) * DAY_MS;
+  const { requestsBySolution, appCallsBySolution } = realRequestsAndCalls(events);
+  const out: TtfrcJourneyStart[] = [];
+  for (const requests of requestsBySolution.values()) {
+    const start = Math.min(...requests.map((r) => r.at.getTime()));
+    if (start < since || start > now.getTime()) continue;
+    const { organizationId, solutionId } = requests[0]!;
+    const calls = appCallsBySolution.get(solutionKeyOf(organizationId, solutionId!)) ?? [];
+    if (calls.some((c) => c.at.getTime() < start)) continue;
+    out.push({ organizationId, solutionId: solutionId!, start: new Date(start) });
+  }
+  return out;
+}
+
+function computeTtfrc(
+  events: readonly JourneyEventRow[],
+  since: number,
+  now: number,
+  priorRealCalls: readonly PriorRealCall[],
+): TtfrcSummary {
+  const { requestsBySolution, appCallsBySolution } = realRequestsAndCalls(events);
+  const earliestPriorCall = new Map<string, number>();
+  for (const c of priorRealCalls) {
+    const key = solutionKeyOf(c.organizationId, c.solutionId);
+    earliestPriorCall.set(key, Math.min(earliestPriorCall.get(key) ?? Infinity, c.at.getTime()));
+  }
   const decidedAt = new Map<string, number>();
   const savedByOrg = new Map<string, JourneyEventRow[]>();
   const probedOkAt = new Map<string, number>();
 
   for (const e of events) {
-    const solutionKey = e.solutionId === null ? null : `${e.organizationId}|${e.solutionId}`;
-    if (e.kind === "GRANT_REQUESTED" && solutionKey && isRealEnvironment(e.environment)) {
-      requestsBySolution.set(solutionKey, [...(requestsBySolution.get(solutionKey) ?? []), e]);
-    } else if (e.kind === "GRANT_DECIDED") {
+    if (e.kind === "GRANT_DECIDED") {
       decidedAt.set(subjectKey(e), e.at.getTime());
-    } else if (isAppCall(e) && solutionKey && isRealEnvironment(e.environment)) {
-      appCallsBySolution.set(solutionKey, [...(appCallsBySolution.get(solutionKey) ?? []), e]);
     } else if (e.kind === "CONNECTION_SAVED" && isRealEnvironment(e.environment)) {
       savedByOrg.set(e.organizationId, [...(savedByOrg.get(e.organizationId) ?? []), e]);
     } else if (e.kind === "CONNECTION_PROBE_OK") {
@@ -392,7 +463,10 @@ function computeTtfrc(events: readonly JourneyEventRow[], since: number, now: nu
     const start = Math.min(...requests.map((r) => r.at.getTime()));
     if (start < since || start > now) continue;
     const calls = appCallsBySolution.get(solutionKey) ?? [];
-    if (calls.some((c) => c.at.getTime() < start)) {
+    // Already calling a real system before its first request: by a recorded
+    // first call, or by the audit trail for an app that has not called since
+    // the deploy that added the milestones.
+    if (calls.some((c) => c.at.getTime() < start) || (earliestPriorCall.get(solutionKey) ?? Infinity) < start) {
       excludedAlreadyCalling += 1;
       continue;
     }
@@ -492,7 +566,12 @@ function computeFunnel(
 export function summarizeJourneys(
   events: readonly JourneyEventRow[],
   now: Date,
-  options: { readonly windowDays?: number; readonly truncated?: boolean } = {},
+  options: {
+    readonly windowDays?: number;
+    readonly truncated?: boolean;
+    /** Audited calls before a journey's start: see `PriorRealCall`. */
+    readonly priorRealCalls?: readonly PriorRealCall[];
+  } = {},
 ): JourneySummary {
   const windowDays = options.windowDays ?? JOURNEY_WINDOW_DAYS;
   const since = now.getTime() - windowDays * DAY_MS;
@@ -502,7 +581,7 @@ export function summarizeJourneys(
     computedAt: now.toISOString(),
     truncated: options.truncated ?? false,
     ttfc: computeTtfc(events, since, now.getTime()),
-    ttfrc: computeTtfrc(events, since, now.getTime()),
+    ttfrc: computeTtfrc(events, since, now.getTime(), options.priorRealCalls ?? []),
     funnel: computeFunnel(events, since),
   };
 }

@@ -68,6 +68,22 @@ export const ENV = {
   auditDatabaseUrl: "COREEDGE_CHECK_AUDIT_DATABASE_URL",
 } as const;
 
+/**
+ * Discovery refusals that are about the canary's own grant: every grant has an
+ * expiry, so the canary's lapse on a date. They still FAIL the check (a release
+ * that refuses a valid grant shows the same codes), but the line says where to
+ * look first, so a lapsed grant is not read as a regression and rolled back.
+ * See "If the check fails", "A canary grant refused", in the runbook.
+ */
+export const CANARY_GRANT_REFUSALS: ReadonlySet<string> = new Set([
+  "GRANT_EXPIRED",
+  "GRANT_REVOKED",
+  "NO_APPROVED_GRANT",
+  "GRANT_NEEDS_REAPPROVAL",
+]);
+
+const CANARY_GRANT_HINT = "check the canary's grant before rolling back (runbook: A canary grant refused)";
+
 /** An interface id no app has: the refused call when no ungranted interface is named. */
 export const UNKNOWN_INTERFACE_ID = "post-deploy-check-no-such-interface";
 
@@ -196,7 +212,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 export async function runPostDeployCheck(config: PostDeployConfig, deps: PostDeployDeps): Promise<PostDeployReport> {
   const secrets = secretsOf(config);
-  const clean = (s: string): string => redactSecrets(s, secrets).replace(/\s+/g, " ").slice(0, 200);
+  const clean = (s: string): string => redactSecrets(s, secrets).replace(/\s+/g, " ").slice(0, 400);
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const lines: CheckLine[] = [];
   const calls: { label: string; correlationId: string | null; status: number | null }[] = [];
@@ -287,6 +303,8 @@ export async function runPostDeployCheck(config: PostDeployConfig, deps: PostDep
   };
   const discoveryProblems: string[] = [];
   const discoveryNotes: string[] = [];
+  /** Interfaces discovery refused for a reason about the canary's grant, and that reason. */
+  const canaryGrantRefusal = new Map<string, string>();
   for (const [key, label] of config.customKey === config.key
     ? ([[config.key, "discovery"]] as const)
     : ([[config.key, "discovery"], [config.customKey, "discovery (custom key)"]] as const)) {
@@ -300,8 +318,10 @@ export async function runPostDeployCheck(config: PostDeployConfig, deps: PostDep
     const i = listed.get(id);
     if (!i) discoveryProblems.push(`${name} ${id} is not listed for this key`);
     else if (i.source !== want) discoveryProblems.push(`${name} ${id} is a ${i.source ?? "unlabelled"} service, expected ${want}`);
-    else if (!i.callable) discoveryProblems.push(`${name} ${id} is not callable (${i.refusal ?? "no reason given"})`);
-    else discoveryNotes.push(`${name} is ${want} and callable`);
+    else if (!i.callable) {
+      discoveryProblems.push(`${name} ${id} is not callable (${i.refusal ?? "no reason given"})`);
+      if (i.refusal !== null && CANARY_GRANT_REFUSALS.has(i.refusal)) canaryGrantRefusal.set(id, i.refusal);
+    } else discoveryNotes.push(`${name} is ${want} and callable`);
   };
   judge(config.key, config.standardInterfaceId, "catalogue", "the SAP-standard interface");
   judge(config.customKey, config.customInterfaceId, "custom", "the Z* interface");
@@ -313,6 +333,7 @@ export async function runPostDeployCheck(config: PostDeployConfig, deps: PostDep
     else if (i.callable) discoveryProblems.push(`the refused interface ${config.refusedInterfaceId} is callable: it has a grant, so it proves no refusal`);
     else discoveryNotes.push(`the refused interface is listed as not callable (${i.refusal ?? "no reason"})`);
   }
+  if (canaryGrantRefusal.size > 0) discoveryProblems.push(CANARY_GRANT_HINT);
   add(
     "discovery",
     "Discovery lists the canary interfaces as expected",
@@ -329,7 +350,9 @@ export async function runPostDeployCheck(config: PostDeployConfig, deps: PostDep
     if (r.status === 200 && data && typeof data.count === "number") {
       add(id, title, true, `HTTP 200, ${data.count} record${data.count === 1 ? "" : "s"}${data.empty === true ? " (an empty resource)" : ""}${withId(r)}`);
     } else {
-      add(id, title, false, describe(r) + withId(r));
+      const grant = canaryGrantRefusal.get(interfaceId);
+      const hint = grant && r.status === 403 ? `; discovery said ${grant}: ${CANARY_GRANT_HINT}` : "";
+      add(id, title, false, describe(r) + withId(r) + hint);
     }
   };
   await read("standard-read", "One SAP-standard read through the broker", config.key, config.standardInterfaceId);

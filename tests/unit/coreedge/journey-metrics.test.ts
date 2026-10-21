@@ -22,6 +22,7 @@ import {
   summarizeJourneys,
   TTFC_TARGET_MS,
   TTFRC_TARGET_MS,
+  ttfrcJourneyStarts,
   unionIntervals,
   verdictFor,
   verdictLabel,
@@ -322,6 +323,52 @@ describe("time to first real call", () => {
       NOW,
     );
     expect(summary.ttfrc).toMatchObject({ completed: 0, open: 0, excludedAlreadyCalling: 1, stats: { n: 0 } });
+  });
+
+  it("excludes an app the audit trail shows calling before its request, though its first recorded call came after", () => {
+    // Deployed 2 days ago, so no FIRST_CALL row predates it. The app has
+    // called PROD nightly for months; its renewal request came an hour after
+    // the deploy and its first post-deploy call (the nightly batch) after that.
+    const deployedAt = ago(2 * DAY);
+    const events = [
+      ...realJourney("acme", "batch", deployedAt + HOUR, { decidedAfter: HOUR }),
+      ev("acme", "FIRST_CALL", deployedAt + 10 * HOUR, { solutionId: "batch", environment: "PROD", detail: "broker" }),
+    ];
+    // Without the audit trail the computation cannot know: a 9-hour journey.
+    expect(summarizeJourneys(events, NOW).ttfrc).toMatchObject({ completed: 1, excludedAlreadyCalling: 0 });
+
+    const summary = summarizeJourneys(events, NOW, {
+      priorRealCalls: [{ organizationId: "acme", solutionId: "batch", at: new Date(ago(90 * DAY)) }],
+    });
+    expect(summary.ttfrc).toMatchObject({ completed: 0, open: 0, excludedAlreadyCalling: 1, stats: { n: 0 } });
+  });
+
+  it("does not exclude an app for an audited call after its request, or another app's call", () => {
+    const start = ago(DAY);
+    const events = realJourney("acme", "new", start, { decidedAfter: HOUR, calledAfter: 2 * HOUR });
+    const summary = summarizeJourneys(events, NOW, {
+      priorRealCalls: [
+        { organizationId: "acme", solutionId: "new", at: new Date(start + 2 * HOUR) },
+        { organizationId: "acme", solutionId: "other", at: new Date(ago(30 * DAY)) },
+        { organizationId: "globex", solutionId: "new", at: new Date(ago(30 * DAY)) },
+      ],
+    });
+    expect(summary.ttfrc).toMatchObject({ completed: 1, excludedAlreadyCalling: 0 });
+  });
+
+  it("names the journeys whose start the audit trail must be asked about", () => {
+    const events = [
+      // Measured, with no recorded call before it: ask.
+      ...realJourney("acme", "new", ago(DAY), { decidedAfter: HOUR }),
+      // Already excluded by a recorded first call: no need to ask.
+      ev("acme", "FIRST_CALL", ago(10 * DAY), { solutionId: "old", environment: "PROD", detail: "broker" }),
+      ...realJourney("acme", "old", ago(DAY), { decidedAfter: HOUR }),
+      // Started before the window: not shown, so not asked about.
+      ...realJourney("acme", "ancient", ago(200 * DAY), {}),
+    ];
+    expect(ttfrcJourneyStarts(events, NOW)).toEqual([
+      { organizationId: "acme", solutionId: "new", start: new Date(ago(DAY)) },
+    ]);
   });
 
   it("ignores SANDBOX requests and console reads: neither is a real call", () => {

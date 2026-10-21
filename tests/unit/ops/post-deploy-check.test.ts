@@ -9,6 +9,9 @@
  * the real broker routes and PostgreSQL.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -238,6 +241,57 @@ describe("each failure fails its own line, and the run", () => {
       },
     });
     expect(line(await run({}, grantedRefusal), "discovery").detail).toMatch(/if_nogrant is callable: it has a grant, so it proves no refusal/);
+  });
+
+  it("a lapsed canary grant still fails, but says to check the canary's grant before rolling back", async () => {
+    // Every grant has an expiry: the canary's lapse on a date, and then both
+    // reads are refused exactly as a release that broke grants would refuse them.
+    const expired = fakeDeployment({
+      "/api/northbound/interfaces": {
+        status: 200,
+        body: {
+          data: {
+            interfaces: [
+              { id: "if_std", callable: false, refusal: "GRANT_EXPIRED", service: { source: "catalogue" } },
+              { id: "if_z", callable: false, refusal: "GRANT_EXPIRED", service: { source: "custom" } },
+              { id: "if_nogrant", callable: false, refusal: "NO_APPROVED_GRANT", service: { source: "catalogue" } },
+            ],
+          },
+        },
+      },
+      "/api/northbound/interfaces/if_std/data": { status: 403, body: { error: { code: "FORBIDDEN", message: "This grant has expired." } } },
+      "/api/northbound/interfaces/if_z/data": { status: 403, body: { error: { code: "FORBIDDEN", message: "This grant has expired." } } },
+    });
+    const r = await run({}, expired);
+    expect(r.ok).toBe(false);
+    const hint = "check the canary's grant before rolling back (runbook: A canary grant refused)";
+    expect(line(r, "discovery")).toMatchObject({
+      status: "FAIL",
+      detail: `the SAP-standard interface if_std is not callable (GRANT_EXPIRED); the Z* interface if_z is not callable (GRANT_EXPIRED); ${hint}`,
+    });
+    expect(line(r, "standard-read")).toMatchObject({
+      status: "FAIL",
+      detail: `HTTP 403 FORBIDDEN: This grant has expired. [correlation corr-2]; discovery said GRANT_EXPIRED: ${hint}`,
+    });
+    expect(line(r, "custom-read").detail).toContain(`discovery said GRANT_EXPIRED: ${hint}`);
+    // The hint names a section the runbook has.
+    const runbook = readFileSync(join(__dirname, "..", "..", "..", "docs", "runbooks", "coreedge-release.md"), "utf8");
+    expect(runbook).toContain("- **A canary grant refused:**");
+  });
+
+  it("does not blame the canary's grant for a refusal of another kind", async () => {
+    const r = await run(
+      {},
+      fakeDeployment({
+        "/api/northbound/interfaces": {
+          status: 200,
+          body: { data: { interfaces: [{ id: "if_std", callable: false, refusal: "INTERFACE_NOT_ACTIVE", service: { source: "catalogue" } }, { id: "if_z", callable: true, service: { source: "custom" } }, { id: "if_nogrant", callable: false, refusal: "NO_APPROVED_GRANT", service: { source: "catalogue" } }] } },
+        },
+        "/api/northbound/interfaces/if_std/data": { status: 403, body: { error: { code: "FORBIDDEN", message: "Not active." } } },
+      }),
+    );
+    expect(line(r, "discovery").detail).toBe("the SAP-standard interface if_std is not callable (INTERFACE_NOT_ACTIVE)");
+    expect(line(r, "standard-read").detail).not.toMatch(/canary's grant/);
   });
 
   it("a protected preview without the bypass secret (a redirect, not the app)", async () => {

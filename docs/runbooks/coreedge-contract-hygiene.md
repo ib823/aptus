@@ -98,7 +98,9 @@ filter runs before it.
   migration's own statements in one transaction and stamps every such capture
   the audit trail can place. It touches only captures still unstamped, so it is
   safe to run any number of times; `pnpm contracts:stamp` (no flag) only counts
-  what is unstamped.
+  what is unstamped. The release protocol lists it among the post-promote
+  commands (`docs/runbooks/coreedge-release.md`, step 4, "After promotion:
+  the release's own commands").
 - **Rollback.** While a pre-P0.4 build serves, its captures are unstamped too
   (and a re-captured fixture keeps the stamp of the recording it replaced, so
   after a contract change it reads as stale: withheld, never served). After

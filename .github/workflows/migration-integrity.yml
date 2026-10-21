@@ -42,8 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The protocol gate compares migrations with origin/main and with
-          # the push's parent commit, so it needs the history.
+          # The protocol gate compares migrations with the pull request's
+          # base branch and with the push's parent commit, so it needs the
+          # history and every branch.
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
@@ -71,12 +72,16 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          # A pull request is held against main; a push to main against the
-          # commit main pointed at before it (all zeros on a new branch,
-          # which the check skips).
-          if [ "$EVENT" = "push" ]; then BASE="$BEFORE"; else BASE="origin/main"; fi
+          # A pull request is held against the branch it merges into: main
+          # for a pull request to main, the wave branch for one stacked on it.
+          # (Held against main, a stacked pull request whose base branch is
+          # behind main would be told it removed every migration main gained
+          # since.) A push to main is held against the commit main pointed at
+          # before it (all zeros on a new branch, which the check skips).
+          if [ "$EVENT" = "push" ]; then BASE="$BEFORE"; else BASE="origin/$BASE_REF"; fi
           pnpm migrations:check --base "$BASE"
 
       # ------------------------------------------------------------------ #

@@ -6,7 +6,7 @@
  * the recovery numbers to the product owner.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -31,11 +31,18 @@ describe("migration-integrity.yml", () => {
     expect(checkout).toMatch(/fetch-depth: 0/);
   });
 
-  it("holds the protocol against origin/main on a pull request, and against the push's parent on main", () => {
-    const gate = steps.find((s) => s.includes("pnpm migrations:check"));
+  it("holds the protocol against the pull request's own base branch, and against the push's parent on main", () => {
+    const gate = steps.find((s) => s.includes("pnpm migrations:check"))!;
     expect(gate).toContain('pnpm migrations:check --base "$BASE"');
-    expect(gate).toContain('BASE="origin/main"');
     expect(gate).toContain("BEFORE: ${{ github.event.before }}");
+    // A pull request stacked on a branch that is behind main is not removing
+    // the migrations main gained since: it is compared with the branch it
+    // merges into (main, for a pull request to main). The branch name comes
+    // in through the environment, never spliced into the script.
+    expect(gate).toContain("BASE_REF: ${{ github.base_ref }}");
+    expect(gate).toContain('BASE="origin/$BASE_REF"');
+    expect(gate).not.toContain('BASE="origin/main"');
+    expect(gate.slice(gate.indexOf("run: |"))).not.toContain("${{");
   });
 
   it("rehearses every backout last, on the database migrate deploy built", () => {
@@ -47,8 +54,10 @@ describe("migration-integrity.yml", () => {
   });
 });
 
+const scriptsOf = () => (JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts;
+
 describe("package.json", () => {
-  const scripts = (JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts;
+  const scripts = scriptsOf();
 
   it("has the protocol's commands", () => {
     expect(scripts["migrations:check"]).toBe("tsx scripts/check-migration-protocol.ts");
@@ -124,6 +133,42 @@ describe("the runbook", () => {
     expect(remove).toBeGreaterThan(-1);
     expect(wait).toBeGreaterThan(remove);
     expect(apply).toBeGreaterThan(wait);
+  });
+
+  // A migration that changes data once leaves the old build's writes during
+  // the build behind; its runbook asks for a command after promotion. The
+  // release protocol is the procedure operators follow, so it must carry it,
+  // and carry it again after a roll-forward.
+  describe("post-promote commands", () => {
+    const step4 = runbook.slice(runbook.indexOf("## Step 4: promote"), runbook.indexOf("## Step 5: the post-deploy check"));
+    const table = step4.slice(step4.indexOf("### After promotion: the release's own commands"));
+    const step6 = runbook.slice(runbook.indexOf("## Step 6: rollback"), runbook.indexOf("## Recovery"));
+
+    it("lists contracts:stamp for the contract-stamps migration, before the post-deploy check", () => {
+      expect(table).toMatch(/^\| `20261023010000_contract_stamps` \| `pnpm contracts:stamp`, then[^|]*`pnpm contracts:stamp --apply` \|/m);
+      expect(scriptsOf()["contracts:stamp"]).toBeDefined();
+      expect(existsSync(join(ROOT, "prisma/migrations/20261023010000_contract_stamps/migration.sql"))).toBe(true);
+    });
+
+    it("lists every runbook that asks for a command after the build is promoted", () => {
+      const asking = readdirSync(join(ROOT, "docs/runbooks"))
+        .filter((f) => f.endsWith(".md") && f !== "coreedge-release.md")
+        .filter((f) => /after the build is promoted, run `pnpm /i.test(read(`docs/runbooks/${f}`)));
+      expect(asking).toContain("coreedge-contract-hygiene.md");
+      for (const f of asking) expect(table).toContain(`docs/runbooks/${f}`);
+    });
+
+    it("runs them again after rolling forward from a rollback", () => {
+      expect(step6).toMatch(/after rolling forward, run the post-promote commands of step 4/);
+    });
+  });
+
+  it("tells the operator how to renew the canary's grants, and not to roll back a healthy release for a lapsed one", () => {
+    const setup = runbook.slice(runbook.indexOf("### The release canary"), runbook.indexOf("## Step 6: rollback"));
+    expect(setup).toContain("GRANT_REQUIRES_EXPIRY");
+    expect(setup).toMatch(/\*\*Renewal:\*\*/);
+    const failing = runbook.slice(runbook.indexOf("### If the check fails"), runbook.indexOf("### The release canary"));
+    expect(failing).toMatch(/- \*\*A canary grant refused:\*\*[\s\S]*GRANT_EXPIRED[\s\S]*it is the canary, not the release/);
   });
 
   it("names the preview isolation check and the rule learned in Phase 0a/0b", () => {

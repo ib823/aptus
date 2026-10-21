@@ -77,6 +77,14 @@ keys and cleared when full (worst case: one more no-op insert per key).
      `FIRST_CALL` row. It has no recorded request before it, so it starts no
      journey; if that app later requests a new environment, it is counted as
      "already calling a real system" and excluded rather than measured;
+   - an existing app whose request comes **before** its first call after the
+     deploy (a renewal, or a new interface, raised before tonight's batch
+     runs) has no `FIRST_CALL` row before its request. The summary then asks
+     the retained northbound audit trail whether that app made a successful
+     call on a real system before the request (see "Reading the tiles",
+     "Already calling"). If it did, the app is excluded like any other app
+     already calling; if the audit retention has already pruned every such
+     call, it cannot be told apart and is measured as a new journey;
    - the first nightly sweep to write one `CONNECTION_PROBE_OK` per healthy
      connection (one insert each, once);
    - grants requested before the deploy and decided after it to write a
@@ -100,6 +108,16 @@ keys and cleared when full (worst case: one more no-op insert per key).
 - **Parts.** Each part is its own median over the same journeys, so the three
   need not add up to the total's median. Within one journey they add up
   exactly: approver wait + SAP set-up wait + developer time = the journey.
+- **Already calling.** An app is "already calling a real system", and not
+  counted, when it made a successful governed call on DEV, TEST or PROD
+  before its first request in the window: a recorded `FIRST_CALL` row says
+  so, or, for an app with none before the request, a `NorthboundAuditEvent`
+  row of that app before it (a 2xx answered to the app, not a replay, naming
+  an interface, on a real environment: the connection's declared one when it
+  has one, the credential's otherwise). The audit is asked only about the
+  journeys the window would otherwise measure, one indexed lookup each,
+  scoped to the app's organization; a failed lookup leaves the journey
+  measured from its milestones and logs `[journey] audit lookup failed`.
 - **Window.** Journeys that started in the last 90 days; milestones up to 90
   days before that are read so a journey sees a connection saved earlier.
   First calls are read whatever their age: each is written once per app and
@@ -173,10 +191,12 @@ These need a person's decision; the code takes the stated interim position.
   connections) and are deleted with their organization. No retention period is
   applied; `actorUserId` names the person who caused a milestone, as the audit
   tables do. Decide a retention period if one is required.
-- **Backfill.** Not done (see deploy step 2). A partial baseline could be
-  derived from `ApiAccessGrant`, `SapConnection`, `SapConnectionProbeEvent`
-  and the retained `NorthboundAuditEvent` rows; decide whether a labelled
-  "reconstructed" baseline is worth having.
+- **Backfill.** Not done (see deploy step 2); the audit trail is read only to
+  keep an app already calling out of the figures, never to start or end a
+  journey. A partial baseline could be derived from `ApiAccessGrant`,
+  `SapConnection`, `SapConnectionProbeEvent` and the retained
+  `NorthboundAuditEvent` rows; decide whether a labelled "reconstructed"
+  baseline is worth having.
 
 ## Verifying
 

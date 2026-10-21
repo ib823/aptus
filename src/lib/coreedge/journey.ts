@@ -30,11 +30,15 @@ import { prisma } from "@/lib/db/prisma";
 import {
   JOURNEY_LOOKBACK_DAYS,
   JOURNEY_WINDOW_DAYS,
+  REAL_ENVIRONMENTS,
   summarizeJourneys,
+  ttfrcJourneyStarts,
   type FirstCallChannel,
   type JourneyEventKind,
   type JourneyEventRow,
   type JourneySummary,
+  type PriorRealCall,
+  type TtfrcJourneyStart,
 } from "./journey-metrics";
 
 export * from "./journey-metrics";
@@ -302,5 +306,69 @@ export async function loadJourneySummary(
     ...earlierCalls.slice(0, MAX_JOURNEY_ROWS),
     ...rows.slice(0, MAX_JOURNEY_ROWS),
   ];
-  return summarizeJourneys(events, now, { truncated });
+  const priorRealCalls = await auditedCallsBefore(ttfrcJourneyStarts(events, now));
+  return summarizeJourneys(events, now, { truncated, priorRealCalls });
+}
+
+/** Audit lookups in flight at once while loading one summary. */
+const AUDIT_LOOKUP_CONCURRENCY = 8;
+
+/**
+ * For each journey no recorded first call excludes, one successful governed
+ * call of that app on a real system before the journey's start, from the
+ * retained northbound audit trail, when there is one.
+ *
+ * WHY. Nothing was backfilled at deploy, so FIRST_CALL rows begin with each
+ * app's first call after it. An app that has called PROD nightly for months
+ * and raises a request (a renewal, a new interface) before that first call
+ * would otherwise be measured as a brand-new journey. The audit trail still
+ * knows; this asks it, for these journeys only.
+ *
+ * What counts is what `noteFirstCall` would have recorded: a 2xx answered to
+ * the app (a replayed write is not a call; discovery, which names no
+ * interface, is not a call of SAP), on a real system — the connection's
+ * declared environment when it has one, the credential's otherwise. Each
+ * lookup is scoped to its organization and app and stops at the first row
+ * (index `organizationId, solutionId, at`). Bounded by the journeys the window
+ * shows, not by traffic. A lookup that fails leaves that journey measured as
+ * before: the board must not fail because the audit read did.
+ */
+async function auditedCallsBefore(starts: readonly TtfrcJourneyStart[]): Promise<PriorRealCall[]> {
+  const found: PriorRealCall[] = [];
+  const realEnvironments = [...REAL_ENVIRONMENTS];
+  for (let i = 0; i < starts.length; i += AUDIT_LOOKUP_CONCURRENCY) {
+    const batch = starts.slice(i, i + AUDIT_LOOKUP_CONCURRENCY);
+    const rows = await Promise.all(
+      batch.map((j) =>
+        prisma.northboundAuditEvent
+          .findFirst({
+            where: {
+              organizationId: j.organizationId,
+              solutionId: j.solutionId,
+              at: { lt: j.start },
+              status: { gte: 200, lt: 300 },
+              replayed: false,
+              interfaceId: { not: null },
+              OR: [
+                { connectionEnvironment: { in: realEnvironments } },
+                { connectionEnvironment: null, environment: { in: realEnvironments } },
+              ],
+            },
+            select: { at: true },
+          })
+          .catch((err: unknown) => {
+            console.warn("[journey] audit lookup failed; journey measured from milestones only", {
+              organizationId: j.organizationId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          }),
+      ),
+    );
+    rows.forEach((row, k) => {
+      const j = batch[k]!;
+      if (row) found.push({ organizationId: j.organizationId, solutionId: j.solutionId, at: row.at });
+    });
+  }
+  return found;
 }
