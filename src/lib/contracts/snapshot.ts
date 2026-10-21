@@ -36,7 +36,10 @@
  *     A review). The recorded diff is the one that decided the bump.
  *
  * A contract larger than MAX_CONTRACT_BYTES is never stored (TOO_LARGE): it
- * would be read back on every /schema call.
+ * would be read back on every /schema call. Nor is one whose /schema, kit or
+ * solution document would not fit its read path's budget (REFUSED,
+ * OUTPUT_TOO_LARGE): every contract is digested, rendered and measured in the
+ * envelope before it gets here (pipeline.ts), and its diffs run there too.
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. A version bump for another reason — the
@@ -52,16 +55,12 @@
 
 import { Prisma } from "@prisma/client";
 
-import { boundedContractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
-import {
-  diffContracts,
-  nextSemver,
-  semverParts,
-  storedDiff,
-  type ContractDiff,
-  type StoredContractDiff,
-} from "@/lib/contracts/diff";
+import { jsonBytesUpTo } from "@/lib/contracts/budget";
+import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
+import { nextSemver, semverParts, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
+import { runInEnvelope } from "@/lib/contracts/envelope";
 import type { InterfaceContract } from "@/lib/contracts/ir";
+import type { DiffJobOutput, EnvelopeRefusal } from "@/lib/contracts/pipeline";
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
@@ -84,7 +83,9 @@ export interface CurrentSnapshot extends SnapshotSummary {
 export type RecordOutcome =
   | { status: "RECORDED"; snapshot: SnapshotSummary; diff: StoredContractDiff | null }
   | { status: "UNCHANGED"; snapshot: SnapshotSummary }
-  | { status: "TOO_LARGE"; bytes: number };
+  | { status: "TOO_LARGE"; bytes: number }
+  /** The envelope refused the work (its limits), or a read path's output would not fit its budget: nothing stored. */
+  | { status: "REFUSED"; reason: EnvelopeRefusal | "OUTPUT_TOO_LARGE" | "NO_SUCH_ENTITY_SET" | "NO_SUCH_ENTITY_TYPE"; detail: string };
 
 /** The largest contract stored, as canonical JSON (defined beside the digest it bounds). */
 export { MAX_CONTRACT_BYTES };
@@ -136,20 +137,53 @@ function laterThan(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * The diffs of `next` against each of `previous`, IN THE ENVELOPE
+ * (envelope.ts): a diff is linear today, and if a contract is ever found
+ * that makes it otherwise, it ends its own worker, not this thread. When the
+ * envelope refuses, the record is refused too: a version cannot be chosen
+ * without its diff.
+ */
+async function diffsInEnvelope(
+  previous: InterfaceContract[],
+  next: InterfaceContract,
+): Promise<{ ok: true; value: DiffJobOutput } | { ok: false; reason: EnvelopeRefusal }> {
+  const r = await runInEnvelope({ kind: "diff", input: { previous, next } });
+  return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
+}
+
 export async function recordContractSnapshot(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string };
   contract: InterfaceContract;
+  /**
+   * The digest the envelope already took, with the contract rendered and
+   * measured for every read path (pipeline.ts, the verify's compile).
+   * Absent, the contract is prepared in the envelope here.
+   */
+  prepared?: { hash: string; bytes: number };
   environment?: string | null;
   connectionId?: string | null;
   createdById?: string | null;
 }): Promise<RecordOutcome> {
   const { scope, iface, contract } = input;
   const environment = input.environment ?? null;
-  // Refused before it is serialised when it cannot be small enough (canonical.ts).
-  const digest = boundedContractDigest(contract, MAX_CONTRACT_BYTES);
-  if (!digest.ok) return { status: "TOO_LARGE", bytes: digest.bytes };
-  const { hash, bytes } = digest;
+  let prepared = input.prepared;
+  if (!prepared) {
+    // Digested under the contract budget, then rendered under every read
+    // path's (budget.ts), in the envelope: refused before anything is stored.
+    const r = await runInEnvelope({ kind: "prepare", input: { contract, subject: null } });
+    if (!r.ok) return { status: "REFUSED", reason: r.reason, detail: r.detail };
+    if (!r.value.ok) {
+      return r.value.reason === "TOO_LARGE"
+        ? { status: "TOO_LARGE", bytes: r.value.bytes ?? MAX_CONTRACT_BYTES + 1 }
+        : { status: "REFUSED", reason: r.value.reason, detail: r.value.detail };
+    }
+    prepared = { hash: r.value.hash, bytes: r.value.bytes };
+  }
+  // A digest over the bound is never stored, however it was taken.
+  if (prepared.bytes > MAX_CONTRACT_BYTES) return { status: "TOO_LARGE", bytes: prepared.bytes };
+  const { hash, bytes } = prepared;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     // Summaries only: an interface has a handful of versions, and the IRs
@@ -167,7 +201,7 @@ export async function recordContractSnapshot(input: {
     const match = rows.find(same);
     if (match && (!own || laterThan(match.semver, own.semver))) return { status: "UNCHANGED", snapshot: summary(match) };
 
-    let diff: ContractDiff | null = null;
+    let stored: StoredContractDiff | null = null;
     let semver = "1.0.0";
     if (latest) {
       // What this contract is a change OF: the environment's own newest row;
@@ -181,38 +215,54 @@ export async function recordContractSnapshot(input: {
         select: { id: true, ir: true },
       });
       const irById = new Map(irs.map((r) => [r.id, r.ir]));
-      let best: { row: (typeof rows)[number]; diff: ContractDiff } | null = null;
-      for (const row of candidates) {
-        const ir = irById.get(row.id);
-        if (!ir) continue;
-        const d = diffContracts(ir as unknown as InterfaceContract, contract);
-        if (!best || bumpRank(d.bump) < bumpRank(best.diff.bump)) best = { row, diff: d };
-      }
       const latestIr = irById.get(latest.id);
-      if (!best || !latestIr) continue; // removed meanwhile: read again
-      // And against the row it follows on the line (see the header): never a
-      // smaller bump than what the line itself changed.
-      if (best.row.id !== latest.id) {
-        const onLine = diffContracts(latestIr as unknown as InterfaceContract, contract);
-        if (bumpRank(onLine.bump) > bumpRank(best.diff.bump)) best = { row: latest, diff: onLine };
+      const present = candidates.filter((row) => irById.has(row.id));
+      if (present.length === 0 || !latestIr) continue; // removed meanwhile: read again
+      // Every diff this decision needs, in one envelope job: the candidates', then the line's.
+      const onLineToo = !present.some((row) => row.id === latest.id);
+      const compared = await diffsInEnvelope(
+        [...present, ...(onLineToo ? [latest] : [])].map((row) => irById.get(row.id) as unknown as InterfaceContract),
+        contract,
+      );
+      if (!compared.ok) {
+        return {
+          status: "REFUSED",
+          reason: compared.reason,
+          detail:
+            compared.reason === "BUSY"
+              ? "Too many contracts are being compiled at once, so this one was not compared with its previous version. Verify again in a moment."
+              : "The contract could not be compared with its previous version within the compiler's limits, so it was not recorded.",
+        };
       }
-      diff = best.diff;
-      if (diff.bump === null) {
+      const diffs = compared.value;
+      // The smallest bump, the newer on a tie (candidates are newest first).
+      let chosen = { row: present[0]!, diff: diffs[0]! };
+      for (let i = 1; i < present.length; i++) {
+        if (bumpRank(diffs[i]!.bump) < bumpRank(chosen.diff.bump)) chosen = { row: present[i]!, diff: diffs[i]! };
+      }
+      // And against the row it follows on the line (see the header): never a
+      // smaller bump than what the line itself changed — whether the latest
+      // row was among the candidates or diffed for this alone.
+      if (chosen.row.id !== latest.id) {
+        const onLine = onLineToo ? diffs[present.length]! : diffs[present.findIndex((row) => row.id === latest.id)]!;
+        if (bumpRank(onLine.bump) > bumpRank(chosen.diff.bump)) chosen = { row: latest, diff: onLine };
+      }
+      // What is stored is bounded whatever the contract (storedDiff, diff.ts, run in the envelope).
+      stored = chosen.diff.stored;
+      if (chosen.diff.bump === null) {
         // Same structure, different hash or service: say so, as a patch.
-        diff = {
+        stored = {
           bump: "patch",
           changes: [
-            best.row.externalId !== iface.externalId
+            chosen.row.externalId !== iface.externalId
               ? { bump: "patch", at: "service", change: "The same contract is now served by another service of this interface." }
               : { bump: "patch", at: "contract", change: "The description was restated without a structural change." },
           ],
         };
       }
-      semver = nextSemver(latest.semver, diff.bump ?? "patch");
+      semver = nextSemver(latest.semver, stored.bump ?? "patch");
     }
     const [semverMajor, semverMinor, semverPatch] = semverParts(semver);
-    // What is stored is bounded whatever the contract (storedDiff, diff.ts).
-    const stored = diff === null ? null : storedDiff(diff);
 
     try {
       const row = await prisma.contractSnapshot.create({
@@ -311,7 +361,9 @@ export async function snapshotContracts(
     const ir = irById.get(c.id);
     if (!ir) continue;
     const contract = ir as unknown as InterfaceContract;
-    out.set(interfaceId, { ...c, contract, irBytes: c.irBytes ?? Buffer.byteLength(JSON.stringify(contract), "utf8") });
+    // A row recorded before its size was kept is measured now, by the budgeted
+    // writer, which stops just past the bound: readers refuse anything over it.
+    out.set(interfaceId, { ...c, contract, irBytes: c.irBytes ?? jsonBytesUpTo(contract, MAX_CONTRACT_BYTES) });
   }
   return out;
 }

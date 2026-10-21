@@ -11,8 +11,9 @@
  * would be the claim P0.1 stopped the broker making.
  */
 
+import { LIMITS } from "@/lib/contracts/budget";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { currentSnapshotSummaries, MAX_CONTRACT_BYTES, snapshotContracts } from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, snapshotContracts } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -24,6 +25,8 @@ export interface CompiledForDoc {
   contentHash: string;
   compiledAt: string;
   contract: InterfaceContract;
+  /** Its canonical bytes: what its read path's budget is a function of (budget.ts). */
+  irBytes: number;
 }
 
 export interface DocInputs {
@@ -54,12 +57,22 @@ export interface DocInputsTooLarge {
  * contract's own bound (MAX_CONTRACT_BYTES), so any one contract the verify
  * accepted renders on every read path; a real dataset's slice is tens of
  * kilobytes, so a solution of dozens of them renders.
+ *
+ * It is the input side of the documents' budget (budget.ts, LIMITS.document):
+ * the output side is the bytes the document is then written in, charged as
+ * they are written (documentLimit, kitLimit), against the same function of
+ * each contract's size that the record measured it against in the envelope.
  */
-export const MAX_DOCUMENT_CONTRACT_BYTES = MAX_CONTRACT_BYTES;
+export const MAX_DOCUMENT_CONTRACT_BYTES = LIMITS.document.contractsCap;
 
 /** The refusal of a document past its budget: what to do about it, never the contract itself. */
 export function documentTooLargeMessage(what: "starter kit" | "solution document", limit: number): string {
   return `The compiled contracts this ${what} would carry are larger than the ${Math.floor(limit / (1024 * 1024))} MB a generated document may carry, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
+}
+
+/** The refusal of a document whose output passed its budget while it was written (budget.ts). */
+export function documentOutputTooLargeMessage(what: "starter kit" | "solution document", limit: number): string {
+  return `This ${what} would be larger than the ${Math.max(1, Math.floor(limit / (1024 * 1024)))} MB its contracts allow it to be, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
 }
 
 export async function loadDocInputs(
@@ -89,6 +102,7 @@ export async function loadDocInputs(
       contentHash: s.contentHash,
       compiledAt: s.createdAt.toISOString(),
       contract: s.contract,
+      irBytes: s.irBytes,
     });
   }
 

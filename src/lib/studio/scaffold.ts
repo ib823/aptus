@@ -19,6 +19,7 @@
  * Pure functions: no I/O, no framework, fully testable.
  */
 
+import { jsonText, UNLIMITED, utf8Length, type OutputBudget } from "@/lib/contracts/budget";
 import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
 import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 import {
@@ -154,6 +155,7 @@ export function buildOpenApi(
   iface: ScaffoldInterface,
   baseUrl = DEFAULT_KIT_BASE_URL,
   version: OpenApiVersion = "3.1.0",
+  budget: OutputBudget = UNLIMITED(),
 ): string {
   const contract = contractForDoc(iface);
   const source =
@@ -194,7 +196,8 @@ export function buildOpenApi(
     ],
     safe: safeName,
   });
-  return documentJson(doc);
+  // Every byte charged as it is written (budget.ts).
+  return documentJson(doc, budget);
 }
 
 /**
@@ -241,13 +244,17 @@ function enumAlias(en: InterfaceContract["enumTypes"][number], types: CompiledTy
 }
 
 /** `export type XEnum = "A" | "B";` once per enum a property used. */
-function enumAliasDeclarations(types: CompiledTypeIndex): string {
+function enumAliasDeclarations(types: CompiledTypeIndex, budget: OutputBudget): string {
   const out: string[] = [];
+  const line = (s: string) => {
+    budget.chargeText(s);
+    out.push(s);
+  };
   for (const [qualifiedName, alias] of types.aliases) {
     const en = types.enums.get(qualifiedName)!;
-    out.push(`/** ${safeComment(qualifiedName)} */`);
-    out.push(`export type ${alias} = ${en.members.map((m) => JSON.stringify(m.name)).join(" | ")};`);
-    out.push("");
+    line(`/** ${safeComment(qualifiedName)} */`);
+    line(`export type ${alias} = ${en.members.map((m) => JSON.stringify(m.name)).join(" | ")};`);
+    line("");
   }
   return out.join("\n");
 }
@@ -320,17 +327,24 @@ function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
  * field should get a value, not a type error. Optional markers follow the
  * schema as served, as openapi.json does (see servedResponseSchema).
  */
-function buildRecordBody(stored: unknown, compiled?: InterfaceContract, types?: CompiledTypeIndex): string {
+function buildRecordBody(
+  stored: unknown,
+  compiled: InterfaceContract | undefined,
+  types: CompiledTypeIndex | undefined,
+  budget: OutputBudget,
+): string {
   if (compiled && compiled.source === "METADATA" && types) {
     // Compiled: every property the service declares. The key is always sent;
     // anything else may be left out by a $select, so it is optional. The
     // index signature stays for a customer's extension fields, which arrive
-    // before the next compile does.
+    // before the next compile does. Each line charged as it is made (budget.ts).
     const key = new Set(compiled.entityType.key);
     const lines = compiled.entityType.properties.map((p) => {
       const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.name) ? p.name : JSON.stringify(p.name);
       const doc = p.label ? `  /** ${safeComment(p.label.replace(/\s+/g, " "))} */\n` : "";
-      return `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled, types)};`;
+      const line = `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled, types)};`;
+      budget.chargeText(line);
+      return line;
     });
     lines.push("  /** Fields the compiled description does not name (extension fields added since). */");
     lines.push("  [field: string]: unknown;");
@@ -346,7 +360,9 @@ function buildRecordBody(stored: unknown, compiled?: InterfaceContract, types?: 
     // Quote anything that is not a plain identifier (SAP emits names like
     // `to_Partner` — fine — but also `@odata.x` on occasion).
     const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
-    return `  ${key}${optional}: ${tsTypeOf(prop)};`;
+    const line = `  ${key}${optional}: ${tsTypeOf(prop)};`;
+    budget.chargeText(line);
+    return line;
   });
   // Always keep the index signature — see the doc comment above.
   lines.push("  /** Fields outside the captured sample. */");
@@ -369,6 +385,7 @@ function buildRecordBody(stored: unknown, compiled?: InterfaceContract, types?: 
 export function buildTypeScriptClient(
   iface: ScaffoldInterface,
   baseUrl = DEFAULT_KIT_BASE_URL,
+  budget: OutputBudget = UNLIMITED(),
 ): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
   /*
@@ -379,8 +396,8 @@ export function buildTypeScriptClient(
    */
   const compiled = iface.compiled?.contract.source === "METADATA" ? iface.compiled : undefined;
   const types = compiled ? compiledTypeIndex(compiled.contract, typeName) : undefined;
-  const recordBody = buildRecordBody(iface.responseSchema, compiled?.contract, types);
-  const aliases = types ? enumAliasDeclarations(types) : "";
+  const recordBody = buildRecordBody(iface.responseSchema, compiled?.contract, types, budget);
+  const aliases = types ? enumAliasDeclarations(types, budget) : "";
   const shapeNote = compiled
     ? ` * The record type below was COMPILED from the service's own description
  * ($metadata), contract version ${safeComment(compiled.semver)} (${safeComment(compiled.compiledAt)}). Its
@@ -746,11 +763,15 @@ function buildFixturesJson(
   iface: { id: string; name: string },
   fixtures: readonly ScaffoldFixture[],
   withheld: readonly WithheldFixture[] = [],
+  budget: OutputBudget = UNLIMITED(),
 ): string {
   const unproven = fixtures.filter((f) => f.sourceStatus === null || f.sourceStatus === undefined);
   const dataFixtures = fixtures.filter((f) => f.scenario === "data");
 
-  return JSON.stringify(
+  // Indented as JSON.stringify(…, null, 2) wrote it, each byte charged as it
+  // is written (budget.ts): indentation of a deeply nested recorded body is
+  // what grows fastest here.
+  return jsonText(
     {
       interfaceId: iface.id,
       interfaceName: safeName(iface.name),
@@ -786,8 +807,8 @@ function buildFixturesJson(
       // nobody can establish (A38). No body — it describes the wrong rows.
       ...(withheld.length > 0 ? { withheld: withheld.map((w) => ({ scenario: w.scenario, reason: w.reason })) } : {}),
     },
-    null,
-    2,
+    budget,
+    { indent: 2 },
   );
 }
 
@@ -1186,26 +1207,37 @@ export interface ScaffoldFile {
  * exercises the same code path the live broker serves. Without them it still
  * ships, and the README says which scenarios are missing rather than pretending
  * the mock is complete.
+ *
+ * UNDER ONE BUDGET (budget.ts, kitLimit). Every byte of every file is
+ * charged to `budget`: the files that grow with the contract or the
+ * fixtures (both OpenAPI documents, client.ts, fixtures.json) as they are
+ * written, so one past the budget stops there (BudgetExceeded); the fixed
+ * ones once they are made.
  */
 export function buildScaffold(
   iface: ScaffoldInterface,
   baseUrl?: string,
   fixtures: readonly ScaffoldFixture[] = [],
   withheld: readonly WithheldFixture[] = [],
+  budget: OutputBudget = UNLIMITED(),
 ): ScaffoldFile[] {
+  const file = (path: string, build: () => string): ScaffoldFile => {
+    const before = budget.spent;
+    const contents = build();
+    // What the builder did not charge as it wrote (its fixed text), charged now.
+    budget.charge(Math.max(0, utf8Length(contents) - (budget.spent - before)));
+    return { path, contents };
+  };
   return [
-    { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl, withheld) },
-    { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
-    { path: "openapi-3.0.json", contents: buildOpenApi(iface, baseUrl, "3.0.3") },
-    { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
-    { path: ".env.example", contents: buildEnvExample(baseUrl) },
-    { path: ".gitignore", contents: buildGitignore() },
-    { path: "package.json", contents: buildPackageJson(iface) },
-    { path: "demo.mjs", contents: buildDemo(iface) },
-    { path: "mock.mjs", contents: buildMockServer(iface) },
-    {
-      path: "fixtures.json",
-      contents: buildFixturesJson(iface, fixtures, withheld),
-    },
+    file("README.md", () => buildReadme(iface, fixtures, baseUrl, withheld)),
+    file("openapi.json", () => buildOpenApi(iface, baseUrl, "3.1.0", budget)),
+    file("openapi-3.0.json", () => buildOpenApi(iface, baseUrl, "3.0.3", budget)),
+    file("client.ts", () => buildTypeScriptClient(iface, baseUrl, budget)),
+    file(".env.example", () => buildEnvExample(baseUrl)),
+    file(".gitignore", () => buildGitignore()),
+    file("package.json", () => buildPackageJson(iface)),
+    file("demo.mjs", () => buildDemo(iface)),
+    file("mock.mjs", () => buildMockServer(iface)),
+    file("fixtures.json", () => buildFixturesJson(iface, fixtures, withheld, budget)),
   ];
 }

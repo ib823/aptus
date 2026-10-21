@@ -39,6 +39,7 @@
  * Pure and deterministic: the same input renders the same document.
  */
 
+import { jsonBytesUpTo, jsonText, LIMITS, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
 import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
@@ -186,7 +187,7 @@ const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Dis
  * So a document's size is linear in its contract with the compact constant
  * (hostile-input review round 2), and every real one stays readable.
  */
-export const PRETTY_DOCUMENT_MAX_BYTES = 512 * 1024;
+export const PRETTY_DOCUMENT_MAX_BYTES = LIMITS.prettyDocument;
 
 /**
  * The `info.version` of a document carrying several interfaces (the
@@ -227,10 +228,16 @@ export function multiInterfaceInfoVersion(
   return `${major}.${minor}.${patch}+${build}`;
 }
 
-/** The document as JSON: indented when small (PRETTY_DOCUMENT_MAX_BYTES), compact otherwise. */
-export function documentJson(doc: unknown): string {
-  const compact = JSON.stringify(doc);
-  return compact.length <= PRETTY_DOCUMENT_MAX_BYTES ? JSON.stringify(doc, null, 2) : compact;
+/**
+ * The document as JSON: indented when small (PRETTY_DOCUMENT_MAX_BYTES),
+ * compact otherwise — written by the one budgeted writer (budget.ts), every
+ * byte charged to `budget` as it is written, so a document past its budget
+ * is refused (BudgetExceeded) without ever being built in full. Whether it is
+ * small is measured first, by the same writer, stopping at the threshold.
+ */
+export function documentJson(doc: unknown, budget: OutputBudget = UNLIMITED()): string {
+  const pretty = jsonBytesUpTo(doc, PRETTY_DOCUMENT_MAX_BYTES) <= PRETTY_DOCUMENT_MAX_BYTES;
+  return jsonText(doc, budget, pretty ? { indent: 2 } : {});
 }
 
 export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {

@@ -24,6 +24,11 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+// Each compile, diff and record-time render runs in a real worker thread
+// (lib/contracts/envelope.ts), which loads the compiler from source here:
+// seconds per test on a loaded runner, not milliseconds.
+vi.setConfig({ testTimeout: 60_000 });
+
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
   const { tenantScopeGuard } = await import("@/lib/db/tenant-guard");
@@ -35,6 +40,7 @@ vi.mock("@/lib/db/prisma", async () => {
 
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
+import { compiledServiceOf } from "@/lib/contracts/pipeline";
 import { MAX_STORED_CHANGES, MAX_STORED_DIFF_BYTES } from "@/lib/contracts/diff";
 import { loadDocInputs } from "@/lib/contracts/doc-inputs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
@@ -159,7 +165,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
       ["PROD", prod],
     ] as const) {
       const r = await recordContractSnapshot({ scope, iface, contract: contract(), environment });
-      if (r.status === "TOO_LARGE") throw new Error("too large");
+      if (r.status === "TOO_LARGE" || r.status === "REFUSED") throw new Error(r.status);
       seen.push(`${environment}:${r.status}:${r.snapshot.semver}`);
     }
     expect(seen).toEqual(["PROD:RECORDED:1.0.0", "DEV:RECORDED:1.1.0", "PROD:UNCHANGED:1.0.0", "DEV:UNCHANGED:1.1.0", "PROD:UNCHANGED:1.0.0"]);
@@ -179,6 +185,34 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const test2 = await recordContractSnapshot({ scope, iface, contract: german, environment: "TEST" });
     expect(test2).toMatchObject({ status: "UNCHANGED", snapshot: { semver: "1.1.1" } });
     expect(await recordContractSnapshot({ scope, iface, contract: dev(), environment: "DEV" })).toMatchObject({ status: "UNCHANGED" });
+  });
+
+  it("an environment's first verify, nearest another's older row, still follows the line's newest (diffs in the envelope)", async () => {
+    // DEV holds 1.0.0, TEST the line's newest (1.1.0, with ZZ1_F2). PROD's
+    // first contract restates DEV's with a new label: nearest DEV (a patch),
+    // but it lacks the line's ZZ1_F2, so on the line it is a major.
+    const iface = await newInterface("first-verify-line");
+    const relabelled = () => {
+      const c = salesOrder();
+      c.entityType.properties[0]!.label = "Relabelled";
+      return c;
+    };
+    const withF2 = () => {
+      const c = salesOrder();
+      c.entityType.properties.push({ name: "ZZ1_F2", type: "Edm.String", nullable: true });
+      return c;
+    };
+    const seen: string[] = [];
+    for (const [environment, contract] of [
+      ["DEV", salesOrder],
+      ["TEST", withF2],
+      ["PROD", relabelled],
+    ] as const) {
+      const r = await recordContractSnapshot({ scope, iface, contract: contract(), environment });
+      if (r.status === "TOO_LARGE" || r.status === "REFUSED") throw new Error(r.status);
+      seen.push(`${environment}:${r.status}:${r.snapshot.semver}${r.status === "RECORDED" && r.diff ? `:${r.diff.bump}` : ""}`);
+    }
+    expect(seen).toEqual(["DEV:RECORDED:1.0.0", "TEST:RECORDED:1.1.0:minor", "PROD:RECORDED:2.0.0:major"]);
   });
 
   it("a version never drops a field the version before it on the line had, without a major bump", async () => {
@@ -204,7 +238,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
       ["DEV", D],
     ] as const) {
       const r = await recordContractSnapshot({ scope, iface, contract: contract(), environment });
-      if (r.status === "TOO_LARGE") throw new Error("too large");
+      if (r.status === "TOO_LARGE" || r.status === "REFUSED") throw new Error(r.status);
       seen.push(`${environment}:${r.status}:${r.snapshot.semver}${r.status === "RECORDED" && r.diff ? `:${r.diff.bump}` : ""}`);
     }
     expect(seen).toEqual([
@@ -266,7 +300,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const outcome = await recordVerifiedContract({
       scope,
       iface: { ...iface, operation: "READ", mode: "READ" },
-      compiled: compileContract(doc),
+      compiled: compiledServiceOf(compileContract(doc), iface.entitySet, null),
       environment: "DEV",
       connectionId: "conn_1",
       actorId: "u1",
@@ -291,7 +325,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const outcome = await recordVerifiedContract({
       scope,
       iface: { ...iface, operation: "READ", mode: "READ" },
-      compiled: compileContract(doc),
+      compiled: compiledServiceOf(compileContract(doc), iface.entitySet, null),
       environment: "DEV",
       connectionId: "conn_1",
       actorId: "u1",
@@ -315,7 +349,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const outcome = await recordVerifiedContract({
       scope,
       iface: { ...iface, operation: "READ", mode: "READ" },
-      compiled: compileContract(doc),
+      compiled: compiledServiceOf(compileContract(doc), iface.entitySet, null),
       environment: "DEV",
       connectionId: "conn_1",
       actorId: "u1",
@@ -409,7 +443,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
       return r;
     };
     const verified = (environment: string, compiled: ReturnType<typeof compileContract>) =>
-      recordVerifiedContract({ scope, iface, compiled, environment, connectionId: `conn_${environment}`, actorId: "u1" });
+      recordVerifiedContract({ scope, iface, compiled: compiledServiceOf(compiled, iface.entitySet, null), environment, connectionId: `conn_${environment}`, actorId: "u1" });
 
     expect(await verified("PROD", a())).toMatchObject({ status: "RECORDED", semver: "1.0.0", requestSchemaWritten: true });
     expect(await verified("DEV", b())).toMatchObject({ status: "RECORDED", semver: "2.0.0", bump: "major" });
@@ -450,7 +484,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     });
     const iface = { ...created, entitySet: created.entitySet! };
     const rap = readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
-    const outcome = await recordVerifiedContract({ scope, iface, compiled: compileContract(rap), environment: "DEV", connectionId: "conn_DEV", actorId: "u1" });
+    const outcome = await recordVerifiedContract({ scope, iface, compiled: compiledServiceOf(compileContract(rap), iface.entitySet, null), environment: "DEV", connectionId: "conn_DEV", actorId: "u1" });
     expect(outcome).toMatchObject({ status: "RECORDED", requestSchemaWritten: true });
     const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true } });
     expect(Object.keys(row!.requestSchema as object)).toEqual(["x-contract"]);
@@ -505,6 +539,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     // A row recorded before the size was kept is measured when read.
     await prisma.contractSnapshot.updateMany({ where: { organizationId: ORG, interfaceId: { in: [one.id, two.id] } }, data: { irBytes: null } });
     expect(await loadDocInputs(scope, [one, two], { maxContractBytes: bytes })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+  });
+
+  it("a diff the envelope stops records nothing: the version cannot be chosen without it (P1.3 containment)", async () => {
+    const iface = await newInterface("diff-refused");
+    const first = await recordContractSnapshot({ scope, iface, contract: salesOrder(), environment: "DEV" });
+    expect(first.status).toBe("RECORDED");
+    const changed = salesOrder();
+    changed.entityType.properties.pop();
+    // A deadline shorter than the worker takes to start: the diff never finishes.
+    vi.stubEnv("COREEDGE_CONTRACT_DEADLINE_MS", "100");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const r = await recordContractSnapshot({ scope, iface, contract: changed, prepared: contractDigest(changed), environment: "DEV" });
+      expect(r).toMatchObject({ status: "REFUSED", reason: "RESOURCE_LIMIT" });
+      expect(errors).toHaveBeenCalledWith("[contracts] envelope refused", expect.objectContaining({ job: "diff", reason: "RESOURCE_LIMIT" }));
+    } finally {
+      vi.unstubAllEnvs();
+      errors.mockRestore();
+    }
+    expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(1);
   });
 
   it("goes with its interface", async () => {

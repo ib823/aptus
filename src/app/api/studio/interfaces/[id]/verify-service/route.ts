@@ -66,9 +66,23 @@ import { writeConfigAudit } from "@/lib/studio/audit";
 import { recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { MAX_STORED_ENTITY_SETS, verifyServiceMetadata } from "@/lib/studio/service-verify";
+import { measuredSubject } from "@/lib/contracts/pipeline";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+/**
+ * The compile runs in a worker thread (lib/contracts/envelope.ts), which only
+ * the Node.js runtime has. Stated, not defaulted, so the envelope cannot be
+ * moved to a runtime where it would not exist.
+ */
+export const runtime = "nodejs";
+/**
+ * Room for the SAP read and a compile up to its own deadline (15 s,
+ * envelope.ts) on a platform whose default function limit is shorter: the
+ * envelope, not the platform, should be what stops a slow compile, so the
+ * verify still answers.
+ */
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
@@ -210,6 +224,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     entitySet: iface.entitySet,
     // SuccessFactors describes one dataset at a time (service-verify.ts).
     sapProduct: iface.sapProduct,
+    // What the dataset's contract is rendered for, in the envelope, before it
+    // can be recorded: this interface, under the longest names a solution and
+    // an interface may have, so a rename never takes a read past its budget.
+    subject: iface.entitySet ? measuredSubject({ ...iface, entitySet: iface.entitySet }) : null,
   });
 
   await recordConsoleRead({

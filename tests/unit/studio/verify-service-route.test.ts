@@ -24,6 +24,11 @@ import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Each compile, diff and record-time render runs in a real worker thread
+// (lib/contracts/envelope.ts), which loads the compiler from source here:
+// seconds per test on a loaded runner, not milliseconds.
+vi.setConfig({ testTimeout: 60_000 });
+
 import type * as Resolver from "@/lib/sap-public/connection-resolver";
 
 const { mocks, BASE } = vi.hoisted(() => ({

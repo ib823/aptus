@@ -52,6 +52,7 @@
  * null has not changed the service.
  */
 
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { canonicalJson } from "@/lib/contracts/canonical";
 import type {
   InterfaceContract,
@@ -95,7 +96,7 @@ const RANK: Record<Bump, number> = { patch: 1, minor: 2, major: 3 };
 export const MAX_STORED_CHANGES = 200;
 export const MAX_CHANGE_TEXT = 300;
 /** 200 changes of two 300-character strings (up to 3 UTF-8 bytes each, 6 once escaped) and their keys. */
-export const MAX_STORED_DIFF_BYTES = 1024 * 1024;
+export const MAX_STORED_DIFF_BYTES = LIMITS.storedDiff;
 
 export interface StoredContractDiff extends ContractDiff {
   /** How many changes were left out of `changes`; absent when none were. */
@@ -126,7 +127,8 @@ export function storedDiff(diff: ContractDiff): StoredContractDiff {
     changes: kept.map((c) => ({ bump: c.bump, at: cut(c.at, MAX_CHANGE_TEXT), change: cut(c.change, MAX_CHANGE_TEXT) })),
   };
   if (kept.length < diff.changes.length) out.omitted = diff.changes.length - kept.length;
-  if (Buffer.byteLength(JSON.stringify(out), "utf8") > MAX_STORED_DIFF_BYTES) {
+  // Measured by the one budgeted writer, which stops at the limit (budget.ts).
+  if (jsonBytesUpTo(out, MAX_STORED_DIFF_BYTES) > MAX_STORED_DIFF_BYTES) {
     // Unreachable with the caps above; a guard, so the bound holds if they change.
     return { bump: diff.bump, changes: [], omitted: diff.changes.length };
   }

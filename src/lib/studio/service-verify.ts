@@ -31,7 +31,9 @@
  * No prisma here: the route owns persistence and audit; this owns the verdict.
  */
 
-import { compileContract, type CompileResult } from "@/lib/contracts/compile";
+import { LIMITS } from "@/lib/contracts/budget";
+import { compileInEnvelope } from "@/lib/contracts/envelope";
+import type { CompiledService, RenderSubject } from "@/lib/contracts/pipeline";
 import { unstorableText } from "@/lib/contracts/storable";
 import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
@@ -99,7 +101,7 @@ export const DATASET_NEEDED_DETAIL =
   "Set the dataset (for example cust_TravelRequest) on the interface, then verify again: on /odata/v2 SuccessFactors describes one dataset at a time, and the description of the whole tenant is too large to read.";
 
 /** A service description larger than this is refused rather than half-read. */
-export const VERIFY_MAX_METADATA_BYTES = 8 * 1024 * 1024;
+export const VERIFY_MAX_METADATA_BYTES = LIMITS.sourceBytes;
 /** How many entity-set names are stored on the interface after a verify. */
 export const MAX_STORED_ENTITY_SETS = 500;
 
@@ -130,12 +132,13 @@ export interface ServiceVerifyResult {
   auditStatus: number;
   failureReason: string | null;
   /**
-   * The description compiled into a Contract IR (P1.3), when one was read in
-   * full; absent when none was. A description the compiler refuses still
-   * verifies as it did before the compiler existed — the dataset list then
-   * comes from the older reader — and the refusal is said here.
+   * What compiling the description (P1.3) gave, when one was read in full;
+   * absent when none was. A description the compiler refuses — or one the
+   * envelope stopped (RESOURCE_LIMIT, BUSY, UNAVAILABLE) — still verifies as
+   * it did before the compiler existed: the dataset list then comes from the
+   * older reader, and the refusal is said here.
    */
-  compiled?: CompileResult;
+  compiled?: CompiledService;
 }
 
 /**
@@ -161,19 +164,16 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
 }
 
 /**
- * The compile, as a refusal when the compiler throws. It is meant to refuse,
- * never throw, on anything a SAP system can answer; a bug that throws
- * anyway must not turn the verify into a 500 — the verdict then comes from
- * the older readers, as for any refused document, and the error is logged
- * by its name only (P1 wave A review).
+ * The compile, IN THE ENVELOPE (envelope.ts): a worker with its own capped
+ * heap and stack and a deadline, so a description built to be expensive
+ * ends its own worker and never this request's thread or the process. What
+ * comes back is a refusal or the bounded summary the verify needs
+ * (pipeline.ts), with the interface's dataset already sliced, digested and
+ * measured for every read path. Refuses, never rejects: a refused compile
+ * gives its verdict to the older readers below, as before the compiler.
  */
-function compileOrRefuse(body: string): CompileResult {
-  try {
-    return compileContract(body);
-  } catch (err) {
-    console.error("[contracts] compile failed", { error: err instanceof Error ? err.name : "unknown" });
-    return { ok: false, reason: "INVALID_CSDL", detail: "The service description could not be read as a service description." };
-  }
+function compileOrRefuse(body: string, entitySet: string | null, subject: RenderSubject | null): Promise<CompiledService> {
+  return compileInEnvelope(body, entitySet, subject);
 }
 
 function versionLabel(v: ODataVersion): string {
@@ -199,6 +199,12 @@ export async function verifyServiceMetadata(
     entitySet: string | null;
     /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
     sapProduct?: string | null;
+    /**
+     * The interface the dataset's contract would be recorded for, so the
+     * compile renders and measures every read path's output for it inside
+     * the envelope (pipeline.ts). Omitted, a stand-in of the same shape.
+     */
+    subject?: RenderSubject | null;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<ServiceVerifyResult> {
@@ -267,11 +273,11 @@ export async function verifyServiceMetadata(
    * the older readers below still list the datasets — so no service that
    * verified yesterday stops verifying today.
    */
-  const compiled = compileOrRefuse(r.body);
+  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null);
   const entitySets = (
     compiled.ok
       ? // A singleton is one record, not a dataset the broker can page through.
-        [...new Set(compiled.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name))]
+        [...new Set(compiled.entitySets.filter((e) => !e.singleton).map((e) => e.name))]
       : [...new Set(parseEntitySets(r.body).map((e) => e.name))]
   ).filter(
     // Stored on the interface: a name PostgreSQL cannot hold (U+0000, an
@@ -280,7 +286,7 @@ export async function verifyServiceMetadata(
     // (hostile-input review round 3).
     (name) => !unstorableText(name),
   );
-  const detected = compiled.ok ? compiled.ir.odataVersion : edmxODataVersion(r.body);
+  const detected = compiled.ok ? compiled.odataVersion : edmxODataVersion(r.body);
 
   if (input.declaredVersion !== null && detected !== null && detected !== input.declaredVersion) {
     return {

@@ -34,6 +34,8 @@
 
 import { SaxesParser, type SaxesTagNS } from "saxes";
 
+import { LIMITS } from "@/lib/contracts/budget";
+
 export interface XmlAttribute {
   local: string;
   /** Namespace URI; "" for an unprefixed attribute. */
@@ -66,7 +68,7 @@ export interface XmlLimits {
  * the deepest real annotation.
  */
 export const DEFAULT_XML_LIMITS: XmlLimits = {
-  maxBytes: 8 * 1024 * 1024,
+  maxBytes: LIMITS.sourceBytes,
   maxDepth: 64,
   maxElements: 400_000,
   maxAttributes: 128,

@@ -2,8 +2,12 @@
  * After a successful verify: turn the compiled description into the
  * interface's recorded contract (P1.3).
  *
- *   1. Slice the IR to the interface's dataset.
- *   2. Record a ContractSnapshot if the contract is new (snapshot.ts).
+ *   1. Take the interface's dataset as the verify's compile left it: sliced,
+ *      digested and rendered for every read path, inside the envelope
+ *      (pipeline.ts, envelope.ts) — nothing about the description is
+ *      computed on this thread.
+ *   2. Record a ContractSnapshot if the contract is new (snapshot.ts; its
+ *      diff runs in the envelope too).
  *   3. For a write interface, WRITE `requestSchema`'s stamp — which snapshot
  *      and interface version the body its write sends is of — conditional on
  *      that version (a PATCH that landed meanwhile wins, exactly as the
@@ -19,12 +23,11 @@
 
 import { Prisma } from "@prisma/client";
 
-import type { CompileResult } from "@/lib/contracts/compile";
 import type { Bump } from "@/lib/contracts/diff";
 import { contractBodies, type JsonSchema } from "@/lib/contracts/json-schema";
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
+import type { CompiledService } from "@/lib/contracts/pipeline";
 import { contractFromSample } from "@/lib/contracts/sampled";
-import { sliceForEntitySet } from "@/lib/contracts/slice";
 import {
   currentContractSnapshot,
   currentSnapshotSummaries,
@@ -67,7 +70,11 @@ export interface RequestSchemaStamp {
 export async function recordVerifiedContract(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string | null; operation: string; mode: string };
-  compiled: CompileResult | undefined;
+  /**
+   * The verify's compile (service-verify.ts), run in the envelope with the
+   * interface's dataset already sliced, digested and measured (pipeline.ts).
+   */
+  compiled: CompiledService | undefined;
   environment: string;
   connectionId: string;
   actorId: string;
@@ -80,19 +87,22 @@ export async function recordVerifiedContract(input: {
   if (!iface.entitySet) {
     return { status: "NO_DATASET", detail: "The interface names no dataset, so there is no contract to record yet." };
   }
-  // In proportion to the description as well as absolutely (slice.ts).
-  const slice = sliceForEntitySet(compiled.ir, iface.entitySet, compiled.sourceLength);
-  if (!slice.ok) {
-    return slice.reason === "TOO_LARGE"
-      ? { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${slice.detail}` }
-      : { status: "NO_DATASET", detail: slice.detail };
+  // Sliced in proportion to the description, digested under the contract
+  // budget and rendered under every read path's budget, in the envelope.
+  const prepared = compiled.dataset;
+  if (!prepared) return { status: "NOT_COMPILED", detail: "The interface's dataset was not compiled with the description. Verify again." };
+  if (!prepared.ok) {
+    return prepared.reason === "TOO_LARGE" || prepared.reason === "OUTPUT_TOO_LARGE"
+      ? { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${prepared.detail}` }
+      : { status: "NO_DATASET", detail: prepared.detail };
   }
 
   try {
     const outcome = await recordContractSnapshot({
       scope: input.scope,
       iface: { id: iface.id, version: iface.version, externalId: iface.externalId, entitySet: iface.entitySet },
-      contract: slice.contract,
+      contract: prepared.contract,
+      prepared: { hash: prepared.hash, bytes: prepared.bytes },
       environment: input.environment,
       connectionId: input.connectionId,
       createdById: input.actorId,
@@ -103,6 +113,7 @@ export async function recordVerifiedContract(input: {
         detail: `The compiled contract is larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB, so it was not recorded.`,
       };
     }
+    if (outcome.status === "REFUSED") return { status: "NOT_COMPILED", detail: outcome.detail };
 
     let requestSchemaWritten = false;
     if (iface.mode === "WRITE") {
@@ -117,7 +128,7 @@ export async function recordVerifiedContract(input: {
        */
       const current = (await currentSnapshotSummaries(input.scope, [iface])).get(iface.id);
       let described: { snapshot: { id: string; semver: string; contentHash: string }; contract: InterfaceContract } | null =
-        current && current.id !== outcome.snapshot.id ? null : { snapshot: outcome.snapshot, contract: slice.contract };
+        current && current.id !== outcome.snapshot.id ? null : { snapshot: outcome.snapshot, contract: prepared.contract };
       if (current && !described) {
         const read = (await snapshotContracts(input.scope, new Map([[iface.id, current]]))).get(iface.id);
         if (read && read.source === "METADATA") described = { snapshot: read, contract: read.contract };
@@ -314,6 +325,7 @@ export async function recordSampledContract(input: {
     if (outcome.status === "TOO_LARGE") {
       return { status: "NOT_RECORDED", detail: "The sampled contract is too large to record." };
     }
+    if (outcome.status === "REFUSED") return { status: "NOT_RECORDED", detail: outcome.detail };
     return { status: outcome.status, snapshotId: outcome.snapshot.id, semver: outcome.snapshot.semver };
   } catch (err) {
     console.error("[contracts] sampled snapshot not recorded", {

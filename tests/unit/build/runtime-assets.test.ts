@@ -100,8 +100,67 @@ describe("developer-guide deployment assets", () => {
     const dir = fixture();
     write(dir, asset, readFileSync(path.join(root, asset), "utf8"));
     write(dir, trace, JSON.stringify({ files: [path.relative(path.dirname(trace), asset)] }));
+    builtWorker(dir);
     const result = check(dir, true);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain("present and traced");
+  });
+});
+
+/*
+ * The Contract Compiler's worker (lib/contracts/envelope.ts) is a webpack chunk
+ * of its own, outside every route's chunk graph: the function trace leaves it
+ * out unless next.config.ts includes it, and a deployed verify then compiles
+ * nothing. The built check refuses a build whose worker is missing or untraced.
+ */
+const worker = ".next/server/chunks/contract-compiler-worker.js";
+const workerRoutes = [
+  ".next/server/app/api/studio/interfaces/[id]/verify-service/route.js.nft.json",
+  ".next/server/app/api/studio/interfaces/[id]/capture-schema/route.js.nft.json",
+];
+
+/** A build's worker chunk, traced by every route that spawns it (or by those given). */
+function builtWorker(dir: string, routes = workerRoutes, chunk = 'reply({ ok: false, error: "HeapNotCapped" })') {
+  write(dir, worker, chunk);
+  for (const r of workerRoutes) write(dir, r, JSON.stringify({ files: routes.includes(r) ? [path.relative(path.dirname(r), worker)] : [] }));
+}
+
+describe("the contract compiler's worker in a build", () => {
+  const built = (dir: string) => {
+    write(dir, asset, "# Developer guide");
+    write(dir, trace, JSON.stringify({ files: [path.relative(path.dirname(trace), asset)] }));
+  };
+
+  it("rejects a build that did not emit the worker under its own name", () => {
+    const dir = fixture();
+    built(dir);
+    const result = check(dir, true);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("worker chunk was not emitted");
+  });
+
+  it("rejects a chunk of that name that is not the worker", () => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir, workerRoutes, "module.exports = {};");
+    expect(check(dir, true).stderr).toContain("worker chunk was not emitted");
+  });
+
+  it.each(workerRoutes)("rejects a build whose %s trace lacks the worker", (route) => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir, workerRoutes.filter((r) => r !== route));
+    const result = check(dir, true);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`missing from the function trace of ${route}`);
+  });
+
+  it("accepts a build whose spawning routes all trace it", () => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir);
+    const result = check(dir, true);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("contract compiler worker emitted and traced");
   });
 });

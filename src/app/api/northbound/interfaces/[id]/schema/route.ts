@@ -36,6 +36,13 @@
  * is rendered is linear in the contract, with the bound asserted in
  * tests/unit/contracts/hostile-input.test.ts. `requestSchema` is rendered
  * from the same snapshot: the row keeps only its stamp.
+ *
+ * AND UNDER THE SHARED OUTPUT BUDGET (budget.ts, schemaLimit of the
+ * contract's kept size): what this answer would carry is counted by the one
+ * writer, which stops at the budget, before it is serialised. The record
+ * rendered and measured the same contract under the same budget inside the
+ * compiler's envelope before storing it (pipeline.ts), so nothing served
+ * here is computed for the first time on this thread.
  */
 
 import type { NextRequest } from "next/server";
@@ -59,7 +66,8 @@ import {
   withheldArtifactNote,
 } from "@/lib/studio/contract-provenance";
 import { scopedById } from "@/lib/studio/tenant-scope";
-import { standaloneSchemas } from "@/lib/contracts/json-schema";
+import { BudgetExceeded, measureJson, schemaLimit } from "@/lib/contracts/budget";
+import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { renderedRequestSchema } from "@/lib/contracts/record";
@@ -164,9 +172,32 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
     servable && inBudget(servable.irBytes)
       ? ((await snapshotContracts(client.scope, new Map([[iface.id, servable]]))).get(iface.id) ?? null)
       : null;
-  const tooLarge = servable !== null && (!inBudget(servable.irBytes) || (read !== null && !inBudget(read.irBytes)));
-  const snapshot = read && !tooLarge ? read : null;
-  const schemas = snapshot ? standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet)) : null;
+  let tooLarge = servable !== null && (!inBudget(servable.irBytes) || (read !== null && !inBudget(read.irBytes)));
+  let snapshot = read && !tooLarge ? read : null;
+  /*
+   * RENDERED UNDER THE READ PATH'S BUDGET (budget.ts, schemaLimit): the
+   * schemas and the write body beside them are counted by the one writer,
+   * which stops at the budget, before any of it is serialised for the
+   * response. The record rendered this same contract under this same budget
+   * in the envelope before storing it (pipeline.ts), so a contract recorded
+   * since is always inside it; a row from before is refused here, not
+   * rendered without bound.
+   */
+  let schemas: ReturnType<typeof standaloneSchemas> | null = null;
+  let requestSchema: JsonSchema | null = null;
+  if (snapshot) {
+    try {
+      schemas = standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet));
+      requestSchema = renderedRequestSchema(iface.requestSchema, iface, { id: snapshot.id, schemas });
+      measureJson({ schemas, requestSchema }, schemaLimit(snapshot.irBytes));
+    } catch (err) {
+      if (!(err instanceof BudgetExceeded)) throw err;
+      tooLarge = true;
+      schemas = null;
+      requestSchema = null;
+      snapshot = null;
+    }
+  }
   const shown = tooLarge ? servable : snapshot;
   const contract = shown
     ? {
@@ -181,7 +212,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
         ...(tooLarge
           ? {
               schemasOmitted: "TOO_LARGE" as const,
-              schemasNote: `This contract is larger than the ${Math.floor(MAX_DOCUMENT_CONTRACT_BYTES / (1024 * 1024))} MB a generated document may carry, so its schemas are not rendered. Narrow the interface's dataset and verify again.`,
+              schemasNote: `This contract's schemas are larger than a generated document may carry (${Math.floor(MAX_DOCUMENT_CONTRACT_BYTES / (1024 * 1024))} MB of contract, rendered within a fixed multiple of it), so they are not rendered. Narrow the interface's dataset and verify again.`,
             }
           : {}),
       }
@@ -223,7 +254,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       // The compiled write body, while it describes THIS contract (P1.3).
       // Rendered from the stamped snapshot, which is the one just rendered;
       // the row stores only the stamp (record.ts).
-      requestSchema: renderedRequestSchema(iface.requestSchema, iface, snapshot && schemas ? { id: snapshot.id, schemas } : null),
+      requestSchema,
       // Of THIS contract only, and as the served rows can satisfy it: a schema
       // captured before the broker stripped SAP's envelope still requires V2's
       // deferred navigations, which no served row carries (servedResponseSchema).

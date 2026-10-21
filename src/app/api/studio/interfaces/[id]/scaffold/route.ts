@@ -24,7 +24,8 @@
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { BudgetExceeded, jsonBytesUpTo, kitLimit, LIMITS, OutputBudget } from "@/lib/contracts/budget";
+import { documentOutputTooLargeMessage, documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -106,37 +107,58 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   const fixtures = servedFixtures(partitioned.current);
   const { withheld } = partitioned;
 
-  const files = buildScaffold(
-    {
-      id: iface.id,
-      name: iface.name,
-      externalId: iface.externalId,
-      sapProduct: iface.sapProduct,
-      operation: iface.operation,
-      entitySet: iface.entitySet,
-      version: iface.version,
-      mode: iface.mode,
-      status: iface.status,
-      solutionName: iface.solution.name,
-      ...(compiled ? { compiled } : {}),
-      grants: inputs.grants.get(iface.id) ?? [],
-      // Present → the contract describes real fields. Absent → it says so,
-      // and says why when a stored schema of another contract was set aside.
-      ...(schemaState === "current" ? { responseSchema: iface.responseSchema } : {}),
-      ...(schemaState === "stale" || schemaState === "unverified"
-        ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
-        : {}),
-    },
-    baseUrl,
-    fixtures.map((f) => ({
-      scenario: f.scenario,
-      status: f.status,
-      body: f.body,
-      sourceStatus: f.sourceStatus,
-      capturedAt: f.capturedAt,
-    })),
-    withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
-  );
+  /*
+   * UNDER THE KIT'S BUDGET (budget.ts, kitLimit): a function of what was
+   * stored — the compiled contract's kept size, or the captured schema's,
+   * and the recorded fixtures' — never of what rendering it turns out to
+   * cost. Every file is charged as it is written and the kit stops at the
+   * budget (TOO_LARGE). The record rendered the same contract under the same
+   * budget in the compiler's envelope (pipeline.ts) before storing it.
+   */
+  const contractBytes =
+    compiled?.irBytes ?? (schemaState === "current" ? jsonBytesUpTo(iface.responseSchema, LIMITS.kit.cap) : 0);
+  let fixtureBytes = 0;
+  for (const f of fixtures) fixtureBytes += jsonBytesUpTo(f.body, LIMITS.kit.cap);
+  const budget = new OutputBudget("kit", kitLimit(contractBytes, fixtureBytes));
+
+  let files: ReturnType<typeof buildScaffold>;
+  try {
+    files = buildScaffold(
+      {
+        id: iface.id,
+        name: iface.name,
+        externalId: iface.externalId,
+        sapProduct: iface.sapProduct,
+        operation: iface.operation,
+        entitySet: iface.entitySet,
+        version: iface.version,
+        mode: iface.mode,
+        status: iface.status,
+        solutionName: iface.solution.name,
+        ...(compiled ? { compiled } : {}),
+        grants: inputs.grants.get(iface.id) ?? [],
+        // Present → the contract describes real fields. Absent → it says so,
+        // and says why when a stored schema of another contract was set aside.
+        ...(schemaState === "current" ? { responseSchema: iface.responseSchema } : {}),
+        ...(schemaState === "stale" || schemaState === "unverified"
+          ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
+          : {}),
+      },
+      baseUrl,
+      fixtures.map((f) => ({
+        scenario: f.scenario,
+        status: f.status,
+        body: f.body,
+        sourceStatus: f.sourceStatus,
+        capturedAt: f.capturedAt,
+      })),
+      withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
+      budget,
+    );
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    return studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", budget.limit));
+  }
 
   return studioOk({ files });
 }

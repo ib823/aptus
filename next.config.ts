@@ -37,6 +37,17 @@ const nextConfig: NextConfig = {
   // fallback would report the document unreadable on every production request.
   outputFileTracingIncludes: {
     "/help/developer-guide": ["./docs/coreedge-developer-guide.md"],
+    /*
+     * The Contract Compiler runs in a worker thread (lib/contracts/envelope.ts),
+     * which webpack emits as its own, named chunk. A worker chunk is not part
+     * of the route's chunk graph, so the trace left it out, and a deployed
+     * function would have no compiler: every verify answered as if the
+     * description could not be compiled. Each route that spawns it carries it.
+     * scripts/check-runtime-assets.mjs --built fails the build if either
+     * trace lacks it.
+     */
+    "/api/studio/interfaces/[id]/verify-service": ["./.next/server/chunks/contract-compiler-worker.js"],
+    "/api/studio/interfaces/[id]/capture-schema": ["./.next/server/chunks/contract-compiler-worker.js"],
   },
   webpack(config, { isServer }) {
     if (!isServer) {

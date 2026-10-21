@@ -40,6 +40,8 @@ import { inferResponseSchema } from "@/lib/studio/schema-capture";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+/** The sampled contract is prepared in a worker thread (lib/contracts/envelope.ts): Node.js only. */
+export const runtime = "nodejs";
 
 const bodySchema = z.object({
   /** Rows from a real run. Used to infer a shape, then discarded. */

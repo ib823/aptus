@@ -26,7 +26,8 @@ import { createHash } from "crypto";
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { BudgetExceeded, documentLimit, jsonBytesUpTo, LIMITS, OutputBudget } from "@/lib/contracts/budget";
+import { documentOutputTooLargeMessage, documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
 import {
   buildNorthboundOpenApi,
   documentJson,
@@ -154,7 +155,35 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     safe: safeName,
   });
 
-  return new Response(documentJson(doc), {
+  /*
+   * UNDER THE DOCUMENT'S BUDGET (budget.ts, documentLimit): a function of
+   * what was stored — each interface's compiled contract's kept size, or its
+   * captured schema's — written by the one writer, which stops at the budget
+   * (TOO_LARGE) before the document exists in full. Each contract was
+   * rendered under its share of this budget in the compiler's envelope
+   * (pipeline.ts) before it was stored.
+   */
+  const budget = new OutputBudget(
+    "document",
+    documentLimit(
+      docInterfaces.map((i) =>
+        i.contract.source === "metadata"
+          ? (inputs.compiled.get(i.id)?.irBytes ?? 0)
+          : i.contract.source === "sampled"
+            ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
+            : 0,
+      ),
+    ),
+  );
+  let body: string;
+  try {
+    body = documentJson(doc, budget);
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    return studioError("TOO_LARGE", documentOutputTooLargeMessage("solution document", budget.limit));
+  }
+
+  return new Response(body, {
     status: 200,
     headers: {
       "content-type": "application/json; charset=utf-8",

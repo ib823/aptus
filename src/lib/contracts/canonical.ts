@@ -9,28 +9,27 @@
  * navigation bindings) by value. Key order and parameter order are the orders
  * kept — they decide how a key predicate and a call are written. So a
  * reshuffled $metadata is not a new contract version; a changed one always is.
+ *
+ * WRITTEN BY THE ONE BUDGETED WRITER (budget.ts). The canonical form is the
+ * text JSON.stringify(sortKeys(v)) always produced — every hash recorded
+ * before stays the hash of the same contract — but it is streamed: the
+ * digest feeds the hash piece by piece and charges each piece to the
+ * contract budget, so a contract that cannot be stored is refused after at
+ * most that many bytes of work, and is never written out whole first.
  */
 
 import { createHash } from "crypto";
 
+import { BudgetExceeded, jsonBytesUpTo, jsonText, LIMITS, OutputBudget, UNLIMITED, writeJson } from "@/lib/contracts/budget";
 import type { InterfaceContract, IrNavigation } from "@/lib/contracts/ir";
 
-/** JSON with object keys sorted at every level; `undefined` members dropped, as JSON.stringify does. */
+/**
+ * JSON with object keys sorted at every level; `undefined` members dropped, as
+ * JSON.stringify does. No limit: what is canonicalised outside the digest is a
+ * few fields at a time (diff.ts's comparisons, an operation's sort key).
+ */
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortKeys(value));
-}
-
-function sortKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeys);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value as Record<string, unknown>).sort()) {
-      const v = (value as Record<string, unknown>)[k];
-      if (v !== undefined) out[k] = sortKeys(v);
-    }
-    return out;
-  }
-  return value;
+  return jsonText(value, UNLIMITED(), { sortKeys: true });
 }
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -44,8 +43,17 @@ const byKey = <T>(list: readonly T[], key: (item: T) => string): T[] =>
     .sort((a, b) => compare(a.k, b.k))
     .map((e) => e.item);
 
-/** The contract with every order-insensitive list in a fixed order. */
-export function normalizeContract(c: InterfaceContract): InterfaceContract {
+/**
+ * The contract with every order-insensitive list in a fixed order.
+ *
+ * `limit`: the most bytes the operations' sort keys may add up to. Each key
+ * is an operation's own canonical JSON, so together they are never longer
+ * than the contract's canonical JSON: a digest under a budget passes its
+ * limit here, and a contract whose operations alone are past it is refused
+ * (BudgetExceeded) while its keys are written, never after.
+ */
+export function normalizeContract(c: InterfaceContract, limit: number = Number.POSITIVE_INFINITY): InterfaceContract {
+  const keyBudget = new OutputBudget("contract", limit);
   const navigation = (n: IrNavigation): IrNavigation =>
     n.referentialConstraints
       ? { ...n, referentialConstraints: byKey(n.referentialConstraints, (rc) => `${rc.property}\u0000${rc.referencedProperty}`) }
@@ -67,7 +75,7 @@ export function normalizeContract(c: InterfaceContract): InterfaceContract {
     enumTypes: byName(c.enumTypes).map((e) => ({ ...e, members: byName(e.members) })),
     // Overloads share a name: within one, by everything else they state
     // (binding, parameters, result), so their document order is not a change.
-    operations: byKey(c.operations, (o) => `${o.name}\u0000${canonicalJson(o)}`).map((o) => ({ ...o })),
+    operations: byKey(c.operations, (o) => `${o.name}\u0000${jsonText(o, keyBudget, { sortKeys: true })}`).map((o) => ({ ...o })),
     entitySet: {
       ...c.entitySet,
       capabilities: caps,
@@ -79,82 +87,54 @@ export function normalizeContract(c: InterfaceContract): InterfaceContract {
 }
 
 /**
- * The largest contract stored, as canonical JSON (snapshot.ts). A slice of a
- * real dataset is tens of kilobytes; one this size is a description built to
- * be expensive. Here, beside the size it bounds, so the slice (slice.ts) can
- * refuse a contract this large before anything serialises it.
- *
- * THE SAME AS THE DOCUMENTS' BUDGET (MAX_DOCUMENT_CONTRACT_BYTES,
- * doc-inputs.ts). At 4 MB a contract was accepted by the verify, rendered by
- * /schema at 35 MB and seconds of CPU per call, and refused as TOO_LARGE by
- * the kit and the solution document (hostile-input review round 2): what is
- * accepted is now servable on every read path.
+ * The largest contract stored, as canonical JSON (snapshot.ts): the contract
+ * budget's absolute cap (budget.ts, LIMITS.contract). A slice of a real
+ * dataset is tens of kilobytes; one this size is a description built to be
+ * expensive. Every read path renders a stored contract under its own budget
+ * (budget.ts), which the record measured inside the envelope before storing.
  */
-export const MAX_CONTRACT_BYTES = 2 * 1024 * 1024;
+export const MAX_CONTRACT_BYTES = LIMITS.contract.cap;
 
 /** sha256 over the canonical JSON of the normalized contract, hex. */
 export function contractHash(c: InterfaceContract): string {
   return contractDigest(c).hash;
 }
 
-/** The content hash, and the size in bytes of the canonical JSON it was taken over. */
-export function contractDigest(c: InterfaceContract): { hash: string; bytes: number } {
-  const json = canonicalJson(normalizeContract(c));
-  return { hash: createHash("sha256").update(json).digest("hex"), bytes: Buffer.byteLength(json, "utf8") };
+/**
+ * The content hash, and the size in bytes of the canonical JSON it was taken
+ * over. Streamed into the hash, each piece charged to `budget` first: past
+ * it, BudgetExceeded — after at most that many bytes of work, however much
+ * the contract's parts share.
+ */
+export function contractDigest(c: InterfaceContract, budget: OutputBudget = UNLIMITED()): { hash: string; bytes: number } {
+  const hash = createHash("sha256");
+  const before = budget.spent;
+  writeJson(normalizeContract(c, budget.remaining), budget, (piece) => hash.update(piece), { sortKeys: true });
+  return { hash: hash.digest("hex"), bytes: budget.spent - before };
 }
 
 /**
- * A LOWER BOUND on the UTF-8 length of `JSON.stringify(value)`, counted
- * without serialising anything, and given up on as soon as it passes `limit`
- * (the result is then some number above it). Exact for ASCII that needs no
- * escaping; an escape or a non-ASCII character only adds bytes. Every value
- * visited adds at least one, so the walk visits at most `limit + 1` values
- * however much of the value is shared: a contract whose copies share their
- * strings is small in memory and enormous as JSON, and this is what sees it.
+ * The size of JSON.stringify(value), or some number above `limit` once it is
+ * known to be past it: counted by the budgeted writer, which stops there.
+ * Exact, so also the lower bound callers relied on.
  */
 export function jsonBytesAtLeast(value: unknown, limit: number): number {
-  let n = 0;
-  const walk = (v: unknown): void => {
-    if (n > limit) return;
-    if (typeof v === "string") n += v.length + 2;
-    else if (typeof v === "number") n += JSON.stringify(v).length;
-    else if (typeof v === "boolean") n += v ? 4 : 5;
-    else if (v === null || v === undefined) n += 4;
-    else if (Array.isArray(v)) {
-      n += 1 + Math.max(1, v.length);
-      for (const x of v) {
-        if (n > limit) return;
-        walk(x);
-      }
-    } else if (typeof v === "object") {
-      n += 2;
-      let first = true;
-      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-        if (n > limit) return;
-        if (x === undefined) continue;
-        // `"k":` and, after the first member, its comma.
-        n += k.length + 3 + (first ? 0 : 1);
-        first = false;
-        walk(x);
-      }
-    }
-  };
-  walk(value);
-  return n;
+  return jsonBytesUpTo(value, limit);
 }
 
 /**
- * The digest of a contract that may be stored, or TOO_LARGE — decided BEFORE
- * serialising when the contract cannot be that small (jsonBytesAtLeast), so
- * no contract is ever written out at hundreds of megabytes only to be
- * refused for its size afterwards (hostile-input review round 2).
+ * The digest of a contract that may be stored, or TOO_LARGE — refused by the
+ * contract budget while the canonical JSON is written (contractDigest).
  */
 export function boundedContractDigest(
   c: InterfaceContract,
   limit: number = MAX_CONTRACT_BYTES,
 ): { ok: true; hash: string; bytes: number } | { ok: false; bytes: number } {
-  const atLeast = jsonBytesAtLeast(c, limit);
-  if (atLeast > limit) return { ok: false, bytes: atLeast };
-  const { hash, bytes } = contractDigest(c);
-  return bytes > limit ? { ok: false, bytes } : { ok: true, hash, bytes };
+  try {
+    const { hash, bytes } = contractDigest(c, new OutputBudget("contract", limit));
+    return { ok: true, hash, bytes };
+  } catch (err) {
+    if (err instanceof BudgetExceeded && err.budget === "contract") return { ok: false, bytes: err.spent };
+    throw err;
+  }
 }

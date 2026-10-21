@@ -188,6 +188,122 @@ review round 1; each asserted in that file, the stored ones in
   schema carries only the types it reaches, and a document over 512 KB is
   served compact; client.ts declares each enum once.
 
+## Structural containment
+
+Three hostile-input reviews each found a new superlinear path, and each was
+closed by its own check. That does not converge, so the compiler is now
+contained by mechanisms that bound any path, found or not.
+
+**The envelope (`src/lib/contracts/envelope.ts`).** The whole compile — parse,
+IR, annotate, slice, canonical digest, the diff against earlier snapshots, and
+every render and measurement taken at record time (`pipeline.ts`) — runs in a
+`node:worker_threads` worker, one per job, terminated after it:
+
+| Limit | Default | Override |
+|---|---|---|
+| Old-generation heap | 384 MB (compile), 256 MB (prepare, diff) | `COREEDGE_CONTRACT_HEAP_MB` (16–1024) |
+| Young generation, stack | 32 MB, 4 MB | — |
+| Wall clock | 15 s (compile), 10 s (prepare, diff) | `COREEDGE_CONTRACT_DEADLINE_MS` (100–60,000) |
+| Concurrency | 2 jobs, 16 waiting; beyond that `BUSY` | — |
+
+Past any of them the worker is terminated and the verify reports the contract
+`NOT_COMPILED` with `RESOURCE_LIMIT` (or `BUSY`, `UNAVAILABLE`), while the
+verify's own verdict comes from the older readers exactly as before the
+compiler existed. The request thread only copies the description in and a
+bounded summary out (the dataset names, the version, the one sliced contract
+with its digest and rendered sizes — never the whole IR). The log line is
+`[contracts] envelope refused { job, reason, ms, cause }`; `cause` is a code
+or an error name (`deadline`, `ERR_WORKER_OUT_OF_MEMORY`, `HeapNotCapped`),
+never text from the description.
+
+Two things it takes to hold in production:
+
+- **The heap cap survives `--max-old-space-size`.** V8 lets that process-wide
+  flag (NODE_OPTIONS often sets it) override a worker's own resource limits:
+  a worker asked for 384 MB got the process's 8 GB. So the flag is set to the
+  worker's cap while its isolate is created (spawns are serialised for it) and
+  put back the moment it is online; the request thread's heap, sized at
+  start, is untouched. The worker checks the heap it was given before it runs
+  anything, and one past its cap refuses the job (`HeapNotCapped`, refused as
+  `UNAVAILABLE`), so a compile never runs uncapped.
+- **The worker chunk is found and deployed.** webpack bundles the worker as
+  `.next/server/chunks/contract-compiler-worker.js`. It resolves the chunk's
+  URL with the publicPath, which Next's server bundle sets to the client's
+  `/_next/`, so the URL pointed at `file:///_next/…` and every compile in a
+  production build was `UNAVAILABLE`; the publicPath is empty for exactly that
+  expression. And a worker chunk is outside every route's chunk graph, so the
+  function trace left it out: `next.config.ts` includes it for the two routes
+  that spawn it (verify-service, capture-schema), and
+  `scripts/check-runtime-assets.mjs --built` fails the build if it is missing
+  or untraced.
+
+**The output budget (`src/lib/contracts/budget.ts`).** One writer counts every
+byte of contract-derived output as it writes it and stops at a stated limit
+(`BudgetExceeded`, a typed refusal): the canonical digest streams through it
+into the hash, the slice charges each copy to it, and the stored diff,
+`/schema`, the starter kit and the solution document are written by it. It
+writes exactly what `JSON.stringify` wrote (so every stored content hash is
+unchanged). The limits, each proportional to what it is made from and capped:
+
+| Output | Bound |
+|---|---|
+| Description | ≤ 8 MiB |
+| Contract (canonical JSON) | ≤ max(128 KiB, 12 × description chars), ≤ 2 MiB |
+| Stored diff | ≤ 1 MiB |
+| `/schema` answer | ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB |
+| Starter kit (all files) | ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB |
+| Solution document | ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts adding up to ≤ 2 MiB |
+
+**Rendered at record time.** Before a contract is stored, every read path's
+output is rendered from it under that read path's budget, inside the
+envelope, as a read interface and as a create interface, under the longest
+names an interface and a solution may have. A contract whose outputs would
+not fit is refused (`OUTPUT_TOO_LARGE`, reported `NOT_COMPILED`). So every
+read renders a contract that was already rendered once, within the same
+bytes, in bounded time: the budget a read applies is a function of the size
+kept at record time (`irBytes`), and a read that would pass it answers
+`TOO_LARGE` (`schemasOmitted` on `/schema`, 422 on the kit and the solution
+document) instead of rendering past what was stored.
+
+**The Studio list reads no schema.** `GET /api/studio/interfaces` and the
+Interfaces page select neither `requestSchema` nor `responseSchema`; where
+each response schema stands is read from its stamp in the database
+(`src/lib/studio/response-schema-states.ts`), and the API answer no longer
+carries the `responseSchema` column (nothing read it; `responseSchemaState`
+is there, as before).
+
+**Proved in a production build.** `pnpm build` (CI unset; the built check
+reports the worker emitted and traced), `pnpm start` with
+`NODE_OPTIONS=--max-old-space-size=8192`, and real `POST verify-service`
+calls against a local SAP stub (one connection, DEV, client 100), while a
+second client polled `GET /api/northbound/versions` every 100 ms:
+
+| Description | Verify answer | Compile | Server meanwhile |
+|---|---|---|---|
+| business-partner golden (9.6 KB V2) | 200 OK, contract `RECORDED` 1.0.0 | in the worker, < 1 s | every probe served |
+| 8 MB CSDL JSON of ~1M members, default limits | 200 (older readers), no contract | ~7 s in the worker, refused there by the member cap | 57/57 probes, max 58 ms, median 17 ms |
+| the same, `COREEDGE_CONTRACT_DEADLINE_MS=3000`, 10 times | 200 each, ~3.2 s each | `RESOURCE_LIMIT`, cause `deadline`, each | 26-28 probes each, all served, max 133 ms |
+| the same, `COREEDGE_CONTRACT_HEAP_MB=64` (process flag 8 GB) | 200 each, ~2.5 s each | `RESOURCE_LIMIT`, cause `ERR_WORKER_OUT_OF_MEMORY` | all probes served, max 54 ms |
+
+The worker's heap (300+ MB at peak) goes back when it is terminated; ten
+compiles in a row, with a GC between them, hold the process's own heap at
+24 MB and its RSS at a plateau (no growth per compile). The kit, the solution
+document and the Studio list answered 200 from the same server. In-process,
+before the envelope, the same 8 MB description held the request thread for
+7.4 s.
+
+**The fuzz property test.** `tests/property/contracts-fuzz.property.test.ts`
+generates CSDL XML (V2, V4) and CSDL JSON from a grammar with adversarial
+weights and asserts, for every case, that the compile never throws, that a
+sample compiles the same in the real envelope, and that every prepared
+contract and every read path stays inside its bound in linear time. CI runs
+120 cases; `CONTRACTS_FUZZ_ITERATIONS=5000` (and `CONTRACTS_FUZZ_SEED`) for a
+long local run. Run when this landed: 5,000 cases from seed 13 and 3,000 from
+seed 2026, inputs up to the 8 MB cap, 6,656 compiled and 14,750 datasets
+prepared, every refusal typed, the worst factors seen 2.45 (contract per
+description byte), 4.6 (`/schema`), 6.8 (kit) and 2.8 (solution document)
+per contract byte beyond each budget's floor — inside every stated bound.
+
 ## Golden tests
 
 `tests/fixtures/contracts/edmx/` holds six descriptions written for this

@@ -23,6 +23,11 @@ import path from "path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Each compile, diff and record-time render runs in a real worker thread
+// (lib/contracts/envelope.ts), which loads the compiler from source here:
+// seconds per test on a loaded runner, not milliseconds.
+vi.setConfig({ testTimeout: 60_000 });
+
 import type * as Resolver from "@/lib/sap-public/connection-resolver";
 import type * as RateLimit from "@/lib/security/rate-limit";
 
@@ -595,6 +600,60 @@ describe("the starter kit and the solution document use the compiled contract", 
     const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
     expect(d.contract).toMatchObject({ source: "metadata", semver: "1.0.0", snapshotId: snap.id, schemas: null, schemasOmitted: "TOO_LARGE" });
     expect(d.requestSchema).toBeNull();
+  });
+
+  /*
+   * P1.3 structural containment: every read path renders under ITS OWN
+   * budget — a function of the size kept at record time (budget.ts) — and
+   * stops there. The record measured the same contract under the same budget
+   * in the envelope, so a row's kept size never understates it; here one is
+   * made to (an IR grown after its size was kept), and each read path refuses
+   * rather than renders past what was stored.
+   */
+  describe("each read path renders under the budget of what was stored, and stops there", () => {
+    const grow = async () => {
+      await verify();
+      const snap = db.snapshots[0]!;
+      const ir = snap.ir as { entityType: { properties: Row[] } };
+      for (let i = 0; i < 20_000; i++) ir.entityType.properties.push({ name: `ZZ1_EXT_${i}`, type: "Edm.String", nullable: true, label: `Extension field ${i}` });
+      snap.irBytes = 1;
+      return snap;
+    };
+
+    it("/schema: TOO_LARGE, its schemas omitted", async () => {
+      const snap = await grow();
+      const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
+      expect(d.contract).toMatchObject({ source: "metadata", snapshotId: snap.id, schemas: null, schemasOmitted: "TOO_LARGE" });
+      expect(d.requestSchema).toBeNull();
+    });
+
+    it("the starter kit: TOO_LARGE", async () => {
+      await grow();
+      const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+      expect(kit.status).toBe(422);
+      expect(((await kit.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+    });
+
+    it("the solution document: TOO_LARGE", async () => {
+      await grow();
+      const solution = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+        params: Promise.resolve({ id: "sol_1" }),
+      });
+      expect(solution.status).toBe(422);
+      expect(((await solution.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+    });
+
+    it("and each serves the same contract when its kept size is its own", async () => {
+      await verify();
+      const schema = await data<{ contract: Row }>(await schemaRoute());
+      expect(schema.contract.schemas).not.toBeNull();
+      const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+      expect(kit.status).toBe(200);
+      const solution = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+        params: Promise.resolve({ id: "sol_1" }),
+      });
+      expect(solution.status).toBe(200);
+    });
   });
 
   it("the solution document's info.version follows its interfaces' contracts: a major bump raises its major", async () => {

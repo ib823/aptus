@@ -33,7 +33,8 @@ import {
 } from "@/lib/sap-public/current-connections";
 import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
 import { getSapProduct, getSapServices, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
-import { responseSchemaState } from "@/lib/studio/contract-provenance";
+import type { SchemaState } from "@/lib/studio/contract-provenance";
+import { responseSchemaStates } from "@/lib/studio/response-schema-states";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
 
@@ -66,8 +67,9 @@ export default async function StudioInterfacesPage({
             mode: true,
             status: true,
             mappingVersion: true,
-            // Not requestSchema: whether there is one is asked below, by id.
-            responseSchema: true,
+            // Neither stored schema: whether there is a requestSchema, and
+            // where the responseSchema stands, are asked below by queries
+            // that never read either column (P1.3 structural containment).
             solutionId: true,
             servicePath: true,
             odataVersion: true,
@@ -211,6 +213,9 @@ export default async function StudioInterfacesPage({
     return op?.entitySet ?? null;
   };
 
+  // Where each stored response schema stands, read from its stamp in the database.
+  const schemaStates = organizationId ? await responseSchemaStates(organizationId, rows) : new Map<string, SchemaState>();
+
   const interfaces: StudioInterface[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -223,7 +228,7 @@ export default async function StudioInterfacesPage({
     status: r.status as StudioInterface["status"],
     mappingVersion: r.mappingVersion,
     hasRequestSchema: withRequestSchema.has(r.id),
-    responseSchemaState: responseSchemaState(r.responseSchema, r),
+    responseSchemaState: schemaStates.get(r.id) ?? "none",
     solutionId: r.solutionId,
     solutionName: r.solution.name,
     // Your own API has no curated suggestion — Verify lists its real datasets.

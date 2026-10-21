@@ -40,7 +40,7 @@
  * SLICE_BYTES_FLOOR, whichever is more. The copies are charged as they are
  * made; whatever the slice carries that is not a copy (the set, its types'
  * own headers, the enum types, the restrictions folded in) is measured once
- * at the end, by a walk that stops at the limit (jsonBytesAtLeast). So what
+ * at the end, by the budgeted writer, which stops at the limit (budget.ts). So what
  * the slice accepts is at most that many bytes of JSON (exactly, for plain
  * ASCII), and so is what is stored and read back.
  *
@@ -53,7 +53,8 @@
  * small description's ordinary folding from being refused.
  */
 
-import { jsonBytesAtLeast, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
+import { BudgetExceeded, contractLimit, jsonBytesUpTo, LIMITS, measureJson, OutputBudget } from "@/lib/contracts/budget";
+import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import {
   CONTRACT_IR_VERSION,
   type ContractIR,
@@ -71,14 +72,13 @@ const MAX_INHERITANCE_DEPTH = 16;
 const SLICE_MEMBER_ALLOWANCE = 10_000;
 
 /** A slice's JSON may be this many bytes per character of the description it was cut from (see above)… */
-export const SLICE_BYTES_PER_SOURCE_CHAR = 12;
+export const SLICE_BYTES_PER_SOURCE_CHAR = LIMITS.contract.perSourceChar;
 /** …or this many, whichever is more; never more than MAX_CONTRACT_BYTES. */
-export const SLICE_BYTES_FLOOR = 128 * 1024;
+export const SLICE_BYTES_FLOOR = LIMITS.contract.floor;
 
-/** The most bytes of JSON a slice of a `sourceLength`-character description may be. */
+/** The most bytes of JSON a slice of a `sourceLength`-character description may be: the contract budget (budget.ts). */
 export function sliceByteLimit(sourceLength: number | undefined): number {
-  if (sourceLength === undefined) return MAX_CONTRACT_BYTES;
-  return Math.min(MAX_CONTRACT_BYTES, Math.max(SLICE_BYTES_FLOOR, SLICE_BYTES_PER_SOURCE_CHAR * sourceLength));
+  return contractLimit(sourceLength);
 }
 
 export type SliceResult =
@@ -101,7 +101,7 @@ function membersOf(ir: ContractIR): number {
 }
 
 class SliceTooLarge extends Error {
-  constructor(readonly by: "members" | "bytes") {
+  constructor(readonly by: "members") {
     super(by);
   }
 }
@@ -126,34 +126,40 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string, sourceL
           : `The dataset "${entitySetName}" would be larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB once its types' base types are folded in.`,
   });
   try {
-    const r = slice(ir, entitySetName, limit, byteLimit);
-    // What is not a copy, measured once: never past the limit (jsonBytesAtLeast stops there).
-    // At the absolute bound the digest measures it exactly (boundedContractDigest, canonical.ts).
-    if (r.ok && byteLimit < MAX_CONTRACT_BYTES && jsonBytesAtLeast(r.contract, byteLimit) > byteLimit) return tooLarge("bytes");
+    // The copies are charged to the slice's budget as they are made (budget.ts)…
+    const r = slice(ir, entitySetName, limit, new OutputBudget("slice", byteLimit));
+    // …and what is not a copy is measured once, by the writer, which stops at
+    // the limit. At the absolute bound the digest measures it exactly
+    // (boundedContractDigest, canonical.ts).
+    if (r.ok && byteLimit < MAX_CONTRACT_BYTES && jsonBytesUpTo(r.contract, byteLimit) > byteLimit) return tooLarge("bytes");
     return r;
   } catch (err) {
+    if (err instanceof BudgetExceeded && (err.budget === "slice" || err.budget === "measure")) return tooLarge("bytes");
     if (!(err instanceof SliceTooLarge)) throw err;
     return tooLarge(err.by);
   }
 }
 
-function slice(ir: ContractIR, entitySetName: string, limit: number, byteLimit: number): SliceResult {
+function slice(ir: ContractIR, entitySetName: string, limit: number, budget: OutputBudget): SliceResult {
   let spent = 0;
   const spend = (n: number) => {
     spent += n;
     if (spent > limit) throw new SliceTooLarge("members");
   };
-  let bytes = 0;
-  /** Each declaration's JSON length, measured once however many times it is folded. */
+  /**
+   * Each declaration's JSON length, measured once however many times it is
+   * folded — never past the slice's own limit: a declaration larger than the
+   * whole slice may be is refused while it is measured — then charged to the
+   * slice's budget per copy.
+   */
   const sizes = new WeakMap<object, number>();
   const spendBytes = (x: object) => {
     let n = sizes.get(x);
     if (n === undefined) {
-      n = JSON.stringify(x).length;
+      n = measureJson(x, budget.limit);
       sizes.set(x, n);
     }
-    bytes += n;
-    if (bytes > byteLimit) throw new SliceTooLarge("bytes");
+    budget.charge(n);
   };
   /** Copies of each list, in order, with the budget spent before each is made; never a spread of a long array. */
   const copyInto = <T extends object>(into: T[], from: readonly T[]) => {
