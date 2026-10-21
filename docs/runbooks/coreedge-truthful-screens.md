@@ -89,7 +89,12 @@ expired credential is not "live" there; a regression test now pins it beside
 the rest. Operations > Tokens counted write keys on every row, revoked and
 expired included, and explained a zero as "by design" because "no code path
 issues a write credential". It now counts write keys on live credentials only
-and says where they are issued.
+and says where they are issued. Control Tower's credential register
+(`/api/control-tower/tokens`, `counts.withWriteSecret`) counted them over
+every row too, so the two registers disagreed once a credential holding a
+write key expired (an expiry, unlike a revocation, leaves the sealed key in
+the row); it now counts with the same predicate and says so in its
+provenance (review round 3).
 
 **An app with no feeds has a board (A63).** The lane board called notFound()
 when an app had no lanes, and an app with no feeds has none, so a new app's
@@ -134,9 +139,11 @@ its first 201 without calling the API by hand:
   Save, that the save turns writes off. A deactivated connection starts
   unticked, so rotating it does not quietly re-arm writes an operator stopped.
 - **Writes are allowed for a system, not a row (review round 2).** A save that
-  keeps writes on while changing the environment, the SAP host (base URL
-  origin) or the SAP client switches writes on for that system for the first
-  time, so it is `connection.enable_writes` too, and the audit row carries
+  keeps writes on while changing the environment, the SAP host or base path
+  (the base URL's origin and path, a trailing slash ignored: behind an
+  API-management or other path-routed gateway, `/s4-dev` and `/s4-prod` on one
+  host are two SAP systems, review round 3) or the SAP client switches writes
+  on for that system for the first time, so it is `connection.enable_writes` too, and the audit row carries
   `writesEnabled: true`, `writeTargetChanged` (the parts that moved) and
   `environmentBefore`, `baseUrlBefore` and `clientBefore` beside the new
   values (every re-save now records these). The form starts the box unticked
@@ -148,6 +155,17 @@ its first 201 without calling the API by hand:
   incident), the save answers 409 naming who changed it and when, and nothing
   is saved: reload and decide on what is true now. Before Save the form also
   says when saving a deactivated connection makes it active again.
+- **The check and the write are one step (review round 3).** The save is
+  judged on the row as read, then the passkey is asked and the bundle sealed;
+  a Deactivate landing in between used to be overwritten (the row came back
+  active and writing, unannounced). The write now locks the row and goes ahead
+  only while it is still exactly the row judged (active, writes, environment,
+  base URL, client and revision); otherwise nothing is written and the save is
+  judged again on the row as it now is. A form that showed the old row then
+  gets the 409 above; an API caller's save is told what it does to the new
+  row (`reactivated`, `writesEnabled`) and its passkey is asked for that
+  action. A row that changes three times during one save answers 409 "kept
+  changing", and nothing is saved.
 
 An API caller that sends no `expected` is not checked, so nothing that saves
 connections today is refused. A save that reactivates a deactivated row says
@@ -179,8 +197,9 @@ writes off and see the broker refuse.
    the file-based refresh it asks for.
 3. Keys minted before the deploy read "ending not recorded" until their next
    rotation. Nothing else about them changes.
-4. The Operations > Tokens write-key count can drop: write keys on expired
-   credentials are no longer counted. Nothing was callable through them.
+4. The Operations > Tokens write-key count, and Control Tower's
+   `withWriteSecret`, can drop: write keys on expired credentials are no
+   longer counted. Nothing was callable through them.
 5. The SAP systems "Metadata" column fills with each service's own answer at
    the next lane sweep (04:30 UTC) or Re-check. Until then it shows the
    previous values. A lane whose own service refuses `$metadata` with 403 is
@@ -201,6 +220,15 @@ the deploy.
 - **Backfilling key tails is impossible** (only hashes are stored). Whether to
   ask owners to rotate pre-P0.3 keys so every console shows a matching
   reference is the product owner's call; nothing is forced.
+- **System selectors inside the sealed credentials are not compared (review
+  round 3).** A connection's writes are judged per system by environment, SAP
+  host and base path, and SAP client. A SuccessFactors company ID, or a
+  basic-auth user of the form `user@company`, also chooses the system, but it
+  is sealed and not readable when the save is judged. Whether a change of
+  company should count as moving writes (which would mean comparing a keyed
+  digest of it, stored beside the row) is the product owner's call; until
+  then, re-saving with another company and writes kept on is recorded as
+  `connection.save_secrets`.
 - **The status vocabulary has no audited literal for a per-service metadata
   403.** It is recorded as `FORBIDDEN` and drawn with the existing "SAP
   refused" chip; adding it to the vocabulary's audit list is left to the next

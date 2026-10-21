@@ -20,7 +20,8 @@
  * would quietly re-arm writes an operator had stopped (P0.3 review round 1).
  *
  * Writes are allowed for a system, not a row (P0.3 review round 2): a save
- * that points a writing row at another environment, SAP host or SAP client
+ * that points a writing row at another environment, SAP host or base path
+ * (review round 3: a gateway routes by path), or SAP client
  * starts unticked and says why. The form sends what it showed for the row it
  * replaces, so a save from a page loaded before the row changed (deactivated
  * during an incident) is refused with 409 rather than re-arming it; saving a
@@ -535,7 +536,8 @@ function ConnectionForm({
   const writableToday = Boolean(replacing?.isActive && replacing.writeEnabled);
   /*
    * WRITES ARE ALLOWED FOR A SYSTEM, NOT A ROW (P0.3 review round 2). A save
-   * that points a writing row at another environment, SAP host or SAP client
+   * that points a writing row at another environment, SAP host or base path,
+   * or SAP client
    * would switch writes on there for the first time, so the box does not
    * carry them over: it starts unticked, and ticking it is enabling writes —
    * the route's rule, by the same function.
@@ -1029,16 +1031,21 @@ function ConnectionForm({
 /** How the moved-writes notice names each part of the write target. */
 const TARGET_FIELD_NAMES: Record<WriteTargetField, string> = {
   environment: "environment",
-  baseUrl: "SAP host",
+  baseUrl: "SAP host or base path",
   client: "SAP client",
 };
 
-/** The system a row's writes are allowed for, in words: "DEV at https://… client 100". */
+/**
+ * The system a row's writes are allowed for, in words: "DEV at host/path
+ * client 100". The base path is named with the host, because behind a
+ * path-routed gateway it is what tells two systems apart (review round 3).
+ */
 function describeTarget(c: Pick<StudioConnection, "environment" | "baseUrl" | "client"> | null): string {
   if (!c) return "";
   let host = c.baseUrl;
   try {
-    host = new URL(c.baseUrl).host;
+    const url = new URL(c.baseUrl);
+    host = `${url.host}${url.pathname.replace(/\/+$/, "")}`;
   } catch {
     // Shown as stored.
   }

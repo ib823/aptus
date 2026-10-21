@@ -20,12 +20,17 @@
  * false over a writing row) says so in its response and its audit row, and is
  * not refused: turning writes off is the safe direction.
  *
- * Writes are allowed for a SYSTEM — environment, SAP host, SAP client — not
+ * Writes are allowed for a SYSTEM — environment, SAP host and base path, SAP client — not
  * for a row id, so a save that keeps them on while pointing the row at
  * another system is `connection.enable_writes` too, and its audit row says
  * what the row pointed at before. A save from a form whose view of the row is
  * stale (it sends what it showed, `expected`) is refused with 409, and a save
  * that reactivates a deactivated row says so (P0.3 review round 2).
+ *
+ * The judgement and the write are one step (P0.3 review round 3): the upsert
+ * writes only while the row is still the one the save was judged on, so a
+ * Deactivate landing while the passkey is asked is never overwritten
+ * unannounced — the save is judged again on the row as it now is.
  *
  * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
  * bundle on every write, so a "just rename the label" call that omitted secrets
@@ -62,6 +67,7 @@ import { settleConnectionGroup } from "@/lib/ops/connection-probe-sweep";
 import {
   isAllowedApiKeyHeader,
   normalizeEnvironment,
+  SapConnectionChangedError,
   upsertSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import {
@@ -79,7 +85,7 @@ import {
   SAP_ODATA_PRODUCTS,
 } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
-import { writeTargetChanges } from "@/lib/studio/connection-form";
+import { writeTargetChanges, type WriteTargetField } from "@/lib/studio/connection-form";
 import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -366,6 +372,13 @@ const patchSchema = z.object({
 type Actor = { userId: string; organizationId: string; user: SessionUser };
 
 /**
+ * How many times a save is judged again when the row changes under it before
+ * the write (review round 3). A row that changes three times within one save
+ * is being fought over; the builder is told to reload rather than win.
+ */
+const MAX_SAVE_ATTEMPTS = 3;
+
+/**
  * The keys of the tenants this deployment configures for a product in env.
  *
  * `getConfiguredSapTenants` throws on a malformed `{PREFIX}_TENANTS_JSON`. A
@@ -488,41 +501,56 @@ export async function GET() {
   return studioOk({ connections });
 }
 
+/** What a save does to the row it replaces, judged on that row as it was read. */
+interface SaveJudgement {
+  /** The row the save replaces, as judged — the upsert writes only while it is still this. */
+  existing: {
+    id: string;
+    isActive: boolean;
+    writeEnabled: boolean;
+    environment: SapEnvironment | null;
+    baseUrl: string;
+    client: string | null;
+    revision: number;
+  } | null;
+  writableAfter: boolean;
+  targetChanges: WriteTargetField[];
+  movesLiveWrites: boolean;
+  enablesWrites: boolean;
+  disablesWrites: boolean;
+  reactivates: boolean;
+}
+
 /**
- * POST — create or replace a connection.
- *
- * Replace, not merge: see the file header. The caller supplies the full
- * credential set every time, because the alternative is a partial write that
- * quietly empties the sealed bundle.
+ * Reads the row a save replaces and judges what the save does to it — or the
+ * refusal, when the form's view is stale or the key or twin cannot be saved.
+ * Called again when the row changes before the write (review round 3), so
+ * every answer — the step-up action, the response, the audit row — comes from
+ * the row the write actually replaces.
  */
-export async function POST(request: NextRequest) {
-  const auth = await requireBuilder();
-  if ("error" in auth) return auth.error;
-  const { userId, organizationId, user } = auth;
-
-  const parsed = upsertSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    // Field-level messages, because "invalid payload" on a nine-field form with
-    // conditional requirements is a guessing game.
-    const first = parsed.error.issues[0];
-    return studioError(
-      "VALIDATION_ERROR",
-      first ? `${first.path.join(".") || "payload"}: ${first.message}` : "Invalid connection payload.",
-    );
-  }
-  const input = parsed.data;
-
-  // Normalized the same way env tenant keys are — the key is what stored probes
-  // are recorded under, so two spellings of one tenant must not split its history.
-  const key = sanitizeTenantKey(input.key);
-  if (!key) return studioError("VALIDATION_ERROR", "key: has no usable value once normalized.");
-
+async function judgeSave(
+  organizationId: string,
+  key: string,
+  input: z.infer<typeof upsertSchema>,
+  environment: SapEnvironment | null,
+  writeEnabled: boolean,
+): Promise<SaveJudgement | { refusal: ReturnType<typeof studioError> }> {
   const existing = await prisma.sapConnection.findFirst({
     where: { organizationId, product: input.product, key },
     // isActive and writeEnabled: whether this save turns writes on, or off
     // (P0.3); environment, baseUrl and client: which system they were on for
     // (review round 2).
-    select: { id: true, isActive: true, writeEnabled: true, environment: true, baseUrl: true, client: true },
+    // revision: bumped by every re-save, so the write can tell this row from a
+    // newer save of it (review round 3).
+    select: {
+      id: true,
+      isActive: true,
+      writeEnabled: true,
+      environment: true,
+      baseUrl: true,
+      client: true,
+      revision: true,
+    },
   });
 
   /*
@@ -544,11 +572,9 @@ export async function POST(request: NextRequest) {
         : existing === null ||
           existing.isActive !== input.expected.isActive ||
           existing.writeEnabled !== input.expected.writeEnabled;
-    if (stale) return studioError("CONFLICT", await staleFormRefusal(organizationId, key, existing));
+    if (stale) return { refusal: studioError("CONFLICT", await staleFormRefusal(organizationId, key, existing)) };
   }
 
-  const environment = normalizeEnvironment(input.environment);
-  const writeEnabled = input.writeEnabled ?? false;
   /*
    * WRITES ARE LIVE ONLY ON AN ACTIVE ROW, judged as PATCH judges them
    * (`isActive && writeEnabled`). The upsert always leaves the row active, so
@@ -568,8 +594,9 @@ export async function POST(request: NextRequest) {
    * the first time. Judged per row it was "already writable", so the passkey
    * was asked as `connection.save_secrets` and the audit row named neither
    * the old environment nor either host. A save that keeps writes on while
-   * changing the environment, the SAP host or the SAP client is enabling them
-   * on the new system — the same rule the form uses to untick its box.
+   * changing the environment, the SAP host or base path (review round 3: a
+   * gateway routes by path) or the SAP client is enabling them on the new
+   * system — the same rule the form uses to untick its box.
    */
   const targetChanges =
     existing && writableBefore && writableAfter
@@ -602,11 +629,13 @@ export async function POST(request: NextRequest) {
    * console read that is already refused.
    */
   if (!existing && deploymentTenantKeys(input.product).includes(key)) {
-    return studioError(
-      "VALIDATION_ERROR",
-      `key: "${key}" is already the key of a tenant configured on this deployment, so the console ` +
-        `could not tell your connection from it. Choose another key.`,
-    );
+    return {
+      refusal: studioError(
+        "VALIDATION_ERROR",
+        `key: "${key}" is already the key of a tenant configured on this deployment, so the console ` +
+          `could not tell your connection from it. Choose another key.`,
+      ),
+    };
   }
 
   /*
@@ -635,90 +664,163 @@ export async function POST(request: NextRequest) {
       excluding: { key },
     });
     if (twin) {
-      return studioError(
-        "VALIDATION_ERROR",
-        twinRefusal(twin, { product: input.product, environment, client: input.client ?? null }, "this one"),
-      );
+      return {
+        refusal: studioError(
+          "VALIDATION_ERROR",
+          twinRefusal(twin, { product: input.product, environment, client: input.client ?? null }, "this one"),
+        ),
+      };
     }
   }
 
-  /*
-   * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.
-   *
-   * `getEncryptionKey()` raises when SAP_CONNECTION_ENCRYPTION_KEY is unset or
-   * is not 64 hex characters. Nothing caught it, so Next returned a bare 500
-   * with a ZERO-BYTE body: no code, no message, no correlationId. The client
-   * then called `response.json()` on nothing, and the consultant's screen
-   * showed the resulting DOMException verbatim —
-   *
-   *     Failed to execute 'json' on 'Response': Unexpected end of JSON input
-   *
-   * Two layers compounding: the server could not say what broke, and the client
-   * could not say the server broke. Declaring a connection is the first thing
-   * this product claims to do, and on a deployment missing that key it has
-   * never once succeeded — which is also why `/api/studio/connections` returns
-   * an empty list, why the northbound path refuses with
-   * CONNECTION_NOT_CONFIGURED, and why three of the six incident rules,
-   * including the only `critical` one, cannot fire at all. One unset variable,
-   * silent at every layer.
-   *
-   * The refusal is now diagnosable. It stays deliberately vague to the caller
-   * about WHICH secret is missing — that is deployment configuration, not
-   * something a consultant should learn from an API — while the server log
-   * carries the real reason and the correlationId ties the two together.
-   */
-  /*
-   * A FRESH PASSKEY before a client's SAP credentials are sealed — and before
-   * writes are switched on, which only this path can do (lib/auth/step-up.ts).
-   * Asked after every validation above, so a form with a mistake in it is
-   * refused for the mistake, not for the passkey.
-   */
-  const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
-    // Turning writes on is recorded as what it is, not as a secret save.
-    action: enablesWrites ? "connection.enable_writes" : "connection.save_secrets",
-    targetId: existing?.id ?? null,
-  });
-  if (!stepUp.ok) return stepUp.response;
+  return { existing, writableAfter, targetChanges, movesLiveWrites, enablesWrites, disablesWrites, reactivates };
+}
 
-  let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
-  try {
-    saved = await upsertSapConnection({
-      organizationId,
-      product: input.product,
-      key,
-      label: input.label,
-      baseUrl: input.baseUrl,
-      authType: input.authType,
-      secrets: {
-        ...(input.username ? { username: input.username } : {}),
-        ...(input.password ? { password: input.password } : {}),
-        ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
-        ...(input.clientId ? { clientId: input.clientId } : {}),
-        ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-        ...(input.companyId ? { companyId: input.companyId } : {}),
-        ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
-        ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
-        ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
-        ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-        ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
-        ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
-      },
-      oauthTokenUrl: input.oauthTokenUrl ?? null,
-      environment,
-      client: input.client ?? null,
-      writeEnabled,
-      apiPath: input.apiPath ?? null,
-      timeoutMs: input.timeoutMs ?? null,
-    });
-  } catch (error) {
-    console.error("[studio/connections] seal or persist failed:", error);
+/**
+ * POST — create or replace a connection.
+ *
+ * Replace, not merge: see the file header. The caller supplies the full
+ * credential set every time, because the alternative is a partial write that
+ * quietly empties the sealed bundle.
+ */
+export async function POST(request: NextRequest) {
+  const auth = await requireBuilder();
+  if ("error" in auth) return auth.error;
+  const { userId, organizationId, user } = auth;
+
+  const parsed = upsertSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    // Field-level messages, because "invalid payload" on a nine-field form with
+    // conditional requirements is a guessing game.
+    const first = parsed.error.issues[0];
     return studioError(
-      "INTERNAL",
-      "The connection could not be sealed and was not saved. This is a deployment " +
-        "configuration problem, not a problem with what you entered — quote the " +
-        "correlation ID to whoever operates this environment.",
+      "VALIDATION_ERROR",
+      first ? `${first.path.join(".") || "payload"}: ${first.message}` : "Invalid connection payload.",
     );
   }
+  const input = parsed.data;
+
+  // Normalized the same way env tenant keys are — the key is what stored probes
+  // are recorded under, so two spellings of one tenant must not split its history.
+  const key = sanitizeTenantKey(input.key);
+  if (!key) return studioError("VALIDATION_ERROR", "key: has no usable value once normalized.");
+
+  const environment = normalizeEnvironment(input.environment);
+  const writeEnabled = input.writeEnabled ?? false;
+
+  /*
+   * JUDGED ON THE ROW IT OVERWRITES (P0.3 review round 3). The row is read and
+   * judged, the passkey asked, and the bundle sealed; only then is it written.
+   * A Deactivate landing in between was overwritten — the row came back
+   * active and writing — while the response, the step-up action and the
+   * audit row all described the row as it had been, and a form's `expected`
+   * had been checked against a row that no longer existed. The upsert now
+   * locks the row and writes only while it is still the one judged here;
+   * otherwise nothing is written and the save is judged again.
+   */
+  let judged: SaveJudgement;
+  let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
+  for (let attempt = 1; ; attempt += 1) {
+    const verdict = await judgeSave(organizationId, key, input, environment, writeEnabled);
+    if ("refusal" in verdict) return verdict.refusal;
+    judged = verdict;
+
+    /*
+     * A FRESH PASSKEY before a client's SAP credentials are sealed — and before
+     * writes are switched on, which only this path can do (lib/auth/step-up.ts).
+     * Asked after every validation above, so a form with a mistake in it is
+     * refused for the mistake, not for the passkey.
+     */
+    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+      // Turning writes on is recorded as what it is, not as a secret save.
+      action: judged.enablesWrites ? "connection.enable_writes" : "connection.save_secrets",
+      targetId: judged.existing?.id ?? null,
+    });
+    if (!stepUp.ok) return stepUp.response;
+
+    /*
+     * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.
+     *
+     * `getEncryptionKey()` raises when SAP_CONNECTION_ENCRYPTION_KEY is unset or
+     * is not 64 hex characters. Nothing caught it, so Next returned a bare 500
+     * with a ZERO-BYTE body: no code, no message, no correlationId. The client
+     * then called `response.json()` on nothing, and the consultant's screen
+     * showed the resulting DOMException verbatim —
+     *
+     *     Failed to execute 'json' on 'Response': Unexpected end of JSON input
+     *
+     * Two layers compounding: the server could not say what broke, and the client
+     * could not say the server broke. Declaring a connection is the first thing
+     * this product claims to do, and on a deployment missing that key it has
+     * never once succeeded — which is also why `/api/studio/connections` returns
+     * an empty list, why the northbound path refuses with
+     * CONNECTION_NOT_CONFIGURED, and why three of the six incident rules,
+     * including the only `critical` one, cannot fire at all. One unset variable,
+     * silent at every layer.
+     *
+     * The refusal is now diagnosable. It stays deliberately vague to the caller
+     * about WHICH secret is missing — that is deployment configuration, not
+     * something a consultant should learn from an API — while the server log
+     * carries the real reason and the correlationId ties the two together.
+     */
+    try {
+      saved = await upsertSapConnection({
+        organizationId,
+        product: input.product,
+        key,
+        label: input.label,
+        baseUrl: input.baseUrl,
+        authType: input.authType,
+        secrets: {
+          ...(input.username ? { username: input.username } : {}),
+          ...(input.password ? { password: input.password } : {}),
+          ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
+          ...(input.clientId ? { clientId: input.clientId } : {}),
+          ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+          ...(input.companyId ? { companyId: input.companyId } : {}),
+          ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+          ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
+          ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
+          ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+          ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
+          ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+        },
+        oauthTokenUrl: input.oauthTokenUrl ?? null,
+        environment,
+        client: input.client ?? null,
+        writeEnabled,
+        apiPath: input.apiPath ?? null,
+        timeoutMs: input.timeoutMs ?? null,
+        expectedRow: judged.existing,
+      });
+      break;
+    } catch (error) {
+      /*
+       * The row changed after it was judged (review round 3): deactivated,
+       * toggled, re-saved or created meanwhile. Nothing was written. Judged
+       * again on what is there now — a form that showed the old row is then
+       * refused as stale, an API caller is told what its save does to the new
+       * one, and the passkey is asked for that action.
+       */
+      if (error instanceof SapConnectionChangedError) {
+        if (attempt < MAX_SAVE_ATTEMPTS) continue;
+        return studioError(
+          "CONFLICT",
+          `The connection "${key}" kept changing while this save was being made, so nothing was saved. ` +
+            "Reload the page to see it as it is, then save again.",
+        );
+      }
+      console.error("[studio/connections] seal or persist failed:", error);
+      return studioError(
+        "INTERNAL",
+        "The connection could not be sealed and was not saved. This is a deployment " +
+          "configuration problem, not a problem with what you entered — quote the " +
+          "correlation ID to whoever operates this environment.",
+      );
+    }
+  }
+  const { existing, writableAfter, targetChanges, movesLiveWrites, enablesWrites, disablesWrites, reactivates } =
+    judged;
 
   /*
    * A NEW SUCCESSFACTORS CONNECTION ON BASIC IS SAVED, AND TOLD WHEN IT ENDS.

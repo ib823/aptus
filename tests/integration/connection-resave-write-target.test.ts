@@ -23,6 +23,23 @@
  * changed since; a save that reactivates a row says so in its response and
  * its audit row.
  *
+ * DEFECT 3: THE CHECK AND THE WRITE WERE NOT ONE STEP (review round 3). The
+ * row was read, judged and compared with `expected` first; the upsert then
+ * wrote by (organization, product, key) whatever had happened since. An
+ * operator's Deactivate landing in that gap — while the route asked for the
+ * passkey, sealed and read the row again — was undone: the row came back
+ * active and writing, the response said nothing, the passkey was asked as a
+ * secret save and the audit row said isActiveBefore: true. The upsert now
+ * locks the row and writes only when it is still the row that was judged;
+ * otherwise the save is judged again on what is there now (a form that
+ * showed the old row is then refused with 409).
+ *
+ * DEFECT 4: A GATEWAY PATH IS A SYSTEM (review round 3). The write target
+ * compared base URLs by origin only, but the base URL's path is joined into
+ * every request, so behind one API-management host `/s4-dev` and `/s4-prod`
+ * are two SAP systems. Moving a writing connection between them was a plain
+ * secret save.
+ *
  * Opt-in on TEST_DATABASE_URL.
  */
 
@@ -31,8 +48,27 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import type * as StepUpModule from "@/lib/auth/step-up";
+
 const session = vi.hoisted(() => ({ user: null as null | Record<string, unknown> }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => session.user }));
+/*
+ * The gap between judging a save and writing it, made deterministic: a hook
+ * that runs once, while the route asks for the passkey (review round 3).
+ */
+const gap = vi.hoisted(() => ({ duringStepUp: null as null | (() => Promise<void>) }));
+vi.mock("@/lib/auth/step-up", async (importOriginal) => {
+  const real = await importOriginal<typeof StepUpModule>();
+  return {
+    ...real,
+    requireStepUp: async (...args: Parameters<typeof real.requireStepUp>) => {
+      const hook = gap.duringStepUp;
+      gap.duringStepUp = null;
+      if (hook) await hook();
+      return real.requireStepUp(...args);
+    },
+  };
+});
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -61,6 +97,8 @@ const OPERATOR = { ...BUILDER, id: `${RUN}-operator`, email: `${RUN}-operator@ab
 
 const DEV_HOST = "https://my000001-api.s4hana.cloud.sap";
 const PROD_HOST = "https://my999999-api.s4hana.cloud.sap";
+/** One API-management host routing by path to two SAP systems. */
+const GATEWAY = "https://apim-acme.prod.apimanagement.eu10.hana.ondemand.com";
 
 function req(value: unknown, method = "POST") {
   return new NextRequest("http://localhost/api/studio/connections", {
@@ -103,12 +141,12 @@ function form(key: string, over: Partial<ConnectionFormFields> = {}): Connection
 /** What the form shows for a row that is active and allows writes. */
 const LIVE_WRITING = { isActive: true, writeEnabled: true } as const;
 
-async function writingDevConnection(key: string): Promise<string> {
+async function writingDevConnection(key: string, over: Partial<ConnectionFormFields> = {}): Promise<string> {
   vi.stubEnv("COREEDGE_STEP_UP", "off");
   session.user = BUILDER;
   // One active DEV connection per product: the previous test's row steps aside.
   await prisma.sapConnection.updateMany({ where: { organizationId: ORG }, data: { isActive: false } });
-  const saved = await saveConnection(req(connectionSaveBody(form(key), null)));
+  const saved = await saveConnection(req(connectionSaveBody(form(key, over), null)));
   expect(saved.status, await saved.clone().text()).toBe(200);
   return ((await saved.json()) as { data: { connection: { id: string } } }).data.connection.id;
 }
@@ -144,6 +182,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
 
   afterAll(async () => {
     vi.unstubAllEnvs();
+    gap.duringStepUp = null;
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
     await prisma.user.deleteMany({ where: { id: { in: [BUILDER.id, OPERATOR.id] } } });
@@ -210,6 +249,103 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
         ),
       );
       expect(await stepUpAction(res)).toBe("connection.save_secrets");
+    });
+
+    it("another backend behind the same gateway host is another system (review round 3)", async () => {
+      const id = await writingDevConnection(`${RUN}-gw`, { baseUrl: `${GATEWAY}/s4-dev` });
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+
+      const moved = form(`${RUN}-gw`, { baseUrl: `${GATEWAY}/s4-prod` });
+      expect(await stepUpAction(await saveConnection(req(connectionSaveBody(moved, LIVE_WRITING))))).toBe(
+        "connection.enable_writes",
+      );
+      expect(await row(id)).toMatchObject({ baseUrl: `${GATEWAY}/s4-dev` });
+
+      vi.stubEnv("COREEDGE_STEP_UP", "warn");
+      const res = await saveConnection(req(connectionSaveBody(moved, LIVE_WRITING)));
+      expect(res.status, await res.clone().text()).toBe(200);
+      expect((await lastAudit(id, "UPDATE"))?.after).toMatchObject({
+        baseUrlBefore: `${GATEWAY}/s4-dev`,
+        baseUrl: `${GATEWAY}/s4-prod`,
+        writesEnabled: true,
+        writeTargetChanged: ["baseUrl"],
+      });
+
+      // The same backend with a trailing slash is not a move.
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      const same = form(`${RUN}-gw`, { baseUrl: `${GATEWAY}/s4-prod/`, password: "rotated" });
+      expect(await stepUpAction(await saveConnection(req(connectionSaveBody(same, LIVE_WRITING))))).toBe(
+        "connection.save_secrets",
+      );
+    });
+  });
+
+  describe("a deactivation landing while a save is in flight (review round 3)", () => {
+    /** The operator's Deactivate, run in the gap between the save's judgement and its write. */
+    function deactivateDuringStepUp(id: string) {
+      gap.duringStepUp = async () => {
+        session.user = OPERATOR;
+        const off = await patchConnection(req({ id, isActive: false }, "PATCH"));
+        expect(off.status, await off.clone().text()).toBe(200);
+        session.user = BUILDER;
+      };
+    }
+
+    it("is not undone by a form that showed the row active: the save is refused with 409", async () => {
+      const id = await writingDevConnection(`${RUN}-j`);
+      vi.stubEnv("COREEDGE_STEP_UP", "warn");
+      deactivateDuringStepUp(id);
+
+      const res = await saveConnection(req(connectionSaveBody(form(`${RUN}-j`, { password: "rotated" }), LIVE_WRITING)));
+      expect(gap.duringStepUp).toBeNull();
+      expect(res.status, await res.clone().text()).toBe(409);
+      const message = ((await res.json()) as { error: { message: string } }).error.message;
+      expect(message).toMatch(/deactivated/i);
+      expect(message).toContain("Incident Operator");
+
+      expect(await row(id)).toMatchObject({ isActive: false, writeEnabled: true });
+      // The last word in the trail is the operator's toggle, not a save over it.
+      expect((await lastAudit(id, "UPDATE"))?.after).toMatchObject({ event: "connection_toggled", isActive: false });
+    });
+
+    it("is judged on the row it overwrites for an API caller: reactivated, writes enabled, said and recorded", async () => {
+      const id = await writingDevConnection(`${RUN}-k`);
+      vi.stubEnv("COREEDGE_STEP_UP", "warn");
+      deactivateDuringStepUp(id);
+
+      // No `expected`: an API caller is not refused, but is told what the save did.
+      const res = await saveConnection(req(connectionSaveBody(form(`${RUN}-k`, { password: "rotated" }))));
+      expect(res.status, await res.clone().text()).toBe(200);
+      const { data } = (await res.json()) as { data: { reactivated?: boolean; reactivatedNotice?: string } };
+      expect(data.reactivated).toBe(true);
+      expect(data.reactivatedNotice).toMatch(/with writes on/);
+
+      expect((await lastAudit(id, "UPDATE"))?.after).toMatchObject({
+        event: "connection_replaced",
+        isActiveBefore: false,
+        reactivated: true,
+        writesEnabled: true,
+      });
+      expect((await lastAudit(id, "STEP_UP_MISSING"))?.after).toMatchObject({
+        governanceAction: "connection.enable_writes",
+      });
+    });
+
+    it("a real concurrent Deactivate and form save always leave the connection deactivated", async () => {
+      for (let i = 0; i < 8; i += 1) {
+        const key = `${RUN}-race${i}`;
+        const id = await writingDevConnection(key);
+        vi.stubEnv("COREEDGE_STEP_UP", "warn");
+        session.user = BUILDER;
+        const [save, off] = await Promise.all([
+          saveConnection(req(connectionSaveBody(form(key, { password: "rotated" }), LIVE_WRITING))),
+          patchConnection(req({ id, isActive: false }, "PATCH")),
+        ]);
+        expect(off.status).toBe(200);
+        // The save either landed first (and the Deactivate after it), or was refused.
+        expect([200, 409]).toContain(save.status);
+        expect(await row(id)).toMatchObject({ isActive: false });
+      }
     });
   });
 

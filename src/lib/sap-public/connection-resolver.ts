@@ -19,6 +19,8 @@
  */
 import { createHash } from "crypto";
 
+import { Prisma } from "@prisma/client";
+
 import { CONNECTION_GROUP_UNREADABLE_STATUS, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -694,6 +696,53 @@ export interface UpsertSapConnectionInput {
    * null.
    */
   client?: string | null;
+  /**
+   * The row as the caller judged it, or null when it judged the key new
+   * (P0.3 review round 3). The write happens only while the row is still
+   * exactly that — locked and compared in the transaction that writes it —
+   * and otherwise throws `SapConnectionChangedError` and changes nothing.
+   * Omitted: an unguarded upsert, as before.
+   */
+  expectedRow?: JudgedSapConnection | null;
+}
+
+/**
+ * What a save decided on: the fields that say whether, and on which system,
+ * the row's writes are live, and its `revision` (bumped by every re-save).
+ */
+export interface JudgedSapConnection {
+  readonly id: string;
+  readonly isActive: boolean;
+  readonly writeEnabled: boolean;
+  readonly environment: SapEnvironment | null;
+  readonly baseUrl: string;
+  readonly client: string | null;
+  readonly revision: number;
+}
+
+/**
+ * The row is no longer the one the save was judged on (P0.3 review round 3):
+ * someone deactivated it, toggled its writes, re-saved it, or created the key,
+ * between the caller's read and this write. Nothing was written.
+ */
+export class SapConnectionChangedError extends Error {
+  constructor() {
+    super("The connection changed between the save's check and its write; nothing was written.");
+    this.name = "SapConnectionChangedError";
+  }
+}
+
+function isJudgedRow(row: JudgedSapConnection | null, judged: JudgedSapConnection | null): boolean {
+  if (row === null || judged === null) return row === judged;
+  return (
+    row.id === judged.id &&
+    row.isActive === judged.isActive &&
+    row.writeEnabled === judged.writeEnabled &&
+    row.environment === judged.environment &&
+    row.baseUrl === judged.baseUrl &&
+    row.client === judged.client &&
+    row.revision === judged.revision
+  );
 }
 
 /**
@@ -764,59 +813,111 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
    * the other row was deactivated meanwhile) — and writes it when the set
    * still does not open, whatever the row held before (round 7).
    */
-  const before = await prisma.sapConnection.findFirst({
-    where: { organizationId: input.organizationId, product: input.product, key: input.key },
-    select: { lastValidationStatus: true },
-  });
-  const keptStatus =
-    before?.lastValidationStatus === CONNECTION_GROUP_UNREADABLE_STATUS ? CONNECTION_GROUP_UNREADABLE_STATUS : null;
-  const row = await prisma.$transaction(async (tx) => {
-    const saved = await tx.sapConnection.upsert({
-      where: {
-        organizationId_product_key: {
-          organizationId: input.organizationId,
-          product: input.product,
-          key: input.key,
+  const guarded = input.expectedRow !== undefined;
+  // A guarded save reads the status from the row it locks, below.
+  const before = guarded
+    ? null
+    : await prisma.sapConnection.findFirst({
+        where: { organizationId: input.organizationId, product: input.product, key: input.key },
+        select: { lastValidationStatus: true },
+      });
+  const keep = (status: string | null | undefined) =>
+    status === CONNECTION_GROUP_UNREADABLE_STATUS ? CONNECTION_GROUP_UNREADABLE_STATUS : null;
+  const createData = {
+    organizationId: input.organizationId,
+    product: input.product,
+    key: input.key,
+    label: input.label,
+    baseUrl: input.baseUrl,
+    authType: input.authType,
+    oauthTokenUrl: input.oauthTokenUrl ?? null,
+    secretsCiphertext,
+    writeEnabled: input.writeEnabled ?? false,
+    apiPath: input.apiPath ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+    isActive: input.isActive ?? true,
+    environment: normalizeEnvironment(input.environment),
+    client: input.client ?? null,
+  } satisfies Prisma.SapConnectionUncheckedCreateInput;
+  let row: Prisma.SapConnectionGetPayload<object>;
+  try {
+    row = await prisma.$transaction(async (tx) => {
+      let keptStatus = keep(before?.lastValidationStatus);
+      /*
+       * THE CHECK AND THE WRITE ARE ONE STEP (P0.3 review round 3). The caller
+       * decided what this save does — whether it turns writes on, reactivates
+       * the row, moves writes to another system — from a read made before its
+       * passkey check and the sealing above. An operator's Deactivate landing
+       * in that gap was overwritten by `isActive: true`, and the response, the
+       * step-up action and the audit row all described the row as it had
+       * been. So the row is locked here and compared with what the caller
+       * judged; a Deactivate or another save waits for this transaction, or
+       * this one sees it and writes nothing.
+       */
+      if (guarded) {
+        const locked = await tx.$queryRaw<(JudgedSapConnection & { lastValidationStatus: string | null })[]>`
+          SELECT "id", "isActive", "writeEnabled", "environment"::text AS "environment", "baseUrl", "client",
+                 "revision", "lastValidationStatus"
+          FROM "SapConnection"
+          WHERE "organizationId" = ${input.organizationId} AND "product" = ${input.product} AND "key" = ${input.key}
+          FOR UPDATE`;
+        const current = locked[0] ?? null;
+        if (!isJudgedRow(current, input.expectedRow ?? null)) throw new SapConnectionChangedError();
+        // Judged new: create, never update — a row created meanwhile is a change too.
+        if (current === null) return tx.sapConnection.create({ data: createData });
+        keptStatus = keep(current.lastValidationStatus);
+      }
+      const saved = await tx.sapConnection.upsert({
+        where: {
+          organizationId_product_key: {
+            organizationId: input.organizationId,
+            product: input.product,
+            key: input.key,
+          },
         },
-      },
-      create: {
-        organizationId: input.organizationId,
-        product: input.product,
-        key: input.key,
-        label: input.label,
-        baseUrl: input.baseUrl,
-        authType: input.authType,
-        oauthTokenUrl: input.oauthTokenUrl ?? null,
-        secretsCiphertext,
-        writeEnabled: input.writeEnabled ?? false,
-        apiPath: input.apiPath ?? null,
-        timeoutMs: input.timeoutMs ?? null,
-        isActive: input.isActive ?? true,
-        environment: normalizeEnvironment(input.environment),
-        client: input.client ?? null,
-      },
-      update: {
-        label: input.label,
-        baseUrl: input.baseUrl,
-        authType: input.authType,
-        oauthTokenUrl: input.oauthTokenUrl ?? null,
-        secretsCiphertext,
-        writeEnabled: input.writeEnabled ?? false,
-        apiPath: input.apiPath ?? null,
-        timeoutMs: input.timeoutMs ?? null,
-        isActive: input.isActive ?? true,
-        environment: normalizeEnvironment(input.environment),
-        client: input.client ?? null,
-        revision: { increment: 1 },
-        lastValidationStatus: keptStatus,
-        lastValidatedAt: null,
-      },
+        create: createData,
+        update: {
+          label: input.label,
+          baseUrl: input.baseUrl,
+          authType: input.authType,
+          oauthTokenUrl: input.oauthTokenUrl ?? null,
+          secretsCiphertext,
+          writeEnabled: input.writeEnabled ?? false,
+          apiPath: input.apiPath ?? null,
+          timeoutMs: input.timeoutMs ?? null,
+          isActive: input.isActive ?? true,
+          environment: normalizeEnvironment(input.environment),
+          client: input.client ?? null,
+          revision: { increment: 1 },
+          lastValidationStatus: keptStatus,
+          lastValidatedAt: null,
+        },
+      });
+      const dropped = { where: { organizationId: input.organizationId, connectionId: saved.id } };
+      await tx.laneCheck.deleteMany(dropped);
+      await tx.sapServiceHealth.deleteMany(dropped);
+      return saved;
     });
-    const dropped = { where: { organizationId: input.organizationId, connectionId: saved.id } };
-    await tx.laneCheck.deleteMany(dropped);
-    await tx.sapServiceHealth.deleteMany(dropped);
-    return saved;
-  });
+  } catch (error) {
+    /*
+     * A key judged new and created by someone else meanwhile: the unique
+     * (organization, product, key) index refuses the create. Said as the
+     * change it is; any other refusal (a twin activated meanwhile) is not.
+     */
+    if (
+      guarded &&
+      input.expectedRow === null &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const created = await prisma.sapConnection.findFirst({
+        where: { organizationId: input.organizationId, product: input.product, key: input.key },
+        select: { id: true },
+      });
+      if (created) throw new SapConnectionChangedError();
+    }
+    throw error;
+  }
   /*
    * Nothing runs here after the commit (P0.2 review round 7). A re-save
    * changes which secrets the broker must open for the product, so the

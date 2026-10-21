@@ -11,7 +11,8 @@
  *   A61  an expired credential is not "live" on the portfolio or the throttle
  *        view (fixed by P0.11; pinned here with the rest);
  *   A62  Operations > Tokens counts write keys on live credentials only, and
- *        no longer says no code path issues one.
+ *        no longer says no code path issues one; Control Tower's credential
+ *        register counts them the same way (review round 3).
  *
  * WHAT IS REAL: the routes, the queries, the key policy, the tenant guard in
  * throw mode and PostgreSQL. WHAT IS STOOD IN: the session. Opt-in like the
@@ -38,6 +39,7 @@ vi.mock("@/lib/db/prisma", async () => {
 
 import { prisma } from "@/lib/db/prisma";
 import { GET as portfolio } from "@/app/api/control-tower/portfolio/route";
+import { GET as ctTokens } from "@/app/api/control-tower/tokens/route";
 import { GET as throttle } from "@/app/api/ops/throttle/route";
 import { GET as opsTokens } from "@/app/api/ops/tokens/route";
 import { PATCH as patchClients, POST as issueClients } from "@/app/api/studio/clients/route";
@@ -269,6 +271,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("truthful registers against real
       // The old provenance said a zero was "by design" because nothing could issue one.
       expect(tokensBefore.provenance.writeCredentials).not.toMatch(/no code path issues/i);
       expect(tokensBefore.provenance.writeCredentials).toMatch(/Issue write key/);
+      type CtRegister = { counts: { withWriteSecret: number; expired: number }; provenance: { writeSecrets: string } };
+      const ctBefore = await data<CtRegister>(await ctTokens(new NextRequest("http://localhost/api/control-tower/tokens")));
+      expect(ctBefore.counts.withWriteSecret).toBe(1);
+      expect(ctBefore.provenance.writeSecrets).toMatch(/live credentials only/);
 
       // The credential expires. Its sealed write key stays in the row.
       await prisma.solutionClient.updateMany({
@@ -280,6 +286,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("truthful registers against real
         await opsTokens(new NextRequest("http://localhost/api/ops/tokens")),
       );
       expect(tokensAfter.counts.withWriteCredential).toBe(0);
+      // The governance register agrees with the operational one (review round 3).
+      const ctAfter = await data<CtRegister>(await ctTokens(new NextRequest("http://localhost/api/control-tower/tokens")));
+      expect(ctAfter.counts.expired).toBe(1);
+      expect(ctAfter.counts.withWriteSecret).toBe(0);
 
       const folio = await data<{ solutions: { id: string; hasLiveCredential: boolean }[] }>(
         await portfolio(new NextRequest("http://localhost/api/control-tower/portfolio")),

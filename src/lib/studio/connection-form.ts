@@ -61,10 +61,11 @@ export interface RenderedConnectionState {
 }
 
 /**
- * The system a connection's writes land in: its environment, its SAP host and
- * its SAP client (P0.3 review round 2). Writes are allowed for THAT system,
- * not for the row id, so a save that keeps writes on while pointing the row
- * at another system switches writes on there for the first time.
+ * The system a connection's writes land in: its environment, its base URL
+ * (SAP host and base path) and its SAP client (P0.3 review rounds 2-3).
+ * Writes are allowed for THAT system, not for the row id, so a save that
+ * keeps writes on while pointing the row at another system switches writes on
+ * there for the first time.
  */
 export interface ConnectionWriteTarget {
   readonly environment: string | null;
@@ -74,12 +75,26 @@ export interface ConnectionWriteTarget {
 
 export type WriteTargetField = "environment" | "baseUrl" | "client";
 
-/** The host a base URL calls, or the trimmed text when it is not a URL. */
-function originOf(baseUrl: string): string {
+/**
+ * The system a base URL addresses: its origin and its path, without a
+ * trailing slash, a query or a fragment — or the trimmed text when it is not
+ * a URL.
+ *
+ * THE PATH IS PART OF THE SYSTEM (P0.3 review round 3). Every request is the
+ * base URL with the service path joined on (sap-url.ts `buildSapUrl`), so
+ * behind one API-management or other path-routed gateway host,
+ * `https://apim…/s4-dev` and `https://apim…/s4-prod` are two SAP systems.
+ * Compared by origin alone, moving a writing connection from one to the other
+ * was a plain secret save. The probe path is `apiPath`, a separate field, so
+ * a base path that changes always addresses something else. The origin is
+ * case-insensitive (the URL parser lower-cases the host); the path is not.
+ */
+function systemOf(baseUrl: string): string {
   try {
-    return new URL(baseUrl.trim()).origin.toLowerCase();
+    const url = new URL(baseUrl.trim());
+    return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/, "")}`;
   } catch {
-    return baseUrl.trim().toLowerCase();
+    return baseUrl.trim().replace(/\/+$/, "").toLowerCase();
   }
 }
 
@@ -88,13 +103,19 @@ function originOf(baseUrl: string): string {
  * save — one rule, used by the route to decide whether a save that keeps
  * writes on is enabling them, and by the form to decide whether its "Allow
  * writes" box starts ticked. Environments compare in the vocabulary the route
- * stores ("dev" is DEV), hosts by origin (a probe path is not another
- * system), clients as trimmed text with blank as none.
+ * stores ("dev" is DEV), base URLs by host and base path (`systemOf`: a
+ * trailing slash is the same system, another gateway path is not), clients
+ * as trimmed text with blank as none.
+ *
+ * Not compared: a system chosen inside the sealed credentials (a
+ * SuccessFactors company ID, a basic-auth user@company). They are sealed and
+ * not readable here; whether to compare them is an open decision in
+ * docs/runbooks/coreedge-truthful-screens.md.
  */
 export function writeTargetChanges(before: ConnectionWriteTarget, after: ConnectionWriteTarget): WriteTargetField[] {
   const changed: WriteTargetField[] = [];
   if (parseSapEnvironment(before.environment) !== parseSapEnvironment(after.environment)) changed.push("environment");
-  if (originOf(before.baseUrl) !== originOf(after.baseUrl)) changed.push("baseUrl");
+  if (systemOf(before.baseUrl) !== systemOf(after.baseUrl)) changed.push("baseUrl");
   if ((before.client?.trim() || null) !== (after.client?.trim() || null)) changed.push("client");
   return changed;
 }

@@ -273,7 +273,7 @@ describe("Connections · Allow writes and the write secret", () => {
     expect(allow.checked).toBe(false);
     const notice = screen.getByTestId("writes-moved-notice").textContent ?? "";
     expect(notice).toMatch(/DEV at my000001-api\.s4hana\.cloud\.sap/);
-    expect(notice).toMatch(/environment, SAP host/);
+    expect(notice).toMatch(/environment, SAP host or base path/);
     expect(notice).toMatch(/passkey/);
     // The moved notice says it; the "turns them off" one would only repeat it.
     expect(screen.queryByTestId("writes-off-notice")).toBeNull();
@@ -327,8 +327,16 @@ describe("Connections · Allow writes and the write secret", () => {
 describe("writeTargetChanges · the system a connection's writes are allowed for (review round 2)", () => {
   const dev = { environment: "DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap", client: null };
 
-  it("is unchanged by a rotation: same environment in any spelling, same host with any path", () => {
+  it("is unchanged by a rotation: same environment in any spelling, same host in any case, a trailing slash", () => {
     expect(writeTargetChanges(dev, { ...dev, environment: "dev", baseUrl: "https://MY000001-api.s4hana.cloud.sap/" })).toEqual([]);
+    const gw = { ...dev, baseUrl: "https://apim.example.hana.ondemand.com/s4-dev" };
+    expect(writeTargetChanges(gw, { ...gw, baseUrl: "https://APIM.example.hana.ondemand.com/s4-dev/" })).toEqual([]);
+  });
+
+  it("calls another base path on the same host another system: the path is joined into every request (review round 3)", () => {
+    const gw = { ...dev, baseUrl: "https://apim.example.hana.ondemand.com/s4-dev" };
+    expect(writeTargetChanges(gw, { ...gw, baseUrl: "https://apim.example.hana.ondemand.com/s4-prod" })).toEqual(["baseUrl"]);
+    expect(writeTargetChanges(dev, { ...dev, baseUrl: `${dev.baseUrl}/s4-prod` })).toEqual(["baseUrl"]);
   });
 
   it("names each part a save moves", () => {
