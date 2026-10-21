@@ -1752,12 +1752,18 @@
                 ]
               },
               "record": {
-                "allOf": [
+                "anyOf": [
                   {
                     "$ref": "#/components/schemas/APartner2"
+                  },
+                  {
+                    "type": "object",
+                    "nullable": true,
+                    "enum": [
+                      null
+                    ]
                   }
-                ],
-                "nullable": true
+                ]
               },
               "location": {
                 "type": "string",

@@ -32,7 +32,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
-import { recordSampledContract } from "@/lib/contracts/record";
+import { recordSampledContract, serviceODataVersion } from "@/lib/contracts/record";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { captureContractMismatch } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -72,7 +72,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const { id } = await ctx.params;
   const iface = await prisma.interface.findFirst({
     where: scopedById(scope, id),
-    select: { id: true, name: true, version: true, entitySet: true, externalId: true, odataVersion: true },
+    select: {
+      id: true,
+      name: true,
+      version: true,
+      entitySet: true,
+      externalId: true,
+      odataVersion: true,
+      sapProduct: true,
+      servicePath: true,
+    },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
@@ -110,7 +119,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const contract = await recordSampledContract({
     scope,
-    iface,
+    // The rows reach here without SAP's envelope (the broker strips it), so
+    // they cannot say which OData version they are. A catalogue interface
+    // stores none either: the service the read went to says it.
+    iface: { ...iface, odataVersion: iface.odataVersion ?? (await serviceODataVersion(iface)) },
     schema,
     rows: parsed.data.rows,
     actorId: user.id,

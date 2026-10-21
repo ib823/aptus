@@ -130,7 +130,12 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   const schemaState = responseSchemaState(iface.responseSchema, iface);
-  const snapshot = await currentContractSnapshot(client.scope, iface);
+  const current = await currentContractSnapshot(client.scope, iface);
+  // A SAMPLED snapshot is the captured schema with a version, so it follows
+  // that capture's provenance (A38): served only while the capture is of
+  // THIS contract, exactly as the kit and the solution document decide. A
+  // compiled one describes the dataset whatever else changed.
+  const snapshot = current && (current.source === "METADATA" || schemaState === "current") ? current : null;
   const contract = snapshot
     ? {
         source: snapshot.source === "METADATA" ? ("metadata" as const) : ("sampled" as const),
@@ -142,8 +147,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         schemas: standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet)),
       }
     : {
-        // No snapshot: the captured schema (responseSchema, above) is all
-        // there is, or nothing is.
+        // No snapshot to serve: the captured schema (responseSchema, above)
+        // is all there is, or nothing is.
         source: schemaState === "current" ? ("sampled" as const) : ("none" as const),
         semver: null,
         snapshotId: null,

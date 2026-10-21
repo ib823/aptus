@@ -40,7 +40,7 @@ const { db, mocks } = vi.hoisted(() => ({
     grants: [] as Row[],
     failSnapshotCreate: false,
   },
-  mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn() },
+  mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn(), hub: vi.fn() },
 }));
 
 function matches(row: Row, where: Row | undefined): boolean {
@@ -120,7 +120,7 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
   buildAuthHeadersFromConnection: mocks.authHeaders,
 }));
 vi.mock("@/lib/sap-public/resolve-hub-service", () => ({
-  resolveHubService: async () => ({ path: "/sap/opu/odata4/sap/api_salesorder/srvd_a2x/sap/salesorder/0001" }),
+  resolveHubService: mocks.hub,
 }));
 vi.mock("@/lib/northbound/auth", () => ({
   authenticateClientToken: async () => ({
@@ -213,6 +213,7 @@ beforeEach(() => {
   mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
   mocks.authHeaders.mockResolvedValue({ Authorization: "Basic dTpw" });
   mocks.audit.mockResolvedValue({ id: "a1" });
+  mocks.hub.mockResolvedValue({ path: "/sap/opu/odata4/sap/api_salesorder/srvd_a2x/sap/salesorder/0001" });
   vi.stubGlobal("fetch", vi.fn(async () => xml(RAP)));
 });
 afterEach(() => {
@@ -364,9 +365,68 @@ describe("capture-schema records the sampled fallback", () => {
   });
 
   it("records nothing when the rows' OData version cannot be told", async () => {
+    mocks.hub.mockResolvedValue(null); // the catalogue no longer resolves the service
     const d = await data<{ contract: Row }>(await capture([{ SalesOrder: "1" }]));
     expect(d.contract).toMatchObject({ status: "NOT_RECORDED" });
     expect(db.snapshots).toHaveLength(0);
+  });
+
+  // What the Test Console really posts: rows broker-run served, with SAP's
+  // envelope (`__metadata`, `@odata.*`) already stripped, for a catalogue
+  // interface, which stores no OData version of its own.
+  it("records a catalogue interface's broker-stripped rows under the version of the service it reads", async () => {
+    expect(db.interfaces[0]).toMatchObject({ servicePath: null, odataVersion: null });
+    const d = await data<{ contract: Row }>(await capture([{ SalesOrder: "1", SoldToParty: "C1" }]));
+    expect(d.contract).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
+    expect(db.snapshots[0]).toMatchObject({ source: "SAMPLED", odataVersion: "V4" });
+  });
+
+  it("a catalogue service's declared protocol wins over its path", async () => {
+    mocks.hub.mockResolvedValue({ path: "/sap/opu/odata/sap/API_BUSINESS_PARTNER", protocol: "ODATAV2" });
+    const d = await data<{ contract: Row }>(await capture([{ SalesOrder: "1" }]));
+    expect(d.contract).toMatchObject({ status: "RECORDED" });
+    expect(db.snapshots[0]).toMatchObject({ source: "SAMPLED", odataVersion: "V2" });
+  });
+
+  it("a service that cannot be resolved does not fail the capture", async () => {
+    mocks.hub.mockRejectedValue(new Error("catalogue unavailable"));
+    const res = await capture([{ SalesOrder: "1" }]);
+    expect(res.status).toBe(200);
+    expect((await data<{ contract: Row }>(res)).contract).toMatchObject({ status: "NOT_RECORDED" });
+  });
+});
+
+describe("/schema and a sampled contract of an earlier contract", () => {
+  it("does not serve the sampled snapshot while the capture it came from is withheld as stale", async () => {
+    seed({ operation: "READ", mode: "READ" });
+    const cap = await captureSchema(
+      new NextRequest("http://localhost/api/studio/interfaces/if_1/capture-schema", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rows: [{ SalesOrder: "1", Secret: "x" }], interfaceVersion: 2 }),
+      }),
+      { params: Promise.resolve({ id: "if_1" }) },
+    );
+    expect(cap.status).toBe(200);
+    expect(db.snapshots[0]).toMatchObject({ source: "SAMPLED" });
+    // While current, the sampled contract is served beside the capture.
+    const before = await data<{ schemaState: string; contract: { source: string } }>(await schemaRoute());
+    expect(before).toMatchObject({ schemaState: "current", contract: { source: "sampled" } });
+
+    // The operation changes on the same dataset: a new contract, v3.
+    Object.assign(db.interfaces[0]!, { version: 3, operation: "CREATE", mode: "WRITE" });
+    const d = await data<{ responseSchema: unknown; schemaState: string; contract: { source: string; schemas: unknown } }>(
+      await schemaRoute(),
+    );
+    expect(d).toMatchObject({ responseSchema: null, schemaState: "stale" });
+    expect(d.contract).toMatchObject({ source: "none", schemas: null, semver: null });
+  });
+
+  it("still serves a compiled snapshot after a change that leaves the dataset alone", async () => {
+    await verify();
+    db.interfaces[0]!.version = 3;
+    const d = await data<{ contract: { source: string } }>(await schemaRoute());
+    expect(d.contract.source).toBe("metadata");
   });
 });
 

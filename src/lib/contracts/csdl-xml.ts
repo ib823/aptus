@@ -238,8 +238,13 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
   const enumTypes: IrEnumType[] = [];
   const entitySets: IrEntitySet[] = [];
   const operations: IrOperation[] = [];
-  /** V4 schema-level actions/functions by qualified name, every overload. */
-  const v4Operations = new Map<string, { kind: "action" | "function"; el: XmlElement; ns: string }[]>();
+  /**
+   * V4 schema-level actions/functions by qualified name: the FIRST UNBOUND
+   * overload, which is the one an import names. Found in one pass and looked
+   * up per import — scanning every overload for each import made a
+   * description full of bound overloads, each imported, quadratic in size.
+   */
+  const v4Unbound = new Map<string, { kind: "action" | "function"; el: XmlElement }>();
   let container: string | undefined;
   const containerOf = new Map<string, string>();
 
@@ -266,11 +271,9 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
     for (const kind of ["Action", "Function"] as const) {
       for (const op of edm(s, kind)) {
         const name = attr(op, "Name");
-        if (!name) continue;
+        if (!name || attr(op, "IsBound") === "true") continue;
         const qn = `${ns}.${name}`;
-        const list = v4Operations.get(qn) ?? [];
-        list.push({ kind: kind === "Action" ? "action" : "function", el: op, ns });
-        v4Operations.set(qn, list);
+        if (!v4Unbound.has(qn)) v4Unbound.set(qn, { kind: kind === "Action" ? "action" : "function", el: op });
       }
     }
   }
@@ -453,7 +456,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
           operations.push(readV2FunctionImport(fi, name, aliases));
         } else {
           const fn = attr(fi, "Function");
-          const op = fn ? firstUnbound(v4Operations.get(aliases.qualify(fn))) : undefined;
+          const op = fn ? v4Unbound.get(aliases.qualify(fn)) : undefined;
           if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, attr(fi, "EntitySet")));
         }
       }
@@ -461,7 +464,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         const name = attr(ai, "Name");
         const action = attr(ai, "Action");
         if (!name || !action) continue;
-        const op = firstUnbound(v4Operations.get(aliases.qualify(action)));
+        const op = v4Unbound.get(aliases.qualify(action));
         if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, attr(ai, "EntitySet")));
       }
     }
@@ -611,12 +614,6 @@ function readV2FunctionImport(fi: XmlElement, name: string, aliases: AliasTable)
   const label = nonEmpty(sap(fi, "label"));
   if (label) op.label = label;
   return op;
-}
-
-function firstUnbound(
-  overloads: { kind: "action" | "function"; el: XmlElement; ns: string }[] | undefined,
-): { kind: "action" | "function"; el: XmlElement } | undefined {
-  return overloads?.find((o) => attr(o.el, "IsBound") !== "true");
 }
 
 function readV4Operation(

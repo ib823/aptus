@@ -56,6 +56,59 @@ describe("no change", () => {
     expect(contractHash(reordered)).toBe(contractHash(base()));
   });
 
+  it("property-path lists, referential constraints and overloads in another order hash the same", () => {
+    const op = (bindingType: string) => ({
+      name: "Release",
+      kind: "action" as const,
+      bound: true as const,
+      bindingType,
+      parameters: [{ name: "_it", type: bindingType, nullable: false }],
+    });
+    const stated = (order: "asc" | "desc") =>
+      changed((c) => {
+        const caps = c.entitySet.capabilities;
+        const paths = order === "asc" ? ["ContactEmail", "Tags"] : ["Tags", "ContactEmail"];
+        caps.nonFilterableProperties = [...paths];
+        caps.requiredFilterProperties = [...paths];
+        caps.nonSortableProperties = [...paths];
+        const nav = c.entityType.navigations.find((n) => n.name === "_SoldToParty")!;
+        const rcs = [
+          { property: "SoldToParty", referencedProperty: "Customer" },
+          { property: "SalesOrder", referencedProperty: "LastOrder" },
+        ];
+        nav.referentialConstraints = order === "asc" ? rcs : [...rcs].reverse();
+        const overloads = [op("com.example.salesorder.SalesOrderType"), op("com.example.salesorder.CustomerType")];
+        c.operations.push(...(order === "asc" ? overloads : [...overloads].reverse()));
+      });
+    expect(contractHash(stated("desc"))).toBe(contractHash(stated("asc")));
+    // Each list alone, so none of them hides behind another.
+    const one = (edit: (c: InterfaceContract) => void) => {
+      const c = stated("asc");
+      edit(c);
+      return contractHash(c);
+    };
+    const hash = contractHash(stated("asc"));
+    expect(one((c) => c.entitySet.capabilities.nonFilterableProperties!.reverse())).toBe(hash);
+    expect(one((c) => c.entitySet.capabilities.requiredFilterProperties!.reverse())).toBe(hash);
+    expect(one((c) => c.entitySet.capabilities.nonSortableProperties!.reverse())).toBe(hash);
+    expect(one((c) => c.entityType.navigations.find((n) => n.name === "_SoldToParty")!.referentialConstraints!.reverse())).toBe(hash);
+    expect(one((c) => c.operations.reverse())).toBe(hash);
+    // What the lists SAY still counts.
+    expect(one((c) => c.entitySet.capabilities.nonFilterableProperties!.pop())).not.toBe(hash);
+  });
+
+  it("parameter order is kept: it is how a call is written", () => {
+    const withParams = (names: string[]) =>
+      changed((c) =>
+        c.operations.push({
+          name: "Copy",
+          kind: "action",
+          parameters: names.map((name) => ({ name, type: "Edm.String", nullable: true })),
+        }),
+      );
+    expect(contractHash(withParams(["A", "B"]))).not.toBe(contractHash(withParams(["B", "A"])));
+  });
+
   it("a contract read back with its keys in another order (JSONB) is not a change", () => {
     const reverseKeys = (v: unknown): unknown =>
       Array.isArray(v)

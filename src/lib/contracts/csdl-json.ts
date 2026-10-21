@@ -115,7 +115,8 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
   for (const [ns, schema] of schemaEntries) aliases.add(ns, str(schema.$Alias));
 
   const typeDefinitions = new Map<string, { underlying: string; facets: Partial<IrProperty> }>();
-  const ops = new Map<string, { kind: "action" | "function"; overload: JsonObject }[]>();
+  /** Each action/function's first UNBOUND overload — the one an import names — found in one pass (see csdl-xml.ts). */
+  const unbound = new Map<string, { kind: "action" | "function"; overload: JsonObject }>();
   for (const [ns, schema] of schemaEntries) {
     for (const [name, member] of Object.entries(schema)) {
       if (name.startsWith("$") || name.startsWith("@")) continue;
@@ -124,10 +125,9 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
       }
       if (Array.isArray(member)) {
         for (const o of member) {
-          if (!isObject(o) || (o.$Kind !== "Action" && o.$Kind !== "Function")) continue;
-          const list = ops.get(`${ns}.${name}`) ?? [];
-          list.push({ kind: o.$Kind === "Action" ? "action" : "function", overload: o });
-          ops.set(`${ns}.${name}`, list);
+          if (!isObject(o) || (o.$Kind !== "Action" && o.$Kind !== "Function") || o.$IsBound === true) continue;
+          const qn = `${ns}.${name}`;
+          if (!unbound.has(qn)) unbound.set(qn, { kind: o.$Kind === "Action" ? "action" : "function", overload: o });
         }
       }
     }
@@ -223,7 +223,7 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
           if (cName.startsWith("$") || cName.startsWith("@") || !isObject(c)) continue;
           if (typeof c.$Action === "string" || typeof c.$Function === "string") {
             const target = aliases.qualify((c.$Action ?? c.$Function) as string);
-            const overload = ops.get(target)?.find((o) => o.overload.$IsBound !== true);
+            const overload = unbound.get(target);
             if (overload) operations.push(readOperation(cName, overload.kind, overload.overload, resolve, str(c.$EntitySet)));
             continue;
           }

@@ -1458,12 +1458,18 @@
                 ]
               },
               "record": {
-                "allOf": [
+                "anyOf": [
                   {
                     "$ref": "#/components/schemas/BonusPlan2"
+                  },
+                  {
+                    "type": "object",
+                    "nullable": true,
+                    "enum": [
+                      null
+                    ]
                   }
-                ],
-                "nullable": true
+                ]
               },
               "location": {
                 "type": "string",

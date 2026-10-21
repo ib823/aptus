@@ -117,7 +117,7 @@ not mean every SAP release has been tested end to end.
 | Connection to S/4HANA Cloud Public Edition, with Test | The host must be on the SAP domain allow-list and reachable from the CoreEdge host. |
 | Northbound read of an SAP-published service | Returns the first N rows of one entity set, where N is at most 100. There is no filter (section 8). |
 | Test Console | Reads only, with `limit` at most 50 (`src/app/api/studio/test/broker-run/route.ts:62`). |
-| Starter kit download | A TypeScript/Node client, an OpenAPI 3.1 file, a mock server and fixtures. It covers reads only (`src/lib/studio/scaffold.ts:1017-1036`). |
+| Starter kit download | A TypeScript/Node client, the contract as OpenAPI 3.1 (`openapi.json`) and 3.0.3 (`openapi-3.0.json`), a mock server and fixtures (`src/lib/studio/scaffold.ts:1055-1076`). The OpenAPI files draw `POST …/data/write`, with its body, for a create interface (`src/lib/contracts/openapi.ts:297`); the client, demo and mock cover reads only. |
 
 ### Works with conditions
 
@@ -1041,11 +1041,17 @@ interface:
   `PurchaseOrder`, not ABAP's upper-case component names.
 - Use that OData version's encodings. In V2, `Edm.DateTime` is `/Date(<ms>)/`
   and `Edm.Decimal` is a JSON string. V4 uses ISO 8601 dates and JSON numbers.
-- There is no request contract to check against, because `requestSchema` is
-  never written (`src/app/api/northbound/interfaces/[id]/schema/route.ts:121`).
-  Use the service's `$metadata` as the contract, or the interface's `/schema`
-  once a response schema has been captured in Studio
-  (`src/app/api/studio/interfaces/[id]/capture-schema/route.ts:68`).
+- Check the body against the interface's request contract. Once the service
+  has been verified in Studio, `GET /interfaces/{id}/schema` returns
+  `requestSchema`: the JSON Schema of `record`, compiled from the service's own
+  `$metadata` (`src/lib/contracts/record.ts:105`). It names the properties a
+  create may send, in that version's encodings, and the ones it must send.
+  It is null for a read interface, before a verify, and after the interface's
+  contract changes until the next verify
+  (`src/app/api/northbound/interfaces/[id]/schema/route.ts:185`). The same
+  response's `contract` field gives the source (`metadata`, `sampled` or
+  `none`), the semantic version and the JSON Schemas of the record, create,
+  update and key. With no compiled contract, use the service's `$metadata`.
 - `/ui2/cl_json` writes upper-case names by default, which SAP rejects (422).
   Its `camel_case` mode gives lowerCamelCase (`purchaseOrder`), which does not
   match either. Map names explicitly, and convert V2 dates and decimals
@@ -1323,7 +1329,7 @@ is logged.
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. The middleware also limits per IP: 300 GET and 120 POST per minute on `/api/*`, shared by every caller behind the same egress IP, with its own 429 shape (section 6.2). |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
-| Contracts | `requestSchema` is never written, so a write interface has no request contract. |
+| Contracts | A write interface's request contract (`requestSchema`) exists only after its service has been verified, and only until its contract next changes. Without a verify, the service's `$metadata` is the contract. |
 | Tokens | A read token issued without an expiry never expires. Grants must have one. |
 
 ### Product gaps that matter most for an ABAP team
@@ -1417,7 +1423,7 @@ Every call needs `Authorization: Bearer ce_...`.
 | Method and path | Purpose | Calls SAP? |
 |---|---|---|
 | `GET /api/northbound/interfaces` | Lists this solution's interfaces, with `callable` and `service: { source: "custom" \| "catalogue", odataVersion }` | No |
-| `GET /api/northbound/interfaces/{id}/schema` | Returns the stored response schema. `requestSchema` is always null. | No |
+| `GET /api/northbound/interfaces/{id}/schema` | Returns the captured response schema; `requestSchema`, the compiled body of a write once the service is verified (null otherwise); and `contract`, the compiled contract's source, semantic version and JSON Schemas. | No |
 | `GET /api/northbound/interfaces/{id}/data?limit=N` | Read. N is between 1 and 100. | Yes |
 | `POST /api/northbound/interfaces/{id}/data/write` | Create. Also needs `X-CoreEdge-Write-Key` and `Idempotency-Key`. | Yes |
 
@@ -1587,7 +1593,6 @@ In each case the code is what runs.
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
 | Write replays | `docs/coreedge-developer-guide.md:289-291` says "Failures are recorded too", and that a 403 the tenant declined replays under the same key | Right for a 401/403 from SAP itself: it is stored and replayed for 24 hours, so after fixing the SAP side, retry under a **new** key (SAP refused, so nothing was created). CoreEdge's own refusals (write key, grant, connection binding, writes disabled) happen before the key is reserved and are never stored. A write that was never sent (credential step, CSRF handshake, SAP 408 or 429) is not recorded either: the key is released (`src/app/api/northbound/interfaces/[id]/data/write/route.ts:425-429`). |
 | Read options | The design mock lists `$top`, `$skip`, `$filter` and `$select` | Only `limit` is read |
-| Starter kit OpenAPI | Its 400 description says "pass ?entity=" (`src/lib/studio/scaffold.ts:146`) | `?entity=` is ignored |
 | Target expansion spec | `docs/coreedge-sap-target-expansion-spec.md` says nothing in it has been applied, and that SAML bearer and CSRF are missing | Private, on-premise and ECC products, SAP-client addressing, SAML bearer and CSRF all exist |
 | `SAP_CONTENT_RELEASE`, `EMAIL_SERVER`, `DEFAULT_AI_PROVIDER` | `.env.example` gives defaults of 2602, "alternative to SMTP" and anthropic | The code defaults to 2608, always sends mail through `SMTP_*`, and falls back to OpenAI |
 | Catalogue rebuild | The button warns that rows SAP no longer publishes disappear | The rebuild route contains no delete |

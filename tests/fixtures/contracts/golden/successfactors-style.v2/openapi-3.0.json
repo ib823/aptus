@@ -1508,12 +1508,18 @@
                 ]
               },
               "record": {
-                "allOf": [
+                "anyOf": [
                   {
                     "$ref": "#/components/schemas/CustTravelRequest2"
+                  },
+                  {
+                    "type": "object",
+                    "nullable": true,
+                    "enum": [
+                      null
+                    ]
                   }
-                ],
-                "nullable": true
+                ]
               },
               "location": {
                 "type": "string",

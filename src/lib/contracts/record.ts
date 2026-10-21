@@ -28,6 +28,8 @@ import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { currentContractSnapshot, recordContractSnapshot } from "@/lib/contracts/snapshot";
 import type { CapturedSchema } from "@/lib/studio/schema-capture";
 import { prisma } from "@/lib/db/prisma";
+import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
 
 export type ContractOutcome =
@@ -149,9 +151,11 @@ export type SampledOutcome =
   | { status: "NOT_RECORDED"; detail: string };
 
 /**
- * Which OData version sampled rows came from: what the interface declares, or
- * what the rows' own envelope says (V2 carries `__metadata`, V4 `@odata.*`
- * keys). Null when neither tells — nothing is guessed.
+ * Which OData version sampled rows came from: what the interface or the
+ * service it reads declares (serviceODataVersion), or what the rows' own
+ * envelope says (V2 carries `__metadata`, V4 `@odata.*` keys) — though rows
+ * the broker served have had that envelope stripped. Null when nothing tells
+ * — nothing is guessed.
  */
 export function sampledODataVersion(
   declared: string | null,
@@ -161,6 +165,30 @@ export function sampledODataVersion(
   if (rows.some((r) => "__metadata" in r)) return "V2";
   if (rows.some((r) => Object.keys(r).some((k) => k.startsWith("@odata.")))) return "V4";
   return null;
+}
+
+/**
+ * The OData version of the service an interface reads, from the same resolver
+ * the broker's read used (interface-service.ts): its declared protocol, or —
+ * where a curated definition states none — SAP's path convention (V4 services
+ * are served under /sap/opu/odata4/; an unstated protocol is V2, as the
+ * definition's own contract says). Null when the service does not resolve;
+ * never throws, because a capture must not fail over a contract.
+ */
+export async function serviceODataVersion(iface: InterfaceServiceFields): Promise<ODataVersion | null> {
+  try {
+    const product = getSapProduct(iface.sapProduct);
+    if (!product) return null;
+    const resolved = await resolveInterfaceService(product, iface);
+    if (!resolved) return null;
+    const { protocol, path } = resolved.service;
+    if (protocol === "ODATAV4") return "V4";
+    if (protocol === "ODATAV2") return "V2";
+    return /\/odata4\//i.test(path) ? "V4" : "V2";
+  } catch (err) {
+    console.error("[contracts] service version not resolved", { error: err instanceof Error ? err.name : "unknown" });
+    return null;
+  }
 }
 
 /**

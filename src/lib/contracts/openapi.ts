@@ -29,7 +29,7 @@
  */
 
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { buildContractSchemas, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
+import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { ALL_ERROR_CODES, NORTHBOUND_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS } from "@/lib/contracts/northbound-errors";
 import type { NorthboundErrorCode } from "@/lib/northbound/respond";
@@ -115,8 +115,9 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   const ref = (kind: "schemas" | "headers" | "parameters" | "responses", name: string) => ({
     $ref: `#/components/${kind}/${name}`,
   });
+  /** Nullable. Every `$ref` passed here names an object schema (a record). */
   const nullableOf = (s: JsonSchema): JsonSchema => {
-    if (dialect === "oas30") return "$ref" in s ? { allOf: [s], nullable: true } : { ...s, nullable: true };
+    if (dialect === "oas30") return "$ref" in s ? nullableRef30(s, "object") : { ...s, nullable: true };
     if ("$ref" in s) return { anyOf: [s, { type: "null" }] };
     return { ...s, type: [s.type as string, "null"] };
   };

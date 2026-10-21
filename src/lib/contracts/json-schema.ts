@@ -30,8 +30,9 @@
  * customer's own extension fields arrive before the next compile does.
  *
  * TWO DIALECTS. "2020-12" is JSON Schema 2020-12, which OpenAPI 3.1 uses as is
- * (type arrays for null). "oas30" is OpenAPI 3.0.3's Schema Object (`nullable`,
- * `allOf` around a nullable `$ref`, `format: byte` for base64). Facts JSON
+ * (type arrays for null). "oas30" is OpenAPI 3.0.3's Schema Object (`nullable`
+ * beside a `type`, `anyOf` with a null-only branch for a nullable `$ref`,
+ * `format: byte` for base64). Facts JSON
  * Schema has no keyword for — the OData type, precision, scale, personal data —
  * travel as `x-` extensions, which both dialects allow.
  */
@@ -128,8 +129,17 @@ function primitiveSchema(p: Pick<IrProperty, "type" | "maxLength" | "precision" 
       return { type: "string", pattern: TIME_OF_DAY };
     case "Edm.Duration":
       return { type: "string", pattern: DURATION };
-    case "Edm.Binary":
-      return withLength(dialect === "oas30" ? { type: "string", format: "byte" } : { type: "string", contentEncoding: v === "V4" ? "base64url" : "base64" });
+    case "Edm.Binary": {
+      // MaxLength counts BYTES; the wire carries base64 (V2) or base64url
+      // (V4), four characters per three bytes. The bound on the string is the
+      // padded encoded length — never less than the unpadded one — and the
+      // byte count travels as an extension.
+      const s: JsonSchema =
+        dialect === "oas30" ? { type: "string", format: "byte" } : { type: "string", contentEncoding: v === "V4" ? "base64url" : "base64" };
+      return typeof p.maxLength === "number"
+        ? { ...s, maxLength: 4 * Math.ceil(p.maxLength / 3), "x-odata-max-length": p.maxLength }
+        : s;
+    }
     default:
       if (p.type.startsWith("Edm.Geography") || p.type.startsWith("Edm.Geometry")) return { type: "object", description: "GeoJSON." };
       // Edm.Untyped, Edm.PrimitiveType, or a type the compiler does not know:
@@ -144,10 +154,22 @@ function sampledSchema(p: IrProperty): JsonSchema {
   return t === "" ? {} : { type: t };
 }
 
-/** Make a schema nullable in the dialect's own way. */
-function nullable(s: JsonSchema, dialect: SchemaDialect): JsonSchema {
+/**
+ * A nullable reference in OpenAPI 3.0.3. `nullable` adds null only to a
+ * `type` in the SAME Schema Object, so `{ allOf: [{ $ref }], nullable: true }`
+ * still refuses null (and validators refuse to compile it: nullable without a
+ * type). The reference OR a branch that admits null and nothing else says it
+ * exactly. `type` is the referenced schema's own type, which that branch must
+ * name for `nullable` to apply.
+ */
+export function nullableRef30(ref: JsonSchema, type: "object" | "string"): JsonSchema {
+  return { anyOf: [ref, { type, nullable: true, enum: [null] }] };
+}
+
+/** Make a schema nullable in the dialect's own way. `refType` is what a `$ref` points at. */
+function nullable(s: JsonSchema, dialect: SchemaDialect, refType: "object" | "string" = "object"): JsonSchema {
   if (dialect === "oas30") {
-    if ("$ref" in s) return { allOf: [s], nullable: true };
+    if ("$ref" in s) return nullableRef30(s, refType);
     if (Object.keys(s).length === 0) return s; // already anything, null included
     const out: JsonSchema = { ...s, nullable: true };
     if (Array.isArray(s.enum)) out.enum = [...(s.enum as unknown[]), null];
@@ -188,12 +210,15 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   /** One property's value schema: primitive, enum or complex; collection; nullability. */
   const valueSchema = (p: IrProperty): JsonSchema => {
     let s: JsonSchema;
+    let refType: "object" | "string" = "object";
     if (sampled) s = sampledSchema(p);
     else if (complexByName.has(p.type)) s = { $ref: ref(complexName(complexByName.get(p.type)!)) };
-    else if (enumByName.has(p.type)) s = { $ref: ref(enumName(enumByName.get(p.type)!)) };
-    else s = primitiveSchema(p, v, dialect);
+    else if (enumByName.has(p.type)) {
+      s = { $ref: ref(enumName(enumByName.get(p.type)!)) };
+      refType = "string"; // an enum value travels as its member name(s)
+    } else s = primitiveSchema(p, v, dialect);
     if (p.collection) return { type: "array", items: s };
-    return p.nullable ? nullable(s, dialect) : s;
+    return p.nullable ? nullable(s, dialect, refType) : s;
   };
 
   const objectOf = (props: readonly IrProperty[], include: (p: IrProperty) => boolean, readOnlyOf: (p: IrProperty) => boolean) =>

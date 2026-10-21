@@ -9,7 +9,9 @@
 import { describe, expect, it } from "vitest";
 
 import { compileContract } from "@/lib/contracts/compile";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { DEFAULT_XML_LIMITS, parseXml } from "@/lib/contracts/xml";
+import { buildTypeScriptClient } from "@/lib/studio/scaffold";
 
 const EDMX_HEAD =
   '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
@@ -125,5 +127,125 @@ describe("documents that are not service descriptions", () => {
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.detail).not.toContain(secret);
     }
+  });
+});
+
+/*
+ * Documents that pass every parser bound (bytes, depth, elements) and are
+ * still built to stall the request that compiles them: the verify route
+ * compiles and slices synchronously, and the kit renders on every download.
+ * Each took ten to twenty seconds at these sizes — a fraction of the 8 MB
+ * bound — when a lookup was a scan, and a few hundred milliseconds after. The
+ * budget leaves room for a loaded CI machine and none for the quadratic one.
+ */
+describe("descriptions that make a lookup quadratic", () => {
+  const BUDGET_MS = 5000;
+  const timed = <T>(fn: () => T): { value: T; ms: number } => {
+    const started = performance.now();
+    const value = fn();
+    return { value, ms: performance.now() - started };
+  };
+
+  it("many bound overloads of one name, each imported (CSDL XML)", () => {
+    const n = 20_000;
+    const doc =
+      EDMX_HEAD +
+      '<Function Name="f" IsBound="true"/>'.repeat(n) +
+      '<EntityContainer Name="C">' +
+      Array.from({ length: n }, (_, i) => `<FunctionImport Name="i${i}" Function="ns.f"/>`).join("") +
+      "</EntityContainer>" +
+      EDMX_TAIL;
+    const { value, ms } = timed(() => compileContract(doc));
+    expect(value.ok).toBe(true);
+    // None is unbound, so no import names an operation.
+    expect(value.ok && value.ir.operations.some((o) => o.name.startsWith("i"))).toBe(false);
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it("many bound overloads of one name, each imported (CSDL JSON)", () => {
+    const n = 40_000;
+    const container: Record<string, unknown> = { $Kind: "EntityContainer" };
+    for (let i = 0; i < n; i++) container[`i${i}`] = { $Function: "ns.f" };
+    const doc = JSON.stringify({
+      $Version: "4.0",
+      ns: { f: Array.from({ length: n }, () => ({ $Kind: "Function", $IsBound: true })), C: container },
+    });
+    const { value, ms } = timed(() => compileContract(doc));
+    expect(value.ok).toBe(true);
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it("an import still names the first unbound overload, after bound ones of the same name", () => {
+    const doc =
+      EDMX_HEAD +
+      '<Function Name="f" IsBound="true"><Parameter Name="it" Type="ns.T"/><ReturnType Type="Edm.Int32"/></Function>' +
+      '<Function Name="f"><Parameter Name="x" Type="Edm.String"/><ReturnType Type="Edm.String"/></Function>' +
+      '<Function Name="f"><ReturnType Type="Edm.Boolean"/></Function>' +
+      '<EntityType Name="T"><Key><PropertyRef Name="K"/></Key><Property Name="K" Type="Edm.String" Nullable="false"/></EntityType>' +
+      '<EntityContainer Name="C"><FunctionImport Name="callF" Function="ns.f"/></EntityContainer>' +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const imported = r.ir.operations.find((o) => o.name === "callF");
+    expect(imported).toMatchObject({ kind: "function", parameters: [{ name: "x" }], returnType: { type: "Edm.String" } });
+  });
+
+  it("a set-level restriction listing as many paths as the type has properties", () => {
+    const n = 40_000;
+    const doc =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">' +
+      '<edmx:Reference Uri="x"><edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="Capabilities"/></edmx:Reference>' +
+      '<edmx:DataServices><Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+      '<EntityType Name="T"><Key><PropertyRef Name="p0"/></Key>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="Edm.String"/>`).join("") +
+      '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>' +
+      '<Annotations Target="ns.C/S"><Annotation Term="Capabilities.FilterRestrictions"><Record>' +
+      '<PropertyValue Property="NonFilterableProperties"><Collection>' +
+      Array.from({ length: n }, (_, i) => `<PropertyPath>q${i}</PropertyPath>`).join("") +
+      "<PropertyPath>p1</PropertyPath></Collection></PropertyValue></Record></Annotation></Annotations>" +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const { value, ms } = timed(() => sliceForEntitySet(r.ir, "S"));
+    expect(value.ok).toBe(true);
+    // The one path that names a property is still folded in.
+    expect(value.ok && value.contract.entityType.properties.find((p) => p.name === "p1")?.capabilities).toEqual({ filterable: false });
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it("one complex type per property, through the slice and the starter kit's client", () => {
+    const n = 60_000;
+    const doc =
+      EDMX_HEAD +
+      Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}"/>`).join("") +
+      '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>' +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const slice = timed(() => sliceForEntitySet(r.ir, "S"));
+    expect(slice.ms).toBeLessThan(BUDGET_MS);
+    if (!slice.value.ok) throw new Error(slice.value.detail);
+    expect(slice.value.contract.complexTypes).toHaveLength(n);
+    const contract = slice.value.contract;
+    const kit = timed(() =>
+      buildTypeScriptClient({
+        id: "if_1",
+        name: "x",
+        externalId: "custom:/sap/opu/odata4/sap/zx/srvd/sap/zx/0001",
+        sapProduct: "s4hana",
+        operation: "READ",
+        entitySet: "S",
+        version: 1,
+        solutionName: "s",
+        compiled: { semver: "1.0.0", snapshotId: "snap", contentHash: "0", compiledAt: "2026-10-20T00:00:00.000Z", contract },
+      }),
+    );
+    expect(kit.value).toContain("p59999?: Record<string, unknown> | null;");
+    expect(kit.ms).toBeLessThan(BUDGET_MS);
   });
 });

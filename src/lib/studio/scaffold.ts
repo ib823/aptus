@@ -164,15 +164,31 @@ export function buildOpenApi(
 }
 
 /**
+ * A contract's complex and enum types by qualified name, built once per
+ * contract: looked up per property, a scan of either list made the kit
+ * quadratic in a description with many types.
+ */
+interface CompiledTypeIndex {
+  complex: ReadonlySet<string>;
+  enums: ReadonlyMap<string, InterfaceContract["enumTypes"][number]>;
+}
+
+function compiledTypeIndex(contract: InterfaceContract): CompiledTypeIndex {
+  const enums = new Map<string, InterfaceContract["enumTypes"][number]>();
+  for (const t of contract.enumTypes) if (!enums.has(t.qualifiedName)) enums.set(t.qualifiedName, t);
+  return { complex: new Set(contract.complexTypes.map((t) => t.qualifiedName)), enums };
+}
+
+/**
  * A compiled property as TypeScript: the WIRE type (see json-schema.ts — a V2
  * Int64, Decimal or date arrives as a string).
  */
-function tsTypeOfCompiled(p: IrProperty, contract: InterfaceContract): string {
+function tsTypeOfCompiled(p: IrProperty, contract: InterfaceContract, types: CompiledTypeIndex): string {
   const v = contract.odataVersion;
   let base: string;
-  if (contract.complexTypes.some((t) => t.qualifiedName === p.type)) base = "Record<string, unknown>";
-  else if (contract.enumTypes.some((t) => t.qualifiedName === p.type)) {
-    const en = contract.enumTypes.find((t) => t.qualifiedName === p.type)!;
+  const en = types.enums.get(p.type);
+  if (types.complex.has(p.type)) base = "Record<string, unknown>";
+  else if (en) {
     base = en.isFlags ? "string" : en.members.map((m) => JSON.stringify(m.name)).join(" | ") || "string";
   } else {
     switch (p.type) {
@@ -238,10 +254,11 @@ function buildRecordBody(stored: unknown, compiled?: InterfaceContract): string 
     // index signature stays for a customer's extension fields, which arrive
     // before the next compile does.
     const key = new Set(compiled.entityType.key);
+    const types = compiledTypeIndex(compiled);
     const lines = compiled.entityType.properties.map((p) => {
       const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.name) ? p.name : JSON.stringify(p.name);
       const doc = p.label ? `  /** ${safeComment(p.label.replace(/\s+/g, " "))} */\n` : "";
-      return `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled)};`;
+      return `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled, types)};`;
     });
     lines.push("  /** Fields the compiled description does not name (extension fields added since). */");
     lines.push("  [field: string]: unknown;");

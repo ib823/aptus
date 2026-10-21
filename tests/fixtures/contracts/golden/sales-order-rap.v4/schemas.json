@@ -531,12 +531,18 @@
             "x-odata-type": "Edm.DateTimeOffset"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "PurchaseOrderByCustomer": {
@@ -640,12 +646,18 @@
             "x-odata-type": "Edm.Int64"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "PurchaseOrderByCustomer": {
@@ -780,12 +792,18 @@
             "x-odata-type": "Edm.Int64"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "PurchaseOrderByCustomer": {

@@ -1062,12 +1062,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1167,12 +1173,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1253,12 +1265,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1448,12 +1466,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder2_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1553,12 +1577,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder2_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1639,12 +1669,18 @@
             "x-odata-type": "Edm.Decimal"
           },
           "NetValue": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/SalesOrder2_Money"
+              },
+              {
+                "type": "object",
+                "nullable": true,
+                "enum": [
+                  null
+                ]
               }
             ],
-            "nullable": true,
             "x-odata-type": "com.example.salesorder.Money"
           },
           "Status": {
@@ -1744,12 +1780,18 @@
                 ]
               },
               "record": {
-                "allOf": [
+                "anyOf": [
                   {
                     "$ref": "#/components/schemas/SalesOrder2"
+                  },
+                  {
+                    "type": "object",
+                    "nullable": true,
+                    "enum": [
+                      null
+                    ]
                   }
-                ],
-                "nullable": true
+                ]
               },
               "location": {
                 "type": "string",

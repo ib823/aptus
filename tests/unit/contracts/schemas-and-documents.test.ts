@@ -16,6 +16,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 
+import Ajv from "ajv";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { describe, expect, it } from "vitest";
@@ -279,6 +280,138 @@ describe("the specification validators are not vacuous", () => {
     expect(validateOpenApi30(doc).valid).toBe(true);
     doc.components.schemas.SalesOrder.properties.ContactEmail.type = ["string", "null"];
     expect(validateOpenApi30(doc).valid).toBe(false);
+  });
+});
+
+/**
+ * A 3.0.3 document's components compiled the way 3.0 tooling compiles them:
+ * ajv with OpenAPI's `nullable` keyword (draft-07 underneath), references
+ * rewritten to the root they are compiled under.
+ */
+function oas30Validator(doc: Doc, name: string) {
+  const defs = JSON.parse(JSON.stringify(doc.components.schemas).replaceAll("#/components/schemas/", "#/definitions/"));
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
+  return ajv.compile({ definitions: defs, $ref: `#/definitions/${name}` });
+}
+
+const V4_NULLABLE_REFS =
+  '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+  '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+  '<EnumType Name="Level"><Member Name="Low"/><Member Name="High"/></EnumType>' +
+  '<ComplexType Name="Money"><Property Name="Amount" Type="Edm.Decimal"/></ComplexType>' +
+  '<EntityType Name="T"><Key><PropertyRef Name="Id"/></Key><Property Name="Id" Type="Edm.String" Nullable="false"/>' +
+  '<Property Name="Net" Type="ns.Money"/><Property Name="Level" Type="ns.Level"/>' +
+  '<Property Name="Gross" Type="ns.Money" Nullable="false"/></EntityType>' +
+  '<EntityContainer Name="C"><EntitySet Name="TSet" EntityType="ns.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+
+describe("OpenAPI 3.0.3 schemas mean what they say", () => {
+  const contract = (() => {
+    const r = compileContract(V4_NULLABLE_REFS);
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "TSet");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  })();
+  const doc30 = (c: InterfaceContract = contract, entitySet = "TSet") =>
+    buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version: "3.0.3",
+      interfaces: [
+        iface({ id: "if_r", entitySet, contract: { source: "metadata", contract: c, semver: "1.0.0" } }),
+        iface({ id: "if_c", entitySet, operation: "CREATE", mode: "WRITE", contract: { source: "metadata", contract: c, semver: "1.0.0" } }),
+      ],
+    }) as Doc;
+
+  it("a nullable complex or enum property admits null, and only where the description allows it", () => {
+    const doc = doc30();
+    expect(validateOpenApi30(doc).errors).toEqual([]);
+    const ok = oas30Validator(doc, "TSet");
+    expect(ok({ Id: "1", Net: null, Level: null, Gross: { Amount: 1 } }), JSON.stringify(ok.errors)).toBe(true);
+    expect(ok({ Id: "1", Net: { Amount: 2 }, Level: "High", Gross: { Amount: 1 } })).toBe(true);
+    expect(ok({ Id: "1", Gross: null })).toBe(false); // not nullable
+    expect(ok({ Id: "1", Level: "Medium" })).toBe(false); // not a member
+    expect(ok({ Id: "1", Net: "x" })).toBe(false);
+  });
+
+  it("a create's result carries a null record when SAP answered without a body", () => {
+    const doc = buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version: "3.0.3",
+      interfaces: [
+        iface({ entitySet: "TSet", operation: "CREATE", mode: "WRITE", contract: { source: "metadata", contract, semver: "1.0.0" } }),
+      ],
+    }) as Doc;
+    const ok = oas30Validator(doc, "TSet_CreateResult");
+    const data = { created: true, location: null, interface: { id: "if_c", name: "x", version: 1 }, note: "n" };
+    expect(ok({ data: { ...data, record: null } }), JSON.stringify(ok.errors)).toBe(true);
+    expect(ok({ data: { ...data, record: { Id: "1" } } })).toBe(true);
+    expect(ok({ data: { ...data, record: "x" } })).toBe(false);
+  });
+
+  it("every component of every golden service compiles under 3.0 tooling", () => {
+    for (const [file, set] of [
+      ["business-partner.v2.xml", "A_Partner"],
+      ["sales-order-rap.v4.xml", "SalesOrder"],
+      ["successfactors-style.v2.xml", "cust_TravelRequest"],
+      ["z-travel-booking.v2.xml", "BookingSet"],
+      ["yy1-sales-bonus.v2.xml", "YY1_SALESBONUS"],
+      ["z-bonus-plan-rap.v4.xml", "BonusPlan"],
+    ] as const) {
+      const doc = doc30(slice(file, set), set);
+      for (const name of Object.keys(doc.components.schemas)) expect(() => oas30Validator(doc, name), `${file} ${name}`).not.toThrow();
+    }
+    const so = oas30Validator(doc30(slice("sales-order-rap.v4.xml", "SalesOrder"), "SalesOrder"), "SalesOrder");
+    expect(so({ SalesOrder: "1", NetValue: null }), JSON.stringify(so.errors)).toBe(true);
+  });
+});
+
+describe("Edm.Binary", () => {
+  const BINARY = (version: "1.0" | "4.0") =>
+    version === "4.0"
+      ? '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+        '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+        '<EntityType Name="T"><Key><PropertyRef Name="Id"/></Key><Property Name="Id" Type="Edm.String" Nullable="false"/>' +
+        '<Property Name="Hash" Type="Edm.Binary" MaxLength="16"/></EntityType>' +
+        '<EntityContainer Name="C"><EntitySet Name="TSet" EntityType="ns.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>'
+      : '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">' +
+        '<edmx:DataServices m:DataServiceVersion="2.0"><Schema Namespace="ns" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">' +
+        '<EntityType Name="T"><Key><PropertyRef Name="Id"/></Key><Property Name="Id" Type="Edm.String" Nullable="false"/>' +
+        '<Property Name="Hash" Type="Edm.Binary" MaxLength="16"/></EntityType>' +
+        '<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="TSet" EntityType="ns.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+  const contractOf = (version: "1.0" | "4.0") => {
+    const r = compileContract(BINARY(version));
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "TSet");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  };
+
+  it("bounds the encoded value, not the byte count: a value at its full length is valid", () => {
+    for (const version of ["1.0", "4.0"] as const) {
+      const schemas = standaloneSchemas(contractOf(version), "TSet");
+      const full = Buffer.alloc(16, 0xfb);
+      const encoded = version === "4.0" ? full.toString("base64url") : full.toString("base64");
+      for (const s of [schemas.record, schemas.create!]) {
+        const ok = validator().compile(s);
+        expect(ok({ Id: "1", Hash: encoded }), `${version} ${JSON.stringify(ok.errors)}`).toBe(true);
+        // Padded base64 of the same bytes is accepted on either version.
+        expect(ok({ Id: "1", Hash: full.toString("base64") })).toBe(true);
+        // Past the encoded bound (19 bytes: 28 characters) is still refused.
+        expect(ok({ Id: "1", Hash: Buffer.alloc(19, 0xfb).toString("base64") })).toBe(false);
+      }
+      expect((schemas.record.properties as Record<string, Record<string, unknown>>).Hash).toMatchObject({ maxLength: 24, "x-odata-max-length": 16 });
+    }
+  });
+
+  it("does the same in the 3.0.3 document", () => {
+    const doc = buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version: "3.0.3",
+      interfaces: [iface({ entitySet: "TSet", contract: { source: "metadata", contract: contractOf("1.0"), semver: "1.0.0" } })],
+    }) as Doc;
+    const ok = oas30Validator(doc, "TSet");
+    expect(ok({ Id: "1", Hash: Buffer.alloc(16, 1).toString("base64") }), JSON.stringify(ok.errors)).toBe(true);
   });
 });
 

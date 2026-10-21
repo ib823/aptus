@@ -58,10 +58,14 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceR
   delete entityType.baseType;
 
   // Set-level restrictions name properties of this set's type: fold them in.
+  // By map, not by a scan per path: a description can list as many paths as
+  // properties, and this runs on the verify request.
   const caps = set.capabilities;
+  const propertyByName = new Map<string, IrProperty>();
+  for (const p of entityType.properties) if (!propertyByName.has(p.name)) propertyByName.set(p.name, p);
   const mark = (paths: string[] | undefined, apply: (p: IrProperty) => void) => {
     for (const path of paths ?? []) {
-      const p = entityType.properties.find((x) => x.name === path);
+      const p = propertyByName.get(path);
       if (p) apply(p);
     }
   };
@@ -76,8 +80,9 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceR
   const enumTypes: IrEnumType[] = [];
   const seen = new Set<string>();
   const queue: IrProperty[] = [...entityType.properties];
-  while (queue.length > 0) {
-    const p = queue.shift()!;
+  // A cursor, not shift(): shifting a long array is linear each time.
+  for (let next = 0; next < queue.length; next++) {
+    const p = queue[next]!;
     if (seen.has(p.type)) continue;
     seen.add(p.type);
     const ct = complexByName.get(p.type);
