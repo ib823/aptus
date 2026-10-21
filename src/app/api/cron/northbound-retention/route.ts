@@ -47,6 +47,8 @@ async function enforceRetention(): Promise<NextResponse> {
      */
     await recordCronRun("northbound-retention", startedAt, !result.moreRemaining, {
       deleted: result.deleted,
+      // The console's platform-scope read rows, expired on the same period (P0.14b).
+      consoleReadsDeleted: result.consoleReadsDeleted,
       // Surfaced rather than swallowed: a run that stopped on its budget has
       // NOT cleared the backlog, and "deleted: N" alone would read as done.
       moreRemaining: result.moreRemaining,

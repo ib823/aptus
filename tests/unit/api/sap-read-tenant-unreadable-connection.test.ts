@@ -31,6 +31,8 @@ import type * as DynamicCatalog from "@/lib/sap-public/dynamic-catalog";
 import type * as HubDependencies from "@/lib/sap-public/hub-dependencies";
 import type * as TddConnector from "@/lib/sap-public/tdd-connector";
 
+import { governedQueryRaw } from "../../helpers/governed-loads";
+
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   requireAuthenticated: vi.fn(),
@@ -95,6 +97,11 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     // Probe-all writes each probe into its row in one statement (A23).
     $executeRaw: async () => 1,
+    // A console read loads its connection with the ceiling's grants in one
+    // statement (governed/call-loads.ts), answered here through the queries it
+    // replaced, which still see both rows.
+    $queryRaw: (first: unknown, ...rest: unknown[]) =>
+      governedQueryRaw(() => ({ sapConnection: { findMany: mocks.connectionFindMany } }))(first, ...rest),
   },
 }));
 

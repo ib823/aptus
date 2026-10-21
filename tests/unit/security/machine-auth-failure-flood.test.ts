@@ -33,14 +33,14 @@ const { lookups, valid, dead } = vi.hoisted(() => ({
   dead: new Map<string, Record<string, unknown>>(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", async () => {
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
     solutionClient: {
       // Authentication looks a token up by `tokenHash` and, only on a miss,
-      // by `previousTokenHash` (the rotation overlap, P0.11). Every call is a
-      // database query, so every call is counted.
+      // by `previousTokenHash` (the rotation overlap, P0.11): one statement
+      // since P0.19, answered here through these queries and counted once below.
       findUnique: async ({ where }: { where: { tokenHash?: string; previousTokenHash?: string } }) => {
-        lookups.count++;
         // No key in this file was ever rotated, so a previous-key lookup misses.
         const hash = where.tokenHash;
         const id =
@@ -63,17 +63,23 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     // The third lookup, only when both above miss: the keys a row has dropped
     // (RetiredClientToken, wave 1a final review). None in this file.
-    retiredClientToken: {
-      findUnique: async () => {
-        lookups.count++;
-        return null;
-      },
-    },
+    retiredClientToken: { findUnique: async () => null },
     solution: { findFirst: async () => ({ status: "ACTIVE" }) },
     interface: { findMany: async () => [] },
     apiAccessGrant: { findMany: async () => [] },
-  },
-}));
+  };
+  const statement = governedQueryRaw(() => models);
+  return {
+    prisma: {
+      ...models,
+      // Every statement is a database round trip, so every one is counted.
+      $queryRaw: async (...args: unknown[]) => {
+        lookups.count++;
+        return statement(args[0], ...args.slice(1));
+      },
+    },
+  };
+});
 vi.mock("@/lib/northbound/audit", () => ({ recordNorthboundCall: async () => undefined }));
 
 import { GET as discovery } from "@/app/api/northbound/interfaces/route";
@@ -84,12 +90,11 @@ import { middleware } from "@/middleware";
 const PATH = "/api/northbound/interfaces";
 
 /**
- * The queries one unknown key costs: the lookup by current key, then the one by
- * the key a rotation replaced, then the one by the keys a row has dropped
- * (auth.ts, P0.11). A key that authenticates costs one, because the others run
- * only on a miss.
+ * The queries one unknown key costs: one. Since P0.19 the lookups by current
+ * key, by the key a rotation replaced and by the keys a row has dropped
+ * (auth.ts, P0.11) are one statement (governed/call-loads.ts); it was three.
  */
-const QUERIES_PER_UNKNOWN_KEY = 3;
+const QUERIES_PER_UNKNOWN_KEY = 1;
 
 /** A live credential of its own, so this test's route budget starts full. */
 function validKey(name: string): string {

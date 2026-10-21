@@ -11,16 +11,12 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { circuitOutcomeForFanOut, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import { circuitOutcomeForConsoleRead, type Refusal } from "@/lib/governed/pipeline";
 import { getCurrentUser } from "@/lib/auth/session";
 import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { SapHttpError } from "@/lib/sap-public/upstream-failure";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -59,6 +55,10 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
  * a refused section is a 401/403/404, not a tenant 5xx. And the failureReason
  * beside it, as /preview records it: without one, a row of SAP 429s read 502
  * and nothing else, indistinguishable from a 5xx or a timeout.
+ *
+ * And what the section tells the console circuit, by the preview's own rule
+ * (circuitOutcomeForConsoleRead with SAP's status): a section SAP answered
+ * 429 is recorded 502 but is SAP answering, not failing (P0.14b review).
  */
 async function loadOperationSection(
   product: SapOdataProduct,
@@ -79,8 +79,10 @@ async function loadOperationSection(
       config.limit,
     );
     const fields = chooseFields(preview.rows, config.fields);
+    const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
     return {
-      auditStatus: answeredReadAuditStatus(preview.ok, preview.status),
+      auditStatus,
+      circuit: circuitOutcomeForConsoleRead(auditStatus, preview.status),
       failureReason: failureReasonFromHttp(preview.status),
       section: {
         key: config.key,
@@ -106,6 +108,7 @@ async function loadOperationSection(
     const failure = consoleReadFailure(error, "SAP section load failed");
     return {
       auditStatus: failure.auditStatus,
+      circuit: circuitOutcomeForConsoleRead(failure.auditStatus, error instanceof SapHttpError ? error.status : null),
       failureReason: failure.failureReason,
       section: {
         key: config.key,
@@ -161,10 +164,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // the same role gate. It was found by checking the siblings of the two routes
   // where the gap was reported, which is the only reliable way to close a
   // per-route omission: the omission is never in the route you were told about.
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer });
   if (refusal) return refusal;
 
-  const viewer = await getCurrentUser();
   // The probe guard above has already established a session; this keeps the
   // audit row's actor non-null, and a read we cannot attribute must not run.
   if (!viewer) {
@@ -184,10 +188,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
   const tenant = resolved.tenant;
-  const conn = resolved.connection;
 
-  const correlationId = newCorrelationId();
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
   /*
    * ONE ROW FOR THE WHOLE DASHBOARD LOAD. This route runs one live read per
    * curated section — four on S/4HANA today — against the same tenant in one
@@ -195,59 +196,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * routes use for `-discovery-` and `-schema-`), and `rowCount` carries how many
    * sections actually reached the tenant, which is the number that says how much
    * load this request caused.
+   *
+   * ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings, the
+   * deployment tenant's host check and the console circuit are its steps, each
+   * refusal audited by it, and the sections are read inside its `callSap`,
+   * which writes the one row.
    */
-  const audit = (
-    status: number,
-    rowCount: number | null,
-    extra: { durationMs?: number; failureReason?: string | null } = {},
-  ) =>
-    recordConsoleRead({
-      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: viewer.id,
-      externalId: "-operations-",
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
+  const call = openConsoleCall({
+    viewer,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/operations",
+    externalId: "-operations-",
+  });
+  const correlationId = call.correlationId;
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
 
-  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-  // (P0.13). Every other role passes straight through it.
-  const sandboxOnly = decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn });
-  if (!sandboxOnly.allowed) {
-    await audit(403, null);
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
-      { status: 403 },
-    );
-  }
-
-  // The environment ceiling. Only a stored connection has a landscape to cap.
-  if (conn && viewer.organizationId) {
-    /*
-     * BOTH CONDITIONS, AND THE SECOND IS NOT DEFENSIVE PADDING. `conn` is only
-     * ever set when `resolveReadTenant` matched a stored connection, and it will
-     * not look for one without an organization — so a connection implies an
-     * organization. Naming it here is what lets the guard take a real
-     * organization id rather than a fallback: a grant query against a sentinel
-     * would return nothing and refuse, which looks like a policy decision and is
-     * actually a missing value.
-     */
-    const decision = await decideConsoleRead({
-      organizationId: viewer.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
-        { status: 403 },
-      );
-    }
-  }
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
 
   // Short-TTL cache: 4 live SAP reads per request is expensive; a warm instance
   // serves repeats from cache. ?refresh=1 forces a live re-read. generatedAt is
@@ -269,31 +236,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const startedAt = Date.now();
-  const loaded = await Promise.all(
-    getSapOperations(product).map((config) => loadOperationSection(product, tenant, config)),
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
+
+  // loadOperationSection never throws: a failed section is a section with an
+  // error, recorded at its own status.
+  const run = await call.callSap(
+    () => Promise.all(getSapOperations(product).map((config) => loadOperationSection(product, tenant, config))),
+    {
+      // Every section that answered at all counts as load on the tenant, whether
+      // it returned rows or an error: the request left and was served.
+      //
+      // THE STATUS IS THE SECTIONS' OWN (audit A26), not a flat 502 whenever none
+      // was ok: every section refused 403 is SAP saying "not set up", and was
+      // counted by the upstream-errors incident as the tenant failing. A 5xx (or
+      // no answer) from any section still makes the row a 502. The failureReason
+      // is that of the section whose status the row carries, so SAP's own answer
+      // — a 429 among them — is still on the row.
+      answered: (loaded) => {
+        const decisive = loaded.some((l) => l.auditStatus === 200)
+          ? null
+          : (loaded.find((l) => l.auditStatus >= 500) ?? loaded[0]);
+        return {
+          status: decisive === null ? 200 : decisive === undefined || decisive.auditStatus >= 500 ? 502 : decisive.auditStatus,
+          rowCount: loaded.length,
+          failureReason: decisive?.failureReason ?? null,
+          // The circuit hears what the sections were answered, not the row's
+          // status: every section refused 429 is a 502 row and a healthy
+          // system; every section failing 5xx is one failure.
+          circuit: circuitOutcomeForFanOut(loaded.map((l) => l.circuit)),
+        };
+      },
+      failed: () => ({ status: 502, rowCount: null }),
+    },
   );
-  const sections = loaded.map((l) => l.section);
+  if (!run.ok) throw run.error;
+  const sections = run.value.map((l) => l.section);
   const generatedAt = new Date().toISOString();
   setLiveCache(resolved, cacheKey, { sections, generatedAt });
-
-  // Every section that answered at all counts as load on the tenant, whether it
-  // returned rows or an error: the request left and was served.
-  //
-  // THE STATUS IS THE SECTIONS' OWN (audit A26), not a flat 502 whenever none
-  // was ok: every section refused 403 is SAP saying "not set up", and was
-  // counted by the upstream-errors incident as the tenant failing. A 5xx (or
-  // no answer) from any section still makes the row a 502. The failureReason is
-  // that of the section whose status the row carries, so SAP's own answer — a
-  // 429 among them — is still on the row.
-  const decisive = loaded.some((l) => l.auditStatus === 200)
-    ? null
-    : (loaded.find((l) => l.auditStatus >= 500) ?? loaded[0]);
-  await audit(
-    decisive === null ? 200 : decisive === undefined || decisive.auditStatus >= 500 ? 502 : decisive.auditStatus,
-    sections.length,
-    { durationMs: Date.now() - startedAt, failureReason: decisive?.failureReason ?? null },
-  );
 
   return NextResponse.json({
     data: {

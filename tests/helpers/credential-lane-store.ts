@@ -16,6 +16,8 @@
 
 import { randomUUID } from "node:crypto";
 
+import { governedQueryRaw } from "./governed-loads";
+
 type Row = Record<string, unknown>;
 
 function isPlainValue(v: unknown): boolean {
@@ -184,11 +186,16 @@ export class CredentialLaneStore {
     },
     // No isolation: each test drives one request at a time.
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(this.client),
-    // The Solution row lock (lib/studio/owner-lock.ts): recorded, never contended.
-    $queryRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
-      this.locks.push([values[1], values[0]]);
-      return [];
-    },
+    // The credential lookup (one statement since P0.19) through the queries it
+    // replaced; otherwise the Solution row lock (lib/studio/owner-lock.ts):
+    // recorded, never contended.
+    $queryRaw: governedQueryRaw(
+      (): unknown => this.client,
+      async (_strings: unknown, ...values: unknown[]): Promise<unknown> => {
+        this.locks.push([values[1], values[0]]);
+        return [];
+      },
+    ),
   };
 }
 

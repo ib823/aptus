@@ -26,6 +26,7 @@
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import type { PrefetchedWriteKey } from "@/lib/northbound/auth";
 import { KeyIssuerRefused, refuseKeyIssuer } from "@/lib/northbound/issue";
 import { isKeyLive } from "@/lib/northbound/key-policy";
 import { solutionClientAad, solutionClientRowAad } from "@/lib/sap-public/connection-crypto";
@@ -125,20 +126,29 @@ export async function verifyWriteCredential(
   clientId: string,
   presented: string | null,
   now: Date = new Date(),
+  /**
+   * The same row's write-key fields, read by authentication in the statement
+   * that found the key (auth.ts `withWriteKey`, P0.19), so the write route
+   * does not read the row twice. The caller passes them for `clientId`'s own
+   * row only; without them the row is read here, scoped as before.
+   */
+  prefetched?: { readonly solutionId: string } & PrefetchedWriteKey,
 ): Promise<boolean> {
   if (!presented) return false;
 
-  const client = await prisma.solutionClient.findFirst({
-    where: scopedById(scope, clientId),
-    select: {
-      id: true,
-      solutionId: true,
-      secretsCiphertext: true,
-      isActive: true,
-      revokedAt: true,
-      expiresAt: true,
-    },
-  });
+  const client = prefetched
+    ? { id: clientId, ...prefetched }
+    : await prisma.solutionClient.findFirst({
+        where: scopedById(scope, clientId),
+        select: {
+          id: true,
+          solutionId: true,
+          secretsCiphertext: true,
+          isActive: true,
+          revokedAt: true,
+          expiresAt: true,
+        },
+      });
   if (!client?.secretsCiphertext) return false;
   /*
    * THE WRITE KEY ENDS WHEN ITS CREDENTIAL DOES (P0.11). It is sealed on the

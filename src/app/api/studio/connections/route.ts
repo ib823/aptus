@@ -79,7 +79,16 @@ import {
   normalizeEnvironment,
   SapConnectionChangedError,
   upsertSapConnection,
+  type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { decideRotation } from "@/lib/sap-public/rotation";
+import {
+  probeRotation,
+  provenReadTarget,
+  rotationProbeApplies,
+  rotationProbeMayApply,
+  rotationRequirements,
+} from "@/lib/sap-public/rotation-probe";
 import {
   ENVIRONMENT_VALUES,
   isUnrecognisedEnvironment,
@@ -535,6 +544,8 @@ interface SaveJudgement {
     baseUrl: string;
     client: string | null;
     revision: number;
+    /** Whether the secret being replaced is working today: decides the rotation probe (P0.14). */
+    lastValidationStatus: string | null;
   } | null;
   writableAfter: boolean;
   targetChanges: WriteTargetField[];
@@ -573,6 +584,10 @@ async function judgeSave(
       baseUrl: true,
       client: true,
       revision: true,
+      // isActive and lastValidationStatus say whether the secret being
+      // replaced is working today, which decides whether the new one is
+      // probed first (P0.14).
+      lastValidationStatus: true,
     },
   });
 
@@ -751,6 +766,22 @@ export async function POST(request: NextRequest) {
    * been, never performed.
    */
   let missing: StepUpMissing | null = null;
+  /** The new secret was proven against SAP before it replaced a working one (P0.14). */
+  let rotationProbed = false;
+  const secrets = {
+    ...(input.username ? { username: input.username } : {}),
+    ...(input.password ? { password: input.password } : {}),
+    ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
+    ...(input.clientId ? { clientId: input.clientId } : {}),
+    ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+    ...(input.companyId ? { companyId: input.companyId } : {}),
+    ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+    ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
+    ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
+    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+    ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
+    ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+  };
   for (let attempt = 1; ; attempt += 1) {
     const verdict = await judgeSave(organizationId, key, input, environment, writeEnabled);
     if ("refusal" in verdict) return withStepUpRecorded(missing, verdict.refusal);
@@ -769,6 +800,66 @@ export async function POST(request: NextRequest) {
     });
     if (!stepUp.ok) return stepUp.response;
     missing = stepUp.outcome === "warned" ? stepUp.missing : null;
+
+    /*
+     * PROBE BEFORE SWAP (P0.14, rotation.ts). Re-saving a connection is how its
+     * secret is rotated, and this used to write the new one unconditionally: a
+     * mistyped password took every lane on that system down until someone
+     * noticed. Now, when the row being replaced is active and its secret is
+     * working — its last probe was OK, or a lane has proven a read through it
+     * (a sweep's one TIMEOUT does not make a working secret fair game) — the
+     * new credentials are tried first, with nothing written: sign in, read the
+     * metadata if the old secret could, read one row of a dataset this
+     * connection has proven. Only if every step passes is the secret stored;
+     * otherwise the working one keeps serving and the form says which step
+     * failed.
+     *
+     * After step-up, so nothing reaches SAP for a caller who has not passed it.
+     * Judged on the row this attempt judged (P0.3 review round 3): a save
+     * judged again after the row changed is probed against the row as it now
+     * is. A new, deactivated or never-proven connection, and one SAP last
+     * refused (UNAUTHORIZED), saves exactly as before;
+     * COREEDGE_ROTATION_PROBE=off turns the probe off.
+     */
+    const current = judged.existing;
+    rotationProbed = false;
+    const readTarget =
+      current && rotationProbeMayApply(current) ? await provenReadTarget(organizationId, current.id) : null;
+    if (current && rotationProbeApplies(current, readTarget)) {
+      const candidate: ResolvedSapConnection = {
+        source: "db",
+        id: current.id,
+        organizationId,
+        product: input.product,
+        key,
+        label: input.label,
+        baseUrl: input.baseUrl.replace(/\/+$/, ""),
+        authType: input.authType,
+        secrets,
+        oauthTokenUrl: input.oauthTokenUrl ?? null,
+        writeEnabled,
+        apiPath: input.apiPath ?? null,
+        timeoutMs: input.timeoutMs ?? null,
+        environment,
+        client: input.client ?? null,
+      };
+      const required = rotationRequirements(current, readTarget);
+      const probe = await probeRotation(candidate, readTarget, undefined, { metadataRequired: required.metadataRequired });
+      const decision = decideRotation(probe, new Date(), required);
+      if (!decision.swap) {
+        // The attempt is on the record — which step stopped it, never what was typed.
+        await writeConfigAudit({
+          organizationId,
+          actorId: userId,
+          entityType: "Connection",
+          entityId: current.id,
+          action: "TEST_CONNECT",
+          after: { event: "connection_rotation_refused", product: input.product, key, failedAt: decision.failedAt },
+        });
+        return withStepUpRecorded(missing, studioError("VALIDATION_ERROR", decision.reason));
+      }
+      rotationProbed = true;
+    }
 
     /*
      * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.
@@ -803,20 +894,7 @@ export async function POST(request: NextRequest) {
         label: input.label,
         baseUrl: input.baseUrl,
         authType: input.authType,
-        secrets: {
-          ...(input.username ? { username: input.username } : {}),
-          ...(input.password ? { password: input.password } : {}),
-          ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
-          ...(input.clientId ? { clientId: input.clientId } : {}),
-          ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-          ...(input.companyId ? { companyId: input.companyId } : {}),
-          ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
-          ...(input.samlPrivateKey ? { samlPrivateKey: input.samlPrivateKey } : {}),
-          ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
-          ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-          ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
-          ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
-        },
+        secrets,
         oauthTokenUrl: input.oauthTokenUrl ?? null,
         environment,
         client: input.client ?? null,
@@ -929,6 +1007,8 @@ export async function POST(request: NextRequest) {
       ...(disablesWrites ? { writesDisabled: true } : {}),
       ...(reactivates ? { reactivated: true } : {}),
       secretsRotated: true,
+      // The new secret was proven against SAP before it replaced a working one.
+      ...(rotationProbed ? { rotationProbed: true } : {}),
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });

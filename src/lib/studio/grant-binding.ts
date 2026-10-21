@@ -37,7 +37,7 @@
  * zero. The runbook is docs/runbooks/coreedge-grant-binding.md.
  */
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 export type GrantBindingMode = "legacy" | "strict";
 
@@ -176,7 +176,11 @@ export function grantsUsableUnder<G extends UsableGrantFields>(
 /** The hourly throttle on the "an unbound grant was used" stamp. */
 export const UNBOUND_USE_STAMP_INTERVAL_MS = 60 * 60 * 1000;
 
-type GrantStampDb = { apiAccessGrant: { updateMany: Prisma.TransactionClient["apiAccessGrant"]["updateMany"] } };
+/** Anything that can send one raw statement: the app client, a test's own. */
+type GrantStampDb = { $executeRaw(query: Prisma.Sql): PromiseLike<number> };
+
+/** A JS instant as a `timestamp(3)` column holds it: UTC wall time, whatever the session's zone. */
+const utc = (at: Date) => Prisma.sql`(${at.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
 
 /**
  * Record that unbound legacy grants authorised a call: the durable signal
@@ -185,6 +189,12 @@ type GrantStampDb = { apiAccessGrant: { updateMany: Prisma.TransactionClient["ap
  * NEVER FAILS THE CALL. The grant has already authorised it; a failed stamp
  * is logged and passed over. At most one write per grant per hour, and none
  * at all when every grant was stamped recently.
+ *
+ * ONE STATEMENT (P0.19 review round 1). Prisma sends `updateMany` as BEGIN,
+ * UPDATE, COMMIT: three round trips on a pooled connection for one stamp.
+ * This is the same UPDATE, with the same conditions, sent alone. The tenant
+ * guard does not see a raw statement, so the organisation is in its WHERE
+ * (pinned by tests/unit/studio/unbound-grant-stamp-sql.test.ts).
  */
 export async function recordUnboundGrantUse(
   db: GrantStampDb,
@@ -203,15 +213,12 @@ export async function recordUnboundGrantUse(
     grantIds: due,
   });
   try {
-    await db.apiAccessGrant.updateMany({
-      where: {
-        organizationId,
-        id: { in: due },
-        interfaceId: null,
-        OR: [{ unboundLastUsedAt: null }, { unboundLastUsedAt: { lt: cutoff } }],
-      },
-      data: { unboundLastUsedAt: now },
-    });
+    await db.$executeRaw(Prisma.sql`
+      UPDATE "ApiAccessGrant" SET "unboundLastUsedAt" = ${utc(now)}
+      WHERE "organizationId" = ${organizationId}
+        AND "id" IN (${Prisma.join(due)})
+        AND "interfaceId" IS NULL
+        AND ("unboundLastUsedAt" IS NULL OR "unboundLastUsedAt" < ${utc(cutoff)})`);
   } catch (err) {
     console.error("[grant-binding] failed to record an unbound grant's use", {
       organizationId,

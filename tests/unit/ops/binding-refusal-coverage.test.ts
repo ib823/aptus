@@ -106,8 +106,13 @@ describe("both northbound paths record the reason", () => {
      * The write route is the one that was missing. A detector counting a
      * column nobody writes reports zero forever, and zero is what a healthy
      * system also reports — which is why this went unseen.
+     *
+     * Since P0.14 both bind through the governed pipeline's one step, whose
+     * refusal carries the reason to the audit row the route writes.
      */
-    expect(SRC(file)).toMatch(/binding\.reason/);
+    expect(SRC(file)).toMatch(/await bindConnection\(/);
+    expect(SRC(file)).toMatch(/if \(!bound\.ok\) return refuse\(bound\.refusal\)/);
+    expect(SRC("src/lib/governed/pipeline.ts")).toMatch(/audit: \{ bindingRefusal: binding\.reason \}/);
   });
 
   it("the audit writer actually persists the field", () => {

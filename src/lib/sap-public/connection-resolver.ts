@@ -23,6 +23,7 @@ import { Prisma } from "@prisma/client";
 
 import { CONNECTION_GROUP_UNREADABLE_STATUS, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
+import { loadConsoleConnection, type CeilingGrantRow } from "@/lib/governed/call-loads";
 import {
   DEFAULT_API_KEY_HEADER,
   isAllowedApiKeyHeader,
@@ -105,11 +106,19 @@ export interface ResolvedSapConnection {
    * The row's settings revision when it was read (SapConnection.revision):
    * bumped by every save. A lane check made through this object records its
    * evidence only while the row still carries it (lane-check-sweep.ts
-   * `recordLaneCheck`). Always set by `openConnectionRow`; optional only so a
+   * `recordLaneCheck`). Always set by `openConnectionRow` (from a Prisma row
+   * or the governed loads, which read the column too); optional only so a
    * connection built outside the table (a test fixture) need not invent one —
    * and a check through such an object records nothing, which fails safe.
    */
   revision?: number;
+  /**
+   * How the governed pipeline reaches this system (P0.14,
+   * src/lib/governed/transport.ts). Optional so a connection built by a
+   * caller that predates the column reads as DIRECT, which every stored row
+   * is unless P1.6 marks it TWIN.
+   */
+  transport?: "DIRECT" | "TWIN";
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -170,7 +179,27 @@ export async function resolveSapConnections(
   return Promise.all(rows.map(openConnectionRow));
 }
 
-type SapConnectionRow = Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number];
+/**
+ * The stored columns a connection is opened from: a Prisma row, or the same
+ * columns read by the governed access load (governed/call-loads.ts, P0.19).
+ */
+type SapConnectionRow = Pick<
+  Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number],
+  | "id"
+  | "organizationId"
+  | "product"
+  | "key"
+  | "label"
+  | "baseUrl"
+  | "authType"
+  | "oauthTokenUrl"
+  | "secretsCiphertext"
+  | "client"
+  | "writeEnabled"
+  | "apiPath"
+  | "timeoutMs"
+  | "revision"
+> & { readonly environment: string | null; readonly transport: string };
 
 /**
  * One stored row, decrypted and normalized. Rejects when the row cannot be opened.
@@ -201,9 +230,11 @@ async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnec
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
     timeoutMs: r.timeoutMs,
-    environment: r.environment,
+    // The column's own enums: Prisma types them, the access load reads them as text.
+    environment: r.environment as SapEnvironment | null,
     client: r.client,
     revision: r.revision,
+    transport: r.transport as "DIRECT" | "TWIN",
   };
 }
 
@@ -215,7 +246,21 @@ export async function resolveSapConnection(
   organizationId: string,
   product: string,
   key?: string | null,
-): Promise<ResolvedSapConnection | null> {
+  options: { readonly withCeilingGrants?: boolean } = {},
+): Promise<(ResolvedSapConnection & { readonly ceilingGrants?: readonly CeilingGrantRow[] }) | null> {
+  if (key && options.withCeilingGrants === true) {
+    /*
+     * A CONSOLE READ (P0.14b review round 5): the same named row, and the
+     * grants its environment ceiling judges, in ONE statement
+     * (governed/call-loads.ts loadConsoleConnection), so the console's
+     * authorise step needs no second round trip. The same row is chosen and
+     * opened exactly as below.
+     */
+    if (!organizationId) return null;
+    const load = await loadConsoleConnection(organizationId, product, key);
+    if (!load.connection || load.connection.key !== key) return null;
+    return { ...(await openConnectionRow(load.connection)), ceilingGrants: load.grants };
+  }
   if (key) {
     /*
      * A NAMED KEY OPENS ONLY THAT ROW. This used to open every active row for
@@ -329,6 +374,28 @@ export async function resolveSapConnectionForEnvironment(
   let estate: BindingEstate<ResolvedSapConnection>;
   try {
     estate = { kind: "connections", connections: await resolveSapConnections(organizationId, product) };
+  } catch {
+    estate = { kind: "unreadable" };
+  }
+  return bindingFor(estate, environment, operation === "WRITE" ? "write" : "read", sapClient);
+}
+
+/**
+ * `resolveSapConnectionForEnvironment` on rows already read: the active
+ * connections of one organisation for one product, oldest first, as the
+ * governed access load reads them in the interface's statement (P0.19). The
+ * same opening, the same fail-closed estate, and the same one binding
+ * predicate (P0.2 authorisation.ts `bindingFor`) the lane board asks.
+ */
+export async function bindStoredConnections(
+  rows: readonly SapConnectionRow[],
+  environment: string,
+  operation: "READ" | "WRITE",
+  sapClient?: string | null,
+): Promise<ConnectionBinding> {
+  let estate: BindingEstate<ResolvedSapConnection>;
+  try {
+    estate = { kind: "connections", connections: await Promise.all(rows.map(openConnectionRow)) };
   } catch {
     estate = { kind: "unreadable" };
   }

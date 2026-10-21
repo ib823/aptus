@@ -1,0 +1,1143 @@
+{
+  "read: no token": {
+    "status": 401,
+    "answer": "UNAUTHENTICATED",
+    "message": "Missing or invalid client token.",
+    "retryAfter": null,
+    "audits": []
+  },
+  "read: unknown token": {
+    "status": 401,
+    "answer": "UNAUTHENTICATED",
+    "message": "Missing or invalid client token.",
+    "retryAfter": null,
+    "audits": []
+  },
+  "read: rate limited": {
+    "status": 429,
+    "answer": "RATE_LIMITED",
+    "message": "Too many requests for this client credential.",
+    "retryAfter": "12",
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 429
+      }
+    ]
+  },
+  "read: limiter unavailable": {
+    "status": 503,
+    "answer": "LIMITER_UNAVAILABLE",
+    "message": "Request limits cannot be checked right now, so the request was refused for safety. Nothing was done; try again shortly.",
+    "retryAfter": "30",
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": "LIMITER_UNAVAILABLE",
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 503
+      }
+    ]
+  },
+  "read: interface not found": {
+    "status": 404,
+    "answer": "NOT_FOUND",
+    "message": "No such interface.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "no-such-interface",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 404
+      }
+    ]
+  },
+  "read: another solution's interface": {
+    "status": 404,
+    "answer": "NOT_FOUND",
+    "message": "No such interface.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:other-solution>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 404
+      }
+    ]
+  },
+  "read: write interface": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This interface is configured for writes, which this API does not serve.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "read: no grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "No approved access grant for this capability in DEV.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:no-grant>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "read: no connection for TEST": {
+    "status": 403,
+    "answer": "CONNECTION_NOT_CONFIGURED",
+    "message": "No SAP connection is configured for the TEST environment. This credential is bound to TEST and will not fall back to another landscape.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": "NO_MATCH_FOR_ENVIRONMENT",
+        "clientTokenId": "<client:TEST>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "TEST",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "read: unknown product": {
+    "status": 403,
+    "answer": "CONNECTION_NOT_CONFIGURED",
+    "message": "This interface names an SAP product the platform does not recognise, so no connection can ever serve it. Fix the interface's product in Studio — adding a connection will not help.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": "UNKNOWN_PRODUCT",
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:bogus-product>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "read: no entity set": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:no-entity>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "read: served": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": "<solution>",
+        "status": 200
+      }
+    ]
+  },
+  "read: SAP 500": {
+    "status": 502,
+    "answer": "UPSTREAM_ERROR",
+    "message": "The tenant responded with HTTP 500.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_500",
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 0,
+        "solutionId": "<solution>",
+        "status": 502
+      }
+    ]
+  },
+  "read: SAP 403": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "The tenant refused this read (HTTP 403): the communication arrangement is not set up, or this entity is not released to the connected user.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_403",
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 0,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "read: SAP timeout": {
+    "status": 504,
+    "answer": "UPSTREAM_TIMEOUT",
+    "message": "The tenant did not respond within 15000ms.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "TIMEOUT",
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 0,
+        "solutionId": "<solution>",
+        "status": 504
+      }
+    ]
+  },
+  "write: no token": {
+    "status": 401,
+    "answer": "UNAUTHENTICATED",
+    "message": "Missing or invalid client token.",
+    "retryAfter": null,
+    "audits": []
+  },
+  "write: wrong write key": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "A valid write credential is required for this operation.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "write: rate limited": {
+    "status": 429,
+    "answer": "RATE_LIMITED",
+    "message": "Too many requests for this client credential.",
+    "retryAfter": "12",
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 429
+      }
+    ]
+  },
+  "write: limiter unavailable": {
+    "status": 503,
+    "answer": "LIMITER_UNAVAILABLE",
+    "message": "Request limits cannot be checked right now, so the request was refused for safety. Nothing was done; try again shortly.",
+    "retryAfter": "30",
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": "LIMITER_UNAVAILABLE",
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 503
+      }
+    ]
+  },
+  "write: no idempotency key": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "An Idempotency-Key header is required for writes (8-255 chars, [A-Za-z0-9_.:-]). Reuse the same key when retrying.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "write: bad body": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "Expected { record: object }.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "write: interface not found": {
+    "status": 404,
+    "answer": "NOT_FOUND",
+    "message": "No such interface.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "no-such-interface",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 404
+      }
+    ]
+  },
+  "write: read-only interface": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This interface is configured for reads. Writing through it is not permitted.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "-",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "write: no connection for TEST": {
+    "status": 403,
+    "answer": "CONNECTION_NOT_CONFIGURED",
+    "message": "No SAP connection is configured for the TEST environment. This credential is bound to TEST and will not fall back to another landscape.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": "NO_MATCH_FOR_ENVIRONMENT",
+        "clientTokenId": "<client:TEST>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "TEST",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "write: writes disabled on the connection": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "Writes are not enabled on this SAP connection.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:SANDBOX>",
+        "connectionEnvironment": "SANDBOX",
+        "connectionId": "<connection:SANDBOX>",
+        "dryRun": false,
+        "environment": "SANDBOX",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "write: entity chosen by the caller": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "The dataset is part of this data feed's definition and cannot be chosen per call. Remove `entity` from the request body, or define a feed for the dataset you mean.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "write: created": {
+    "status": 201,
+    "answer": "ok",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 201
+      }
+    ]
+  },
+  "write: replayed": {
+    "status": 201,
+    "answer": "ok",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": true,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 201
+      }
+    ]
+  },
+  "write: same key, other payload": {
+    "status": 409,
+    "answer": "CONFLICT",
+    "message": "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": null,
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 409
+      }
+    ]
+  },
+  "write: SAP 500": {
+    "status": 502,
+    "answer": "UPSTREAM_ERROR",
+    "message": "The tenant responded with HTTP 500. (the tenant did not issue a CSRF token)",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": "HTTP_500",
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 502
+      }
+    ]
+  },
+  "write: SAP timeout": {
+    "status": 504,
+    "answer": "UPSTREAM_TIMEOUT",
+    "message": "The tenant did not answer the CSRF handshake within 20000ms, so the write was never sent and nothing was created. Retry with the same Idempotency-Key.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": false,
+        "environment": "DEV",
+        "externalId": "supplier-invoices",
+        "failureReason": "TIMEOUT",
+        "interfaceId": "<interface:write>",
+        "operation": "WRITE",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 504
+      }
+    ]
+  },
+  "broker-run: rate limited": {
+    "status": 200,
+    "answer": "refused:RATE_LIMITED",
+    "message": "This credential has spent its budget of 60 calls a minute — the same budget the deployed application shares. Wait 12s and run again.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 429
+      }
+    ]
+  },
+  "broker-run: limiter unavailable": {
+    "status": 200,
+    "answer": "refused:LIMITER_UNAVAILABLE",
+    "message": "Request limits cannot be checked right now, so the request was refused for safety. Nothing was done; try again shortly.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "LIMITER_UNAVAILABLE",
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 503
+      }
+    ]
+  },
+  "broker-run: ambiguous credential": {
+    "status": 200,
+    "answer": "refused:AMBIGUOUS_CREDENTIAL",
+    "message": "This solution holds live credentials for DEV, TEST, SANDBOX. Pick which one to run as — each binds to a different system.",
+    "retryAfter": null,
+    "audits": []
+  },
+  "broker-run: no grant": {
+    "status": 200,
+    "answer": "refused:NO_APPROVED_GRANT",
+    "message": "No approved access grant for this capability in DEV. (This is the refusal the deployed application would receive.)",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-contracts",
+        "failureReason": null,
+        "interfaceId": "<interface:no-grant>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "broker-run: no connection for TEST": {
+    "status": 200,
+    "answer": "refused:NO_MATCH_FOR_ENVIRONMENT",
+    "message": "No SAP connection is configured for the TEST environment. This credential is bound to TEST and will not fall back to another landscape. (This is the refusal the deployed application would receive.)",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": "NO_MATCH_FOR_ENVIRONMENT",
+        "clientTokenId": "<client:TEST>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "TEST",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "broker-run: entity chosen by the caller": {
+    "status": 200,
+    "answer": "refused:ENTITY_NOT_YOURS_TO_CHOOSE",
+    "message": "This run asked for \"A_Other\", but this feed serves \"A_PurchaseOrder\". The dataset is part of the feed's definition — the deployed application cannot choose one either, so a run against a different dataset would not tell you anything about the real call. Change the feed's dataset in Studio, or re-record this case.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "broker-run: no entity set": {
+    "status": 200,
+    "answer": "refused:NO_ENTITY_SET",
+    "message": "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:no-entity>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 400
+      }
+    ]
+  },
+  "broker-run: unknown product": {
+    "status": 200,
+    "answer": "refused:UNKNOWN_PRODUCT",
+    "message": "This interface names an SAP product the platform does not recognise, so no connection can ever serve it. Fix the interface's product in Studio — adding a connection will not help. (This is the refusal the deployed application would receive.)",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": "UNKNOWN_PRODUCT",
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:bogus-product>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": "<solution>",
+        "status": 403
+      }
+    ]
+  },
+  "broker-run: ran": {
+    "status": 200,
+    "answer": "ran",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": "<solution>",
+        "status": 200
+      }
+    ]
+  },
+  "broker-run: SAP 500": {
+    "status": 200,
+    "answer": "ran",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": null,
+        "bindingRefusal": null,
+        "clientTokenId": "<client:DEV>",
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_500",
+        "interfaceId": "<interface:read>",
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 0,
+        "solutionId": "<solution>",
+        "status": 502
+      }
+    ]
+  },
+  "broker-run: sandbox developer on a DEV key": {
+    "status": 200,
+    "answer": "refused:SANDBOX_ONLY",
+    "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This system is declared DEV. Pick a Sandbox tenant, or ask an administrator of your organization for a role that can request access.",
+    "retryAfter": null,
+    "audits": []
+  },
+  "preview: unknown product": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "Unknown product",
+    "retryAfter": null,
+    "audits": []
+  },
+  "preview: no entity": {
+    "status": 400,
+    "answer": "VALIDATION_ERROR",
+    "message": "An entity set is required (?entity=).",
+    "retryAfter": null,
+    "audits": []
+  },
+  "preview: DEV connection served": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ]
+  },
+  "preview: SAP 500": {
+    "status": 502,
+    "answer": "INTERNAL_ERROR",
+    "message": "SAP preview request failed",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_500",
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 502
+      }
+    ]
+  },
+  "preview: SAP 403": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_403",
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 0,
+        "solutionId": null,
+        "status": 403
+      }
+    ]
+  },
+  "preview: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ]
+  },
+  "preview: sandbox developer on a DEV connection": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This system is declared DEV. Pick a Sandbox tenant, or ask an administrator of your organization for a role that can request access.",
+    "retryAfter": null,
+    "audits": [
+      {
+        "actorUserId": "<user:sandbox_developer>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ]
+  }
+}

@@ -26,12 +26,8 @@ import {
   getSapProduct,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
-import {
-  decideConsoleRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { circuitOutcomeForProbes, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import type { Refusal } from "@/lib/governed/pipeline";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
 import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
 import { addressVerificationScope, recordAddressProbe } from "@/lib/sap-public/catalogue-address-verification";
@@ -162,38 +158,58 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    * ten-minute window. A deployment tenant has no connection and so no landscape
    * to cap — it is still recorded, and it is still admin-only above.
    */
-  const correlationId = newCorrelationId();
-  const conn = resolved.connection;
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
-    recordConsoleRead({
-      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: viewer.id,
-      // One row for the whole fan-out, rowCount carrying how many probes were
-      // made — the -probe-fanout- convention /entities uses, for its reason:
-      // the board is asking how much load this put on the tenant.
-      externalId: "-probe-all-",
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
-  if (conn && viewer.organizationId) {
-    const decision = await decideConsoleRead({
-      organizationId: viewer.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
-        { status: 403 },
-      );
-    }
+  const call = openConsoleCall({
+    viewer,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/hub-content/probe-all",
+    // One row for the whole fan-out, rowCount carrying how many probes were
+    // made — the -probe-fanout- convention /entities uses, for its reason:
+    // the board is asking how much load this put on the tenant.
+    externalId: "-probe-all-",
+    request: { includeDeprecated: body.includeDeprecated === true },
+  });
+  const correlationId = call.correlationId;
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
+  // ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings and
+  // the deployment tenant's host check, each refusal audited by it. A sandbox
+  // developer's SANDBOX ceiling (P0.13) is now applied here too, as on every
+  // other console read; the role is not a Studio builder, so the gate above
+  // already refused it, and this changes nothing for any role that works.
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
+
+  /*
+   * PROBE THE REQUESTED PRODUCT'S OWN CATALOGUE. This queried
+   * `appliesToPublic: true` regardless of `?product=`, so "Probe all" on a
+   * SuccessFactors or RISE tenant fired the S/4 PUBLIC list at it —
+   * manufactured URLs against SF (404 by construction), and the wrong
+   * published set against private/on-prem. Non-edition scopes have no
+   * dynamically-probeable rows at all (path derivation waits for a live
+   * system), and ECC has no list — both refuse honestly instead of storing
+   * hundreds of meaningless outcomes under the tenant's key.
+   */
+  const scope = hubCatalogueScope(product);
+  if (scope.kind !== "edition") {
+    const message =
+      scope.kind === "none"
+        ? scope.reason
+        : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
+    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
   }
+  // The console's circuit, before the rate limit too (P0.14b review): enforcing,
+  // a run an open circuit refuses never reaches the tenant, so it must not spend
+  // the tenant's ten-minute window either. The permit is recorded only inside
+  // callSap; the product check above comes first so a request refused for what
+  // it asks never takes the circuit's half-open trial. Past the cooldown
+  // contain() takes that trial, so every exit below that does not reach
+  // callSap (the 429, the limiter outage, a throw from the catalogue query)
+  // gives it back with call.release() (review round 3): held, it refused the
+  // organization's other console reads of this system for PROBE_LEASE_MS
+  // although nothing was sent to SAP.
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
 
   /*
    * WHERE THIS RUN'S RESULTS ARE FILED. Derived once, outside the worker, from
@@ -220,6 +236,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     PROBE_ALL_LIMIT,
   );
   if (!gate.allowed) {
+    await call.release();
     // Not "ran moments ago" when the limiter is down (audit A44).
     if (isLimiterOutage(gate)) return limiterUnavailableResponse(gate);
     return NextResponse.json(
@@ -233,24 +250,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  /*
-   * PROBE THE REQUESTED PRODUCT'S OWN CATALOGUE. This queried
-   * `appliesToPublic: true` regardless of `?product=`, so "Probe all" on a
-   * SuccessFactors or RISE tenant fired the S/4 PUBLIC list at it —
-   * manufactured URLs against SF (404 by construction), and the wrong
-   * published set against private/on-prem. Non-edition scopes have no
-   * dynamically-probeable rows at all (path derivation waits for a live
-   * system), and ECC has no list — both refuse honestly instead of storing
-   * hundreds of meaningless outcomes under the tenant's key.
-   */
-  const scope = hubCatalogueScope(product);
-  if (scope.kind !== "edition") {
-    const message =
-      scope.kind === "none"
-        ? scope.reason
-        : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
-    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
-  }
   // 2608 WS3 — SAP-deprecated services are skipped by default: probing a
   // retirement proves nothing about readiness and its bucket is DEPRECATED
   // regardless of the answer. `includeDeprecated: true` opts in (the result is
@@ -267,10 +266,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // P0.8: `sap-s4-*` wrapper rows are excluded at the query AND by isProbeable
   // below. Their addresses are malformed by construction; probing them filed
   // a 404 per wrapper under the tenant and counted them as probeable services.
-  const rows = await prisma.sapHubContent.findMany({
-    where: probeAllCandidateWhere(scope.where, { includeDeprecated }),
-    select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
-  });
+  const rows = await prisma.sapHubContent
+    .findMany({
+      where: probeAllCandidateWhere(scope.where, { includeDeprecated }),
+      select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true },
+    })
+    .catch(async (error: unknown) => {
+      await call.release();
+      throw error;
+    });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).
   const targets = rows.filter((r) =>
     isProbeable({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }),
@@ -306,6 +310,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    * and their real answers are stored; nothing more is started.
    */
   let credentialFailure: { kind: "refused" | "unavailable"; detail: string } | null = null;
+  // What each request that left was answered, for the console circuit.
+  const answers: Array<{ status: number }> = [];
 
   async function worker(): Promise<void> {
     while (cursor < targets.length && !credentialFailure) {
@@ -328,6 +334,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         credentialFailure ??= { kind: result.credentialError, detail: result.error ?? "" };
         continue;
       }
+      answers.push({ status: result.status });
       const { read, write } = deriveReadWrite(result.entities ?? []);
       // MERGE under THIS tenant's OWNER-SCOPED key — preserves sibling keys
       // (source/apiId/steps), the legacy singular `probe`, and every other
@@ -348,22 +355,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       byOutcome[bucket] = (byOutcome[bucket] ?? 0) + 1;
     }
   }
-  const startedAt = Date.now();
-  try {
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
-  } catch (error) {
-    // The requests already reached the tenant; the row says so even when a
-    // write failed part-way through the run.
-    await audit(502, requested, { durationMs: Date.now() - startedAt });
-    throw error;
-  }
   // `as` because TypeScript cannot see the workers assign it.
-  const stopped = credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
+  const stoppedBy = () => credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
+  const run = await call.callSap(
+    () => Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker)),
+    {
+      // A setup problem is a refusal, recorded as one (403); only a token
+      // endpoint that failed is a 502. Either way, the tenant was not asked.
+      //
+      // The circuit hears what the services were answered, not the row's 200
+      // (P0.14b review): a run against a system that is down is a failure,
+      // never the "ok" that closes the circuit the preview shares. A run a
+      // credential stopped is told by its status, as the preview tells it.
+      answered: () => {
+        const stopped = stoppedBy();
+        return stopped
+          ? { status: stopped.kind === "refused" ? 403 : 502, rowCount: requested }
+          : { status: 200, rowCount: requested, circuit: circuitOutcomeForProbes(answers) };
+      },
+      // The requests already reached the tenant; the row says so even when a
+      // write failed part-way through the run. That failure is the database's,
+      // not SAP's: the circuit hears only what SAP answered.
+      failed: () => ({ status: 502, rowCount: requested, circuit: circuitOutcomeForProbes(answers) }),
+    },
+  );
+  if (!run.ok) throw run.error;
+  const stopped = stoppedBy();
   if (stopped) {
-    // A setup problem is a refusal, recorded as one (403); only a token
-    // endpoint that failed is a 502. Either way, the tenant was not asked.
     const status = stopped.kind === "refused" ? 403 : 502;
-    await audit(status, requested, { durationMs: Date.now() - startedAt });
     return NextResponse.json(
       {
         error: {
@@ -377,8 +396,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status },
     );
   }
-  await audit(200, requested, { durationMs: Date.now() - startedAt });
-
   try {
     await logDecision({
       assessmentId: null,

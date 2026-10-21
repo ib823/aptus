@@ -48,7 +48,11 @@ const READ_STATUSES: readonly ReadStatus[] = LEDGER_READ_STATUSES;
 
 /**
  * A stored SapServiceHealth row as facts. The columns are free text; a value
- * nobody defined becomes null — "we do not know" — never a cast.
+ * nobody defined becomes null — "we do not know" — never a cast. A metadata
+ * status outside the vocabulary (the probe's NO_PROBE_PATH) is therefore
+ * "never checked", and a read answered 401 stays the read hop's observed
+ * sign-in refusal. The one reader for the "Services readable" tile and the SAP
+ * system screen's per-service verdict and owner (P0.14).
  */
 export function serviceHealthFactsOf(row: {
   readonly metadataStatus: string | null;

@@ -20,6 +20,7 @@ import type { $Enums } from "@prisma/client";
 
 import { CONNECTION_NEEDS_ATTENTION, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
+import { FAILURE_REASON_CIRCUIT_OPEN } from "@/lib/governed/containment";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import {
@@ -106,6 +107,10 @@ export async function GET(request: NextRequest) {
        * connection, so not "the upstream SAP system returning errors". The
        * reason is matched with an explicit null branch: `not` alone would
        * drop every row with no reason, which is most of them.
+       *
+       * Likewise a call the circuit breaker refused (503 CIRCUIT_OPEN, P0.14,
+       * only under COREEDGE_CIRCUIT_BREAKER=enforce): SAP was not called, and
+       * the failures that opened the circuit are already counted.
        */
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, {
@@ -113,7 +118,10 @@ export async function GET(request: NextRequest) {
           status: { gte: 500 },
           dryRun: false,
           replayed: false,
-          OR: [{ failureReason: null }, { failureReason: { not: FAILURE_REASON_LIMITER_UNAVAILABLE } }],
+          OR: [
+            { failureReason: null },
+            { failureReason: { notIn: [FAILURE_REASON_LIMITER_UNAVAILABLE, FAILURE_REASON_CIRCUIT_OPEN] } },
+          ],
         }),
       }),
       prisma.northboundAuditEvent.count({

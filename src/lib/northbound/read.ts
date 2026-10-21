@@ -136,10 +136,15 @@ export interface ReadEntitySetInput {
  *
  * Bounded by an AbortController: a hung tenant fails the request rather than
  * holding a server thread until something else times out.
+ *
+ * `fetchImpl` and `authHeadersFor` are the transport (governed/transport.ts):
+ * the credential step is network too (a token exchange), so a transport that
+ * must not reach the network replaces both.
  */
 export async function readEntitySet(
   input: ReadEntitySetInput,
   fetchImpl: typeof fetch = fetch,
+  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>> = buildAuthHeadersFromConnection,
 ): Promise<NorthboundReadResult> {
   const started = Date.now();
   const { connection } = input;
@@ -162,7 +167,7 @@ export async function readEntitySet(
      */
     let authHeaders: Record<string, string>;
     try {
-      authHeaders = await buildAuthHeadersFromConnection(connection);
+      authHeaders = await authHeadersFor(connection);
     } catch (err) {
       const { status, detail, failureReason } = credentialStepOutcome(err);
       return { status, httpStatus: null, records: [], detail, durationMs: Date.now() - started, failureReason };

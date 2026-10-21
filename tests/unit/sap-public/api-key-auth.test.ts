@@ -139,7 +139,9 @@ describe("the route and the form know the type", () => {
   it("every stored-connection request path spreads the header record", () => {
     for (const file of ["src/lib/northbound/read.ts", "src/lib/northbound/write.ts", "src/lib/studio/connection-health.ts"]) {
       const src = read(file);
-      expect(src, file).toContain("buildAuthHeadersFromConnection(");
+      // Called directly, or (the broker's executors, P0.14) as the default
+      // credential step a transport may replace.
+      expect(src, file).toMatch(/buildAuthHeadersFromConnection\(|=\s*buildAuthHeadersFromConnection\b/);
       expect(src, file).not.toContain("buildAuthHeaderFromConnection(");
     }
   });

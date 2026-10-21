@@ -26,7 +26,8 @@
  * is its I/O: it reads the interface row and the grants fetched for it, scoped
  * to the token's organization, and hands them over. The lane board, the lane
  * sweep and discovery hand the same rows to the same function, so none of them
- * can call a lane live that this refuses.
+ * can call a lane live that this refuses. The governed pipeline's authorise
+ * step (governed/pipeline.ts `authorise`) is this module.
  *
  * v1 serves READ only. A WRITE-mode interface is refused here rather than
  * quietly downgraded, because silently turning a write request into a read is a
@@ -34,6 +35,8 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { afterResponse } from "@/lib/governed/after-response";
+import { loadInterfaceAccess, type AccessLoad, type StoredConnectionRow } from "@/lib/governed/call-loads";
 import {
   authorisesHere,
   interfaceRefusal,
@@ -45,19 +48,33 @@ import {
 } from "@/lib/northbound/authorisation";
 import {
   grantBindingMode,
-  grantsForInterfaceWhere,
   isBoundTo,
   recordUnboundGrantUse,
   type GrantBindingMode,
   type GrantedInterface,
 } from "@/lib/studio/grant-binding";
-import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
+import type { TenantScope } from "@/lib/studio/tenant-scope";
 
 // The names this module has always exported, now defined beside the decision.
 export type { AccessibleInterface, AccessRefusal };
 
+/**
+ * The organisation's active connections for the interface's product, read in
+ * the same statement as the interface (P0.19), for the pipeline's
+ * bindConnection step. Present only when asked for.
+ */
+export interface PrefetchedConnections {
+  readonly product: string;
+  readonly rows: readonly StoredConnectionRow[];
+}
+
+export interface AccessLoadOptions {
+  /** Also read the connections that may serve the call (the pipeline does). */
+  readonly withConnections?: boolean;
+}
+
 export type AccessResult =
-  | { ok: true; iface: AccessibleInterface }
+  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections }
   | { ok: false; reason: AccessRefusal; message: string };
 
 /** What the grant lookup selects: the decision, its end, and its binding. */
@@ -109,6 +126,11 @@ export type ReadDecision = AccessDecision;
  * After a call is authorised: if no BOUND grant was among the live ones, the
  * call rode on legacy matching alone, and that is recorded (at most hourly per
  * grant) as the signal strict binding would refuse it.
+ *
+ * After the response (P0.19 review round 1): the stamp decides nothing about
+ * this call, so it does not hold the caller up. It still counts in the
+ * database budget (src/lib/governed/db-budget.ts). Outside a request it runs
+ * at once and is awaited, as before.
  */
 async function noteLegacyAuthority(
   scope: TenantScope,
@@ -117,13 +139,19 @@ async function noteLegacyAuthority(
   now: Date,
 ): Promise<void> {
   if (live.some((g) => isBoundTo(g, iface))) return;
-  await recordUnboundGrantUse(prisma, scope.organizationId, live, now);
+  await afterResponse(() => recordUnboundGrantUse(prisma, scope.organizationId, live, now));
 }
 
 /**
- * One route's access check: the interface row, then (unless the row alone
- * refuses) the grants bound to it on its product or, legacy, unbound — then
- * `authorisesHere`.
+ * One route's access check: the interface row and the grants bound to it on
+ * its product or, legacy, unbound — then `authorisesHere`.
+ *
+ * ONE STATEMENT (P0.19). The interface, its grants (grantsForInterfaceWhere,
+ * in SQL) and, when asked, the connections that may serve the call are read
+ * together (governed/call-loads.ts `loadInterfaceAccess`), every table scoped
+ * to the token's organization. The grants were a second query, asked only when
+ * the row alone did not refuse; they now cost nothing extra, and are judged
+ * only then.
  */
 async function resolveAccess(
   scope: TenantScope,
@@ -132,32 +160,34 @@ async function resolveAccess(
   environment: string,
   route: "read" | "write",
   now: Date,
+  options: AccessLoadOptions,
 ): Promise<AccessResult> {
   // Scoped by construction: the id cannot escape the token's organization.
-  const iface = await prisma.interface.findFirst({
-    where: scopedById(scope, interfaceId),
-    select: READABLE_INTERFACE_SELECT,
-  });
+  const loaded = await loadInterfaceAccess(scope.organizationId, solutionId, interfaceId, environment, options);
+  const iface = loaded.iface;
   if (!iface) {
     return { ok: false, reason: "INTERFACE_NOT_FOUND", message: "No such interface." };
   }
 
-  // Asked first so an interface the row alone refuses (a sibling's, the wrong
-  // mode, a deprecated one) never costs a grant query.
+  // Asked first, so an interface the row alone refuses (a sibling's, the
+  // wrong mode, a deprecated one) is refused on the row whatever its grants say.
   const refused = interfaceRefusal(iface, solutionId, route);
   if (refused) return refused;
 
-  const grants: AuthorisingGrant[] = await prisma.apiAccessGrant.findMany({
-    // scopedWhere injects the organization; the rest narrows within it, to
-    // grants bound to THIS interface on its product or (legacy) unbound.
-    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
-    select: GRANT_SELECT,
-  });
+  // Bound to THIS interface on its product, or (legacy) unbound: in the load's SQL.
+  const grants: readonly AuthorisingGrant[] = loaded.grants;
 
   const decision = authorisesHere({ iface, solutionId, environment, route, grants, now });
   if (!decision.ok) return decision;
   await noteLegacyAuthority(scope, decision.authorising, iface, now);
-  return { ok: true, iface: decision.iface };
+  return { ok: true, iface: decision.iface, ...connectionsOf(loaded) };
+}
+
+/** The prefetched connections, on a result asked for them. */
+function connectionsOf(loaded: AccessLoad): { connections?: PrefetchedConnections } {
+  return loaded.connections === null || loaded.iface === null
+    ? {}
+    : { connections: { product: loaded.iface.sapProduct, rows: loaded.connections } };
 }
 
 /**
@@ -181,8 +211,9 @@ export async function resolveWritableInterface(
   interfaceId: string,
   environment: string,
   now: Date = new Date(),
+  options: AccessLoadOptions = {},
 ): Promise<AccessResult> {
-  return resolveAccess(scope, solutionId, interfaceId, environment, "write", now);
+  return resolveAccess(scope, solutionId, interfaceId, environment, "write", now, options);
 }
 
 export async function resolveReadableInterface(
@@ -191,8 +222,9 @@ export async function resolveReadableInterface(
   interfaceId: string,
   environment: string,
   now: Date = new Date(),
+  options: AccessLoadOptions = {},
 ): Promise<AccessResult> {
-  return resolveAccess(scope, solutionId, interfaceId, environment, "read", now);
+  return resolveAccess(scope, solutionId, interfaceId, environment, "read", now, options);
 }
 
 /**

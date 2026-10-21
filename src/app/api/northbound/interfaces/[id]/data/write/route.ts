@@ -26,31 +26,33 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { noteFirstCall } from "@/lib/coreedge/journey";
-import { resolveWritableInterface } from "@/lib/northbound/access";
-import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
-import { noteFailedCredential } from "@/lib/northbound/auth-failures";
+import { afterResponse } from "@/lib/governed/after-response";
+import {
+  authenticate,
+  authenticateWriteKey,
+  authorise,
+  bindConnection,
+  callSapWrite,
+  carryLastUsedStamp,
+  contain,
+  GovernedAudit,
+  northboundRefusalResponse,
+  prefetchedConnectionsFor,
+  rateLimit,
+  refusal,
+  requireWritesEnabled,
+  type Refusal,
+} from "@/lib/governed/pipeline";
 import { customServiceUnverified } from "@/lib/northbound/authorisation";
-import { resolveBindingFor } from "@/lib/northbound/binding";
-import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   completeIdempotencyKey,
   isValidIdempotencyKey,
   releaseIdempotencyKey,
   reserveIdempotencyKey,
 } from "@/lib/northbound/idempotency";
-import {
-  newCorrelationId,
-  northboundError,
-  northboundOk,
-  northboundThrottleRefusal,
-  unauthenticated,
-} from "@/lib/northbound/respond";
-import { verifyWriteCredential } from "@/lib/northbound/write-credential";
-import { writeEntitySet, writeHttpStatusFor } from "@/lib/northbound/write";
-import { connectionRefusalMessage } from "@/lib/sap-public/connection-resolver";
+import { newCorrelationId, northboundError, northboundOk } from "@/lib/northbound/respond";
+import { writeHttpStatusFor } from "@/lib/northbound/write";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -84,147 +86,94 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const correlationId = newCorrelationId();
 
   // 1 — authenticate the read identity.
-  const bearer = extractBearer(request.headers.get("authorization"));
-  const auth = await authenticateClientToken(bearer);
-  if (!auth.ok) {
-    console.warn("[northbound-write] auth rejected", { reason: auth.reason, correlationId });
-    // A key matching no row spends the address's failed-lookup budget, which
-    // the edge reads first; a real key that refuses is bounded by its own.
-    await noteFailedCredential(request.headers, bearer, auth.reason);
-    return unauthenticated(correlationId);
-  }
-  const client = auth.client;
-  void touchClientLastUsed(client.clientId, client.organizationId);
+  // The write key's row fields come back in the same statement (P0.19).
+  const auth = await authenticate(request.headers, correlationId, "northbound-write", { withWriteKey: true });
+  if (!auth.ok) return northboundRefusalResponse(auth.refusal, correlationId);
+  const client = auth.value;
 
   const { id } = await ctx.params;
 
-  const audit = (
-    status: number,
-    interfaceId: string | null,
-    externalId: string,
-    // Supplied once a connection has actually been bound. Absent on every
-    // refusal that happens before that point, which is itself the truth: no
-    // connection was involved.
-    conn?: { id: string; environment: string | null },
-    durationMs?: number,
-    /*
-     * WHY A REFUSAL REASON ON THE WRITE PATH.
-     *
-     * This helper never passed one, so every binding refusal on a WRITE
-     * audited as a bare 403 with `bindingRefusal: null` — indistinguishable
-     * from a grant-gate denial. The `binding-refused` incident rule counts
-     * that column, so the CRITICAL control that exists to catch "a live,
-     * granted credential that fails every call" has only ever seen READS.
-     * A write-only integration could fail indefinitely and the console would
-     * report zero incidents, which is the same silence the rule was written
-     * to end.
-     */
-    bindingRefusal?: string | null,
-    /** Why the upstream call failed, from the write result. See failure-reason.ts. */
-    failureReason?: string | null,
-    /**
-     * TRUE for an idempotent replay. Without it the replayed row was
-     * indistinguishable from a fresh call: the usage rollup billed every
-     * same-key retry of one created record as another write, and a stored
-     * 504 retried five times fired the upstream-errors incident after one
-     * SAP call. See `replayed` on NorthboundAuditEvent.
-     */
-    replayed?: boolean,
-  ) =>
-    recordNorthboundCall({
+  /*
+   * One row per call, about what it had reached (pipeline.ts GovernedAudit).
+   *
+   * WHY A REFUSAL REASON ON THE WRITE PATH. The old helper never passed one,
+   * so every binding refusal on a WRITE audited as a bare 403 with
+   * `bindingRefusal: null` — indistinguishable from a grant-gate denial. The
+   * `binding-refused` incident rule counts that column, so the CRITICAL
+   * control that exists to catch "a live, granted credential that fails every
+   * call" had only ever seen READS. The binding step's refusal carries it.
+   *
+   * A connection is named only once one has actually been bound. Absent on
+   * every refusal before that point, which is itself the truth: no connection
+   * was involved.
+   */
+  const audit = new GovernedAudit(
+    {
       organizationId: client.organizationId,
       solutionId: client.solutionId,
-      interfaceId,
       operation: "WRITE",
-      externalId,
       environment: client.environment,
-      status,
-      rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      durationMs: durationMs ?? null,
-      bindingRefusal: bindingRefusal ?? null,
-      failureReason: failureReason ?? null,
-      replayed: replayed ?? false,
-    });
+      // Stated on every row, so a row says "none" rather than leaving it out.
+      connectionId: null,
+      connectionEnvironment: null,
+      durationMs: null,
+      bindingRefusal: null,
+      failureReason: null,
+      replayed: false,
+    },
+    { interfaceId: id, externalId: "-" },
+  );
+  const refuse = async (r: Refusal) => {
+    await audit.refused(r);
+    return northboundRefusalResponse(r, correlationId);
+  };
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
-  // leaked read token cannot write. Sent as its own header.
-  const writeSecret = request.headers.get("x-coreedge-write-key");
-  // Verified against THIS token's row: a write key minted for the TEST
-  // credential does not authorise a call made with the DEV one.
-  const credentialOk = await verifyWriteCredential(client.scope, client.clientId, writeSecret);
-  if (!credentialOk) {
-    await audit(403, id, "-");
-    return northboundError(
-      "FORBIDDEN",
-      "A valid write credential is required for this operation.",
-      403,
-      correlationId,
-    );
-  }
+  // leaked read token cannot write. Sent as its own header, and verified
+  // against THIS token's row: a write key minted for the TEST credential does
+  // not authorise a call made with the DEV one.
+  const writeKey = await authenticateWriteKey(client, request.headers.get("x-coreedge-write-key"));
+  if (!writeKey.ok) return refuse(writeKey.refusal);
 
   // 3 — throttle. Writes get their OWN per-credential bucket, deliberately
   // separate from the read bucket (`northbound:`): a read burst must not be
-  // able to starve a write, nor a write burst reads. The comment here used to
-  // claim "the same bucket as reads" while the key said otherwise — one
-  // credential genuinely holds two independent 60/min budgets.
-  const rate = await checkRateLimit(`northbound-write:${client.clientId}`, RATE_LIMITS.northbound);
-  if (!rate.allowed) {
-    // 429 for this credential's own use, 503 when the limiter is down (A44).
-    // Either way before the key is reserved, so a retry with it is a fresh try.
-    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests for this client credential.");
-    await audit(refusal.status, id, "-", undefined, undefined, undefined, refusal.failureReason);
-    return refusal.response;
-  }
+  // able to starve a write, nor a write burst reads. One credential genuinely
+  // holds two independent 60/min budgets. 429 for this credential's own use,
+  // 503 when the limiter is down (A44) — either way before the key is
+  // reserved, so a retry with it is a fresh try.
+  const rate = await rateLimit(`northbound-write:${client.clientId}`, "Too many requests for this client credential.");
+  if (!rate.ok) return refuse(rate.refusal);
 
   // 4 — idempotency key is MANDATORY. Refusing the write outright is the only
   // honest option: without a key a retry is indistinguishable from a new intent,
   // and we would have no way to avoid duplicating a record.
   const idempotencyKey = request.headers.get("idempotency-key");
   if (!idempotencyKey || !isValidIdempotencyKey(idempotencyKey)) {
-    await audit(400, id, "-");
-    return northboundError(
-      "VALIDATION_ERROR",
-      "An Idempotency-Key header is required for writes (8-255 chars, [A-Za-z0-9_.:-]). Reuse the same key when retrying.",
-      400,
-      correlationId,
+    return refuse(
+      refusal(
+        "resolveInterface",
+        "IDEMPOTENCY_KEY_INVALID",
+        "An Idempotency-Key header is required for writes (8-255 chars, [A-Za-z0-9_.:-]). Reuse the same key when retrying.",
+      ),
     );
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    await audit(400, id, "-");
-    return northboundError("VALIDATION_ERROR", "Expected { record: object }.", 400, correlationId);
+    return refuse(refusal("resolveInterface", "BODY_INVALID", "Expected { record: object }."));
   }
 
   // 5 — authorize: ACTIVE write interface, owned by this solution, with a live
-  // approved WRITE grant for this environment.
-  const access = await resolveWritableInterface(client.scope, client.solutionId, id, client.environment);
-  if (!access.ok) {
-    /*
-     * An unsupported operation is a 400, not a 403: nothing about access is
-     * wrong, and a 403 tells the caller to go and fix access. It is a gap in
-     * the interface's definition — the same class, and the same answer, as a
-     * feed that names no dataset further down.
-     */
-    const status =
-      access.reason === "INTERFACE_NOT_FOUND" || access.reason === "NOT_THIS_SOLUTION"
-        ? 404
-        : access.reason === "OPERATION_NOT_SUPPORTED"
-          ? 400
-          : 403;
-    await audit(status, id, "-");
-    return northboundError(
-      status === 404 ? "NOT_FOUND" : status === 400 ? "VALIDATION_ERROR" : "FORBIDDEN",
-      access.message,
-      status,
-      correlationId,
-    );
-  }
-  const iface = access.iface;
+  // approved WRITE grant for this environment. An unsupported operation is a
+  // 400, not a 403 (pipeline.ts REFUSAL_STATUS): nothing about access is
+  // wrong, it is a gap in the interface's definition. Audited against the id
+  // the caller sent, as every refusal before this point is.
+  const access = await authorise("WRITE", client.scope, client.solutionId, id, client.environment);
+  if (!access.ok) return refuse(access.refusal);
+  const iface = access.value;
+  audit.about(iface.id, iface.externalId);
 
   // 6 — resolve the client's OWN connection, and check ITS write flag. A
   // connection with writeEnabled=false is a deliberate per-tenant veto that
@@ -234,68 +183,51 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // connections the organization has. `writeEnabled` is not a substitute — it is
   // a per-connection yes/no that says nothing about WHICH landscape it enables
   // writes on, so it cannot stand in for knowing you are not in production.
-  // `bindingFor` on the product's estate, as the read route and the lane
-  // board ask it (P0.2); an unknown product is UNKNOWN_PRODUCT — see the read
-  // route.
-  const product = getSapProduct(iface.sapProduct);
-  const binding = await resolveBindingFor(
+  const bound = await bindConnection(
     client.organizationId,
     iface.sapProduct,
     client.environment,
-    "write",
+    "WRITE",
     client.sapClient,
+    prefetchedConnectionsFor(iface),
   );
+  if (!bound.ok) return refuse(bound.refusal);
+  const { connection, product } = bound.value;
 
-  if (!binding.ok) {
-    await audit(403, iface.id, iface.externalId, undefined, undefined, binding.reason);
-    return northboundError(
-      "CONNECTION_NOT_CONFIGURED",
-      connectionRefusalMessage(binding.reason, client.environment),
-      403,
-      correlationId,
-    );
-  }
-  const connection = binding.connection;
-
-  if (!connection.writeEnabled) {
-    await audit(403, iface.id, iface.externalId, connection);
-    return northboundError(
-      "FORBIDDEN",
-      "Writes are not enabled on this SAP connection.",
-      403,
-      correlationId,
-    );
-  }
+  const enabled = requireWritesEnabled(connection);
+  if (!enabled.ok) return refuse(enabled.refusal);
 
   // The interface's OWN service when it carries one, the catalogue's otherwise —
   // never a fallback from one to the other (see interface-service.ts).
-  const resolved = await resolveInterfaceService(product!, iface);
+  const resolved = await resolveInterfaceService(product, iface);
   const service = resolved?.service ?? null;
   // The governed value, and only it. A caller-supplied `entity` that disagrees is
   // refused rather than ignored (see bodySchema); one that agrees is a harmless
   // restatement and proceeds.
   const entitySet = iface.entitySet;
   if (parsed.data.entity !== undefined && parsed.data.entity !== entitySet) {
-    await audit(400, iface.id, iface.externalId, connection);
-    return northboundError(
-      "VALIDATION_ERROR",
-      "The dataset is part of this data feed's definition and cannot be chosen per call. " +
-        "Remove `entity` from the request body, or define a feed for the dataset you mean.",
-      400,
-      correlationId,
+    return refuse(
+      refusal(
+        "resolveInterface",
+        "ENTITY_NOT_YOURS_TO_CHOOSE",
+        "The dataset is part of this data feed's definition and cannot be chosen per call. " +
+          "Remove `entity` from the request body, or define a feed for the dataset you mean.",
+        { audit: { connection } },
+      ),
     );
   }
   if (!service || !entitySet) {
-    await audit(400, iface.id, iface.externalId, connection);
-    return northboundError(
-      "VALIDATION_ERROR",
-      service
-        ? "This data feed names no dataset, so there is nowhere to write. Set its entity set in Studio."
-        : iface.servicePath
-          ? "This interface's own service path is not valid for its product. Fix it in Studio."
-          : "The catalogue service could not be resolved.",
-      400,
-      correlationId,
+    return refuse(
+      refusal(
+        "resolveInterface",
+        service ? "NO_ENTITY_SET" : iface.servicePath ? "SERVICE_PATH_INVALID" : "SERVICE_UNRESOLVED",
+        service
+          ? "This data feed names no dataset, so there is nowhere to write. Set its entity set in Studio."
+          : iface.servicePath
+            ? "This interface's own service path is not valid for its product. Fix it in Studio."
+            : "The catalogue service could not be resolved.",
+        { audit: { connection } },
+      ),
     );
   }
 
@@ -313,12 +245,13 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
    */
   // The same gate the lane board previews (authorisation.ts, P0.2).
   if (resolved!.source === "custom" && customServiceUnverified(iface, client.environment, connection)) {
-    await audit(400, iface.id, iface.externalId, connection);
-    return northboundError(
-      "VALIDATION_ERROR",
-      `This data feed's own SAP service has not been verified in ${client.environment}, through the connection and SAP client this write uses, since it last changed. Verify it in Studio for ${client.environment} before writing.`,
-      400,
-      correlationId,
+    return refuse(
+      refusal(
+        "resolveInterface",
+        "CUSTOM_SERVICE_UNVERIFIED",
+        `This data feed's own SAP service has not been verified in ${client.environment}, through the connection and SAP client this write uses, since it last changed. Verify it in Studio for ${client.environment} before writing.`,
+        { audit: { connection } },
+      ),
     );
   }
 
@@ -339,6 +272,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       entitySet,
       interfaceVersion: iface.version,
     },
+    // The key's lastUsedAt stamp, when due, rides in the claim's statement
+    // rather than costing one of its own after the response (P0.19).
+    stamp: carryLastUsedStamp(client),
   });
 
   if (reservation.outcome === "replay") {
@@ -348,17 +284,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // Indistinguishable to the CLIENT, not to the trail. The row is marked as
     // a replay, and names the connection this request was bound to — it got
     // past the binding, and without one it counted as a call refused before
-    // reaching any connection. No duration: SAP was not called.
-    await audit(
-      reservation.status,
-      iface.id,
-      iface.externalId,
-      connection,
-      undefined,
-      undefined,
-      undefined,
-      true,
-    );
+    // reaching any connection. No duration: SAP was not called. Answered
+    // before the breaker is asked, so a replay is served while SAP is down.
+    await audit.record(reservation.status, { connection, replayed: true });
     return NextResponse.json(reservation.body, {
       status: reservation.status,
       headers: {
@@ -381,33 +309,39 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
    * client branching on it today is not broken; Retry-After is what is new.
    */
   if (reservation.outcome === "conflict") {
-    await audit(409, iface.id, iface.externalId);
-    if (reservation.reason === "PAYLOAD_MISMATCH") {
-      return northboundError(
-        "CONFLICT",
-        "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write.",
-        409,
-        correlationId,
-      );
-    }
-    return northboundError(
-      "CONFLICT",
-      "A request with this Idempotency-Key is still in progress. Retry with the same Idempotency-Key after Retry-After to get its outcome; do not send it under a new key.",
-      409,
-      correlationId,
-      { "retry-after": String(IN_FLIGHT_RETRY_AFTER_SECONDS) },
+    return refuse(
+      reservation.reason === "PAYLOAD_MISMATCH"
+        ? refusal(
+            "resolveInterface",
+            "IDEMPOTENCY_CONFLICT",
+            "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write.",
+          )
+        : refusal(
+            "resolveInterface",
+            "IDEMPOTENCY_IN_FLIGHT",
+            "A request with this Idempotency-Key is still in progress. Retry with the same Idempotency-Key after Retry-After to get its outcome; do not send it under a new key.",
+            { headers: { "retry-after": String(IN_FLIGHT_RETRY_AFTER_SECONDS) } },
+          ),
     );
   }
 
-  // 8 — write. Timed around the upstream call only — see the read route.
-  const startedAt = Date.now();
-  const result = await writeEntitySet({
-    connection,
-    servicePath: service.path,
-    entitySet,
-    payload: parsed.data.record,
-  });
-  const durationMs = Date.now() - startedAt;
+  // 8 — contain: the circuit breaker for this SAP system, after the replay
+  // and conflict answers (neither calls SAP). Observes only, unless
+  // COREEDGE_CIRCUIT_BREAKER=enforce. A refusal releases the key: nothing was
+  // sent, so a retry with it after Retry-After is a fresh try.
+  const circuit = await contain(bound.value, correlationId);
+  if (!circuit.ok) {
+    await releaseIdempotencyKey(client.scope, reservation.recordId);
+    return refuse(circuit.refusal);
+  }
+
+  // 9 — write. Timed around the upstream call only — see the read route.
+  const sap = await callSapWrite(
+    bound.value,
+    { servicePath: service.path, entitySet, payload: parsed.data.record },
+    circuit.value,
+  );
+  const { result, durationMs } = sap;
   const status = writeHttpStatusFor(result.status);
 
   let response: NextResponse;
@@ -448,21 +382,30 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   //
   // Released only on an explicit `false`. Storing can never write twice, so
   // anything less certain than that is stored.
-  if (result.attempted === false) {
-    await releaseIdempotencyKey(client.scope, reservation.recordId);
-  } else {
-    await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+  try {
+    if (result.attempted === false) {
+      await releaseIdempotencyKey(client.scope, reservation.recordId);
+    } else {
+      await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+    }
+    await audit.record(status, { connection, durationMs, failureReason: result.failureReason });
+  } finally {
+    // THE BREAKER HEARS LAST. SAP may already have created the record, so its
+    // outcome is stored under the key and audited before anything waits on
+    // the breaker's store (pipeline.ts SapWriteCall). Bounded, never throws.
+    await sap.reportOutcome();
   }
-  await audit(status, iface.id, iface.externalId, connection, durationMs, undefined, result.failureReason);
   // The app's first successful call in this environment (P2.12); in memory
-  // after this instance's first, as on the read route.
-  await noteFirstCall({
-    organizationId: client.organizationId,
-    solutionId: client.solutionId,
-    environment: connection.environment ?? client.environment,
-    channel: "broker",
-    status,
-  });
+  // after this instance's first, and after the response, as on the read route.
+  await afterResponse(() =>
+    noteFirstCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      environment: connection.environment ?? client.environment,
+      channel: "broker",
+      status,
+    }),
+  );
   // Same as the read route: the cause meets the correlation id here and only here.
   if (result.failureReason) {
     console.warn("[northbound] upstream write failed", {

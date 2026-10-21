@@ -167,6 +167,13 @@ export async function decideConsoleRead(input: {
   organizationId: string;
   environment: SapEnvironment | null;
   now?: Date;
+  /**
+   * The organization's grants for `environment`, when they were read already
+   * in the connection's own statement (governed/call-loads.ts
+   * loadConsoleConnection, P0.14b review round 5): judged here exactly as the
+   * rows this function would have read, and not read again.
+   */
+  grants?: readonly { readonly decision: string; readonly expiresAt: Date | null; readonly revokedAt: Date | null }[];
 }): Promise<ConsoleReadDecision> {
   const { organizationId, environment } = input;
   const now = input.now ?? new Date();
@@ -202,10 +209,12 @@ export async function decideConsoleRead(input: {
    * outside SANDBOX. The northbound discovery route has been wrong on exactly
    * this twice; one function, one answer.
    */
-  const grants = await prisma.apiAccessGrant.findMany({
-    where: { organizationId, environment },
-    select: { decision: true, expiresAt: true, revokedAt: true },
-  });
+  const grants =
+    input.grants ??
+    (await prisma.apiAccessGrant.findMany({
+      where: { organizationId, environment },
+      select: { decision: true, expiresAt: true, revokedAt: true },
+    }));
 
   const live = grants.some(
     (g) =>

@@ -49,8 +49,14 @@ describe("the read path", () => {
   it("takes the entity set from the interface and nothing else", () => {
     // Through the definition discovery shares (P0.4, A42), which reads the
     // interface's own entity set and takes no request input at all.
-    expect(src).toContain("resolveReadDefinition(product!, iface)");
-    expect(src).toContain("const { service, entitySet } = definition;");
+    // Since P0.14 through the governed pipeline's resolveReadTarget step,
+    // which calls exactly that function with the bound product and the
+    // interface the grant gate returned.
+    expect(src).toContain("resolveReadTarget(bound.value.product, iface, connection,");
+    expect(src).toContain("const { service, entitySet } = target.value;");
+    const pipeline = flat(read("src/lib/governed/pipeline.ts"));
+    expect(pipeline).toContain("const definition = await resolveReadDefinition(product, iface);");
+    expect(pipeline).toContain("entitySet: definition.entitySet");
     const definition = flat(read("src/lib/northbound/read-definition.ts"));
     expect(definition).toContain("entitySet: iface.entitySet");
     expect(definition).not.toMatch(/searchParams|request/);
@@ -112,7 +118,14 @@ describe("the discovery console keeps its parameter, deliberately", () => {
   });
 
   it("but is capped and recorded", () => {
-    expect(src).toContain("decideConsoleRead");
-    expect(src).toContain("recordConsoleRead");
+    // Since P0.14b the ceiling and the row are the console pipeline's steps
+    // (src/lib/governed/console.ts: authorise() runs decideConsoleRead, and
+    // callSap records the read); the read is made only inside callSap.
+    expect(src).toContain("openConsoleCall(");
+    expect(src).toContain(".authorise()");
+    expect(src).toContain(".callSap(");
+    const consoleModule = read("src/lib/governed/console.ts");
+    expect(consoleModule).toContain("decideConsoleRead(");
+    expect(consoleModule).toContain("recordConsoleRead(");
   });
 });

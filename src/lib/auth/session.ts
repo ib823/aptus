@@ -2,6 +2,7 @@
 
 import { cache } from "react";
 import { createHash, randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 import type { SessionUser } from "@/types/assessment";
@@ -100,6 +101,56 @@ export async function createSession(
   return { token, hadExistingSession: revoked.count > 0 };
 }
 
+/** One row of `sessionLookup`: the session, its user, and what validation needs of the organization. */
+interface SessionLookupRow {
+  id: string;
+  isRevoked: boolean;
+  expiresAt: Date;
+  lastActiveAt: Date | null;
+  mfaVerified: boolean;
+  passkeyAssertedAt: Date | null;
+  userId: string;
+  email: string;
+  name: string;
+  image: string | null;
+  role: string;
+  organizationId: string | null;
+  mfaEnabled: boolean;
+  isActive: boolean;
+  /** Null when the user has no organization. */
+  organizationMfaPolicy: string | null;
+  hasWebAuthn: boolean;
+}
+
+/**
+ * THE SESSION LOOKUP, ONE STATEMENT (P0.14b review round 4, P0.19's budget).
+ *
+ * It was a nested Prisma `select` (session → user → organization, and the
+ * user's passkey count), which Prisma, without the `relationJoins` preview,
+ * sends as THREE statements — every signed-in request paid them, and a
+ * Workbench console read, which validated its session twice, sent six before
+ * its own three. This is the same read joined: the same rows, the same
+ * columns. `Session.userId` is a required foreign key, so the inner join is
+ * the required relation; the organization is optional, so its join is left.
+ * Only whether a passkey exists is read, as `_count > 0` was used.
+ *
+ * By the token's hash, the only lookup of a session by credential; the
+ * Session and User tables are not tenant-anchored (lib/db/tenant-guard.ts).
+ * tests/integration/session-lookup.test.ts holds it to the Prisma select it
+ * replaces, row for row.
+ */
+export function sessionLookup(tokenHash: string): Prisma.Sql {
+  return Prisma.sql`/* auth:session-lookup */
+    SELECT s."id", s."isRevoked", s."expiresAt", s."lastActiveAt", s."mfaVerified", s."passkeyAssertedAt",
+      u."id" AS "userId", u."email", u."name", u."image", u."role", u."organizationId", u."mfaEnabled", u."isActive",
+      o."mfaPolicy" AS "organizationMfaPolicy",
+      EXISTS (SELECT 1 FROM "WebAuthnCredential" w WHERE w."userId" = u."id") AS "hasWebAuthn"
+    FROM "Session" s
+    JOIN "User" u ON u."id" = s."userId"
+    LEFT JOIN "Organization" o ON o."id" = u."organizationId"
+    WHERE s."tokenHash" = ${tokenHash}`;
+}
+
 /**
  * Validate a session token and return the user if valid.
  * The raw token comes from the cookie; we hash it before lookup so the
@@ -108,36 +159,12 @@ export async function createSession(
 export async function validateSession(
   token: string,
 ): Promise<SessionUser | null> {
-  const session = await prisma.session.findUnique({
-    where: { tokenHash: hashSessionToken(token) },
-    select: {
-      id: true,
-      isRevoked: true,
-      expiresAt: true,
-      lastActiveAt: true,
-      mfaVerified: true,
-      passkeyAssertedAt: true,
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          image: true,
-          role: true,
-          organizationId: true,
-          mfaEnabled: true,
-          isActive: true,
-          organization: { select: { mfaPolicy: true } },
-          _count: { select: { webauthnCredentials: true } },
-        },
-      },
-    },
-  });
+  const [session] = await prisma.$queryRaw<SessionLookupRow[]>(sessionLookup(hashSessionToken(token)));
 
   if (!session) return null;
   if (session.isRevoked) return null;
   if (session.expiresAt < new Date()) return null;
-  if (!session.user.isActive) return null;
+  if (!session.isActive) return null;
 
   // Update last active timestamp (debounce: only if >5 min since last update)
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
@@ -149,16 +176,16 @@ export async function validateSession(
   }
 
   return {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    image: session.user.image,
-    role: mapLegacyRole(session.user.role),
-    organizationId: session.user.organizationId,
-    organizationMfaPolicy: session.user.organization?.mfaPolicy ?? null,
-    mfaEnabled: session.user.mfaEnabled,
+    id: session.userId,
+    email: session.email,
+    name: session.name,
+    image: session.image,
+    role: mapLegacyRole(session.role),
+    organizationId: session.organizationId,
+    organizationMfaPolicy: session.organizationMfaPolicy ?? null,
+    mfaEnabled: session.mfaEnabled,
     mfaVerified: session.mfaVerified,
-    hasWebAuthn: session.user._count.webauthnCredentials > 0,
+    hasWebAuthn: session.hasWebAuthn,
     passkeyAssertedAt: session.passkeyAssertedAt,
     authMethod: "session",
   };

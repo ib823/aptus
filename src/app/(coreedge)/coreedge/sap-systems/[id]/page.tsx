@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { DecisionBar } from "@/components/coreedge/DecisionBar";
 import { OpsTable } from "@/components/coreedge/OpsTable";
+import { StatusChip } from "@/components/coreedge/StatusChip";
+import { ownerForService, serviceHealthFactsOf, verdictForService } from "@/lib/coreedge/service-health";
 import { DISABLED_REASONS, EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
 import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
@@ -146,6 +148,34 @@ export default async function SapSystemDetailPage({
             key: "read",
             header: "Data read",
             cell: (s) => statusCell(s.readStatus, s.readAt, now, s.readRowCount),
+          },
+          {
+            /*
+             * THE VERDICT AND ITS OWNER (P0.14, service-health.ts), from the
+             * two columns beside it and never merged into them: a metadata
+             * 401 is the platform admin's and stops every lane on the
+             * system, a read 403 is the client's SAP admin's and stops one.
+             * The owner is derived from the verdict, so the two cannot
+             * disagree.
+             */
+            key: "verdict",
+            header: "Status",
+            cell: (s) => {
+              const facts = serviceHealthFactsOf(s);
+              const verdict = verdictForService(facts, now);
+              const age = describeAge(verdict.provenAt, now);
+              return (
+                <span className="flex flex-col gap-1">
+                  <StatusChip status={verdict.status} {...(age === null ? {} : { age })} />
+                  <span className="max-w-prose text-xs text-ink-muted">{verdict.because}</span>
+                </span>
+              );
+            },
+          },
+          {
+            key: "owner",
+            header: "Who fixes it",
+            cell: (s) => ownerForService(serviceHealthFactsOf(s), now),
           },
         ]}
       />

@@ -791,6 +791,14 @@ model SapConnection {
   /// under the same id (P0.2, A18).
   revision             Int       @default(1)
 
+  /// How the governed pipeline reaches this system (P0.14,
+  /// src/lib/governed/transport.ts). DIRECT, the default and the value every
+  /// existing row was given, is the public internet through the platform's own
+  /// fetch: what every connection has always been. TWIN is the Tenant Twin
+  /// (P1.6), refused until a twin engine is registered. Nothing in the product
+  /// writes TWIN yet. P4.1 adds the connector and integration-suite kinds.
+  transport SapTransport @default(DIRECT)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1796,7 +1804,9 @@ model NorthboundAuditEvent {
 /// two; neither alone is the whole answer.
 model PlatformAuditEvent {
   id     String @id @default(cuid())
-  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST
+  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST (P0.7, kept at any age) |
+  /// SAP_CONSOLE_READ (P0.14b, a console read; deleted with the northbound
+  /// audit after NORTHBOUND_AUDIT_RETENTION_DAYS, lib/northbound/retention.ts)
   action String
 
   /// The person. Not a relation: an audit row must outlive the user it names
@@ -1847,8 +1857,10 @@ model PlatformAuditOutcome {
   eventId String             @unique
   event   PlatformAuditEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND — see
-  /// PLATFORM_AUDIT_OUTCOMES in lib/audit/platform-audit.ts.
+  /// A write: SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND
+  /// (PLATFORM_AUDIT_OUTCOMES). A console read: SUCCEEDED | BLOCKED |
+  /// SAP_REFUSED | FAILED (CONSOLE_READ_OUTCOMES). Both in
+  /// lib/audit/platform-audit.ts.
   outcome    String
   /// The HTTP status SAP answered the create with, when it answered.
   sapStatus  Int?
@@ -1998,6 +2010,12 @@ enum SapEnvironment {
   DEV
   TEST
   PROD
+}
+
+/// How a SapConnection is reached (P0.14). See SapConnection.transport.
+enum SapTransport {
+  DIRECT
+  TWIN
 }
 
 enum SolutionKind {
