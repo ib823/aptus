@@ -31,7 +31,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    sapConnection: { findFirst: mocks.findFirstConnection, update: mocks.updateConnection },
+    // The status write is guarded by the revision the probe read through.
+    sapConnection: { findFirst: mocks.findFirstConnection, updateMany: mocks.updateConnection },
     sapConnectionProbeEvent: { create: mocks.createProbeEvent },
   },
 }));
@@ -46,7 +47,7 @@ import { POST } from "@/app/api/studio/connections/[id]/test/route";
 
 const BUILDER = { id: "u_1", email: "a@abeam.com", role: "consultant", organizationId: "org_a" };
 const ROW = { id: "conn_1", product: "s4hana", key: "acme-dev", label: "Acme DEV", environment: "DEV" };
-const RESOLVED = { id: "conn_1", key: "acme-dev", baseUrl: "https://x.example", secrets: {} };
+const RESOLVED = { id: "conn_1", key: "acme-dev", baseUrl: "https://x.example", secrets: {}, revision: 3 };
 
 const call = () =>
   POST(new Request("http://localhost/api/studio/connections/conn_1/test", { method: "POST" }) as never, {
@@ -58,7 +59,7 @@ beforeEach(() => {
   mocks.getCurrentUser.mockResolvedValue(BUILDER);
   mocks.findFirstConnection.mockResolvedValue(ROW);
   mocks.resolveSapConnection.mockResolvedValue(RESOLVED);
-  mocks.updateConnection.mockResolvedValue({});
+  mocks.updateConnection.mockResolvedValue({ count: 1 });
   mocks.createProbeEvent.mockResolvedValue({});
   mocks.writeConfigAudit.mockResolvedValue(undefined);
   mocks.probeConnection.mockResolvedValue({
@@ -135,6 +136,26 @@ describe("the manual test leaves a trace", () => {
     const data = mocks.updateConnection.mock.calls[0]![0].data;
     expect(data.lastValidationStatus).toBe("ERROR");
     expect(data).not.toHaveProperty("lastValidatedAt");
+  });
+});
+
+describe("a re-save while the test runs (P0.2 review)", () => {
+  it("writes the status only while the row holds the settings that were probed", async () => {
+    await call();
+    expect(mocks.updateConnection.mock.calls[0]![0].where).toEqual({ id: "conn_1", organizationId: "org_a", revision: 3 });
+  });
+
+  it("records nothing about the new settings, and says the test must be run again", async () => {
+    // The row was re-saved mid-probe: the revision moved, the guarded write
+    // matches nothing, and the old tenant's 200 must not read as the new
+    // settings' health — nor enter their probe history.
+    mocks.updateConnection.mockResolvedValue({ count: 0 });
+    const res = await call();
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/changed while it was being tested/i);
+    expect(mocks.createProbeEvent).not.toHaveBeenCalled();
+    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
   });
 });
 

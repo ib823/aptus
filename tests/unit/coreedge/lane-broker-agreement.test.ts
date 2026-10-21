@@ -347,6 +347,19 @@ describe("A17: the reader keeps every status the ledger writes", () => {
     expect(v.because).toContain("404");
     expect(v.because).not.toContain("no read has been proven");
   });
+
+  it("a 404 read is drawn failed at the read hop, not 'not checked' (P0.2 review)", () => {
+    // The strip said the read was never checked, beside a sentence saying it
+    // was checked and SAP answered 404. The chip stays Unknown (no status for
+    // a 404 yet); the strip draws what was observed.
+    const v = laneFrom({ check: { ...FRESH_CHECK, readStatus: "NOT_FOUND" } }).verdict;
+    const state = (hop: string) => v.hops.find((h) => h.hop === hop)?.state;
+    expect(v.status).toBe("unknown");
+    expect(v.checkedAt).not.toBeNull();
+    expect(state("sapMetadata")).toBe("ok");
+    expect(state("sapDataRead")).toBe("broken");
+    expect(state("app")).toBe("unreached");
+  });
 });
 
 describe("A18: evidence is tied to the connection, dataset and feed version that produced it", () => {
@@ -401,6 +414,17 @@ describe("A50: connection health decays", () => {
     expect(connectionHealthVerdict({ lastValidationStatus: "OK", lastValidatedAt: old }, NOW)).toBe("stale");
     expect(connectionHealthVerdict({ lastValidationStatus: "UNREADABLE", lastValidatedAt: RECENT }, NOW)).toBe(
       "unreadable",
+    );
+  });
+
+  it("a sibling of an unopenable connection is unreadable too, and says the fault is elsewhere (P0.2 review)", () => {
+    const sibling = { lastValidationStatus: "GROUP_UNREADABLE", lastValidatedAt: RECENT };
+    expect(connectionHealthVerdict(sibling, NOW)).toBe("unreadable");
+    expect(describeLastProbe(sibling, NOW).headline).toBe(
+      "GROUP_UNREADABLE · another connection for this product will not open",
+    );
+    expect(describeLastProbe({ lastValidationStatus: "UNREADABLE", lastValidatedAt: RECENT }, NOW).headline).toBe(
+      "UNREADABLE · the secret would not open",
     );
   });
 

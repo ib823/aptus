@@ -43,7 +43,9 @@ six as not checked.
 UNAUTHORIZED, so a 404 or 401 read showed "no read has been proven". A 401 read
 is now "401 · could not sign in"; a 404 is Unknown with the reason "SAP has no
 such dataset (HTTP 404)" (the vocabulary has no chip for a 404 yet, the same
-call the SAP systems matrix makes).
+call the SAP systems matrix makes). Its gate strip draws the read hop failed
+and the app hop not reached, not "not checked": the read was checked, and SAP
+answered 404.
 
 **Evidence says what it proved (A18).** A check is used only while it was made
 through the connection the broker binds today, against the feed's entity set,
@@ -67,6 +69,22 @@ after the re-save had deleted the checks. Such an answer is discarded and
 counted (`discardedConnectionChanged` on the run log; Re-check says "Not
 recorded" and asks to re-check).
 
+Probes are guarded the same way. The nightly probe, "Probe now" and Studio's
+"Test connectivity" write a status only onto the revision they probed
+(`swapProbeStatus` in `connection-probe-sweep.ts`, and the Studio test route).
+A probe still running when the connection is re-saved records nothing: no
+status, no probe event, no drift email. "Probe now" and "Test connectivity"
+answer 409, "the connection changed while it was being probed", and ask to
+run it again.
+
+The drift email still fires on the first failing probe after a re-save. A
+re-save clears the stored status, so the probe sweep judges the transition
+against the last probe that actually ran for the connection (its latest
+`SapConnectionProbeEvent`). A password rotation that was mistyped, on a
+connection that last probed OK, is mailed as healthy-to-failing, as it was
+before P0.2. A connection that has never been probed still has no baseline,
+and its first failure is not mailed.
+
 Two refusals are not "changes". A check written before checks recorded their
 dataset and feed version reads "not checked since CoreEdge was upgraded",
 not "not checked since it changed": nothing changed, only what it proved is
@@ -88,7 +106,15 @@ connections-health route counts it `stale` and the topology lens draws it "not
 observed" with a STALE badge. When a connection's secret will not open, the
 nightly probe and "Probe now" record `UNREADABLE` as its status (it counts as
 needing attention and in the unhealthy-connections incident); no probe event
-is written and `lastValidatedAt` is left alone.
+is written and `lastValidatedAt` is left alone. The broker refuses the whole
+product when any one of its connections will not open, so each row is opened
+on its own to find which one is at fault. That row reads `UNREADABLE`; a
+sibling whose own secret opens reads `GROUP_UNREADABLE` ("another connection
+for this product will not open"), which counts the same way. The fix is to
+re-save or deactivate the row marked `UNREADABLE`; re-saving a
+`GROUP_UNREADABLE` row changes nothing. If every row opens on its own, the
+failure was not a secret and nothing is written. Neither status is a probe
+outcome, so neither counts as "was healthy" for the drift email.
 
 **"Services readable" counts fresh proof only (A60).** The SAP system page
 counted every OK or EMPTY read of any age. It now counts a service readable
@@ -133,23 +159,24 @@ governance property test pins every answer), now through the shared functions.
   row reads "OK · stale"), and draw "not observed · STALE" on the topology
   lens, until the next nightly probe (04:00 UTC) succeeds. `UNREADABLE` reads
   "the stored secret would not open — ours to fix" there, and "Needs setup"
-  in Studio. Connections whose secret does not open read
-  `UNREADABLE` after the next probe sweep and count toward the
-  unhealthy-connections incident. No email is sent for that change of status.
+  in Studio, with a line saying whose secret to re-save. Connections whose
+  secret does not open read `UNREADABLE` after the next probe sweep, and
+  their siblings for the same product read `GROUP_UNREADABLE`; both count
+  toward the unhealthy-connections incident. No email is sent for that change
+  of status.
 - **Re-saving a connection** clears its lanes' checks, its service health and
   its probe status; they read Unknown, unproven and "never tested" until the
-  next check and probe. The first probe after a re-save starts from "never
-  tested", so if it fails the connection counts as needing attention and in
-  the unhealthy-connections incident, but no healthy-to-failing drift email
-  is sent: the new settings were never healthy. "Probe now" right after a
-  save is how to see the new settings' health at once.
+  next check and probe. If the first probe after a re-save fails, and the
+  connection's last probe before it was OK, the admins get the
+  healthy-to-failing drift email, as they did before P0.2. "Probe now" right
+  after a save is how to see the new settings' health at once.
 
 ## Rolling back
 
 Roll back the code; the columns can stay (the code before P0.2 ignores them,
 and `revision` has a default, so its inserts need not name it).
-`UNREADABLE` statuses written by the sweep are an unrecognised value to the code
-before P0.2 (counted "unknown" on the connections view, drawn failing on the
+`UNREADABLE` and `GROUP_UNREADABLE` statuses written by the sweep are
+unrecognised values to the code before P0.2 (counted "unknown" on the connections view, drawn failing on the
 topology lens) and are replaced by the next successful probe.
 
 ## Open decisions
@@ -169,7 +196,8 @@ topology lens) and are replaced by the next successful probe.
   owner.
 - **An incident for stale connections.** A connection with no successful probe
   in 48 hours is counted `stale`, but no incident rule fires on it.
-- **A drift email after a re-save.** A re-save clears the probe status, so a
-  failing first probe of the new settings is not mailed as a healthy-to-failing
-  drift (it was never healthy). Whether a failure right after a re-save should
-  email the organisation's admins is a decision for the product owner.
+- **A drift email after a re-save.** It is sent, judged against the last probe
+  before the re-save, because it was sent before P0.2 and a re-save is when a
+  working integration is most likely to break. Whether it should instead say
+  "the new settings fail" rather than "started failing" is a decision for the
+  product owner.

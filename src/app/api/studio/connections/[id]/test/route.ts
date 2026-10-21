@@ -85,14 +85,32 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
 
   const result = await probeConnection(resolved);
 
-  await prisma.sapConnection.update({
-    where: { id: row.id, organizationId },
-    data: {
-      lastValidationStatus: result.status,
-      // Only a real 200 updates the timestamp (see rule 1).
-      ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
-    },
-  });
+  /*
+   * ONLY ONTO THE SETTINGS THAT WERE PROBED (P0.2 review). A re-save while
+   * this test waited on SAP keeps the row's id, points it somewhere else,
+   * bumps `revision` and clears the status to "never tested". Writing this
+   * answer then would call the NEW settings healthy on the OLD tenant's 200.
+   * So the write names the revision the probe read through, and a write that
+   * matches nothing records nothing — no status, no probe event, no audit of
+   * a test of settings that no longer exist.
+   */
+  const written =
+    resolved.revision === undefined
+      ? { count: 0 }
+      : await prisma.sapConnection.updateMany({
+          where: { id: row.id, organizationId, revision: resolved.revision },
+          data: {
+            lastValidationStatus: result.status,
+            // Only a real 200 updates the timestamp (see rule 1).
+            ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
+          },
+        });
+  if (written.count === 0) {
+    return studioError(
+      "CONFLICT",
+      "The connection changed while it was being tested, so the result was about its previous settings and was not recorded. Test it again.",
+    );
+  }
 
   // THE MANUAL TEST LEAVES A TRACE. Only the cron sweep and the Ops "Probe now"
   // wrote a SapConnectionProbeEvent; the one probe a human runs while actively

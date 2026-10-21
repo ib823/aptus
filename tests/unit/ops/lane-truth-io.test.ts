@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   upsertLaneCheck: vi.fn(),
   resolveSapConnections: vi.fn(),
+  resolveSapConnection: vi.fn(),
   readEntitySet: vi.fn(),
   probeConnection: vi.fn(),
   findHubContent: vi.fn(),
@@ -70,6 +71,7 @@ vi.mock("@/lib/db/tenant-guard", () => ({ permitCrossTenantReads: vi.fn() }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionResolverModule>()),
   resolveSapConnections: mocks.resolveSapConnections,
+  resolveSapConnection: mocks.resolveSapConnection,
 }));
 vi.mock("@/lib/sap-public/secret-envelope", () => ({
   openSecretsForOrg: async () => ({}),
@@ -145,21 +147,42 @@ describe("A70: a retired or draft app's lane is not read on demand", () => {
 });
 
 describe("A50: the probe sweep records a connection whose secret will not open", () => {
-  it("writes UNREADABLE on every row of the group, leaving lastValidatedAt alone", async () => {
-    mocks.findConnections.mockResolvedValue([
-      { id: "c1", organizationId: "org_a", product: "s4hana", key: "a", label: "A", environment: "DEV", lastValidationStatus: "OK" },
-      { id: "c2", organizationId: "org_a", product: "s4hana", key: "b", label: "B", environment: "TEST", lastValidationStatus: "OK" },
-    ]);
+  const ROWS = [
+    { id: "c1", organizationId: "org_a", product: "s4hana", key: "a", label: "A", environment: "DEV", lastValidationStatus: "OK", revision: 1 },
+    { id: "c2", organizationId: "org_a", product: "s4hana", key: "b", label: "B", environment: "TEST", lastValidationStatus: "OK", revision: 4 },
+  ];
+
+  it("writes UNREADABLE on the row that will not open and GROUP_UNREADABLE on its sibling, leaving lastValidatedAt alone", async () => {
+    mocks.findConnections.mockResolvedValue(ROWS);
     mocks.resolveSapConnections.mockRejectedValue(new Error("sealed under a previous key"));
+    // Opened one by one (P0.2 review): only "a" is sealed under the old key.
+    mocks.resolveSapConnection.mockImplementation(async (_o: string, _p: string, key: string) => {
+      if (key === "a") throw new Error("sealed under a previous key");
+      return { id: "c2", key: "b" };
+    });
     mocks.updateManyConnections.mockResolvedValue({ count: 1 });
 
     const result = await sweepConnectionProbes();
     expect(result.unreadable).toBe(2);
     expect(mocks.updateManyConnections).toHaveBeenCalledTimes(2);
-    for (const [arg] of mocks.updateManyConnections.mock.calls) {
-      expect(arg.data).toEqual({ lastValidationStatus: "UNREADABLE" });
-      expect(arg.data).not.toHaveProperty("lastValidatedAt");
-    }
+    const byId = Object.fromEntries(
+      mocks.updateManyConnections.mock.calls.map(([arg]) => [arg.where.id, arg]),
+    );
+    expect(byId.c1.data).toEqual({ lastValidationStatus: "UNREADABLE" });
+    expect(byId.c2.data).toEqual({ lastValidationStatus: "GROUP_UNREADABLE" });
+    // Each write names the revision the sweep listed: a re-save since wins.
+    expect(byId.c1.where.revision).toBe(1);
+    expect(byId.c2.where.revision).toBe(4);
+  });
+
+  it("writes nothing when every row opens on its own — the group's failure was not a secret", async () => {
+    mocks.findConnections.mockResolvedValue(ROWS);
+    mocks.resolveSapConnections.mockRejectedValue(new Error("connection reset"));
+    mocks.resolveSapConnection.mockImplementation(async (_o: string, _p: string, key: string) => ({ id: key, key }));
+
+    const result = await sweepConnectionProbes();
+    expect(result.unreadable).toBe(2);
+    expect(mocks.updateManyConnections).not.toHaveBeenCalled();
   });
 });
 

@@ -69,6 +69,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // own scope first. Same status and sentence as the Studio test route (R5).
     return studioError("CONFLICT", result.detail);
   }
+  if (result.outcome === "superseded") {
+    // Re-saved while the probe ran (P0.2 review): the answer was the previous
+    // settings', and recording it would have called the new ones healthy.
+    return studioError("CONFLICT", result.detail);
+  }
 
   return studioOk({
     connectionId,

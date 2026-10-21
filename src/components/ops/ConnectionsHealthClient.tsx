@@ -123,6 +123,17 @@ const PROBE: Record<string, { tone: OpsTone; label: string; meaning: string }> =
     label: "UNREADABLE",
     meaning: "the stored secret would not open — ours to fix, and every call through it is refused",
   },
+  /*
+   * P0.2 review: this row's own secret opens, but a sibling for the same
+   * product will not, and the broker refuses the whole product meanwhile.
+   * Worded so the operator fixes the row marked UNREADABLE, not this one.
+   */
+  GROUP_UNREADABLE: {
+    tone: "bad",
+    label: "GROUP_UNREADABLE",
+    meaning:
+      "this secret opens, but another connection for this product will not — every call for the product is refused until the row marked UNREADABLE is re-saved or deactivated",
+  },
 };
 
 /** The chip for one row: its verdict first, so an aged OK is never drawn as a live 200. */
@@ -239,7 +250,7 @@ function ConnectionsBody({
               label="Needs attention"
               value={count(counts.needsAttention)}
               tone={counts.needsAttention > 0 ? "attention" : "default"}
-              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR · UNREADABLE"
+              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR · UNREADABLE · GROUP_UNREADABLE"
             />
             <Stat
               label="Unknown"

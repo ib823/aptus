@@ -742,11 +742,13 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
    *     after the deletes above.
    *
    * All of these are caches of the latest result, not records; the probe
-   * history (SapConnectionProbeEvent) and the call audit are untouched. One
-   * consequence, recorded in docs/runbooks/coreedge-lane-truth.md: the first
-   * probe after a re-save starts from "never tested", so a failure then is
-   * counted as needing attention but is not mailed as a healthy-to-failing
-   * drift — the new settings were never healthy.
+   * history (SapConnectionProbeEvent) and the call audit are untouched, and
+   * the history is what the next probe's drift alert is judged against: a
+   * failing first probe after a re-save of a connection that last probed OK
+   * is still mailed (connection-probe-sweep.ts `driftBaseline`). A probe
+   * already running against the previous settings records nothing when it
+   * finishes, for the same revision reason as a lane check
+   * (connection-probe-sweep.ts `revisionGuard`).
    */
   const row = await prisma.$transaction(async (tx) => {
     const saved = await tx.sapConnection.upsert({

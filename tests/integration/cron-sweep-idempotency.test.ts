@@ -189,12 +189,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cron sweeps run twice at once, 
           isActive: true,
           lastValidationStatus: "OK",
         },
-        select: { id: true },
+        select: { id: true, revision: true },
       });
 
       // Other tests' connections may share this database; only ours resolves.
       mocks.resolveSapConnections.mockImplementation(async (org: string) =>
-        org === organizationId ? [{ id: connection.id, key }] : [],
+        // The revision the probe reads through: a probe-status write names it (P0.2).
+        org === organizationId ? [{ id: connection.id, key, revision: connection.revision }] : [],
       );
       // Both sweeps read OK at their start, then both probe a failing system.
       // The probe answers only once both are inside it, so the two status writes
@@ -243,9 +244,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("cron sweeps run twice at once, 
           isActive: true,
           lastValidationStatus: "UNAUTHORIZED",
         },
-        select: { id: true },
+        select: { id: true, revision: true },
       });
-      mocks.resolveSapConnections.mockImplementation(async (o: string) => (o === organizationId ? [{ id: connection.id, key }] : []));
+      mocks.resolveSapConnections.mockImplementation(async (o: string) => (o === organizationId ? [{ id: connection.id, key, revision: connection.revision }] : []));
       mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "OK", durationMs: 5 });
 
       await Promise.all([sweepConnectionProbes(), sweepConnectionProbes()]);

@@ -53,11 +53,14 @@ interface TestOutcome {
  *   NOT_FOUND     → NOT_FOUND     (404 on this tenant)
  *   TIMEOUT/ERROR → PROBE_FAILED  (unreachable right now)
  *   UNREADABLE    → NEEDS_SETUP   (the stored secret will not open: re-enter it)
+ *   GROUP_UNREADABLE → NEEDS_SETUP (another connection for the product will not open)
  *   never tested  → NOT_CHECKED
  *
  * UNREADABLE is named, not left to the default (P0.2, A50): the probe sweep
  * records it for a connection it checked and could not open, so "Not
  * checked" was false, and the broker refuses every call through it.
+ * GROUP_UNREADABLE (P0.2 review) is a row whose own secret opens while a
+ * sibling's will not; `unreadableHint` says which row to fix under the chip.
  * Exported for its test.
  */
 export function healthToStatus(status: string | null): HonestStatus {
@@ -66,6 +69,7 @@ export function healthToStatus(status: string | null): HonestStatus {
       return "ACTIVATED";
     case "UNAUTHORIZED":
     case "UNREADABLE":
+    case "GROUP_UNREADABLE":
       return "NEEDS_SETUP";
     case "NOT_FOUND":
       return "NOT_FOUND";
@@ -109,6 +113,20 @@ export function healthToStatus(status: string | null): HonestStatus {
  * pairs with "Not probeable", which is already in the vocabulary. Everything
  * else keeps the shared label so the console still reads as one system.
  */
+/**
+ * The line under the chip for a connection the broker refuses because a
+ * secret will not open — saying WHICH secret, so "Needs setup" does not send
+ * a builder to re-save a row whose own secret is fine (P0.2 review). Null for
+ * every other status. Exported for its test.
+ */
+export function unreadableHint(status: string | null): string | null {
+  if (status === "UNREADABLE") return "The stored secret will not open: re-save this connection's secrets.";
+  if (status === "GROUP_UNREADABLE") {
+    return "This secret opens, but another connection for this product will not: re-save or deactivate the one marked unreadable.";
+  }
+  return null;
+}
+
 function healthLabel(status: HonestStatus): string | undefined {
   return status === "ACTIVATED" ? "Reachable" : undefined;
 }
@@ -282,6 +300,11 @@ export function ConnectionsClient({
                       const health = healthToStatus(c.lastValidationStatus);
                       return <StudioStatusChip status={health} label={healthLabel(health)} />;
                     })()}
+                    {unreadableHint(c.lastValidationStatus) ? (
+                      <span style={{ fontSize: 11, color: "var(--ink-muted)", maxWidth: 260 }}>
+                        {unreadableHint(c.lastValidationStatus)}
+                      </span>
+                    ) : null}
                     <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>
                       {c.lastValidatedAt
                         ? `last 200 · ${new Date(c.lastValidatedAt).toLocaleString()}`

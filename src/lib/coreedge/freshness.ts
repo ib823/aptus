@@ -147,6 +147,27 @@ export const CONNECTION_PROOF_TTL_MS = 48 * 60 * 60 * 1000;
  */
 export const CONNECTION_UNREADABLE_STATUS = "UNREADABLE";
 
+/**
+ * The status recorded on a connection whose OWN secret opens, when another
+ * active connection for the same product will not (P0.2 review). The broker
+ * fails closed on the whole (organization, product) set, so every call through
+ * this connection is refused too — but re-entering THIS row's secret fixes
+ * nothing, and saying "the secret would not open" here sent the operator to
+ * re-save the wrong row. The fix is on the row marked UNREADABLE.
+ */
+export const CONNECTION_GROUP_UNREADABLE_STATUS = "GROUP_UNREADABLE";
+
+/**
+ * Statuses a connection can hold that no probe produced: no request reached
+ * SAP. The drift rule never treats one as "was healthy" (incidents.ts
+ * `isDriftTransition`), and the probe sweep judges a transition against the
+ * last probe that actually ran instead.
+ */
+export const CONNECTION_NOT_PROBED_STATUSES: readonly string[] = [
+  CONNECTION_UNREADABLE_STATUS,
+  CONNECTION_GROUP_UNREADABLE_STATUS,
+];
+
 /** Probe outcomes that mean SAP is not answering this connection as it should. */
 export const CONNECTION_NEEDS_ATTENTION: readonly string[] = ["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
 
@@ -155,7 +176,11 @@ export type ConnectionHealthVerdict =
   /** The last probe said OK, longer ago than CONNECTION_PROOF_TTL_MS: a claim about our evidence, not SAP. */
   | "stale"
   | "needsAttention"
-  /** CoreEdge cannot open the stored secret: ours to fix, and every call is refused. */
+  /**
+   * CoreEdge cannot open a stored secret — this row's (UNREADABLE) or a
+   * sibling's for the same product (GROUP_UNREADABLE): ours to fix, and every
+   * call is refused.
+   */
   | "unreadable"
   /** NO_PROBE_PATH, or a value nobody defined: never assumed healthy. */
   | "unknown"
@@ -172,7 +197,7 @@ export function connectionHealthVerdict(
 ): ConnectionHealthVerdict {
   const status = c.lastValidationStatus;
   if (status === null) return "neverTested";
-  if (status === CONNECTION_UNREADABLE_STATUS) return "unreadable";
+  if (CONNECTION_NOT_PROBED_STATUSES.includes(status)) return "unreadable";
   if (CONNECTION_NEEDS_ATTENTION.includes(status)) return "needsAttention";
   if (status === "OK") {
     return freshnessOf(c.lastValidatedAt, CONNECTION_PROOF_TTL_MS, now) === "fresh" ? "healthy" : "stale";
@@ -195,8 +220,10 @@ export function describeLastProbe(
   const headline =
     verdict === "stale"
       ? `${c.lastValidationStatus} · stale`
-      : verdict === "unreadable"
-        ? `${c.lastValidationStatus} · the secret would not open`
-        : c.lastValidationStatus;
+      : c.lastValidationStatus === CONNECTION_GROUP_UNREADABLE_STATUS
+        ? `${c.lastValidationStatus} · another connection for this product will not open`
+        : verdict === "unreadable"
+          ? `${c.lastValidationStatus} · the secret would not open`
+          : c.lastValidationStatus;
   return { headline, detail: `last succeeded ${describeAge(c.lastValidatedAt, now) ?? "never"}` };
 }

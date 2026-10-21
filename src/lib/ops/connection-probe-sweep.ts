@@ -21,7 +21,11 @@
 
 import * as Sentry from "@sentry/nextjs";
 
-import { CONNECTION_UNREADABLE_STATUS } from "@/lib/coreedge/freshness";
+import {
+  CONNECTION_GROUP_UNREADABLE_STATUS,
+  CONNECTION_NOT_PROBED_STATUSES,
+  CONNECTION_UNREADABLE_STATUS,
+} from "@/lib/coreedge/freshness";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
@@ -31,6 +35,7 @@ import { isDriftTransition } from "@/lib/ops/incidents";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
 import {
   connectionRefusalMessage,
+  resolveSapConnection,
   resolveSapConnections,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
@@ -91,6 +96,27 @@ async function alertDrift(
 /** How many times a status write retries against a status that moved under it. */
 const SWAP_ATTEMPTS = 3;
 
+/** A status write's outcome: what it replaced, or that the settings had moved on. */
+type ProbeStatusWrite = { readonly recorded: true; readonly previous: string | null } | { readonly recorded: false };
+
+/**
+ * THE REVISION GUARD (P0.2 review). A probe reads one version of a
+ * connection's settings and then waits on SAP. A re-save in the meantime
+ * (`upsertSapConnection`) keeps the row's id, points it at another host or
+ * secret, bumps `revision` and clears the probe status, so the new settings
+ * read "never tested". Without this guard the probe of the OLD settings then
+ * wrote OK — and a last-success time — onto the row holding the NEW ones,
+ * which nobody had probed. Every probe-status write therefore names the
+ * revision the probe read through, and a write that matches no row is
+ * discarded, as `recordLaneCheck` discards a lane check.
+ *
+ * A connection built outside the table (a test fixture) carries no revision:
+ * nothing proves what it read through, so nothing is recorded.
+ */
+function revisionGuard(revision: number | undefined): { revision: number } | null {
+  return revision === undefined ? null : { revision };
+}
+
 /**
  * Record a probe's status and return the status it REPLACED, which is the one
  * the drift transition must be judged against.
@@ -107,13 +133,19 @@ const SWAP_ATTEMPTS = 3;
  *
  * A manual "Probe now" is a writer too, under the same rule: the transition is
  * from the last RECORDED status, whoever recorded it.
+ *
+ * Every attempt also names the `revision` the probe read through (see
+ * `revisionGuard`): once the row has been re-saved, nothing is recorded.
  */
 async function swapProbeStatus(
   id: string,
   organizationId: string,
   believed: string | null,
-  next: ConnectionHealthStatus | typeof CONNECTION_UNREADABLE_STATUS,
-): Promise<string | null> {
+  next: ConnectionHealthStatus | typeof CONNECTION_UNREADABLE_STATUS | typeof CONNECTION_GROUP_UNREADABLE_STATUS,
+  revision: number | undefined,
+): Promise<ProbeStatusWrite> {
+  const guard = revisionGuard(revision);
+  if (!guard) return { recorded: false };
   // lastValidatedAt moves ONLY on a real 200 — same rule as the Studio test
   // route. A failing probe must not touch the one record of when the
   // connection last actually worked.
@@ -125,24 +157,117 @@ async function swapProbeStatus(
   let expected = believed;
   for (let attempt = 0; attempt < SWAP_ATTEMPTS; attempt++) {
     const swapped = await prisma.sapConnection.updateMany({
-      where: { id, organizationId, lastValidationStatus: expected },
+      where: { id, organizationId, ...guard, lastValidationStatus: expected },
       data,
     });
-    if (swapped.count === 1) return expected;
+    if (swapped.count === 1) return { recorded: true, previous: expected };
     const current = await prisma.sapConnection.findFirst({
       where: { id, organizationId },
-      select: { lastValidationStatus: true },
+      select: { lastValidationStatus: true, revision: true },
     });
-    // Gone since the scan: the plain update below fails on it, as it always has.
-    if (!current) break;
+    // Gone since the scan, or re-saved since the probe read it: nothing this
+    // probe saw is true of the row now.
+    if (!current || current.revision !== guard.revision) return { recorded: false };
     expected = current.lastValidationStatus;
   }
 
   // Still moving after every attempt. Record the observation anyway and claim
   // no transition: an alert this sweep cannot attribute risks being the
   // duplicate, and the next sweep judges against whatever is stored by then.
-  await prisma.sapConnection.update({ where: { id, organizationId }, data });
-  return next;
+  const last = await prisma.sapConnection.updateMany({ where: { id, organizationId, ...guard }, data });
+  return last.count === 1 ? { recorded: true, previous: next } : { recorded: false };
+}
+
+/**
+ * The status a drift transition is judged against (P0.2 review).
+ *
+ * Usually the status this write replaced. But two stored values are not the
+ * outcome of any probe: null after a re-save cleared it (the new settings
+ * were never tested), and UNREADABLE / GROUP_UNREADABLE (no request reached
+ * SAP). Judging against those lost the one alert that matters most: an admin
+ * rotates a PROD password in Studio, mistypes it, and every call fails 401 —
+ * before P0.2 the re-save left "OK" standing and the next probe mailed the
+ * admins; with the status cleared, null → UNAUTHORIZED was "first
+ * observation" and nobody was told. So for those, the baseline is the last
+ * probe that actually RAN for this connection, before this one started. A
+ * connection that has never been probed still has none, and its first
+ * failure is still not a drift.
+ */
+async function driftBaseline(
+  previous: string | null,
+  organizationId: string,
+  connectionId: string,
+  probeStartedAt: Date,
+): Promise<string | null> {
+  if (previous !== null && !CONNECTION_NOT_PROBED_STATUSES.includes(previous)) return previous;
+  const last = await prisma.sapConnectionProbeEvent.findFirst({
+    where: { organizationId, connectionId, at: { lt: probeStartedAt } },
+    orderBy: { at: "desc" },
+    select: { status: true },
+  });
+  return last?.status ?? previous;
+}
+
+/**
+ * Record a group whose secrets will not all open — on the RIGHT rows.
+ *
+ * The broker fails closed on the whole (organization, product) set, so every
+ * row of it is refused (A50) and none may keep its last "OK". But writing
+ * UNREADABLE on every row told the operator to re-enter the secret of a row
+ * that opens perfectly well — usually the PROD one — which fixed nothing and
+ * dropped that row's lane evidence on the way (P0.2 review). So each row is
+ * opened on its own: one that will not open reads UNREADABLE; a sibling that
+ * does reads GROUP_UNREADABLE ("another connection for this product will not
+ * open"). If every row opens on its own, the group's failure was not about a
+ * secret (a transient read), nothing can be attributed, and nothing is
+ * written: the next sweep looks again.
+ */
+async function recordUnreadableGroup(
+  organizationId: string,
+  product: string,
+  rows: ReadonlyArray<GroupRow>,
+): Promise<void> {
+  const opened = await openEachRow(organizationId, product, rows);
+  if (!opened.some((o) => o.opens === false)) return;
+  for (const { row, opens } of opened) {
+    if (opens === null) continue;
+    await swapProbeStatus(
+      row.id,
+      organizationId,
+      row.lastValidationStatus,
+      opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS,
+      row.revision,
+    );
+  }
+}
+
+interface GroupRow {
+  id: string;
+  key: string;
+  label: string;
+  lastValidationStatus: string | null;
+  revision: number;
+}
+
+/**
+ * Open each row of a group on its own (a named key opens only that row):
+ * true when it opens, false when it will not, null when it is no longer
+ * active — deactivated since it was listed, so no longer part of the set.
+ */
+async function openEachRow<R extends GroupRow>(
+  organizationId: string,
+  product: string,
+  rows: ReadonlyArray<R>,
+): Promise<{ row: R; opens: boolean | null }[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      try {
+        return { row, opens: (await resolveSapConnection(organizationId, product, row.key)) === null ? null : true };
+      } catch {
+        return { row, opens: false };
+      }
+    }),
+  );
 }
 
 export async function sweepConnectionProbes(): Promise<SweepResult> {
@@ -155,7 +280,16 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
   // through the same resolver every other read path uses.
   const rows = await prisma.sapConnection.findMany({
     where: { isActive: true },
-    select: { id: true, organizationId: true, product: true, key: true, label: true, environment: true, lastValidationStatus: true },
+    select: {
+      id: true,
+      organizationId: true,
+      product: true,
+      key: true,
+      label: true,
+      environment: true,
+      lastValidationStatus: true,
+      revision: true,
+    },
   });
 
   const groups = new Map<string, typeof rows>();
@@ -188,14 +322,13 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
        * AND SAYS SO ON EVERY ROW OF THE GROUP (P0.2, A50). It used to write
        * nothing, so a connection's last "OK" stood forever while the broker
        * refused every call for the product (it fails closed on the whole
-       * group, so every row is unusable, not just the bad one). No probe ran,
+       * group, so every row is unusable, not just the bad one). Which row is
+       * the one to fix is said too: see `recordUnreadableGroup`. No probe ran,
        * so no probe event is written and `lastValidatedAt` — the last time SAP
        * answered — is left alone; no alert is sent from here either (an open
        * decision, docs/runbooks/coreedge-lane-truth.md).
        */
-      for (const row of groupRows) {
-        await swapProbeStatus(row.id, organizationId, row.lastValidationStatus, CONNECTION_UNREADABLE_STATUS);
-      }
+      await recordUnreadableGroup(organizationId, product, groupRows);
       continue;
     }
     const byKey = new Map(resolved.map((c) => [c.key, c]));
@@ -213,11 +346,23 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
           result.skippedNoPath++;
           continue;
         }
+        const probeStartedAt = new Date();
         const probe = await probeConnection(conn);
         result.probed++;
         result.byStatus[probe.status] = (result.byStatus[probe.status] ?? 0) + 1;
 
-        const previous = await swapProbeStatus(row.id, organizationId, row.lastValidationStatus, probe.status);
+        const write = await swapProbeStatus(
+          row.id,
+          organizationId,
+          row.lastValidationStatus,
+          probe.status,
+          conn.revision,
+        );
+        // Re-saved while this probe ran: it probed the previous settings, so
+        // it is not their health, not their history and not a drift of
+        // theirs. Nothing is recorded; the next probe asks the new settings.
+        if (!write.recorded) continue;
+        const previous = await driftBaseline(write.previous, organizationId, row.id, probeStartedAt);
         await prisma.sapConnectionProbeEvent.create({
           data: {
             organizationId,
@@ -256,7 +401,7 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
 }
 
 /**
- * What "Probe now" can come back with. THREE OUTCOMES, NOT TWO.
+ * What "Probe now" can come back with. EACH OUTCOME AS ITSELF.
  *
  * This returned `null` for both "no such active connection in this tenant"
  * and "the row exists but its secrets would not open", and the route rendered
@@ -269,12 +414,64 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
  * `unreadable` carries the resolver's own sentence. It writes no probe event —
  * no probe ran, so there is no tenant fact to record — but since P0.2 (A50) it
  * records UNREADABLE as the row's status, so the last "OK" stops standing for
- * a connection every call is refused on.
+ * a connection every call is refused on — or GROUP_UNREADABLE, with the
+ * sibling to fix named, when this row's own secret opens (P0.2 review).
+ *
+ * `superseded` (P0.2 review): the connection was re-saved while the probe ran,
+ * so the result was about the previous settings and nothing was recorded.
  */
 export type ProbeOneOutcome =
   | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
   | { outcome: "not-found" }
-  | { outcome: "unreadable"; detail: string };
+  | { outcome: "unreadable"; detail: string }
+  | { outcome: "superseded"; detail: string };
+
+/**
+ * "Probe now" on a connection whose product group will not open.
+ *
+ * The resolver opens every row of the (organization, product) group and fails
+ * closed on the set — the same refusal the binding path gives. Recorded on the
+ * row as the sweep records it (P0.2, A50), so its last "OK" no longer stands;
+ * no probe ran, so no probe event and `lastValidatedAt` untouched. Only THIS
+ * row is written — it is the one asked about — and, like the sweep, it reads
+ * UNREADABLE only when its own secret is the one that will not open. When it
+ * opens, the operator is told which sibling to fix instead of being sent to
+ * re-enter a secret that is fine (P0.2 review).
+ */
+async function recordUnreadableOne(
+  organizationId: string,
+  target: { id: string; product: string; environment: string | null },
+): Promise<ProbeOneOutcome> {
+  const groupRows = await prisma.sapConnection.findMany({
+    where: { organizationId, product: target.product, isActive: true },
+    select: { id: true, key: true, label: true, lastValidationStatus: true, revision: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const opened = await openEachRow(organizationId, target.product, groupRows);
+  const self = opened.find((o) => o.row.id === target.id);
+  if (!self || self.opens === null) return { outcome: "not-found" };
+  const unopenable = opened.filter((o) => o.opens === false).map((o) => o.row.label);
+  const ownSentence = connectionRefusalMessage("CONNECTION_UNREADABLE", target.environment ?? "");
+  // Every row opens on its own: the group's failure was not a secret, and
+  // nothing can be attributed. Said, not recorded; the next probe looks again.
+  if (unopenable.length === 0) return { outcome: "unreadable", detail: ownSentence };
+
+  await swapProbeStatus(
+    self.row.id,
+    organizationId,
+    self.row.lastValidationStatus,
+    self.opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS,
+    self.row.revision,
+  );
+  if (!self.opens) return { outcome: "unreadable", detail: ownSentence };
+  return {
+    outcome: "unreadable",
+    detail:
+      `This connection's own secret opens, but another active connection for this product will not ` +
+      `(${unopenable.map((l) => `"${l}"`).join(", ")}), so CoreEdge refuses every call for the product. ` +
+      `Re-save that connection's secrets in Studio, or deactivate it.`,
+  };
+}
 
 /** Probe ONE connection on demand (the Ops "Probe now" action). */
 export async function probeOneConnection(
@@ -291,16 +488,7 @@ export async function probeOneConnection(
   try {
     resolved = await resolveSapConnections(organizationId, row.product);
   } catch {
-    // The resolver opens every row of the (organization, product) group and
-    // fails closed on the set — the same refusal the binding path gives, with
-    // the same sentence, so the operator is sent to the same fix. Recorded on
-    // the row as the sweep records it (P0.2, A50), so its last "OK" no longer
-    // stands; no probe ran, so no probe event and `lastValidatedAt` untouched.
-    await prisma.sapConnection.update({
-      where: { id: row.id, organizationId },
-      data: { lastValidationStatus: CONNECTION_UNREADABLE_STATUS },
-    });
-    return { outcome: "unreadable", detail: connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? "") };
+    return recordUnreadableOne(organizationId, row);
   }
   const conn = resolved.find((c) => c.key === row.key);
   if (!conn) {
@@ -314,15 +502,28 @@ export async function probeOneConnection(
   }
 
   const probe = await probeConnection(conn);
-  await prisma.sapConnection.update({
-    where: { id: row.id, organizationId },
-    // Same rule as the sweep and the Studio test: the timestamp is "last
-    // succeeded", and only a real 200 may move it.
-    data: {
-      lastValidationStatus: probe.status,
-      ...(probe.status === "OK" ? { lastValidatedAt: new Date() } : {}),
-    },
-  });
+  // Guarded by the revision the probe read through (`revisionGuard`).
+  const guard = revisionGuard(conn.revision);
+  const written = guard
+    ? await prisma.sapConnection.updateMany({
+        where: { id: row.id, organizationId, ...guard },
+        // Same rule as the sweep and the Studio test: the timestamp is "last
+        // succeeded", and only a real 200 may move it.
+        data: {
+          lastValidationStatus: probe.status,
+          ...(probe.status === "OK" ? { lastValidatedAt: new Date() } : {}),
+        },
+      })
+    : { count: 0 };
+  if (written.count === 0) {
+    // Re-saved while the probe ran: the answer is the previous settings',
+    // so it is not recorded as the new settings' health or history.
+    return {
+      outcome: "superseded",
+      detail:
+        "The connection was changed while it was being probed, so the result was about its previous settings and was not recorded. Probe again.",
+    };
+  }
   await prisma.sapConnectionProbeEvent.create({
     data: {
       organizationId,

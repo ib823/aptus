@@ -28,6 +28,7 @@
  * here, so neither is ever reported as health.
  */
 
+import { CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import type { ConnectionBindingFailure } from "@/lib/sap-public/connection-resolver";
 
 export type IncidentSeverity = "critical" | "major" | "minor";
@@ -320,10 +321,17 @@ export const PROBE_FAILING_STATUSES: ReadonlySet<string> = new Set([
  * needs-attention on the screen but nobody's integration just broke. And
  * failing→failing stays silent so a connection that is down for a week alerts
  * once, when it went down — the transition IS the dedupe.
+ *
+ * UNREADABLE (and GROUP_UNREADABLE) is not healthy either (P0.2 review): no
+ * probe ran, every call was refused, and the screens count it as needing
+ * attention. Reading it as "was healthy" mailed a second "started failing"
+ * for a connection that never recovered. The probe sweep judges a row holding
+ * one against the last probe that actually ran (connection-probe-sweep.ts).
  */
 export function isDriftTransition(previous: string | null, next: string): boolean {
   if (!PROBE_FAILING_STATUSES.has(next)) return false;
   if (previous === null) return false;
+  if (CONNECTION_NOT_PROBED_STATUSES.includes(previous)) return false;
   return !PROBE_FAILING_STATUSES.has(previous);
 }
 

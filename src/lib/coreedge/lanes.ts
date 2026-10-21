@@ -453,9 +453,20 @@ export interface LaneVerdict {
 /**
  * The verdict before the reason is attached — see `deriveLaneStatus` — with
  * the hop where proof ran out, for an Unknown lane (A16). Every `unknown`
- * verdict names one; nothing else does.
+ * verdict names one — or, when that hop was checked and failed, names it as
+ * `failedHop` instead; nothing else does.
  */
-type HopVerdict = Omit<LaneVerdict, "unchecked" | "hops"> & { readonly undecidedHop?: LaneHop };
+type HopVerdict = Omit<LaneVerdict, "unchecked" | "hops"> & {
+  readonly undecidedHop?: LaneHop;
+  /**
+   * A hop that was checked and FAILED on a verdict whose status has no chip
+   * for that failure (a 404 read: Unknown). The status stays as derived; the
+   * strip draws this hop broken and the ones after it unreached, because that
+   * is what was observed — never "not checked" beside a sentence saying it
+   * was checked (P0.2 review).
+   */
+  readonly failedHop?: LaneHop;
+};
 
 function isStale(at: Date | null, now: Date): boolean {
   return at === null || now.getTime() - at.getTime() > CHECK_TTL_MS;
@@ -592,12 +603,13 @@ function deriveHopVerdict(facts: LaneFacts): HopVerdict {
      * 403 owned by the client's SAP admin, while a 404 is usually a mistyped
      * or unreleased entity set the builder fixes. The SAP systems matrix makes
      * the same call (service-health.ts). So: Unknown, at the read hop, with
-     * the real reason — never "no read has been proven".
+     * the real reason — never "no read has been proven". The strip draws the
+     * read hop failed, not "not checked": it was checked, and SAP answered.
      */
     return {
       status: "unknown",
       brokenHop: null,
-      undecidedHop: "sapDataRead",
+      failedHop: "sapDataRead",
       because:
         "SAP has no such dataset (HTTP 404). Check the entity set name, and that its service is released on this system.",
       checkedAt: read.at,
@@ -859,11 +871,11 @@ function whyUnchecked(facts: LaneFacts): UncheckedReason {
  * exactly as an ACTIVE one would; it just also says that no check was coming.
  */
 export function deriveLaneStatus(facts: LaneFacts): LaneVerdict {
-  const { undecidedHop, ...verdict } = deriveHopVerdict(facts);
+  const { undecidedHop, failedHop, ...verdict } = deriveHopVerdict(facts);
   return {
     ...verdict,
     unchecked: verdict.checkedAt === null ? whyUnchecked(facts) : null,
-    hops: hopVerdicts(facts, verdict.brokenHop, undecidedHop ?? null),
+    hops: hopVerdicts(facts, verdict.brokenHop ?? failedHop ?? null, undecidedHop ?? null),
   };
 }
 

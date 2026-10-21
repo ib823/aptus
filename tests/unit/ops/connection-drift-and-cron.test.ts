@@ -63,6 +63,17 @@ describe("isDriftTransition — the alert fires on the change, once", () => {
     expect(isDriftTransition("NO_PROBE_PATH", "ERROR")).toBe(true);
     expect(isDriftTransition("OK", "NO_PROBE_PATH")).toBe(false);
   });
+
+  it("treats an unopenable secret as not healthy: UNREADABLE then a failing probe is not a new break (P0.2 review)", () => {
+    // UNREADABLE is not a probe outcome and not healthy — the screens and the
+    // incident count treat it as needing attention. A connection already
+    // failing, then unreadable for a key rotation, then failing again after
+    // the key is restored never recovered: no second "started failing" mail.
+    for (const failing of PROBE_FAILING_STATUSES) {
+      expect(isDriftTransition("UNREADABLE", failing), `UNREADABLE → ${failing}`).toBe(false);
+      expect(isDriftTransition("GROUP_UNREADABLE", failing), `GROUP_UNREADABLE → ${failing}`).toBe(false);
+    }
+  });
 });
 
 describe("countDriftingConnections — window plus the event before it", () => {

@@ -321,6 +321,24 @@ describe("connections — health and binding are separate questions", () => {
     expect(screen.getByText(/ERROR · UNREADABLE/)).toBeTruthy();
   });
 
+  it("sends the operator to the row that will not open, not to a sibling whose secret is fine (P0.2 review)", async () => {
+    serve({
+      "/api/ops/connections-health": {
+        ...HEALTHY_BUT_UNDECLARED,
+        counts: { total: 1, healthy: 0, stale: 0, needsAttention: 1, unknown: 0, neverTested: 0 },
+        connections: [{ ...HEALTHY_BUT_UNDECLARED.connections[0], status: "GROUP_UNREADABLE", verdict: "unreadable" }],
+      },
+    });
+    render(<ConnectionsHealthClient />);
+
+    const chip = await screen.findByLabelText(/GROUP_UNREADABLE/);
+    const meaning = chip.getAttribute("aria-label") ?? "";
+    expect(meaning).toContain("another connection for this product will not");
+    expect(meaning).toContain("the row marked UNREADABLE");
+    expect(meaning).not.toContain("the stored secret would not open");
+    expect(meaning).not.toContain("unrecognised");
+  });
+
   it("distinguishes no connections from a feed it could not read", async () => {
     serve({
       "/api/ops/connections-health": {
