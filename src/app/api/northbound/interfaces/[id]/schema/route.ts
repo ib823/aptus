@@ -41,7 +41,8 @@
  * A current snapshot without texts (recorded before they were kept, or no
  * longer the row a verify last rendered: the interface pointed back at an
  * earlier dataset) answers `schemas: null` with `schemasOmitted:
- * "NOT_RENDERED"`: verify the service again. A row past the documents'
+ * "NOT_RENDERED"` and a note saying what renders them (a verify for a
+ * compiled contract, a capture for a sampled one). A row past the documents'
  * budget (MAX_DOCUMENT_CONTRACT_BYTES, kept at record time) is
  * `schemasOmitted: "TOO_LARGE"`.
  *
@@ -58,6 +59,7 @@ import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/l
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
+  FAILURE_REASON_ORG_SCHEMA_RATE,
   newCorrelationId,
   northboundError,
   northboundOkJson,
@@ -111,10 +113,20 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   // Then the organisation's own bucket: it mints credentials without bound,
   // and every read copies up to 1 MiB of texts (RATE_LIMITS.northboundSchemaPerOrg).
   let rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
-  if (rate.allowed) rate = await checkRateLimit(`northbound-schema:${client.organizationId}`, RATE_LIMITS.northboundSchemaPerOrg);
+  const byOrganisation = rate.allowed;
+  if (byOrganisation) rate = await checkRateLimit(`northbound-schema:${client.organizationId}`, RATE_LIMITS.northboundSchemaPerOrg);
   if (!rate.allowed) {
     // 429 for this credential's own use, 503 when the limiter is down (A44).
-    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");
+    // The organisation's bucket says so, in its words and on its audit row:
+    // slowing this one credential down does not help (review round 2).
+    const refusal = byOrganisation
+      ? northboundThrottleRefusal(
+          rate,
+          correlationId,
+          `Your organisation's credentials together have read /schema ${RATE_LIMITS.northboundSchemaPerOrg.limit} times this minute. Retry after Retry-After.`,
+          FAILURE_REASON_ORG_SCHEMA_RATE,
+        )
+      : northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -235,7 +247,13 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
           : notRendered
             ? {
                 schemasOmitted: "NOT_RENDERED" as const,
-                schemasNote: "This contract's schemas were not rendered when it was recorded, so they are not served. Verify the service again to render them.",
+                // By source (review round 2): a sampled contract's texts are
+                // written by a capture, or by a verify only if its description
+                // compiles and records; "verify again" alone can never help it.
+                schemasNote:
+                  servable.source === "SAMPLED"
+                    ? "This contract's schemas were not rendered when it was recorded, so they are not served. Capture the schema again in the Test Console to render them (or verify the service, if its description compiles)."
+                    : "This contract's schemas were not rendered when it was recorded, so they are not served. Verify the service again to render them.",
               }
             : {}),
       }

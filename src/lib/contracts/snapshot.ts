@@ -43,7 +43,8 @@
  * interface's stamp. An interface therefore holds at most 1 MiB of texts. A
  * row without them, or with texts of another renderer version
  * (SCHEMA_TEXTS_VERSION, render-version.ts), is served as NOT_RENDERED until
- * the interface is verified again.
+ * the interface is verified (or captured) again, or the build's re-render
+ * (contracts/rerender.ts) renders the current row from its own IR.
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. Pointing the interface at another dataset

@@ -75,3 +75,9 @@ sends or receives changed, except the additions marked *Added*.
   still point at `/api/northbound`, which every deployment serves; they
   move to `/api/northbound/v1` in a later release, once a deployment that
   serves it is the one a rollback would return to.
+- *Added:* `GET /interfaces/{id}/schema` also counts against an
+  organisation-wide budget: 120 reads a minute across all of the
+  organisation's credentials, beside each credential's own 60 (P1.3). Past
+  it the answer is `429 RATE_LIMITED` with `Retry-After`, and its message
+  says it is the organisation's credentials together, not this one: slowing
+  this key alone does not help. The code is unchanged.

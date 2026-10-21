@@ -10,12 +10,15 @@
  * — and consumers validate write bodies against /schema's requestSchema.
  *
  * So the texts are stored with this number (ContractSnapshot.schemaTextsVersion)
- * and served only while it is the running code's: an older one is answered
- * as NOT_RENDERED ("verify the service again"), never as a stale render.
+ * and served only while it is the running code's: another one is answered
+ * as NOT_RENDERED, never as a stale render.
  *
  * BUMP IT whenever a /schema text of any contract changes. The golden test
  * (tests/unit/contracts/golden.test.ts) records the digest of the goldens'
- * texts for each version, so a change made without a bump fails there.
+ * texts for each version, so a change made without a bump fails there. The
+ * build then renders every interface's texts again from its stored row
+ * (scripts/rerender-schema-texts.ts, contracts/rerender.ts), so a bump costs
+ * no re-verify against SAP.
  *
  * Pure, and its own module: GET /schema imports it and must import nothing
  * that renders (tests/unit/contracts/schema-read-path.test.ts).

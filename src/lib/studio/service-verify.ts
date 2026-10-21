@@ -146,10 +146,14 @@ export interface ServiceVerifyResult {
   failureReason: string | null;
   /**
    * What compiling the description (P1.3) gave, when one was read in full;
-   * absent when none was. A description the compiler refuses — or a job that
-   * did not run (BUSY, its time spent, the compiler off, RESOURCE_LIMIT) —
+   * absent when none was. A description the compiler refuses — or, after
+   * the fetch, a job that did not run (BUSY, RESOURCE_LIMIT, or a day the
+   * organisation's other jobs used up between the check and this one) —
    * still verifies as it did before the compiler existed: the dataset list
-   * then comes from the older reader, and the refusal is said here.
+   * then comes from the older reader, and the refusal is said here. With
+   * the compiler off, or the organisation's time for today spent, the verify
+   * is refused BEFORE SAP is asked (COMPILER_UNAVAILABLE, verified false),
+   * and this holds that refusal.
    */
   compiled?: CompiledService;
   /** The snapshot rows the record job diffed against, and the current row it was handed (snapshot.ts, loadRecordHeads), by id. */
@@ -454,9 +458,9 @@ async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, de
    * whether the compiler read the description or refused it (a singleton is
    * one record, not a dataset the broker can page through; a name
    * PostgreSQL cannot hold is no dataset anyone can address). Only when the
-   * job never ran (busy, its time spent, the compiler off, no worker) does
-   * this thread read them, in slices that give the event loop back between
-   * them.
+   * job fetched for did not run (BUSY, RESOURCE_LIMIT, or a day used up in
+   * between) does this thread read them, in slices that give the event loop
+   * back between them.
    */
   const datasets: DatasetSummary =
     compiled.ok ? compiled.datasets : (compiled.datasets ?? (await readDatasetsSliced(r.body, input.entitySet || null)));

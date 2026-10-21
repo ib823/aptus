@@ -13,8 +13,10 @@
  * crosses back to the request thread is this summary, never one entry per
  * declared set.
  *
- * When the job itself did not run (busy, its time spent, no worker), the
- * request thread reads the names with the older reader in slices of bounded
+ * When the job fetched for did not run (BUSY, RESOURCE_LIMIT, or a day the
+ * organisation's other jobs used up in between; with the compiler off or the
+ * day already spent the verify is refused before SAP is asked, and nothing is
+ * read), the request thread reads the names with the older reader in slices of bounded
  * size, giving the event loop back between them (readDatasetsSliced): what
  * one slice costs is fixed, whatever the description holds.
  *

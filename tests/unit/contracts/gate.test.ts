@@ -25,8 +25,12 @@ import path from "path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const time = vi.hoisted(() => ({ check: vi.fn(async () => ({ ok: true as const })), charge: vi.fn(async () => {}) }));
-vi.mock("@/lib/contracts/contract-time", () => ({ checkContractTime: time.check, chargeContractTime: time.charge }));
+const time = vi.hoisted(() => ({
+  check: vi.fn(async () => ({ ok: true as const })),
+  reserve: vi.fn(async (_org: string, ms: number) => ({ ok: true as const, reservation: { at: new Date(0), ms } })),
+  charge: vi.fn(async (..._args: unknown[]) => {}),
+}));
+vi.mock("@/lib/contracts/contract-time", () => ({ checkContractTime: time.check, reserveContractTime: time.reserve, chargeContractTime: time.charge }));
 
 import {
   CONTRACT_JOB_LIMITS,
@@ -126,9 +130,15 @@ describe("the gate's bounds, before anything is loaded", () => {
     await tick();
     const fifth = vi.fn(async () => null);
     const startedAt = Date.now();
-    expect(await runContractJob("render", fifth, { tenant: "org_five" })).toMatchObject({ ok: false, reason: "BUSY" });
+    const busy = await runContractJob("render", fifth, { tenant: "org_five" });
+    expect(busy).toMatchObject({ ok: false, reason: "BUSY" });
     expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(fifth).not.toHaveBeenCalled();
+    // Refused by its own organisation's share: the words do not blame other organisations (review round 2).
+    expect(busy && !busy.ok && busy.detail).toContain("your organisation's other verifies, captures or downloads");
+    expect(busy && !busy.ok && busy.detail).not.toContain("other organisations");
+    // Its reservation is given back: settled with no wall time.
+    expect(time.charge).toHaveBeenCalledWith("org_five", 0, new Date(0), CONTRACT_JOB_LIMITS.deadlineMs);
     // Waiting, the other three have loaded nothing either.
     for (const h of waiting) expect(h.load).not.toHaveBeenCalled();
     first.release();
@@ -180,8 +190,11 @@ describe("the gate's bounds, before anything is loaded", () => {
     expect(r).toMatchObject({ ok: false, reason: "BUSY", cause: "request-deadline" });
     // The deadline, then the worker's exit.
     expect(Date.now() - startedAt).toBeLessThan(400 + 5_000);
-    // Charged the wall time it ran.
-    expect(time.charge).toHaveBeenCalledWith("org_deadline", expect.any(Number));
+    // Its deadline reserved before it ran, then settled to the wall time it ran.
+    expect(time.reserve).toHaveBeenCalledWith("org_deadline", CONTRACT_JOB_LIMITS.deadlineMs);
+    const settled = time.charge.mock.calls.find((c) => c[0] === "org_deadline");
+    expect(settled).toEqual(["org_deadline", expect.any(Number), new Date(0), CONTRACT_JOB_LIMITS.deadlineMs]);
+    expect(settled![1]).toBeGreaterThan(0);
   });
 
   it("live isolates never pass COREEDGE_CONTRACT_ISOLATES (1 by default)", async () => {
@@ -204,11 +217,12 @@ describe("the compiler turned off, and the allowance, are answered before the ga
     expect(await runContractJob("render", load, { tenant: "org_off" })).toMatchObject({ ok: false, reason: "DISABLED" });
     expect(load).not.toHaveBeenCalled();
     expect(time.check).not.toHaveBeenCalledWith("org_off", expect.anything());
+    expect(time.reserve).not.toHaveBeenCalledWith("org_off", expect.anything());
   });
 
   it("an organisation whose time is spent is refused with its own words and 00:00 UTC, its inputs never loaded", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    time.check.mockResolvedValueOnce({ ok: false, detail: "your organisation has used its 40 s of contract compile time for today.", retryAfterMs: 3_600_000 } as never);
+    time.reserve.mockResolvedValueOnce({ ok: false, detail: "your organisation has used its 40 s of contract compile time for today.", retryAfterMs: 3_600_000 } as never);
     const load = vi.fn(async () => null);
     const r = await runContractJob("render", load, { tenant: "org_spent" });
     expect(r).toMatchObject({ ok: false, reason: "ALLOWANCE", retryAfterMs: 3_600_000 });

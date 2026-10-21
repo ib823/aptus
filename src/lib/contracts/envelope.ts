@@ -22,9 +22,11 @@
  *   - SLOT FIRST: a job's inputs are loaded only once it holds its slot
  *     (runContractJob's loader), so a job refused or still waiting has cost
  *     the request thread nothing;
- *   - its organisation's daily allowance (contract-time.ts): checked before
- *     the job is queued, and charged with the job's wall time from spawn to
- *     exit once the worker has gone.
+ *   - its organisation's daily allowance (contract-time.ts): checked and
+ *     the job's deadline reserved in one statement before the job is queued
+ *     (the gate is per process; the reservation holds across instances), and
+ *     settled to the job's wall time from spawn to exit once the worker has
+ *     gone.
  *
  * Whatever runs past a limit ends as a typed refusal (EnvelopeRefusal), never
  * an out-of-memory, a crash or a blocked event loop. A job's slot is free only
@@ -50,7 +52,7 @@ import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
 import { LIMITS } from "@/lib/contracts/budget";
-import { chargeContractTime, checkContractTime } from "@/lib/contracts/contract-time";
+import { chargeContractTime, checkContractTime, reserveContractTime } from "@/lib/contracts/contract-time";
 import type { EnvelopeRefusal, Job, JobOutput } from "@/lib/contracts/jobs";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
@@ -231,7 +233,7 @@ export type EnvelopeResult<T> =
 
 const DETAIL: Record<EnvelopeRefusal, string> = {
   RESOURCE_LIMIT: "It needs more memory or time than one contract compiler job may use, so it was not processed.",
-  BUSY: "The contract compiler is busy with other organisations' jobs. Try again in a moment.",
+  BUSY: "The contract compiler is busy, possibly with your organisation's other verifies, captures or downloads. Try again in a few seconds.",
   ALLOWANCE: "Your organisation has used its contract compile time for today.",
   DISABLED: "The contract compiler is turned off on this deployment (compiler disabled).",
   UNAVAILABLE: "The contract compiler could not be started, so nothing was processed.",
@@ -253,10 +255,10 @@ export interface EnvelopeOptions {
 }
 
 /**
- * Run one job in a fresh worker, in order: the allowance, the gate, `load`
- * (only once the slot is held; null declines the job, and null is answered),
- * the worker, its exit, the slot freed, the wall time charged. Resolves,
- * never rejects.
+ * Run one job in a fresh worker, in order: the allowance (its deadline
+ * reserved), the gate, `load` (only once the slot is held; null declines the
+ * job, and null is answered), the worker, its exit, the slot freed, the
+ * reservation settled to the wall time (0 for a job that never ran).
  */
 export async function runContractJob<K extends Job["kind"]>(
   kind: K,
@@ -268,40 +270,44 @@ export async function runContractJob<K extends Job["kind"]>(
   const deadlineAt = opts.deadlineAt ?? null;
   const limits = opts.limits ?? CONTRACT_JOB_LIMITS;
   const left = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
-  const admitted = await contractJobAdmission(kind, tenant);
-  if (admitted !== null) return admitted;
-  const wait = left(GATE.maxWaitMs);
-  const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
-  if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
+  if (contractIsolates() === 0) return refuse("DISABLED", kind, queuedAt);
+  // The allowance, checked and this job's deadline reserved in one statement
+  // (contract-time.ts): the per-process gate below cannot see other instances.
+  const reserved = tenant === null ? null : await reserveContractTime(tenant, limits.deadlineMs);
+  if (reserved !== null && !reserved.ok) return refuse("ALLOWANCE", kind, queuedAt, "allowance", reserved.detail, reserved.retryAfterMs);
   let wallMs = 0;
-  let result: EnvelopeResult<JobOutput<K>> | null;
   try {
-    const job = await load();
-    if (job === null) return null;
-    const runMs = left(limits.deadlineMs);
-    if (job.kind === "render" && inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes) {
-      result = refuse("RESOURCE_LIMIT", kind, queuedAt, INPUT_CAUSE);
-    } else if (runMs <= 0) {
-      result = refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
-    } else {
+    const wait = left(GATE.maxWaitMs);
+    const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
+    if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
+    try {
+      const job = await load();
+      if (job === null) return null;
+      const runMs = left(limits.deadlineMs);
+      if (job.kind === "render" && inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes) {
+        return refuse("RESOURCE_LIMIT", kind, queuedAt, INPUT_CAUSE);
+      }
+      if (runMs <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
       const ran = await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
       wallMs = ran.wallMs;
-      result = ran.result;
+      return ran.result;
+    } finally {
+      release();
     }
   } finally {
-    release();
+    // Settled to the wall time from spawn to exit; a job that never ran gives its reservation back.
+    if (tenant !== null && reserved?.ok && (wallMs > 0 || reserved.reservation.ms > 0)) await chargeContractTime(tenant, wallMs, reserved.reservation.at, reserved.reservation.ms);
   }
-  if (tenant !== null && wallMs > 0) await chargeContractTime(tenant, wallMs);
-  return result;
 }
 
 /**
  * Whether a job of this organisation may start at all: DISABLED while the
  * compiler is off, ALLOWANCE once the organisation has used its day; null
- * when it may. The first step of every job — and the verify asks it BEFORE it
+ * when it may. A read that reserves nothing: the verify asks it BEFORE it
  * fetches a description (service-verify.ts), so an organisation whose time is
  * spent, or a deployment with the compiler off, costs no 8 MiB fetch and no
- * read of it on the request thread (consolidated review round 1).
+ * read of it on the request thread (consolidated review round 1); the record
+ * job then reserves its own time as every job does (runContractJob).
  */
 export async function contractJobAdmission<T = never>(kind: Job["kind"], tenant: string | null): Promise<EnvelopeResult<T> | null> {
   const since = Date.now();

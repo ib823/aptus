@@ -150,7 +150,10 @@ vi.mock("@/lib/db/prisma", async () => {
       $queryRaw: async (q: unknown) => {
         db.sql.push(sqlOf(q));
         return sqlOf(q).includes('"ContractTime"')
-          ? [{ ms: db.contractTimeMs }]
+          ? // A job's reservation (contract-time.ts) returns no row once the day is spent; a check reads the row.
+            sqlOf(q).includes("RETURNING") && db.contractTimeMs >= contractSecondsPerOrgDay() * 1000
+            ? []
+            : [{ ms: db.contractTimeMs }]
           : isSnapshotSummariesQuery(q)
             ? snapshotSummaryRows(db.snapshots, q)
             : isSchemaTextsQuery(q)
@@ -205,6 +208,7 @@ import { GET as getSolutionOpenApi } from "@/app/api/studio/solutions/[id]/opena
 import { kitLimit, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
+import { contractSecondsPerOrgDay } from "@/lib/contracts/contract-time";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { envelopeIsolates } from "@/lib/contracts/envelope";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
@@ -406,6 +410,31 @@ describe("/schema is bounded per organisation, whatever its credential count", (
     expect(mocks.record).toHaveBeenLastCalledWith(expect.objectContaining({ status: 429, externalId: "-schema-" }));
     expect(db.sql.some((q) => q.includes('"schemasText"'))).toBe(false);
   });
+
+  /*
+   * Consolidated review round 2: the organisation's refusal is not this
+   * credential's. The developer guide says a RATE_LIMITED is about the
+   * caller's own key, so this one says whose reads spent it, and is audited
+   * with its own reason, which the per-credential throttle signals leave out.
+   */
+  it("the organisation's refusal says so and is audited ORG_SCHEMA_RATE; the credential's own is unchanged", async () => {
+    mocks.rate.mockImplementation(async (key: string) =>
+      key.startsWith("northbound-schema:") ? { allowed: false, remaining: 0, resetMs: 30_000, reason: "limited" } : { allowed: true, remaining: 10, resetMs: 1000 },
+    );
+    const byOrg = await schemaRoute();
+    const orgError = ((await byOrg.json()) as { error: { code: string; message: string } }).error;
+    expect(orgError.code).toBe("RATE_LIMITED");
+    expect(orgError.message).toContain("Your organisation's credentials together have read /schema 120 times this minute");
+    expect(mocks.record).toHaveBeenLastCalledWith(expect.objectContaining({ status: 429, failureReason: "ORG_SCHEMA_RATE" }));
+
+    mocks.rate.mockImplementation(async (key: string) =>
+      key.startsWith("northbound:") ? { allowed: false, remaining: 0, resetMs: 30_000, reason: "limited" } : { allowed: true, remaining: 10, resetMs: 1000 },
+    );
+    const byKey = await schemaRoute();
+    const keyError = ((await byKey.json()) as { error: { code: string; message: string } }).error;
+    expect(keyError).toMatchObject({ code: "RATE_LIMITED", message: "Too many requests. Slow down and retry." });
+    expect(mocks.record).toHaveBeenLastCalledWith(expect.objectContaining({ status: 429, failureReason: null }));
+  });
 });
 
 describe("/schema serves the compiled contract, additively", () => {
@@ -566,6 +595,29 @@ describe("/schema and a sampled contract of an earlier contract", () => {
     );
     expect(d).toMatchObject({ responseSchema: null, schemaState: "stale" });
     expect(d.contract).toMatchObject({ source: "none", schemas: null, semver: null });
+  });
+
+  /*
+   * Consolidated review round 2: a sampled contract's texts come back only
+   * from a capture (or a verify whose description compiles and records), so
+   * its NOT_RENDERED note says so instead of "verify the service again".
+   */
+  it("a sampled contract that is NOT_RENDERED says to capture again", async () => {
+    seed({ operation: "READ", mode: "READ" });
+    const cap = await captureSchema(
+      new NextRequest("http://localhost/api/studio/interfaces/if_1/capture-schema", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rows: [{ SalesOrder: "1" }], interfaceVersion: 2 }),
+      }),
+      { params: Promise.resolve({ id: "if_1" }) },
+    );
+    expect(cap.status).toBe(200);
+    db.snapshots[0]!.schemaTextsVersion = SCHEMA_TEXTS_VERSION + 1;
+    const d = await data<{ contract: Row }>(await schemaRoute());
+    expect(d.contract).toMatchObject({ source: "sampled", schemas: null, schemasOmitted: "NOT_RENDERED" });
+    expect(d.contract.schemasNote).toMatch(/Capture the schema again in the Test Console/);
+    expect(d.contract.schemasNote).not.toMatch(/Verify the service again to render them/);
   });
 
   it("still serves a compiled snapshot after a change that leaves the dataset alone", async () => {

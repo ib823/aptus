@@ -54,14 +54,22 @@ stored snapshot in a worker.
   compiled write body of a verified write interface, else still null.
   `contract.schemasOmitted` says why `schemas` is null for a contract that is
   recorded: `TOO_LARGE`, past the documents' budget; `NOT_RENDERED`, its
-  schemas were not rendered when it was recorded (verify the service again).
+  schemas were not rendered when it was recorded (`schemasNote` says what
+  renders them: for a `metadata` contract, verify the service again; for a
+  `sampled` one, capture the schema again in the Test Console, or verify the
+  service if its description compiles).
 - `GET /api/studio/interfaces` no longer returns `requestSchema` (always null
   before P1.3); it returns `hasRequestSchema`, as the Studio page does.
 - `POST /api/studio/interfaces/{id}/verify-service` adds `contract` to its answer
-  and to its TEST_CONNECT audit row. A description the compiler refuses still
+  and to its TEST_CONNECT audit row. A description the compiler refuses, or
+  a job fetched for that did not run (busy, `RESOURCE_LIMIT`), still
   verifies exactly as before (the older reader lists the datasets), with
   `contract.status: NOT_COMPILED`; a snapshot that cannot be written answers
-  `NOT_RECORDED`. Neither changes `verified`. `entitySets` lists the first 500
+  `NOT_RECORDED`. Neither changes `verified`. **With the compiler off
+  (`COREEDGE_CONTRACT_ISOLATES=0`) or the organisation's compiler time for
+  today spent, the verify is refused before SAP is asked**: `status:
+  COMPILER_UNAVAILABLE`, `verified: false`, so nothing is verified and custom
+  writes cannot be unlocked until it is on again. `entitySets` lists the first 500
   dataset names (as many as the interface stores) and `entitySetCount` says
   how many there are; a verify sent while its organisation already has three
   in flight answers `status: BUSY` at once, having asked SAP nothing.
@@ -72,9 +80,10 @@ stored snapshot in a worker.
   spent) and stores nothing when the compiler cannot take the capture.
 - `POST /api/studio/interfaces/{id}/capture-schema` adds `contract`, and
   answers 503 or 429 the same way.
-- The starter kit and the solution document answer 503 (`Retry-After: 5`)
-  when the compiler is busy or off, and 429 until 00:00 UTC when the
-  organisation's compiler time is spent.
+- The starter kit and the solution document answer 503 when the compiler is
+  busy (`Retry-After: 5`) or off (no `Retry-After`: it stays off until an
+  operator turns it on), and 429 until 00:00 UTC when the organisation's
+  compiler time is spent.
 - The starter kit has one more file, `openapi-3.0.json`. `openapi.json` now
   draws the operation the interface actually serves: a CREATE interface's
   document describes `POST …/data/write` with its body, headers and errors
@@ -238,6 +247,7 @@ allow-listed `*.ondemand.com` host; operators and the platform are trusted.
 | `capture` | capture-schema | the raw request text (≤ 4.5 MiB), the previous heads | the captured schema's text and the small validated fields; the SAMPLED contract made ready as `record` makes one |
 | `fixture` | capture-fixture | the raw request text (≤ 4.5 MiB) | the compact body text (≤ 4.5 MiB), the scenario and status |
 | `render` | scaffold, solutions/[id]/openapi | the kit's or document's inputs, loaded once the job holds its slot (IRs as `ir::text`, the captured schema under the ≤ 1 MiB stored / ≤ 520 KiB served decision, fixture bodies size-first ≤ 8 MiB, the grants), ≤ 16 MiB (`INPUT_TOO_LARGE` past it) | the kit's files or the document, under its budget (32 MiB caps, 32 KiB per interface, 1,016 interfaces) |
+| `texts` | scripts/rerender-schema-texts.ts (the build) | a stored row's `ir::text` (≤ 2 MiB), its dataset and size; no tenant | its `/schema` texts, under the same 1 MiB cap (`OUTPUT_TOO_LARGE` past it) |
 
 Everything the request thread only stores or sends crosses back as UTF-8
 bytes, transferred, and is written as text. **The `/schema` texts** — the
@@ -260,15 +270,36 @@ own IR, so the same bytes it held), the texts nulled on every other row of
 the interface, and the write interface's `requestSchema` stamp; a capture's
 schema on the interface in the same transaction, or nothing.
 
-**A renderer change means re-verifying.** Any change to what
-`renderSchemaTexts` writes (`json-schema.ts`, or how it is called) bumps
-`SCHEMA_TEXTS_VERSION` and adds its digest to
+**A renderer change is re-rendered by the build, not by re-verifying.** Any
+change to what `renderSchemaTexts` writes (`json-schema.ts`, or how it is
+called) bumps `SCHEMA_TEXTS_VERSION` and adds its digest to
 `tests/fixtures/contracts/golden/schema-texts-versions.json` (the golden
-test fails until it does). After the deploy, every interface's `/schema`
-answers `schemasOmitted: NOT_RENDERED` until it is verified again; the kit
-and the document are unaffected.
+test fails until it does). The texts are a pure function of the row's own
+`ir::text`, dataset and size, so `vercel-build` runs
+`scripts/rerender-schema-texts.ts` after the migrations
+(`src/lib/contracts/rerender.ts`): each interface's current row whose texts
+are of another version — and no other row of the interface holds texts — is
+rendered again in a worker job with no tenant (its heap and deadline as any
+job's, no organisation's allowance) and written only while still so, so a
+verify that recorded meanwhile is never overwritten. The bytes are the ones
+a record would write for that row. The run never fails the build: it stops
+after 5 minutes, logs `[rerender-schema-texts] version N: … rendered, …
+refused, … left` and exits 0. A row it refuses (its texts past 1 MiB, or a
+job limit) or leaves stays `NOT_RENDERED` until its interface is verified
+again (`metadata`) or captured again (`sampled`), or the next run.
+**After an Instant Rollback across a bump** the rolled-back code serves only
+its own version: run that deployment's script once from its checkout against
+the production database (`pnpm exec tsx scripts/rerender-schema-texts.ts`),
+and again after rolling forward if the build does not. The kit and the
+document are unaffected either way.
 
-**The gate (`src/lib/contracts/envelope.ts`).**
+**The gate (`src/lib/contracts/envelope.ts`), per function instance.** Vercel
+groups a Next app's routes into functions by their configuration, and each
+group's instances keep their own gate: at least two on Hobby (verify-service,
+`maxDuration` 60, and the other four spawning routes), more as Fluid scales
+out. So the slots, the per-organisation running and waiting limits and the
+dispatch below hold per instance; the organisation's daily allowance is the
+one bound that holds across all of them (it is reserved in Postgres).
 
 | | |
 |---|---|
@@ -278,7 +309,7 @@ and the document are unaffected.
 | Dispatch | a freed slot goes to the waiting job whose organisation was served least recently (never served first; first in, first out on a tie; the map forgets an organisation after an hour) |
 | Wait | at most min(10 s, the caller's deadline); then `BUSY`, out of the queue |
 | Worker limits | old generation 384 MB, young 32 MB, stack 4 MB, 10 s from spawn (or less: the caller's deadline bounds wait and run together) |
-| Order per job | allowance check → queue → load inputs → spawn → result and the worker's exit → slot freed → wall time charged |
+| Order per job | allowance checked and the job's deadline (10 s) reserved, in one statement → queue → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
 
 A job's slot is free only once its worker has exited (5 s grace, logged), so
 live isolates never pass `COREEDGE_CONTRACT_ISOLATES`. The heap cap survives
@@ -320,7 +351,17 @@ before it is queued once the organisation has used
 `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` (default 40; 0 is unlimited), and
 every job is charged its wall time from spawn to exit — verify, capture,
 fixture, kit and document alike, a job killed at its deadline or heap
-included. The refusal says "your organisation has used its N s of contract
+included. **Reserved, then settled** (consolidated review round 2): the gate
+is per instance, so a check that only read the row let every instance admit
+its own queue for an organisation already at its cap. The check is one
+`INSERT … ON CONFLICT DO UPDATE SET ms = ms + 10000 WHERE ms < cap
+RETURNING`: no row back is the refusal, a row back has reserved the job's
+10 s deadline; when the worker has gone the row is settled by
+`ms − 10000 + wall time` (a job that never ran gives the 10 s back). So the
+day's total is at most the allowance plus one deadline, however many
+instances run; a process that dies between the two leaves the 10 s charged,
+which fails safe. The verify's own pre-SAP check (`contractJobAdmission`) is
+a plain read, so nothing is reserved twice. The refusal says "your organisation has used its N s of contract
 compile time for today" and retries at the next 00:00 UTC (downloads and
 captures: 429 with `Retry-After`). Rows older than 7 days are deleted by a
 charge (at most once an hour per process). There is no deployment-wide sum,
@@ -333,8 +374,8 @@ never touches it.
 |---|---|---|---|---|
 | verify-service | `contract: NOT_COMPILED`, retry in 5 s; a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `status: COMPILER_UNAVAILABLE` before SAP is asked, the stored datasets, `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `status: COMPILER_UNAVAILABLE` before SAP is asked, `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
 | capture-schema, capture-fixture | 503, `Retry-After: 5`, nothing stored | 429 until 00:00 UTC, nothing stored | 503, nothing stored | 422 `TOO_LARGE`; a body past 4.5 MiB has its own message |
-| scaffold, solutions/[id]/openapi (deadline 25 s) | 503, `Retry-After: 5` | 429 until 00:00 UTC | 503 | 422 with the input's or the output's message |
-| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, or with texts of another `SCHEMA_TEXTS_VERSION` |
+| scaffold, solutions/[id]/openapi (deadline 25 s) | 503, `Retry-After: 5` | 429 until 00:00 UTC | 503, no `Retry-After` | 422 with the input's or the output's message |
+| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, or with texts of another `SCHEMA_TEXTS_VERSION` (its `schemasNote` says verify again for `metadata`, capture again for `sampled`) |
 
 The Studio screens say a refused download: the Test Console's Generate and
 the Solutions screen's OpenAPI buttons (fetched, no longer a plain link that
@@ -346,7 +387,12 @@ buckets before anything is read: the credential's (`northbound`, 60 a minute)
 and the organisation's (`northboundSchemaPerOrg`, `northbound-schema:<org>`,
 120 a minute), refused 429 with `Retry-After` and an audit row — an
 organisation mints credentials without bound (four per solution, solutions
-unlimited), so only the second bounds its reads. Then one
+unlimited), so only the second bounds its reads. The organisation's refusal
+keeps the code `RATE_LIMITED` but says whose reads spent it ("Your
+organisation's credentials together have read /schema 120 times this
+minute…") and is audited with `failureReason: ORG_SCHEMA_RATE`, which the
+per-credential throttle view and the `throttled` incident leave out: the
+credential on that row is under its own limit. Then one
 query for the interface, the captured schema through the existing
 size-first decision, `currentSnapshotSummaries` (one `DISTINCT ON`, with the
 `octet_length` of the three texts), and one `SELECT` of the schemas text and
@@ -360,8 +406,8 @@ nothing that could (`tests/unit/contracts/schema-read-path.test.ts`).
 
 | Setting | Default | Hobby | Pro |
 |---|---|---|---|
-| `COREEDGE_CONTRACT_ISOLATES` | 1 (0 turns the compiler off: the kill switch) | 1 | 2, on a 4 GB / 2 vCPU function |
-| `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` | 40 (0 is unlimited) | 40 | 120, or 0 with Spend Management set above normal use |
+| `COREEDGE_CONTRACT_ISOLATES` | 1 per function instance (0 turns the compiler off: the kill switch; verifies are then refused before SAP is asked) | 1 | 2, only once the project's default function memory is Performance (4 GB / 2 vCPU); see On Pro |
+| `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` | 40 (0 is unlimited), across every instance | 40 | 120, or 0 with Spend Management set above normal use |
 
 Upstash stays optional, for the existing rate limiters only.
 
@@ -414,10 +460,26 @@ normal interface's starter kit (162,300 bytes, 322 ms) and its solution's
 document (86,754 bytes, 188 ms) downloaded with 200, each rendered in a worker
 spawned from the route's own trace, and the row rose to 1,703 ms.
 
-**On Pro.** Set function memory to 4 GB / 2 vCPU (Performance) for the five
-spawning routes, then `COREEDGE_CONTRACT_ISOLATES=2`; set
-`COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` to 120, or 0 with Spend Management
-set above normal use. Nothing else differs: the `/schema` per-organisation bucket (120 a minute) and the body bounds are code constants sized for one vCPU, and stay as they are (on 2 vCPU they simply cost a smaller share).
+**On Pro.** Vercel sets function memory for the whole project, not per
+route: in the dashboard (Settings → Functions), as the project's default.
+`functions.<route>.memory` in `vercel.json` is ignored with a build warning,
+so it cannot raise only the five spawning routes. In order:
+
+1. Choose Performance (4 GB / 2 vCPU) as the project's default memory. It
+   applies to **every** function of the project, not only the compiler's,
+   and raises their Provisioned Memory cost accordingly; decide on that
+   cost first.
+2. Only then set `COREEDGE_CONTRACT_ISOLATES=2`. On a 2 GB function it is
+   outside the memory arithmetic above (768 + 2 × 544 + 256 = 2,112 MB >
+   2,048); nothing in the code checks the memory it runs on
+   (`AWS_LAMBDA_FUNCTION_MEMORY_SIZE` is not readable under Fluid).
+3. Set `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` to 120, or 0 with Spend
+   Management set above normal use.
+
+The `/schema` per-organisation bucket (120 a minute) and the body bounds are
+code constants sized for one vCPU and stay as they are (on 2 vCPU they cost a
+smaller share). The gate's limits stay per function instance (see the gate);
+the daily allowance stays deployment-wide.
 
 **The worker chunk is found and deployed.** webpack bundles the worker as
 `.next/server/chunks/contract-compiler-worker.js`, outside every route's chunk
@@ -485,10 +547,11 @@ Each with its bound; closing it would cost more code and attack surface than
 it prevents.
 
 - **R1. Sybil organisations against Hobby's 4 CPU-hours a month.** One
-  hostile organisation spends at most 40 s a day of worker wall time, about
-  0.34 CPU-hours a month (about 9% of the quota); k organisations, k × 0.34:
-  about 12 sustained for a month exhaust the quota from compiles alone. Past
-  its 40 s an organisation's verifies cost a Postgres lookup each and no
+  hostile organisation spends at most 40 s a day of worker wall time plus
+  one job's 10 s deadline (R6), however many instances serve it, about
+  0.42 CPU-hours a month (about 10% of the quota); k organisations,
+  k × 0.42: about 10 sustained for a month exhaust the quota from compiles
+  alone. Past its 40 s an organisation's verifies cost a Postgres lookup each and no
   fetch (they are refused before SAP is asked), so the 40 s is the bound; the
   same holds for every verify while the compiler is off. Its `/schema` reads
   cost at most 120 a minute × about 25 ms ≈ 3 s of CPU a minute (R3), which
@@ -519,11 +582,32 @@ it prevents.
   interface's current row); a capture holds ≤ 4.5 MiB of text.
 - **R5. CPU sharing.** On 1 vCPU one job shares the CPU with the request
   thread for ≤ 10 s.
-- **R6. Allowance overshoot.** An organisation's concurrent jobs, each
-  checked before it is queued, can overshoot its day by ≤ 4 × 10 s.
+- **R6. Allowance overshoot.** Deployment-wide, an organisation's day ends
+  at most at its allowance plus one job's deadline: ≤ 40 s + 10 s, however
+  many function instances and groups run, because each job reserves its
+  10 s in the statement that checks the day and the reservations stop at
+  the allowance (consolidated review round 2; before, each instance's gate
+  admitted its own 4 × 10 s). Beyond that, a job in flight at the crossing
+  can pass its own 10 s by the time its worker takes to exit after the
+  deadline (milliseconds; at most the 5 s grace), and a process that dies
+  between reserving and settling leaves 10 s charged (fails safe).
 - **R7. `NOT_RENDERED` after an interface is pointed back to an earlier
   dataset without a re-verify.** The earlier row lost its texts to the newer
-  one. Fix: verify again.
+  one, and the build's re-render leaves it alone (the newer row still holds
+  texts). Fix: verify again for a `metadata` contract, capture again in the
+  Test Console for a `sampled` one; the `schemasNote` says which.
+- **R11. `NOT_RENDERED` after a renderer change, for the rows the build's
+  re-render does not render.** `scripts/rerender-schema-texts.ts` re-renders
+  every current row from its stored IR in `vercel-build`; a row whose texts
+  under the new renderer pass 1 MiB (or that hits a job limit) is refused and
+  logged, and rows past the run's 5-minute budget are left for the next run.
+  Those interfaces answer `NOT_RENDERED` until verified (or captured) again
+  or the script runs again. After an Instant Rollback across a bump the
+  rolled-back code serves only its own version until an operator runs that
+  deployment's script by hand (contract jobs, above): until then every
+  interface re-verified under the newer version answers `NOT_RENDERED`. The
+  bound is the run itself: about 0.15-0.5 s per row on one vCPU, so the
+  5 minutes cover about 600-2,000 interfaces per run.
 - **R8. Storage.** Texts ≤ 1 MiB per interface; IR history as before. There is
   no organisation storage quota; that gap predates this change.
 - **R9. Vercel's runtime heap flags are unverified.** The jobs fail closed
@@ -538,8 +622,9 @@ it prevents.
   goldens or the corpus list we know of, but not proven against SAP's own
   descriptions here (`pnpm contracts:corpus` needs
   `SAP_API_HUB_SANDBOX_API_KEY`; run it before promoting). After this change,
-  `/schema` of every interface verified before it answers `NOT_RENDERED`
-  until verified again (the texts' version column is new). A verify of an
+  the build's re-render gives the texts to every interface verified before
+  it whose row keeps its size (`irBytes`); a row from before that column
+  answers `NOT_RENDERED` until verified again. A verify of an
   organisation whose compile time is spent, or with the compiler off, is
   `COMPILER_UNAVAILABLE` and verifies nothing. A contract whose kit or document passes its budget is now recorded
   and refused only at download. A 4th concurrent verify of one organisation

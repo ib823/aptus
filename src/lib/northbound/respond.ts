@@ -104,13 +104,24 @@ export function northboundError(
 export const FAILURE_REASON_LIMITER_UNAVAILABLE = "LIMITER_UNAVAILABLE";
 
 /**
+ * The audit row's failureReason for a /schema read refused by its
+ * ORGANISATION's bucket (northboundSchemaPerOrg), not by the credential's own:
+ * the per-credential throttle view and the throttled incident leave it out,
+ * since the credential named on the row is under its own limit (consolidated
+ * review round 2).
+ */
+export const FAILURE_REASON_ORG_SCHEMA_RATE = "ORG_SCHEMA_RATE";
+
+/**
  * A per-credential throttle refused the call: what to answer, and what to
  * audit. The routes that limit a credential all go through this, so a limiter
  * outage cannot be told to one of them as throttling (audit A44).
  *
  *   limited     — 429 RATE_LIMITED with Retry-After: this credential used its
  *                 budget. Audited 429, which the traffic screen calls
- *                 throttled and the throttled incident counts.
+ *                 throttled and the throttled incident counts. A bucket that
+ *                 is not the credential's own (/schema's organisation bucket)
+ *                 passes its own `limitedReason`, which both leave out.
  *   unavailable — 503 LIMITER_UNAVAILABLE with Retry-After. Audited 503 with
  *                 failureReason LIMITER_UNAVAILABLE, so neither the throttle
  *                 view nor the throttled incident sees it, and the
@@ -121,6 +132,7 @@ export function northboundThrottleRefusal(
   rate: RateLimitResult,
   correlationId: string,
   limitedMessage: string,
+  limitedReason: string | null = null,
 ): { status: 429 | 503; failureReason: string | null; response: NextResponse } {
   const headers = { "retry-after": retryAfterSeconds(rate) };
   if (isLimiterOutage(rate)) {
@@ -132,7 +144,7 @@ export function northboundThrottleRefusal(
   }
   return {
     status: 429,
-    failureReason: null,
+    failureReason: limitedReason,
     response: northboundError("RATE_LIMITED", limitedMessage, 429, correlationId, headers),
   };
 }

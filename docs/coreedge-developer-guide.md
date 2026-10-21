@@ -301,7 +301,7 @@ help.
 | `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
 | `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |
 | `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
-| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it | **Yes, after `Retry-After`.** Slow this key down |
+| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it. One exception: `GET …/schema` also has a budget for your whole organisation (120 reads a minute across all its credentials); when that is spent the message says *"Your organisation's credentials together have read /schema…"* | **Yes, after `Retry-After`.** Slow this key down; for the organisation's `/schema` budget, read `/schema` less often across your applications (cache it: it changes only when the interface's contract does) |
 | `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
 | `429` | `RATE_LIMIT_EXCEEDED` | **Your address** is over the edge's ordinary per-address limit (300 GET or 120 POST a minute). Only a call that no per-credential limit covers meets it: `GET /versions`, a call with no `Authorization` header, or every call while per-credential limits are switched off | **Yes, after `Retry-After`.** Send your token on every call |
 | `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
@@ -309,7 +309,8 @@ help.
 | `504` | `UPSTREAM_TIMEOUT` | The tenant, or the connection's token endpoint, did not answer in time | **Yes, with backoff.** A write that timed out after it was sent returns the same answer under its key; see *Idempotency is not optional* |
 
 **Branch on `error.code`, not only on the status.** A `429 RATE_LIMITED` is
-about your own credential; a `429 RATE_LIMITED_ADDRESS` or
+about your own credential (or, on `/schema` only, your organisation's
+credentials together, as its message says); a `429 RATE_LIMITED_ADDRESS` or
 `RATE_LIMIT_EXCEEDED` is about the address you call from. Neither is ever sent for an outage: when the limiter itself is
 down you get `503 LIMITER_UNAVAILABLE`, which says nothing about your rate.
 When SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`, so back
