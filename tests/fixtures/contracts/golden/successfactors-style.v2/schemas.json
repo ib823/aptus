@@ -95,9 +95,9 @@
           "x-sap-display-format": "Date"
         },
         "externalCode": {
-          "maxLength": 128,
           "title": "Code",
           "type": "string",
+          "x-odata-max-length": 128,
           "x-odata-type": "Edm.String"
         }
       },
@@ -114,13 +114,13 @@
       "description": "A cust_TravelRequest record as the service returns it, compiled from the service's own description.",
       "properties": {
         "createdBy": {
-          "maxLength": 255,
           "readOnly": true,
           "title": "Created By",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 255,
           "x-odata-type": "Edm.String"
         },
         "cust_Amount": {
@@ -144,12 +144,12 @@
           "x-odata-type": "Edm.Boolean"
         },
         "cust_Destination": {
-          "maxLength": 255,
           "title": "Destination",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 255,
           "x-odata-type": "Edm.String"
         },
         "cust_Nights": {
@@ -163,12 +163,12 @@
           "x-odata-type": "Edm.Int64"
         },
         "cust_Traveller": {
-          "maxLength": 100,
           "title": "Traveller",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 100,
           "x-odata-type": "Edm.String"
         },
         "effectiveStartDate": {
@@ -179,9 +179,9 @@
           "x-sap-display-format": "Date"
         },
         "externalCode": {
-          "maxLength": 128,
           "title": "Code",
           "type": "string",
+          "x-odata-max-length": 128,
           "x-odata-type": "Edm.String"
         },
         "lastModifiedDateTime": {
@@ -195,13 +195,13 @@
           "x-odata-type": "Edm.DateTimeOffset"
         },
         "mdfSystemRecordStatus": {
-          "maxLength": 255,
           "readOnly": true,
           "title": "Record Status",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 255,
           "x-odata-type": "Edm.String"
         }
       },
@@ -289,11 +289,11 @@
         "description": "A cust_TravelRequest record as the service returns it, compiled from the service's own description.",
         "properties": {
           "createdBy": {
-            "maxLength": 255,
             "nullable": true,
             "readOnly": true,
             "title": "Created By",
             "type": "string",
+            "x-odata-max-length": 255,
             "x-odata-type": "Edm.String"
           },
           "cust_Amount": {
@@ -313,10 +313,10 @@
             "x-odata-type": "Edm.Boolean"
           },
           "cust_Destination": {
-            "maxLength": 255,
             "nullable": true,
             "title": "Destination",
             "type": "string",
+            "x-odata-max-length": 255,
             "x-odata-type": "Edm.String"
           },
           "cust_Nights": {
@@ -328,10 +328,10 @@
             "x-odata-type": "Edm.Int64"
           },
           "cust_Traveller": {
-            "maxLength": 100,
             "nullable": true,
             "title": "Traveller",
             "type": "string",
+            "x-odata-max-length": 100,
             "x-odata-type": "Edm.String"
           },
           "effectiveStartDate": {
@@ -342,9 +342,9 @@
             "x-sap-display-format": "Date"
           },
           "externalCode": {
-            "maxLength": 128,
             "title": "Code",
             "type": "string",
+            "x-odata-max-length": 128,
             "x-odata-type": "Edm.String"
           },
           "lastModifiedDateTime": {
@@ -356,11 +356,11 @@
             "x-odata-type": "Edm.DateTimeOffset"
           },
           "mdfSystemRecordStatus": {
-            "maxLength": 255,
             "nullable": true,
             "readOnly": true,
             "title": "Record Status",
             "type": "string",
+            "x-odata-max-length": 255,
             "x-odata-type": "Edm.String"
           }
         },
@@ -460,9 +460,9 @@
             "x-sap-display-format": "Date"
           },
           "externalCode": {
-            "maxLength": 128,
             "title": "Code",
             "type": "string",
+            "x-odata-max-length": 128,
             "x-odata-type": "Edm.String"
           }
         },

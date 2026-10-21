@@ -158,9 +158,9 @@
       "properties": {
         "Partner": {
           "description": "Business Partner Number",
-          "maxLength": 10,
           "title": "Business Partner",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "fieldSemantics": "DataSubjectID"
@@ -226,12 +226,12 @@
           "x-odata-type": "Edm.Decimal"
         },
         "Currency": {
-          "maxLength": 5,
           "title": "Currency",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 5,
           "x-odata-type": "Edm.String",
           "x-sap-semantics": "currency-code"
         },
@@ -255,12 +255,12 @@
           "x-odata-type": "Edm.Int64"
         },
         "FirstName": {
-          "maxLength": 40,
           "title": "First Name",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 40,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "isPotentiallyPersonal": true
@@ -283,12 +283,12 @@
           "x-odata-type": "Edm.DateTimeOffset"
         },
         "LastName": {
-          "maxLength": 40,
           "title": "Last Name",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 40,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "isPotentiallyPersonal": true
@@ -297,9 +297,9 @@
         },
         "Partner": {
           "description": "Business Partner Number",
-          "maxLength": 10,
           "title": "Business Partner",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "fieldSemantics": "DataSubjectID"
@@ -307,22 +307,22 @@
           "x-sap-display-format": "UpperCase"
         },
         "PartnerCategory": {
-          "maxLength": 1,
           "title": "BP Category",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 1,
           "x-odata-type": "Edm.String"
         },
         "PartnerFullName": {
-          "maxLength": 81,
           "readOnly": true,
           "title": "Name",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 81,
           "x-odata-type": "Edm.String",
           "x-sap-semantics": "name"
         },
@@ -498,10 +498,10 @@
             "x-odata-type": "Edm.Decimal"
           },
           "Currency": {
-            "maxLength": 5,
             "nullable": true,
             "title": "Currency",
             "type": "string",
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
           },
@@ -521,10 +521,10 @@
             "x-odata-type": "Edm.Int64"
           },
           "FirstName": {
-            "maxLength": 40,
             "nullable": true,
             "title": "First Name",
             "type": "string",
+            "x-odata-max-length": 40,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "isPotentiallyPersonal": true
@@ -545,10 +545,10 @@
             "x-odata-type": "Edm.DateTimeOffset"
           },
           "LastName": {
-            "maxLength": 40,
             "nullable": true,
             "title": "Last Name",
             "type": "string",
+            "x-odata-max-length": 40,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "isPotentiallyPersonal": true
@@ -557,9 +557,9 @@
           },
           "Partner": {
             "description": "Business Partner Number",
-            "maxLength": 10,
             "title": "Business Partner",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "fieldSemantics": "DataSubjectID"
@@ -567,18 +567,18 @@
             "x-sap-display-format": "UpperCase"
           },
           "PartnerCategory": {
-            "maxLength": 1,
             "nullable": true,
             "title": "BP Category",
             "type": "string",
+            "x-odata-max-length": 1,
             "x-odata-type": "Edm.String"
           },
           "PartnerFullName": {
-            "maxLength": 81,
             "nullable": true,
             "readOnly": true,
             "title": "Name",
             "type": "string",
+            "x-odata-max-length": 81,
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "name"
           },
@@ -746,9 +746,9 @@
         "properties": {
           "Partner": {
             "description": "Business Partner Number",
-            "maxLength": 10,
             "title": "Business Partner",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "fieldSemantics": "DataSubjectID"

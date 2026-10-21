@@ -80,15 +80,15 @@
       "description": "The key that names one BookingSet record.",
       "properties": {
         "BookingId": {
-          "maxLength": 4,
           "title": "Booking ID",
           "type": "string",
+          "x-odata-max-length": 4,
           "x-odata-type": "Edm.String"
         },
         "TravelId": {
-          "maxLength": 8,
           "title": "Travel ID",
           "type": "string",
+          "x-odata-max-length": 8,
           "x-odata-type": "Edm.String"
         }
       },
@@ -104,24 +104,24 @@
       "description": "A BookingSet record as the service returns it, compiled from the service's own description.",
       "properties": {
         "BookingId": {
-          "maxLength": 4,
           "title": "Booking ID",
           "type": "string",
+          "x-odata-max-length": 4,
           "x-odata-type": "Edm.String"
         },
         "BookingStatus": {
-          "maxLength": 1,
           "title": "Status",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 1,
           "x-odata-type": "Edm.String"
         },
         "CarrierId": {
-          "maxLength": 3,
           "title": "Airline",
           "type": "string",
+          "x-odata-max-length": 3,
           "x-odata-type": "Edm.String"
         },
         "ChangedAt": {
@@ -135,19 +135,19 @@
           "x-odata-type": "Edm.DateTimeOffset"
         },
         "CurrencyCode": {
-          "maxLength": 5,
           "title": "Currency",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 5,
           "x-odata-type": "Edm.String",
           "x-sap-semantics": "currency-code"
         },
         "CustomerId": {
-          "maxLength": 6,
           "title": "Customer",
           "type": "string",
+          "x-odata-max-length": 6,
           "x-odata-type": "Edm.String"
         },
         "FlightDate": {
@@ -180,9 +180,9 @@
           "x-odata-type": "Edm.Byte"
         },
         "TravelId": {
-          "maxLength": 8,
           "title": "Travel ID",
           "type": "string",
+          "x-odata-max-length": 8,
           "x-odata-type": "Edm.String"
         }
       },
@@ -280,22 +280,22 @@
         "description": "A BookingSet record as the service returns it, compiled from the service's own description.",
         "properties": {
           "BookingId": {
-            "maxLength": 4,
             "title": "Booking ID",
             "type": "string",
+            "x-odata-max-length": 4,
             "x-odata-type": "Edm.String"
           },
           "BookingStatus": {
-            "maxLength": 1,
             "nullable": true,
             "title": "Status",
             "type": "string",
+            "x-odata-max-length": 1,
             "x-odata-type": "Edm.String"
           },
           "CarrierId": {
-            "maxLength": 3,
             "title": "Airline",
             "type": "string",
+            "x-odata-max-length": 3,
             "x-odata-type": "Edm.String"
           },
           "ChangedAt": {
@@ -307,17 +307,17 @@
             "x-odata-type": "Edm.DateTimeOffset"
           },
           "CurrencyCode": {
-            "maxLength": 5,
             "nullable": true,
             "title": "Currency",
             "type": "string",
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
           },
           "CustomerId": {
-            "maxLength": 6,
             "title": "Customer",
             "type": "string",
+            "x-odata-max-length": 6,
             "x-odata-type": "Edm.String"
           },
           "FlightDate": {
@@ -346,9 +346,9 @@
             "x-odata-type": "Edm.Byte"
           },
           "TravelId": {
-            "maxLength": 8,
             "title": "Travel ID",
             "type": "string",
+            "x-odata-max-length": 8,
             "x-odata-type": "Edm.String"
           }
         },
@@ -434,15 +434,15 @@
         "description": "The key that names one BookingSet record.",
         "properties": {
           "BookingId": {
-            "maxLength": 4,
             "title": "Booking ID",
             "type": "string",
+            "x-odata-max-length": 4,
             "x-odata-type": "Edm.String"
           },
           "TravelId": {
-            "maxLength": 8,
             "title": "Travel ID",
             "type": "string",
+            "x-odata-max-length": 8,
             "x-odata-type": "Edm.String"
           }
         },

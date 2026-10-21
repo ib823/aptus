@@ -23,6 +23,7 @@ import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
 import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 import {
   buildNorthboundOpenApi,
+  documentJson,
   type ContractForDoc,
   type OpenApiVersion,
   type SampledSchema,
@@ -193,7 +194,7 @@ export function buildOpenApi(
     ],
     safe: safeName,
   });
-  return JSON.stringify(doc, null, 2);
+  return documentJson(doc);
 }
 
 /**

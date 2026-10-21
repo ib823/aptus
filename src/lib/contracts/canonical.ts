@@ -83,8 +83,14 @@ export function normalizeContract(c: InterfaceContract): InterfaceContract {
  * real dataset is tens of kilobytes; one this size is a description built to
  * be expensive. Here, beside the size it bounds, so the slice (slice.ts) can
  * refuse a contract this large before anything serialises it.
+ *
+ * THE SAME AS THE DOCUMENTS' BUDGET (MAX_DOCUMENT_CONTRACT_BYTES,
+ * doc-inputs.ts). At 4 MB a contract was accepted by the verify, rendered by
+ * /schema at 35 MB and seconds of CPU per call, and refused as TOO_LARGE by
+ * the kit and the solution document (hostile-input review round 2): what is
+ * accepted is now servable on every read path.
  */
-export const MAX_CONTRACT_BYTES = 4 * 1024 * 1024;
+export const MAX_CONTRACT_BYTES = 2 * 1024 * 1024;
 
 /** sha256 over the canonical JSON of the normalized contract, hex. */
 export function contractHash(c: InterfaceContract): string {
@@ -95,4 +101,60 @@ export function contractHash(c: InterfaceContract): string {
 export function contractDigest(c: InterfaceContract): { hash: string; bytes: number } {
   const json = canonicalJson(normalizeContract(c));
   return { hash: createHash("sha256").update(json).digest("hex"), bytes: Buffer.byteLength(json, "utf8") };
+}
+
+/**
+ * A LOWER BOUND on the UTF-8 length of `JSON.stringify(value)`, counted
+ * without serialising anything, and given up on as soon as it passes `limit`
+ * (the result is then some number above it). Exact for ASCII that needs no
+ * escaping; an escape or a non-ASCII character only adds bytes. Every value
+ * visited adds at least one, so the walk visits at most `limit + 1` values
+ * however much of the value is shared: a contract whose copies share their
+ * strings is small in memory and enormous as JSON, and this is what sees it.
+ */
+export function jsonBytesAtLeast(value: unknown, limit: number): number {
+  let n = 0;
+  const walk = (v: unknown): void => {
+    if (n > limit) return;
+    if (typeof v === "string") n += v.length + 2;
+    else if (typeof v === "number") n += JSON.stringify(v).length;
+    else if (typeof v === "boolean") n += v ? 4 : 5;
+    else if (v === null || v === undefined) n += 4;
+    else if (Array.isArray(v)) {
+      n += 1 + Math.max(1, v.length);
+      for (const x of v) {
+        if (n > limit) return;
+        walk(x);
+      }
+    } else if (typeof v === "object") {
+      n += 2;
+      let first = true;
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (n > limit) return;
+        if (x === undefined) continue;
+        // `"k":` and, after the first member, its comma.
+        n += k.length + 3 + (first ? 0 : 1);
+        first = false;
+        walk(x);
+      }
+    }
+  };
+  walk(value);
+  return n;
+}
+
+/**
+ * The digest of a contract that may be stored, or TOO_LARGE — decided BEFORE
+ * serialising when the contract cannot be that small (jsonBytesAtLeast), so
+ * no contract is ever written out at hundreds of megabytes only to be
+ * refused for its size afterwards (hostile-input review round 2).
+ */
+export function boundedContractDigest(
+  c: InterfaceContract,
+  limit: number = MAX_CONTRACT_BYTES,
+): { ok: true; hash: string; bytes: number } | { ok: false; bytes: number } {
+  const atLeast = jsonBytesAtLeast(c, limit);
+  if (atLeast > limit) return { ok: false, bytes: atLeast };
+  const { hash, bytes } = contractDigest(c);
+  return bytes > limit ? { ok: false, bytes } : { ok: true, hash, bytes };
 }

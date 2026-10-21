@@ -6,9 +6,12 @@
  * fetching or recursing into anything.
  */
 
+import { readFileSync } from "fs";
+import path from "path";
+
 import { describe, expect, it } from "vitest";
 
-import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
+import { boundedContractDigest, contractDigest, jsonBytesAtLeast, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { MAX_IDENTIFIER_LENGTH, MAX_REFERENCE_LENGTH } from "@/lib/contracts/csdl-xml";
 import {
@@ -21,7 +24,8 @@ import {
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, standaloneSchemas } from "@/lib/contracts/json-schema";
-import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
+import { MAX_TYPE_NAME_LENGTH, toTypeName } from "@/lib/contracts/names";
+import { buildNorthboundOpenApi, documentJson, multiInterfaceInfoVersion, type OpenApiVersion } from "@/lib/contracts/openapi";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { DEFAULT_XML_LIMITS, parseXml } from "@/lib/contracts/xml";
 import { buildScaffold, buildTypeScriptClient, safeName } from "@/lib/studio/scaffold";
@@ -272,14 +276,15 @@ describe("descriptions that make a lookup quadratic", () => {
     expect(imported).toMatchObject({ kind: "function", parameters: [{ name: "x" }], returnType: { type: "Edm.String" } });
   });
 
-  it("a set-level restriction listing as many paths as the type has properties", () => {
+  it("a set-level restriction listing more paths than the type has properties", () => {
+    // As many properties as fit the contract's size bound, and more paths.
     const n = 40_000;
     const doc =
       '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">' +
       '<edmx:Reference Uri="x"><edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="Capabilities"/></edmx:Reference>' +
       '<edmx:DataServices><Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
       '<EntityType Name="T"><Key><PropertyRef Name="p0"/></Key>' +
-      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="Edm.String"/>`).join("") +
+      Array.from({ length: 30_000 }, (_, i) => `<Property Name="p${i}" Type="Edm.String"/>`).join("") +
       '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>' +
       '<Annotations Target="ns.C/S"><Annotation Term="Capabilities.FilterRestrictions"><Record>' +
       '<PropertyValue Property="NonFilterableProperties"><Collection>' +
@@ -297,7 +302,8 @@ describe("descriptions that make a lookup quadratic", () => {
   });
 
   it("one complex type per property, through the slice and the starter kit's client", () => {
-    const n = 60_000;
+    // As many as fit the contract's size bound (MAX_CONTRACT_BYTES).
+    const n = 40_000;
     const doc =
       EDMX_HEAD +
       Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}"/>`).join("") +
@@ -326,7 +332,7 @@ describe("descriptions that make a lookup quadratic", () => {
         compiled: { semver: "1.0.0", snapshotId: "snap", contentHash: "0", compiledAt: "2026-10-20T00:00:00.000Z", contract },
       }),
     );
-    expect(kit.value).toContain("p59999?: Record<string, unknown> | null;");
+    expect(kit.value).toContain(`p${n - 1}?: Record<string, unknown> | null;`);
     expect(kit.ms).toBeLessThan(BUDGET_MS);
   });
 });
@@ -344,9 +350,11 @@ describe("compiled contracts that are expensive to read back", () => {
   };
 
   it("thousands of types sharing one Name get their component names in linear time", () => {
-    // Each type probed one suffix per earlier namesake: 36 s of CPU at this
-    // size, paid on every GET /schema, every OpenAPI build and every kit.
-    const n = 30_000;
+    // Each type probed one suffix per earlier namesake: 36 s of CPU at twice
+    // this size (a quarter of it here, still past the budget), paid on every
+    // GET /schema, every OpenAPI build and every kit. As many as fit the
+    // contract's size bound.
+    const n = 15_000;
     const doc =
       '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
       '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm"><EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
@@ -475,7 +483,9 @@ describe("CSDL JSON values that are not scalars", () => {
  *            contract (refused before any IR is read past it, see
  *            routes.test.ts), and is linear in it: a kit response under 32
  *            bytes per contract byte, a solution document under 16, /schema's
- *            four schemas under 8, each in under BUDGET_MS; client.ts under 2.
+ *            four schemas under 12 and its whole answer under 16, each in
+ *            under BUDGET_MS; client.ts under 2. Round 2 asserts these at the
+ *            worst shapes (below), not only at ordinary ones.
  */
 describe("hostile-input review round 1", () => {
   const BUDGET_MS = 5000;
@@ -746,5 +756,236 @@ describe("hostile-input review round 1", () => {
       expect(schema.ms).toBeLessThan(BUDGET_MS);
       expect(schema.value.length).toBeLessThan(8 * bytes);
     }, 60_000);
+  });
+});
+
+/*
+ * Hostile-input review round 2. THE BOUNDS, at the worst shapes:
+ *
+ *   slice    an operation the slice keeps is charged its bytes like a folded
+ *            property, so imports multiplying one action's parameters are
+ *            refused (TOO_LARGE, reported NOT_COMPILED) in under 1 s;
+ *   digest   a contract that cannot be under MAX_CONTRACT_BYTES is refused
+ *            before it is serialised (boundedContractDigest), in under 1 s
+ *            and with under 64 MB more heap, however much its parts share;
+ *   names    a component name is never longer than MAX_TYPE_NAME_LENGTH
+ *            plus a type's own, so a 511-character dataset name is not
+ *            repeated in every $ref;
+ *   render   the multipliers stated above hold for the shapes that render
+ *            the most per contract byte: enum- and complex-typed nullable
+ *            properties under a 511-character dataset name, one large
+ *            complex type, collection navigations — at the budget.
+ */
+describe("hostile-input review round 2", () => {
+  const BUDGET_MS = 5000;
+  const timed = <T>(fn: () => T): { value: T; ms: number } => {
+    const started = performance.now();
+    const value = fn();
+    return { value, ms: performance.now() - started };
+  };
+  const LONG = 511; // MAX_IDENTIFIER_LENGTH: a legal name
+
+  describe("an action imported many times does not multiply its parameters' bytes", () => {
+    // 1,000 parameters with long names and types, imported 399 times into the
+    // dataset: 399 × 1,001 members is under the member bound, and the digest
+    // then wrote 600 MB of canonical JSON — RangeError, or the heap exhausted.
+    const P = 1000;
+    const IMPORTS = 399;
+    const name = (i: number) => `p${i}`.padEnd(LONG, "x");
+    const type = `${"n".repeat(LONG)}.${"T".repeat(LONG)}`;
+    const ENTITY = '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>';
+
+    const refused = (doc: string) => {
+      expect(doc.length).toBeLessThan(DEFAULT_XML_LIMITS.maxBytes);
+      const r = compileContract(doc);
+      if (!r.ok) throw new Error(r.detail);
+      const heap = process.memoryUsage().heapUsed;
+      const { value, ms } = timed(() => sliceForEntitySet(r.ir, "S"));
+      expect(value).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+      expect(ms).toBeLessThan(1000);
+      expect(process.memoryUsage().heapUsed - heap).toBeLessThan(64 * 1024 * 1024);
+    };
+
+    it("CSDL XML", () => {
+      refused(
+        EDMX_HEAD +
+          ENTITY +
+          `<Action Name="a">${Array.from({ length: P }, (_, i) => `<Parameter Name="${name(i)}" Type="${type}"/>`).join("")}</Action>` +
+          `<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/>${Array.from({ length: IMPORTS }, (_, i) => `<ActionImport Name="i${i}" Action="ns.a" EntitySet="S"/>`).join("")}</EntityContainer>` +
+          EDMX_TAIL,
+      );
+    }, 30_000);
+
+    it("CSDL JSON", () => {
+      const container: Record<string, unknown> = { $Kind: "EntityContainer", S: { $Collection: true, $Type: "ns.T" } };
+      for (let i = 0; i < IMPORTS; i++) container[`i${i}`] = { $Action: "ns.a", $EntitySet: "S" };
+      refused(
+        JSON.stringify({
+          $Version: "4.0",
+          ns: {
+            T: { $Kind: "EntityType", $Key: ["k"], k: {} },
+            a: [{ $Kind: "Action", $Parameter: Array.from({ length: P }, (_, i) => ({ $Name: name(i), $Type: type })) }],
+            C: container,
+          },
+        }),
+      );
+    }, 30_000);
+
+    it("a few imports of a small action are still kept, each with its parameters", () => {
+      const r = compileContract(
+        EDMX_HEAD +
+          ENTITY +
+          '<Action Name="a"><Parameter Name="x" Type="Edm.String"/></Action>' +
+          '<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/><ActionImport Name="one" Action="ns.a" EntitySet="S"/><ActionImport Name="two" Action="ns.a" EntitySet="S"/></EntityContainer>' +
+          EDMX_TAIL,
+      );
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S");
+      expect(s.ok && s.contract.operations.map((o) => [o.name, o.parameters.length])).toEqual([
+        ["one", 1],
+        ["two", 1],
+      ]);
+    });
+
+    it("whatever reaches the digest, one that cannot be stored is refused before it is serialised", () => {
+      const r = compileContract(`${EDMX_HEAD}${ENTITY}<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>${EDMX_TAIL}`);
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S");
+      if (!s.ok) throw new Error(s.detail);
+      // Built in code, past the slice's charge: 399 operations sharing one list of parameters.
+      const parameters = Array.from({ length: P }, (_, i) => ({ name: name(i), type, nullable: true }));
+      for (let i = 0; i < IMPORTS; i++) s.contract.operations.push({ name: `i${i}`, kind: "action", entitySet: "S", parameters });
+      const heap = process.memoryUsage().heapUsed;
+      const { value, ms } = timed(() => boundedContractDigest(s.contract));
+      expect(value.ok).toBe(false);
+      expect(value.bytes).toBeGreaterThan(MAX_CONTRACT_BYTES);
+      expect(ms).toBeLessThan(1000);
+      expect(process.memoryUsage().heapUsed - heap).toBeLessThan(64 * 1024 * 1024);
+    });
+
+    it("the size it decides on is a lower bound of the canonical bytes, exact for plain ASCII", () => {
+      const r = compileContract(readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8"));
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "SalesOrder");
+      if (!s.ok) throw new Error(s.detail);
+      const exact = contractDigest(s.contract);
+      expect(jsonBytesAtLeast(s.contract, Number.MAX_SAFE_INTEGER)).toBe(exact.bytes);
+      expect(boundedContractDigest(s.contract)).toEqual({ ok: true, ...exact });
+      for (const v of [{ a: "é\n\"", b: [1, null, undefined, true], c: undefined }, [], {}, "x", 1.5e300, Number.NaN]) {
+        expect(jsonBytesAtLeast(v, Number.MAX_SAFE_INTEGER)).toBeLessThanOrEqual(Buffer.byteLength(JSON.stringify(v) ?? "", "utf8"));
+      }
+    });
+  });
+
+  describe("component names do not repeat a long dataset name", () => {
+    it("toTypeName is at most MAX_TYPE_NAME_LENGTH, keeps short names as they were, and keeps long ones apart", () => {
+      expect(toTypeName("A_BusinessPartner")).toBe("ABusinessPartner");
+      const a = toTypeName(`${"S".repeat(LONG)}a`);
+      const b = toTypeName(`${"S".repeat(LONG)}b`);
+      expect(a.length).toBeLessThanOrEqual(MAX_TYPE_NAME_LENGTH);
+      expect(b.length).toBeLessThanOrEqual(MAX_TYPE_NAME_LENGTH);
+      expect(a).not.toBe(b);
+      expect(a).toMatch(/^[A-Za-z][A-Za-z0-9]*$/);
+      expect(toTypeName(`${"S".repeat(LONG)}a`)).toBe(a); // stable
+    });
+  });
+
+  describe("rendered documents stay inside the stated bounds at the worst shapes", () => {
+    const SET = "S".repeat(LONG);
+    const HEAD =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices><Schema Namespace="n" xmlns="http://docs.oasis-open.org/odata/ns/edm">';
+    const TAIL = `<EntityContainer Name="C"><EntitySet Name="${SET}" EntityType="n.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`;
+    const entity = (members: string) =>
+      `<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>${members}</EntityType>`;
+    const many = (n: number, member: (i: number) => string) => Array.from({ length: n }, (_, i) => member(i)).join("");
+
+    const SHAPES: [string, string][] = [
+      ["enum-typed nullable properties", '<EnumType Name="E"><Member Name="A"/></EnumType>' + entity(many(40_000, (i) => `<Property Name="p${i}" Type="n.E"/>`))],
+      ["complex-typed nullable properties", '<ComplexType Name="E"><Property Name="a" Type="Edm.String"/></ComplexType>' + entity(many(40_000, (i) => `<Property Name="p${i}" Type="n.E"/>`))],
+      ["one large complex type", `<ComplexType Name="E">${many(36_000, (i) => `<Property Name="p${i}" Type="Edm.TimeOfDay"/>`)}</ComplexType>` + entity('<Property Name="c" Type="n.E"/>')],
+      ["collection navigations", entity(many(40_000, (i) => `<NavigationProperty Name="p${i}" Type="Collection(n.T)"/>`))],
+    ];
+
+    const kitInterface = (contract: InterfaceContract) => ({
+      id: "if_1",
+      name: "x",
+      externalId: "custom:/x",
+      sapProduct: "s4hana",
+      operation: "CREATE",
+      mode: "WRITE",
+      entitySet: SET,
+      version: 1,
+      solutionName: "s",
+      compiled: { semver: "1.0.0", snapshotId: "snap", contentHash: "0", compiledAt: "2026-10-20T00:00:00.000Z", contract },
+    });
+
+    it.each(SHAPES)("%s", (_label, body) => {
+      const r = compileContract(HEAD + body + TAIL);
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, SET);
+      if (!s.ok) throw new Error(s.detail);
+      const contract = s.contract;
+      const bytes = contractDigest(contract).bytes;
+      // Near the budget, which is every read path's.
+      expect(bytes).toBeGreaterThan(MAX_DOCUMENT_CONTRACT_BYTES * 0.7);
+      expect(bytes).toBeLessThanOrEqual(MAX_DOCUMENT_CONTRACT_BYTES);
+      expect(MAX_DOCUMENT_CONTRACT_BYTES).toBe(MAX_CONTRACT_BYTES);
+
+      const kit = timed(() => JSON.stringify({ data: { files: buildScaffold(kitInterface(contract), "https://x") } }));
+      expect(kit.ms).toBeLessThan(BUDGET_MS);
+      expect(kit.value.length).toBeLessThan(32 * bytes);
+
+      for (const version of ["3.1.0", "3.0.3"] as OpenApiVersion[]) {
+        const solution = timed(() =>
+          documentJson(
+            buildNorthboundOpenApi({
+              version,
+              baseUrl: "https://x",
+              title: "t",
+              infoVersion: "1.0.0",
+              description: "d",
+              interfaces: [{ ...kitInterface(contract), contract: { source: "metadata", contract, semver: "1.0.0" } }],
+              discovery: true,
+              safe: safeName,
+            }),
+          ),
+        );
+        expect(solution.ms).toBeLessThan(BUDGET_MS);
+        expect(solution.value.length).toBeLessThan(16 * bytes);
+      }
+
+      // GET /schema: its four schemas, and with the write body it serves beside them.
+      const schema = timed(() => {
+        const schemas = standaloneSchemas(contract, toTypeName(SET));
+        return { schemas: JSON.stringify(schemas), all: JSON.stringify({ schemas, requestSchema: { ...schemas.create, "x-contract": {} } }) };
+      });
+      expect(schema.ms).toBeLessThan(BUDGET_MS);
+      expect(schema.value.schemas.length).toBeLessThan(12 * bytes);
+      expect(schema.value.all.length).toBeLessThan(16 * bytes);
+    }, 120_000);
+
+    it("a small document is still indented for the person who reads it", () => {
+      expect(documentJson({ a: { b: 1 } })).toBe('{\n  "a": {\n    "b": 1\n  }\n}');
+      const large = { a: "x".repeat(600 * 1024) };
+      expect(documentJson(large)).toBe(JSON.stringify(large));
+    });
+  });
+
+  describe("a document of several interfaces has a version that moves with their contracts", () => {
+    const metadata = (semver: string, version = 1) => ({
+      version,
+      contract: { source: "metadata" as const, contract: {} as InterfaceContract, semver },
+    });
+    it("one compiled interface: its contract's version; a major anywhere raises the major", () => {
+      expect(multiInterfaceInfoVersion([metadata("1.4.2")], "abc")).toBe("1.4.2+abc");
+      const before = multiInterfaceInfoVersion([metadata("1.4.0"), metadata("3.1.0")], "a");
+      const after = multiInterfaceInfoVersion([metadata("2.0.0"), metadata("3.1.0")], "b");
+      expect(before).toBe("3.6.0+a");
+      expect(after).toBe("4.2.0+b");
+      // A minor bump raises the minor, a patch the patch; one without a compiled contract counts by its version.
+      expect(multiInterfaceInfoVersion([metadata("1.5.0"), metadata("3.1.0")], "c")).toBe("3.7.0+c");
+      expect(multiInterfaceInfoVersion([metadata("1.4.1"), metadata("3.1.0")], "d")).toBe("3.6.1+d");
+      expect(multiInterfaceInfoVersion([{ version: 3, contract: { source: "none" } }], "e")).toBe("1.3.0+e");
+    });
   });
 });

@@ -1037,14 +1037,14 @@
         "properties": {
           "SalesEmployee": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Employee",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           },
           "FiscalYear": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Fiscal Year",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
@@ -1054,7 +1054,7 @@
               "string",
               "null"
             ],
-            "maxLength": 80,
+            "x-odata-max-length": 80,
             "title": "Employee Name",
             "x-odata-type": "Edm.String",
             "x-personal-data": {
@@ -1078,7 +1078,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -1107,14 +1107,14 @@
         "properties": {
           "SalesEmployee": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Employee",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           },
           "FiscalYear": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Fiscal Year",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
@@ -1180,14 +1180,14 @@
         "properties": {
           "SalesEmployee": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Employee",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           },
           "FiscalYear": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Fiscal Year",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
@@ -1197,7 +1197,7 @@
               "string",
               "null"
             ],
-            "maxLength": 80,
+            "x-odata-max-length": 80,
             "title": "Employee Name",
             "x-odata-type": "Edm.String",
             "x-personal-data": {
@@ -1221,7 +1221,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -1250,14 +1250,14 @@
         "properties": {
           "SalesEmployee": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Employee",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           },
           "FiscalYear": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Fiscal Year",
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
@@ -1629,6 +1629,16 @@
                       "null"
                     ],
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

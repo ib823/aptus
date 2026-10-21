@@ -37,6 +37,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { idsWithRequestSchema } from "@/lib/contracts/record";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
@@ -275,7 +276,8 @@ export async function GET(request: NextRequest) {
       mode: true,
       status: true,
       mappingVersion: true,
-      requestSchema: true,
+      // Not requestSchema: an org-wide list says whether there is one (below)
+      // and never reads or returns it (hostile-input review round 2).
       responseSchema: true,
       solutionId: true,
       updatedAt: true,
@@ -294,10 +296,15 @@ export async function GET(request: NextRequest) {
   // connection id or host the gate compares against. Connections are read
   // only when some interface carries a verification.
   const anyVerified = interfaces.some((i) => i.serviceVerifications != null);
-  const connections = anyVerified ? await loadCurrentConnections(organizationId) : [];
+  const [connections, withRequestSchema] = await Promise.all([
+    anyVerified ? loadCurrentConnections(organizationId) : Promise.resolve([] as Awaited<ReturnType<typeof loadCurrentConnections>>),
+    idsWithRequestSchema({ organizationId, ...(solutionId ? { solutionId } : {}) }),
+  ]);
   return studioOk({
     interfaces: interfaces.map(({ serviceVerifications, ...rest }) => ({
       ...rest,
+      // Whether a write body is recorded for it; GET …/schema serves the body.
+      hasRequestSchema: withRequestSchema.has(rest.id),
       // Whether the stored schema is THIS contract's (contract-provenance.ts, A38).
       responseSchemaState: responseSchemaState(rest.responseSchema, rest),
       serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(

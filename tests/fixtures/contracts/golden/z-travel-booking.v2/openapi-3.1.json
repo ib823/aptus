@@ -1437,25 +1437,25 @@
         "properties": {
           "TravelId": {
             "type": "string",
-            "maxLength": 8,
+            "x-odata-max-length": 8,
             "title": "Travel ID",
             "x-odata-type": "Edm.String"
           },
           "BookingId": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Booking ID",
             "x-odata-type": "Edm.String"
           },
           "CustomerId": {
             "type": "string",
-            "maxLength": 6,
+            "x-odata-max-length": 6,
             "title": "Customer",
             "x-odata-type": "Edm.String"
           },
           "CarrierId": {
             "type": "string",
-            "maxLength": 3,
+            "x-odata-max-length": 3,
             "title": "Airline",
             "x-odata-type": "Edm.String"
           },
@@ -1483,7 +1483,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -1493,7 +1493,7 @@
               "string",
               "null"
             ],
-            "maxLength": 1,
+            "x-odata-max-length": 1,
             "title": "Status",
             "x-odata-type": "Edm.String"
           },
@@ -1670,13 +1670,13 @@
         "properties": {
           "TravelId": {
             "type": "string",
-            "maxLength": 8,
+            "x-odata-max-length": 8,
             "title": "Travel ID",
             "x-odata-type": "Edm.String"
           },
           "BookingId": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Booking ID",
             "x-odata-type": "Edm.String"
           }
@@ -1740,25 +1740,25 @@
         "properties": {
           "TravelId": {
             "type": "string",
-            "maxLength": 8,
+            "x-odata-max-length": 8,
             "title": "Travel ID",
             "x-odata-type": "Edm.String"
           },
           "BookingId": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Booking ID",
             "x-odata-type": "Edm.String"
           },
           "CustomerId": {
             "type": "string",
-            "maxLength": 6,
+            "x-odata-max-length": 6,
             "title": "Customer",
             "x-odata-type": "Edm.String"
           },
           "CarrierId": {
             "type": "string",
-            "maxLength": 3,
+            "x-odata-max-length": 3,
             "title": "Airline",
             "x-odata-type": "Edm.String"
           },
@@ -1786,7 +1786,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -1796,7 +1796,7 @@
               "string",
               "null"
             ],
-            "maxLength": 1,
+            "x-odata-max-length": 1,
             "title": "Status",
             "x-odata-type": "Edm.String"
           },
@@ -1973,13 +1973,13 @@
         "properties": {
           "TravelId": {
             "type": "string",
-            "maxLength": 8,
+            "x-odata-max-length": 8,
             "title": "Travel ID",
             "x-odata-type": "Edm.String"
           },
           "BookingId": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Booking ID",
             "x-odata-type": "Edm.String"
           }
@@ -2416,6 +2416,16 @@
                       "null"
                     ],
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

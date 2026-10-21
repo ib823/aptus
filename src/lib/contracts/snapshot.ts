@@ -52,7 +52,7 @@
 
 import { Prisma } from "@prisma/client";
 
-import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
+import { boundedContractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import {
   diffContracts,
   nextSemver,
@@ -146,8 +146,10 @@ export async function recordContractSnapshot(input: {
 }): Promise<RecordOutcome> {
   const { scope, iface, contract } = input;
   const environment = input.environment ?? null;
-  const { hash, bytes } = contractDigest(contract);
-  if (bytes > MAX_CONTRACT_BYTES) return { status: "TOO_LARGE", bytes };
+  // Refused before it is serialised when it cannot be small enough (canonical.ts).
+  const digest = boundedContractDigest(contract, MAX_CONTRACT_BYTES);
+  if (!digest.ok) return { status: "TOO_LARGE", bytes: digest.bytes };
+  const { hash, bytes } = digest;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     // Summaries only: an interface has a handful of versions, and the IRs

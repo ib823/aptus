@@ -39,7 +39,7 @@ import { MAX_STORED_CHANGES, MAX_STORED_DIFF_BYTES } from "@/lib/contracts/diff"
 import { loadDocInputs } from "@/lib/contracts/doc-inputs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { standaloneSchemas } from "@/lib/contracts/json-schema";
-import { currentRequestSchema, recordSampledContract, recordVerifiedContract } from "@/lib/contracts/record";
+import { idsWithRequestSchema, renderedRequestSchema, recordSampledContract, recordVerifiedContract } from "@/lib/contracts/record";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { currentContractSnapshot, recordContractSnapshot } from "@/lib/contracts/snapshot";
 import { MissingTenantScopeError } from "@/lib/db/tenant-guard";
@@ -369,14 +369,46 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const current = await currentContractSnapshot(scope, iface);
     expect(current?.semver).toBe("2.0.0");
     const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true, version: true, entitySet: true } });
-    const served = currentRequestSchema(row!.requestSchema, row!, current!.id) as { required: string[]; "x-contract": { semver: string } } | null;
+    const schemas = standaloneSchemas(current!.contract, "SalesOrder");
+    const served = renderedRequestSchema(row!.requestSchema, row!, { id: current!.id, schemas }) as {
+      required: string[];
+      "x-contract": { semver: string };
+    } | null;
     expect(served).not.toBeNull();
     expect(served!["x-contract"].semver).toBe("2.0.0");
     // The two bodies /schema serves agree: both require Region.
     expect(served!.required).toEqual(standaloneSchemas(current!.contract, "SalesOrder").create!.required);
     expect(served!.required).toContain("Region");
     // A body stamped with any other snapshot is never served.
-    expect(currentRequestSchema(row!.requestSchema, row!, "another-snapshot")).toBeNull();
+    expect(renderedRequestSchema(row!.requestSchema, row!, { id: "another-snapshot", schemas })).toBeNull();
+  });
+
+  it("a write interface's row keeps the stamp of its body, never the body (hostile-input review round 2)", async () => {
+    // The body is a multiple of the contract (52 MB under the size bound), and
+    // every Studio list of the organisation's interfaces read it back.
+    const created = await prisma.interface.create({
+      data: {
+        organizationId: ORG,
+        solutionId,
+        name: "create-stamp",
+        sapProduct: "s4hana",
+        externalId: "CE_SALESORDER_0001",
+        operation: "CREATE",
+        mode: "WRITE",
+        entitySet: "SalesOrder",
+      },
+      select: { id: true, version: true, externalId: true, entitySet: true, operation: true, mode: true },
+    });
+    const iface = { ...created, entitySet: created.entitySet! };
+    const rap = readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
+    const outcome = await recordVerifiedContract({ scope, iface, compiled: compileContract(rap), environment: "DEV", connectionId: "conn_DEV", actorId: "u1" });
+    expect(outcome).toMatchObject({ status: "RECORDED", requestSchemaWritten: true });
+    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true } });
+    expect(Object.keys(row!.requestSchema as object)).toEqual(["x-contract"]);
+    expect(Buffer.byteLength(JSON.stringify(row!.requestSchema))).toBeLessThan(2048);
+    // And a list asks whether there is one without reading it.
+    const ids = await idsWithRequestSchema({ organizationId: ORG, solutionId });
+    expect(ids.has(iface.id)).toBe(true);
   });
 
   it("stores a bounded diff and the contract's size, whatever the contract", async () => {

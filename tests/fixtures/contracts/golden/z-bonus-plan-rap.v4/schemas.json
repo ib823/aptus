@@ -94,14 +94,14 @@
       "description": "A BonusPlan record as the service returns it, compiled from the service's own description.",
       "properties": {
         "Currency": {
-          "maxLength": 5,
           "type": "string",
+          "x-odata-max-length": 5,
           "x-odata-type": "Edm.String"
         },
         "Employee": {
-          "maxLength": 12,
           "title": "Employee",
           "type": "string",
+          "x-odata-max-length": 12,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "fieldSemantics": "DataSubjectID",
@@ -125,8 +125,8 @@
           "x-odata-type": "Edm.String"
         },
         "PlanName": {
-          "maxLength": 40,
           "type": "string",
+          "x-odata-max-length": 40,
           "x-odata-type": "Edm.String"
         },
         "PlanUUID": {
@@ -246,14 +246,14 @@
         "description": "A BonusPlan record as the service returns it, compiled from the service's own description.",
         "properties": {
           "Currency": {
-            "maxLength": 5,
             "type": "string",
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String"
           },
           "Employee": {
-            "maxLength": 12,
             "title": "Employee",
             "type": "string",
+            "x-odata-max-length": 12,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "fieldSemantics": "DataSubjectID",
@@ -273,8 +273,8 @@
             "x-odata-type": "Edm.String"
           },
           "PlanName": {
-            "maxLength": 40,
             "type": "string",
+            "x-odata-max-length": 40,
             "x-odata-type": "Edm.String"
           },
           "PlanUUID": {

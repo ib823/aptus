@@ -1446,12 +1446,12 @@
           },
           "PlanName": {
             "type": "string",
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "x-odata-type": "Edm.String"
           },
           "Employee": {
             "type": "string",
-            "maxLength": 12,
+            "x-odata-max-length": 12,
             "title": "Employee",
             "x-odata-type": "Edm.String",
             "x-personal-data": {
@@ -1471,7 +1471,7 @@
           },
           "Currency": {
             "type": "string",
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String"
           },
           "ValidFrom": {
@@ -1715,12 +1715,12 @@
           },
           "PlanName": {
             "type": "string",
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "x-odata-type": "Edm.String"
           },
           "Employee": {
             "type": "string",
-            "maxLength": 12,
+            "x-odata-max-length": 12,
             "title": "Employee",
             "x-odata-type": "Edm.String",
             "x-personal-data": {
@@ -1740,7 +1740,7 @@
           },
           "Currency": {
             "type": "string",
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String"
           },
           "ValidFrom": {
@@ -2348,6 +2348,16 @@
                       "null"
                     ],
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

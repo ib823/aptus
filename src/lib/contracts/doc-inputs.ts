@@ -50,13 +50,12 @@ export interface DocInputsTooLarge {
  * time. Every document is linear in the contracts it carries, so the budget
  * bounds the render; what it buys, measured and asserted in
  * tests/unit/contracts/hostile-input.test.ts ("rendered documents stay inside
- * a stated bound"): a kit response under 32 bytes per contract byte, a
- * solution document under 16, each in well under the 5 s read budget. Half a
- * stored contract's bound (MAX_CONTRACT_BYTES): a real dataset's slice is tens
- * of kilobytes, so a solution of dozens of them renders; a kit at 4 MB would
- * have been 90 MB and seconds of CPU per download.
+ * a stated bound"), at the worst shapes rather than ordinary ones. A stored
+ * contract's own bound (MAX_CONTRACT_BYTES), so any one contract the verify
+ * accepted renders on every read path; a real dataset's slice is tens of
+ * kilobytes, so a solution of dozens of them renders.
  */
-export const MAX_DOCUMENT_CONTRACT_BYTES = MAX_CONTRACT_BYTES / 2;
+export const MAX_DOCUMENT_CONTRACT_BYTES = MAX_CONTRACT_BYTES;
 
 /** The refusal of a document past its budget: what to do about it, never the contract itself. */
 export function documentTooLargeMessage(what: "starter kit" | "solution document", limit: number): string {

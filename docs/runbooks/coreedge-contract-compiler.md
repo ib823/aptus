@@ -24,10 +24,12 @@ changes what the contract documents say, and where the shape in them comes from.
    content hash, its OData version, its source (`METADATA`), and a semantic
    version — 1.0.0 the first time; afterwards the previous one bumped by the
    structural diff (`diff.ts`). The same contract again records nothing.
-3. **Writes `requestSchema`** for a write interface: the JSON Schema of the body
-   its write sends, stamped with the snapshot and the interface version
-   (`x-contract`). A contract change in Studio clears it; the `/schema` route
-   serves it only while the stamp matches.
+3. **Writes `requestSchema`'s stamp** for a write interface: which snapshot and
+   interface version the body its write sends is of (`x-contract`), never the
+   body itself — that is a multiple of the contract, and Studio's lists read
+   the column. `/schema` renders the body from the stamped snapshot, and only
+   while the stamp matches; a contract change in Studio clears it. The lists
+   ask whether there is one by id, without reading it.
 4. **Falls back to sampled rows.** A schema capture also records a `SAMPLED`
    snapshot while no compiled one describes the interface. A compiled one is
    never pushed aside by a capture.
@@ -45,6 +47,10 @@ parses a description; `/schema` and the documents read the stored snapshot.
   `snapshotId`, `contentHash`, `odataVersion`, `compiledAt`, `schemas`).
   `requestSchema`, which was always null because nothing wrote it, is now the
   compiled write body of a verified write interface, else still null.
+  `contract.schemasOmitted` (`TOO_LARGE`) says why `schemas` is null for a
+  contract past the documents' budget.
+- `GET /api/studio/interfaces` no longer returns `requestSchema` (always null
+  before P1.3); it returns `hasRequestSchema`, as the Studio page does.
 - `POST /api/studio/interfaces/{id}/verify-service` adds `contract` to its answer
   and to its TEST_CONNECT audit row. A description the compiler refuses still
   verifies exactly as before (the older reader lists the datasets), with
@@ -93,6 +99,11 @@ parses a description; `/schema` and the documents read the stored snapshot.
 - **Versions in the documents.** The kit's `info.version` is the compiled
   contract's semantic version with the interface version as build metadata
   (`2.0.0+iface.3`); without a compiled contract it is `1.<interface version>.0`.
+  The solution document's moves with its interfaces' contracts: one plus the
+  majors they gained past 1, their minors (an interface without a compiled
+  contract counts its version) plus one per interface past the first, their
+  patches, and a digest as build metadata — so a major bump of any interface
+  raises the document's major. An interface leaving the document lowers it.
   A write interface's `requestSchema` is written from the snapshot that is
   current after the verify, and `/schema` serves it only while that snapshot
   is still the current one.
@@ -103,8 +114,12 @@ Major: a property, navigation, operation, parameter or enum member removed or
 renamed; a type, key or dataset changed; a field newly mandatory, or a
 mandatory one added; nullability changed either way; a length, precision or
 scale smaller; a capability withdrawn; a filter newly required; a field newly
-computed or immutable. Minor: an optional addition, a larger facet, a capability
-granted. Patch: labels, quick info, semantics, display formats, PersonalData
+computed or immutable; and what a read can now return that the previous
+record schema refuses — a member added to an enum (a closed list; a flags
+enum is a string and adding to it is minor) or a property added to a closed
+complex type. Minor: an optional addition, a larger facet (the record and key
+schemas state lengths as `x-odata-max-length`; only request bodies validate
+them), a capability granted. Patch: labels, quick info, semantics, display formats, PersonalData
 annotations, partners, bindings. Closing an open entity type is major; opening
 one is minor. A change of source (sampled ↔ compiled), and two sampled
 contracts, compare field names only: what a sample happened to observe (a type
@@ -136,9 +151,12 @@ Every property, navigation, parameter, enum member, entity set and operation
 spends from a budget equal to the element bound, and a description past it is
 refused as `TOO_MANY_MEMBERS` (CSDL XML and JSON alike). The slice is refused
 (`TOO_LARGE`, reported as `NOT_COMPILED`) once folding base types would give it
-more than twice the description's own members plus 10,000, and a contract over
-4 MB of canonical JSON is never stored: it would be read back on every
-`/schema` call. `tests/unit/contracts/hostile-input.test.ts` has a case for each.
+more than twice the description's own members plus 10,000, or once the copies
+it makes — of base-type properties, and of the parameters every import of an
+action carries — exceed 2 MB, and a contract over 2 MB of canonical JSON is
+never stored, refused before it is serialised when it cannot be that small:
+it would be read back on every `/schema` call.
+`tests/unit/contracts/hostile-input.test.ts` has a case for each.
 
 The bounds that hold for any description inside the parser's (hostile-input
 review round 1; each asserted in that file, the stored ones in
@@ -156,10 +174,19 @@ review round 1; each asserted in that file, the stored ones in
   under 1 MB whatever the contract.
 - **Render.** A starter kit or a solution document carries at most 2 MB of
   compiled contract, added up from `ContractSnapshot.irBytes` (kept at record
-  time) before any IR is read; past it the answer is `422 TOO_LARGE`. Every
-  document is linear in what it carries: a kit response under 32 bytes per
-  contract byte, a solution document under 16, `/schema`'s schemas under 8,
-  each in under 5 s; client.ts declares each enum once.
+  time) before any IR is read; past it the answer is `422 TOO_LARGE`. The
+  budget is the stored contract's own bound, so a contract the verify
+  accepted is servable on every read path; `/schema` checks it the same way
+  and answers `schemas: null` with `schemasOmitted: "TOO_LARGE"` past it.
+  Every document is linear in what it carries: a kit response under 32 bytes
+  per contract byte, a solution document under 16, `/schema`'s schemas under
+  12 and its whole answer under 16, each in under 5 s, asserted at the worst
+  shapes (round 2: enum- and complex-typed nullable properties under a
+  511-character dataset name, one large complex type, navigations).
+  Component names are at most 64 characters plus a type's own (a long
+  dataset name keeps its first characters and a hash), each standalone
+  schema carries only the types it reaches, and a document over 512 KB is
+  served compact; client.ts declares each enum once.
 
 ## Golden tests
 

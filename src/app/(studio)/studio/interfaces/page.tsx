@@ -4,6 +4,8 @@
  * Schema presence is reported as a boolean rather than shipping the schemas
  * themselves to the browser: the list only needs to say whether a contract has
  * been captured, and an unread JSON blob per row is payload nobody asked for.
+ * The request schema's presence is asked of the database by id, so the column
+ * is never read for a list (hostile-input review round 2).
  *
  * "Register your own API" needs the organization's solutions, the OData
  * products, and which declared connections Verify may ask — connection
@@ -19,6 +21,7 @@ import {
   type VerifyTarget,
 } from "@/components/studio/InterfacesClient";
 import { getCurrentUser } from "@/lib/auth/session";
+import { idsWithRequestSchema } from "@/lib/contracts/record";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeEnvironment } from "@/lib/sap-public/connection-resolver";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
@@ -48,7 +51,7 @@ export default async function StudioInterfacesPage({
   const openRegister = sp.register === "1";
 
   const organizationId = user.organizationId;
-  const [rows, liveCredentials, writeKeyHolders, writeGrants, solutionRows, connectionRows] = await Promise.all([
+  const [rows, liveCredentials, writeKeyHolders, writeGrants, solutionRows, connectionRows, withRequestSchema] = await Promise.all([
     organizationId
       ? prisma.interface.findMany({
           where: { organizationId },
@@ -63,7 +66,7 @@ export default async function StudioInterfacesPage({
             mode: true,
             status: true,
             mappingVersion: true,
-            requestSchema: true,
+            // Not requestSchema: whether there is one is asked below, by id.
             responseSchema: true,
             solutionId: true,
             servicePath: true,
@@ -120,6 +123,8 @@ export default async function StudioInterfacesPage({
           orderBy: { createdAt: "asc" },
         })
       : Promise.resolve([]),
+    // Which interfaces have a request schema, without reading one (record.ts).
+    organizationId ? idsWithRequestSchema({ organizationId }) : Promise.resolve(new Set<string>()),
   ]);
 
   // An undeclared connection cannot be chosen by environment, so it is not a
@@ -217,7 +222,7 @@ export default async function StudioInterfacesPage({
     mode: r.mode,
     status: r.status as StudioInterface["status"],
     mappingVersion: r.mappingVersion,
-    hasRequestSchema: r.requestSchema !== null,
+    hasRequestSchema: withRequestSchema.has(r.id),
     responseSchemaState: responseSchemaState(r.responseSchema, r),
     solutionId: r.solutionId,
     solutionName: r.solution.name,

@@ -17,10 +17,19 @@
  *     computed or immutable; an open entity or complex type closed. An
  *     operation is compared with its own overload (same name and binding),
  *     never with another of the same name.
+ *     AND WHAT A READ CAN NOW RETURN THAT THE PREVIOUS RECORD SCHEMA REFUSES:
+ *     a member added to an enum type (its schema is a closed `enum`, its
+ *     client type a closed union), or a property added to a closed complex
+ *     type (`additionalProperties: false`). A consumer pinned to ^1.0 who
+ *     validates rows with 1.0.0's record schema would reject every row that
+ *     carried the new value (hostile-input review round 2).
  *   MINOR — something was added or loosened: an optional property,
- *     navigation, operation (or overload), enum member or optional parameter
- *     added; a length, precision or scale grew; a capability granted; a
- *     closed entity or complex type opened.
+ *     navigation, operation (or overload), member of a flags enum (a string,
+ *     not a closed list) or optional parameter added, or a property added to
+ *     an open complex type; a length, precision or scale grew (what a read
+ *     returns STATES its facets, x-odata-max-length, and only a request body
+ *     validates them, json-schema.ts); a capability granted; a closed entity
+ *     or complex type opened.
  *   PATCH — only what the contract SAYS about itself changed: labels, quick
  *     info, semantics, display formats, PersonalData annotations, default
  *     values, partners, bindings, an entity type's own name.
@@ -186,7 +195,8 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
   for (const t of next.complexTypes) {
     const before = prevComplex.get(t.qualifiedName);
     if (!before) continue;
-    diffProperties(`complexType:${t.name}`, before.properties, t.properties, add);
+    // A property added to a closed complex type is a row the previous record schema refuses.
+    diffProperties(`complexType:${t.name}`, before.properties, t.properties, add, t.openType !== true);
     // Its schema's additionalProperties follows openType (json-schema.ts):
     // closed, the dynamic properties clients send are refused.
     if (before.openType === true && t.openType !== true) {
@@ -205,7 +215,12 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
       else if (now.get(m.name) !== m.value) add("major", `enumType:${t.name}`, `The value ${m.name} changed its number.`);
     }
     const then = new Set(before.members.map((m) => m.name));
-    for (const m of t.members) if (!then.has(m.name)) add("minor", `enumType:${t.name}`, `The value ${m.name} was added.`);
+    // A flags enum is a comma-separated string in every schema; any other is a closed list.
+    for (const m of t.members) {
+      if (then.has(m.name)) continue;
+      if (t.isFlags === true) add("minor", `enumType:${t.name}`, `The value ${m.name} was added.`);
+      else add("major", `enumType:${t.name}`, `The value ${m.name} was added: rows carrying it fail the previous version's record schema.`);
+    }
   }
 
   diffOperations(prev.operations, next.operations, add);
@@ -281,7 +296,7 @@ function diffPropertyCapabilities(at: string, a: IrPropertyCapabilities = {}, b:
   else if (a.mandatory === true && b.mandatory !== true) add("minor", at, "It no longer has to be sent on create.");
 }
 
-function diffProperties(scope: string, prev: readonly IrProperty[], next: readonly IrProperty[], add: Add): void {
+function diffProperties(scope: string, prev: readonly IrProperty[], next: readonly IrProperty[], add: Add, closed = false): void {
   const before = new Map(prev.map((p) => [p.name, p]));
   const after = new Map(next.map((p) => [p.name, p]));
   for (const [name, a] of before) {
@@ -312,6 +327,7 @@ function diffProperties(scope: string, prev: readonly IrProperty[], next: readon
   for (const [name, b] of after) {
     if (before.has(name)) continue;
     if (b.capabilities?.mandatory === true) add("major", `${scope}:${name}`, `${name} was added and must be sent on create.`);
+    else if (closed) add("major", `${scope}:${name}`, `${name} was added to a closed type: values carrying it fail the previous version's schema.`);
     else add("minor", `${scope}:${name}`, `${name} was added.`);
   }
 }

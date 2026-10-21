@@ -1438,7 +1438,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1454,7 +1454,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Destination",
             "x-odata-type": "Edm.String"
           },
@@ -1493,7 +1493,7 @@
               "string",
               "null"
             ],
-            "maxLength": 100,
+            "x-odata-max-length": 100,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
           },
@@ -1512,7 +1512,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Created By",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1522,7 +1522,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Record Status",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1678,7 +1678,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1750,7 +1750,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1766,7 +1766,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Destination",
             "x-odata-type": "Edm.String"
           },
@@ -1805,7 +1805,7 @@
               "string",
               "null"
             ],
-            "maxLength": 100,
+            "x-odata-max-length": 100,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
           },
@@ -1824,7 +1824,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Created By",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1834,7 +1834,7 @@
               "string",
               "null"
             ],
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "title": "Record Status",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1990,7 +1990,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -2434,6 +2434,16 @@
                       "null"
                     ],
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

@@ -1440,7 +1440,7 @@
           },
           "Currency": {
             "type": "string",
-            "maxLength": 3,
+            "x-odata-max-length": 3,
             "nullable": true,
             "x-odata-type": "Edm.String"
           }
@@ -1468,7 +1468,7 @@
         "properties": {
           "SalesOrder": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Order",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1481,13 +1481,13 @@
           },
           "SalesOrderType": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Sales Document Type",
             "x-odata-type": "Edm.String"
           },
           "SoldToParty": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sold-to Party",
             "description": "Customer who orders",
             "x-odata-type": "Edm.String",
@@ -1497,7 +1497,7 @@
           },
           "PurchaseOrderByCustomer": {
             "type": "string",
-            "maxLength": 35,
+            "x-odata-max-length": 35,
             "x-odata-type": "Edm.String"
           },
           "RequestedDeliveryDate": {
@@ -1545,13 +1545,13 @@
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 20
+              "x-odata-max-length": 20
             },
             "x-odata-type": "Collection(Edm.String)"
           },
           "ContactEmail": {
             "type": "string",
-            "maxLength": 241,
+            "x-odata-max-length": 241,
             "nullable": true,
             "title": "Contact E-Mail",
             "x-odata-type": "Edm.String",
@@ -1802,7 +1802,7 @@
         "properties": {
           "SalesOrder": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Order",
             "x-odata-type": "Edm.String"
           }
@@ -1868,7 +1868,7 @@
           },
           "Currency": {
             "type": "string",
-            "maxLength": 3,
+            "x-odata-max-length": 3,
             "nullable": true,
             "x-odata-type": "Edm.String"
           }
@@ -1896,7 +1896,7 @@
         "properties": {
           "SalesOrder": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Order",
             "x-odata-type": "Edm.String",
             "readOnly": true
@@ -1909,13 +1909,13 @@
           },
           "SalesOrderType": {
             "type": "string",
-            "maxLength": 4,
+            "x-odata-max-length": 4,
             "title": "Sales Document Type",
             "x-odata-type": "Edm.String"
           },
           "SoldToParty": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sold-to Party",
             "description": "Customer who orders",
             "x-odata-type": "Edm.String",
@@ -1925,7 +1925,7 @@
           },
           "PurchaseOrderByCustomer": {
             "type": "string",
-            "maxLength": 35,
+            "x-odata-max-length": 35,
             "x-odata-type": "Edm.String"
           },
           "RequestedDeliveryDate": {
@@ -1973,13 +1973,13 @@
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 20
+              "x-odata-max-length": 20
             },
             "x-odata-type": "Collection(Edm.String)"
           },
           "ContactEmail": {
             "type": "string",
-            "maxLength": 241,
+            "x-odata-max-length": 241,
             "nullable": true,
             "title": "Contact E-Mail",
             "x-odata-type": "Edm.String",
@@ -2230,7 +2230,7 @@
         "properties": {
           "SalesOrder": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Sales Order",
             "x-odata-type": "Edm.String"
           }
@@ -2636,6 +2636,16 @@
                     "type": "object",
                     "nullable": true,
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

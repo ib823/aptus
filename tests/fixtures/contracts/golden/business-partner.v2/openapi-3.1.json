@@ -1441,7 +1441,7 @@
         "properties": {
           "Partner": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Business Partner",
             "description": "Business Partner Number",
             "x-odata-type": "Edm.String",
@@ -1455,7 +1455,7 @@
               "string",
               "null"
             ],
-            "maxLength": 1,
+            "x-odata-max-length": 1,
             "title": "BP Category",
             "x-odata-type": "Edm.String"
           },
@@ -1464,7 +1464,7 @@
               "string",
               "null"
             ],
-            "maxLength": 81,
+            "x-odata-max-length": 81,
             "title": "Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "name",
@@ -1475,7 +1475,7 @@
               "string",
               "null"
             ],
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "title": "First Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "givenname",
@@ -1488,7 +1488,7 @@
               "string",
               "null"
             ],
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "title": "Last Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "familyname",
@@ -1572,7 +1572,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -1852,7 +1852,7 @@
         "properties": {
           "Partner": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Business Partner",
             "description": "Business Partner Number",
             "x-odata-type": "Edm.String",
@@ -1924,7 +1924,7 @@
         "properties": {
           "Partner": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Business Partner",
             "description": "Business Partner Number",
             "x-odata-type": "Edm.String",
@@ -1938,7 +1938,7 @@
               "string",
               "null"
             ],
-            "maxLength": 1,
+            "x-odata-max-length": 1,
             "title": "BP Category",
             "x-odata-type": "Edm.String"
           },
@@ -1947,7 +1947,7 @@
               "string",
               "null"
             ],
-            "maxLength": 81,
+            "x-odata-max-length": 81,
             "title": "Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "name",
@@ -1958,7 +1958,7 @@
               "string",
               "null"
             ],
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "title": "First Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "givenname",
@@ -1971,7 +1971,7 @@
               "string",
               "null"
             ],
-            "maxLength": 40,
+            "x-odata-max-length": 40,
             "title": "Last Name",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "familyname",
@@ -2055,7 +2055,7 @@
               "string",
               "null"
             ],
-            "maxLength": 5,
+            "x-odata-max-length": 5,
             "title": "Currency",
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
@@ -2335,7 +2335,7 @@
         "properties": {
           "Partner": {
             "type": "string",
-            "maxLength": 10,
+            "x-odata-max-length": 10,
             "title": "Business Partner",
             "description": "Business Partner Number",
             "x-odata-type": "Edm.String",
@@ -2776,6 +2776,16 @@
                       "null"
                     ],
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

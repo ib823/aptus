@@ -27,7 +27,13 @@ import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
-import { buildNorthboundOpenApi, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
+import {
+  buildNorthboundOpenApi,
+  documentJson,
+  multiInterfaceInfoVersion,
+  type ContractForDoc,
+  type SampledSchema,
+} from "@/lib/contracts/openapi";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError } from "@/lib/studio/api";
@@ -118,7 +124,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     };
   });
 
-  // The document's own version: changes whenever any interface's contract does.
+  // The build metadata of the document's version: changes whenever any interface's contract does.
   const digest = createHash("sha256")
     .update(
       docInterfaces
@@ -133,7 +139,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     // The original path first, the versioned second (northboundServers).
     baseUrl: `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`,
     title: `${safeName(solution.name)} — CoreEdge northbound`,
-    infoVersion: `1.0.0+${digest}`,
+    // Moves with its interfaces' contracts; the digest is build metadata.
+    infoVersion: multiInterfaceInfoVersion(docInterfaces, digest),
     description: [
       `Every interface of the CoreEdge solution "${safeName(solution.name)}", as the northbound API serves it.`,
       "",
@@ -147,7 +154,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     safe: safeName,
   });
 
-  return new Response(JSON.stringify(doc, null, 2), {
+  return new Response(documentJson(doc), {
     status: 200,
     headers: {
       "content-type": "application/json; charset=utf-8",

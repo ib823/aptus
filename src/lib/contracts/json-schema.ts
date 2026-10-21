@@ -35,7 +35,9 @@
  * beside a `type`, `anyOf` with a null-only branch for a nullable `$ref`,
  * `format: byte` for base64). Facts JSON
  * Schema has no keyword for — the OData type, precision, scale, personal data —
- * travel as `x-` extensions, which both dialects allow.
+ * travel as `x-` extensions, which both dialects allow. So does a maximum
+ * length in what a read returns (the record, the key, a complex value):
+ * only a request body validates one (FacetMode).
  */
 
 import {
@@ -94,10 +96,28 @@ const INTEGER_STRING = "^-?\\d+$";
  */
 const TIME_OF_DAY = "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$";
 
+/**
+ * Whether a schema VALIDATES a length or only states it. A request body
+ * validates it: a longer value is refused by SAP. A schema of what a READ
+ * returns (the record, the key, a complex value) only states it, as
+ * `x-odata-max-length`: a grown length is a compatible change (diff.ts), and a
+ * consumer validating rows against the previous version's record must keep
+ * accepting them — the S/4HANA material number grew from 18 to 40 characters
+ * (hostile-input review round 2).
+ */
+export type FacetMode = "validate" | "state";
+
 /** The schema of one primitive OData type on the wire, before nullability. */
-function primitiveSchema(p: Pick<IrProperty, "type" | "maxLength" | "precision" | "scale">, v: ODataVersion, dialect: SchemaDialect): JsonSchema {
+function primitiveSchema(
+  p: Pick<IrProperty, "type" | "maxLength" | "precision" | "scale">,
+  v: ODataVersion,
+  dialect: SchemaDialect,
+  facets: FacetMode = "validate",
+): JsonSchema {
   const withLength = (s: JsonSchema): JsonSchema =>
-    typeof p.maxLength === "number" ? { ...s, maxLength: p.maxLength } : s;
+    typeof p.maxLength === "number"
+      ? { ...s, ...(facets === "validate" ? { maxLength: p.maxLength } : { "x-odata-max-length": p.maxLength }) }
+      : s;
   const numeric = (s: JsonSchema): JsonSchema => ({
     ...s,
     ...(p.precision !== undefined ? { "x-odata-precision": p.precision } : {}),
@@ -146,7 +166,7 @@ function primitiveSchema(p: Pick<IrProperty, "type" | "maxLength" | "precision" 
       const s: JsonSchema =
         dialect === "oas30" ? { type: "string", format: "byte" } : { type: "string", contentEncoding: v === "V4" ? "base64url" : "base64" };
       return typeof p.maxLength === "number"
-        ? { ...s, maxLength: 4 * Math.ceil(p.maxLength / 3), "x-odata-max-length": p.maxLength }
+        ? { ...s, ...(facets === "validate" ? { maxLength: 4 * Math.ceil(p.maxLength / 3) } : {}), "x-odata-max-length": p.maxLength }
         : s;
     }
     default:
@@ -257,6 +277,17 @@ function deepInsertProperties(
   return out;
 }
 
+/**
+ * Which request bodies a compiled contract has, without rendering any: a
+ * create body unless the dataset refuses creates or is a singleton, an update
+ * body unless it refuses updates. A sampled contract has neither.
+ */
+export function contractBodies(contract: InterfaceContract): { create: boolean; update: boolean } {
+  if (contract.source === "SAMPLED") return { create: false, update: false };
+  const caps = contract.entitySet.capabilities;
+  return { create: caps.creatable !== false && contract.entitySet.singleton !== true, update: caps.updatable !== false };
+}
+
 export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOptions): ContractSchemas {
   const { dialect, stem, ref } = opts;
   const v = contract.odataVersion;
@@ -286,7 +317,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   const enumByName = new Map(contract.enumTypes.map((t) => [t.qualifiedName, t]));
 
   /** One property's value schema: primitive, enum or complex; collection; nullability. */
-  const valueSchema = (p: IrProperty): JsonSchema => {
+  const valueSchema = (p: IrProperty, facets: FacetMode): JsonSchema => {
     let s: JsonSchema;
     let refType: "object" | "string" = "object";
     if (sampled) s = sampledSchema(p);
@@ -294,15 +325,20 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     else if (enumByName.has(p.type)) {
       s = { $ref: ref(enumName(enumByName.get(p.type)!)) };
       refType = "string"; // an enum value travels as its member name(s)
-    } else s = primitiveSchema(p, v, dialect);
+    } else s = primitiveSchema(p, v, dialect, facets);
     if (p.collection) return { type: "array", items: s };
     return p.nullable ? nullable(s, dialect, refType) : s;
   };
 
-  const objectOf = (props: readonly IrProperty[], include: (p: IrProperty) => boolean, readOnlyOf: (p: IrProperty) => boolean) =>
+  const objectOf = (
+    props: readonly IrProperty[],
+    include: (p: IrProperty) => boolean,
+    readOnlyOf: (p: IrProperty) => boolean,
+    facets: FacetMode,
+  ) =>
     Object.fromEntries(
       props.filter(include).map((p) => {
-        const s = annotate(valueSchema(p), p, readOnlyOf(p));
+        const s = annotate(valueSchema(p, facets), p, readOnlyOf(p));
         // A $ref beside sibling keywords is legal in 2020-12 but ignored by
         // 3.0 tooling: wrap it so the label survives in both.
         if (dialect === "oas30" && "$ref" in s && Object.keys(s).length > 1) {
@@ -325,7 +361,8 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
       type: "object",
       ...(ct.label ? { title: ct.label } : {}),
       "x-odata-type": ct.qualifiedName,
-      properties: objectOf(ct.properties, () => true, () => false),
+      // Shared by the record and the bodies, so it states lengths (FacetMode).
+      properties: objectOf(ct.properties, () => true, () => false, "state"),
       additionalProperties: ct.openType === true,
     };
   }
@@ -352,7 +389,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     "x-odata-entity-set": set.name,
     ...(sampled ? {} : { "x-odata-entity-type": et.qualifiedName, "x-odata-key": et.key }),
     ...(et.personalData ? { "x-personal-data": et.personalData } : {}),
-    properties: objectOf(et.properties, () => true, readOnlyInRecord),
+    properties: objectOf(et.properties, () => true, readOnlyInRecord, "state"),
     ...(et.key.length > 0 ? { required: [...et.key] } : {}),
     additionalProperties: true,
   };
@@ -360,7 +397,8 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   const names: ContractSchemaNames = { record: stem, create: null, update: null, key: null };
   if (sampled) return { schemas, names };
 
-  if (set.capabilities.creatable !== false && set.singleton !== true) {
+  const bodies = contractBodies(contract);
+  if (bodies.create) {
     const props = et.properties.filter((p) => writable(p) && p.capabilities?.creatable !== false);
     const required = props.filter((p) => p.capabilities?.mandatory === true).map((p) => p.name);
     names.create = `${stem}_Create`;
@@ -368,13 +406,13 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
       type: "object",
       ...(title ? { title: `${title} (create)` } : {}),
       description: `The record a create sends to ${set.name}. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert)${v === "V4" ? " or, as <navigation>@odata.bind, the records to link" : ""}.`,
-      properties: { ...objectOf(props, () => true, () => false), ...deepInsertProperties(et.navigations, new Set(et.properties.map((p) => p.name)), v) },
+      properties: { ...objectOf(props, () => true, () => false, "validate"), ...deepInsertProperties(et.navigations, new Set(et.properties.map((p) => p.name)), v) },
       ...(required.length > 0 ? { required } : {}),
       additionalProperties: false,
     };
   }
 
-  if (set.capabilities.updatable !== false) {
+  if (bodies.update) {
     const props = et.properties.filter(
       (p) =>
         writable(p) && !keySet.has(p.name) && p.capabilities?.updatable !== false && p.capabilities?.immutable !== true,
@@ -384,7 +422,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
       type: "object",
       ...(title ? { title: `${title} (update)` } : {}),
       description: `The changes an update sends to one ${set.name} record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.`,
-      properties: objectOf(props, () => true, () => false),
+      properties: objectOf(props, () => true, () => false, "validate"),
       additionalProperties: false,
     };
   }
@@ -395,7 +433,8 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
       type: "object",
       ...(title ? { title: `${title} (key)` } : {}),
       description: `The key that names one ${set.name} record.`,
-      properties: objectOf(et.properties, (p) => keySet.has(p.name), () => false),
+      // A key is read from a row before it addresses one: it states lengths, as the record does.
+      properties: objectOf(et.properties, (p) => keySet.has(p.name), () => false, "state"),
       required: [...et.key],
       additionalProperties: false,
     };
@@ -404,10 +443,34 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   return { schemas, names };
 }
 
+/** The `#/$defs/<name>` names a schema refers to, directly. */
+function defRefs(schema: unknown): string[] {
+  const prefix = "#/$defs/";
+  const out: string[] = [];
+  const stack: unknown[] = [schema];
+  while (stack.length > 0) {
+    const x = stack.pop();
+    if (Array.isArray(x)) {
+      for (const y of x) stack.push(y);
+    } else if (x && typeof x === "object") {
+      for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+        if (k === "$ref" && typeof v === "string" && v.startsWith(prefix)) out.push(v.slice(prefix.length));
+        else if (v && typeof v === "object") stack.push(v);
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Self-contained JSON Schema 2020-12 documents — the record, and the bodies
- * where the contract has them — each carrying the types it reaches in $defs.
- * What the northbound /schema endpoint serves.
+ * where the contract has them — each carrying in $defs the types it reaches,
+ * and only those. What the northbound /schema endpoint serves.
+ *
+ * ONLY WHAT EACH REACHES. Every document carried every type, so a contract
+ * whose weight is one large complex type was rendered four times over,
+ * the key's document included, which reaches no type at all (hostile-input
+ * review round 2). Each type's own references are walked once.
  */
 export function standaloneSchemas(contract: InterfaceContract, stem: string): {
   record: JsonSchema;
@@ -416,17 +479,35 @@ export function standaloneSchemas(contract: InterfaceContract, stem: string): {
   key: JsonSchema | null;
 } {
   const built = buildContractSchemas(contract, { dialect: "2020-12", stem, ref: (n) => `#/$defs/${n}` });
-  const shared = Object.fromEntries(
-    Object.entries(built.schemas).filter(([n]) => !Object.values(built.names).includes(n)),
-  );
-  const wrap = (name: string | null): JsonSchema | null =>
-    name === null
-      ? null
-      : {
-          $schema: "https://json-schema.org/draft/2020-12/schema",
-          ...built.schemas[name],
-          ...(Object.keys(shared).length > 0 ? { $defs: shared } : {}),
-        };
+  const own = new Set(Object.values(built.names).filter((n): n is string => n !== null));
+  const shared = new Map(Object.entries(built.schemas).filter(([n]) => !own.has(n)));
+  const refsOf = new Map<string, string[]>();
+  const reached = (root: JsonSchema): Record<string, JsonSchema> => {
+    const seen = new Set<string>();
+    const queue = defRefs(root);
+    for (let i = 0; i < queue.length; i++) {
+      const n = queue[i]!;
+      if (seen.has(n) || !shared.has(n)) continue;
+      seen.add(n);
+      let next = refsOf.get(n);
+      if (!next) refsOf.set(n, (next = defRefs(shared.get(n))));
+      for (const m of next) if (!seen.has(m)) queue.push(m);
+    }
+    // In the contract's own order, whatever order they were reached in.
+    const defs: Record<string, JsonSchema> = {};
+    for (const [n, schema] of shared) if (seen.has(n)) defs[n] = schema;
+    return defs;
+  };
+  const wrap = (name: string | null): JsonSchema | null => {
+    if (name === null) return null;
+    const schema = built.schemas[name]!;
+    const defs = reached(schema);
+    return {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      ...schema,
+      ...(Object.keys(defs).length > 0 ? { $defs: defs } : {}),
+    };
+  };
   return {
     record: wrap(built.names.record)!,
     create: wrap(built.names.create),

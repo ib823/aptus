@@ -1438,7 +1438,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1451,7 +1451,7 @@
           },
           "cust_Destination": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Destination",
             "x-odata-type": "Edm.String"
@@ -1482,7 +1482,7 @@
           },
           "cust_Traveller": {
             "type": "string",
-            "maxLength": 100,
+            "x-odata-max-length": 100,
             "nullable": true,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
@@ -1497,7 +1497,7 @@
           },
           "createdBy": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Created By",
             "x-odata-type": "Edm.String",
@@ -1505,7 +1505,7 @@
           },
           "mdfSystemRecordStatus": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Record Status",
             "x-odata-type": "Edm.String",
@@ -1642,7 +1642,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1714,7 +1714,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -1727,7 +1727,7 @@
           },
           "cust_Destination": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Destination",
             "x-odata-type": "Edm.String"
@@ -1758,7 +1758,7 @@
           },
           "cust_Traveller": {
             "type": "string",
-            "maxLength": 100,
+            "x-odata-max-length": 100,
             "nullable": true,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
@@ -1773,7 +1773,7 @@
           },
           "createdBy": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Created By",
             "x-odata-type": "Edm.String",
@@ -1781,7 +1781,7 @@
           },
           "mdfSystemRecordStatus": {
             "type": "string",
-            "maxLength": 255,
+            "x-odata-max-length": 255,
             "nullable": true,
             "title": "Record Status",
             "x-odata-type": "Edm.String",
@@ -1918,7 +1918,7 @@
         "properties": {
           "externalCode": {
             "type": "string",
-            "maxLength": 128,
+            "x-odata-max-length": 128,
             "title": "Code",
             "x-odata-type": "Edm.String"
           },
@@ -2332,6 +2332,16 @@
                     "type": "object",
                     "nullable": true,
                     "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  },
+                  "schemasOmitted": {
+                    "type": "string",
+                    "enum": [
+                      "TOO_LARGE"
+                    ],
+                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                  },
+                  "schemasNote": {
+                    "type": "string"
                   }
                 }
               }

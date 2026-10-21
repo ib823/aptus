@@ -225,7 +225,7 @@ afterEach(() => {
 });
 
 describe("verify-service compiles and records the contract", () => {
-  it("the first verify records 1.0.0 and writes the write interface's request schema", async () => {
+  it("the first verify records 1.0.0 and writes the stamp of the write interface's request schema", async () => {
     const d = await data<{ status: string; verified: boolean; entitySets: string[]; contract: Row }>(await verify());
     expect(d).toMatchObject({ status: "OK", verified: true, entitySets: ["SalesOrder", "SalesOrderItem", "Customer"] });
     expect(d.contract).toMatchObject({ status: "RECORDED", semver: "1.0.0", bump: "initial", requestSchemaWritten: true });
@@ -242,9 +242,10 @@ describe("verify-service compiles and records the contract", () => {
       connectionId: "conn_dev",
       createdById: "u_builder",
     });
+    // Only the stamp is stored: the body is a multiple of the contract, and
+    // GET …/schema renders it from the stamped snapshot (round 2).
     const rs = db.interfaces[0]!.requestSchema as Row;
-    expect(rs.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
-    expect(rs.required).toEqual(["SoldToParty", "PurchaseOrderByCustomer"]);
+    expect(Object.keys(rs)).toEqual(["x-contract"]);
     expect(rs["x-contract"]).toMatchObject({ semver: "1.0.0", interfaceVersion: 2, entitySet: "SalesOrder", operation: "CREATE" });
     expect(mocks.audit.mock.calls.at(-1)![0].data.after.contract).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
   });
@@ -575,6 +576,39 @@ describe("the starter kit and the solution document use the compiled contract", 
     });
     expect(kit.status).toBe(422);
     expect(((await kit.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+  });
+
+  /*
+   * Hostile-input review round 2: /schema re-rendered any stored contract on
+   * every call, with no budget — 35 MB and 2.8 s of CPU for one the kit and
+   * the solution document refused as TOO_LARGE.
+   */
+  it("/schema names a contract past the documents' budget without reading its IR or rendering it", async () => {
+    await verify();
+    const snap = db.snapshots[0]!;
+    snap.irBytes = MAX_DOCUMENT_CONTRACT_BYTES + 1;
+    Object.defineProperty(snap, "ir", {
+      get() {
+        throw new Error("an IR was read");
+      },
+    });
+    const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
+    expect(d.contract).toMatchObject({ source: "metadata", semver: "1.0.0", snapshotId: snap.id, schemas: null, schemasOmitted: "TOO_LARGE" });
+    expect(d.requestSchema).toBeNull();
+  });
+
+  it("the solution document's info.version follows its interfaces' contracts: a major bump raises its major", async () => {
+    const version = async () => {
+      const res = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+        params: Promise.resolve({ id: "sol_1" }),
+      });
+      return ((await res.json()) as { info: { version: string } }).info.version;
+    };
+    await verify();
+    const before = await version();
+    expect(before).toMatch(/^1\.0\.0\+[0-9a-f]{12}$/);
+    db.snapshots.push({ ...db.snapshots[0]!, id: "snap_major", semver: "2.0.0", semverMajor: 2 });
+    expect(await version()).toMatch(/^2\.0\.0\+[0-9a-f]{12}$/);
   });
 
   it("refuses an unknown version, another organization's solution and a signed-out caller", async () => {

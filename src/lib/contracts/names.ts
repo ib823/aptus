@@ -1,4 +1,27 @@
-/** A conservative PascalCase identifier, safe as a TypeScript name and an OpenAPI component name. */
+/**
+ * The longest name toTypeName returns. Real SAP entity sets and types are a
+ * few dozen characters; a name past this keeps its first characters and a
+ * hash of the whole, so distinct long names stay distinct.
+ *
+ * BOUNDED BECAUSE IT IS REPEATED. The entity set's name is the stem of every
+ * component name of its contract, so it is repeated in every `$ref` of every
+ * property, in the record, each body and both OpenAPI documents of the kit:
+ * a 511-character set name made a kit 109 times its contract, where the
+ * contract states the name once (hostile-input review round 2).
+ */
+export const MAX_TYPE_NAME_LENGTH = 64;
+
+/** 32-bit FNV-1a, as 8 hex digits: a short, stable tag for a name cut short (not a security boundary). */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** A conservative PascalCase identifier, safe as a TypeScript name and an OpenAPI component name; never longer than MAX_TYPE_NAME_LENGTH. */
 export function toTypeName(raw: string): string {
   const cleaned = raw
     .replace(/[^a-zA-Z0-9]+/g, " ")
@@ -7,7 +30,10 @@ export function toTypeName(raw: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join("");
   const safe = /^[0-9]/.test(cleaned) ? `X${cleaned}` : cleaned;
-  return safe.length > 0 ? safe : "CoreEdgeResource";
+  if (safe.length === 0) return "CoreEdgeResource";
+  if (safe.length <= MAX_TYPE_NAME_LENGTH) return safe;
+  const tag = `H${fnv1a(raw)}`;
+  return `${safe.slice(0, MAX_TYPE_NAME_LENGTH - tag.length)}${tag}`;
 }
 
 /**

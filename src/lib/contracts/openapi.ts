@@ -39,6 +39,7 @@
  * Pure and deterministic: the same input renders the same document.
  */
 
+import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
 import { nameAllocator, toTypeName } from "@/lib/contracts/names";
@@ -176,6 +177,61 @@ const H = {
 
 /** Component schemas every document defines beside its interfaces' own. */
 const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery", "Versions"] as const;
+
+/**
+ * A generated document is indented while it is small enough to be read, and
+ * compact past this: indentation is the larger part of a large document —
+ * most lines of a schema are a few characters of content after a dozen
+ * spaces — and a document this large is read by a generator, not a person.
+ * So a document's size is linear in its contract with the compact constant
+ * (hostile-input review round 2), and every real one stays readable.
+ */
+export const PRETTY_DOCUMENT_MAX_BYTES = 512 * 1024;
+
+/**
+ * The `info.version` of a document carrying several interfaces (the
+ * per-solution document): a semantic version that moves the way its
+ * interfaces' contracts move, with `build` as build metadata.
+ *
+ *   major  1 + the majors each compiled contract has gained past 1
+ *   minor  the compiled contracts' minors, the interface version of each
+ *          interface without one (as the kit numbers it), and one per
+ *          interface past the first (adding one is additive)
+ *   patch  the compiled contracts' patches
+ *
+ * So a document of one compiled interface is that contract's version, and a
+ * major bump of any interface's contract raises the document's major. It was
+ * `1.0.0+<digest>` whatever changed, and SemVer ignores build metadata for
+ * precedence, so a field removed from an interface did not change the
+ * document's version at all (hostile-input review round 2). What the sum
+ * cannot see is an interface leaving the document (DEPRECATED, or moved to
+ * another solution): that lowers it, and the digest still changes.
+ */
+export function multiInterfaceInfoVersion(
+  interfaces: readonly { version: number; contract: ContractForDoc }[],
+  build: string,
+): string {
+  let major = 1;
+  let minor = Math.max(0, interfaces.length - 1);
+  let patch = 0;
+  for (const i of interfaces) {
+    if (i.contract.source === "metadata") {
+      const [a, b, c] = semverParts(i.contract.semver);
+      major += Math.max(0, a - 1);
+      minor += b;
+      patch += c;
+    } else {
+      minor += i.version;
+    }
+  }
+  return `${major}.${minor}.${patch}+${build}`;
+}
+
+/** The document as JSON: indented when small (PRETTY_DOCUMENT_MAX_BYTES), compact otherwise. */
+export function documentJson(doc: unknown): string {
+  const compact = JSON.stringify(doc);
+  return compact.length <= PRETTY_DOCUMENT_MAX_BYTES ? JSON.stringify(doc, null, 2) : compact;
+}
 
 export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   const dialect: SchemaDialect = input.version === "3.1.0" ? "2020-12" : "oas30";
@@ -754,6 +810,12 @@ function contractDocumentSchema(dialect: SchemaDialect): Obj {
               odataVersion: nullableType("string", dialect),
               compiledAt: nullableType("string", dialect, { format: "date-time" }),
               schemas: anyObjectOrNull(dialect, "JSON Schema 2020-12 documents: record, create, update, key."),
+              schemasOmitted: {
+                type: "string",
+                enum: ["TOO_LARGE"],
+                description: "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry.",
+              },
+              schemasNote: { type: "string" },
             },
           },
         },

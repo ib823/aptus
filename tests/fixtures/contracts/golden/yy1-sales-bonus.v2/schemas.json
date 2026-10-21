@@ -7,16 +7,16 @@
       "description": "The key that names one YY1_SALESBONUS record.",
       "properties": {
         "FiscalYear": {
-          "maxLength": 4,
           "title": "Fiscal Year",
           "type": "string",
+          "x-odata-max-length": 4,
           "x-odata-type": "Edm.String",
           "x-sap-display-format": "NonNegative"
         },
         "SalesEmployee": {
-          "maxLength": 10,
           "title": "Sales Employee",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String",
           "x-sap-display-format": "UpperCase"
         }
@@ -56,36 +56,36 @@
           "x-odata-type": "Edm.Double"
         },
         "Currency": {
-          "maxLength": 5,
           "title": "Currency",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 5,
           "x-odata-type": "Edm.String",
           "x-sap-semantics": "currency-code"
         },
         "FiscalYear": {
-          "maxLength": 4,
           "title": "Fiscal Year",
           "type": "string",
+          "x-odata-max-length": 4,
           "x-odata-type": "Edm.String",
           "x-sap-display-format": "NonNegative"
         },
         "SalesEmployee": {
-          "maxLength": 10,
           "title": "Sales Employee",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String",
           "x-sap-display-format": "UpperCase"
         },
         "SalesEmployeeName": {
-          "maxLength": 80,
           "title": "Employee Name",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 80,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "isPotentiallyPersonal": true
@@ -138,32 +138,32 @@
             "x-odata-type": "Edm.Double"
           },
           "Currency": {
-            "maxLength": 5,
             "nullable": true,
             "title": "Currency",
             "type": "string",
+            "x-odata-max-length": 5,
             "x-odata-type": "Edm.String",
             "x-sap-semantics": "currency-code"
           },
           "FiscalYear": {
-            "maxLength": 4,
             "title": "Fiscal Year",
             "type": "string",
+            "x-odata-max-length": 4,
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
           },
           "SalesEmployee": {
-            "maxLength": 10,
             "title": "Sales Employee",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           },
           "SalesEmployeeName": {
-            "maxLength": 80,
             "nullable": true,
             "title": "Employee Name",
             "type": "string",
+            "x-odata-max-length": 80,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "isPotentiallyPersonal": true
@@ -188,16 +188,16 @@
         "description": "The key that names one YY1_SALESBONUS record.",
         "properties": {
           "FiscalYear": {
-            "maxLength": 4,
             "title": "Fiscal Year",
             "type": "string",
+            "x-odata-max-length": 4,
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "NonNegative"
           },
           "SalesEmployee": {
-            "maxLength": 10,
             "title": "Sales Employee",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String",
             "x-sap-display-format": "UpperCase"
           }

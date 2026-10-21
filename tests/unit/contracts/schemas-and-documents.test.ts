@@ -455,10 +455,15 @@ describe("Edm.Binary", () => {
         expect(ok({ Id: "1", Hash: encoded }), `${version} ${JSON.stringify(ok.errors)}`).toBe(true);
         // Padded base64 of the same bytes is accepted on either version.
         expect(ok({ Id: "1", Hash: full.toString("base64") })).toBe(true);
-        // Past the encoded bound (19 bytes: 28 characters) is still refused.
-        expect(ok({ Id: "1", Hash: Buffer.alloc(19, 0xfb).toString("base64") })).toBe(false);
       }
-      expect((schemas.record.properties as Record<string, Record<string, unknown>>).Hash).toMatchObject({ maxLength: 24, "x-odata-max-length": 16 });
+      // A body refuses past the encoded bound (19 bytes: 28 characters); the
+      // record only states it, so a grown length is a compatible change.
+      const body = validator().compile(schemas.create!);
+      expect(body({ Id: "1", Hash: Buffer.alloc(19, 0xfb).toString("base64") })).toBe(false);
+      expect(validator().compile(schemas.record)({ Id: "1", Hash: Buffer.alloc(19, 0xfb).toString("base64") })).toBe(true);
+      expect((schemas.create!.properties as Record<string, Record<string, unknown>>).Hash).toMatchObject({ maxLength: 24, "x-odata-max-length": 16 });
+      expect((schemas.record.properties as Record<string, Record<string, unknown>>).Hash).toMatchObject({ "x-odata-max-length": 16 });
+      expect((schemas.record.properties as Record<string, Record<string, unknown>>).Hash).not.toHaveProperty("maxLength");
     }
   });
 

@@ -17,11 +17,11 @@
               "x-odata-type": "Edm.Decimal"
             },
             "Currency": {
-              "maxLength": 3,
               "type": [
                 "string",
                 "null"
               ],
+              "x-odata-max-length": 3,
               "x-odata-type": "Edm.String"
             }
           },
@@ -159,51 +159,14 @@
       "type": "object"
     },
     "key": {
-      "$defs": {
-        "SalesOrder_Money": {
-          "additionalProperties": false,
-          "properties": {
-            "Amount": {
-              "format": "decimal",
-              "title": "Amount",
-              "type": [
-                "number",
-                "null"
-              ],
-              "x-odata-precision": 15,
-              "x-odata-scale": 2,
-              "x-odata-type": "Edm.Decimal"
-            },
-            "Currency": {
-              "maxLength": 3,
-              "type": [
-                "string",
-                "null"
-              ],
-              "x-odata-type": "Edm.String"
-            }
-          },
-          "type": "object",
-          "x-odata-type": "com.example.salesorder.Money"
-        },
-        "SalesOrder_OverallStatus": {
-          "enum": [
-            "Open",
-            "InProcess",
-            "Completed"
-          ],
-          "type": "string",
-          "x-odata-type": "com.example.salesorder.OverallStatus"
-        }
-      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "description": "The key that names one SalesOrder record.",
       "properties": {
         "SalesOrder": {
-          "maxLength": 10,
           "title": "Sales Order",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String"
         }
       },
@@ -230,11 +193,11 @@
               "x-odata-type": "Edm.Decimal"
             },
             "Currency": {
-              "maxLength": 3,
               "type": [
                 "string",
                 "null"
               ],
+              "x-odata-max-length": 3,
               "x-odata-type": "Edm.String"
             }
           },
@@ -256,12 +219,12 @@
       "description": "A SalesOrder record as the service returns it, compiled from the service's own description.",
       "properties": {
         "ContactEmail": {
-          "maxLength": 241,
           "title": "Contact E-Mail",
           "type": [
             "string",
             "null"
           ],
+          "x-odata-max-length": 241,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "isPotentiallyPersonal": true
@@ -310,8 +273,8 @@
           "x-odata-type": "com.example.salesorder.Money"
         },
         "PurchaseOrderByCustomer": {
-          "maxLength": 35,
           "type": "string",
+          "x-odata-max-length": 35,
           "x-odata-type": "Edm.String"
         },
         "RequestedDeliveryDate": {
@@ -323,16 +286,16 @@
           "x-odata-type": "Edm.Date"
         },
         "SalesOrder": {
-          "maxLength": 10,
           "readOnly": true,
           "title": "Sales Order",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String"
         },
         "SalesOrderType": {
-          "maxLength": 4,
           "title": "Sales Document Type",
           "type": "string",
+          "x-odata-max-length": 4,
           "x-odata-type": "Edm.String"
         },
         "SalesOrderUUID": {
@@ -343,9 +306,9 @@
         },
         "SoldToParty": {
           "description": "Customer who orders",
-          "maxLength": 10,
           "title": "Sold-to Party",
           "type": "string",
+          "x-odata-max-length": 10,
           "x-odata-type": "Edm.String",
           "x-personal-data": {
             "fieldSemantics": "DataSubjectID"
@@ -357,8 +320,8 @@
         },
         "Tags": {
           "items": {
-            "maxLength": 20,
-            "type": "string"
+            "type": "string",
+            "x-odata-max-length": 20
           },
           "type": "array",
           "x-odata-type": "Collection(Edm.String)"
@@ -399,11 +362,11 @@
               "x-odata-type": "Edm.Decimal"
             },
             "Currency": {
-              "maxLength": 3,
               "type": [
                 "string",
                 "null"
               ],
+              "x-odata-max-length": 3,
               "x-odata-type": "Edm.String"
             }
           },
@@ -520,10 +483,10 @@
         "description": "A SalesOrder record as the service returns it, compiled from the service's own description.",
         "properties": {
           "ContactEmail": {
-            "maxLength": 241,
             "nullable": true,
             "title": "Contact E-Mail",
             "type": "string",
+            "x-odata-max-length": 241,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "isPotentiallyPersonal": true
@@ -570,8 +533,8 @@
             "x-odata-type": "com.example.salesorder.Money"
           },
           "PurchaseOrderByCustomer": {
-            "maxLength": 35,
             "type": "string",
+            "x-odata-max-length": 35,
             "x-odata-type": "Edm.String"
           },
           "RequestedDeliveryDate": {
@@ -581,16 +544,16 @@
             "x-odata-type": "Edm.Date"
           },
           "SalesOrder": {
-            "maxLength": 10,
             "readOnly": true,
             "title": "Sales Order",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String"
           },
           "SalesOrderType": {
-            "maxLength": 4,
             "title": "Sales Document Type",
             "type": "string",
+            "x-odata-max-length": 4,
             "x-odata-type": "Edm.String"
           },
           "SalesOrderUUID": {
@@ -601,9 +564,9 @@
           },
           "SoldToParty": {
             "description": "Customer who orders",
-            "maxLength": 10,
             "title": "Sold-to Party",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String",
             "x-personal-data": {
               "fieldSemantics": "DataSubjectID"
@@ -619,8 +582,8 @@
           },
           "Tags": {
             "items": {
-              "maxLength": 20,
-              "type": "string"
+              "type": "string",
+              "x-odata-max-length": 20
             },
             "type": "array",
             "x-odata-type": "Collection(Edm.String)"
@@ -771,9 +734,9 @@
         "description": "The key that names one SalesOrder record.",
         "properties": {
           "SalesOrder": {
-            "maxLength": 10,
             "title": "Sales Order",
             "type": "string",
+            "x-odata-max-length": 10,
             "x-odata-type": "Edm.String"
           }
         },
@@ -796,9 +759,9 @@
             "x-odata-type": "Edm.Decimal"
           },
           "Currency": {
-            "maxLength": 3,
             "nullable": true,
             "type": "string",
+            "x-odata-max-length": 3,
             "x-odata-type": "Edm.String"
           }
         },

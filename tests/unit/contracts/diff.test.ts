@@ -9,12 +9,15 @@
 import { readFileSync } from "fs";
 import path from "path";
 
+import Ajv2020 from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import { describe, expect, it } from "vitest";
 
 import { contractHash } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { diffContracts, nextSemver, semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
+import { standaloneSchemas } from "@/lib/contracts/json-schema";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
@@ -151,6 +154,12 @@ describe("major", () => {
     ["a navigation removed", (c) => (c.entityType.navigations = c.entityType.navigations.slice(1))],
     ["an enum member removed", (c) => (c.enumTypes[0]!.members = c.enumTypes[0]!.members.slice(1))],
     ["a complex type's property removed", (c) => (c.complexTypes[0]!.properties = c.complexTypes[0]!.properties.slice(1))],
+    // What a read can now return that the previous record schema refuses (round 2).
+    ["an enum member added (a closed enum in the record schema)", (c) => c.enumTypes[0]!.members.push({ name: "Cancelled", value: "3" })],
+    [
+      "a property added to a closed complex type",
+      (c) => c.complexTypes[0]!.properties.push({ name: "Region", type: "Edm.String", nullable: true }),
+    ],
     ["an operation removed", (c) => (c.operations = c.operations.filter((o) => o.name !== "Release"))],
     [
       "a required parameter added",
@@ -167,7 +176,13 @@ describe("minor", () => {
     ["a length grew", (c) => (prop(c, "PurchaseOrderByCustomer").maxLength = 70)],
     ["the dataset is now deletable", (c) => (c.entitySet.capabilities.deletable = true)],
     ["a navigation added", (c) => c.entityType.navigations.push({ name: "_Notes", target: "ns.Note", collection: true })],
-    ["an enum member added", (c) => c.enumTypes[0]!.members.push({ name: "Cancelled", value: "3" })],
+    [
+      "a member added to a flags enum (a string in every schema)",
+      (c) => {
+        c.enumTypes[0]!.isFlags = true;
+        c.enumTypes[0]!.members.push({ name: "Cancelled", value: "4" });
+      },
+    ],
     ["an operation added", (c) => c.operations.push({ name: "Archive", kind: "action", bound: true, bindingType: c.entityType.qualifiedName, parameters: [] })],
     [
       "an optional parameter added",
@@ -325,5 +340,88 @@ describe("semver arithmetic", () => {
     expect(nextSemver("1.4.2", "minor")).toBe("1.5.0");
     expect(nextSemver("1.4.2", "patch")).toBe("1.4.3");
     expect(semverParts("12.0.3")).toEqual([12, 0, 3]);
+  });
+});
+
+/*
+ * Hostile-input review round 2: the bump and the schemas tell one story. A
+ * consumer pinned to ^1.0 validating rows with 1.0.0's record schema (what
+ * /schema says it is for) must keep accepting every row of a minor version;
+ * where the old schema would refuse the new rows, the bump is major.
+ */
+describe("a minor bump never makes new rows fail the previous version's record schema", () => {
+  const HEAD =
+    '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices><Schema Namespace="Z_SRV" xmlns="http://docs.oasis-open.org/odata/ns/edm">';
+  const TAIL =
+    '<EntityContainer Name="C"><EntitySet Name="Orders" EntityType="Z_SRV.Order"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+  const contract = (types: string, props: string, key = '<Property Name="ID" Type="Edm.String" Nullable="false"/>'): InterfaceContract => {
+    const r = compileContract(
+      `${HEAD}${types}<EntityType Name="Order"><Key><PropertyRef Name="ID"/></Key>${key}${props}</EntityType>${TAIL}`,
+    );
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "Orders");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  };
+  const validate = (schema: Record<string, unknown>, value: Record<string, unknown>) => {
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    addFormats(ajv);
+    return ajv.compile(schema)(value) === true;
+  };
+  const accepts = (c: InterfaceContract, row: Record<string, unknown>) => validate(standaloneSchemas(c, "Orders").record, row);
+  const address = (props: string, open = false) =>
+    contract(
+      `<ComplexType Name="Address"${open ? ' OpenType="true"' : ""}><Property Name="Street" Type="Edm.String"/>${props}</ComplexType>`,
+      '<Property Name="ShipTo" Type="Z_SRV.Address"/>',
+    );
+  const status = (members: string, flags = false) =>
+    contract(`<EnumType Name="Status"${flags ? ' IsFlags="true"' : ""}>${members}</EnumType>`, '<Property Name="Status" Type="Z_SRV.Status"/>');
+
+  it.each<[string, InterfaceContract, InterfaceContract, Record<string, unknown>, "major" | "minor"]>([
+    [
+      "a property added to a closed complex type",
+      address(""),
+      address('<Property Name="City" Type="Edm.String"/>'),
+      { ID: "1", ShipTo: { Street: "Main", City: "Walldorf" } },
+      "major",
+    ],
+    [
+      "a property added to an open complex type",
+      address("", true),
+      address('<Property Name="City" Type="Edm.String"/>', true),
+      { ID: "1", ShipTo: { Street: "Main", City: "Walldorf" } },
+      "minor",
+    ],
+    ["an enum member added", status('<Member Name="Open"/>'), status('<Member Name="Open"/><Member Name="Blocked"/>'), { ID: "1", Status: "Blocked" }, "major"],
+    [
+      "a member added to a flags enum",
+      status('<Member Name="Open"/>', true),
+      status('<Member Name="Open"/><Member Name="Blocked"/>', true),
+      { ID: "1", Status: "Open,Blocked" },
+      "minor",
+    ],
+    [
+      "a maximum length grew (the S/4HANA material number, 18 to 40)",
+      contract("", '<Property Name="Material" Type="Edm.String" MaxLength="18"/>'),
+      contract("", '<Property Name="Material" Type="Edm.String" MaxLength="40"/>'),
+      { ID: "1", Material: "M".repeat(40) },
+      "minor",
+    ],
+  ])("%s", (_label, before, after, row, bump) => {
+    expect(diffContracts(before, after).bump).toBe(bump);
+    expect(accepts(after, row)).toBe(true);
+    // Minor exactly when the previous version's record schema still accepts the new row.
+    expect(accepts(before, row)).toBe(bump === "minor");
+  });
+
+  it("a grown key length is minor and the previous key schema accepts the new key; a body still validates lengths", () => {
+    const keyOf = (n: number) => `<Property Name="ID" Type="Edm.String" Nullable="false" MaxLength="${n}"/>`;
+    const before = contract("", '<Property Name="Material" Type="Edm.String" MaxLength="18"/>', keyOf(4));
+    const after = contract("", '<Property Name="Material" Type="Edm.String" MaxLength="18"/>', keyOf(8));
+    expect(diffContracts(before, after).bump).toBe("minor");
+    expect(validate(standaloneSchemas(before, "Orders").key!, { ID: "PLANT001" })).toBe(true);
+    // What a write sends is still refused past its length: SAP would refuse it.
+    expect(validate(standaloneSchemas(before, "Orders").create!, { ID: "1", Material: "M".repeat(19) })).toBe(false);
+    expect(standaloneSchemas(before, "Orders").record.properties).toMatchObject({ Material: { "x-odata-max-length": 18 } });
   });
 });

@@ -25,7 +25,9 @@
  * charged its own JSON length — measured once per declaration — and the slice
  * is refused once the copies alone exceed MAX_CONTRACT_BYTES: canonical JSON
  * is never shorter than that, so such a contract could never be stored, and
- * nothing that could have been is refused here.
+ * nothing that could have been is refused here. The operations the slice
+ * keeps are charged the same way: each import is its own copy of its
+ * action's parameters.
  */
 
 import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
@@ -193,7 +195,15 @@ function slice(ir: ContractIR, entitySetName: string, limit: number, byteLimit: 
       ? op.bindingType !== undefined && typeNames.has(op.bindingType)
       : op.entitySet === set.name || (op.actionFor !== undefined && typeNames.has(op.actionFor)),
   );
-  for (const op of operations) spend(1 + op.parameters.length);
+  // Charged in bytes as well as members, like a folded property: an import
+  // carries its action's parameters, sharing their strings, so 399 imports
+  // of one action with 1,000 long-named parameters were a 1.6 MB description
+  // and 600 MB of canonical JSON that the digest threw on, or exhausted the
+  // heap building (hostile-input review round 2).
+  for (const op of operations) {
+    spend(1 + op.parameters.length);
+    spendBytes(op);
+  }
 
   const entitySet = { ...set, capabilities: { ...set.capabilities } };
   return {

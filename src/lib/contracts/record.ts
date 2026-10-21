@@ -4,10 +4,11 @@
  *
  *   1. Slice the IR to the interface's dataset.
  *   2. Record a ContractSnapshot if the contract is new (snapshot.ts).
- *   3. For a write interface, WRITE `requestSchema` — the JSON Schema of the
- *      body its write sends — stamped with the snapshot and the interface
- *      version it describes, conditional on that version (a PATCH that landed
- *      meanwhile wins, exactly as the verification itself does).
+ *   3. For a write interface, WRITE `requestSchema`'s stamp — which snapshot
+ *      and interface version the body its write sends is of — conditional on
+ *      that version (a PATCH that landed meanwhile wins, exactly as the
+ *      verification itself does). The body is rendered from that snapshot
+ *      when /schema is read (renderedRequestSchema), never stored.
  *
  * NEVER FAILS THE VERIFY. The verification is already recorded when this
  * runs. A description the compiler refused, a dataset the slice cannot find,
@@ -16,12 +17,11 @@
  * are untouched.
  */
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import type { CompileResult } from "@/lib/contracts/compile";
 import type { Bump } from "@/lib/contracts/diff";
-import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
-import { toTypeName } from "@/lib/contracts/names";
+import { contractBodies, type JsonSchema } from "@/lib/contracts/json-schema";
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
@@ -111,8 +111,8 @@ export async function recordVerifiedContract(input: {
        * against its own older row; writing that row's body put 1.0.0's closed
        * create body beside the 2.0.0 contract /schema serves as current, one
        * refusing what the other requires (hostile-input review round 1). So
-       * the body written is the current snapshot's, stamped with its id, and
-       * /schema serves it only while that snapshot is still current.
+       * the stamp written names the current snapshot, and /schema serves its
+       * body only while that snapshot is still current.
        */
       const current = (await currentSnapshotSummaries(input.scope, [iface])).get(iface.id);
       let described: { snapshot: { id: string; semver: string; contentHash: string }; contract: InterfaceContract } | null =
@@ -121,9 +121,11 @@ export async function recordVerifiedContract(input: {
         const read = (await snapshotContracts(input.scope, new Map([[iface.id, current]]))).get(iface.id);
         if (read && read.source === "METADATA") described = { snapshot: read, contract: read.contract };
       }
-      const schemas = described ? standaloneSchemas(described.contract, toTypeName(iface.entitySet)) : null;
-      const body = schemas ? (iface.operation === "UPDATE" ? schemas.update : schemas.create) : null;
-      if (body && described) {
+      // Whether the contract HAS the body this interface's write sends; the
+      // body itself is never stored (below), so nothing is rendered here.
+      const bodies = described ? contractBodies(described.contract) : null;
+      const hasBody = bodies !== null && (iface.operation === "UPDATE" ? bodies.update : bodies.create);
+      if (hasBody && described) {
         const stamp: RequestSchemaStamp = {
           snapshotId: described.snapshot.id,
           semver: described.snapshot.semver,
@@ -132,9 +134,19 @@ export async function recordVerifiedContract(input: {
           entitySet: iface.entitySet,
           operation: iface.operation,
         };
+        /*
+         * THE STAMP, NOT THE BODY. The body is a pure function of the stamped
+         * snapshot (standaloneSchemas), and a multiple of it: 52 MB for a
+         * contract under the size bound, written to the Interface row and
+         * read back by every Studio list of the organisation's interfaces
+         * (hostile-input review round 2). So the row keeps what decides
+         * WHICH body describes the interface, a few hundred bytes whatever
+         * the contract, and /schema renders the body from the snapshot it
+         * already reads (renderedRequestSchema).
+         */
         const written = await prisma.interface.updateMany({
           where: { id: iface.id, organizationId: input.scope.organizationId, version: iface.version },
-          data: { requestSchema: { ...body, "x-contract": stamp } as unknown as Prisma.InputJsonObject },
+          data: { requestSchema: { "x-contract": stamp } as unknown as Prisma.InputJsonObject },
         });
         requestSchemaWritten = written.count > 0;
       }
@@ -157,6 +169,18 @@ export async function recordVerifiedContract(input: {
   }
 }
 
+/**
+ * The ids of the interfaces matching `where` that have a requestSchema, by
+ * a query that never reads the column: what a list needs to know.
+ */
+export async function idsWithRequestSchema(where: Prisma.InterfaceWhereInput): Promise<Set<string>> {
+  const rows = await prisma.interface.findMany({
+    where: { AND: [where, { requestSchema: { not: Prisma.DbNull } }] },
+    select: { id: true },
+  });
+  return new Set(rows.map((r) => r.id));
+}
+
 /** The stamp a stored requestSchema carries, or null when it carries none. */
 export function requestSchemaStamp(schema: unknown): RequestSchemaStamp | null {
   if (!schema || typeof schema !== "object") return null;
@@ -169,24 +193,42 @@ export function requestSchemaStamp(schema: unknown): RequestSchemaStamp | null {
 }
 
 /**
- * The stored requestSchema when it describes the interface's current
- * contract, else null: written for this interface version and dataset, from
- * the snapshot that is current now (`currentSnapshotId`). A body written from
- * an older snapshot is never served beside a newer contract.
+ * The stored stamp when it describes the interface's current contract, else
+ * null: written for this interface version and dataset, from the snapshot
+ * that is current now (`currentSnapshotId`). A body of an older snapshot is
+ * never served beside a newer contract.
  */
-export function currentRequestSchema(
+export function currentRequestSchemaStamp(
   schema: unknown,
   iface: { version: number; entitySet: string | null },
   currentSnapshotId: string | null,
-): unknown {
+): RequestSchemaStamp | null {
   const stamp = requestSchemaStamp(schema);
   return stamp &&
     currentSnapshotId !== null &&
     stamp.snapshotId === currentSnapshotId &&
     stamp.interfaceVersion === iface.version &&
     stamp.entitySet === iface.entitySet
-    ? schema
+    ? stamp
     : null;
+}
+
+/**
+ * The write body /schema serves as `requestSchema`: the current snapshot's
+ * create (or, for an UPDATE interface, update) schema, rendered from that
+ * snapshot (`schemas`, standaloneSchemas of it) and carrying the stamp —
+ * exactly what was stored before only the stamp was. Null when the stamp
+ * does not describe the current contract, or that contract has no such body.
+ */
+export function renderedRequestSchema(
+  stored: unknown,
+  iface: { version: number; entitySet: string | null },
+  current: { id: string; schemas: { create: JsonSchema | null; update: JsonSchema | null } } | null,
+): JsonSchema | null {
+  const stamp = currentRequestSchemaStamp(stored, iface, current?.id ?? null);
+  if (!stamp || !current) return null;
+  const body = stamp.operation === "UPDATE" ? current.schemas.update : current.schemas.create;
+  return body ? { ...body, "x-contract": stamp } : null;
 }
 
 export type SampledOutcome =
