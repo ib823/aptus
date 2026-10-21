@@ -401,6 +401,15 @@
   --ink-muted: var(--muted-foreground);
   --border-default: var(--border);
   --brand-navy: oklch(0.78 0.09 250);
+  /* The selected / active / in-progress GROUND (bg-navy-soft). Undeclared here,
+     the light #E6EBF1 survived into dark under the theme's light inks: a
+     selected Studio Interfaces row measured 1.05:1, and every navy-on-navy-soft
+     pill, filter and nav item failed the same way. Every ink found on this
+     ground flips with the theme, so a dark ground clears all of them:
+     --ink-primary 11.48:1, --brand-navy 7.26:1, --cta-red 5.33:1,
+     --ink-secondary / --ink-muted 5.01:1 (tests/unit/studio/interfaces-contrast.test.ts).
+     The same value .dark .coreedge uses, so the console's two palettes agree. */
+  --brand-navy-soft: #1B2A40;
   --cta-red: oklch(0.72 0.18 20);
   /* The light-mode #C8102E ring is only 1.9:1 against this dark surface, so
      the ring flips with everything else. Lightened red keeps the meaning and
