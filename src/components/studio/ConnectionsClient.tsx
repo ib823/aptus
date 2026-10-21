@@ -18,6 +18,13 @@
  * it says, before Save, that the save turns them off. A DEACTIVATED
  * connection starts unticked: a save reactivates the row, so a ticked default
  * would quietly re-arm writes an operator had stopped (P0.3 review round 1).
+ *
+ * Writes are allowed for a system, not a row (P0.3 review round 2): a save
+ * that points a writing row at another environment, SAP host or SAP client
+ * starts unticked and says why. The form sends what it showed for the row it
+ * replaces, so a save from a page loaded before the row changed (deactivated
+ * during an incident) is refused with 409 rather than re-arming it; saving a
+ * deactivated row says, before Save, that it makes it active again.
  */
 
 import { useRouter } from "next/navigation";
@@ -29,7 +36,7 @@ import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
-import { connectionSaveBody } from "@/lib/studio/connection-form";
+import { connectionSaveBody, formWriteTarget, writeTargetChanges, type WriteTargetField } from "@/lib/studio/connection-form";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -42,6 +49,13 @@ export interface StudioConnection {
   authType: string;
   /** DEV | TEST | PROD | SANDBOX, or null when undeclared (a scored incident). */
   environment: string | null;
+  /**
+   * The SAP client, or null on a one-tenant-per-host product. With the
+   * environment and the host, the system the row's writes are allowed for:
+   * the form unticks Allow writes when a save points the row elsewhere (P0.3
+   * review round 2).
+   */
+  client: string | null;
   /** The probe path — the value that decides NO_PROBE_PATH on the health chip. */
   apiPath: string | null;
   timeoutMs: number | null;
@@ -519,9 +533,22 @@ function ConnectionForm({
    * from `writeEnabled` alone re-armed the writes of a deactivated connection.
    */
   const writableToday = Boolean(replacing?.isActive && replacing.writeEnabled);
-  const allowWrites = allowWritesChoice ?? writableToday;
-  /** This save would switch off writes the connection allows today. */
-  const turnsWritesOff = writableToday && !allowWrites;
+  /*
+   * WRITES ARE ALLOWED FOR A SYSTEM, NOT A ROW (P0.3 review round 2). A save
+   * that points a writing row at another environment, SAP host or SAP client
+   * would switch writes on there for the first time, so the box does not
+   * carry them over: it starts unticked, and ticking it is enabling writes —
+   * the route's rule, by the same function.
+   */
+  const movedFields: WriteTargetField[] = replacing
+    ? writeTargetChanges(replacing, formWriteTarget({ product, environment, baseUrl, client }))
+    : [];
+  const movesWrites = writableToday && movedFields.length > 0;
+  const allowWrites = allowWritesChoice ?? (writableToday && !movesWrites);
+  /** This save would switch off writes the connection allows today (on the system it points at today). */
+  const turnsWritesOff = writableToday && !allowWrites && !movesWrites;
+  /** The upsert stores the row active, so saving a deactivated row brings it back. */
+  const reactivatesRow = replacing !== null && !replacing.isActive;
   const basicAuthNotice =
     authType === "basic" && isNewConnection ? (basicAuthNotices[product] ?? null) : null;
 
@@ -561,11 +588,17 @@ function ConnectionForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          connectionSaveBody({
-            product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, username,
-            password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
-            samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret,
-          }),
+          connectionSaveBody(
+            {
+              product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, username,
+              password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
+              samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret,
+            },
+            // What this form showed for the row it replaces: the route refuses
+            // the save (409) when the row has changed since the page loaded —
+            // deactivated by an operator, say (P0.3 review round 2).
+            replacing ? { isActive: replacing.isActive, writeEnabled: replacing.writeEnabled } : null,
+          ),
         ),
       });
       /*
@@ -613,7 +646,7 @@ function ConnectionForm({
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret, replacing]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -948,7 +981,23 @@ function ConnectionForm({
             it is refused until it is saved again with writes allowed.
           </p>
         ) : null}
+        {movesWrites ? (
+          <p role="status" data-testid="writes-moved-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+            This connection allows writes on {describeTarget(replacing)}. This save points it at a different{" "}
+            {movedFields.map((f) => TARGET_FIELD_NAMES[f]).join(", ")}, so Allow writes starts unticked: writes are not
+            carried to another system. Ticking it switches writes on for the new one, which asks for your passkey and is
+            recorded as enabling writes.
+          </p>
+        ) : null}
       </fieldset>
+
+      {reactivatesRow ? (
+        <p role="status" data-testid="reactivates-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+          This connection is deactivated. Saving it makes it active again
+          {allowWrites ? ", with writes on" : ""}, so it serves calls from then on. If it was stopped on purpose, check
+          with whoever stopped it first.
+        </p>
+      ) : null}
 
       {error && (
         <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">{error}</p>
@@ -975,6 +1024,25 @@ function ConnectionForm({
       </p>
     </div>
   );
+}
+
+/** How the moved-writes notice names each part of the write target. */
+const TARGET_FIELD_NAMES: Record<WriteTargetField, string> = {
+  environment: "environment",
+  baseUrl: "SAP host",
+  client: "SAP client",
+};
+
+/** The system a row's writes are allowed for, in words: "DEV at https://… client 100". */
+function describeTarget(c: Pick<StudioConnection, "environment" | "baseUrl" | "client"> | null): string {
+  if (!c) return "";
+  let host = c.baseUrl;
+  try {
+    host = new URL(c.baseUrl).host;
+  } catch {
+    // Shown as stored.
+  }
+  return `${c.environment ?? "an undeclared environment"} at ${host}${c.client ? ` client ${c.client}` : ""}`;
 }
 
 function Label({ text, hint, children }: { text: string; hint?: string; children: React.ReactNode }) {

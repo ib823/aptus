@@ -42,6 +42,10 @@ export default async function StudioConnectionsPage() {
           authType: true,
           // The binding-mismatch rule's left operand — see the Connections table.
           environment: true,
+          // With the environment and host, the system the row's writes are
+          // allowed for: the form unticks Allow writes when a save points the
+          // row elsewhere (P0.3 review round 2).
+          client: true,
           // The value that decides NO_PROBE_PATH. The health chip rendered its
           // consequence while the projection hid the cause — an operator saw
           // "Not probeable" with no way to see WHY from the same screen.

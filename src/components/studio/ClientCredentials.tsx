@@ -28,7 +28,8 @@
  * builder who does not own the app, and only where a second person has
  * approved a CREATE or UPDATE grant for that environment. Where it cannot
  * succeed the row says why in words, beside the disabled control, rather than
- * leaving the route's refusal to be the first notice. The route stays the
+ * leaving the route's refusal to be the first notice — a retired app and an
+ * app missing a live owner included (P0.3 review round 2). The route stays the
  * authority: it re-checks every gate and asks for a fresh passkey
  * (`write_key.issue`), and the key is shown once, like the bearer token.
  *
@@ -84,6 +85,21 @@ export interface CredentialSummary {
    * review round 1).
    */
   writeKeyNeedsExpiry: boolean;
+  /**
+   * The app is RETIRED: the write-key route refuses it (gate 2), because
+   * authentication refuses every call a retired app makes. Retiring does not
+   * revoke the app's credentials, so the key itself can still read "active"
+   * (P0.3 review round 2).
+   */
+  solutionRetired: boolean;
+  /**
+   * The owner roles no LIVE member holds — empty, or held by someone
+   * deactivated or gone from the organization: the route's gate 3, judged by
+   * the predicate `refuseKeyIssuer` uses (P0.3 review round 2).
+   */
+  ownersMissing: readonly string[];
+  /** At least one of those slots names an owner who has been deactivated or left. */
+  ownersDeparted: boolean;
 }
 
 /** What the "Issue write key" control on one credential row may do, and why not. */
@@ -96,16 +112,43 @@ export interface WriteKeyAction {
 
 /**
  * The write-key action for one credential row, from the facts the page holds.
- * Mirrors the route's gates in the order a person can act on them; the route
- * re-checks all of them and the ones this screen cannot see (owners named,
- * the passkey). The expiry rule is seen: the page judges it with the route's
- * own predicate and mode (`writeKeyNeedsExpiry`).
+ * Mirrors the route's gates in its order — the app retired (2), owners not
+ * all live (3), before the credential's own state — and the route re-checks
+ * all of them and the one this screen cannot answer (the passkey). The
+ * expiry rule, the retired app and the owners are judged by the page with the
+ * route's own predicates (P0.3 review rounds 1 and 2).
  */
 export function writeKeyAction(
-  c: Pick<CredentialSummary, "state" | "environment" | "writeKeyIssued" | "writeGrantLive" | "writeKeyNeedsExpiry">,
+  c: Pick<
+    CredentialSummary,
+    | "state"
+    | "environment"
+    | "writeKeyIssued"
+    | "writeGrantLive"
+    | "writeKeyNeedsExpiry"
+    | "solutionRetired"
+    | "ownersMissing"
+    | "ownersDeparted"
+  >,
   viewerOwns: boolean,
 ): WriteKeyAction {
   const label = c.writeKeyIssued ? "Replace write key" : "Issue write key";
+  if (c.solutionRetired) {
+    return {
+      enabled: false,
+      label,
+      reason: "This app is retired, so every call it makes is refused. Reactivate it before issuing its write key.",
+    };
+  }
+  if (c.ownersMissing.length > 0) {
+    return {
+      enabled: false,
+      label,
+      reason:
+        `This app has no live ${c.ownersMissing.join(", ")}. Assign all three owners first: a write key needs someone accountable for it.` +
+        (c.ownersDeparted ? " A slot whose owner has been deactivated or has left the organization counts as empty." : ""),
+    };
+  }
   if (!(c.state === "active" || c.state === "noExpiry")) {
     return {
       enabled: false,

@@ -44,7 +44,9 @@ import {
   type GrantOperation,
 } from "@/lib/studio/grants";
 import { needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { liveOwnerships } from "@/lib/studio/owner-liveness";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { missingOwners } from "@/lib/studio/solutions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "API Access" };
@@ -166,6 +168,9 @@ export default async function StudioAccessPage() {
              * empty and there was nothing on screen to explain why.
              */
             slug: true,
+            // The write-key route refuses a RETIRED app (gate 2): the row says
+            // so before the click (P0.3 review round 2).
+            status: true,
             technicalOwnerId: true,
             businessOwnerId: true,
             supportOwnerId: true,
@@ -222,6 +227,24 @@ export default async function StudioAccessPage() {
 
   const solutionNames = new Map(solutionRows.map((s) => [s.id, s.name]));
   const solutionSlugs = new Map(solutionRows.map((s) => [s.id, s.slug]));
+  /*
+   * The write-key route's gates 2 and 3, judged here by the same facts (P0.3
+   * review round 2): the app is not RETIRED, and all three owner slots are
+   * held by LIVE members — a slot whose owner was deactivated or left reads
+   * as empty, the predicate `refuseKeyIssuer` applies. Without them the row
+   * offered "Issue write key", enabled, on an app the route always refuses.
+   */
+  const live = organizationId ? await liveOwnerships(prisma, organizationId, solutionRows) : [];
+  const keyIssuerFacts = new Map(
+    solutionRows.map((s, i) => [
+      s.id,
+      {
+        solutionRetired: s.status === "RETIRED",
+        ownersMissing: live[i] ? missingOwners(live[i].live) : missingOwners(s),
+        ownersDeparted: (live[i]?.departed.length ?? 0) > 0,
+      },
+    ]),
+  );
 
   const requestableInterfaces: RequestableInterface[] = interfaceRows.map((i) => ({
     id: i.id,
@@ -278,6 +301,13 @@ export default async function StudioAccessPage() {
     // The write-key route's gate 5b, by its own predicate and mode, so the
     // row explains the refusal before the click (P0.3 review round 1).
     writeKeyNeedsExpiry: expiryEnforced && lacksRequiredExpiry(c, now),
+    // The route's gates 2 and 3 (P0.3 review round 2). A credential whose app
+    // row is gone is refused as not found; it reads as unowned here.
+    ...(keyIssuerFacts.get(c.solutionId) ?? {
+      solutionRetired: false,
+      ownersMissing: ["technical owner", "business owner", "support owner"],
+      ownersDeparted: false,
+    }),
   }));
 
   // Marked here so the UI can explain the SoD rule BEFORE it is hit, rather

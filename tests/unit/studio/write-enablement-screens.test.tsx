@@ -32,7 +32,7 @@ import {
   type CredentialSummary,
 } from "@/components/studio/ClientCredentials";
 import { ConnectionsClient, type StudioConnection } from "@/components/studio/ConnectionsClient";
-import { connectionSaveBody } from "@/lib/studio/connection-form";
+import { connectionSaveBody, writeTargetChanges } from "@/lib/studio/connection-form";
 
 afterEach(() => cleanup());
 beforeEach(() => vi.clearAllMocks());
@@ -58,6 +58,9 @@ const credential = (over: Partial<CredentialSummary> = {}): CredentialSummary =>
   writeKeyIssued: false,
   writeGrantLive: true,
   writeKeyNeedsExpiry: false,
+  solutionRetired: false,
+  ownersMissing: [],
+  ownersDeparted: false,
   ...over,
 });
 
@@ -161,6 +164,36 @@ describe("API Access · Issue write key", () => {
     expect(document.getElementById(button.getAttribute("aria-describedby")!)?.textContent).toMatch(/no expiry/i);
   });
 
+  it.each([
+    ["the app is retired (route gate 2)", credential({ solutionRetired: true }), /retired/i, /Reactivate it/],
+    ["an owner slot is empty (route gate 3)", credential({ ownersMissing: ["support owner"] }), /no live support owner/, /Assign all three owners/],
+    [
+      "an owner has been deactivated or left (route gate 3, on live owners)",
+      credential({ ownersMissing: ["business owner"], ownersDeparted: true }),
+      /no live business owner/,
+      /deactivated or has left/,
+    ],
+  ])("is disabled, with its reason, when %s (review round 2)", (_why, c, reason, remedy) => {
+    // The credential itself is live and a write grant is approved: only the
+    // app's own state stands in the way, and the route refuses for it.
+    const action = writeKeyAction(c, false);
+    expect(action.enabled).toBe(false);
+    expect(action.reason).toMatch(reason);
+    expect(action.reason).toMatch(remedy);
+
+    renderCredentials(c);
+    const button = screen.getByRole("button", { name: "Issue write key" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(document.getElementById(button.getAttribute("aria-describedby")!)?.textContent).toMatch(reason);
+  });
+
+  it("names the retired app before the credential's own state, as the route does", () => {
+    expect(writeKeyAction(credential({ solutionRetired: true, state: "revoked" }), false).reason).toMatch(/retired/i);
+    expect(writeKeyAction(credential({ ownersMissing: ["technical owner"], state: "expired" }), true).reason).toMatch(
+      /Assign all three owners/,
+    );
+  });
+
   it("writeKeyAction is the single decision the row renders", () => {
     // With expiry not enforced (COREEDGE_KEY_EXPIRY=off) the route issues it.
     expect(writeKeyAction(credential({ state: "noExpiry", writeKeyNeedsExpiry: false }), false).enabled).toBe(true);
@@ -176,6 +209,7 @@ const WRITING: StudioConnection = {
   baseUrl: "https://my000001-api.s4hana.cloud.sap",
   authType: "basic",
   environment: "DEV",
+  client: null,
   apiPath: null,
   timeoutMs: null,
   writeEnabled: true,
@@ -183,6 +217,13 @@ const WRITING: StudioConnection = {
   lastValidatedAt: null,
   lastValidationStatus: null,
 };
+
+/** Type the key, environment and host — the same system as WRITING unless overridden. */
+function fillTarget(key: string, environment = "DEV", baseUrl = "https://my000001-api.s4hana.cloud.sap") {
+  fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: key } });
+  fireEvent.change(screen.getByPlaceholderText("DEV"), { target: { value: environment } });
+  fireEvent.change(screen.getByPlaceholderText("https://my123456-api.s4hana.cloud.sap"), { target: { value: baseUrl } });
+}
 
 function openForm(connections: StudioConnection[]) {
   render(<ConnectionsClient connections={connections} canManage />);
@@ -203,7 +244,7 @@ describe("Connections · Allow writes and the write secret", () => {
 
   it("starts ticked when re-saving a connection that allows writes, so a rotation keeps them on", () => {
     openForm([WRITING]);
-    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    fillTarget("erp-dev");
     const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
     expect(allow.checked).toBe(true);
     expect(screen.queryByTestId("writes-off-notice")).toBeNull();
@@ -220,9 +261,53 @@ describe("Connections · Allow writes and the write secret", () => {
 
   it("says, before Save, that unticking turns writes off", () => {
     openForm([WRITING]);
-    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    fillTarget("erp-dev");
     fireEvent.click(screen.getByRole("checkbox", { name: /Allow writes/ }));
     expect(screen.getByTestId("writes-off-notice").textContent).toMatch(/turns them off/);
+  });
+
+  it("starts unticked, and says why, when a save points a writing connection at another environment or host (review round 2)", () => {
+    openForm([WRITING]);
+    fillTarget("erp-dev", "PROD", "https://my999999-api.s4hana.cloud.sap");
+    const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
+    expect(allow.checked).toBe(false);
+    const notice = screen.getByTestId("writes-moved-notice").textContent ?? "";
+    expect(notice).toMatch(/DEV at my000001-api\.s4hana\.cloud\.sap/);
+    expect(notice).toMatch(/environment, SAP host/);
+    expect(notice).toMatch(/passkey/);
+    // The moved notice says it; the "turns them off" one would only repeat it.
+    expect(screen.queryByTestId("writes-off-notice")).toBeNull();
+
+    // Back on the same system (a lower-case environment is the same one), the box follows the row again.
+    fillTarget("erp-dev", "dev");
+    expect(allow.checked).toBe(true);
+    expect(screen.queryByTestId("writes-moved-notice")).toBeNull();
+  });
+
+  it("says, before Save, that saving a deactivated connection makes it active again (review round 2)", () => {
+    openForm([{ ...WRITING, isActive: false }]);
+    fillTarget("erp-dev");
+    expect(screen.getByTestId("reactivates-notice").textContent).toMatch(/active again/);
+    expect(screen.getByTestId("reactivates-notice").textContent).not.toMatch(/with writes on/);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Allow writes/ }));
+    expect(screen.getByTestId("reactivates-notice").textContent).toMatch(/with writes on/);
+  });
+
+  it("sends what it showed for the row it replaces, so the route can refuse a stale save (review round 2)", async () => {
+    mocks.fetchWithStepUp.mockResolvedValue(new Response(JSON.stringify({ error: { message: "changed since" } }), { status: 409 }));
+    openForm([WRITING]);
+    fillTarget("erp-dev");
+    fireEvent.change(screen.getByPlaceholderText("Customizing X5M/100"), { target: { value: "ERP DEV" } });
+    const [username, password] = [screen.getByLabelText("Username"), screen.getByLabelText("Password")];
+    fireEvent.change(username, { target: { value: "COMM_USER" } });
+    fireEvent.change(password, { target: { value: "p" } });
+    fireEvent.change(screen.getByLabelText(/Write secret/), { target: { value: "w" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("changed since");
+    const body = JSON.parse(String((mocks.fetchWithStepUp.mock.calls[0]![1] as RequestInit).body)) as Record<string, unknown>;
+    expect(body.expected).toEqual({ isActive: true, writeEnabled: true });
+    expect(body).toMatchObject({ writeEnabled: true, environment: "DEV" });
   });
 
   it("sends writeEnabled with the secret only when writes are allowed", () => {
@@ -236,5 +321,21 @@ describe("Connections · Allow writes and the write secret", () => {
     const off = connectionSaveBody({ ...base, allowWrites: false, writeSecret: "ignored" });
     expect("writeEnabled" in off).toBe(false);
     expect("writeSecret" in off).toBe(false);
+  });
+});
+
+describe("writeTargetChanges · the system a connection's writes are allowed for (review round 2)", () => {
+  const dev = { environment: "DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap", client: null };
+
+  it("is unchanged by a rotation: same environment in any spelling, same host with any path", () => {
+    expect(writeTargetChanges(dev, { ...dev, environment: "dev", baseUrl: "https://MY000001-api.s4hana.cloud.sap/" })).toEqual([]);
+  });
+
+  it("names each part a save moves", () => {
+    expect(writeTargetChanges(dev, { ...dev, environment: "PROD" })).toEqual(["environment"]);
+    expect(writeTargetChanges(dev, { ...dev, baseUrl: "https://my999999-api.s4hana.cloud.sap" })).toEqual(["baseUrl"]);
+    expect(writeTargetChanges({ ...dev, client: "100" }, { ...dev, client: "200" })).toEqual(["client"]);
+    expect(writeTargetChanges({ ...dev, client: "100" }, { ...dev, client: " " })).toEqual(["client"]);
+    expect(writeTargetChanges(dev, { ...dev, environment: null })).toEqual(["environment"]);
   });
 });

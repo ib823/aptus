@@ -20,6 +20,13 @@
  * false over a writing row) says so in its response and its audit row, and is
  * not refused: turning writes off is the safe direction.
  *
+ * Writes are allowed for a SYSTEM — environment, SAP host, SAP client — not
+ * for a row id, so a save that keeps them on while pointing the row at
+ * another system is `connection.enable_writes` too, and its audit row says
+ * what the row pointed at before. A save from a form whose view of the row is
+ * stale (it sends what it showed, `expected`) is refused with 409, and a save
+ * that reactivates a deactivated row says so (P0.3 review round 2).
+ *
  * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
  * bundle on every write, so a "just rename the label" call that omitted secrets
  * would store an EMPTY bundle and silently break a working connection — the
@@ -72,6 +79,7 @@ import {
   SAP_ODATA_PRODUCTS,
 } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { writeTargetChanges } from "@/lib/studio/connection-form";
 import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -217,6 +225,14 @@ const upsertSchema = z
     oauthTokenUrl: httpsUrl.optional(),
     writeSecret: z.string().max(500).optional(),
     writeEnabled: z.boolean().optional(),
+    /**
+     * What the Connections form showed for the row this save replaces, or
+     * null when it showed the key as new (P0.3 review round 2). The save is
+     * refused (409) when the row no longer matches: a form opened before an
+     * operator deactivated a writing connection would otherwise bring it back
+     * active with its writes on. Absent — an API caller — skips the check.
+     */
+    expected: z.object({ isActive: z.boolean(), writeEnabled: z.boolean() }).nullable().optional(),
     apiPath: z.string().max(200).optional(),
     timeoutMs: z.number().int().min(1000).max(120000).optional(),
   })
@@ -455,6 +471,9 @@ export async function GET() {
       // explain a binding-mismatch incident could not see, anywhere on the screen
       // that manages connections, the value the rule fired on.
       environment: true,
+      // With the environment and host, the system the row's writes are
+      // allowed for (P0.3 review round 2).
+      client: true,
       writeEnabled: true,
       isActive: true,
       apiPath: true,
@@ -500,9 +519,35 @@ export async function POST(request: NextRequest) {
 
   const existing = await prisma.sapConnection.findFirst({
     where: { organizationId, product: input.product, key },
-    // isActive and writeEnabled: whether this save turns writes on, or off (P0.3).
-    select: { id: true, isActive: true, writeEnabled: true },
+    // isActive and writeEnabled: whether this save turns writes on, or off
+    // (P0.3); environment, baseUrl and client: which system they were on for
+    // (review round 2).
+    select: { id: true, isActive: true, writeEnabled: true, environment: true, baseUrl: true, client: true },
   });
+
+  /*
+   * A FORM OPENED BEFORE THE ROW CHANGED IS REFUSED (P0.3 review round 2).
+   * The form's "Allow writes" default, and everything its notices say, come
+   * from the list loaded with the page. Opened before an operator deactivated
+   * a writing connection during an incident, a later save sent writes on and
+   * — the upsert storing the row active — brought it back with its writes,
+   * while the screen said nothing. The form sends what it showed (`expected`);
+   * when the row is no longer that, the save is refused and names who changed
+   * it, so the builder reloads and decides on what is true now. API callers
+   * send nothing and are not checked; their response says when a save
+   * reactivated the row.
+   */
+  if (input.expected !== undefined) {
+    const stale =
+      input.expected === null
+        ? existing !== null
+        : existing === null ||
+          existing.isActive !== input.expected.isActive ||
+          existing.writeEnabled !== input.expected.writeEnabled;
+    if (stale) return studioError("CONFLICT", await staleFormRefusal(organizationId, key, existing));
+  }
+
+  const environment = normalizeEnvironment(input.environment);
   const writeEnabled = input.writeEnabled ?? false;
   /*
    * WRITES ARE LIVE ONLY ON AN ACTIVE ROW, judged as PATCH judges them
@@ -516,10 +561,28 @@ export async function POST(request: NextRequest) {
   const writableBefore = existing ? existing.isActive && existing.writeEnabled : false;
   /** The upsert stores the row active, so writes are live exactly when kept on. */
   const writableAfter = writeEnabled;
-  /** Writes go from not live (off, deactivated, or a new row) to live: the governance action. */
-  const enablesWrites = writableAfter && !writableBefore;
+  /*
+   * WRITES ARE ALLOWED FOR A SYSTEM, NOT FOR A ROW ID (P0.3 review round 2).
+   * A DEV connection that allows writes, re-saved with Environment PROD and
+   * the client's PROD host and writes kept on, switches writes on in PROD for
+   * the first time. Judged per row it was "already writable", so the passkey
+   * was asked as `connection.save_secrets` and the audit row named neither
+   * the old environment nor either host. A save that keeps writes on while
+   * changing the environment, the SAP host or the SAP client is enabling them
+   * on the new system — the same rule the form uses to untick its box.
+   */
+  const targetChanges =
+    existing && writableBefore && writableAfter
+      ? writeTargetChanges(existing, { environment, baseUrl: input.baseUrl, client: input.client ?? null })
+      : [];
+  /** Writes were live, stay on, and now land in another system. */
+  const movesLiveWrites = targetChanges.length > 0;
+  /** Writes go from not live (off, deactivated, a new row, another system) to live: the governance action. */
+  const enablesWrites = writableAfter && (!writableBefore || movesLiveWrites);
   /** A re-save of a writing connection that does not keep its writes on. */
   const disablesWrites = writableBefore && !writableAfter;
+  /** The upsert stores the row active, so a save over a deactivated row brings it back. */
+  const reactivates = existing !== null && !existing.isActive;
 
   /*
    * REFUSE A KEY THE DEPLOYMENT ALREADY USES FOR ITS OWN TENANT.
@@ -563,7 +626,6 @@ export async function POST(request: NextRequest) {
    * same KEY is replacement, not duplication, so it is excluded: that is the
    * documented way to rotate a connection's credentials.
    */
-  const environment = normalizeEnvironment(input.environment);
   if (environment) {
     const twin = await findActiveTwin({
       organizationId,
@@ -679,6 +741,15 @@ export async function POST(request: NextRequest) {
   const writesOffNotice = disablesWrites
     ? "Writes are now OFF on this connection: this save did not keep them on. Every create through it is refused until it is saved again with Allow writes ticked and its write secret."
     : null;
+  /*
+   * A SAVE THAT REACTIVATES A CONNECTION SAYS SO (P0.3 review round 2). An
+   * operator may have stopped it on purpose; the form refuses a save made on
+   * a stale view of the row, and every other caller is told here.
+   */
+  const reactivatedNotice = reactivates
+    ? `This connection had been deactivated, and saving it made it active again${writableAfter ? ", with writes on" : ""}. ` +
+      "Deactivate it again if it was stopped on purpose."
+    : null;
 
   // Records THAT the credential set was written, never what it is. The whole
   // point of sealing secrets is undone by an audit trail that quotes them.
@@ -694,13 +765,28 @@ export async function POST(request: NextRequest) {
       key,
       authType: input.authType,
       environment,
+      // The system the row now points at, beside what it pointed at before
+      // (P0.3 review round 2): writes are allowed for a system, so the trail
+      // must say which one. The base URL is a non-secret hostname (file header).
+      baseUrl: input.baseUrl,
+      client: input.client ?? null,
       writeEnabled,
       // What the save did to writes, so the trail answers "who turned them on/off".
       // isActiveBefore: a save always leaves the row active, so a re-save of
       // a deactivated connection is a reactivation, and the trail says so.
-      ...(existing ? { writeEnabledBefore: existing.writeEnabled, isActiveBefore: existing.isActive } : {}),
+      ...(existing
+        ? {
+            writeEnabledBefore: existing.writeEnabled,
+            isActiveBefore: existing.isActive,
+            environmentBefore: existing.environment,
+            baseUrlBefore: existing.baseUrl,
+            clientBefore: existing.client,
+          }
+        : {}),
       ...(enablesWrites ? { writesEnabled: true } : {}),
+      ...(movesLiveWrites ? { writeTargetChanged: targetChanges } : {}),
       ...(disablesWrites ? { writesDisabled: true } : {}),
+      ...(reactivates ? { reactivated: true } : {}),
       secretsRotated: true,
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
@@ -736,7 +822,43 @@ export async function POST(request: NextRequest) {
     replaced: Boolean(existing),
     ...(warning ? { warning } : {}),
     ...(writesOffNotice ? { writesTurnedOff: true, writesNotice: writesOffNotice } : {}),
+    ...(reactivatedNotice ? { reactivated: true, reactivatedNotice } : {}),
   });
+}
+
+/**
+ * The 409 for a save made on a view of the row that is no longer true (P0.3
+ * review round 2): what the row is now, and who changed it last and when, so
+ * the builder can ask them before undoing an incident response.
+ */
+async function staleFormRefusal(
+  organizationId: string,
+  key: string,
+  existing: { id: string; isActive: boolean; writeEnabled: boolean } | null,
+): Promise<string> {
+  if (existing === null) {
+    return `The connection "${key}" this form was replacing no longer exists. Reload the page and save it again.`;
+  }
+  const now = existing.isActive
+    ? existing.writeEnabled
+      ? "active, with writes allowed"
+      : "active, with writes off"
+    : existing.writeEnabled
+      ? "deactivated (its writes stay off while it is)"
+      : "deactivated";
+  const last = await prisma.configAudit.findFirst({
+    where: { organizationId, entityType: "Connection", entityId: existing.id, action: { in: ["CREATE", "UPDATE"] } },
+    orderBy: { at: "desc" },
+    select: { actorId: true, at: true },
+  });
+  const actor = last
+    ? await prisma.user.findFirst({ where: { id: last.actorId, organizationId }, select: { name: true, email: true } })
+    : null;
+  const who = last ? ` ${actor?.name ?? actor?.email ?? "Someone"} changed it at ${last.at.toISOString()}.` : "";
+  return (
+    `The connection "${key}" has changed since this page was loaded: it is now ${now}.${who} ` +
+    "Nothing was saved. Reload the page to see it as it is, then save again if the change should still be made."
+  );
 }
 
 /**

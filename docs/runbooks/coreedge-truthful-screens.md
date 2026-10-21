@@ -113,7 +113,11 @@ its first 201 without calling the API by hand:
   the control is disabled with the reason beside it. A TEST or PROD key with no
   expiry (minted before expiry was mandatory) is disabled too while
   `COREEDGE_KEY_EXPIRY` is enforced, with "rotate it first" beside it: the
-  route refuses a write key that would never end (review round 1). The route
+  route refuses a write key that would never end (review round 1). It is also
+  disabled, with the reason, on a RETIRED app (retiring leaves the app's keys
+  "active", but the route refuses it) and on an app whose three owner slots are
+  not all held by live members, a slot whose owner was deactivated or left
+  counting as empty, as the route judges it (review round 2). The route
   re-checks every gate. The key is shown once.
 - **Allow writes and the write secret (Studio > Connections).** The form now
   has an "Allow writes" box and, when ticked, a write-secret field. A save that
@@ -129,6 +133,26 @@ its first 201 without calling the API by hand:
   re-enters the write secret like every other secret. Unticking it says, before
   Save, that the save turns writes off. A deactivated connection starts
   unticked, so rotating it does not quietly re-arm writes an operator stopped.
+- **Writes are allowed for a system, not a row (review round 2).** A save that
+  keeps writes on while changing the environment, the SAP host (base URL
+  origin) or the SAP client switches writes on for that system for the first
+  time, so it is `connection.enable_writes` too, and the audit row carries
+  `writesEnabled: true`, `writeTargetChanged` (the parts that moved) and
+  `environmentBefore`, `baseUrlBefore` and `clientBefore` beside the new
+  values (every re-save now records these). The form starts the box unticked
+  for such a save and says why; ticking it is the builder's explicit choice.
+- **A form opened before the row changed is refused (review round 2).** The
+  form sends what it showed for the row it replaces (`expected`: its
+  `isActive` and `writeEnabled`, or null for a new key). If the row has changed
+  since the page loaded (for example an operator deactivated it during an
+  incident), the save answers 409 naming who changed it and when, and nothing
+  is saved: reload and decide on what is true now. Before Save the form also
+  says when saving a deactivated connection makes it active again.
+
+An API caller that sends no `expected` is not checked, so nothing that saves
+connections today is refused. A save that reactivates a deactivated row says
+so in its response (`reactivated: true`, `reactivatedNotice`) and its audit
+row (`reactivated: true`).
 
 The API is unchanged for its callers: a POST without `writeEnabled` still
 saves writes off. Over a connection whose writes were live, the response now says

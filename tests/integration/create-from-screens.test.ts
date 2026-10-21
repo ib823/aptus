@@ -55,8 +55,14 @@ import { POST as issueKey } from "@/app/api/studio/clients/route";
 import { POST as issueWriteKey } from "@/app/api/studio/clients/write-credential/route";
 import { POST as saveConnection } from "@/app/api/studio/connections/route";
 import { PATCH as editInterface, POST as registerInterface } from "@/app/api/studio/interfaces/route";
+import StudioAccessPage from "@/app/(studio)/studio/access/page";
 import { connectionSaveBody, type ConnectionFormFields } from "@/lib/studio/connection-form";
-import { writeKeyAction } from "@/components/studio/ClientCredentials";
+import {
+  ClientCredentials,
+  writeKeyAction,
+  type CredentialSolution,
+  type CredentialSummary,
+} from "@/components/studio/ClientCredentials";
 
 const RUN = `p03e2e-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -131,6 +137,21 @@ function sources(dir: string): string[] {
     const p = path.join(dir, name);
     return statSync(p).isDirectory() ? sources(p) : /\.tsx?$/.test(name) ? [p] : [];
   });
+}
+
+/** The props API Access hands its Runtime credentials panel. */
+function credentialsPanel(node: unknown): { credentials: CredentialSummary[]; solutions: CredentialSolution[] } | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = credentialsPanel(child);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (node === null || typeof node !== "object" || !("props" in node)) return null;
+  const element = node as { type: unknown; props: { children?: unknown; credentials: CredentialSummary[]; solutions: CredentialSolution[] } };
+  if (element.type === ClientCredentials) return element.props;
+  return credentialsPanel(element.props.children);
 }
 
 /** SAP: a CSRF token on the service root, 201 on the create. */
@@ -218,7 +239,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
   it("2 · the builder saves the DEV system with writes allowed (Connections form)", async () => {
     session.user = DEVELOPER;
     const saved = await ok<{ connection: { id: string; writeEnabled: boolean } }>(
-      await saveConnection(req(connectionSaveBody(form({ allowWrites: true, writeSecret: "a-write-secret" })))),
+      // `null`: the form showed this key as new (P0.3 review round 2).
+      await saveConnection(req(connectionSaveBody(form({ allowWrites: true, writeSecret: "a-write-secret" }), null))),
     );
     expect(saved.connection.writeEnabled).toBe(true);
     // Recorded as the governance action it is.
@@ -256,13 +278,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
     );
     token = issued.token;
 
-    // What the row offers the colleague: the action, enabled, with nothing to explain.
-    expect(
-      writeKeyAction(
-        { state: "active", environment: "DEV", writeKeyIssued: false, writeGrantLive: true, writeKeyNeedsExpiry: false },
-        false,
-      ),
-    ).toEqual({ enabled: true, label: "Issue write key", reason: null });
+    // What the row offers the colleague, from the page's own query: the
+    // action, enabled, with nothing to explain (P0.3 review round 2: the row
+    // is read off the rendered page, not written out by hand).
+    const panel = credentialsPanel(await StudioAccessPage());
+    const row = panel?.credentials.find((c) => c.id === issued.id);
+    expect(row, "the page lists the new credential").toBeDefined();
+    const viewerOwns = panel!.solutions.find((s) => s.id === solutionId)?.viewerOwns ?? true;
+    expect(writeKeyAction(row!, viewerOwns)).toEqual({ enabled: true, label: "Issue write key", reason: null });
 
     const minted = await ok<{ writeKey: string; clientId: string; environment: string }>(
       await issueWriteKey(req({ solutionId, environment: "DEV" })),
@@ -316,7 +339,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
     // builder re-enters the secrets, as every save requires.
     const saved = await ok<{ connection: { writeEnabled: boolean }; writesTurnedOff?: boolean }>(
       await saveConnection(
-        req(connectionSaveBody(form({ password: "a-rotated-password", allowWrites: true, writeSecret: "a-write-secret" }))),
+        req(
+          connectionSaveBody(
+            form({ password: "a-rotated-password", allowWrites: true, writeSecret: "a-write-secret" }),
+            { isActive: true, writeEnabled: true },
+          ),
+        ),
       ),
     );
     expect(saved.connection.writeEnabled).toBe(true);
@@ -329,7 +357,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
   it("8 · a save that does not keep writes on says so, and the broker then refuses the create", async () => {
     session.user = DEVELOPER;
     const saved = await ok<{ connection: { writeEnabled: boolean }; writesTurnedOff?: boolean; writesNotice?: string }>(
-      await saveConnection(req(connectionSaveBody(form({ allowWrites: false })))),
+      await saveConnection(req(connectionSaveBody(form({ allowWrites: false }), { isActive: true, writeEnabled: true }))),
     );
     expect(saved.connection.writeEnabled).toBe(false);
     expect(saved.writesTurnedOff).toBe(true);
