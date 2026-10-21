@@ -108,9 +108,11 @@ succeeded.
 **Health decays (A50).** An "OK" counted as healthy whatever its age. It now
 counts as healthy for 48 hours (`CONNECTION_PROOF_TTL_MS`,
 `connectionHealthVerdict` in `src/lib/coreedge/freshness.ts`), after which the
-connections-health route counts it `stale` and the topology lens draws it "not
-observed" with a STALE badge. When a connection's secret will not open, the
-nightly probe and "Probe now" record `UNREADABLE` as its status (it counts as
+connections-health route counts it `stale`, the topology lens draws it "not
+observed" with a STALE badge, and Studio → Connections draws a muted
+"OK · stale" chip instead of the green "Reachable" one. When a connection's
+secret will not open, the nightly probe, "Probe now" and Studio's "Test
+connectivity" record `UNREADABLE` as its status (it counts as
 needing attention and in the unhealthy-connections incident); no probe event
 is written and `lastValidatedAt` is left alone. The broker refuses the whole
 product when any one of its connections will not open, so each row is opened
@@ -120,7 +122,12 @@ for this product will not open"), which counts the same way. The fix is to
 re-save or deactivate the row marked `UNREADABLE`; re-saving a
 `GROUP_UNREADABLE` row changes nothing. If every row opens on its own, the
 failure was not a secret and nothing is written. Neither status is a probe
-outcome, so neither counts as "was healthy" for the drift email.
+outcome, so neither counts as "was healthy" for the drift email. Studio's
+"Test connectivity" opens the whole product group the same way before it
+probes: on a group that will not open it answers 409 naming the row to fix,
+sends nothing to SAP, and writes no OK, no success time and no set-up journey
+milestone, so it cannot paint a connection healthy while the broker refuses
+every call for its product.
 
 **"Services readable" counts fresh proof only (A60).** The SAP system page
 counted every OK or EMPTY read of any age. It now counts a service readable

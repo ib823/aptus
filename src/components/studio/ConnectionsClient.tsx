@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
+import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
@@ -45,10 +46,18 @@ interface TestOutcome {
   validated: boolean;
 }
 
+/** What the health chip reads: the recorded status and when SAP last answered 200. */
+export interface ConnectionHealthInput {
+  readonly lastValidationStatus: string | null;
+  /** ISO string as the page serialises it, or a Date. */
+  readonly lastValidatedAt: string | Date | null;
+}
+
 /**
  * Health → the honest-status vocabulary already used across the console, so a
  * connection's state reads the same way a capability's does.
- *   OK            → ACTIVATED     (proven by a live 200)
+ *   OK, recent    → ACTIVATED     (proven by a live 200 within CONNECTION_PROOF_TTL_MS)
+ *   OK, aged      → NOT_CHECKED   (stale: our evidence has aged; see `connectionHealthChip`)
  *   UNAUTHORIZED  → NEEDS_SETUP   (401/403 — arrangement/credentials)
  *   NOT_FOUND     → NOT_FOUND     (404 on this tenant)
  *   TIMEOUT/ERROR → PROBE_FAILED  (unreachable right now)
@@ -61,12 +70,18 @@ interface TestOutcome {
  * checked" was false, and the broker refuses every call through it.
  * GROUP_UNREADABLE (P0.2 review) is a row whose own secret opens while a
  * sibling's will not; `unreadableHint` says which row to fix under the chip.
- * Exported for its test.
+ *
+ * AN OK IS ONLY ACTIVATED WHILE IT IS RECENT (P0.2 review round 4). This took
+ * the status alone, so an OK from months ago — the nightly probe stopped —
+ * kept the green "Reachable" chip here while Operations, the topology lens and
+ * the SAP systems screen called the same row stale. The age is now an input,
+ * and the reading is `connectionHealthVerdict`, the one every other screen
+ * uses, so the two cannot disagree. Exported for its test.
  */
-export function healthToStatus(status: string | null): HonestStatus {
-  switch (status) {
+export function healthToStatus(c: ConnectionHealthInput, now: Date = new Date()): HonestStatus {
+  switch (c.lastValidationStatus) {
     case "OK":
-      return "ACTIVATED";
+      return verdictOf(c, now) === "healthy" ? "ACTIVATED" : "NOT_CHECKED";
     case "UNAUTHORIZED":
     case "UNREADABLE":
     case "GROUP_UNREADABLE":
@@ -129,6 +144,38 @@ export function unreadableHint(status: string | null): string | null {
 
 function healthLabel(status: HonestStatus): string | undefined {
   return status === "ACTIVATED" ? "Reachable" : undefined;
+}
+
+function verdictOf(c: ConnectionHealthInput, now: Date) {
+  const at = c.lastValidatedAt === null ? null : new Date(c.lastValidatedAt);
+  return connectionHealthVerdict(
+    { lastValidationStatus: c.lastValidationStatus, lastValidatedAt: at && !Number.isNaN(at.getTime()) ? at : null },
+    now,
+  );
+}
+
+/**
+ * The chip as drawn: status, visible label and accessible meaning.
+ *
+ * A stale OK is drawn in the muted "not checked" tone and labelled
+ * "OK · stale", the words Operations → Connections and the SAP systems screen
+ * use for the same row; its meaning says the evidence has aged rather than
+ * "not yet probed", which would be false. Exported for its test.
+ */
+export function connectionHealthChip(
+  c: ConnectionHealthInput,
+  now: Date = new Date(),
+): { status: HonestStatus; label: string | undefined; meaning: string | undefined } {
+  const status = healthToStatus(c, now);
+  if (c.lastValidationStatus === "OK" && status !== "ACTIVATED") {
+    const hours = Math.round(CONNECTION_PROOF_TTL_MS / (60 * 60 * 1000));
+    return {
+      status,
+      label: "OK · stale",
+      meaning: `the last 200 was more than ${hours} h ago and no probe has succeeded since — our evidence has aged, which says nothing either way about SAP; test it again`,
+    };
+  }
+  return { status, label: healthLabel(status), meaning: undefined };
 }
 
 export function ConnectionsClient({
@@ -297,8 +344,8 @@ export function ConnectionsClient({
                 <Td>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {(() => {
-                      const health = healthToStatus(c.lastValidationStatus);
-                      return <StudioStatusChip status={health} label={healthLabel(health)} />;
+                      const chip = connectionHealthChip(c);
+                      return <StudioStatusChip status={chip.status} label={chip.label} meaning={chip.meaning} />;
                     })()}
                     {unreadableHint(c.lastValidationStatus) ? (
                       <span style={{ fontSize: 11, color: "var(--ink-muted)", maxWidth: 260 }}>

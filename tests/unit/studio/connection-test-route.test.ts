@@ -11,6 +11,11 @@
  * 2. Only the cron sweep and the Ops "Probe now" wrote a SapConnectionProbeEvent.
  *    The probe a human runs while actively diagnosing a connection — this one —
  *    left no history in Operations at all.
+ *
+ * 3. (P0.2 review round 4) It opened only the named row, so on a product whose
+ *    group the broker refuses (a sibling will not open) it probed SAP and wrote
+ *    a fresh OK over GROUP_UNREADABLE. It now opens the group, as "Probe now"
+ *    does; the real-database proof is tests/integration/connection-probe-resave.test.ts.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,9 +26,11 @@ import type * as ConnectionResolverModule from "@/lib/sap-public/connection-reso
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   findFirstConnection: vi.fn(),
+  findManyConnections: vi.fn(),
   updateConnection: vi.fn(),
   createProbeEvent: vi.fn(),
   resolveSapConnection: vi.fn(),
+  resolveSapConnections: vi.fn(),
   probeConnection: vi.fn(),
   writeConfigAudit: vi.fn(),
 }));
@@ -32,14 +39,21 @@ vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     // The status write is guarded by the revision the probe read through.
-    sapConnection: { findFirst: mocks.findFirstConnection, updateMany: mocks.updateConnection },
+    sapConnection: {
+      findFirst: mocks.findFirstConnection,
+      findMany: mocks.findManyConnections,
+      updateMany: mocks.updateConnection,
+    },
     sapConnectionProbeEvent: { create: mocks.createProbeEvent },
   },
 }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionResolverModule>()),
   resolveSapConnection: mocks.resolveSapConnection,
+  resolveSapConnections: mocks.resolveSapConnections,
 }));
+vi.mock("@sentry/nextjs", () => ({ captureMessage: vi.fn() }));
+vi.mock("@/lib/email/brevo", () => ({ sendEmail: vi.fn() }));
 vi.mock("@/lib/studio/connection-health", () => ({ probeConnection: mocks.probeConnection }));
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: mocks.writeConfigAudit }));
 
@@ -59,6 +73,10 @@ beforeEach(() => {
   mocks.getCurrentUser.mockResolvedValue(BUILDER);
   mocks.findFirstConnection.mockResolvedValue(ROW);
   mocks.resolveSapConnection.mockResolvedValue(RESOLVED);
+  mocks.resolveSapConnections.mockResolvedValue([RESOLVED]);
+  mocks.findManyConnections.mockResolvedValue([
+    { id: "conn_1", key: "acme-dev", label: "Acme DEV", lastValidationStatus: "OK", revision: 3 },
+  ]);
   mocks.updateConnection.mockResolvedValue({ count: 1 });
   mocks.createProbeEvent.mockResolvedValue({});
   mocks.writeConfigAudit.mockResolvedValue(undefined);
@@ -71,10 +89,14 @@ beforeEach(() => {
 });
 
 describe("secrets that will not open", () => {
+  /** This row's own secret will not open: the group throws, and so does the row on its own. */
+  function ownSecretBroken(err = new Error("Unsupported state or unable to authenticate data")) {
+    mocks.resolveSapConnections.mockRejectedValue(err);
+    mocks.resolveSapConnection.mockRejectedValue(err);
+  }
+
   it("is a refusal with a sentence, not a 500 with a stack trace", async () => {
-    mocks.resolveSapConnection.mockRejectedValue(
-      new Error("Unsupported state or unable to authenticate data"),
-    );
+    ownSecretBroken();
     const res = await call();
     expect(res.status).toBe(409);
     const body = await res.json();
@@ -85,18 +107,47 @@ describe("secrets that will not open", () => {
     expect(body.error.message).toMatch(/Re-save the connection/i);
   });
 
-  it("never records a health status, because no probe ran", async () => {
-    mocks.resolveSapConnection.mockRejectedValue(new Error("decrypt failed"));
+  it("runs no probe and records no probe outcome — only UNREADABLE, with no success time", async () => {
+    ownSecretBroken(new Error("decrypt failed"));
     await call();
     expect(mocks.probeConnection).not.toHaveBeenCalled();
-    expect(mocks.updateConnection).not.toHaveBeenCalled();
     expect(mocks.createProbeEvent).not.toHaveBeenCalled();
+    expect(mocks.updateConnection).toHaveBeenCalledTimes(1);
+    const write = mocks.updateConnection.mock.calls[0]![0];
+    expect(write.where).toMatchObject({ id: "conn_1", organizationId: "org_a", revision: 3 });
+    expect(write.data).toEqual({ lastValidationStatus: "UNREADABLE" });
   });
 
   it("does not put the error text in the response", async () => {
-    mocks.resolveSapConnection.mockRejectedValue(new Error("SECRET-SHAPED-DETAIL xyz"));
+    ownSecretBroken(new Error("SECRET-SHAPED-DETAIL xyz"));
     const body = await (await call()).json();
     expect(JSON.stringify(body)).not.toContain("SECRET-SHAPED-DETAIL");
+  });
+
+  it("a sibling that will not open: GROUP_UNREADABLE, the sibling named, and SAP never asked (round 4)", async () => {
+    // The broker refuses every call for the product; a 200 from SAP for this
+    // row must not be recorded as its health.
+    mocks.resolveSapConnections.mockRejectedValue(new Error("decrypt failed"));
+    mocks.findManyConnections.mockResolvedValue([
+      { id: "conn_1", key: "acme-dev", label: "Acme DEV", lastValidationStatus: "OK", revision: 3 },
+      { id: "conn_2", key: "acme-qa", label: "Acme QA", lastValidationStatus: null, revision: 1 },
+    ]);
+    mocks.resolveSapConnection.mockImplementation(async (_org: string, _product: string, key: string) => {
+      if (key === "acme-qa") throw new Error("decrypt failed");
+      return RESOLVED;
+    });
+
+    const res = await call();
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/another active connection for this product/i);
+    expect(body.error.message).toContain('"Acme QA"');
+    expect(mocks.probeConnection).not.toHaveBeenCalled();
+    expect(mocks.createProbeEvent).not.toHaveBeenCalled();
+    expect(mocks.updateConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.updateConnection.mock.calls[0]![0].where.id).toBe("conn_1");
+    expect(mocks.updateConnection.mock.calls[0]![0].data).toEqual({ lastValidationStatus: "GROUP_UNREADABLE" });
   });
 });
 
@@ -195,7 +246,7 @@ describe("what did not change", () => {
     mocks.findFirstConnection.mockResolvedValue(null);
     const res = await call();
     expect(res.status).toBe(404);
-    expect(mocks.resolveSapConnection).not.toHaveBeenCalled();
+    expect(mocks.resolveSapConnections).not.toHaveBeenCalled();
   });
 
   it("an oversight role may look but not probe", async () => {

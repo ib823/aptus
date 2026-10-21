@@ -65,8 +65,10 @@ describe("the connections health chip does not collide with the Active column", 
 
   it("still distinguishes health from active — they read different fields", () => {
     const src = code(read(CLIENT));
-    // Health comes from the probe record; Active comes from the row's own flag.
-    expect(src).toMatch(/healthToStatus\(\s*c\.lastValidationStatus\s*\)/);
+    // Health comes from the probe record (status AND age, P0.2 review round 4);
+    // Active comes from the row's own flag.
+    expect(src).toMatch(/connectionHealthChip\(\s*c\s*\)/);
+    expect(src).toMatch(/switch\s*\(\s*c\.lastValidationStatus\s*\)/);
     expect(src).toMatch(/c\.isActive\s*\?/);
   });
 

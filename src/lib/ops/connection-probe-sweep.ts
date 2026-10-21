@@ -471,8 +471,13 @@ export type ProbeOneOutcome =
  * UNREADABLE only when its own secret is the one that will not open. When it
  * opens, the operator is told which sibling to fix instead of being sent to
  * re-enter a secret that is fine (P0.2 review).
+ *
+ * Exported for the Studio "Test connectivity" route (P0.2 review round 4):
+ * it opened only the named row, so on a group the broker refuses it wrote a
+ * fresh OK over GROUP_UNREADABLE. Every writer of a connection's status now
+ * judges the group the same way, through this one function.
  */
-async function recordUnreadableOne(
+export async function recordUnreadableOne(
   organizationId: string,
   target: { id: string; product: string; environment: string | null },
 ): Promise<ProbeOneOutcome> {

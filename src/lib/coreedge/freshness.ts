@@ -189,7 +189,8 @@ export type ConnectionHealthVerdict =
 /**
  * THE ONE READING of a connection's health, for every screen and count that
  * states one (the connections-health route, the topology lens, the SAP systems
- * screen). "OK" alone is not healthy: it must be recent.
+ * screen, the Studio connections screen). "OK" alone is not healthy: it must
+ * be recent.
  */
 export function connectionHealthVerdict(
   c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },

@@ -22,8 +22,9 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
+import { recordUnreadableOne } from "@/lib/ops/connection-probe-sweep";
 import { probeEventSource } from "@/lib/ops/probe-event-source";
-import { connectionRefusalMessage, resolveSapConnection } from "@/lib/sap-public/connection-resolver";
+import { resolveSapConnections } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { probeConnection } from "@/lib/studio/connection-health";
@@ -67,20 +68,33 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   // trace, on the one screen an operator would open to diagnose exactly that.
   // The northbound binding path already catches the same throw and answers
   // CONNECTION_UNREADABLE with an actionable sentence; this is the same
-  // treatment one caller over. No probe ran, so no health status is written —
-  // "could not even try" must not be recorded as a probe outcome.
+  // treatment one caller over. No probe ran, so no probe OUTCOME is written —
+  // "could not even try" is recorded only as UNREADABLE / GROUP_UNREADABLE,
+  // the statuses that say no request reached SAP (as the sweep records them).
+  //
+  // THE WHOLE PRODUCT GROUP IS OPENED, NOT ONLY THIS ROW (P0.2 review round 4).
+  // The broker fails closed on the (organization, product) set: one sibling
+  // whose secrets will not open refuses every call for the product. Opening
+  // only the named row let this test probe SAP, get a 200 and write a fresh
+  // OK — and end the SAP set-up wait — over the GROUP_UNREADABLE the sweep had
+  // recorded, so every screen said healthy while the broker refused every
+  // call. So the group is judged as "Probe now" and the sweep judge it: when
+  // it will not open, the row is recorded UNREADABLE (its own secret fails)
+  // or GROUP_UNREADABLE (a sibling's does, named in the answer), through the
+  // same revision guard; no probe runs, so no probe event, no success time
+  // and no journey milestone.
   let resolved;
   try {
-    resolved = await resolveSapConnection(organizationId, row.product, row.key);
+    const group = await resolveSapConnections(organizationId, row.product);
+    resolved = group.find((c) => c.key === row.key) ?? null;
   } catch (err) {
     console.warn("[studio] connection secrets could not be opened", {
       connectionId: row.id,
       reason: err instanceof Error ? err.name : "unknown",
     });
-    return studioError(
-      "CONFLICT",
-      connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? ""),
-    );
+    const refused = await recordUnreadableOne(organizationId, row);
+    if (refused.outcome === "not-found") return studioError("NOT_FOUND", "Connection not found.");
+    return studioError("CONFLICT", refused.detail);
   }
   if (!resolved) return studioError("NOT_FOUND", "Connection not found.");
 

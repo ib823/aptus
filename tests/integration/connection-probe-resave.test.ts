@@ -19,13 +19,17 @@
  *      against the last probe that ran, as it did before P0.2;
  *   3. when one connection of a product will not open, only that row reads
  *      UNREADABLE; a sibling whose own secret opens reads GROUP_UNREADABLE,
- *      so the operator is not sent to re-enter a secret that is fine.
+ *      so the operator is not sent to re-enter a secret that is fine;
+ *   4. the Studio "Test connectivity" judges the group the same way, so it
+ *      cannot write a fresh OK over GROUP_UNREADABLE while the broker
+ *      refuses every call for the product (P0.2 review round 4).
  *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as JourneyModule from "@/lib/coreedge/journey";
 import type * as ResolverModule from "@/lib/sap-public/connection-resolver";
 
 vi.mock("@/lib/db/prisma", async () => {
@@ -43,6 +47,8 @@ const hooks = vi.hoisted(() => ({
   probedHosts: [] as string[],
   status: "OK" as string,
   captureMessage: vi.fn(),
+  noteConnectionProbe: vi.fn(),
+  writeConfigAudit: vi.fn(),
 }));
 
 /*
@@ -77,11 +83,35 @@ vi.mock("@/lib/studio/connection-health", async (importOriginal) => {
 });
 vi.mock("@sentry/nextjs", () => ({ captureMessage: hooks.captureMessage }));
 vi.mock("@/lib/email/brevo", () => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/auth/session", () => ({
+  getCurrentUser: async () => ({
+    id: "u_builder",
+    email: "builder@abeam.com",
+    role: "consultant",
+    organizationId: hooks.org,
+    authMethod: "session",
+  }),
+}));
+vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: hooks.writeConfigAudit }));
+// The journey milestone is the real one, watched: a Studio test that ends the
+// SAP set-up wait for a product the broker refuses is the defect.
+vi.mock("@/lib/coreedge/journey", async (importOriginal) => {
+  const real = await importOriginal<typeof JourneyModule>();
+  return {
+    ...real,
+    noteConnectionProbe: (input: Parameters<typeof real.noteConnectionProbe>[0]) => {
+      hooks.noteConnectionProbe(input);
+      return real.noteConnectionProbe(input);
+    },
+  };
+});
 
+import { POST as studioTest } from "@/app/api/studio/connections/[id]/test/route";
+import { connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { probeOneConnection, sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
 import { countedProbeEvents } from "@/lib/ops/probe-event-source";
-import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
+import { resolveSapConnectionForEnvironment, upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import { clearDataKeyCache } from "@/lib/sap-public/keys/org-data-key";
 
 const KEY_VARS = [
@@ -141,6 +171,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
     hooks.probedHosts = [];
     hooks.status = "OK";
     hooks.captureMessage.mockReset();
+    hooks.noteConnectionProbe.mockReset();
+    hooks.writeConfigAudit.mockReset();
     await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: org } });
     await prisma.sapConnection.deleteMany({ where: { organizationId: org } });
   });
@@ -296,6 +328,78 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
         expect(out.detail).toContain("S/4 acme-dev");
       }
       expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+    });
+
+    const studioTestOf = (id: string) =>
+      studioTest(new Request(`http://localhost/api/studio/connections/${id}/test`, { method: "POST" }) as never, {
+        params: Promise.resolve({ id }),
+      });
+
+    it("Studio 'Test connectivity' on the sibling leaves GROUP_UNREADABLE standing (round 4)", async () => {
+      // The broker fails closed on the whole product: every PROD call is
+      // refused. The Studio test opened only the named row, probed SAP, got a
+      // 200 and wrote a fresh OK over GROUP_UNREADABLE — Healthy on every
+      // screen, and the SAP set-up wait ended, while nothing could be served.
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+      hooks.noteConnectionProbe.mockReset();
+
+      const res = await studioTestOf(good.id);
+
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.message).toMatch(/another active connection for this product/i);
+      expect(body.error.message).toContain("S/4 acme-dev");
+      // No request reached SAP, so nothing is recorded as a probe of it.
+      expect(hooks.probedHosts).toEqual([]);
+      const after = await stored(good.id);
+      expect(after).toMatchObject({ lastValidationStatus: "GROUP_UNREADABLE", lastValidatedAt: null });
+      expect(await sources(good.id)).toEqual([]);
+      expect(hooks.noteConnectionProbe).not.toHaveBeenCalled();
+      // The screens and the broker agree.
+      expect(connectionHealthVerdict(after!, new Date())).not.toBe("healthy");
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+    });
+
+    it("Studio 'Test connectivity' on a sibling never probed before records GROUP_UNREADABLE, not OK", async () => {
+      const { good } = await brokenSibling();
+
+      const res = await studioTestOf(good.id);
+
+      expect(res.status).toBe(409);
+      expect(hooks.probedHosts).toEqual([]);
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+      expect(hooks.noteConnectionProbe).not.toHaveBeenCalled();
+    });
+
+    it("Studio 'Test connectivity' on the row that will not open records UNREADABLE on it alone", async () => {
+      const { good, bad } = await brokenSibling();
+
+      const res = await studioTestOf(bad.id);
+
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.message).toMatch(/could not be read/i);
+      expect((await stored(bad.id))?.lastValidationStatus).toBe("UNREADABLE");
+      // The sibling was not the one asked about: left as it was.
+      expect((await stored(good.id))?.lastValidationStatus).toBeNull();
+    });
+
+    it("once the broken sibling is deactivated, the Studio test records the 200 again", async () => {
+      const { good, bad } = await brokenSibling();
+      await sweepConnectionProbes();
+      await prisma.sapConnection.update({ where: { id: bad.id, organizationId: org }, data: { isActive: false } });
+
+      const res = await studioTestOf(good.id);
+
+      expect(res.status).toBe(200);
+      expect(hooks.probedHosts).toEqual(["https://prod.example.com"]);
+      expect((await stored(good.id))?.lastValidationStatus).toBe("OK");
+      expect(hooks.noteConnectionProbe).toHaveBeenCalledTimes(1);
     });
   });
 });
