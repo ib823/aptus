@@ -191,8 +191,13 @@ export interface BindingFacts {
 }
 
 export interface ProbeFacts {
-  /** The last probe's status, or null when none has ever run. */
-  readonly status: "OK" | "UNAUTHORIZED" | "NOT_FOUND" | "TIMEOUT" | "ERROR" | "NO_PROBE_PATH" | null;
+  /**
+   * The last probe's status, or null when none has ever run. The probe asks
+   * the LANE'S OWN SERVICE for its `$metadata` (P0.3, A30), so FORBIDDEN — a
+   * 403 on that service — is its own outcome: SAP refused this service, not
+   * CoreEdge's sign-in.
+   */
+  readonly status: "OK" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TIMEOUT" | "ERROR" | "NO_PROBE_PATH" | null;
   readonly at: Date | null;
 }
 
@@ -549,6 +554,20 @@ function deriveHopVerdict(facts: LaneFacts): HopVerdict {
       status: "signInRefused",
       brokenHop: "sapMetadata",
       because: "SAP rejected CoreEdge's sign-in. Every lane on this system stops.",
+      checkedAt: probe.at,
+    };
+  }
+  if (probe.status === "FORBIDDEN") {
+    /*
+     * A 403 on THIS service's description (A30): we signed in, and the
+     * communication user may not use this service. One lane stops, and the
+     * fix is the client's SAP authorisation — never "every lane stops", which
+     * is what a 403 read as UNAUTHORIZED used to say.
+     */
+    return {
+      status: "sapRefused",
+      brokenHop: "sapMetadata",
+      because: "We signed in and SAP refused this service. The fix is in SAP authorisation, not in CoreEdge.",
       checkedAt: probe.at,
     };
   }

@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 
 import { LaneCard } from "@/components/coreedge/LaneCard";
 import { AppStatusChip } from "@/components/coreedge/StatusChip";
-import { laneAge } from "@/lib/coreedge/copy";
+import { EMPTY_STATES, laneAge } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS, LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
-import { listLanes } from "@/lib/coreedge/queries";
+import { getApp, listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
 
@@ -24,6 +24,13 @@ import { CoreEdgeShell } from "../../CoreEdgeShell";
  * is a status precisely so that the empty cells are visible; showing only the
  * lanes with rows behind them would hide the ones a builder most needs to act
  * on.
+ *
+ * AN APP WITH NO FEEDS HAS A BOARD, NOT A 404 (P0.3, A63). Lanes are feeds ×
+ * environments, so an app with no feed yet has none, and the board used to
+ * call notFound() on an empty lane list: a new app's owner was told it does not
+ * exist, on the only screen that links to "Add data feed". Whether the app
+ * exists is asked on its own (`getApp`); only a missing app is a 404, and an
+ * app with no feeds shows the empty state with the way to add one.
  */
 
 export const metadata: Metadata = { title: "App" };
@@ -40,11 +47,11 @@ export default async function AppLaneBoard({
   const { app } = await params;
   // One instant for the whole board.
   const now = new Date();
-  const lanes = await listLanes(user.organizationId, { appSlug: app });
-  if (lanes.length === 0) notFound();
-
-  const first = lanes[0];
-  if (first === undefined) notFound();
+  const [summary, lanes] = await Promise.all([
+    getApp(user.organizationId, app),
+    listLanes(user.organizationId, { appSlug: app }),
+  ]);
+  if (summary === null) notFound();
 
   // Feeds in the order the query returned them, de-duplicated. Not sorted again
   // here: one ordering decision, made in the query.
@@ -58,12 +65,12 @@ export default async function AppLaneBoard({
   return (
     <CoreEdgeShell
       current="/coreedge"
-      title={first.appName}
+      title={summary.name}
       subtitle={`${feeds.length} ${feeds.length === 1 ? "data feed" : "data feeds"} × ${LANE_ENVIRONMENTS.length} environments`}
     >
       <div className="flex items-center gap-3">
-        <AppStatusChip status={first.appStatus} />
-        {first.appStatus === "restricted" ? (
+        <AppStatusChip status={summary.status} />
+        {summary.status === "restricted" ? (
           /*
            * DECISION D3, visible where it matters: Restricted stops NEW access
            * being requested or approved and leaves existing lanes serving. The
@@ -75,6 +82,10 @@ export default async function AppLaneBoard({
           </span>
         ) : null}
       </div>
+
+      {feeds.length === 0 ? (
+        <p className="max-w-prose text-sm text-ink-soft">{EMPTY_STATES.appNoFeeds.message}</p>
+      ) : null}
 
       <div className="flex flex-col gap-8">
         {feeds.map((feed) => (

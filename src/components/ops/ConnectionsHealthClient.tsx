@@ -76,15 +76,19 @@ interface ConnectionsPayload {
     /** An OK older than `provenance.healthyWithinHours`: counted here, not as healthy (P0.2, A50). */
     stale?: number;
   };
-  deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
+  /** Apps reach SAP through the broker only when this is true: an active connection exists (P0.3, A59). */
+  brokerReachable: boolean;
+  /** The deployment's env tenant: console and explorer reads for everyone, never the broker. */
+  deploymentTenant: { configured: boolean; servesBroker: false; tenants: FallbackTenant[] };
   provenance: {
     activeOnly: boolean;
     /** How old an OK may be and still count as healthy. */
     healthyWithinHours?: number;
     excludedInactive: number;
     why: string;
-    fallbackIsShared: string | null;
-    noHealthForFallback: string | null;
+    deploymentTenantScope: string | null;
+    brokerReachability: string | null;
+    noHealthForDeploymentTenant: string | null;
   };
   bindingBacklog: { undeclaredEnvironment: number; remediation: string; consequence: string };
   prodConnections: number;
@@ -276,15 +280,22 @@ function ConnectionsBody({
         />
       ) : null}
 
-      {/* WHAT IS ACTUALLY SERVING TRAFFIC. This panel exists because the screen
-          previously said "No active SAP connection" on a deployment that was
-          reaching SAP perfectly well through its env tenant — true about the
-          table, false about the world. */}
-      {data.deploymentFallback.inUse ? (
-        <DeploymentFallback
-          tenants={data.deploymentFallback.tenants}
-          shared={data.provenance.fallbackIsShared}
-          noHealth={data.provenance.noHealthForFallback}
+      {/* WHAT REACHES SAP, AS TWO FACTS (P0.3, A59). The panel used to say the
+          deployment's tenant served this organization's traffic whenever it
+          had no connection; the broker never uses that tenant, so the apps'
+          calls were refused while the screen called them served. Whether the
+          broker can reach SAP is said on its own; the env tenant is listed
+          whenever it exists, for what it does serve: console reads. */}
+      {!data.brokerReachable && data.provenance.brokerReachability ? (
+        <p role="status" style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--status-awaiting-fg)" }}>
+          {data.provenance.brokerReachability}
+        </p>
+      ) : null}
+      {data.deploymentTenant.configured ? (
+        <DeploymentTenant
+          tenants={data.deploymentTenant.tenants}
+          scope={data.provenance.deploymentTenantScope}
+          noHealth={data.provenance.noHealthForDeploymentTenant}
         />
       ) : null}
 
@@ -296,9 +307,9 @@ function ConnectionsBody({
             // reaching SAP is answered by the panel above, not here.
             title="This organization has no stored SAP connection"
             detail={
-              data.deploymentFallback.inUse
-                ? "Traffic falls back to the deployment's shared tenant, listed above. Add a connection in Developer Studio to give this organization its own."
-                : "Nothing is configured for this organization, and the deployment has no fallback tenant either — so the broker has nothing to reach."
+              data.deploymentTenant.configured
+                ? "Its apps' calls through the broker are refused until a connection is added in Developer Studio. The deployment's tenant listed above serves console reads only; it never stands in for one."
+                : "Its apps' calls through the broker are refused until a connection is added in Developer Studio, and the deployment has no tenant of its own for console reads either."
             }
           />
         ) : (
@@ -499,35 +510,39 @@ function BindingBacklog({
 }
 
 /**
- * The deployment's shared tenant, when it is the thing actually serving traffic.
+ * The deployment's shared tenant: what it serves (console and explorer reads,
+ * for every organization) and what it never does (the broker's calls) — P0.3,
+ * A59. It used to be titled "Serving through the deployment's tenant" and shown
+ * only when the organization had no connection, as if it stood in for one.
  *
  * SHOWN AS ITS OWN PANEL, never merged into the connections table. A row in that
  * table implies a stored connection with an owner, a write flag, a sealed secret
- * and a probe history — a fallback tenant has none of those, and borrowing the
- * table's shape would imply all four.
+ * and a probe history — the deployment's tenant has none of those, and
+ * borrowing the table's shape would imply all four.
  *
- * NO HEALTH IS CLAIMED. Probe outcomes are recorded per stored connection; a
- * fallback tenant has no row to record one against. That is an absence, not a
- * pass and not a failure, so it renders as an absence.
+ * NO HEALTH IS CLAIMED. Probe outcomes are recorded per stored connection; the
+ * deployment's tenant has no row to record one against. That is an absence,
+ * not a pass and not a failure, so it renders as an absence.
  */
-function DeploymentFallback({
+function DeploymentTenant({
   tenants,
-  shared,
+  scope,
   noHealth,
 }: {
   tenants: FallbackTenant[];
-  shared: string | null;
+  scope: string | null;
   noHealth: string | null;
 }) {
   return (
     <OpsCard>
       <div style={{ padding: "13px 16px 4px", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Serving through the deployment&apos;s tenant</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>The deployment&apos;s tenant: console reads only</span>
         <OpsChip
           tone="info"
           label="shared"
           meaning="configured for the whole deployment, not for this organization"
         />
+        <OpsChip tone="muted" label="not used by the broker" meaning="apps reach SAP only through their own organization's connections" />
       </div>
       <OpsTable head={["Tenant", "Product", "Environment", "Health"]}>
         {tenants.map((t) => (
@@ -557,14 +572,14 @@ function DeploymentFallback({
             <td style={opsCellStyle}>
               <AbsencePill
                 label="no health record"
-                meaning="probe outcomes are stored per connection; a fallback tenant has no row to record one against"
+                meaning="probe outcomes are stored per connection; the deployment's tenant has no row to record one against"
               />
             </td>
           </tr>
         ))}
       </OpsTable>
       <ProvenanceStrip claim="Shared across the deployment">
-        {shared}
+        {scope}
         {noHealth ? <div style={{ marginTop: 6 }}>{noHealth}</div> : null}
       </ProvenanceStrip>
     </OpsCard>

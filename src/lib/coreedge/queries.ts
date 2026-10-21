@@ -19,7 +19,13 @@ import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver
 import { responseSchemaState } from "@/lib/studio/contract-provenance";
 import { grantBindingMode, unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { productName } from "@/lib/studio/product-marks";
-import type { GrantOperation } from "@/lib/studio/grants";
+import {
+  effectiveDecision,
+  grantsRead,
+  type GrantDecision,
+  type GrantEnvironment,
+  type GrantOperation,
+} from "@/lib/studio/grants";
 
 import { laneAuthorisation, laneEvidence } from "./lane-authorisation";
 import {
@@ -471,6 +477,29 @@ export async function listApps(organizationId: string): Promise<AppSummary[]> {
     status: APP_STATUS_BY_SOLUTION[s.status] ?? "draft",
     feedCount: s._count.interfaces,
   }));
+}
+
+/**
+ * One app by its slug, in this organization — whether it EXISTS, asked apart
+ * from whether it has lanes (P0.3, A63). The lane board called notFound()
+ * when `listLanes` came back empty, and an app with no feeds has no lanes, so
+ * a new app's owner was told "not found" on the only screen that links to
+ * "Add data feed". Null only when there is no such app here.
+ */
+export async function getApp(organizationId: string, slug: string): Promise<AppSummary | null> {
+  const s = await prisma.solution.findFirst({
+    where: { organizationId, slug },
+    select: { id: true, slug: true, name: true, status: true, _count: { select: { interfaces: true } } },
+  });
+  return s === null
+    ? null
+    : {
+        id: s.id,
+        slug: s.slug,
+        name: s.name,
+        status: APP_STATUS_BY_SOLUTION[s.status] ?? "draft",
+        feedCount: s._count.interfaces,
+      };
 }
 
 export interface RequestRow {
@@ -928,8 +957,15 @@ export interface KeyRow {
   readonly lastUsedAt: Date | null;
   readonly revokedAt: Date | null;
   readonly expiresAt: Date | null;
-  /** Last four of the stored label, for recognition. Never the token. */
-  readonly tail: string;
+  /**
+   * The last four characters of the KEY (`SolutionClient.tokenTail`, P0.3,
+   * A45) — the reference the claim page told its holder to expect, so a
+   * leaked key can be matched to this row. It used to be the last four of
+   * the LABEL ("PROD" from "App · PROD"), which matched no key anyone held.
+   * Null for a key minted before the tail was recorded: the screen says so
+   * rather than inventing one, and the next rotation records it.
+   */
+  readonly tail: string | null;
   /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
   readonly tokenPrefix: ClientTokenPrefix;
   /**
@@ -946,7 +982,8 @@ export interface KeyRow {
  * Keys, for the operations keys screen.
  *
  * `tokenHash` is never selected. The screen recognises a key by its app, its
- * environment and a four-character tail; a console that could show the value
+ * environment and the key's own last four characters (`tokenTail`, stored at
+ * mint for exactly this); a console that could show the value
  * would be a second place the key exists, which is the whole thing the
  * one-time claim link is built to avoid.
  */
@@ -957,9 +994,9 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
       select: {
         id: true,
         solutionId: true,
-        label: true,
         environment: true,
         tokenPrefix: true,
+        tokenTail: true,
         isActive: true,
         createdAt: true,
         lastUsedAt: true,
@@ -990,7 +1027,7 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
       lastUsedAt: c.lastUsedAt,
       revokedAt: c.revokedAt,
       expiresAt: c.expiresAt,
-      tail: c.label.slice(-4),
+      tail: c.tokenTail,
       tokenPrefix: storedTokenPrefix(c.tokenPrefix),
       state: keyState(c, now),
       previousValidUntil:
@@ -1009,6 +1046,53 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
  * for historical rows; it does not make it a client-data approval.
  */
 const PASSPORT_DECISIONS = ["APPROVED", "READ_ONLY"] as const;
+
+/**
+ * The grant rows a screen may count as access that is in force NOW (P0.3,
+ * A58): unrevoked and unexpired, by the same clock the broker applies. A
+ * filter on the query, so lapsed rows are not even read; `authorisesReadNow`
+ * below is the decision itself, on the rows that come back.
+ */
+function liveGrantWhere(now: Date) {
+  return {
+    revokedAt: null,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  } satisfies Prisma.ApiAccessGrantWhereInput;
+}
+
+/**
+ * Does this grant authorise a read in its environment right now? The single
+ * display resolver (`effectiveDecision`: revoked, then expired, judged at
+ * read time, since nothing ever stores EXPIRED) and then the broker's own
+ * read predicate (`grantsRead`: SANDBOX_ONLY only in SANDBOX). The passport
+ * selected on the stored decision alone, so a grant that lapsed in February
+ * stayed "approved to read" on the CIO's screen forever.
+ */
+function authorisesReadNow(
+  g: { decision: string; expiresAt: Date | null; revokedAt: Date | null; environment: string },
+  now: Date,
+): boolean {
+  const decision = effectiveDecision(g, now);
+  if (decision === "REVOKED" || decision === "EXPIRED") return false;
+  return grantsRead(decision as GrantDecision, g.environment as GrantEnvironment);
+}
+
+/**
+ * Is this a passport row: a decision the passport lists, still in force, in an
+ * environment that reaches the CLIENT's SAP? SANDBOX is excluded by its
+ * ENVIRONMENT, not only by the SANDBOX_ONLY decision: since D2 the decide
+ * route stores APPROVED for a sandbox request (it never offers SANDBOX_ONLY),
+ * so "SANDBOX NEVER APPEARS" held only for rows decided before D2 and every
+ * new sandbox approval was listed as data leaving the client's system.
+ */
+function isPassportGrant(
+  g: { decision: string; expiresAt: Date | null; revokedAt: Date | null; environment: string },
+  now: Date,
+): boolean {
+  if (g.environment.trim().toUpperCase() === "SANDBOX") return false;
+  if (!(PASSPORT_DECISIONS as readonly string[]).includes(g.decision)) return false;
+  return authorisesReadNow(g, now);
+}
 
 /** One connected SAP system, with what the console can say about it. */
 export interface SapSystemDetailRow {
@@ -1042,6 +1126,7 @@ export interface SapSystemDetailRow {
  */
 export async function listSapSystemDetails(
   organizationId: string,
+  now: Date = new Date(),
 ): Promise<SapSystemDetailRow[]> {
   const [connections, grants] = await Promise.all([
     prisma.sapConnection.findMany({
@@ -1059,13 +1144,14 @@ export async function listSapSystemDetails(
       },
       orderBy: { label: "asc" },
     }),
+    // Live grants only (A58): an expired or revoked approval binds no lane.
     prisma.apiAccessGrant.findMany({
       where: {
         organizationId,
         decision: { in: [...PASSPORT_DECISIONS] },
-        revokedAt: null,
+        ...liveGrantWhere(now),
       },
-      select: { environment: true },
+      select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
     }),
   ]);
 
@@ -1073,6 +1159,7 @@ export async function listSapSystemDetails(
 
   const grantsByEnv = new Map<LaneEnvironment, number>();
   for (const g of grants) {
+    if (!authorisesReadNow(g, now)) continue;
     const env = parseLaneEnvironment(g.environment);
     if (env === null) continue;
     grantsByEnv.set(env, (grantsByEnv.get(env) ?? 0) + 1);
@@ -1182,7 +1269,8 @@ export interface PassportRow {
 }
 
 /**
- * The passport: every approved, unrevoked read, for a client CIO.
+ * The passport: every approval IN FORCE that reaches the client's SAP, for a
+ * client CIO — unrevoked, unexpired, and never SANDBOX (`isPassportGrant`).
  *
  * Read-only by construction — there is no revoke path from this query and none
  * on the screen. X06 is explicit that a CIO who wants something stopped says
@@ -1194,12 +1282,15 @@ export async function listPassport(organizationId: string, now: Date = new Date(
       where: {
         organizationId,
         decision: { in: [...PASSPORT_DECISIONS] },
-        revokedAt: null,
+        environment: { not: "SANDBOX" },
+        ...liveGrantWhere(now),
       },
       select: {
         externalId: true,
         operation: true,
         environment: true,
+        decision: true,
+        revokedAt: true,
         decidedById: true,
         decidedAt: true,
         expiresAt: true,
@@ -1228,7 +1319,9 @@ export async function listPassport(organizationId: string, now: Date = new Date(
   // One key per (app, environment) — AD-11 — so this is a lookup, not a choice.
   const keyByLane = new Map(keys.map((k) => [`${k.solutionId}::${k.environment}`, keyState(k, now)]));
 
-  return grants.map((g) => ({
+  // The decision itself, on the rows the filter let through: the same
+  // resolver and predicate every other screen and the broker use.
+  return grants.filter((g) => isPassportGrant(g, now)).map((g) => ({
     appName: g.solution.name,
     feedName: feedNameByExternalId.get(g.externalId) ?? g.externalId,
     externalId: g.externalId,

@@ -255,3 +255,23 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
     expect(body.data.types.length).toBeGreaterThanOrEqual(9);
   });
 });
+
+describe("the Rebuild and the bundled imports stamp the import time (P0.3, A29)", () => {
+  it("every API row the Rebuild projects or injects carries importedAt, on create and on update", async () => {
+    await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }));
+    expect(mocks.upsert.mock.calls.length).toBeGreaterThan(0);
+    for (const [args] of mocks.upsert.mock.calls as [{ create: { importedAt?: unknown }; update: { importedAt?: unknown } }][]) {
+      expect(args.create.importedAt).toBeInstanceOf(Date);
+      expect(args.update.importedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("a bundled type's import stamps importedAt on every row it creates", async () => {
+    await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: "EVENT" }));
+    expect(mocks.create.mock.calls.length).toBeGreaterThan(0);
+    for (const [args] of mocks.create.mock.calls as [{ data: { importedAt?: unknown; rawMetadataJson: { importedAt: string } } }][]) {
+      expect(args.data.importedAt).toBeInstanceOf(Date);
+      expect((args.data.importedAt as Date).toISOString()).toBe(args.data.rawMetadataJson.importedAt);
+    }
+  });
+});

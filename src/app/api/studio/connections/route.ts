@@ -8,6 +8,18 @@
  * Saving secrets (POST) and anything that turns writes on (PATCH) need a fresh
  * passkey once COREEDGE_STEP_UP is enforce (lib/auth/step-up.ts).
  *
+ * WRITES ARE SWITCHED ON HERE, FROM THE FORM (P0.3). `writeEnabled` needs the
+ * write secret, which is sealed with the rest of the bundle and never read
+ * back, so the only door is a save that supplies it — and the Connections
+ * form never offered the field, so no screen could enable writes, and every
+ * re-save (how credentials are rotated) silently switched a writing
+ * connection's writes off. The form now carries "Allow writes" and the write
+ * secret, ticked by default when re-saving a connection that allows writes.
+ * A save that turns writes on is the governance action
+ * `connection.enable_writes`; one that turns them off (writeEnabled omitted or
+ * false over a writing row) says so in its response and its audit row, and is
+ * not refused: turning writes off is the safe direction.
+ *
  * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
  * bundle on every write, so a "just rename the label" call that omitted secrets
  * would store an EMPTY bundle and silently break a working connection — the
@@ -488,8 +500,14 @@ export async function POST(request: NextRequest) {
 
   const existing = await prisma.sapConnection.findFirst({
     where: { organizationId, product: input.product, key },
-    select: { id: true },
+    // writeEnabled: whether this save turns writes on, or off (P0.3).
+    select: { id: true, writeEnabled: true },
   });
+  const writeEnabled = input.writeEnabled ?? false;
+  /** Writes go from off (or a new row) to on: the governance action. */
+  const enablesWrites = writeEnabled && !(existing?.writeEnabled ?? false);
+  /** A re-save of a writing connection that does not keep its writes on. */
+  const disablesWrites = !writeEnabled && (existing?.writeEnabled ?? false);
 
   /*
    * REFUSE A KEY THE DEPLOYMENT ALREADY USES FOR ITS OWN TENANT.
@@ -582,7 +600,8 @@ export async function POST(request: NextRequest) {
    * refused for the mistake, not for the passkey.
    */
   const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
-    action: "connection.save_secrets",
+    // Turning writes on is recorded as what it is, not as a secret save.
+    action: enablesWrites ? "connection.enable_writes" : "connection.save_secrets",
     targetId: existing?.id ?? null,
   });
   if (!stepUp.ok) return stepUp.response;
@@ -613,7 +632,7 @@ export async function POST(request: NextRequest) {
       oauthTokenUrl: input.oauthTokenUrl ?? null,
       environment,
       client: input.client ?? null,
-      writeEnabled: input.writeEnabled ?? false,
+      writeEnabled,
       apiPath: input.apiPath ?? null,
       timeoutMs: input.timeoutMs ?? null,
     });
@@ -639,6 +658,15 @@ export async function POST(request: NextRequest) {
    * copy is for every other caller of the API, and for the audit trail.
    */
   const warning = existing ? null : newSuccessFactorsBasicConnectionNotice(input.product, input.authType);
+  /*
+   * A RE-SAVE THAT TURNS WRITES OFF SAYS SO. Not refused — off is the safe
+   * direction, and an API caller re-saving credentials keeps working — but a
+   * writing integration that stops at its next create deserves a sentence now,
+   * not a 403 later. The form keeps writes on by default (P0.3).
+   */
+  const writesOffNotice = disablesWrites
+    ? "Writes are now OFF on this connection: this save did not keep them on. Every create through it is refused until it is saved again with Allow writes ticked and its write secret."
+    : null;
 
   // Records THAT the credential set was written, never what it is. The whole
   // point of sealing secrets is undone by an audit trail that quotes them.
@@ -654,7 +682,11 @@ export async function POST(request: NextRequest) {
       key,
       authType: input.authType,
       environment,
-      writeEnabled: input.writeEnabled ?? false,
+      writeEnabled,
+      // What the save did to writes, so the trail answers "who turned them on/off".
+      ...(existing ? { writeEnabledBefore: existing.writeEnabled } : {}),
+      ...(enablesWrites ? { writesEnabled: true } : {}),
+      ...(disablesWrites ? { writesDisabled: true } : {}),
       secretsRotated: true,
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
@@ -685,7 +717,12 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return studioOk({ connection: saved, replaced: Boolean(existing), ...(warning ? { warning } : {}) });
+  return studioOk({
+    connection: saved,
+    replaced: Boolean(existing),
+    ...(warning ? { warning } : {}),
+    ...(writesOffNotice ? { writesTurnedOff: true, writesNotice: writesOffNotice } : {}),
+  });
 }
 
 /**
@@ -742,11 +779,12 @@ export async function PATCH(request: NextRequest) {
   // Enabling writes needs a write secret, which lives sealed and unreadable from
   // here. Flipping the switch on a connection that never had one would produce a
   // connection that claims to allow writes and fails at the first attempt, so the
-  // caller is sent to POST — where the secret can actually be supplied.
+  // caller is sent to POST — where the secret can actually be supplied, and
+  // which the Connections form now offers (P0.3).
   if (writeEnabled === true && !existing.writeEnabled) {
     return studioError(
       "VALIDATION_ERROR",
-      "Enabling writes requires the write secret. Re-save the connection with it instead.",
+      "Enabling writes requires the write secret. Save the connection again from the Connections form with Allow writes ticked and its write secret entered.",
     );
   }
 

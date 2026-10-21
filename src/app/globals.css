@@ -438,6 +438,16 @@
   --decision-open: oklch(0.7 0 0);
 }
 
+/* Studio's one-time key panels (API Access: the bearer token and, since P0.3,
+   the write key) sit on --surface-banner-warn under the theme's inks. The
+   .dark block above leaves it at the light #FDF7E6, so in dark the key and
+   its warning were light text on a light ground. Scoped to the Studio
+   surface so no other screen's dark palette moves; the same value
+   .dark .coreedge uses (coreedge-tokens.css). */
+.dark [data-studio] {
+  --surface-banner-warn: #2A2415;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

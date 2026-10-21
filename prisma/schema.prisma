@@ -630,7 +630,19 @@ model SapHubContent {
   rawMetadataJson Json?
 
   createdAt DateTime @default(now())
+  /// ANY write: an import, and also every capability probe (probe-all, the
+  /// explorer's own probe), which merges into `rawMetadataJson` and stamps
+  /// this. So it is NOT the import time, and catalogue freshness must never
+  /// be judged from it (P0.3, A29).
   updatedAt DateTime @updatedAt
+  /// When an IMPORT last wrote this row — the seed and its Rebuild, the
+  /// harvest import, scripts/import-sap-hub-content.ts and the Hub OAuth
+  /// ingest — and nothing else. Catalogue Health judges freshness from this
+  /// (catalogue-health.ts). Backfilled by migration 20261025010000 from the
+  /// importer's own stamp (`rawMetadataJson.importedAt`), else from
+  /// `updatedAt` on a row no probe has written, else from `createdAt`, which
+  /// can only make a catalogue read older, never fresher, than it is.
+  importedAt DateTime?
 
   // 2608 WS2 — the Hub's own lifecycle fields, persisted verbatim from
   // catalog.svc so "is this deprecated / which version / when did SAP last
@@ -1472,6 +1484,15 @@ model SolutionClient {
   /// before P0.11, after a rollback, knows nothing of these columns) ends the
   /// window instead of inheriting it.
   overlapForTokenHash String?
+  /// The last four characters of the CURRENT token (P0.3, A45), written by
+  /// every path that mints one (issue, rotate, claim link) in the same update
+  /// as `tokenHash`. Non-secret on its own: four base64url characters of a
+  /// 32-byte key. It is what makes the masked reference the claim page shows
+  /// (`ce_live_••••k9Xq`) the one the console shows, so a leaked key can be
+  /// matched to its row. NULL for a key minted before P0.3: the screens say
+  /// "reference not recorded" rather than inventing one; the next rotation
+  /// fills it. Display only: authentication never reads it.
+  tokenTail String?
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
   environment String
 

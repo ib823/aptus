@@ -1,0 +1,214 @@
+/**
+ * Creates can be switched on from the screens (P0.3).
+ *
+ * THE DEFECT. The write path shipped every gate and no screen to pass them:
+ *   - no component called POST /api/studio/clients/write-credential, so a
+ *     write key could be issued only by calling the API by hand, while the
+ *     Interfaces screen told builders to issue it "under API Access";
+ *   - the Connections form had no write-secret field, so no screen could
+ *     allow writes on a connection;
+ *   - and every re-save — how credentials are rotated — sent no
+ *     `writeEnabled`, which the route reads as off, so rotating a writing
+ *     connection's password silently stopped its writes.
+ *
+ * Here the two screens are rendered and driven: API Access offers "Issue write
+ * key" where it can succeed and says why where it cannot, and calls the route
+ * through the step-up helper; the Connections form carries "Allow writes" and
+ * the write secret, starts ticked when re-saving a writing connection, and
+ * says so before Save when a save would turn writes off.
+ */
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ fetchWithStepUp: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("@/lib/auth/step-up-client", () => ({ fetchWithStepUp: mocks.fetchWithStepUp }));
+
+import {
+  ClientCredentials,
+  writeKeyAction,
+  type CredentialSolution,
+  type CredentialSummary,
+} from "@/components/studio/ClientCredentials";
+import { ConnectionsClient, type StudioConnection } from "@/components/studio/ConnectionsClient";
+import { connectionSaveBody } from "@/lib/studio/connection-form";
+
+afterEach(() => cleanup());
+beforeEach(() => vi.clearAllMocks());
+
+const POLICY = { maxTtlDays: 90, defaultExpiry: "2027-01-01", overlapHours: 24 };
+
+const credential = (over: Partial<CredentialSummary> = {}): CredentialSummary => ({
+  id: "cl_1",
+  solutionId: "sol_1",
+  solutionName: "PO intake",
+  solutionSlug: "po-intake",
+  label: "PO intake · DEV",
+  environment: "DEV",
+  sapClient: null,
+  isActive: true,
+  lastUsedAt: null,
+  revokedAt: null,
+  state: "active",
+  tokenPrefix: "ce_test_",
+  expiresAt: null,
+  previousValidUntil: null,
+  tokenTail: "k9Xq",
+  writeKeyIssued: false,
+  writeGrantLive: true,
+  ...over,
+});
+
+const solution = (viewerOwns: boolean): CredentialSolution => ({ id: "sol_1", name: "PO intake", slug: "po-intake", viewerOwns });
+
+function renderCredentials(c: CredentialSummary, viewerOwns = false) {
+  render(
+    <ClientCredentials
+      credentials={[c]}
+      solutions={[solution(viewerOwns)]}
+      canIssue
+      connectedEnvironments={["DEV"]}
+      keyPolicy={POLICY}
+    />,
+  );
+}
+
+describe("API Access · Issue write key", () => {
+  it("offers the action on a live credential with an approved write grant, to someone who does not own the app", () => {
+    renderCredentials(credential());
+    const button = screen.getByRole("button", { name: "Issue write key" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+  });
+
+  it("mints through the write-key route, with the step-up helper, and shows the key once", async () => {
+    mocks.fetchWithStepUp.mockResolvedValue(
+      new Response(JSON.stringify({ data: { writeKey: "cew_only_shown_once", warning: "Copy this write key now." } }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    renderCredentials(credential());
+
+    fireEvent.click(screen.getByRole("button", { name: "Issue write key" }));
+
+    await screen.findByText("cew_only_shown_once");
+    expect(screen.getByText("Copy this write key now.")).toBeTruthy();
+    expect(mocks.fetchWithStepUp).toHaveBeenCalledWith(
+      "/api/studio/clients/write-credential",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ solutionId: "sol_1", environment: "DEV" }) }),
+    );
+  });
+
+  it("asks before replacing a write key, because the current one stops at once", async () => {
+    mocks.fetchWithStepUp.mockResolvedValue(
+      new Response(JSON.stringify({ data: { writeKey: "cew_new", warning: "w" } }), { status: 201 }),
+    );
+    renderCredentials(credential({ writeKeyIssued: true }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace write key" }));
+    expect(mocks.fetchWithStepUp).not.toHaveBeenCalled();
+    expect(screen.getByText(/stops the current write key at once/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace now" }));
+    await waitFor(() => expect(mocks.fetchWithStepUp).toHaveBeenCalledTimes(1));
+  });
+
+  it("says the route's refusal in words when it refuses", async () => {
+    mocks.fetchWithStepUp.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "This solution has no Business owner." } }), { status: 403 }),
+    );
+    renderCredentials(credential());
+    fireEvent.click(screen.getByRole("button", { name: "Issue write key" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("no Business owner");
+  });
+
+  it.each([
+    ["the viewer owns the app", credential(), true, /a colleague who does not own it/],
+    ["no write grant covers the environment", credential({ writeGrantLive: false }), false, /No approved CREATE or UPDATE grant covers DEV/],
+    ["the credential has expired", credential({ state: "expired" }), false, /not live/],
+    ["the credential is revoked", credential({ state: "revoked", revokedAt: new Date().toISOString() }), false, /not live/],
+  ])("is disabled, with its reason beside it, when %s", (_why, c, owns, reason) => {
+    renderCredentials(c, owns);
+    const button = screen.getByRole("button", { name: "Issue write key" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    const describedBy = button.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toMatch(reason);
+  });
+
+  it("shows the key's own reference, or says it was not recorded", () => {
+    renderCredentials(credential());
+    expect(document.body.textContent).toContain("ce_test_…k9Xq");
+    cleanup();
+    renderCredentials(credential({ tokenTail: null }));
+    expect(document.body.textContent).toContain("ending not recorded");
+  });
+
+  it("writeKeyAction is the single decision the row renders", () => {
+    expect(writeKeyAction(credential({ state: "noExpiry" }), false).enabled).toBe(true);
+    expect(writeKeyAction(credential({ writeKeyIssued: true }), false).label).toBe("Replace write key");
+  });
+});
+
+const WRITING: StudioConnection = {
+  id: "conn_1",
+  product: "s4hana",
+  key: "erp-dev",
+  label: "ERP DEV",
+  baseUrl: "https://my000001-api.s4hana.cloud.sap",
+  authType: "basic",
+  environment: "DEV",
+  apiPath: null,
+  timeoutMs: null,
+  writeEnabled: true,
+  isActive: true,
+  lastValidatedAt: null,
+  lastValidationStatus: null,
+};
+
+function openForm(connections: StudioConnection[]) {
+  render(<ConnectionsClient connections={connections} canManage />);
+  if (connections.length > 0) fireEvent.click(screen.getByRole("button", { name: /Add a connection/ }));
+}
+
+describe("Connections · Allow writes and the write secret", () => {
+  it("offers both on a new connection, unticked, and requires the secret once ticked", () => {
+    openForm([]);
+    const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
+    expect(allow.checked).toBe(false);
+    expect(screen.queryByLabelText(/Write secret/)).toBeNull();
+
+    fireEvent.click(allow);
+    expect(screen.getByLabelText(/Write secret/)).toBeTruthy();
+    expect(document.body.textContent).toContain("the write secret (writes are allowed)");
+  });
+
+  it("starts ticked when re-saving a connection that allows writes, so a rotation keeps them on", () => {
+    openForm([WRITING]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
+    expect(allow.checked).toBe(true);
+    expect(screen.queryByTestId("writes-off-notice")).toBeNull();
+  });
+
+  it("says, before Save, that unticking turns writes off", () => {
+    openForm([WRITING]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Allow writes/ }));
+    expect(screen.getByTestId("writes-off-notice").textContent).toMatch(/turns them off/);
+  });
+
+  it("sends writeEnabled with the secret only when writes are allowed", () => {
+    const base = {
+      product: "s4hana", client: "", key: "erp-dev", label: "ERP DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap",
+      environment: "DEV", authType: "basic" as const, apiKey: "", apiKeyHeader: "apikey", username: "u", password: "p",
+      bearerToken: "", clientId: "", clientSecret: "", oauthTokenUrl: "", companyId: "", samlAssertion: "",
+      samlSigning: "key" as const, samlPrivateKey: "", samlUserId: "", apiPath: "", timeoutMs: "",
+    };
+    expect(connectionSaveBody({ ...base, allowWrites: true, writeSecret: "s" })).toMatchObject({ writeEnabled: true, writeSecret: "s" });
+    const off = connectionSaveBody({ ...base, allowWrites: false, writeSecret: "ignored" });
+    expect("writeEnabled" in off).toBe(false);
+    expect("writeSecret" in off).toBe(false);
+  });
+});

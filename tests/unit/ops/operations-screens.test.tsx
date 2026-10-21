@@ -178,14 +178,16 @@ describe("connections — health and binding are separate questions", () => {
   const HEALTHY_BUT_UNDECLARED = {
     counts: { total: 1, healthy: 1, needsAttention: 0, unknown: 0, neverTested: 0 },
     // Mirrors the real payload: this organization has its own connection, so
-    // the deployment fallback is not in use.
-    deploymentFallback: { inUse: false, tenants: [] },
+    // the broker can reach SAP; this deployment has no env tenant (P0.3, A59).
+    brokerReachable: true,
+    deploymentTenant: { configured: false, servesBroker: false, tenants: [] },
     provenance: {
       activeOnly: true,
       excludedInactive: 2,
       why: "A deactivated connection serves no traffic.",
-      fallbackIsShared: null,
-      noHealthForFallback: null,
+      deploymentTenantScope: null,
+      brokerReachability: null,
+      noHealthForDeploymentTenant: null,
     },
     bindingBacklog: {
       undeclaredEnvironment: 1,

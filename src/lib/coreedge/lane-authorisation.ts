@@ -201,7 +201,7 @@ export interface LaneCheckRow {
   readonly readRowCount: number | null;
 }
 
-const PROBE_STATUSES = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR", "NO_PROBE_PATH"] as const;
+const PROBE_STATUSES = ["OK", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR", "NO_PROBE_PATH"] as const;
 
 /**
  * The ledger stores these as `String?`, and the derivation takes a closed union.

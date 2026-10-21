@@ -559,48 +559,49 @@ function conn(over: Record<string, unknown> = {}) {
 }
 
 
-describe("connection health knows the deployment falls back to an env tenant", () => {
+describe("connection health reports the deployment's env tenant whatever the organization holds (A59)", () => {
   /**
-   * THE ENDPOINT HALF of the fallback fix, and it was missing.
+   * THE ENDPOINT HALF, kept from the fallback fix and corrected by P0.3.
    *
-   * The screen tests feed a payload straight in, so they prove the component
-   * renders a fallback it is given — and pass unchanged if the endpoint stops
-   * resolving one. Reverting the route to rows-only was caught by nothing until
-   * this block existed. A component test is not an endpoint test.
+   * The env tenant was resolved only when the organization had no stored row,
+   * and described as the broker's fallback. The broker never uses it; console
+   * reads use it for everyone. So it is now listed whenever it exists, with
+   * what it serves, and whether the broker can reach SAP is its own field.
+   * tests/unit/ops/deployment-tenant-registers.test.ts holds the A59 cases for
+   * both registers; this keeps the route resolving the tenants at all.
    */
   beforeEach(() => mocks.getCurrentUser.mockResolvedValue(SUPPORT));
 
   const TDD = { key: "s4_tdd", label: "ABeam S/4 TDD", product: "s4hana", source: "environment", environment: null };
 
-  it("reports the fallback as in use when the organization has no stored row", async () => {
+  it("lists the env tenant when the organization has no stored row, and says its apps are refused", async () => {
     mocks.connectionFindMany.mockResolvedValue([]);
     mocks.fallbackTenants.mockReturnValue([TDD]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(true);
-    expect(body.data.deploymentFallback.tenants[0].key).toBe("s4_tdd");
-    expect(body.data.provenance.fallbackIsShared).toContain("shared by every organization");
+    expect(body.data.deploymentTenant).toMatchObject({ configured: true, servesBroker: false });
+    expect(body.data.deploymentTenant.tenants[0].key).toBe("s4_tdd");
+    expect(body.data.provenance.deploymentTenantScope).toContain("shared by every organization");
+    expect(body.data.brokerReachable).toBe(false);
   });
 
-  it("does NOT resolve a fallback when the organization has its own connection", async () => {
-    // The broker prefers a stored row, so listing the shared tenant beside one
-    // would show something that is not serving anything.
+  it("lists it beside the organization's own connection too: console reads still reach it", async () => {
     mocks.connectionFindMany.mockResolvedValue([conn()]);
     mocks.fallbackTenants.mockReturnValue([TDD]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(false);
-    expect(mocks.fallbackTenants).not.toHaveBeenCalled();
-    expect(body.data.provenance.fallbackIsShared).toBeNull();
+    expect(body.data.deploymentTenant.configured).toBe(true);
+    expect(body.data.brokerReachable).toBe(true);
+    expect(body.data.provenance.brokerReachability).toBeNull();
   });
 
-  it("says nothing falls back when the deployment has no env tenant either", async () => {
+  it("says there is none when the deployment has no env tenant", async () => {
     mocks.connectionFindMany.mockResolvedValue([]);
     mocks.fallbackTenants.mockReturnValue([]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(false);
-    expect(body.data.provenance.noHealthForFallback).toBeNull();
+    expect(body.data.deploymentTenant.configured).toBe(false);
+    expect(body.data.provenance.noHealthForDeploymentTenant).toBeNull();
   });
 });
 

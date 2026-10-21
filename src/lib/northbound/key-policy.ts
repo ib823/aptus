@@ -54,6 +54,19 @@ export function tokenPrefixFor(environment: string): typeof LIVE_TOKEN_PREFIX | 
   return environment.toUpperCase() === "PROD" ? LIVE_TOKEN_PREFIX : TEST_TOKEN_PREFIX;
 }
 
+/**
+ * The four characters a masked key reference ends in (P0.3, A45): the last
+ * four of the TOKEN, stored beside its hash as `SolutionClient.tokenTail` by
+ * every path that mints one. The claim page shows the same four, so the
+ * reference the recipient is told to expect is the one every console shows.
+ * Four base64url characters of a 32-byte key are not a secret.
+ */
+export const TOKEN_TAIL_LENGTH = 4;
+
+export function tokenTailOf(rawToken: string): string {
+  return rawToken.slice(-TOKEN_TAIL_LENGTH);
+}
+
 /** The stored prefix, read defensively: anything unrecognised reads as legacy. */
 export function storedTokenPrefix(value: string | null | undefined): ClientTokenPrefix {
   return value === LIVE_TOKEN_PREFIX || value === TEST_TOKEN_PREFIX ? value : LEGACY_TOKEN_PREFIX;

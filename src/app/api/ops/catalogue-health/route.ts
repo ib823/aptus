@@ -11,7 +11,9 @@
  * operations-of-my-tenant question, and putting it behind the tenant-scoped
  * guard would be the third time this table's scope was confused for a tenant's.
  *
- * EVERY NUMBER IS A REAL COLUMN. Counts, oldest/newest `updatedAt` and the
+ * EVERY NUMBER IS A REAL COLUMN. Counts, oldest/newest `importedAt` (when an
+ * IMPORT last wrote each row — never `updatedAt`, which every capability probe
+ * moves too: P0.3, A29) and the
  * grouped `itemCount` sums come from the table; the latest provenance is read
  * off the newest row's own rawMetadataJson, which the importers stamp; the
  * drift reference is the published-counts constant and the committed
@@ -68,8 +70,9 @@ export async function GET(): Promise<NextResponse> {
     prisma.sapHubContent.groupBy({
       by: ["contentType"],
       _count: { _all: true },
-      _min: { updatedAt: true },
-      _max: { updatedAt: true },
+      // The IMPORT time, not the last write: a probe writes rows too (A29).
+      _min: { importedAt: true },
+      _max: { importedAt: true },
       _sum: { itemCount: true },
     }),
     prisma.sapHubContent.groupBy({
@@ -92,13 +95,15 @@ export async function GET(): Promise<NextResponse> {
     illustrativeByType.map((g) => [g.contentType as HubContentType, g._count._all]),
   );
 
-  // The newest row per type carries the latest import's own provenance stamp.
-  // Twelve bounded findFirsts, admin-only — clarity beats a raw-SQL window fn.
+  // The newest IMPORTED row per type carries the latest import's own
+  // provenance stamp — by import time, so a row a probe wrote last is not
+  // mistaken for the last import. Twelve bounded findFirsts, admin-only —
+  // clarity beats a raw-SQL window fn.
   const newestRows = await Promise.all(
     HUB_CONTENT_TYPES.map((t) =>
       prisma.sapHubContent.findFirst({
-        where: { contentType: t },
-        orderBy: { updatedAt: "desc" },
+        where: { contentType: t, importedAt: { not: null } },
+        orderBy: { importedAt: "desc" },
         select: { rawMetadataJson: true },
       }),
     ),
@@ -107,7 +112,7 @@ export async function GET(): Promise<NextResponse> {
   const types = HUB_CONTENT_TYPES.map((contentType, i) => {
     const agg = aggregates.get(contentType);
     const meta = HUB_CONTENT_TYPE_META[contentType];
-    const newestRowAt = agg?._max.updatedAt ?? null;
+    const newestRowAt = agg?._max.importedAt ?? null;
     const groupedItems = agg?._sum.itemCount ?? 0;
     return {
       contentType,
@@ -124,7 +129,8 @@ export async function GET(): Promise<NextResponse> {
       illustrativeRows: illustrative.get(contentType) ?? 0,
       /** Published Hub figure for S/4 Public — a drift REFERENCE, not data. */
       publishedReference: S4_PUBLIC_PUBLISHED_COUNTS[contentType],
-      oldestRowAt: agg?._min.updatedAt?.toISOString() ?? null,
+      /** The oldest and newest IMPORT across the type's rows (A29), never a probe time. */
+      oldestRowAt: agg?._min.importedAt?.toISOString() ?? null,
       newestRowAt: newestRowAt?.toISOString() ?? null,
       freshness: catalogueFreshness(newestRowAt, now),
       latestImport: rowProvenance(newestRows[i]?.rawMetadataJson),
@@ -170,7 +176,9 @@ export async function GET(): Promise<NextResponse> {
           "Every harvest this deployment ships is self-declared a floor: it counts what the anonymous catalogue walk could reach. A row count below the published reference is expected; a count far above it means the reference is a release behind.",
         refreshIsFileBased:
           "Refresh never reaches api.sap.com from this product (Hub ToU). The path is: export from a logged-in Hub session, commit the drop file, deploy, then run the rebuild/import actions — each import stamps its provenance on the rows and audits its own summary.",
-        stalenessBasis: `STALE means the newest row write is older than ${CATALOGUE_STALE_AFTER_DAYS} days — one SAP half-yearly release cycle, so a STALE catalogue is at least one release behind by construction.`,
+        importNotProbe:
+          "Freshness and the oldest and newest times are judged from when an IMPORT last wrote each row (importedAt). Capability probes write the same rows to record what a tenant answered; they never move it, so probing a tenant cannot make an old catalogue read current.",
+        stalenessBasis: `STALE means the type's newest import is older than ${CATALOGUE_STALE_AFTER_DAYS} days — one SAP half-yearly release cycle, so a STALE catalogue is at least one release behind by construction.`,
       },
     },
   });

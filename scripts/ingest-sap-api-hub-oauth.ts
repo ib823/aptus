@@ -424,8 +424,9 @@ async function ingestAllHubContent(token: string): Promise<void> {
         if (!DRY_RUN) {
           await prisma.sapHubContent.upsert({
             where: { contentType_externalId: { contentType: type as never, externalId: m.externalId } },
-            create: { contentType: type as never, appliesToPublic: true, rawMetadataJson: e as Prisma.InputJsonValue, ...m },
-            update: { rawMetadataJson: e as Prisma.InputJsonValue, ...m },
+            // importedAt: an import, unlike a probe (P0.3, A29).
+            create: { contentType: type as never, appliesToPublic: true, rawMetadataJson: e as Prisma.InputJsonValue, importedAt: new Date(), ...m },
+            update: { rawMetadataJson: e as Prisma.InputJsonValue, importedAt: new Date(), ...m },
           });
         }
         count++;

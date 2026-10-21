@@ -158,6 +158,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       illustrative: norm.illustrative,
       hubUrl: norm.hubUrl,
       ...hubLifecycleFields(norm),
+      // The import time Catalogue Health judges freshness from (P0.3, A29):
+      // `updatedAt` moves on every probe, so it cannot say when this ran.
+      importedAt: new Date(importedAt),
       // Which harvest, at which commit. "Is the catalogue current?" stays answerable
       // from the row itself rather than from whoever last ran the import.
       rawMetadataJson: {

@@ -9,6 +9,9 @@
  *     lane on that system stops.
  *   · read 403      → the client's SAP admin. We signed in; ONE entity set is
  *     unauthorised, and one lane stops.
+ *   · metadata 403  → the client's SAP admin too (P0.3, A30). The metadata
+ *     fact is now this service's own, so a 403 on it is THIS service refused,
+ *     recorded as FORBIDDEN — not a sign-in failure across the system.
  *
  * Same colour on a dashboard, opposite phone calls.
  */
@@ -17,7 +20,12 @@ import type { LaneStatus } from "./status-vocabulary";
 import { freshnessOf, LANE_PROOF_TTL_MS } from "./freshness";
 import { LEDGER_READ_STATUSES } from "./lanes";
 
-export type MetadataStatus = "OK" | "UNAUTHORIZED" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+/**
+ * What the lane check recorded for THIS service's `$metadata` (P0.3, A30: it
+ * used to be the connection's default probe path, observed on another
+ * service). FORBIDDEN is a 403 on this service: signed in, refused here.
+ */
+export type MetadataStatus = "OK" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
 /**
  * THE WRITER'S VOCABULARY, NOT A COPY OF IT (P0.2 review round 3). The lane
  * sweep writes `SapServiceHealth.readStatus` from `ledgerReadStatus`, whose
@@ -35,7 +43,7 @@ export interface ServiceHealthFacts {
   readonly readRowCount: number | null;
 }
 
-const METADATA_STATUSES: readonly MetadataStatus[] = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+const METADATA_STATUSES: readonly MetadataStatus[] = ["OK", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR"];
 const READ_STATUSES: readonly ReadStatus[] = LEDGER_READ_STATUSES;
 
 /**
@@ -112,6 +120,15 @@ export function verdictForService(facts: ServiceHealthFacts, now: Date = new Dat
     return {
       status: "signInRefused",
       because: "SAP rejected our sign-in. Every lane on this system stops until the credential is fixed.",
+      provenAt: facts.metadataAt,
+    };
+  }
+  if (facts.metadataStatus === "FORBIDDEN") {
+    // Signed in; SAP refused THIS service's description (A30). One service,
+    // one owner: the client's SAP admin — never "every lane stops".
+    return {
+      status: "sapRefused",
+      because: "We signed in and SAP refused this service. The fix is in SAP authorisation, not in CoreEdge.",
       provenAt: facts.metadataAt,
     };
   }

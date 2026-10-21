@@ -387,8 +387,8 @@ export function InterfacesClient({
                     {readyEnvironments(selected.writeReadiness ?? []).length > 0
                       ? `Ready in ${readyEnvironments(selected.writeReadiness ?? []).join(", ")} — the solution can write there once this interface is ACTIVE.`
                       : selectedIsCustom
-                        ? "No environment is ready — the broker refuses every write that lacks a write key, an approved write grant, or a verification of this service in that environment, so this interface cannot be activated yet. Get the write grant approved for an environment, issue that environment's write credential under API Access, and verify the service there."
-                        : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
+                        ? "No environment is ready — the broker refuses every write that lacks a write key, an approved write grant, or a verification of this service in that environment, so this interface cannot be activated yet. Get the write grant approved for an environment, issue that environment's write key under API Access (Runtime credentials, Issue write key), allow writes on its connection under Connections, and verify the service there."
+                        : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, issue that environment's write key under API Access (Runtime credentials, Issue write key), and allow writes on its connection under Connections."}
                   </span>
                 </div>
               </Row>

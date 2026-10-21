@@ -150,6 +150,8 @@ async function main(): Promise<void> {
         // 2608 WS2 — the Hub's lifecycle fields (state, version, modifiedAt, subType,
         // the owning package's release, SAP-named successor).
         ...hubLifecycleFields(norm),
+        // The import time Catalogue Health judges freshness from (P0.3, A29).
+        importedAt: new Date(importedAt),
         // Provenance: which file, when, and — when the row carries it — the Hub
         // content release of its package.
         rawMetadataJson: { source: label, release: norm.catalogueRelease, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,

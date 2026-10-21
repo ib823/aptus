@@ -1105,6 +1105,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Value: operators can act on what the screens say.
 - Code: `src/lib/sap-public/catalogue-health.ts`, `hub-content.ts`, `src/app/(coreedge)/coreedge/passport`, portfolio and Ops tokens routes, the claim page, `src/app/(coreedge)/coreedge/apps/[app]`.
 - Acceptance: one regression test per finding; a recorded manual pass on a seeded org; a create interface reaches its first audited 201 using screens only.
+- Status: shipped in Phase 0b wave 2. Catalogue Health judges freshness from `SapHubContent.importedAt`, which only imports write (A29). The lane check asks each lane's own service for its `$metadata`, once per service per sweep, and records a 403 there as `FORBIDDEN`, drawn "SAP refused" (A30). `SolutionClient.tokenTail` holds each key's own last four, so the claim page and every console show one reference; keys minted before it read "ending not recorded" (A45). `src/lib/ops/scheduled-jobs.ts` lists every cron, checked against vercel.json and the cron routes (A51). The passport and the SAP systems list count only grants in force by the broker's clock, never SANDBOX (A58). Both connection registers report `brokerReachable` and `deploymentTenant` (console reads only, never the broker) instead of a "fallback" (A59). Operations > Tokens counts write keys on live credentials only (A62); the portfolio and throttle views were already fixed by P0.11 and are pinned by a test (A61). An app with no feeds shows its board with the empty state (A63). Studio API Access has an "Issue write key" action (non-owner, `write_key.issue` step-up) and the Connections form has "Allow writes" with the write secret, ticked by default when re-saving a writing connection; a save that turns writes on is the step-up action `connection.enable_writes`. `tests/integration/create-from-screens.test.ts` takes a create interface to its first audited 201 through the routes the screens call. No setting was added and no call path changed. Operator notes: `docs/runbooks/coreedge-truthful-screens.md`.
 
 **P0.4 Contract and fixture hygiene (A38, A42, A56, A57, residuals).** Size S. Depends on: none.
 - Problem:
@@ -2346,13 +2347,15 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 
 **Fixed in P0.2** (Phase 0b wave 2): A14, A15, A16, A17, A18, A19, A50, A60 and A70. Operator notes: `docs/runbooks/coreedge-lane-truth.md`.
 
-**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1, P0.2, P0.4, P0.5 and P0.6 have since fixed twenty-four of them, so the nine of P0.3 remain open:
+**Fixed in P0.3** (Phase 0b wave 2): A29, A30, A45, A51, A58, A59, A61, A62 and A63. Operator notes: `docs/runbooks/coreedge-truthful-screens.md`.
+
+**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1, P0.2, P0.3, P0.4, P0.5 and P0.6 have since fixed all thirty-three:
 
 | Findings | Subject | Item |
 |---|---|---|
 | A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 (fixed) |
 | A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 (fixed) |
-| A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
+| A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 (fixed) |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 (fixed) |
 | A43, A44 | Rate-limit attribution | P0.5 (fixed) |
 | A71, A72, A73, A74, A75 | Ariba configuration and errors | P0.6 (fixed) |

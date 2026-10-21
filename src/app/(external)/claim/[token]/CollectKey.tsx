@@ -155,7 +155,10 @@ export function CollectKey({
         </code>
 
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-ink-muted">From now on your lane shows only the reference:</p>
+          <p className="text-xs text-ink-muted">
+            From now on CoreEdge shows this key only by its reference, the same one on the Keys screen
+            and in the app&apos;s settings:
+          </p>
           <MaskedKey prefix={key.tokenPrefix ?? keyPrefix} tail={key.tail} />
         </div>
 

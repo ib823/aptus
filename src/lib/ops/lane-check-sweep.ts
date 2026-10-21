@@ -28,6 +28,15 @@
  * request and had nothing to return — the path works. The handoff is explicit:
  * a 0-row SAP response is gate-info, never an error.
  *
+ * THE METADATA FACT IS THE LANE'S OWN SERVICE'S (P0.3, A30). The probe asks
+ * `$metadata` of the service the lane reads, resolved exactly as the read is.
+ * It used to ask the connection's default probe path (its apiPath, or the
+ * product's first curated service) and record that answer under every
+ * service on the system, so the SAP systems screen showed "Metadata OK" for a
+ * service whose description was never requested, or NOT_FOUND for one that
+ * reads fine. One probe per (connection, service) per run: several lanes on
+ * one service share it (`MetadataMemo`).
+ *
  * THE CONNECTION SWEEP IS UNCHANGED AND STILL RUNS. This one answers a
  * different question and writes different rows; neither replaces the other.
  */
@@ -57,7 +66,7 @@ import { readEntitySet } from "@/lib/northbound/read";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
+import { probeConnection } from "@/lib/studio/connection-health";
 
 const SWEEP_CONCURRENCY = 4;
 
@@ -352,6 +361,9 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     byReadStatus: {} as Record<string, number>,
   };
 
+  // One $metadata request per (connection, service) per run (A30).
+  const metadata: MetadataMemo = new Map();
+
   // One lookup per distinct service per run: a feed is checked in up to four
   // environments, and the service it names is the same in all of them. Keyed
   // by the feed's own path too, so two custom feeds never share an answer.
@@ -412,7 +424,7 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
           result.skippedNoService++;
           continue;
         }
-        await checkOneLane(item.target, servicePath, item.connection, now, result);
+        await checkOneLane(item.target, servicePath, item.connection, now, result, metadata);
       }
     }
     await Promise.all(Array.from({ length: Math.min(SWEEP_CONCURRENCY, work.length) }, worker));
@@ -530,6 +542,51 @@ export async function recheckOneLane(
   return { ok: true, readStatus, checkedAt: now };
 }
 
+/**
+ * The `$metadata` answers one sweep run has already had, by connection,
+ * settings revision and service path. Several lanes (apps, environments) read
+ * one service through one connection; SAP is asked once.
+ */
+type MetadataMemo = Map<string, Promise<string>>;
+
+/**
+ * Does THIS service describe itself, through this connection? The same probe
+ * the Studio test uses (`probeConnection`: credentials, SAP client, redirect
+ * rule and EDMX test), pointed at the lane's own service rather than the
+ * connection's default probe path (A30).
+ *
+ * A 403 is recorded as FORBIDDEN, apart from a 401. The connection probe
+ * classifies both as UNAUTHORIZED — for the connection's own probe path that
+ * means "the credential or the communication arrangement is not set up" — but
+ * asked of one service, a 403 means we signed in and SAP refused THIS
+ * service: one lane stops and the client's SAP admin fixes it. Recorded as
+ * UNAUTHORIZED, the board and the SAP systems screen would say "every lane on
+ * this system stops" and call the platform admin.
+ */
+async function serviceMetadataStatus(
+  connection: ResolvedSapConnection,
+  servicePath: string,
+): Promise<string> {
+  const probe = await probeConnection(connection, undefined, { path: servicePath });
+  return probe.httpStatus === 403 ? "FORBIDDEN" : probe.status;
+}
+
+function probeServiceMetadata(
+  connection: ResolvedSapConnection,
+  servicePath: string,
+  memo: MetadataMemo | undefined,
+): Promise<string> {
+  const run = () => serviceMetadataStatus(connection, servicePath);
+  if (memo === undefined) return run();
+  const key = `${connection.id}::${connection.revision ?? ""}::${servicePath}`;
+  let pending = memo.get(key);
+  if (pending === undefined) {
+    pending = run();
+    memo.set(key, pending);
+  }
+  return pending;
+}
+
 async function checkOneLane(
   target: LaneTarget,
   /** Resolved by `resolveLaneServicePath` — never the raw catalogue id. */
@@ -537,11 +594,11 @@ async function checkOneLane(
   connection: ResolvedSapConnection,
   now: Date,
   result: { checked: number; discardedConnectionChanged: number; byReadStatus: Record<string, number> },
+  metadata?: MetadataMemo,
 ): Promise<void> {
-  // 1 · Metadata reachability, through the same probe the Studio test uses.
-  const probeStatus = resolveProbePath(connection)
-    ? (await probeConnection(connection)).status
-    : null;
+  // 1 · Metadata reachability OF THIS LANE'S SERVICE (A30), through the same
+  // probe the Studio test uses. Never null: the lane always has a service.
+  const probeStatus: string | null = await probeServiceMetadata(connection, servicePath, metadata);
 
   // 2 · Data readability — a real read, bounded to one row. Attempted even when
   // the probe failed, because the two facts are independent and a lane whose

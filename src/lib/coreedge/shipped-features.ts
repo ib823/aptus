@@ -153,6 +153,14 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     terms: [/\bauthorisesHere\b/, /\bone authorisation predicate\b/i],
   },
   {
+    id: "write-enablement-screens",
+    name: "Write keys and write enablement from the screens",
+    roadmap: "P0.3",
+    cells: [GOVERN],
+    code: { file: "src/components/studio/ClientCredentials.tsx", exports: ["ClientCredentials", "writeKeyAction"] },
+    terms: [/\bIssue write key\b/i, /\bAllow writes\b/],
+  },
+  {
     id: "owner-liveness",
     name: "Owner liveness (departed owners stop counting)",
     roadmap: "P0.1",

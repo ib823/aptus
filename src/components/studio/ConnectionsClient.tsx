@@ -7,6 +7,15 @@
  * secret column is not something this component redacts; it is something it
  * never receives (the endpoint's select does not read it). The "🔒 Sealed"
  * cell is therefore a statement of fact, not a mask over a value in memory.
+ *
+ * WRITES ARE SWITCHED ON HERE (P0.3). The API always accepted `writeEnabled`
+ * with a write secret on a save, and the form never offered either — so no
+ * screen could allow writes on a connection, and every re-save (how
+ * credentials are rotated) sent no `writeEnabled` and switched a writing
+ * connection's writes off. The form now carries "Allow writes" and the write
+ * secret. Re-saving a connection that allows writes starts with the box
+ * ticked, so a rotation keeps them on; unticking it says, before Save, that
+ * the save turns them off.
  */
 
 import { useRouter } from "next/navigation";
@@ -18,6 +27,7 @@ import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
+import { connectionSaveBody } from "@/lib/studio/connection-form";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -464,6 +474,13 @@ function ConnectionForm({
   const [samlUserId, setSamlUserId] = useState("");
   const [apiPath, setApiPath] = useState("");
   const [timeoutMs, setTimeoutMs] = useState("");
+  /*
+   * "Allow writes" (P0.3). Null until the person touches the box, and until
+   * then it follows the connection being replaced: ticked when that one allows
+   * writes, so re-saving to rotate credentials keeps them on.
+   */
+  const [allowWritesChoice, setAllowWritesChoice] = useState<boolean | null>(null);
+  const [writeSecret, setWriteSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -492,7 +509,11 @@ function ConnectionForm({
    * against a stored "sf-prod".
    */
   const normalizedKey = sanitizeTenantKey(key);
-  const isNewConnection = !connections.some((c) => c.product === product && c.key === normalizedKey);
+  const replacing = connections.find((c) => c.product === product && c.key === normalizedKey) ?? null;
+  const isNewConnection = replacing === null;
+  const allowWrites = allowWritesChoice ?? Boolean(replacing?.writeEnabled);
+  /** This save would switch off writes the connection allows today. */
+  const turnsWritesOff = Boolean(replacing?.writeEnabled) && !allowWrites;
   const basicAuthNotice =
     authType === "basic" && isNewConnection ? (basicAuthNotices[product] ?? null) : null;
 
@@ -522,6 +543,7 @@ function ConnectionForm({
     missing.push("the registration's private key and the SuccessFactors user id to sign for");
   if (authType === "oauth-saml-bearer" && samlSigning === "assertion" && !samlAssertion.trim())
     missing.push("a pre-signed SAML assertion");
+  if (allowWrites && !writeSecret) missing.push("the write secret (writes are allowed)");
 
   const submit = useCallback(async () => {
     setBusy(true);
@@ -530,48 +552,13 @@ function ConnectionForm({
       const res = await fetchWithStepUp("/api/studio/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product,
-          key: key.trim(),
-          label: label.trim(),
-          baseUrl: baseUrl.trim(),
-          authType,
-          ...(environment.trim() ? { environment: environment.trim() } : {}),
-          /*
-           * Sent only where the product HAS a client. The API rejects one on a
-           * cloud product, so a stale value left behind by switching the picker
-           * from on-premise back to Cloud ERP would otherwise fail the whole
-           * save with a message about a field the form is no longer showing.
-           */
-          ...(PRODUCT_MARKS[product]?.addressesClient && client.trim()
-            ? { client: client.trim() }
-            : {}),
-          ...(apiPath.trim() ? { apiPath: apiPath.trim() } : {}),
-          ...(timeoutMs.trim() && Number.isFinite(Number(timeoutMs))
-            ? { timeoutMs: Number(timeoutMs) }
-            : {}),
-          ...(authType === "basic" ? { username: username.trim(), password } : {}),
-          ...(authType === "bearer" ? { bearerToken } : {}),
-          ...(authType === "api-key"
-            ? { apiKey, ...(apiKeyHeader.trim() ? { apiKeyHeader: apiKeyHeader.trim() } : {}) }
-            : {}),
-          ...(authType === "oauth-saml-bearer"
-            ? {
-                clientId: clientId.trim(),
-                companyId: companyId.trim(),
-                oauthTokenUrl: oauthTokenUrl.trim(),
-                // One credential source or the other, never both: the route
-                // prefers the key, and sending a stale assertion alongside it
-                // would seal a second credential nobody meant to keep.
-                ...(samlSigning === "key"
-                  ? { samlPrivateKey: samlPrivateKey.trim(), samlUserId: samlUserId.trim() }
-                  : { samlAssertion: samlAssertion.trim() }),
-              }
-            : {}),
-          ...(authType === "oauth-client-credentials"
-            ? { clientId: clientId.trim(), clientSecret, oauthTokenUrl: oauthTokenUrl.trim() }
-            : {}),
-        }),
+        body: JSON.stringify(
+          connectionSaveBody({
+            product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, username,
+            password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
+            samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret,
+          }),
+        ),
       });
       /*
        * A FAILING RESPONSE MAY HAVE NO BODY, AND `.json()` THROWS ON EMPTY.
@@ -618,7 +605,7 @@ function ConnectionForm({
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -917,6 +904,43 @@ function ConnectionForm({
           </Label>
         </div>
       )}
+
+      <fieldset
+        style={{ margin: 0, padding: 12, border: "1px solid var(--border-default)", borderRadius: "var(--radius-input, 8px)", display: "flex", flexDirection: "column", gap: 8 }}
+      >
+        <legend style={{ padding: "0 4px", fontSize: 13, fontWeight: 600, color: "var(--ink-primary)" }}>Writes</legend>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--ink-primary)" }}>
+          <input
+            type="checkbox"
+            checked={allowWrites}
+            onChange={(e) => setAllowWritesChoice(e.target.checked)}
+            aria-describedby="connection-writes-hint"
+          />
+          Allow writes through this connection
+        </label>
+        <span id="connection-writes-hint" style={{ fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)" }}>
+          A create interface writes into SAP only through a connection that allows writes, for a declared
+          environment, with an approved write grant and a write key issued under API Access. Allowing writes is a
+          governance action: Save asks for your passkey and the change is recorded.
+        </span>
+        {allowWrites ? (
+          <Label text="Write secret" hint="Sealed with the other secrets and never shown again. Enter it on every save that keeps writes on.">
+            <input
+              type="password"
+              value={writeSecret}
+              onChange={(e) => setWriteSecret(e.target.value)}
+              autoComplete="new-password"
+              style={input}
+            />
+          </Label>
+        ) : null}
+        {turnsWritesOff ? (
+          <p role="status" data-testid="writes-off-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+            This connection allows writes today. Saving it without Allow writes turns them off, and every create through
+            it is refused until it is saved again with writes allowed.
+          </p>
+        ) : null}
+      </fieldset>
 
       {error && (
         <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">{error}</p>

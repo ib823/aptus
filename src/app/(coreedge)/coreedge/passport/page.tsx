@@ -21,9 +21,14 @@ import { CoreEdgeShell } from "../CoreEdgeShell";
  * would be an action with no author, which is the opposite of what a passport
  * is for. The query behind it has no write path either.
  *
- * SANDBOX NEVER APPEARS. Sandbox reads ABeam's own API Hub, not the client's
- * system — so a sandbox approval moves no client data and listing it here would
- * overstate what leaves SAP. See PASSPORT_DECISIONS.
+ * SANDBOX NEVER APPEARS, AND NEITHER DOES LAPSED ACCESS (P0.3, A58). Sandbox
+ * reads ABeam's own API Hub, not the client's system — so a sandbox approval
+ * moves no client data and listing it here would overstate what leaves SAP.
+ * It is excluded by its ENVIRONMENT: since D2 a sandbox request is approved as
+ * APPROVED, so excluding the SANDBOX_ONLY decision alone listed every new one.
+ * An approval that has expired or been revoked is excluded by the same rule
+ * the broker applies (`isPassportGrant` in queries.ts): the screen used to
+ * list a grant that lapsed in February as current access, for ever.
  *
  * THE FIELDS COLUMN IS BLANK, AND SAYS WHY. X06 shows "12 of 71" on every row
  * and calls it the fact that matters. Nothing in this schema records which
@@ -67,7 +72,7 @@ export default async function PassportPage(): Promise<ReactNode> {
     <CoreEdgeShell
       current="/coreedge/passport"
       title="Passport"
-      subtitle="Everything ABeam apps are approved to read from this SAP system"
+      subtitle="Every approval in force for your SAP systems: what ABeam apps may read, and write"
     >
       <p className="max-w-prose text-sm text-ink-muted">
         {GATE_GLYPHS["gate-info"]} {SCREEN_NOTES.passportReadOnly}
@@ -75,7 +80,7 @@ export default async function PassportPage(): Promise<ReactNode> {
 
       <dl className="flex flex-wrap gap-8">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-ink-muted">Apps reading</dt>
+          <dt className="text-xs uppercase tracking-wide text-ink-muted">Apps with access</dt>
           <dd className="text-2xl text-ink">{apps}</dd>
         </div>
         <div>
@@ -89,8 +94,13 @@ export default async function PassportPage(): Promise<ReactNode> {
       </dl>
 
       <OpsTable
-        caption="Approved reads, by app and data feed"
-        legend={<span>Every line has a person who approved it and a date it stops.</span>}
+        caption="Approvals in force, by app and data feed"
+        legend={
+          <span>
+            Every line names who approved it, and the date it stops if it has one. Approvals that have
+            ended are not listed, and neither is sandbox access, which never reaches your system.
+          </span>
+        }
         rows={rows}
         rowKey={(r) => `${r.appName}::${r.externalId}::${r.environmentRaw}`}
         empty={<p className="text-sm text-ink-soft">{EMPTY_STATES.passportNone.message}</p>}

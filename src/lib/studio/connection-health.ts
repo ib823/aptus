@@ -267,8 +267,18 @@ function resolveLocation(res: Response, base: string): URL | null {
 export async function probeConnection(
   conn: ResolvedSapConnection,
   fetchImpl: typeof fetch = fetch,
+  /**
+   * `path`: probe THIS service's `$metadata` instead of the connection's
+   * default (P0.3, A30). The lane sweep records a per-service "Metadata"
+   * fact, and it used to record the connection's apiPath (or the product's
+   * first curated service) under every service on the system, so the SAP
+   * systems screen showed a verdict observed on another service. A path given
+   * here must be one the broker resolved (resolveInterfaceService), like the
+   * read beside it; `buildSapUrl`'s origin guard stays behind it regardless.
+   */
+  options: { readonly path?: string } = {},
 ): Promise<ConnectionHealthResult> {
-  const path = resolveProbePath(conn);
+  const path = options.path ?? resolveProbePath(conn);
   if (!path) {
     return {
       status: "NO_PROBE_PATH",

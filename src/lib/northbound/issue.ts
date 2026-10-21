@@ -49,6 +49,7 @@ import {
   resolveKeyExpiry,
   retiredKeysWrite,
   tokenPrefixFor,
+  tokenTailOf,
   type KeyExpiryRefusal,
   type KeyExpiryResolution,
 } from "@/lib/northbound/key-policy";
@@ -387,6 +388,8 @@ export async function issueClientToken(
         label: input.label,
         tokenHash,
         tokenPrefix: tokenPrefixFor(input.environment),
+        // The masked reference every screen shows (A45), never the token.
+        tokenTail: tokenTailOf(rawToken),
         environment: input.environment,
         sapClient,
         createdById: input.createdById,
@@ -396,6 +399,7 @@ export async function issueClientToken(
         label: input.label,
         tokenHash,
         tokenPrefix: tokenPrefixFor(input.environment),
+        tokenTail: tokenTailOf(rawToken),
         // A re-issue over a live key with the same binding is a rotation, and
         // overlaps like one: the key it replaces keeps working for the window.
         // Over an ended key, or one bound to another SAP client, it writes
@@ -497,6 +501,7 @@ export async function rotateClientToken(
       data: {
         tokenHash,
         tokenPrefix: tokenPrefixFor(existing.environment),
+        tokenTail: tokenTailOf(rawToken),
         ...overlap,
         ...retiredKeysWrite(scope.organizationId, existing, overlap, now),
         // Rotating an inactive or revoked credential brings it back — that is what

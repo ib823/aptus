@@ -162,7 +162,12 @@ export function isSharedEnvironmentTenant(
 }
 
 /**
- * The tenants this DEPLOYMENT falls back to when an organization has stored none.
+ * The deployment's own env tenants: what console and explorer reads (Explore,
+ * preview, the operations screens) resolve, for every organization. NEVER the
+ * northbound broker's: an app reaches SAP only through a connection its own
+ * organization declares, and is refused with CONNECTION_NOT_CONFIGURED
+ * without one (P0.3, A59 — the registers used to call this "the broker's own
+ * fallback rule"). The name is historical.
  *
  * WHY THIS EXISTS SEPARATELY FROM `resolveStudioTenants`. That function answers
  * "what may this caller use", preferring stored connections and falling back

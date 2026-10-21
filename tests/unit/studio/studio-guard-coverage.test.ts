@@ -79,6 +79,11 @@ const SECRET_REFERENCE_ALLOWANCES: ReadonlyArray<{ file: string; symbol: string;
     symbol: "secretsCiphertext",
     why: "Lists which solutions hold a write credential so Mark ACTIVE can say why it is disabled, via the same `NOT: { secretsCiphertext: null }` filter, selecting solutionId only.",
   },
+  {
+    file: "src/app/(studio)/studio/access/page.tsx",
+    symbol: "secretsCiphertext",
+    why: "P0.3: says which credentials carry a write key, so the row offers Issue or Replace write key, via the same `NOT: { secretsCiphertext: null }` filter, selecting the row id only — the value is not read.",
+  },
 ];
 
 /**

@@ -45,6 +45,7 @@ import {
   resolveKeyExpiry,
   rotationOverlapHours,
   tokenPrefixFor,
+  tokenTailOf,
   type KeyExpiryResolution,
 } from "@/lib/northbound/key-policy";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -128,7 +129,7 @@ export interface ClaimSuccess {
   readonly rawToken: string;
   readonly environment: string;
   readonly solutionName: string;
-  /** The last four characters, for the lane's masked reference afterwards. */
+  /** The token's last four characters — the row's `tokenTail` — for the masked reference. */
   readonly tail: string;
   /** `ce_live_` or `ce_test_` — the non-secret prefix of the key just minted. */
   readonly tokenPrefix: string;
@@ -351,7 +352,9 @@ export async function claimKey(rawClaimToken: string, now: Date = new Date()): P
     rawToken: minted.rawToken,
     environment: link.environment,
     solutionName: minted.solutionName,
-    tail: minted.rawToken.slice(-4),
+    // The same four characters stored as the row's tokenTail (A45), so the
+    // reference shown here is the one the console shows.
+    tail: tokenTailOf(minted.rawToken),
     tokenPrefix: tokenPrefixFor(link.environment),
     expiresAt: minted.expiresAt,
     previousValidUntil: minted.previousValidUntil,
@@ -591,6 +594,8 @@ async function mintKey(
       label: `${solutionName} · ${link.environment}`,
       tokenHash,
       tokenPrefix: tokenPrefixFor(link.environment),
+      // The masked reference the claim page shows, and every console (A45).
+      tokenTail: tokenTailOf(rawToken),
       expiresAt,
       isActive: true,
       /*
@@ -614,6 +619,7 @@ async function mintKey(
     update: {
       tokenHash,
       tokenPrefix: tokenPrefixFor(link.environment),
+      tokenTail: tokenTailOf(rawToken),
       ...overlap,
       // The keys the row drops stay known, so they refuse as dead keys (key-policy.ts).
       ...retiredKeysWrite(link.organizationId, existing, overlap, now),
