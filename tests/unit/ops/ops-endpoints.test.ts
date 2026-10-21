@@ -631,3 +631,36 @@ describe("the upstream-errors incident counts live traffic, not console explorat
     expect(body.data.incidents.map((i: { id: string }) => i.id)).toContain("upstream-errors");
   });
 });
+
+describe("the connection-drift incident reads probe history, not superseded traces (P0.2 review round 3)", () => {
+  /*
+   * A probe whose connection was re-saved before it returned still writes its
+   * SapConnectionProbeEvent — the trace that a request reached SAP — but it is
+   * about settings that no longer exist. The mock filters as Postgres would,
+   * so the assertion is about what the route asks for.
+   */
+  type ProbeEventQuery = { where: { at?: { gte?: Date }; source?: { not?: { endsWith?: string } } } };
+  const ok = { connectionId: "conn_1", status: "OK", source: "cron" };
+
+  function stored(events: { connectionId: string; status: string; source: string }[]) {
+    mocks.probeEventFindMany.mockImplementation((args: ProbeEventQuery) => {
+      if (!args.where.at?.gte) return Promise.resolve([]);
+      const suffix = args.where.source?.not?.endsWith;
+      return Promise.resolve(events.filter((e) => suffix === undefined || !e.source.endsWith(suffix)));
+    });
+  }
+
+  it("a superseded probe's failure is not a healthy-to-failing transition", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    stored([ok, { connectionId: "conn_1", status: "UNAUTHORIZED", source: "manual:superseded" }]);
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).not.toContain("connection-drift");
+  });
+
+  it("the same failure, recorded as history, still raises it", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    stored([ok, { connectionId: "conn_1", status: "UNAUTHORIZED", source: "manual" }]);
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).toContain("connection-drift");
+  });
+});

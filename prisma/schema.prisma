@@ -993,7 +993,10 @@ model SapConnectionProbeEvent {
   status     String
   httpStatus Int?
   durationMs Int?
-  /// cron | manual | test — who caused this probe.
+  /// cron | manual | test — who caused this probe. A ":superseded" suffix
+  /// marks a probe whose connection was re-saved before it returned: a trace
+  /// that a request reached SAP, not history of the current settings
+  /// (src/lib/ops/probe-event-source.ts).
   source     String
 
   at DateTime @default(now())

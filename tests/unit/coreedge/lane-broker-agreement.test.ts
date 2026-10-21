@@ -22,7 +22,7 @@ import {
   type LaneGrantRow,
 } from "@/lib/coreedge/lane-authorisation";
 import { deriveLaneStatus, LEDGER_READ_STATUSES, type LaneEnvironment, type LaneFacts } from "@/lib/coreedge/lanes";
-import { readableServices } from "@/lib/coreedge/service-health";
+import { readableServices, serviceHealthFactsOf } from "@/lib/coreedge/service-health";
 import type { AuthorisableInterface, BindingEstate } from "@/lib/northbound/authorisation";
 import { ledgerReadStatus, planLaneCheck } from "@/lib/ops/lane-check-sweep";
 import { deriveConnection } from "@/lib/ops/topology";
@@ -447,5 +447,22 @@ describe("A60: 'Services readable' counts only fresh proof", () => {
       { metadataStatus: "OK", metadataAt: RECENT, readStatus: "EMPTY", readAt: RECENT, readRowCount: 0 },
     ];
     expect(readableServices(rows, NOW)).toEqual({ readable: 2, unproven: 1 });
+  });
+
+  it("an observed 401 on a read is failing, not 'not proven' (round 3: the A17 drop, in the A60 reader)", () => {
+    // The metadata probe asked the connection's default service and signed
+    // in; the read asked this feed's service and SAP answered 401. The sweep
+    // writes exactly what ledgerReadStatus returns, so that is the input.
+    const readStatus = ledgerReadStatus("ERROR", 401);
+    expect(readStatus).toBe("UNAUTHORIZED");
+    const rows = [{ metadataStatus: "OK", metadataAt: RECENT, readStatus, readAt: RECENT, readRowCount: null }];
+    expect(readableServices(rows, NOW)).toEqual({ readable: 0, unproven: 0 });
+  });
+
+  it("every read status the sweep writes is one the reader keeps", () => {
+    for (const readStatus of LEDGER_READ_STATUSES) {
+      const row = { metadataStatus: "OK", metadataAt: RECENT, readStatus, readAt: RECENT, readRowCount: 1 };
+      expect(serviceHealthFactsOf(row).readStatus, readStatus).toBe(readStatus);
+    }
   });
 });

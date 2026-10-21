@@ -15,9 +15,17 @@
 
 import type { LaneStatus } from "./status-vocabulary";
 import { freshnessOf, LANE_PROOF_TTL_MS } from "./freshness";
+import { LEDGER_READ_STATUSES } from "./lanes";
 
 export type MetadataStatus = "OK" | "UNAUTHORIZED" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
-export type ReadStatus = "OK" | "EMPTY" | "FORBIDDEN" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+/**
+ * THE WRITER'S VOCABULARY, NOT A COPY OF IT (P0.2 review round 3). The lane
+ * sweep writes `SapServiceHealth.readStatus` from `ledgerReadStatus`, whose
+ * values are `LEDGER_READ_STATUSES`. A private list here left out UNAUTHORIZED,
+ * so an observed 401 on a read narrowed to null and the "Services readable"
+ * tile counted it as "not proven" — the A17 drop, back in the A60 reader.
+ */
+export type ReadStatus = (typeof LEDGER_READ_STATUSES)[number];
 
 export interface ServiceHealthFacts {
   readonly metadataStatus: MetadataStatus | null;
@@ -28,7 +36,7 @@ export interface ServiceHealthFacts {
 }
 
 const METADATA_STATUSES: readonly MetadataStatus[] = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
-const READ_STATUSES: readonly ReadStatus[] = ["OK", "EMPTY", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR"];
+const READ_STATUSES: readonly ReadStatus[] = LEDGER_READ_STATUSES;
 
 /**
  * A stored SapServiceHealth row as facts. The columns are free text; a value
@@ -58,6 +66,11 @@ export function serviceHealthFactsOf(row: {
  * The screen counted every OK or EMPTY read of any age, so a service last read
  * months ago for a since-retired app stayed "readable" forever. `unproven` is
  * the rest that are not failing: no fresh proof either way.
+ *
+ * An OBSERVED failure is never "unproven" (P0.2 review round 3). A fresh 404
+ * on the read is drawn Unknown by `verdictForService` (the vocabulary has no
+ * chip for it), but the read ran and failed — the per-service row draws it
+ * failed — so the tile does not count it as "not proven in 24 h" either.
  */
 export function readableServices(
   rows: readonly Parameters<typeof serviceHealthFactsOf>[0][],
@@ -66,11 +79,17 @@ export function readableServices(
   let readable = 0;
   let unproven = 0;
   for (const row of rows) {
-    const { status } = verdictForService(serviceHealthFactsOf(row), now);
+    const facts = serviceHealthFactsOf(row);
+    const { status } = verdictForService(facts, now);
     if (status === "live" || status === "noData") readable++;
-    else if (status === "unknown") unproven++;
+    else if (status === "unknown" && !isFreshNotFoundRead(facts, now)) unproven++;
   }
   return { readable, unproven };
+}
+
+/** A read that ran within the proof window and found no dataset (HTTP 404). */
+function isFreshNotFoundRead(facts: ServiceHealthFacts, now: Date): boolean {
+  return facts.readStatus === "NOT_FOUND" && freshnessOf(facts.readAt, LANE_PROOF_TTL_MS, now) === "fresh";
 }
 
 export interface ServiceVerdict {
@@ -120,6 +139,19 @@ export function verdictForService(facts: ServiceHealthFacts, now: Date = new Dat
       status: "sapRefused",
       because:
         "We signed in and SAP refused this dataset. The fix is in SAP authorisation, not in CoreEdge.",
+      provenAt: facts.readAt,
+    };
+  }
+  if (facts.readStatus === "UNAUTHORIZED") {
+    /*
+     * An observed failure, as the lane board reads it (lanes.ts
+     * `deriveHopVerdict`, A17): the metadata hop signed in, but SAP rejected
+     * the sign-in on this service's read — the read can ask a different
+     * service from the connection's metadata probe. Never "not proven".
+     */
+    return {
+      status: "signInRefused",
+      because: "SAP rejected CoreEdge's sign-in when it read this dataset (HTTP 401).",
       provenAt: facts.readAt,
     };
   }

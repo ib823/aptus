@@ -22,6 +22,7 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
+import { probeEventSource } from "@/lib/ops/probe-event-source";
 import { connectionRefusalMessage, resolveSapConnection } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -91,8 +92,14 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
    * bumps `revision` and clears the status to "never tested". Writing this
    * answer then would call the NEW settings healthy on the OLD tenant's 200.
    * So the write names the revision the probe read through, and a write that
-   * matches nothing records nothing — no status, no probe event, no audit of
-   * a test of settings that no longer exist.
+   * matches nothing records no status and no history for the new settings.
+   *
+   * BUT THE REQUEST STILL REACHED SAP, AND SOMEONE CAUSED IT (P0.2 review
+   * round 3). The probe went to the old host with the old credentials; when
+   * someone asks why their estate saw traffic at 14:07 the answer has to name
+   * a person. So a superseded test still writes its audit row, marked
+   * `superseded`, and its probe event, under a source the history readers
+   * skip (`probeEventSource`): a trace, not the new settings' health.
    */
   const written =
     resolved.revision === undefined
@@ -105,12 +112,7 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
             ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
           },
         });
-  if (written.count === 0) {
-    return studioError(
-      "CONFLICT",
-      "The connection changed while it was being tested, so the result was about its previous settings and was not recorded. Test it again.",
-    );
-  }
+  const superseded = written.count === 0;
 
   // THE MANUAL TEST LEAVES A TRACE. Only the cron sweep and the Ops "Probe now"
   // wrote a SapConnectionProbeEvent; the one probe a human runs while actively
@@ -124,9 +126,29 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
       status: result.status,
       httpStatus: result.httpStatus,
       durationMs: result.durationMs,
-      source: "test",
+      source: probeEventSource("test", superseded),
     },
   });
+
+  if (superseded) {
+    await writeConfigAudit({
+      organizationId,
+      actorId: user.id,
+      entityType: "Connection",
+      entityId: row.id,
+      action: "TEST_CONNECT",
+      after: {
+        status: result.status,
+        httpStatus: result.httpStatus,
+        durationMs: result.durationMs,
+        superseded: true,
+      },
+    });
+    return studioError(
+      "CONFLICT",
+      "The connection changed while it was being tested, so the result was about its previous settings and was not recorded as its health. Test it again.",
+    );
+  }
   // A connection's first good probe ends its SAP set-up wait (P2.12).
   await noteConnectionProbe({
     organizationId,

@@ -148,14 +148,45 @@ describe("a re-save while the test runs (P0.2 review)", () => {
   it("records nothing about the new settings, and says the test must be run again", async () => {
     // The row was re-saved mid-probe: the revision moved, the guarded write
     // matches nothing, and the old tenant's 200 must not read as the new
-    // settings' health — nor enter their probe history.
+    // settings' health — nor enter their probe history (the event is written
+    // under a source the history readers skip; see below).
     mocks.updateConnection.mockResolvedValue({ count: 0 });
     const res = await call();
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error.message).toMatch(/changed while it was being tested/i);
-    expect(mocks.createProbeEvent).not.toHaveBeenCalled();
-    expect(mocks.writeConfigAudit).not.toHaveBeenCalled();
+    expect(mocks.createProbeEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ source: "test" }) }),
+    );
+  });
+
+  it("still leaves the trace that a person sent a request to SAP (round 3)", async () => {
+    // The probe reached the client's SAP system with the old settings. Who
+    // caused it must be answerable: the audit row names the builder and says
+    // the result was superseded, and the probe event is kept, marked so the
+    // drift baseline and incident history skip it.
+    mocks.updateConnection.mockResolvedValue({ count: 0 });
+    await call();
+    expect(mocks.writeConfigAudit).toHaveBeenCalledTimes(1);
+    expect(mocks.writeConfigAudit).toHaveBeenCalledWith({
+      organizationId: "org_a",
+      actorId: "u_1",
+      entityType: "Connection",
+      entityId: "conn_1",
+      action: "TEST_CONNECT",
+      after: { status: "OK", httpStatus: 200, durationMs: 12, superseded: true },
+    });
+    expect(mocks.createProbeEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.createProbeEvent).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org_a",
+        connectionId: "conn_1",
+        status: "OK",
+        httpStatus: 200,
+        durationMs: 12,
+        source: "test:superseded",
+      },
+    });
   });
 });
 

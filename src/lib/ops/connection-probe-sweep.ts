@@ -32,6 +32,7 @@ import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { sendEmail } from "@/lib/email/brevo";
 import { esc } from "@/lib/email/templates";
 import { isDriftTransition } from "@/lib/ops/incidents";
+import { countedProbeEvents, probeEventSource, type ProbeSource } from "@/lib/ops/probe-event-source";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
 import {
   connectionRefusalMessage,
@@ -118,6 +119,31 @@ function revisionGuard(revision: number | undefined): { revision: number } | nul
 }
 
 /**
+ * A superseded probe still leaves its trace (P0.2 review round 3). It reached
+ * the client's SAP system with the previous settings, so a probe event says
+ * so, marked superseded: the drift baseline and the incident history skip it
+ * (probe-event-source.ts), and no status, success time or journey milestone
+ * is written for settings it never saw.
+ */
+async function recordSupersededProbe(
+  organizationId: string,
+  connectionId: string,
+  probe: { status: string; httpStatus: number | null; durationMs: number },
+  source: ProbeSource,
+): Promise<void> {
+  await prisma.sapConnectionProbeEvent.create({
+    data: {
+      organizationId,
+      connectionId,
+      status: probe.status,
+      httpStatus: probe.httpStatus,
+      durationMs: probe.durationMs,
+      source: probeEventSource(source, true),
+    },
+  });
+}
+
+/**
  * Record a probe's status and return the status it REPLACED, which is the one
  * the drift transition must be judged against.
  *
@@ -200,8 +226,10 @@ async function driftBaseline(
   probeStartedAt: Date,
 ): Promise<string | null> {
   if (previous !== null && !CONNECTION_NOT_PROBED_STATUSES.includes(previous)) return previous;
+  // A superseded probe's trace is about settings that were replaced before it
+  // returned: never a baseline (probe-event-source.ts).
   const last = await prisma.sapConnectionProbeEvent.findFirst({
-    where: { organizationId, connectionId, at: { lt: probeStartedAt } },
+    where: { organizationId, connectionId, at: { lt: probeStartedAt }, ...countedProbeEvents },
     orderBy: { at: "desc" },
     select: { status: true },
   });
@@ -360,8 +388,12 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
         );
         // Re-saved while this probe ran: it probed the previous settings, so
         // it is not their health, not their history and not a drift of
-        // theirs. Nothing is recorded; the next probe asks the new settings.
-        if (!write.recorded) continue;
+        // theirs; the next probe asks the new settings. The request still
+        // reached SAP, so its trace is kept, marked superseded.
+        if (!write.recorded) {
+          await recordSupersededProbe(organizationId, row.id, probe, "cron");
+          continue;
+        }
         const previous = await driftBaseline(write.previous, organizationId, row.id, probeStartedAt);
         await prisma.sapConnectionProbeEvent.create({
           data: {
@@ -418,7 +450,9 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
  * sibling to fix named, when this row's own secret opens (P0.2 review).
  *
  * `superseded` (P0.2 review): the connection was re-saved while the probe ran,
- * so the result was about the previous settings and nothing was recorded.
+ * so the result was about the previous settings and is not recorded as their
+ * status or history — only as a probe event marked superseded, the trace that
+ * a request reached SAP (round 3).
  */
 export type ProbeOneOutcome =
   | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
@@ -477,7 +511,7 @@ async function recordUnreadableOne(
 export async function probeOneConnection(
   organizationId: string,
   connectionId: string,
-  source: "manual" | "test",
+  source: Exclude<ProbeSource, "cron">,
 ): Promise<ProbeOneOutcome> {
   const row = await prisma.sapConnection.findFirst({
     where: { id: connectionId, organizationId, isActive: true },
@@ -517,11 +551,13 @@ export async function probeOneConnection(
     : { count: 0 };
   if (written.count === 0) {
     // Re-saved while the probe ran: the answer is the previous settings',
-    // so it is not recorded as the new settings' health or history.
+    // so it is not recorded as the new settings' health or history. The
+    // request still reached SAP, so its trace is kept, marked superseded.
+    await recordSupersededProbe(organizationId, row.id, probe, source);
     return {
       outcome: "superseded",
       detail:
-        "The connection was changed while it was being probed, so the result was about its previous settings and was not recorded. Probe again.",
+        "The connection was changed while it was being probed, so the result was about its previous settings and was not recorded as its health. Probe again.",
     };
   }
   await prisma.sapConnectionProbeEvent.create({

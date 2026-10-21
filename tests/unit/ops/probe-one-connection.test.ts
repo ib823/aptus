@@ -123,12 +123,30 @@ describe("probeOneConnection tells its three outcomes apart", () => {
     expect(mocks.createEvent).not.toHaveBeenCalled();
   });
 
-  it("says 'superseded', and records nothing, when the connection was re-saved mid-probe (P0.2 review)", async () => {
+  it("says 'superseded', and records no history, when the connection was re-saved mid-probe (P0.2 review)", async () => {
     // The guarded write matches no row: the revision moved under the probe.
     mocks.updateMany.mockResolvedValue({ count: 0 });
     const out = await probeOneConnection("org_a", "conn_1", "manual");
     expect(out.outcome).toBe("superseded");
-    expect(mocks.createEvent).not.toHaveBeenCalled();
+    expect(mocks.createEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ source: "manual" }) }),
+    );
+  });
+
+  it("still leaves a trace, marked superseded, that the probe reached SAP (round 3)", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    await probeOneConnection("org_a", "conn_1", "manual");
+    expect(mocks.createEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvent).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org_a",
+        connectionId: "conn_1",
+        status: "OK",
+        httpStatus: 200,
+        durationMs: 12,
+        source: "manual:superseded",
+      },
+    });
   });
 
   it("treats a row the resolver does not return as unreadable, not as missing", async () => {

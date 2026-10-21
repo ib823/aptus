@@ -80,6 +80,7 @@ vi.mock("@/lib/email/brevo", () => ({ sendEmail: vi.fn() }));
 
 import { prisma } from "@/lib/db/prisma";
 import { probeOneConnection, sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
+import { countedProbeEvents } from "@/lib/ops/probe-event-source";
 import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import { clearDataKeyCache } from "@/lib/sap-public/keys/org-data-key";
 
@@ -113,8 +114,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       select: { baseUrl: true, revision: true, lastValidationStatus: true, lastValidatedAt: true },
     });
 
+  /** The connection's probe HISTORY — what drift and incidents read. */
   const events = (connectionId: string) =>
-    prisma.sapConnectionProbeEvent.count({ where: { organizationId: org, connectionId } });
+    prisma.sapConnectionProbeEvent.count({ where: { organizationId: org, connectionId, ...countedProbeEvents } });
+  /** Every request that reached SAP, superseded or not. */
+  const sources = async (connectionId: string) =>
+    (
+      await prisma.sapConnectionProbeEvent.findMany({
+        where: { organizationId: org, connectionId },
+        orderBy: { at: "asc" },
+        select: { source: true },
+      })
+    ).map((e) => e.source);
 
   beforeAll(async () => {
     for (const k of KEY_VARS) savedEnv[k] = process.env[k];
@@ -164,6 +175,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
         lastValidatedAt: null,
       });
       expect(await events(saved.id)).toBe(0);
+      // But the request that reached the old tenant is not erased (round 3).
+      expect(await sources(saved.id)).toEqual(["manual:superseded"]);
     });
 
     it("the nightly sweep: the same race leaves the new settings 'never tested'", async () => {
@@ -181,6 +194,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
         lastValidatedAt: null,
       });
       expect(await events(saved.id)).toBe(0);
+      expect(await sources(saved.id)).toEqual(["cron:superseded"]);
     });
 
     it("a probe with no re-save still records as before", async () => {
@@ -208,6 +222,25 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       expect(hooks.captureMessage).toHaveBeenCalledTimes(1);
       // The screens still say what the new settings are: failing, not "was OK".
       expect((await stored(saved.id))?.lastValidationStatus).toBe("UNAUTHORIZED");
+    });
+
+    it("a superseded probe's trace is never the drift baseline (round 3)", async () => {
+      // OK, then a Probe now of the OLD settings that SAP refuses, superseded
+      // by a re-save mid-probe. Its trace says UNAUTHORIZED; read as history
+      // it would make the next failure "UNAUTHORIZED → UNAUTHORIZED" and
+      // swallow the alert.
+      const saved = await save("acme-prod", "https://prod.example.com");
+      await sweepConnectionProbes();
+      hooks.status = "UNAUTHORIZED";
+      hooks.duringProbe = async () => {
+        await save("acme-prod", "https://prod.example.com");
+      };
+      expect((await probeOneConnection(org, saved.id, "manual")).outcome).toBe("superseded");
+
+      const result = await sweepConnectionProbes();
+
+      expect(result.transitions).toEqual([{ connectionId: saved.id, from: "OK", to: "UNAUTHORIZED" }]);
+      expect(await sources(saved.id)).toEqual(["cron", "manual:superseded", "cron"]);
     });
 
     it("a brand-new connection's first failing probe is still not a drift", async () => {

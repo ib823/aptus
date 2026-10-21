@@ -29,6 +29,7 @@ import {
   INCIDENT_RULES,
   INCIDENT_THRESHOLDS,
 } from "@/lib/ops/incidents";
+import { countedProbeEvents } from "@/lib/ops/probe-event-source";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -184,9 +185,11 @@ export async function GET(request: NextRequest) {
       }),
       // The probe HISTORY, oldest first — the substrate for connection-drift.
       // The standing state (`connection-unhealthy`) reads the summary column;
-      // the transition can only be read from the event sequence.
+      // the transition can only be read from the event sequence. A superseded
+      // probe's trace (probe-event-source.ts) is about replaced settings and
+      // is not part of that sequence.
       prisma.sapConnectionProbeEvent.findMany({
-        where: opsWhere(guard.actor, { at: { gte: since } }),
+        where: opsWhere(guard.actor, { at: { gte: since }, ...countedProbeEvents }),
         select: { connectionId: true, status: true },
         orderBy: { at: "asc" },
       }),
@@ -200,6 +203,7 @@ export async function GET(request: NextRequest) {
       ? await prisma.sapConnectionProbeEvent.findMany({
           where: opsWhere(guard.actor, {
             at: { lt: since },
+            ...countedProbeEvents,
             connectionId: { in: [...new Set(probeEventsInWindow.map((e) => e.connectionId))] },
           }),
           select: { connectionId: true, status: true },

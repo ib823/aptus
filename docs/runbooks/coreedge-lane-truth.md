@@ -72,15 +72,21 @@ recorded" and asks to re-check).
 Probes are guarded the same way. The nightly probe, "Probe now" and Studio's
 "Test connectivity" write a status only onto the revision they probed
 (`swapProbeStatus` in `connection-probe-sweep.ts`, and the Studio test route).
-A probe still running when the connection is re-saved records nothing: no
-status, no probe event, no drift email. "Probe now" and "Test connectivity"
-answer 409, "the connection changed while it was being probed", and ask to
-run it again.
+A probe still running when the connection is re-saved records nothing about
+the new settings: no status, no success time, no drift email. "Probe now" and
+"Test connectivity" answer 409, "the connection changed while it was being
+probed", and ask to run it again. The request did reach SAP, so it still
+leaves its trace: a `SapConnectionProbeEvent` whose `source` ends in
+`:superseded` (`test:superseded`, `manual:superseded`, `cron:superseded`),
+and for "Test connectivity" a `TEST_CONNECT` audit row naming the builder,
+with `superseded: true`. The drift baseline and the connection-drift incident
+skip superseded events (`countedProbeEvents` in
+`src/lib/ops/probe-event-source.ts`).
 
 The drift email still fires on the first failing probe after a re-save. A
 re-save clears the stored status, so the probe sweep judges the transition
 against the last probe that actually ran for the connection (its latest
-`SapConnectionProbeEvent`). A password rotation that was mistyped, on a
+`SapConnectionProbeEvent` that is not superseded). A password rotation that was mistyped, on a
 connection that last probed OK, is mailed as healthy-to-failing, as it was
 before P0.2. A connection that has never been probed still has no baseline,
 and its first failure is not mailed.
@@ -119,7 +125,12 @@ outcome, so neither counts as "was healthy" for the drift email.
 **"Services readable" counts fresh proof only (A60).** The SAP system page
 counted every OK or EMPTY read of any age. It now counts a service readable
 only when its verdict is Live or No data (fresh metadata and a fresh read, 24
-hours), and says how many have no fresh proof.
+hours), and says how many have no fresh proof. A read that ran and failed is
+never counted as "not proven": a fresh 401 on the read is Sign-in refused (the
+read can ask a different service from the connection's metadata probe), and a
+fresh 404 counts as failing, as the per-service row draws it. The reader takes
+its read statuses from the writer (`LEDGER_READ_STATUSES`), so a status the
+sweep records cannot be dropped to "unknown".
 
 **Retired apps are not re-checked (A70).** Re-check on a retired or draft
 app's lane read the client's SAP system although the nightly sweep never does.
