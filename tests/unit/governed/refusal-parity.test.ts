@@ -40,6 +40,9 @@ const h = vi.hoisted(() => ({
   sandboxOnly: false,
   consoleRefusal: null as null | string,
   audits: [] as { status: number }[],
+  /** What SAP answers a write with; null is the default success. */
+  writeResult: null as null | Record<string, unknown>,
+  idempotency: { completed: 0, released: 0 },
   user: { id: "u1", role: "consultant", organizationId: "org_a", email: "u@a.co", authMethod: "session" },
 }));
 
@@ -138,8 +141,12 @@ vi.mock("@/lib/northbound/idempotency", () => ({
     h.reservation === "proceed"
       ? { outcome: "proceed", recordId: "rec_1" }
       : { outcome: "conflict", reason: h.reservation },
-  completeIdempotencyKey: async () => undefined,
-  releaseIdempotencyKey: async () => undefined,
+  completeIdempotencyKey: async () => {
+    h.idempotency.completed += 1;
+  },
+  releaseIdempotencyKey: async () => {
+    h.idempotency.released += 1;
+  },
 }));
 vi.mock("@/lib/northbound/read", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -147,7 +154,7 @@ vi.mock("@/lib/northbound/read", async (importOriginal) => ({
 }));
 vi.mock("@/lib/northbound/write", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  writeEntitySet: async () => ({
+  writeEntitySet: async () => h.writeResult ?? ({
     status: "CREATED",
     httpStatus: 201,
     record: { a: 1 },
@@ -200,9 +207,10 @@ import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/rout
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
 import { GET as previewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as brokerRun } from "@/app/api/studio/test/broker-run/route";
+import { attributeAuditRow, type CorrelatedCall } from "@/lib/coreedge/correlation-lookup";
 import { __setGovernedCircuitStore, governedCircuitBreaker } from "@/lib/governed/containment";
 import { REFUSAL_STATUS, type RefusalReason } from "@/lib/governed/pipeline";
-import { FAILURE_THRESHOLD, MemoryCircuitStore } from "@/lib/northbound/circuit-breaker";
+import { FAILURE_THRESHOLD, MemoryCircuitStore, STORE_DEADLINE_MS } from "@/lib/northbound/circuit-breaker";
 
 type Route = "read" | "write" | "broker-run" | "preview";
 
@@ -343,6 +351,8 @@ function reset(): void {
     writeBody: undefined,
     noKey: false,
     runEntity: undefined,
+    writeResult: null,
+    idempotency: { completed: 0, released: 0 },
   });
 }
 
@@ -439,5 +449,189 @@ describe("the audited duration leaves out the breaker's store", () => {
     const row = h.audits.at(-1) as { durationMs?: number | null };
     expect(typeof row.durationMs).toBe("number");
     expect(row.durationMs!).toBeLessThan(100);
+  });
+});
+
+/*
+ * THE CORRELATION SEARCH READS EACH REFUSAL BACK AS WHAT IT WAS. Operations'
+ * search (correlation-lookup.ts) turns the audit row a refusal left into
+ * "Stopped at" and "Outcome". Every row here is the one the route itself
+ * wrote, so the hop is checked against what the routes really record: none of
+ * these calls reached SAP, so none may be attributed to SAP's answer, and
+ * each must say nothing was sent.
+ */
+describe("the correlation search attributes every refusal to the hop that refused it", () => {
+  const HOP: Readonly<Record<RefusalReason, CorrelatedCall["brokenHop"]>> = {
+    UNAUTHENTICATED: "key",
+    // The row cannot tell a bad write key from a grant refusal (both 403,
+    // before binding); the outcome sentence names both.
+    WRITE_CREDENTIAL_INVALID: "access",
+    RATE_LIMITED: "key",
+    LIMITER_UNAVAILABLE: "key",
+    IDEMPOTENCY_KEY_INVALID: "request",
+    BODY_INVALID: "request",
+    NO_ENTITY_SET: "request",
+    SERVICE_PATH_INVALID: "request",
+    SERVICE_UNRESOLVED: "request",
+    ENTITY_NOT_YOURS_TO_CHOOSE: "request",
+    CUSTOM_SERVICE_UNVERIFIED: "request",
+    INTERFACE_NOT_FOUND: "access",
+    NOT_THIS_SOLUTION: "access",
+    NO_APPROVED_GRANT: "access",
+    GRANT_EXPIRED: "access",
+    GRANT_REVOKED: "access",
+    GRANT_NEEDS_REAPPROVAL: "access",
+    WRITE_NOT_SERVED: "access",
+    READ_ONLY_INTERFACE: "access",
+    INTERFACE_NOT_ACTIVE: "access",
+    INTERFACE_DEPRECATED: "access",
+    OPERATION_NOT_SUPPORTED: "request",
+    UNDECLARED_ENVIRONMENT: "access",
+    SANDBOX_ONLY: "access",
+    NO_CONNECTION: "binding",
+    NO_MATCH_FOR_CLIENT: "binding",
+    NO_MATCH_FOR_ENVIRONMENT: "binding",
+    AMBIGUOUS: "binding",
+    NO_DECLARED_CANDIDATE: "binding",
+    UNDECLARED_ENVIRONMENT_WRITE: "binding",
+    CONNECTION_UNREADABLE: "binding",
+    UNKNOWN_PRODUCT: "binding",
+    WRITES_DISABLED: "binding",
+    TRANSPORT_UNAVAILABLE: "binding",
+    CIRCUIT_OPEN: "binding",
+    IDEMPOTENCY_CONFLICT: "request",
+    IDEMPOTENCY_IN_FLIGHT: "request",
+  };
+
+  const AUDITED = ROWS.filter(([, , c]) => !c.unaudited);
+
+  it.each(AUDITED)("%s on %s", async (reason, route, c) => {
+    c.set();
+    await call(route);
+    const row = h.audits.at(-1) as Record<string, unknown>;
+    const { brokenHop, outcome } = attributeAuditRow({
+      status: row.status as number,
+      // A console read's row is written by recordConsoleRead, which names the operation itself.
+      operation: (row.operation as string | undefined) ?? "READ",
+      bindingRefusal: (row.bindingRefusal as string | null | undefined) ?? null,
+      failureReason: (row.failureReason as string | null | undefined) ?? null,
+      durationMs: (row.durationMs as number | null | undefined) ?? null,
+      connectionId: (row.connectionId as string | null | undefined) ?? null,
+      replayed: (row.replayed as boolean | undefined) ?? false,
+    });
+    expect(brokenHop).toBe(HOP[reason]);
+    expect(outcome).toContain("Nothing was sent to SAP");
+  });
+});
+
+/*
+ * A BREAKER STORE THAT STOPS ANSWERING HOLDS NO CALL. The default mode only
+ * observes, and a deploy with it must change no answer: so an Upstash that
+ * accepts the connection and never replies must not hang the call, and on a
+ * write must not strand the Idempotency-Key, or leave a write SAP performed
+ * without its stored outcome and audit row. Every store operation is bounded
+ * (circuit-breaker.ts STORE_DEADLINE_MS) and treated like a store error when
+ * it runs out; the write's outcome reaches the breaker only after the key is
+ * completed and the row written.
+ */
+describe("a breaker store that never answers (default observe)", () => {
+  const never = new Promise<never>(() => undefined);
+
+  /** Answers its first `answered` reads, then never answers again. */
+  class HangingStore extends MemoryCircuitStore {
+    reads = 0;
+    seenAtRecord: { completed: number; audits: number } | null = null;
+    constructor(private readonly answered: number) {
+      super({ shared: true });
+    }
+    override async read(key: string): Promise<string | null> {
+      this.reads += 1;
+      if (this.reads === 2) this.seenAtRecord = { completed: h.idempotency.completed, audits: h.audits.length };
+      if (this.reads > this.answered) return never;
+      return super.read(key);
+    }
+    override async compareAndSet(): Promise<boolean> {
+      return never;
+    }
+  }
+
+  const BOUND = 2 * STORE_DEADLINE_MS + 1_500;
+
+  it.each(["read", "write", "preview"] as const)(
+    "%s is answered and audited when the store hangs from the start",
+    async (route) => {
+      __setGovernedCircuitStore(new HangingStore(0));
+      const startedAt = Date.now();
+      const { status } = await call(route);
+      expect([200, 201]).toContain(status);
+      expect(Date.now() - startedAt).toBeLessThan(BOUND);
+      expect(h.audits.length).toBe(1);
+      expect(h.audits[0]!.status).toBe(status);
+      if (route === "write") expect(h.idempotency).toEqual({ completed: 1, released: 0 });
+    },
+    10_000,
+  );
+
+  it(
+    "a write whose outcome cannot be reported still stores SAP's result and audits it first",
+    async () => {
+      // The first read (before the call) answers; reporting the outcome hangs.
+      const store = new HangingStore(1);
+      __setGovernedCircuitStore(store);
+      const { status } = await call("write");
+      expect(status).toBe(201);
+      expect(store.reads).toBe(2);
+      expect(h.idempotency).toEqual({ completed: 1, released: 0 });
+      expect(h.audits.map((r) => r.status)).toEqual([201]);
+      // Already stored and audited when the breaker was told.
+      expect(store.seenAtRecord).toEqual({ completed: 1, audits: 1 });
+    },
+    10_000,
+  );
+});
+
+/*
+ * ONE SOLUTION'S WRITES CANNOT REFUSE ANOTHER'S CALLS. A write's payload is
+ * the caller's choice, and SAP answers a bad one with a 500 (a Gateway
+ * technical exception, a RAP short dump) as readily as with a 400; enough
+ * writes get a 429. Counted, five such writes would open the circuit every
+ * solution on the connection shares, and under enforce refuse their reads
+ * while SAP is healthy. So a write SAP ANSWERED never counts; a write it did
+ * not answer (timed out, unreachable, the credential step failed) does.
+ */
+describe("enforced, write outcomes SAP answered do not open the connection's circuit", () => {
+  const sapAnswered = (httpStatus: number, attempted: boolean) => ({
+    status: "ERROR",
+    httpStatus,
+    record: null,
+    location: null,
+    detail: `The tenant responded with HTTP ${httpStatus}.`,
+    durationMs: 1,
+    failureReason: `HTTP_${httpStatus}`,
+    attempted,
+  });
+
+  beforeEach(() => {
+    __setGovernedCircuitStore(new MemoryCircuitStore());
+    vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+  });
+
+  it.each([
+    ["SAP's 500 to the payload", sapAnswered(500, true)],
+    ["SAP's 503 to the POST", sapAnswered(503, true)],
+    ["SAP's 429", sapAnswered(429, false)],
+  ])("%s, written past the threshold, leaves another solution's read served", async (_label, result) => {
+    h.writeResult = result;
+    for (let i = 0; i <= FAILURE_THRESHOLD; i++) expect((await call("write")).status).toBe(502);
+    h.writeResult = null;
+    expect((await call("read")).status).toBe(200);
+  });
+
+  it("writes SAP never answered still open it", async () => {
+    h.writeResult = { ...sapAnswered(0, true), status: "TIMEOUT", httpStatus: null, failureReason: "TIMEOUT" };
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) expect((await call("write")).status).toBe(504);
+    h.writeResult = null;
+    expect((await call("read")).status).toBe(503);
+    expect(h.audits.at(-1)).toMatchObject({ status: 503, failureReason: "CIRCUIT_OPEN" });
   });
 });

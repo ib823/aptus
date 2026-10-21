@@ -60,7 +60,11 @@ in the product sets TWIN yet.
 by its correlation id"), on `src/lib/coreedge/correlation-lookup.ts`. It reads
 only the viewer's own organization's rows, shows the call's outcome, the hop it
 stopped at, its service, environment, row count and duration, and never a
-payload.
+payload. The hop is read from the row's facts, not its status alone: a row with
+a duration, an upstream failure reason or a replay reached SAP; one without
+was refused by CoreEdge, at the key (401, 429, the limiter), the request
+(400, 409), the connection (a binding refusal, writes disabled, an open
+circuit) or the access grant (403, 404), and says nothing was sent to SAP.
 
 **The SAP system screen shows each service's verdict and who fixes it**
 (`/coreedge/sap-systems/<id>`, columns "Status" and "Who fixes it"), from

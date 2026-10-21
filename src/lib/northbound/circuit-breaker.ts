@@ -41,6 +41,13 @@
  * goes ahead as it did before the breaker existed, and the error is logged
  * once. Refusing every call because Redis is down would turn a cache outage
  * into an SAP outage.
+ *
+ * NOR DOES IT HOLD ONE. A Redis that accepts the connection and never answers
+ * (a regional brownout) is the same outage as one that errors, and the Upstash
+ * client sets no timeout of its own: unbounded, every governed call waited on
+ * it until the platform killed the function. So every breaker operation has a
+ * deadline (STORE_DEADLINE_MS), and one that runs out is a store error:
+ * allowed through, logged once.
  */
 
 export type CircuitState = "closed" | "open" | "half-open";
@@ -351,6 +358,39 @@ function sameState(a: CircuitRecord, b: CircuitRecord): boolean {
 /** How many times a contended compare-and-set is retried before the breaker gives up on that write. */
 const CAS_ATTEMPTS = 5;
 
+/**
+ * How long one breaker operation (a decision, an outcome, a snapshot: each a
+ * read and at most a few compare-and-sets) may take before the store counts
+ * as unavailable. Upstash in-region answers in single milliseconds; this is a
+ * ceiling for a store that has stopped answering, not a latency budget.
+ */
+export const STORE_DEADLINE_MS = 400;
+
+/** A store operation that ran out of time: handled exactly like one that threw. */
+export class CircuitStoreTimeout extends Error {
+  constructor(readonly deadlineMs: number) {
+    super(`the circuit store did not answer within ${deadlineMs} ms`);
+    this.name = "CircuitStoreTimeout";
+  }
+}
+
+/**
+ * `work`, or a CircuitStoreTimeout once `ms` have passed. The work is not
+ * cancelled (the Upstash store aborts its own requests: containment.ts); its
+ * late result is ignored, and a late rejection is handled here.
+ */
+async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new CircuitStoreTimeout(ms)), ms);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface SharedCircuitDecision extends CircuitDecision {
   /** True when the store could not be asked and the call was let through regardless. */
   readonly degraded: boolean;
@@ -370,27 +410,62 @@ export interface CircuitBreaker {
  * retrying on contention: so five failures recorded by any instances at any
  * interleaving open the circuit for every one of them.
  */
-export function createCircuitBreaker(store: CircuitStore, options: { onStoreError?: (err: unknown) => void } = {}): CircuitBreaker {
+export function createCircuitBreaker(
+  store: CircuitStore,
+  options: { onStoreError?: (err: unknown) => void; deadlineMs?: number } = {},
+): CircuitBreaker {
   const onStoreError = options.onStoreError ?? (() => undefined);
+  const deadlineMs = options.deadlineMs ?? STORE_DEADLINE_MS;
   const allowAnyway: SharedCircuitDecision = { allowed: true, state: "closed", retryAfterSeconds: null, degraded: true };
+
+  /*
+   * THE DEADLINE COVERS THE WHOLE OPERATION, retries included. If it runs out
+   * in the middle of a decision whose compare-and-set later lands (a probe
+   * taken), this call still goes through as degraded and its outcome is
+   * recorded, which settles that probe; failing that, PROBE_LEASE_MS does.
+   */
+  const decideCall = async (key: string, now: number): Promise<SharedCircuitDecision> => {
+    for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+      const raw = await store.read(key);
+      const { decision, next } = decide(deserialise(raw), now);
+      const serialised = serialise(next);
+      // Nothing changed (closed, or still open): nothing to write.
+      if (raw === serialised || (raw === null && next === CLOSED_CIRCUIT)) return { ...decision, degraded: false };
+      if (await store.compareAndSet(key, raw, serialised)) return { ...decision, degraded: false };
+    }
+    // Another instance kept winning the write: it took the probe. Refuse
+    // only what the record says to refuse; never take a second probe.
+    const { decision } = decide(deserialise(await store.read(key)), now);
+    return decision.state === "half-open" ? { allowed: false, state: "half-open", retryAfterSeconds: 1, degraded: false } : { ...decision, degraded: false };
+  };
+
+  const record = async (key: string, outcome: CallOutcome, now: number): Promise<void> => {
+    for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+      const raw = await store.read(key);
+      const current = deserialise(raw);
+      // A success on a circuit with nothing recorded changes nothing worth a write.
+      if (raw === null && outcome === "ok") return;
+      const next = applyOutcome(current, outcome, now);
+      /*
+       * NOR DOES AN OUTCOME THAT LEAVES THE STATE AS IT WAS: a success on
+       * a closed circuit with no failures, a refusal on a closed one.
+       * Only `lastOutcomeAt` would change, and writing it would cost an
+       * Upstash command on every call and renew the record's expiry
+       * forever, so a busy connection's record would never expire.
+       */
+      if (raw !== null && sameState(current, next)) return;
+      const serialised = serialise(next);
+      if (raw === serialised) return;
+      if (await store.compareAndSet(key, raw, serialised)) return;
+    }
+  };
 
   return {
     shared: store.shared,
 
     async beforeCall(key, now = Date.now()) {
       try {
-        for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
-          const raw = await store.read(key);
-          const { decision, next } = decide(deserialise(raw), now);
-          const serialised = serialise(next);
-          // Nothing changed (closed, or still open): nothing to write.
-          if (raw === serialised || (raw === null && next === CLOSED_CIRCUIT)) return { ...decision, degraded: false };
-          if (await store.compareAndSet(key, raw, serialised)) return { ...decision, degraded: false };
-        }
-        // Another instance kept winning the write: it took the probe. Refuse
-        // only what the record says to refuse; never take a second probe.
-        const { decision } = decide(deserialise(await store.read(key)), now);
-        return decision.state === "half-open" ? { allowed: false, state: "half-open", retryAfterSeconds: 1, degraded: false } : { ...decision, degraded: false };
+        return await withDeadline(decideCall(key, now), deadlineMs);
       } catch (err) {
         onStoreError(err);
         return allowAnyway;
@@ -399,24 +474,7 @@ export function createCircuitBreaker(store: CircuitStore, options: { onStoreErro
 
     async recordOutcome(key, outcome, now = Date.now()) {
       try {
-        for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
-          const raw = await store.read(key);
-          const current = deserialise(raw);
-          // A success on a circuit with nothing recorded changes nothing worth a write.
-          if (raw === null && outcome === "ok") return;
-          const next = applyOutcome(current, outcome, now);
-          /*
-           * NOR DOES AN OUTCOME THAT LEAVES THE STATE AS IT WAS: a success on
-           * a closed circuit with no failures, a refusal on a closed one.
-           * Only `lastOutcomeAt` would change, and writing it would cost an
-           * Upstash command on every call and renew the record's expiry
-           * forever, so a busy connection's record would never expire.
-           */
-          if (raw !== null && sameState(current, next)) return;
-          const serialised = serialise(next);
-          if (raw === serialised) return;
-          if (await store.compareAndSet(key, raw, serialised)) return;
-        }
+        await withDeadline(record(key, outcome, now), deadlineMs);
       } catch (err) {
         onStoreError(err);
       }
@@ -424,7 +482,7 @@ export function createCircuitBreaker(store: CircuitStore, options: { onStoreErro
 
     async snapshot(key, now = Date.now()) {
       try {
-        return snapshotOf(key, deserialise(await store.read(key)), now);
+        return snapshotOf(key, deserialise(await withDeadline(store.read(key), deadlineMs)), now);
       } catch (err) {
         onStoreError(err);
         return null;

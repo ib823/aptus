@@ -329,11 +329,12 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   // 9 — write. Timed around the upstream call only — see the read route.
-  const { result, durationMs } = await callSapWrite(
+  const sap = await callSapWrite(
     bound.value,
     { servicePath: service.path, entitySet, payload: parsed.data.record },
     circuit.value,
   );
+  const { result, durationMs } = sap;
   const status = writeHttpStatusFor(result.status);
 
   let response: NextResponse;
@@ -374,12 +375,19 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   //
   // Released only on an explicit `false`. Storing can never write twice, so
   // anything less certain than that is stored.
-  if (result.attempted === false) {
-    await releaseIdempotencyKey(client.scope, reservation.recordId);
-  } else {
-    await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+  try {
+    if (result.attempted === false) {
+      await releaseIdempotencyKey(client.scope, reservation.recordId);
+    } else {
+      await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+    }
+    await audit.record(status, { connection, durationMs, failureReason: result.failureReason });
+  } finally {
+    // THE BREAKER HEARS LAST. SAP may already have created the record, so its
+    // outcome is stored under the key and audited before anything waits on
+    // the breaker's store (pipeline.ts SapWriteCall). Bounded, never throws.
+    await sap.reportOutcome();
   }
-  await audit.record(status, { connection, durationMs, failureReason: result.failureReason });
   // The app's first successful call in this environment (P2.12); in memory
   // after this instance's first, as on the read route.
   await noteFirstCall({

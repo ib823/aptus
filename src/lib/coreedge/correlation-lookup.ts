@@ -43,25 +43,61 @@ export interface CorrelatedCall {
   readonly externalId: string;
   readonly environment: LaneEnvironment | null;
   readonly environmentRaw: string;
-  /** The hop the call stopped at, in the vocabulary's own terms. */
-  readonly brokenHop: "key" | "access" | "binding" | "sapMetadata" | "sapDataRead" | null;
+  /**
+   * The hop the call stopped at, in the vocabulary's own terms, plus one the
+   * lane vocabulary does not need: `request`, a call CoreEdge refused for
+   * what the request itself carried (no Idempotency-Key, a record that is not
+   * an object, a key in conflict) or for a gap in the feed's definition. A
+   * lane is a standing path and has no request; one call does.
+   */
+  readonly brokenHop: "key" | "access" | "binding" | "request" | "sapMetadata" | "sapDataRead" | null;
   readonly outcome: string;
   readonly rowCount: number | null;
   readonly durationMs: number | null;
   readonly dryRun: boolean;
 }
 
+/** The facts on an audit row the attribution reads. */
+export interface AttributableRow {
+  readonly status: number;
+  readonly operation: string;
+  readonly bindingRefusal: string | null;
+  readonly failureReason: string | null;
+  readonly durationMs: number | null;
+  readonly connectionId: string | null;
+  readonly replayed: boolean;
+}
+
+/** failureReasons CoreEdge itself records for a call it refused before SAP. */
+const REFUSED_BEFORE_SAP = new Set(["LIMITER_UNAVAILABLE", "CIRCUIT_OPEN"]);
+
 /**
- * Which hop a stored status code means.
+ * Whether the call reached SAP (or the credential step on the way to it).
  *
- * Derived from the status and the recorded refusal rather than guessed: a 403
- * carrying a binding refusal stopped at the binding, and a 403 without one
- * reached SAP and was refused there. Those have different owners, which is the
- * entire reason the vocabulary keeps them apart.
+ * From what the row holds, not from its status: a 403 or a 404 is as often
+ * CoreEdge's refusal as SAP's. A call that reached SAP has a duration (every
+ * route stamps one around the upstream call, and the column is older than
+ * the 30-day window), or the upstream failure that ended it, or is a replay
+ * of a write that did. A refusal CoreEdge gave has none of the three.
  */
-function hopFor(status: number, bindingRefusal: string | null, failureReason: string | null): CorrelatedCall["brokenHop"] {
-  if (status === 401) return "key";
-  if (status === 429) return "key";
+function reachedSap(row: AttributableRow): boolean {
+  if (row.replayed) return true;
+  if (row.durationMs !== null) return true;
+  return row.failureReason !== null && !REFUSED_BEFORE_SAP.has(row.failureReason);
+}
+
+/**
+ * Which hop a stored row means.
+ *
+ * Derived from the row's facts rather than guessed from its status. A 403
+ * carrying a binding refusal stopped at the binding; a 403 that reached SAP
+ * was SAP's refusal; a 403 that did neither was the grant gate's. Those have
+ * different owners (the platform admin, the client's SAP admin, the
+ * reviewer), which is the entire reason the vocabulary keeps them apart.
+ */
+function hopFor(row: AttributableRow): CorrelatedCall["brokenHop"] {
+  const { status, bindingRefusal, failureReason } = row;
+  if (status >= 200 && status < 300) return null;
   // Refused at the throttle because the limiter could not be asked (P0.5):
   // the same hop as a 429, and nothing reached SAP.
   if (failureReason === "LIMITER_UNAVAILABLE") return "key";
@@ -69,25 +105,45 @@ function hopFor(status: number, bindingRefusal: string | null, failureReason: st
   // connection and stopped there, because that SAP system had been failing.
   if (failureReason === "CIRCUIT_OPEN") return "binding";
   if (status === 403 && bindingRefusal !== null) return "binding";
-  if (status === 403) {
-    // A grant refusal is the Access hop; an SAP refusal is the read.
-    return failureReason !== null && /grant|access|scope/i.test(failureReason)
-      ? "access"
-      : "sapDataRead";
+
+  // SAP's own answer, or the credential step on the way to it.
+  if (reachedSap(row)) return "sapDataRead";
+
+  // Refused by CoreEdge before SAP was asked anything.
+  if (status === 401) return "key";
+  if (status === 429) return "key";
+  if (status === 400 || status === 409) return "request";
+  if (row.connectionId !== null) {
+    /*
+     * Bound to a connection, then refused. On a write that is the
+     * connection's own veto (writes disabled) or its transport; on a read
+     * that names a connection, the console's grant ceiling for that system
+     * (the Workbench reads name the connection before they ask).
+     */
+    return status === 403 && row.operation !== "WRITE" ? "access" : "binding";
   }
-  if (status === 404) return "sapDataRead";
-  if (status === 502 || status === 504) return "sapDataRead";
-  if (status >= 200 && status < 300) return null;
-  return "sapDataRead";
+  // Not bound: the interface the call named, or the grant for it.
+  return "access";
 }
 
-function describeOutcome(status: number, rowCount: number | null, failureReason: string | null): string {
+function describeOutcome(row: AttributableRow, rowCount: number | null): string {
+  const { status, failureReason } = row;
   if (failureReason === "LIMITER_UNAVAILABLE") {
     return "CoreEdge could not check its rate limits, so the call was refused for safety. Nothing was sent to SAP.";
   }
   if (failureReason === "CIRCUIT_OPEN") {
     return "The SAP system behind this connection had failed repeatedly, so the circuit breaker refused the call. Nothing was sent to SAP.";
   }
+  if (status >= 200 && status < 300) {
+    const succeeded =
+      rowCount === 0
+        ? "SAP answered successfully and had nothing to return."
+        : rowCount === null
+          ? "Succeeded."
+          : `Succeeded, ${rowCount} ${rowCount === 1 ? "row" : "rows"}.`;
+    return row.replayed ? replayedFrom(succeeded) : succeeded;
+  }
+  if (!reachedSap(row)) return refusedBeforeSap(row);
   // The credential step's own failures (credentialFailure): SAP was never
   // asked, so "SAP returned an error" would send the reader to the tenant.
   if (status >= 500 && failureReason?.startsWith("TOKEN_")) {
@@ -95,18 +151,60 @@ function describeOutcome(status: number, rowCount: number | null, failureReason:
       ? "The connection's token endpoint did not answer in time. Nothing was sent to SAP."
       : "The connection's token endpoint failed or could not be reached. Nothing was sent to SAP.";
   }
-  if (status >= 200 && status < 300) {
-    if (rowCount === 0) return "SAP answered successfully and had nothing to return.";
-    if (rowCount === null) return "Succeeded.";
-    return `Succeeded, ${rowCount} ${rowCount === 1 ? "row" : "rows"}.`;
+  const answered =
+    status === 403
+      ? "Refused."
+      : status === 404
+        ? "Not found on this SAP system."
+        : status === 504
+          ? "SAP did not answer in time."
+          : status === 502
+            ? "SAP returned an error."
+            : `Failed with status ${status}.`;
+  return row.replayed ? replayedFrom(answered) : answered;
+}
+
+function replayedFrom(answered: string): string {
+  return `Replayed the stored outcome of the first request with this Idempotency-Key; SAP was not called again. That outcome: ${answered}`;
+}
+
+/** A call CoreEdge refused itself, in the words of the hop that refused it. */
+function refusedBeforeSap(row: AttributableRow): string {
+  const nothing = "Nothing was sent to SAP.";
+  switch (hopFor(row)) {
+    case "key":
+      return row.status === 429 ? `Rate limited. ${nothing}` : `The key was not valid. ${nothing}`;
+    case "request":
+      return row.status === 409
+        ? `Refused: this Idempotency-Key was already used for a different write, or that write is still in progress. ${nothing}`
+        : `Refused as invalid: the request, or the feed's definition, lacks something the call needs. ${nothing}`;
+    case "binding":
+      return row.status === 403
+        ? `Refused at the SAP connection: none could be bound for this call, or the bound one does not allow it. ${nothing}`
+        : `Failed with status ${row.status} at the SAP connection. ${nothing}`;
+    case "access":
+      if (row.status === 404) return `Not found: this application has no interface with that id. ${nothing}`;
+      if (row.status === 403) {
+        return row.operation === "WRITE"
+          ? `Refused: the write key was not valid, or no approved grant allows this write. ${nothing}`
+          : `Refused: no approved grant allows this call. ${nothing}`;
+      }
+      return `Failed with status ${row.status}. ${nothing}`;
+    default:
+      return `Failed with status ${row.status}. ${nothing}`;
   }
-  if (status === 401) return "The key was not valid.";
-  if (status === 429) return "Rate limited. Nothing was sent to SAP.";
-  if (status === 403) return "Refused.";
-  if (status === 404) return "Not found on this SAP system.";
-  if (status === 504) return "SAP did not answer in time.";
-  if (status === 502) return "SAP returned an error.";
-  return `Failed with status ${status}.`;
+}
+
+/**
+ * The hop and the outcome sentence for one audit row: what the search shows.
+ * Pure, so each route's own refusal rows can be read back through it
+ * (tests/unit/governed/refusal-parity.test.ts).
+ */
+export function attributeAuditRow(
+  row: AttributableRow,
+  rowCount: number | null = null,
+): Pick<CorrelatedCall, "brokenHop" | "outcome"> {
+  return { brokenHop: hopFor(row), outcome: describeOutcome(row, rowCount) };
 }
 
 export async function lookupCorrelationId(
@@ -132,6 +230,8 @@ export async function lookupCorrelationId(
       dryRun: true,
       bindingRefusal: true,
       failureReason: true,
+      connectionId: true,
+      replayed: true,
     },
     orderBy: { at: "desc" },
   });
@@ -162,8 +262,7 @@ export async function lookupCorrelationId(
       externalId: row.externalId,
       environment: parseLaneEnvironment(row.environment),
       environmentRaw: row.environment,
-      brokenHop: hopFor(row.status, row.bindingRefusal, row.failureReason),
-      outcome: describeOutcome(row.status, row.rowCount, row.failureReason),
+      ...attributeAuditRow(row, row.rowCount),
       rowCount: row.rowCount,
       durationMs: row.durationMs,
       dryRun: row.dryRun,

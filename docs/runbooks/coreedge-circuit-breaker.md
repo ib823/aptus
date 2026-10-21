@@ -24,8 +24,20 @@ audit row still records it as 502.
 | Event | What the circuit does |
 |---|---|
 | A call is answered (200, 201, or an empty result) | Closes; the failure count goes back to 0 |
-| A timeout, a 5xx, an unreachable host, an invalid response | Counts one failure |
+| A read that times out, gets a 5xx, cannot reach the host, or gets an invalid response | Counts one failure |
+| A write that times out, cannot reach the host, cannot get its credential, or whose CSRF handshake fails | Counts one failure |
 | SAP refuses the call (401, 403, 404, 422) | Nothing: a healthy system said no to one request |
+| SAP answers a write's POST with any other status (a 5xx included), or throttles a write (408, 429) | Nothing: see below |
+
+A write's payload is the caller's choice, and SAP answers a bad one with a 500
+(a Gateway technical exception, a RAP short dump on a field value) as readily
+as with a 400; enough writes earn a 429. The connection's circuit is shared by
+every solution that uses it, so were those answers counted, one solution's
+five bad writes would open it and, under `enforce`, refuse every other
+solution's reads and writes on the connection for 30 seconds at a time while
+SAP is healthy. So only what SAP did not answer counts for a write. The
+production reads, whose query the interface fixes, still count SAP's 5xx, so a
+system that is really failing still opens the circuit for the writes too.
 | The fifth failure in a row | Opens for 30 seconds |
 | The 30 seconds have passed | Lets exactly one call through (half-open); its outcome closes or re-opens the circuit |
 
@@ -36,7 +48,13 @@ after the circuit last changed. Every change is a compare-and-set, so concurrent
 not lose a failure. Without Upstash each instance keeps its own circuits (five
 failures that instance saw itself). If Redis cannot be asked, the call goes
 ahead as if there were no breaker, and the error is logged once per instance
-(`[circuit] the breaker's store could not be asked`).
+(`[circuit] the breaker's store could not be asked`). A Redis that accepts the
+connection and does not answer is treated the same way: each breaker operation
+gives up after 400 ms (`STORE_DEADLINE_MS` in `circuit-breaker.ts`), each
+Upstash request is aborted at that deadline and retried at most once, and the
+call goes ahead. A write's outcome reaches the breaker only after its
+`Idempotency-Key` is completed and its audit row written, so a slow Redis can
+never leave a write SAP performed without its stored outcome.
 
 ## The setting
 
@@ -48,7 +66,10 @@ ahead as if there were no breaker, and the error is logged once per instance
 
 ## What happens on deploy
 
-Nothing a caller can see. The default is `observe`, which never refuses.
+Nothing a caller can see. The default is `observe`, which never refuses. The
+one cost a caller can notice is latency while Upstash is unhealthy: at most
+400 ms before the call to SAP and 400 ms after it, in place of waiting on
+Redis without limit.
 
 The new work per governed call, with Upstash configured, is two Redis reads:
 one before the call to SAP and one after it, when its outcome is recorded.
@@ -72,8 +93,12 @@ with the limiter.
    Operations, or the customer confirms one). An entry outside an outage means
    a system that fails often enough to trip it while serving: find out why
    before enforcing, because enforcing would refuse its calls.
-3. Set `COREEDGE_CIRCUIT_BREAKER=enforce` and redeploy.
-4. After the deploy, look up any `503 CIRCUIT_OPEN` a developer quotes with the
+3. Know what `enforce` refuses: everything on the connection, reads and
+   writes from every solution that uses it, for as long as it is open. Only
+   a system's failures open it (the table above); one solution's payloads
+   cannot.
+4. Set `COREEDGE_CIRCUIT_BREAKER=enforce` and redeploy.
+5. After the deploy, look up any `503 CIRCUIT_OPEN` a developer quotes with the
    correlation-id search in Operations: it names the connection hop and says
    nothing was sent to SAP.
 

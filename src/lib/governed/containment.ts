@@ -29,6 +29,12 @@
  * system. Without them, this instance's memory (each instance then opens its
  * own circuit after five failures it saw itself). A store that errors never
  * refuses a call; the error is logged once per instance.
+ *
+ * A STORE THAT DOES NOT ANSWER NEITHER. Each breaker operation has a deadline
+ * (circuit-breaker.ts STORE_DEADLINE_MS) and runs out into the same "let it
+ * through" as an error; each Upstash request is aborted at that deadline and
+ * retried at most once, so a hung request does not outlive the call it was
+ * made for.
  */
 
 import { Redis } from "@upstash/redis/cloudflare";
@@ -36,6 +42,7 @@ import { Redis } from "@upstash/redis/cloudflare";
 import {
   createCircuitBreaker,
   MemoryCircuitStore,
+  STORE_DEADLINE_MS,
   upstashCircuitStore,
   type CircuitBreaker,
   type CircuitStore,
@@ -66,7 +73,17 @@ function defaultStore(): CircuitStore {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (url && token) {
     // Raw strings: the store compares the serialised record byte for byte.
-    return upstashCircuitStore(new Redis({ url, token, automaticDeserialization: false }));
+    // A fresh signal per request (a function, so an abort throws rather than
+    // reading as an answer), and one retry on a network error.
+    return upstashCircuitStore(
+      new Redis({
+        url,
+        token,
+        automaticDeserialization: false,
+        signal: () => AbortSignal.timeout(STORE_DEADLINE_MS),
+        retry: { retries: 1, backoff: () => 25 },
+      }),
+    );
   }
   return new MemoryCircuitStore();
 }

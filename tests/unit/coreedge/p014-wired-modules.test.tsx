@@ -62,6 +62,50 @@ describe("the correlation-id search in Operations", () => {
     expect(findFirst.mock.calls.at(-1)![0].where).toEqual({ organizationId: "org_a", correlationId: "corr_1" });
   });
 
+  it("shows a grant refusal as the access grant's, not SAP's answer", async () => {
+    findFirst.mockResolvedValue({
+      correlationId: "corr_2",
+      at: new Date("2026-10-20T11:00:00.000Z"),
+      status: 403,
+      operation: "READ",
+      externalId: "-",
+      environment: "PROD",
+      rowCount: null,
+      durationMs: null,
+      dryRun: false,
+      bindingRefusal: null,
+      failureReason: null,
+      connectionId: null,
+      replayed: false,
+    });
+    const outcome = await lookupCorrelationId("org_a", "corr_2", NOW);
+    render(<CorrelationSearch query="corr_2" outcome={outcome} />);
+    expect(screen.getByText("the access grant")).toBeTruthy();
+    expect(screen.queryByText("SAP's answer to the read")).toBeNull();
+    expect(screen.getByText(/Nothing was sent to SAP/)).toBeTruthy();
+  });
+
+  it("shows a refused request as the request's", async () => {
+    findFirst.mockResolvedValue({
+      correlationId: "corr_3",
+      at: new Date("2026-10-20T11:00:00.000Z"),
+      status: 409,
+      operation: "WRITE",
+      externalId: "supplier-invoices",
+      environment: "PROD",
+      rowCount: null,
+      durationMs: null,
+      dryRun: false,
+      bindingRefusal: null,
+      failureReason: null,
+      connectionId: null,
+      replayed: false,
+    });
+    const outcome = await lookupCorrelationId("org_a", "corr_3", NOW);
+    render(<CorrelationSearch query="corr_3" outcome={outcome} />);
+    expect(screen.getByText(/the request, or the feed's definition/)).toBeTruthy();
+  });
+
   it("says an unknown id is unknown here, and an old one is out of the window", () => {
     const { rerender } = render(<CorrelationSearch query="x" outcome={{ kind: "not-found" }} />);
     expect(screen.getByText(/No call in this organization has that correlation id/)).toBeTruthy();

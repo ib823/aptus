@@ -30,6 +30,7 @@ const HOP_LABELS: Readonly<Record<NonNullable<Extract<CorrelationOutcome, { kind
   key: "the key or its rate limit",
   access: "the access grant",
   binding: "the SAP connection",
+  request: "the request, or the feed's definition (checked before SAP)",
   sapMetadata: "SAP's service description",
   sapDataRead: "SAP's answer to the read",
 };

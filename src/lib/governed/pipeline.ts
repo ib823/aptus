@@ -59,7 +59,7 @@ import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
 import { readEntitySet, type NorthboundReadResult, type NorthboundReadStatus } from "@/lib/northbound/read";
 import { resolveReadDefinition, type ReadDefinitionRefusal } from "@/lib/northbound/read-definition";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE, northboundError, type NorthboundErrorCode } from "@/lib/northbound/respond";
-import { writeEntitySet, type NorthboundWriteResult, type NorthboundWriteStatus } from "@/lib/northbound/write";
+import { writeEntitySet, type NorthboundWriteResult } from "@/lib/northbound/write";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE, retryAfterSeconds } from "@/lib/security/rate-limit-response";
@@ -554,11 +554,31 @@ export function circuitOutcomeForRead(status: NorthboundReadStatus): CallOutcome
   return "refused";
 }
 
-export function circuitOutcomeForWrite(status: NorthboundWriteStatus): CallOutcome {
-  if (status === "CREATED") return "ok";
-  if (status === "TIMEOUT") return "timeout";
-  if (status === "ERROR") return "upstream-error";
-  return "refused";
+/**
+ * What a write outcome says about the SAP system's health.
+ *
+ * THE CALLER CHOSE THE PAYLOAD. SAP answers a bad one with a 500 (a Gateway
+ * technical exception, a RAP short dump on a field value) as readily as with
+ * a 400, and enough writes earn a 429. Counted, five such writes from one
+ * solution would open the circuit every solution on the connection shares,
+ * and under enforce refuse their reads while SAP is healthy. So an answer SAP
+ * gave to the POST never counts, whatever its status, and neither does a
+ * throttle (408 or 429, at either step). What counts is what SAP did not
+ * answer: a timeout, a host that could not be reached, a credential that
+ * could not be obtained, a CSRF handshake (no payload in it) that failed. The
+ * production reads, whose query the interface fixes, still count SAP's 5xx.
+ */
+export function circuitOutcomeForWrite(
+  result: Pick<NorthboundWriteResult, "status" | "httpStatus" | "attempted">,
+): CallOutcome {
+  if (result.status === "CREATED") return "ok";
+  if (result.status === "TIMEOUT") return "timeout";
+  if (result.status !== "ERROR") return "refused";
+  if (result.httpStatus === null) return "upstream-error";
+  if (result.httpStatus === 408 || result.httpStatus === 429) return "refused";
+  // SAP answered the POST itself: the payload's answer, not the system's health.
+  if (result.attempted) return "refused";
+  return "upstream-error";
 }
 
 /**
@@ -618,18 +638,29 @@ export async function callSapRead(
   return { result, durationMs };
 }
 
-/** The write, likewise. */
+/** A write SAP was asked to make, whose outcome the breaker has not yet been told. */
+export interface SapWriteCall extends SapCall<NorthboundWriteResult> {
+  /**
+   * Tell the breaker. Never throws, and is bounded (containment.ts). The
+   * write route calls it LAST, after the Idempotency-Key is completed and the
+   * audit row written, and in a `finally`: SAP may already have created the
+   * record, so its outcome is stored and audited before anything that talks
+   * to the breaker's store can delay it.
+   */
+  reportOutcome(): Promise<void>;
+}
+
+/** The write, likewise, except that the caller reports the outcome (see SapWriteCall). */
 export async function callSapWrite(
   bound: Pick<Bound, "connection" | "transport">,
   input: { servicePath: string; entitySet: string; payload: Record<string, unknown> },
   permit: CircuitPermit,
-): Promise<SapCall<NorthboundWriteResult>> {
+): Promise<SapWriteCall> {
   const args = { connection: bound.connection, ...input };
   const startedAt = Date.now();
   const result = await (bound.transport.kind === "DIRECT"
     ? writeEntitySet(args)
     : writeEntitySet(args, bound.transport.fetch, bound.transport.authHeaders));
   const durationMs = Date.now() - startedAt;
-  await permit.record(circuitOutcomeForWrite(result.status));
-  return { result, durationMs };
+  return { result, durationMs, reportOutcome: () => permit.record(circuitOutcomeForWrite(result)) };
 }

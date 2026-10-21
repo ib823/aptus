@@ -124,9 +124,22 @@ describe("containment: COREEDGE_CIRCUIT_BREAKER", () => {
     // A healthy system saying no is not a failure.
     expect(circuitOutcomeForRead("NEEDS_SETUP")).toBe("refused");
     expect(circuitOutcomeForRead("NOT_FOUND")).toBe("refused");
-    expect(circuitOutcomeForWrite("CREATED")).toBe("ok");
-    expect(circuitOutcomeForWrite("REJECTED")).toBe("refused");
-    expect(circuitOutcomeForWrite("ERROR")).toBe("upstream-error");
+    const write = (status: string, httpStatus: number | null, attempted: boolean) =>
+      circuitOutcomeForWrite({ status, httpStatus, attempted } as Parameters<typeof circuitOutcomeForWrite>[0]);
+    expect(write("CREATED", 201, true)).toBe("ok");
+    expect(write("REJECTED", 400, true)).toBe("refused");
+    // A write's payload is the caller's: SAP's own answer to it, a 5xx or a
+    // throttle included, says nothing about the system every solution shares.
+    expect(write("ERROR", 500, true)).toBe("refused");
+    expect(write("ERROR", 503, true)).toBe("refused");
+    expect(write("ERROR", 429, false)).toBe("refused");
+    expect(write("ERROR", 408, false)).toBe("refused");
+    // What SAP did not answer still counts: no answer, a timeout, the
+    // credential step, a CSRF handshake (no payload in it) that failed.
+    expect(write("ERROR", null, true)).toBe("upstream-error");
+    expect(write("ERROR", null, false)).toBe("upstream-error");
+    expect(write("TIMEOUT", null, true)).toBe("timeout");
+    expect(write("ERROR", 503, false)).toBe("upstream-error");
     expect(circuitOutcomeForConsoleRead(200, 200)).toBe("ok");
     expect(circuitOutcomeForConsoleRead(403, 403)).toBe("refused");
     // SAP's 4xx to a query the builder chose is audited 502, and is not a failure.
