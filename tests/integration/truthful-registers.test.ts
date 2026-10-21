@@ -202,6 +202,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("truthful registers against real
       expect(rows.map((r) => r.environmentRaw)).toEqual(["DEV"]);
     });
 
+    it("gives a READ and a CREATE approval for one feed and environment a row each, keyed apart", async () => {
+      const solutionId = await app("Two approvals app");
+      await grant(solutionId, { environment: "DEV", operation: "READ" });
+      await grant(solutionId, { environment: "DEV", operation: "CREATE", expiresAt: inDays(5) });
+
+      const rows = (await listPassport(ORG)).filter((r) => r.appName === "Two approvals app");
+      expect(rows.map((r) => r.operation).sort()).toEqual(["CREATE", "READ"]);
+      // The screen keys rows by this id; app, feed and environment are shared.
+      expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+    });
+
     it("counts a system's bound lanes from live grants only", async () => {
       const solutionId = await app("Systems app");
       await grant(solutionId, { environment: "PROD", expiresAt: new Date(Date.now() - DAY) });

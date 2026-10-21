@@ -1235,6 +1235,12 @@ export async function getSapSystemDetail(
 
 /** One approved grant, as the passport shows it to a client CIO. */
 export interface PassportRow {
+  /**
+   * The grant's id: the row's identity. The screen keyed rows by app, feed and
+   * environment, which a READ and a CREATE approval for one feed share, so
+   * React could drop one of the two rows (P0.3).
+   */
+  readonly id: string;
   readonly appName: string;
   readonly feedName: string;
   readonly externalId: string;
@@ -1286,6 +1292,7 @@ export async function listPassport(organizationId: string, now: Date = new Date(
         ...liveGrantWhere(now),
       },
       select: {
+        id: true,
         externalId: true,
         operation: true,
         environment: true,
@@ -1322,6 +1329,7 @@ export async function listPassport(organizationId: string, now: Date = new Date(
   // The decision itself, on the rows the filter let through: the same
   // resolver and predicate every other screen and the broker use.
   return grants.filter((g) => isPassportGrant(g, now)).map((g) => ({
+    id: g.id,
     appName: g.solution.name,
     feedName: feedNameByExternalId.get(g.externalId) ?? g.externalId,
     externalId: g.externalId,

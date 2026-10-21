@@ -102,7 +102,9 @@ export default async function PassportPage(): Promise<ReactNode> {
           </span>
         }
         rows={rows}
-        rowKey={(r) => `${r.appName}::${r.externalId}::${r.environmentRaw}`}
+        // The grant's id: app, feed and environment are shared by a READ and a
+        // CREATE approval for one feed, and a shared key drops a row.
+        rowKey={(r) => r.id}
         empty={<p className="text-sm text-ink-soft">{EMPTY_STATES.passportNone.message}</p>}
         columns={[
           { key: "app", header: "App", cell: (r) => r.appName },

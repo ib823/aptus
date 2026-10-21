@@ -149,6 +149,11 @@ describe("PR-6 · the passport tells the truth about fields", () => {
     expect(SCREEN_NOTES.passportFieldsUnknown).toMatch(/does not yet record/i);
   });
 
+  it("keys each row by its grant, so two approvals for one feed both render (P0.3)", () => {
+    // App, feed and environment are shared by a READ and a CREATE approval.
+    expect(code(SCREENS.passport)).toContain("rowKey={(r) => r.id}");
+  });
+
   it("has no revoke path, by construction", () => {
     const body = code(SCREENS.passport);
     expect(body).not.toMatch(/revoke/i);

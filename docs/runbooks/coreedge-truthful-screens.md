@@ -59,7 +59,9 @@ passport and the SAP systems list's "bound lanes" now take a grant only while
 it is unrevoked and unexpired by the broker's clock (`effectiveDecision`, then
 `grantsRead`), and the passport never lists SANDBOX by environment. Its
 subtitle, tiles and legend now say what it lists (approvals in force, reads and
-writes) and what it leaves out.
+writes) and what it leaves out. Its rows are keyed by grant: they were keyed by
+app, feed and environment, which a READ and a CREATE approval for one feed
+share, so React could drop one of the two (found in the manual pass).
 
 **Registers say what the deployment tenant serves (A59).** Control Tower's
 connection register and the Operations connection health view said the
