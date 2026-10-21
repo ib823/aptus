@@ -8,7 +8,10 @@
  *            measure every output a read path will ever produce from it;
  *   prepare  the same from "canonical digest" on, for a contract that did not
  *            come from a description (a sampled capture, a test);
- *   diff     the structural diff against earlier snapshots, as stored.
+ *   diff     the structural diff against earlier snapshots, as stored;
+ *   render   a read path's output (/schema, the starter kit, the solution
+ *            document) from what was stored, when it is too large to render
+ *            on the request thread (read-render.ts).
  *
  * WHY RENDER AT RECORD TIME. /schema, the starter kit and the per-solution
  * OpenAPI render a stored contract on every read. Each is rendered HERE first,
@@ -30,6 +33,7 @@ import {
   BudgetExceeded,
   contractLimit,
   documentLimit,
+  jsonText,
   kitLimit,
   LIMITS,
   OutputBudget,
@@ -43,9 +47,10 @@ import { diffContracts, storedDiff, type Bump, type StoredContractDiff } from "@
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import { standaloneSchemas } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
-import { buildNorthboundOpenApi, documentJson, type OpenApiVersion } from "@/lib/contracts/openapi";
+import { buildNorthboundOpenApi, documentJson, type NorthboundDocInput, type OpenApiVersion } from "@/lib/contracts/openapi";
+import { renderedRequestSchema } from "@/lib/contracts/request-schema";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
-import { buildScaffold, safeName, type ScaffoldInterface } from "@/lib/studio/scaffold";
+import { buildScaffold, safeName, type ScaffoldFixture, type ScaffoldInterface, type WithheldFixture } from "@/lib/studio/scaffold";
 
 /** Why the envelope refused a job it could not finish (envelope.ts). */
 export type EnvelopeRefusal =
@@ -130,16 +135,62 @@ export interface DiffJobInput {
 /** One entry per `previous`: the bump, and the diff as a snapshot stores it (bounded, diff.ts). */
 export type DiffJobOutput = { bump: Bump | null; stored: StoredContractDiff }[];
 
+/**
+ * A read path's render, from what was stored: everything it needs as plain
+ * data, so it renders the same on the request thread and in a worker
+ * (read-render.ts), under `limit` bytes — the read path's budget, computed
+ * by the route from the sizes it stored, exactly as before.
+ */
+export type RenderJobInput =
+  | {
+      /** GET /schema: the four schemas, and the write body while its stamp is current (record.ts). */
+      path: "schema";
+      contract: InterfaceContract;
+      entitySet: string;
+      snapshotId: string;
+      /** The interface's stored requestSchema (its stamp) and contract identity. */
+      requestSchema: unknown;
+      iface: { version: number; entitySet: string | null };
+      limit: number;
+    }
+  | {
+      /** The starter kit's files (scaffold.ts). */
+      path: "kit";
+      iface: ScaffoldInterface;
+      baseUrl: string;
+      fixtures: ScaffoldFixture[];
+      withheld: WithheldFixture[];
+      limit: number;
+    }
+  | {
+      /** The per-solution OpenAPI document; `safe` is always safeName, and the budget is `limit`. */
+      path: "document";
+      doc: Omit<NorthboundDocInput, "safe" | "budget">;
+      limit: number;
+    };
+
+/**
+ * What a read path's render produced: compact JSON texts (schema: the
+ * schemas, then the request schema; kit: the files; document: the document
+ * as it is downloaded), or the budget that stopped it — its bytes
+ * (TOO_LARGE) or its clock (TIME, which the request thread answers by
+ * handing the render to the envelope).
+ */
+export type RenderedForRead = { ok: true; texts: string[] } | { ok: false; reason: "TOO_LARGE" | "TIME"; limit: number };
+
 export type Job =
   | { kind: "compile"; input: CompileJobInput }
   | { kind: "prepare"; input: PrepareJobInput }
-  | { kind: "diff"; input: DiffJobInput };
+  | { kind: "diff"; input: DiffJobInput }
+  | { kind: "render"; input: RenderJobInput };
 
 export type JobOutput<K extends Job["kind"]> = K extends "compile"
   ? CompiledService
   : K extends "prepare"
     ? PreparedContract
-    : DiffJobOutput;
+    : K extends "diff"
+      ? DiffJobOutput
+      : RenderedForRead;
 
 /** The kit's base URL while measuring: the length of a real origin's, give or take (the floors cover the rest). */
 const MEASURE_BASE_URL = "https://coreedge.example.invalid/api/northbound";
@@ -319,6 +370,38 @@ export function diffJob(input: DiffJobInput): DiffJobOutput {
   });
 }
 
+/**
+ * Render one read path's output under its budget, and a deadline when one is
+ * given (ms since the epoch): pure, so the request thread and the envelope's
+ * worker render the same bytes (read-render.ts). Each text is written by the
+ * one budgeted writer, so a render past its budget stops there.
+ */
+export function renderForRead(input: RenderJobInput, deadline: number | null = null): RenderedForRead {
+  try {
+    switch (input.path) {
+      case "schema": {
+        const budget = new OutputBudget("schema", input.limit, deadline);
+        const schemas = standaloneSchemas(input.contract, toTypeName(input.entitySet));
+        const requestSchema = renderedRequestSchema(input.requestSchema, input.iface, { id: input.snapshotId, schemas });
+        return { ok: true, texts: [jsonText(schemas, budget), jsonText(requestSchema, budget)] };
+      }
+      case "kit": {
+        const budget = new OutputBudget("kit", input.limit, deadline);
+        const files = buildScaffold(input.iface, input.baseUrl, input.fixtures, input.withheld, budget);
+        // The files' contents were charged as they were written; their JSON escapes are a bounded multiple of them.
+        return { ok: true, texts: [JSON.stringify(files)] };
+      }
+      case "document": {
+        const doc = buildNorthboundOpenApi({ ...input.doc, safe: safeName, budget: new OutputBudget("document", input.limit, deadline) });
+        return { ok: true, texts: [documentJson(doc, new OutputBudget("document", input.limit, deadline))] };
+      }
+    }
+  } catch (err) {
+    if (err instanceof BudgetExceeded) return { ok: false, reason: err.budget === "time" ? "TIME" : "TOO_LARGE", limit: input.limit };
+    throw err;
+  }
+}
+
 export function runJob(job: Job): unknown {
   switch (job.kind) {
     case "compile":
@@ -327,5 +410,7 @@ export function runJob(job: Job): unknown {
       return prepareContract(job.input);
     case "diff":
       return diffJob(job.input);
+    case "render":
+      return renderForRead(job.input);
   }
 }

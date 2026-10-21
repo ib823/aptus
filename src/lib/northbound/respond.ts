@@ -148,15 +148,22 @@ export function unauthenticated(correlationId: string): NextResponse {
 }
 
 export function northboundOk<T>(data: T, correlationId: string, status = 200): NextResponse {
-  return NextResponse.json(
-    { data },
-    {
-      status,
-      headers: {
-        "x-correlation-id": correlationId,
-        // Client SAP data must never sit in a shared cache.
-        "cache-control": "no-store",
-      },
-    },
-  );
+  return NextResponse.json({ data }, { status, headers: okHeaders(correlationId) });
+}
+
+/**
+ * northboundOk for an answer already written as JSON — `{"data":…}`, with
+ * rendered text spliced in (contracts/read-render.ts, RawJson): the same
+ * status, headers and content type, and the body as given.
+ */
+export function northboundOkJson(text: string, correlationId: string, status = 200): NextResponse {
+  return new NextResponse(text, { status, headers: { "content-type": "application/json", ...okHeaders(correlationId) } });
+}
+
+function okHeaders(correlationId: string): Record<string, string> {
+  return {
+    "x-correlation-id": correlationId,
+    // Client SAP data must never sit in a shared cache.
+    "cache-control": "no-store",
+  };
 }

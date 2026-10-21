@@ -53,6 +53,16 @@
  * to the answer's budget, which allows it exactly that bound beside the
  * contract's schemas. Past it `responseSchema` is null and
  * `responseSchemaOmitted` says why, as `schemasOmitted` does for a contract.
+ *
+ * AND NEVER MORE THAN A FIXED SHARE OF THE REQUEST THREAD (structural
+ * hardening round 2). A contract inside every cap rendered 13 MB here, half a
+ * second to a second of blocked event loop, on every call. The schemas are
+ * now rendered by renderReadPath (read-render.ts): here only while the budget
+ * is small enough to be cheap by construction and the render keeps to the
+ * inline clock, in the compiler's envelope otherwise — and the text that
+ * comes back is spliced into the answer as it is. An envelope that cannot
+ * start the render (no free slot) leaves `schemas` null with
+ * `schemasOmitted: "UNAVAILABLE"`, to retry.
  */
 
 import type { NextRequest } from "next/server";
@@ -63,10 +73,11 @@ import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   newCorrelationId,
   northboundError,
-  northboundOk,
+  northboundOkJson,
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
+import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
 import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -74,13 +85,12 @@ import { withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
 import { scopedById } from "@/lib/studio/tenant-scope";
 import { BudgetExceeded, chargeJson, LIMITS, OutputBudget, schemaLimit } from "@/lib/contracts/budget";
-import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
-import { toTypeName } from "@/lib/contracts/names";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
-import { renderedRequestSchema } from "@/lib/contracts/record";
 import { currentSnapshotSummaries, snapshotContracts } from "@/lib/contracts/snapshot";
 
 export const dynamic = "force-dynamic";
+/** A large contract's schemas render in a worker thread (lib/contracts/read-render.ts): Node.js only. */
+export const runtime = "nodejs";
 
 /**
  * Served as every supported version of the northbound API, at
@@ -210,22 +220,35 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       responseSchemaTooLarge = true;
     }
   }
-  let schemas: ReturnType<typeof standaloneSchemas> | null = null;
-  let requestSchema: JsonSchema | null = null;
+  // The schemas and the write body, in what is left of the budget: on this
+  // thread only while that is cheap by construction (read-render.ts).
+  const raw = new RawJson();
+  let schemas: string | null = null;
+  let requestSchema: string | null = null;
+  let unavailable = false;
   if (snapshot) {
-    try {
-      schemas = standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet));
-      requestSchema = renderedRequestSchema(iface.requestSchema, iface, { id: snapshot.id, schemas });
-      chargeJson({ schemas, requestSchema }, budget);
-    } catch (err) {
-      if (!(err instanceof BudgetExceeded)) throw err;
-      tooLarge = true;
-      schemas = null;
-      requestSchema = null;
+    const rendered = await renderReadPath(
+      {
+        path: "schema",
+        contract: snapshot.contract,
+        entitySet: snapshot.entitySet,
+        snapshotId: snapshot.id,
+        requestSchema: iface.requestSchema,
+        iface: { version: iface.version, entitySet: iface.entitySet },
+        limit: budget.remaining,
+      },
+      { tenant: client.organizationId },
+    );
+    if (rendered.ok) {
+      schemas = raw.slot(rendered.texts[0]!);
+      requestSchema = raw.slot(rendered.texts[1]!);
+    } else {
+      if (rendered.reason === "TOO_LARGE") tooLarge = true;
+      else unavailable = true;
       snapshot = null;
     }
   }
-  const shown = tooLarge ? servable : snapshot;
+  const shown = tooLarge || unavailable ? servable : snapshot;
   const contract = shown
     ? {
         source: shown.source === "METADATA" ? ("metadata" as const) : ("sampled" as const),
@@ -241,7 +264,12 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
               schemasOmitted: "TOO_LARGE" as const,
               schemasNote: `This contract's schemas are larger than a generated document may carry (${Math.floor(MAX_DOCUMENT_CONTRACT_BYTES / (1024 * 1024))} MB of contract, rendered within a fixed multiple of it), so they are not rendered. Narrow the interface's dataset and verify again.`,
             }
-          : {}),
+          : unavailable
+            ? {
+                schemasOmitted: "UNAVAILABLE" as const,
+                schemasNote: "This contract's schemas could not be rendered just now (too many large contracts are being rendered at once). Retry in a moment.",
+              }
+            : {}),
       }
     : {
         // No snapshot to serve: the captured schema (responseSchema, above)
@@ -268,8 +296,10 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
     clientTokenId: client.clientId,
   });
 
-  return northboundOk(
-    {
+  // The rendered schemas are spliced in as they were written (RawJson): the
+  // same text NextResponse.json would send, never parsed back on this thread.
+  const body = raw.stringify({
+    data: {
       id: iface.id,
       name: iface.name,
       externalId: iface.externalId,
@@ -306,6 +336,6 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       // Additive (P1.3): the compiled contract and where it came from.
       contract,
     },
-    correlationId,
-  );
+  });
+  return northboundOkJson(body, correlationId);
 }

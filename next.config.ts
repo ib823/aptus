@@ -48,6 +48,11 @@ const nextConfig: NextConfig = {
      */
     "/api/studio/interfaces/[id]/verify-service": ["./.next/server/chunks/contract-compiler-worker.js"],
     "/api/studio/interfaces/[id]/capture-schema": ["./.next/server/chunks/contract-compiler-worker.js"],
+    // And the read paths that render a large contract there (read-render.ts, structural hardening round 2).
+    "/api/northbound/interfaces/[id]/schema": ["./.next/server/chunks/contract-compiler-worker.js"],
+    "/api/northbound/v1/interfaces/[id]/schema": ["./.next/server/chunks/contract-compiler-worker.js"],
+    "/api/studio/interfaces/[id]/scaffold": ["./.next/server/chunks/contract-compiler-worker.js"],
+    "/api/studio/solutions/[id]/openapi": ["./.next/server/chunks/contract-compiler-worker.js"],
   },
   webpack(config, { isServer }) {
     if (!isServer) {

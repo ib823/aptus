@@ -28,11 +28,20 @@
  * of it, measured in the database), and readCurrentCapturedSchemas reads only
  * those that describe the current contract and are inside the stated bound;
  * any other is named (TOO_LARGE), never read.
+ *
+ * ONE DECISION FOR EVERY READER (structural hardening round 2). Whether a
+ * schema it did read is SERVED was left to each reader: /schema charged it
+ * to a 520 KiB share and withheld one past it, while the kit and the
+ * solution document served the same row whole — 20,000 fields in their
+ * OpenAPI, an open record from /schema. Now it is decided here, once: a
+ * served schema whose compact JSON is past LIMITS.capturedSchema.served
+ * (measured no further than that) is TOO_LARGE for all three, and each says
+ * so in its own words.
  */
 
 import { Prisma } from "@prisma/client";
 
-import { LIMITS } from "@/lib/contracts/budget";
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { prisma } from "@/lib/db/prisma";
 import {
   artifactState,
@@ -134,7 +143,8 @@ export type CurrentCapturedSchema =
 /**
  * The served schema (servedResponseSchema) of each listed interface whose
  * stored schema describes its current contract: read only when its stored
- * size is inside the stated bound, named TOO_LARGE otherwise. Interfaces
+ * size is inside the stated bound, and served only when what is served is
+ * inside its own (LIMITS.capturedSchema.served); named TOO_LARGE otherwise. Interfaces
  * with no current schema are absent. The stamp is checked again on what was
  * read, so a capture that landed meanwhile for another contract is not served.
  */
@@ -160,7 +170,14 @@ export async function readCurrentCapturedSchemas(
   for (const r of rows) {
     const iface = byId.get(r.id);
     if (iface && responseSchemaState(r.responseSchema, iface) === "current") {
-      out.set(r.id, { ok: true, schema: servedResponseSchema(r.responseSchema), stored: r.responseSchema });
+      const schema = servedResponseSchema(r.responseSchema);
+      const served = jsonBytesUpTo(schema, LIMITS.capturedSchema.served);
+      out.set(
+        r.id,
+        served > LIMITS.capturedSchema.served
+          ? { ok: false, reason: "TOO_LARGE", storedBytes: facts.get(r.id)?.storedBytes ?? 0 }
+          : { ok: true, schema, stored: r.responseSchema },
+      );
     }
   }
   return out;

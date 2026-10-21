@@ -71,6 +71,15 @@ const TOO_LARGE_MESSAGE =
   `These rows describe more than a captured schema may hold (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ` +
   `${LIMITS.capturedSchema.bytes / 1024} KB), so nothing was captured. Narrow the interface's dataset, or verify the service to compile its contract from its own description.`;
 
+/**
+ * The body past its size is a different cause with a different remedy: a few
+ * wide rows, or one long value, can pass it while describing a few dozen
+ * fields, and narrowing the dataset does nothing for that — fewer rows do.
+ */
+const BODY_TOO_LARGE_MESSAGE =
+  `The sampled rows are larger than ${LIMITS.capturedSchema.requestBytes / (1024 * 1024)} MB together, so nothing was captured. ` +
+  "Capture from fewer rows (a smaller $top in the Test Console), or verify the service to compile its contract from its own description.";
+
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
@@ -85,7 +94,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const scope = scoped.scope;
 
   const body = await readJsonCapped(request, LIMITS.capturedSchema.requestBytes);
-  if (!body.ok && body.reason === "TOO_LARGE") return studioError("TOO_LARGE", TOO_LARGE_MESSAGE);
+  if (!body.ok && body.reason === "TOO_LARGE") return studioError("TOO_LARGE", BODY_TOO_LARGE_MESSAGE);
   // A row wider than a schema could describe is refused before it is validated (a pass over every key).
   if (body.ok && rowsPastCaptureBound((body.value as { rows?: unknown } | null)?.rows)) {
     return studioError("TOO_LARGE", TOO_LARGE_MESSAGE);

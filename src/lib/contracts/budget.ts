@@ -26,11 +26,16 @@
  *   stored diff  ≤ 1 MiB
  *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB
  *   starter kit  ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB
- *   solution doc ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB,
+ *   solution doc ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB,
  *                  over contracts (and captured schemas) adding up to ≤ 2 MiB,
- *                  for at most (32 MiB − 256 KiB) / 128 KiB = 254 interfaces
+ *                  for at most (32 MiB − 256 KiB) / 32 KiB = 1,016 interfaces
  *   captured schema ≤ 2,000 properties and 512 KiB, from a request body of
- *                  ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB
+ *                  ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB,
+ *                  and served (by /schema, the kit and the document alike)
+ *                  only while its served JSON is ≤ 520 KiB
+ *   request thread ≤ 2 MiB of any read path's budget, rendered within 100 ms;
+ *                  a budget past it, or a render past the clock, runs in the
+ *                  envelope instead (read-render.ts), on ≤ 4 MiB of input
  *   snapshot history ≤ 100 rows per interface, plus each environment's newest
  *   envelope input  ≤ the description cap (compile) or the contract cap per
  *                  contract (prepare, diff), measured before it is copied in
@@ -45,6 +50,17 @@
  * budget its contract was measured against at record time, inside that
  * envelope (pipeline.ts), so what a read renders was rendered once already,
  * within the same bytes, before the contract was ever stored.
+ *
+ * AND WHERE A READ RENDERS IT (structural hardening round 2). Bounding a
+ * read's bytes did not bound the request thread: a contract under every cap
+ * still rendered 13-25 MB, 0.5-1.4 s of blocked event loop, on every call of
+ * /schema, the kit and the solution document. So the request thread renders
+ * only what LIMITS.inlineRender allows — a budget (a function of what was
+ * stored, known before anything is rendered) of at most `bytes`, under a
+ * deadline of `ms` — and everything else renders in the envelope, on a
+ * thread of its own, under the same budget (read-render.ts). What a read
+ * costs the request thread is then bounded by that constant, whatever shape
+ * of contract makes the render expensive, found or not.
  *
  * PURE. No I/O; usable in the worker and on a read path alike.
  */
@@ -64,7 +80,13 @@ export const LIMITS = {
   /** The starter kit (every file, before the response wraps them). */
   kit: { perContractByte: 32, perFixtureByte: 8, floor: 512 * KiB, cap: 32 * MiB },
   /** The per-solution OpenAPI document. */
-  document: { perContractByte: 16, perInterface: 128 * KiB, floor: 256 * KiB, cap: 32 * MiB, contractsCap: 2 * MiB },
+  /**
+   * The per-solution OpenAPI document. `perInterface` is what an interface
+   * with no contract adds — about 11.4 KB measured, 32 KiB allowed (its names
+   * at their longest, its grants) — so the count bound (maxDocumentInterfaces)
+   * follows what an interface renders, not a floor ten times larger.
+   */
+  document: { perContractByte: 16, perInterface: 32 * KiB, floor: 256 * KiB, cap: 32 * MiB, contractsCap: 2 * MiB },
   /**
    * A schema captured from sampled rows (schema-capture.ts), as stored on the
    * Interface row and served by /schema, the kit and the solution document.
@@ -83,6 +105,15 @@ export const LIMITS = {
    * flips.
    */
   snapshotHistory: 100,
+  /**
+   * WHAT A READ PATH MAY RENDER ON THE REQUEST THREAD (read-render.ts): a
+   * render whose budget is at most `bytes` runs there under a deadline of
+   * `ms` — about 50 ns a byte measured, so a full budget is ~100 ms at worst;
+   * a larger budget, or a render that meets the deadline, runs in the
+   * envelope instead, on a thread of its own, from at most `inputBytes` of
+   * contract, schema and fixtures copied into it.
+   */
+  inlineRender: { bytes: 2 * MiB, ms: 100, inputBytes: 4 * MiB },
   /** Documents up to this size are indented for the person reading them; larger ones are compact. */
   prettyDocument: 512 * KiB,
   /** Nesting a writer follows before it refuses: no contract, schema or fixture comes near it. */

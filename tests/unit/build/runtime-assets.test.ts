@@ -117,6 +117,11 @@ const worker = ".next/server/chunks/contract-compiler-worker.js";
 const workerRoutes = [
   ".next/server/app/api/studio/interfaces/[id]/verify-service/route.js.nft.json",
   ".next/server/app/api/studio/interfaces/[id]/capture-schema/route.js.nft.json",
+  // The read paths that render a large contract in the worker (lib/contracts/read-render.ts).
+  ".next/server/app/api/northbound/interfaces/[id]/schema/route.js.nft.json",
+  ".next/server/app/api/northbound/v1/interfaces/[id]/schema/route.js.nft.json",
+  ".next/server/app/api/studio/interfaces/[id]/scaffold/route.js.nft.json",
+  ".next/server/app/api/studio/solutions/[id]/openapi/route.js.nft.json",
 ];
 
 /** A build's worker chunk, traced by every route that spawns it (or by those given). */

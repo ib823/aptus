@@ -157,7 +157,10 @@ import { GET as getScaffold } from "@/app/api/studio/interfaces/[id]/scaffold/ro
 import { POST as verifyService } from "@/app/api/studio/interfaces/[id]/verify-service/route";
 import { GET as getSolutionOpenApi } from "@/app/api/studio/solutions/[id]/openapi/route";
 import { kitLimit, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
+import { contractDigest } from "@/lib/contracts/canonical";
+import { compileContract } from "@/lib/contracts/compile";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
 const RAP = readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
@@ -757,6 +760,26 @@ describe("a captured schema is bounded where it is written and where it is read"
     expect(db.interfaces[0]!.responseSchema).toBeNull();
   });
 
+  /*
+   * Structural hardening, round 2: one long value (an attachment's base64)
+   * makes a body past its size while describing one field, and the builder was
+   * told the rows describe more than 2,000 fields and to narrow the dataset —
+   * neither true nor any help. The body's own refusal says what it is.
+   */
+  it("capture-schema says a body past its size is too many bytes of rows, not too many fields", async () => {
+    const big = JSON.stringify({ rows: [{ a: "x".repeat(LIMITS.capturedSchema.requestBytes) }], interfaceVersion: 2 });
+    const { error } = (await (await capture(big)).json()) as { error: { code: string; message: string } };
+    expect(error.code).toBe("TOO_LARGE");
+    expect(error.message).toMatch(/larger than 4\.5 MB together/);
+    expect(error.message).toMatch(/fewer rows/);
+    expect(error.message).not.toMatch(/2,000 fields/);
+    // Rows past the field bound keep their own answer.
+    const row: Row = {};
+    for (let i = 0; i < LIMITS.capturedSchema.properties + 1; i++) row[`k${i}`] = 0;
+    const wide = (await (await capture(JSON.stringify({ rows: [row], interfaceVersion: 2 }))).json()) as { error: { message: string } };
+    expect(wide.error.message).toMatch(/2,000 fields/);
+  });
+
   it("capture-schema still captures an ordinary wide row", async () => {
     const row: Row = {};
     for (let i = 0; i < 300; i++) row[`Field${i}`] = "v";
@@ -814,7 +837,7 @@ describe("a captured schema is bounded where it is written and where it is read"
     expect(res.status).toBe(422);
     expect(((await res.json()) as { error: { code: string; message: string } }).error).toMatchObject({
       code: "TOO_LARGE",
-      message: expect.stringMatching(/more than 254 interfaces/),
+      message: expect.stringContaining(`more than ${maxDocumentInterfaces()} interfaces`),
     });
     expect(queryRaw).not.toHaveBeenCalled();
   });
@@ -835,6 +858,83 @@ describe("a captured schema is bounded where it is written and where it is read"
     for (const call of findMany.mock.calls) expect(Object.keys((call[0] as { select: Row }).select)).not.toContain("responseSchema");
   });
 
+  /*
+   * Structural hardening, round 2: a capture stored before capture was
+   * bounded, inside the stored-text bound (1 MiB) but past what a served
+   * schema may be (520 KiB). /schema withheld it as TOO_LARGE; the kit and
+   * the solution document, from the same row, described all 20,000 fields.
+   * Whether it is served is now decided once (readCurrentCapturedSchemas),
+   * and all three say the same.
+   */
+  it("/schema, the starter kit and the solution document agree about a captured schema past what may be served", async () => {
+    const stored = storedCapture(20_000, 16);
+    const compact = JSON.stringify(stored).length;
+    expect(compact).toBeGreaterThan(LIMITS.capturedSchema.served);
+    expect(compact).toBeLessThan(LIMITS.capturedSchema.storedTextBytes);
+    db.interfaces[0] = { ...db.interfaces[0]!, operation: "READ", mode: "READ", responseSchema: stored };
+
+    const schema = await data<Row>(await schemaRoute());
+    expect(schema).toMatchObject({ responseSchema: null, responseSchemaOmitted: "TOO_LARGE", schemaCaptured: true });
+
+    const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+    expect(kit.status).toBe(200);
+    const files = (await data<{ files: { path: string; contents: string }[] }>(kit)).files;
+    expect(files.find((f) => f.path === "client.ts")!.contents).toMatch(/larger than a captured schema may be/);
+    for (const name of ["openapi.json", "openapi-3.0.json"]) {
+      expect(files.find((f) => f.path === name)!.contents, name).not.toContain("F000000000019999");
+    }
+
+    const solution = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(solution.status).toBe(200);
+    const text = await solution.text();
+    expect(text).not.toContain("F000000000019999");
+    const doc = JSON.parse(text) as { "x-coreedge-interfaces": { contract: { source: string } }[] };
+    expect(doc["x-coreedge-interfaces"][0]!.contract.source).toBe("none");
+    expect(text).toMatch(/larger than a captured schema may be/);
+
+    // And one inside the bound is served by all three.
+    db.interfaces[0]!.responseSchema = storedCapture(50);
+    expect(Object.keys(((await data<Row>(await schemaRoute())).responseSchema as { properties: Row }).properties)).toHaveLength(50);
+    const kitOk = (await data<{ files: { path: string; contents: string }[] }>(
+      await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) }),
+    )).files;
+    expect(kitOk.find((f) => f.path === "openapi.json")!.contents).toContain("F0000049");
+    const docOk = (await (
+      await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) })
+    ).json()) as { "x-coreedge-interfaces": { contract: { source: string } }[] };
+    expect(docOk["x-coreedge-interfaces"][0]!.contract.source).toBe("sampled");
+  });
+
+  /*
+   * Structural hardening, round 2: the interface count bound came from a
+   * per-interface floor of 128 KiB, ten times what an interface renders, and
+   * refused a solution of 255 interfaces whose document is about 3 MB. It is
+   * now sized from what an interface renders, so such a solution is served —
+   * built in the envelope, its budget being past what the request thread
+   * renders — and the bound still refuses a solution far past it.
+   */
+  it("serves the solution document of a solution with more than 254 interfaces", async () => {
+    const base = db.interfaces[0]!;
+    db.interfaces = Array.from({ length: 300 }, (_, i) => ({
+      ...base,
+      id: `if_${i + 1}`,
+      name: `Interface ${i + 1} ${"n".repeat(180)}`,
+      externalId: `custom:/sap/opu/odata/sap/ZAPI_${i}_SRV`,
+      operation: "READ",
+      mode: "READ",
+    }));
+    const res = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as { "x-coreedge-interfaces": unknown[] };
+    expect(doc["x-coreedge-interfaces"]).toHaveLength(300);
+    // The count bound is now about what an interface renders: a thousand of them.
+    expect(maxDocumentInterfaces()).toBeGreaterThan(1000);
+  }, 120_000);
+
   it("and serves a solution document of captured schemas inside its budget", async () => {
     const base = db.interfaces[0]!;
     db.interfaces = Array.from({ length: 3 }, (_, i) => ({ ...base, id: `if_${i + 1}`, operation: "READ", mode: "READ", responseSchema: storedCapture(40) }));
@@ -844,5 +944,107 @@ describe("a captured schema is bounded where it is written and where it is read"
     expect(res.status).toBe(200);
     const doc = (await res.json()) as { "x-coreedge-interfaces": { contract: { source: string } }[] };
     expect(doc["x-coreedge-interfaces"].map((i) => i.contract.source)).toEqual(["sampled", "sampled", "sampled"]);
+  });
+});
+
+/*
+ * STRUCTURAL HARDENING, ROUND 2: WHAT A READ COSTS THE REQUEST THREAD. A
+ * builder's SAP serves a 1.2 MB description of one entity type with 18,000
+ * decimal properties; it slices to a 1.4 MB contract, under every cap, and is
+ * recorded. Every GET /schema, kit download and solution document then
+ * re-rendered 10-25 MB from it on the request thread, 0.5-1.4 s each with
+ * the event loop blocked, on every call. The render is now on the request
+ * thread only while its budget is small enough to be cheap by construction
+ * (read-render.ts), and in the envelope otherwise: the answers are the same,
+ * and the thread keeps ticking while they are made.
+ */
+describe("a read of a contract at the caps does not block the request thread", () => {
+  /** The hostile contract, sliced and digested as the record would keep it: on the dataset the seeded interface reads. */
+  function hostileContract(properties: number) {
+    const props = Array.from({ length: properties }, (_, i) => `<Property Name="F${i}" Type="Edm.Decimal" Precision="9" Scale="2"/>`).join("");
+    const description =
+      `<?xml version="1.0" encoding="utf-8"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" ` +
+      `xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"><edmx:DataServices m:DataServiceVersion="2.0">` +
+      `<Schema Namespace="S" xmlns="http://schemas.microsoft.com/ado/2008/09/edm"><EntityType Name="SalesOrderType"><Key><PropertyRef Name="F0"/></Key>${props}</EntityType>` +
+      `<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="SalesOrder" EntityType="S.SalesOrderType"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`;
+    const compiled = compileContract(description);
+    if (!compiled.ok) throw new Error("not compiled");
+    const slice = sliceForEntitySet(compiled.ir, "SalesOrder", description.length);
+    if (!slice.ok) throw new Error("not sliced");
+    return { contract: slice.contract, bytes: contractDigest(slice.contract).bytes };
+  }
+
+  /** The longest the event loop went without running a 5 ms ticker while `work` ran. */
+  async function longestStall<T>(work: () => Promise<T>): Promise<{ value: T; ms: number }> {
+    let longest = 0;
+    let last = performance.now();
+    const ticker = setInterval(() => {
+      const now = performance.now();
+      longest = Math.max(longest, now - last);
+      last = now;
+    }, 5);
+    try {
+      const value = await work();
+      longest = Math.max(longest, performance.now() - last);
+      return { value, ms: longest };
+    } finally {
+      clearInterval(ticker);
+    }
+  }
+
+  /** Before any fix: 500-1,000 ms for /schema, 1,300-1,400 ms for the kit, ~900 ms for the document. */
+  const STALL_MS = 250;
+
+  it("/schema, the starter kit and the solution document answer in full, and the thread keeps ticking", async () => {
+    const hostile = hostileContract(18_000);
+    // Under every cap: the contract a verify of that description records.
+    expect(hostile.bytes).toBeGreaterThan(1_000_000);
+    expect(hostile.bytes).toBeLessThanOrEqual(MAX_DOCUMENT_CONTRACT_BYTES);
+    await verify();
+    const snap = db.snapshots[0]!;
+    snap.ir = hostile.contract;
+    snap.irBytes = hostile.bytes;
+
+    const schema = await longestStall(() => schemaRoute());
+    const d = await data<{ requestSchema: Row | null; contract: { schemas: { record: { properties: Row } } | null } }>(schema.value);
+    expect(Object.keys(d.contract.schemas!.record.properties)).toHaveLength(18_000);
+    expect(d.requestSchema).not.toBeNull();
+    expect(schema.ms, "/schema").toBeLessThan(STALL_MS);
+
+    const v1 = await longestStall(() =>
+      getSchemaV1(new NextRequest("http://localhost/api/northbound/v1/interfaces/if_1/schema", { headers: { authorization: "Bearer ce_x" } }), {
+        params: Promise.resolve({ id: "if_1" }),
+      }),
+    );
+    expect(Object.keys((await data<{ contract: { schemas: { record: { properties: Row } } } }>(v1.value)).contract.schemas.record.properties)).toHaveLength(18_000);
+    expect(v1.ms, "/v1 /schema").toBeLessThan(STALL_MS);
+
+    const kit = await longestStall(() =>
+      getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) }),
+    );
+    expect(kit.value.status).toBe(200);
+    const files = (await data<{ files: { path: string; contents: string }[] }>(kit.value)).files;
+    expect(files.find((f) => f.path === "openapi.json")!.contents).toContain('"F17999"');
+    expect(kit.ms, "kit").toBeLessThan(STALL_MS);
+
+    const solution = await longestStall(() =>
+      getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) }),
+    );
+    expect(solution.value.status).toBe(200);
+    expect(await solution.value.text()).toContain('"F17999"');
+    expect(solution.ms, "solution document").toBeLessThan(STALL_MS);
+  }, 180_000);
+
+  it("a small contract is still answered on the request thread, byte for byte as before", async () => {
+    await verify();
+    const res = await schemaRoute();
+    expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-correlation-id")).toBeTruthy();
+    const text = await res.text();
+    // What NextResponse.json({ data }) would have sent for the same answer.
+    expect(text).toBe(JSON.stringify(JSON.parse(text)));
+    const d = (JSON.parse(text) as { data: { contract: { schemas: Row } } }).data;
+    expect(Object.keys(d.contract.schemas)).toEqual(["record", "create", "update", "key"]);
   });
 });

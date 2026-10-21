@@ -80,6 +80,11 @@ export function documentOutputTooLargeMessage(what: "starter kit" | "solution do
   return `This ${what} would be larger than the ${Math.max(1, Math.floor(limit / (1024 * 1024)))} MB its contracts allow it to be, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
 }
 
+/** A document that could not be rendered just now (read-render.ts: no free render slot, or no worker). */
+export function documentUnavailableMessage(what: "starter kit" | "solution document"): string {
+  return `This ${what} could not be generated just now: too many large documents are being generated at once. Try again in a moment.`;
+}
+
 export async function loadDocInputs(
   scope: TenantScope,
   interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],

@@ -48,7 +48,8 @@ parses a description; `/schema` and the documents read the stored snapshot.
   `requestSchema`, which was always null because nothing wrote it, is now the
   compiled write body of a verified write interface, else still null.
   `contract.schemasOmitted` (`TOO_LARGE`) says why `schemas` is null for a
-  contract past the documents' budget.
+  contract past the documents' budget (or `UNAVAILABLE`, when a large one
+  could not be rendered just now; a retry may succeed).
 - `GET /api/studio/interfaces` no longer returns `requestSchema` (always null
   before P1.3); it returns `hasRequestSchema`, as the Studio page does.
 - `POST /api/studio/interfaces/{id}/verify-service` adds `contract` to its answer
@@ -238,10 +239,11 @@ Two things it takes to hold in production:
   `/_next/`, so the URL pointed at `file:///_next/…` and every compile in a
   production build was `UNAVAILABLE`; the publicPath is empty for exactly that
   expression. And a worker chunk is outside every route's chunk graph, so the
-  function trace left it out: `next.config.ts` includes it for the two routes
-  that spawn it (verify-service, capture-schema), and
-  `scripts/check-runtime-assets.mjs --built` fails the build if it is missing
-  or untraced.
+  function trace left it out: `next.config.ts` includes it for every route
+  that spawns it (verify-service and capture-schema, which compile; `/schema`
+  on both base paths, the kit and the solution document, which render a large
+  contract there), and `scripts/check-runtime-assets.mjs --built` fails the
+  build if it is missing or untraced.
 
 **The output budget (`src/lib/contracts/budget.ts`).** One writer counts every
 byte of contract-derived output as it writes it and stops at a stated limit
@@ -258,8 +260,9 @@ unchanged). The limits, each proportional to what it is made from and capped:
 | Stored diff | ≤ 1 MiB |
 | `/schema` answer | ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB |
 | Starter kit (all files) | ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB |
-| Solution document | ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts and captured schemas adding up to ≤ 2 MiB, for ≤ 254 interfaces |
-| Captured schema | ≤ 2,000 fields and 512 KiB, from a request body ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB |
+| Solution document | ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts and captured schemas adding up to ≤ 2 MiB, for ≤ 1,016 interfaces |
+| Captured schema | ≤ 2,000 fields and 512 KiB, from a request body ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB, and served (by all three readers alike) only while its served JSON is ≤ 520 KiB |
+| Request thread | a read path renders there only under a budget ≤ 2 MiB and within 100 ms; anything else renders in the envelope, from ≤ 4 MiB of input |
 | Snapshot history | ≤ 100 rows per interface, plus each environment's newest |
 
 **Rendered at record time.** Before a contract is stored, every read path's
@@ -314,6 +317,48 @@ stated limit, at the edge where the input arrives:
   hostile service holds at most one slot and two queue places, so another
   organisation's verify still compiles; a wait that times out leaves the
   queue at once.
+
+**Structural hardening, round 2.** Bounding what a read renders did not bound
+what it costs the thread it renders on; a second review found that, and three
+smaller edges:
+
+- **Reads render off the request thread when they are large.** A 1.2 MB V2
+  description of one entity type with 18,000 decimal properties slices to a
+  1.4 MB contract, under every cap, and is recorded. Every `GET /schema` (and
+  `/v1`), kit download and solution document then re-rendered 10-25 MB from
+  it on the request thread — 0.5-1.4 s of blocked event loop per call, on
+  every call, with nothing cached and no deadline. Now every read path renders
+  through `renderReadPath` (`src/lib/contracts/read-render.ts`): on the
+  request thread only while its budget — a function of the sizes stored,
+  known before anything is rendered — is at most 2 MiB and the render keeps
+  to a 100 ms clock; otherwise in the envelope, as a `render` job, in slots of
+  its own (`ENVELOPE_RENDER_CONCURRENCY`, shared between organisations like
+  the compile slots, so a loop of downloads never queues a verify). What comes
+  back is text, spliced into the answer verbatim (`RawJson`): the bytes are
+  exactly what was sent before. The bound holds for any shape of contract
+  that makes a render expensive, found or not. A render the envelope cannot
+  finish is `TOO_LARGE`; one it cannot start is `schemasOmitted:
+  "UNAVAILABLE"` on `/schema` and a 503 `UNAVAILABLE` on the kit and the
+  document, to retry. Measured through the route handlers on the contract
+  above: the event loop never went more than 250 ms without a tick, against
+  0.5-1.0 s before for `/schema`, ~1.0 s for the kit and ~0.55 s for the
+  document.
+- **A slot is free when its isolate is.** The envelope handed a slot on the
+  moment a job's result was in, while the terminated worker was still exiting:
+  a burst of jobs ending at their deadline held three and four isolates
+  against a cap of two. A job now holds its slot until its worker's `exit`
+  (after 5 s without one, it is handed on and logged).
+- **One decision about a captured schema.** `/schema` withheld a stored
+  capture past what may be served (520 KiB) while the kit and the solution
+  document served the same row whole. `readCurrentCapturedSchemas` now
+  decides it once for all three.
+- **The interface count follows what an interface renders.** The solution
+  document's count bound came from a 128 KiB per-interface floor, ten times
+  the ~11.4 KB an interface without a contract renders, and refused solutions
+  of more than 254 interfaces; the floor is 32 KiB, so up to 1,016.
+- **capture-schema names its refusals apart.** A body past 4.5 MiB is "the
+  sampled rows are larger than 4.5 MB together … capture from fewer rows",
+  not the field bound's "more than 2,000 fields".
 
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with

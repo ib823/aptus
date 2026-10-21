@@ -2430,9 +2430,10 @@
                   "schemasOmitted": {
                     "type": "string",
                     "enum": [
-                      "TOO_LARGE"
+                      "TOO_LARGE",
+                      "UNAVAILABLE"
                     ],
-                    "description": "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry."
+                    "description": "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; UNAVAILABLE, it could not be rendered just now, and a retry may succeed."
                   },
                   "schemasNote": {
                     "type": "string"

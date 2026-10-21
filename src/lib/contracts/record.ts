@@ -24,7 +24,8 @@
 import { Prisma } from "@prisma/client";
 
 import type { Bump } from "@/lib/contracts/diff";
-import { contractBodies, type JsonSchema } from "@/lib/contracts/json-schema";
+import { contractBodies } from "@/lib/contracts/json-schema";
+import type { RequestSchemaStamp } from "@/lib/contracts/request-schema";
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import type { CompiledService } from "@/lib/contracts/pipeline";
 import { contractFromSample } from "@/lib/contracts/sampled";
@@ -39,6 +40,9 @@ import { prisma } from "@/lib/db/prisma";
 import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
+
+// Pure, and read on every path that serves a write body (the request thread and the envelope's worker alike).
+export { currentRequestSchemaStamp, renderedRequestSchema, requestSchemaStamp, type RequestSchemaStamp } from "@/lib/contracts/request-schema";
 
 export type ContractOutcome =
   | {
@@ -55,16 +59,6 @@ export type ContractOutcome =
       status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED";
       detail: string;
     };
-
-/** The stamp a written requestSchema carries, read back by the /schema route. */
-export interface RequestSchemaStamp {
-  snapshotId: string;
-  semver: string;
-  contentHash: string;
-  interfaceVersion: number;
-  entitySet: string;
-  operation: string;
-}
 
 export async function recordVerifiedContract(input: {
   scope: TenantScope;
@@ -190,56 +184,6 @@ export async function idsWithRequestSchema(where: Prisma.InterfaceWhereInput): P
     select: { id: true },
   });
   return new Set(rows.map((r) => r.id));
-}
-
-/** The stamp a stored requestSchema carries, or null when it carries none. */
-export function requestSchemaStamp(schema: unknown): RequestSchemaStamp | null {
-  if (!schema || typeof schema !== "object") return null;
-  const stamp = (schema as JsonSchema)["x-contract"];
-  if (!stamp || typeof stamp !== "object") return null;
-  const s = stamp as Partial<RequestSchemaStamp>;
-  return typeof s.interfaceVersion === "number" && typeof s.entitySet === "string" && typeof s.snapshotId === "string"
-    ? (s as RequestSchemaStamp)
-    : null;
-}
-
-/**
- * The stored stamp when it describes the interface's current contract, else
- * null: written for this interface version and dataset, from the snapshot
- * that is current now (`currentSnapshotId`). A body of an older snapshot is
- * never served beside a newer contract.
- */
-export function currentRequestSchemaStamp(
-  schema: unknown,
-  iface: { version: number; entitySet: string | null },
-  currentSnapshotId: string | null,
-): RequestSchemaStamp | null {
-  const stamp = requestSchemaStamp(schema);
-  return stamp &&
-    currentSnapshotId !== null &&
-    stamp.snapshotId === currentSnapshotId &&
-    stamp.interfaceVersion === iface.version &&
-    stamp.entitySet === iface.entitySet
-    ? stamp
-    : null;
-}
-
-/**
- * The write body /schema serves as `requestSchema`: the current snapshot's
- * create (or, for an UPDATE interface, update) schema, rendered from that
- * snapshot (`schemas`, standaloneSchemas of it) and carrying the stamp —
- * exactly what was stored before only the stamp was. Null when the stamp
- * does not describe the current contract, or that contract has no such body.
- */
-export function renderedRequestSchema(
-  stored: unknown,
-  iface: { version: number; entitySet: string | null },
-  current: { id: string; schemas: { create: JsonSchema | null; update: JsonSchema | null } } | null,
-): JsonSchema | null {
-  const stamp = currentRequestSchemaStamp(stored, iface, current?.id ?? null);
-  if (!stamp || !current) return null;
-  const body = stamp.operation === "UPDATE" ? current.schemas.update : current.schemas.create;
-  return body ? { ...body, "x-contract": stamp } : null;
 }
 
 export type SampledOutcome =

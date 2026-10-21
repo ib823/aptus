@@ -45,12 +45,14 @@ import {
   ENVELOPE_QUEUE,
   ENVELOPE_TENANT_RUNNING,
   ENVELOPE_TENANT_WAITING,
+  envelopeIsolates,
   envelopeQueueState,
   heapLimitBytes,
   runInEnvelope,
 } from "@/lib/contracts/envelope";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { prepareContract, renderAndMeasure } from "@/lib/contracts/pipeline";
+import { prepareContract, renderAndMeasure, renderForRead, type RenderJobInput } from "@/lib/contracts/pipeline";
+import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
 import { buildScaffold } from "@/lib/studio/scaffold";
@@ -486,4 +488,128 @@ describe("structural hardening, round 1", () => {
       v8.setFlagsFromString("--max-semi-space-size=0");
     }
   }, 60_000);
+});
+
+/*
+ * STRUCTURAL HARDENING, ROUND 2: the envelope's slots count isolates, not
+ * results; and a read path renders on the request thread only what is cheap
+ * by construction, in the envelope otherwise, with the same bytes either way.
+ */
+describe("structural hardening, round 2", () => {
+  it("a slot is free only once its worker has exited: never more live isolates than slots", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(envelopeIsolates().live).toBe(0);
+    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
+    const quick = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
+    // Slots held by jobs that end at their deadline, then handed on to queued jobs that run to the end.
+    const ended = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 500 }));
+    const queued = Array.from({ length: ENVELOPE_CONCURRENCY + 2 }, () => runInEnvelope(quick, { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 }));
+    const [endedResults, queuedResults] = await Promise.all([Promise.all(ended), Promise.all(queued)]);
+    for (const r of endedResults) expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
+    for (const r of queuedResults) expect(r.ok).toBe(true);
+    // Answered only once exited: nothing awaited is still alive, and no slot outlived its isolate.
+    expect(envelopeIsolates()).toEqual({ live: 0, peak: expect.any(Number) as number });
+    expect(envelopeQueueState()).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
+  }, 120_000);
+
+  it("and the peak of live isolates in such a burst never passes the slots", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    envelopeIsolates();
+    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
+    const quick = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
+    const ended = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 500 }));
+    const queued = Array.from({ length: ENVELOPE_CONCURRENCY + 2 }, () => runInEnvelope(quick, { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 }));
+    await Promise.all([...ended, ...queued]);
+    expect(envelopeIsolates().peak).toBeLessThanOrEqual(ENVELOPE_CONCURRENCY);
+  }, 120_000);
+
+  const schemaInput = (limit: number): RenderJobInput => ({
+    path: "schema",
+    contract: sliced("business-partner.v2.xml", "A_Partner"),
+    entitySet: "A_Partner",
+    snapshotId: "snap_1",
+    requestSchema: null,
+    iface: { version: 1, entitySet: "A_Partner" },
+    limit,
+  });
+
+  it("a read path's budget past what the request thread renders renders in the envelope, the same bytes as here", async () => {
+    const here = renderForRead(schemaInput(LIMITS.inlineRender.bytes));
+    expect(here.ok).toBe(true);
+    const small = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes), { tenant: null });
+    expect(small).toMatchObject({ ok: true, where: "request" });
+    const large = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes + 1), { tenant: null });
+    expect(large).toMatchObject({ ok: true, where: "envelope" });
+    if (!here.ok || !large.ok || !small.ok) throw new Error("not rendered");
+    expect(large.texts).toEqual(here.texts);
+    expect(small.texts).toEqual(here.texts);
+    // Its budget still stops it, wherever it renders.
+    expect(await renderReadPath(schemaInput(1000), { tenant: null })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+  }, 60_000);
+
+  it("a render that meets the request thread's clock is handed to the envelope, not refused", async () => {
+    // A contract with enough in it for the writer to look at the clock while it writes.
+    const compiled = compileContract(largeDescription(1, 1500));
+    if (!compiled.ok) throw new Error("not compiled");
+    const slice = sliceForEntitySet(compiled.ir, "T0", compiled.sourceLength);
+    if (!slice.ok) throw new Error("not sliced");
+    const input: RenderJobInput = {
+      path: "schema",
+      contract: slice.contract,
+      entitySet: "T0",
+      snapshotId: "snap_1",
+      requestSchema: null,
+      iface: { version: 1, entitySet: "T0" },
+      limit: LIMITS.inlineRender.bytes,
+    };
+    expect(renderForRead(input).ok).toBe(true);
+    const inline = LIMITS.inlineRender as { ms: number };
+    const ms = inline.ms;
+    inline.ms = -60_000;
+    try {
+      // On this thread the clock has already run out…
+      expect(renderForRead(input, Date.now() + inline.ms)).toMatchObject({ ok: false, reason: "TIME" });
+      // …so the envelope renders it.
+      expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: true, where: "envelope" });
+    } finally {
+      inline.ms = ms;
+    }
+  }, 60_000);
+
+  it("what a render is handed is measured before it is copied: past the bound it never reaches a worker", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const input: RenderJobInput = {
+      path: "kit",
+      iface: { id: "if_1", name: "x", externalId: "custom:/x", sapProduct: "s4hana", operation: "READ", entitySet: "X", version: 1, solutionName: "S" },
+      baseUrl: "https://x",
+      fixtures: [{ scenario: "success", status: 200, body: { value: "x".repeat(LIMITS.inlineRender.inputBytes) }, sourceStatus: 200, capturedAt: "2026-10-01T00:00:00.000Z" }],
+      withheld: [],
+      limit: LIMITS.kit.cap,
+    };
+    const before = envelopeIsolates().live;
+    const started = Date.now();
+    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(envelopeIsolates().peak).toBe(before);
+  });
+
+  it("renders have slots of their own: a read is not queued behind every compile", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
+    const compiles = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }));
+    const r = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes + 1), { tenant: "org_a" });
+    expect(r).toMatchObject({ ok: true, where: "envelope" });
+    // Both compile slots were taken all along.
+    expect(envelopeQueueState("compile").running).toBe(ENVELOPE_CONCURRENCY);
+    await Promise.all(compiles);
+    expect(envelopeQueueState("render")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
+  }, 300_000);
+
+  it("rendered text is spliced in verbatim: the answer is what JSON.stringify writes of the value", () => {
+    const value = { a: [1, "two", { three: null }], b: "\u0000raw:not-a-slot:0\u0000" };
+    const raw = new RawJson();
+    const out = raw.stringify({ data: { x: raw.slot(JSON.stringify(value)), y: raw.slot("null"), name: "\u0000raw:guess:1\u0000" } });
+    expect(out).toBe(JSON.stringify({ data: { x: value, y: null, name: "\u0000raw:guess:1\u0000" } }));
+    expect(JSON.parse(out)).toEqual({ data: { x: value, y: null, name: "\u0000raw:guess:1\u0000" } });
+  });
 });

@@ -836,8 +836,9 @@ function contractDocumentSchema(dialect: SchemaDialect): Obj {
               schemas: anyObjectOrNull(dialect, "JSON Schema 2020-12 documents: record, create, update, key."),
               schemasOmitted: {
                 type: "string",
-                enum: ["TOO_LARGE"],
-                description: "Present when `schemas` is null for a contract that is recorded: it is larger than a generated document may carry.",
+                enum: ["TOO_LARGE", "UNAVAILABLE"],
+                description:
+                  "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; UNAVAILABLE, it could not be rendered just now, and a retry may succeed.",
               },
               schemasNote: { type: "string" },
             },

@@ -33,7 +33,13 @@
  * bounded result out (pipeline.ts says what crosses).
  *
  * The worker is spawned per job and terminated after it, so its memory goes
- * back when the job ends however the job ended.
+ * back when the job ends however the job ended — and the job's slot is free
+ * only once the worker has exited (EXIT_GRACE_MS, below).
+ *
+ * READ PATHS TOO (structural hardening round 2). /schema, the starter kit
+ * and the solution document render a stored contract on every read; one too
+ * large to render on the request thread (read-render.ts) is rendered here,
+ * as a `render` job, in slots of its own (ENVELOPE_RENDER_CONCURRENCY).
  *
  * WHY A WORKER, NOT A COOPERATIVE BUDGET. A budget threaded through every
  * loop bounds only the loops someone remembered to thread it through, which
@@ -94,6 +100,13 @@ export const ENVELOPE_LIMITS: Readonly<Record<Job["kind"], EnvelopeLimits>> = {
   compile: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 15_000 },
   prepare: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
   diff: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
+  /**
+   * A read path's render past what the request thread may render
+   * (read-render.ts): at the largest budget (a 32 MiB kit or document) about
+   * 1.5 s and a few hundred MB measured, the same order as the record-time
+   * renders a compile already does.
+   */
+  render: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
 };
 
 /**
@@ -128,6 +141,16 @@ export const ENVELOPE_CONCURRENCY = 2;
 export const ENVELOPE_QUEUE = 16;
 
 /**
+ * READ-PATH RENDERS HAVE SLOTS OF THEIR OWN (structural hardening round 2).
+ * A render too large for the request thread (read-render.ts) runs here, but
+ * never in a compile's slot: a builder's loop of kit downloads must not
+ * queue every tenant's verify behind it, nor a burst of verifies every
+ * northbound /schema. Same shares per organisation as compiles.
+ */
+export const ENVELOPE_RENDER_CONCURRENCY = 2;
+export const ENVELOPE_RENDER_QUEUE = 16;
+
+/**
  * ONE ORGANISATION'S SHARE. The slots and the queue are the process's, and
  * verify-service is a builder's to call: with no share, one builder whose
  * SAP serves a description that takes seconds to compile kept eighteen
@@ -142,6 +165,18 @@ export const ENVELOPE_QUEUE = 16;
  */
 export const ENVELOPE_TENANT_RUNNING = 1;
 export const ENVELOPE_TENANT_WAITING = 2;
+
+/**
+ * A SLOT IS FREE WHEN ITS ISOLATE IS GONE (structural hardening round 2).
+ * The slot used to be handed on the moment the job's result was in, while
+ * the terminated worker — up to its whole heap — was still exiting: a burst
+ * of jobs ending at their deadline held three and four isolates against a
+ * cap of two. Now a job holds its slot until its worker's 'exit' (and its
+ * caller is answered then, so nothing that awaited a job sees its slot
+ * still taken); should an exit never come, the slot is handed on after
+ * EXIT_GRACE_MS all the same, and that is logged.
+ */
+const EXIT_GRACE_MS = 5_000;
 
 export type EnvelopeResult<T> = { ok: true; value: T; ms: number } | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number };
 
@@ -159,71 +194,96 @@ interface Waiter {
   start: () => void;
 }
 
-let running = 0;
-const runningByTenant = new Map<string, number>();
-const waiting: Waiter[] = [];
-
-/** May a job of this tenant take a slot now (its organisation's share allowing)? */
-function withinShare(tenant: string | null): boolean {
-  return tenant === null || (runningByTenant.get(tenant) ?? 0) < ENVELOPE_TENANT_RUNNING;
+/** A set of slots and the queue for them, with each organisation's share (above). */
+interface Pool {
+  readonly concurrency: number;
+  readonly queue: number;
+  running: number;
+  readonly runningByTenant: Map<string, number>;
+  readonly waiting: Waiter[];
 }
 
-function occupy(tenant: string | null): void {
-  running += 1;
-  if (tenant !== null) runningByTenant.set(tenant, (runningByTenant.get(tenant) ?? 0) + 1);
+const pool = (concurrency: number, queue: number): Pool => ({ concurrency, queue, running: 0, runningByTenant: new Map(), waiting: [] });
+
+/** Compiles, prepares and diffs share one pool; read-path renders have their own. */
+const POOLS = { compile: pool(ENVELOPE_CONCURRENCY, ENVELOPE_QUEUE), render: pool(ENVELOPE_RENDER_CONCURRENCY, ENVELOPE_RENDER_QUEUE) };
+const poolFor = (job: Job): Pool => (job.kind === "render" ? POOLS.render : POOLS.compile);
+
+/** May a job of this tenant take a slot now (its organisation's share allowing)? */
+function withinShare(p: Pool, tenant: string | null): boolean {
+  return tenant === null || (p.runningByTenant.get(tenant) ?? 0) < ENVELOPE_TENANT_RUNNING;
+}
+
+function occupy(p: Pool, tenant: string | null): void {
+  p.running += 1;
+  if (tenant !== null) p.runningByTenant.set(tenant, (p.runningByTenant.get(tenant) ?? 0) + 1);
 }
 
 /** A slot now (true), a place in the queue (the waiter), or neither (false: BUSY). */
-function acquire(tenant: string | null): true | false | Waiter {
-  if (running < ENVELOPE_CONCURRENCY && withinShare(tenant)) {
-    occupy(tenant);
+function acquire(p: Pool, tenant: string | null): true | false | Waiter {
+  if (p.running < p.concurrency && withinShare(p, tenant)) {
+    occupy(p, tenant);
     return true;
   }
-  if (waiting.length >= ENVELOPE_QUEUE) return false;
+  if (p.waiting.length >= p.queue) return false;
   if (tenant !== null) {
     let mine = 0;
-    for (const w of waiting) if (w.tenant === tenant) mine += 1;
+    for (const w of p.waiting) if (w.tenant === tenant) mine += 1;
     if (mine >= ENVELOPE_TENANT_WAITING) return false;
   }
   let start!: () => void;
   const turn = new Promise<void>((resolve) => (start = resolve));
   const waiter: Waiter = { tenant, turn, start };
-  waiting.push(waiter);
+  p.waiting.push(waiter);
   return waiter;
 }
 
 /** Hand free slots to the first waiting jobs whose organisations' shares allow them. */
-function dispatch(): void {
-  while (running < ENVELOPE_CONCURRENCY) {
-    const i = waiting.findIndex((w) => withinShare(w.tenant));
+function dispatch(p: Pool): void {
+  while (p.running < p.concurrency) {
+    const i = p.waiting.findIndex((w) => withinShare(p, w.tenant));
     if (i < 0) return;
-    const [next] = waiting.splice(i, 1);
-    occupy(next!.tenant);
+    const [next] = p.waiting.splice(i, 1);
+    occupy(p, next!.tenant);
     next!.start();
   }
 }
 
-function release(tenant: string | null): void {
-  running -= 1;
+function release(p: Pool, tenant: string | null): void {
+  p.running -= 1;
   if (tenant !== null) {
-    const n = (runningByTenant.get(tenant) ?? 1) - 1;
-    if (n > 0) runningByTenant.set(tenant, n);
-    else runningByTenant.delete(tenant);
+    const n = (p.runningByTenant.get(tenant) ?? 1) - 1;
+    if (n > 0) p.runningByTenant.set(tenant, n);
+    else p.runningByTenant.delete(tenant);
   }
-  dispatch();
+  dispatch(p);
 }
 
 /** Leave the queue (a wait that timed out): false when the turn was already given. */
-function abandon(waiter: Waiter): boolean {
-  const i = waiting.indexOf(waiter);
+function abandon(p: Pool, waiter: Waiter): boolean {
+  const i = p.waiting.indexOf(waiter);
   if (i < 0) return false;
-  waiting.splice(i, 1);
+  p.waiting.splice(i, 1);
   return true;
 }
 
-/** The queue as it stands, for a test: running, by tenant, and waiting. */
-export function envelopeQueueState(): { running: number; waiting: number; runningByTenant: Record<string, number> } {
-  return { running, waiting: waiting.length, runningByTenant: Object.fromEntries(runningByTenant) };
+/** A pool as it stands, for a test: running, by tenant, and waiting (the compile pool unless asked). */
+export function envelopeQueueState(kind: "compile" | "render" = "compile"): {
+  running: number;
+  waiting: number;
+  runningByTenant: Record<string, number>;
+} {
+  const p = POOLS[kind];
+  return { running: p.running, waiting: p.waiting.length, runningByTenant: Object.fromEntries(p.runningByTenant) };
+}
+
+/** Worker isolates spawned and not yet exited, and the most there were at once since the last look (for a test). */
+let liveIsolates = 0;
+let peakIsolates = 0;
+export function envelopeIsolates(): { live: number; peak: number } {
+  const r = { live: liveIsolates, peak: peakIsolates };
+  peakIsolates = liveIsolates;
+  return r;
 }
 
 /** Errors that mean the job hit a limit rather than a defect. */
@@ -308,6 +368,9 @@ async function spawn(job: Job, limits: EnvelopeLimits): Promise<Worker> {
     done();
     throw err;
   }
+  liveIsolates += 1;
+  peakIsolates = Math.max(peakIsolates, liveIsolates);
+  worker.once("exit", () => (liveIsolates -= 1));
   let restored = false;
   const restore = () => {
     // Once: a later exit must not reset the flag while the next spawn has it set.
@@ -370,6 +433,7 @@ function construct(input: WorkerInput, limits: EnvelopeLimits): Worker {
 function overInputBound(job: Job): boolean {
   const cap = LIMITS.contract.cap;
   if (job.kind === "prepare") return jsonBytesUpTo(job.input.contract, cap) > cap;
+  if (job.kind === "render") return jsonBytesUpTo(job.input, LIMITS.inlineRender.inputBytes) > LIMITS.inlineRender.inputBytes;
   if (job.kind === "diff") {
     const n = (Array.isArray(job.input.previous) ? job.input.previous.length : 0) + 1;
     return jsonBytesUpTo(job.input, n * cap) > n * cap;
@@ -408,7 +472,8 @@ export async function runInEnvelope<J extends Job>(
   const queuedAt = Date.now();
   if (overInputBound(job)) return inputRefusal(job, queuedAt);
   const tenant = opts.tenant ?? null;
-  const turn = acquire(tenant);
+  const p = poolFor(job);
+  const turn = acquire(p, tenant);
   if (turn === false) return refuse("BUSY", job, queuedAt);
   if (turn !== true) {
     // Waiting counts against the deadline too: a verify never waits longer than a compile may run.
@@ -421,14 +486,15 @@ export async function runInEnvelope<J extends Job>(
     // Out of the queue the moment the wait ends, so a stale waiter never holds a place;
     // a turn given just as the wait ended is handed straight on.
     if (timedOut) {
-      if (!abandon(turn)) release(tenant);
+      if (!abandon(p, turn)) release(p, tenant);
       return refuse("BUSY", job, queuedAt);
     }
   }
   try {
+    // Answered once its worker has exited, so the slot is never free while its isolate lives (EXIT_GRACE_MS).
     return await runWorker(job, limits, queuedAt);
   } finally {
-    release(tenant);
+    release(p, tenant);
   }
 }
 
@@ -464,22 +530,46 @@ function refuse<T>(reason: EnvelopeRefusal, job: Job, since: number, cause?: str
 
 function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number): Promise<EnvelopeResult<T>> {
   return new Promise((resolve) => {
-    let settled = false;
+    let result: EnvelopeResult<T> | null = null;
     let worker: Worker | undefined;
+    /** The isolate is gone: it exited, or it was never made. */
+    let gone = false;
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    let answered = false;
+    // Answered once there is a result AND its isolate is gone; the caller frees the slot right after.
+    const answer = () => {
+      if (answered || result === null || !gone) return;
+      answered = true;
+      clearTimeout(grace);
+      resolve(result);
+    };
     const settle = (r: EnvelopeResult<T>) => {
-      if (settled) return;
-      settled = true;
+      if (result !== null) return;
+      result = r;
       clearTimeout(timer);
-      // Its memory goes back now, however the job ended.
+      // Its memory goes back now, however the job ended; the slot once it has.
       void worker?.terminate().catch(() => {});
-      resolve(r);
+      if (!gone) {
+        grace = setTimeout(() => {
+          console.error("[contracts] envelope worker did not exit", { job: job.kind, graceMs: EXIT_GRACE_MS });
+          gone = true;
+          answer();
+        }, EXIT_GRACE_MS);
+      }
+      answer();
     };
     const timer = setTimeout(() => settle(refuse("RESOURCE_LIMIT", job, since, "deadline")), limits.deadlineMs);
     spawn(job, limits).then(
       (w) => {
         worker = w;
+        w.once("exit", (code) => {
+          // An exit before any message: killed by a limit V8 enforces without an error event, or a crash.
+          if (result === null) settle(refuse(code === 0 ? "INTERNAL" : "RESOURCE_LIMIT", job, since, `exit ${code}`));
+          gone = true;
+          answer();
+        });
         // The deadline passed while it was being spawned: it never runs.
-        if (settled) {
+        if (result !== null) {
           void w.terminate().catch(() => {});
           return;
         }
@@ -498,12 +588,10 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number): Promise<
             ),
           );
         });
-        w.once("exit", (code) => {
-          // An exit before any message: killed by a limit V8 enforces without an error event, or a crash.
-          if (!settled) settle(refuse(code === 0 ? "INTERNAL" : "RESOURCE_LIMIT", job, since, `exit ${code}`));
-        });
       },
       (err: unknown) => {
+        // Never made: nothing to wait for.
+        gone = true;
         const code = (err as { code?: string } | null)?.code;
         settle(
           refuse(
@@ -513,6 +601,7 @@ function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number): Promise<
             code ?? (err instanceof Error ? err.name : "unknown"),
           ),
         );
+        answer();
       },
     );
   });

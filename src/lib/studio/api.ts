@@ -19,6 +19,8 @@ export type StudioErrorCode =
   | "CONFLICT"
   /** A generated document that would be larger than its stated budget (doc-inputs.ts). */
   | "TOO_LARGE"
+  /** A generated document that could not be rendered just now (no free render slot); a retry may succeed. */
+  | "UNAVAILABLE"
   | "INTERNAL";
 
 const STATUS: Record<StudioErrorCode, number> = {
@@ -28,6 +30,7 @@ const STATUS: Record<StudioErrorCode, number> = {
   VALIDATION_ERROR: 400,
   CONFLICT: 409,
   TOO_LARGE: 422,
+  UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 
@@ -44,4 +47,13 @@ export function studioError(
 
 export function studioOk<T>(data: T, status = 200): NextResponse {
   return NextResponse.json({ data }, { status });
+}
+
+/**
+ * studioOk for an answer already written as JSON — `{"data":…}`, with
+ * rendered text spliced in (contracts/read-render.ts, RawJson): the same
+ * status and content type, and the body as given.
+ */
+export function studioOkJson(text: string, status = 200): NextResponse {
+  return new NextResponse(text, { status, headers: { "content-type": "application/json" } });
 }

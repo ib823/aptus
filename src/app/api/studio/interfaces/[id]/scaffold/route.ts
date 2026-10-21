@@ -23,24 +23,38 @@
  * And the captured schema is read only when its stored size is inside the
  * captured-schema bound (response-schema-states.ts, structural hardening
  * round 1); past it the kit says it was set aside, and why.
+ *
+ * RENDERED OFF THE REQUEST THREAD WHEN IT IS LARGE (structural hardening
+ * round 2). A kit inside its 32 MiB budget took a second or more to build,
+ * on this thread, on every download. It is built by renderReadPath
+ * (read-render.ts): here only while its budget is small enough to be cheap by
+ * construction, in the compiler's envelope otherwise, and its files' JSON is
+ * sent as the envelope wrote it.
  */
 
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { BudgetExceeded, jsonBytesUpTo, kitLimit, LIMITS, OutputBudget } from "@/lib/contracts/budget";
-import { documentOutputTooLargeMessage, documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { jsonBytesUpTo, kitLimit, LIMITS } from "@/lib/contracts/budget";
+import {
+  documentOutputTooLargeMessage,
+  documentTooLargeMessage,
+  documentUnavailableMessage,
+  loadDocInputs,
+} from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
-import { studioError, studioOk } from "@/lib/studio/api";
+import { studioError, studioOkJson } from "@/lib/studio/api";
 import { partitionFixtures, withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { servedFixtures } from "@/lib/studio/fixtures";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
-import { buildScaffold } from "@/lib/studio/scaffold";
+import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+/** A large kit renders in a worker thread (lib/contracts/read-render.ts): Node.js only. */
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -125,14 +139,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    */
   const contractBytes =
     compiled?.irBytes ?? (responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0);
+  // Measured no further than a render may be handed (LIMITS.inlineRender.inputBytes): past it the kit is refused anyway.
   let fixtureBytes = 0;
-  for (const f of fixtures) fixtureBytes += jsonBytesUpTo(f.body, LIMITS.kit.cap);
-  const budget = new OutputBudget("kit", kitLimit(contractBytes, fixtureBytes));
+  for (const f of fixtures) {
+    if (fixtureBytes > LIMITS.inlineRender.inputBytes) break;
+    fixtureBytes += jsonBytesUpTo(f.body, LIMITS.inlineRender.inputBytes);
+  }
+  const limit = kitLimit(contractBytes, fixtureBytes);
 
-  let files: ReturnType<typeof buildScaffold>;
-  try {
-    files = buildScaffold(
-      {
+  const rendered = await renderReadPath(
+    {
+      path: "kit",
+      iface: {
         id: iface.id,
         name: iface.name,
         externalId: iface.externalId,
@@ -157,20 +175,25 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
             : {}),
       },
       baseUrl,
-      fixtures.map((f) => ({
+      fixtures: fixtures.map((f) => ({
         scenario: f.scenario,
         status: f.status,
         body: f.body,
         sourceStatus: f.sourceStatus,
         capturedAt: f.capturedAt,
       })),
-      withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
-      budget,
-    );
-  } catch (err) {
-    if (!(err instanceof BudgetExceeded)) throw err;
-    return studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", budget.limit));
+      withheld: withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
+      limit,
+    },
+    { tenant: organizationId },
+  );
+  if (!rendered.ok) {
+    return rendered.reason === "TOO_LARGE"
+      ? studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", limit))
+      : studioError("UNAVAILABLE", documentUnavailableMessage("starter kit"));
   }
 
-  return studioOk({ files });
+  // As studioOk sends it, with the files' JSON spliced in as it was written (RawJson).
+  const raw = new RawJson();
+  return studioOkJson(raw.stringify({ data: { files: raw.slot(rendered.texts[0]!) } }));
 }
