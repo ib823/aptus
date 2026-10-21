@@ -61,27 +61,30 @@ export function refusalRetryAfterSeconds(compiled: { reason: string; retryAfterM
   return undefined;
 }
 
+/** A compile that was refused (or a job that did not run), as the verify's `contract` says it, with its retry time. */
+export function notCompiled(compiled: { reason: string; detail: string; retryAfterMs?: number }): ContractOutcome {
+  const retryAfterSeconds = refusalRetryAfterSeconds(compiled);
+  return {
+    status: "NOT_COMPILED",
+    detail: `The service's description could not be compiled: ${compiled.detail}`,
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+  };
+}
+
 export async function recordVerifiedContract(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string | null; operation: string; mode: string };
   /** The verify's record job (service-verify.ts), with the interface's dataset made ready to record. */
   compiled: CompiledService | undefined;
   /** The rows the job diffed against (snapshot.ts, loadRecordHeads), by id. */
-  heads: { ids: readonly string[] } | undefined;
+  heads: { ids: readonly string[]; currentId?: string | null } | undefined;
   environment: string;
   connectionId: string;
   actorId: string;
 }): Promise<ContractOutcome> {
   const { iface, compiled } = input;
   if (!compiled) return { status: "NOT_COMPILED", detail: "The service's description was not read in full." };
-  if (!compiled.ok) {
-    const retryAfterSeconds = refusalRetryAfterSeconds(compiled);
-    return {
-      status: "NOT_COMPILED",
-      detail: `The service's description could not be compiled: ${compiled.detail}`,
-      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
-    };
-  }
+  if (!compiled.ok) return notCompiled(compiled);
   if (!iface.entitySet) {
     return { status: "NO_DATASET", detail: "The interface names no dataset, so there is no contract to record yet." };
   }
@@ -247,7 +250,7 @@ export async function recordCapture(input: {
   contract: Extract<CaptureJobOutput, { ok: true }>["contract"];
   /** The current compiled snapshot, when one describes the interface: then no sample is recorded. */
   preferred: { snapshotId: string; semver: string } | null;
-  heads: { ids: readonly string[] };
+  heads: { ids: readonly string[]; currentId?: string | null };
   actorId: string;
 }): Promise<SampledOutcome> {
   const { scope, iface } = input;

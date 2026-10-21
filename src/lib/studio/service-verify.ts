@@ -33,7 +33,7 @@
 
 import { LIMITS } from "@/lib/contracts/budget";
 import { MAX_LISTED_DATASETS, readDatasetsSliced, type DatasetSummary } from "@/lib/contracts/datasets";
-import { runContractJob } from "@/lib/contracts/envelope";
+import { contractJobAdmission, runContractJob } from "@/lib/contracts/envelope";
 import type { CompiledService } from "@/lib/contracts/jobs";
 import type { RecordHeads } from "@/lib/contracts/snapshot";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
@@ -115,6 +115,12 @@ export type ServiceVerifyStatus =
   | "TIMEOUT"
   /** The organisation (or the instance) already has verifies in flight, past its share (FETCH_GATE): nothing was read. */
   | "BUSY"
+  /**
+   * The contract compiler would refuse this verify's job (the organisation's
+   * compile time for today is spent, or the compiler is off): SAP was not
+   * asked, nothing was read, and the interface's stored datasets are listed.
+   */
+  | "COMPILER_UNAVAILABLE"
   | "ERROR";
 
 export interface ServiceVerifyResult {
@@ -146,8 +152,8 @@ export interface ServiceVerifyResult {
    * then comes from the older reader, and the refusal is said here.
    */
   compiled?: CompiledService;
-  /** The snapshot rows the record job diffed against (snapshot.ts, loadRecordHeads), by id. */
-  heads?: { ids: string[] };
+  /** The snapshot rows the record job diffed against, and the current row it was handed (snapshot.ts, loadRecordHeads), by id. */
+  heads?: { ids: string[]; currentId: string | null };
 }
 
 /**
@@ -188,8 +194,8 @@ async function recordOrRefuse(
   loadHeads: (() => Promise<RecordHeads>) | undefined,
   tenant: string | null,
   deadlineAt: number,
-): Promise<{ compiled: CompiledService; heads?: { ids: string[] } }> {
-  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [] };
+): Promise<{ compiled: CompiledService; heads?: { ids: string[]; currentId: string | null } }> {
+  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [], current: null, currentId: null };
   const r = await runContractJob(
     "record",
     async () => {
@@ -200,11 +206,14 @@ async function recordOrRefuse(
           return heads;
         });
       }
-      return { kind: "record", input: { description: body, entitySet, previous: heads.previous, unchangedHashes: heads.unchangedHashes } };
+      return {
+        kind: "record",
+        input: { description: body, entitySet, previous: heads.previous, unchangedHashes: heads.unchangedHashes, current: heads.current ?? null },
+      };
     },
     { tenant, deadlineAt },
   );
-  if (r?.ok) return { compiled: r.value, heads: { ids: heads.ids } };
+  if (r?.ok) return { compiled: r.value, heads: { ids: heads.ids, currentId: heads.currentId } };
   if (!r || r.reason === "INTERNAL") {
     // A job that threw is a defect: refused as a description that could not be read, logged by name only.
     console.error("[contracts] compile failed", { error: "INTERNAL" });
@@ -243,6 +252,8 @@ export interface VerifyServiceInput {
   loadHeads?: () => Promise<RecordHeads>;
   /** The organisation verifying: its share of the fetch gate and of the compiler (envelope.ts). */
   organizationId?: string | null;
+  /** The datasets the interface's last verify stored: what a COMPILER_UNAVAILABLE answer lists, SAP not being asked. */
+  storedEntitySets?: readonly string[] | null;
   /**
    * When the request must have its answer (ms since the epoch): the job's
    * wait and run are bounded by it (see VERIFY_REQUEST_BUDGET_MS); omitted,
@@ -326,6 +337,48 @@ export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl
 }
 
 async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, deadlineAt: number): Promise<ServiceVerifyResult> {
+  const started = Date.now();
+  /*
+   * NOTHING IS FETCHED FOR A COMPILE THAT CANNOT RUN (consolidated review
+   * round 1). The record job's own first step (contractJobAdmission: the
+   * compiler on, the organisation's time for today not spent) is asked here,
+   * before SAP is. It was asked only after the description (up to 8 MiB) had
+   * been fetched, and a refused job's datasets were then read on this
+   * thread, uncharged: about 0.3-0.46 s of CPU per verify, so an
+   * organisation past its 40 s still spent about 3 CPU-hours a day at
+   * sapLive's 20 a minute, and the kill switch moved the parse onto the
+   * request thread instead of stopping it. Such a verify now answers at once
+   * with the refusal, its retry time and the interface's stored datasets.
+   * Only BUSY and RESOURCE_LIMIT, after a fetch, still read the datasets
+   * here, bounded by the fetch gate.
+   */
+  const admission = await contractJobAdmission("record", input.organizationId ?? null);
+  if (admission !== null && !admission.ok) {
+    const stored = input.storedEntitySets ?? [];
+    return {
+      status: "COMPILER_UNAVAILABLE",
+      verified: false,
+      detail:
+        admission.reason === "ALLOWANCE"
+          ? `The service was not verified, and SAP was not asked: ${admission.detail}`
+          : "The service was not verified, and SAP was not asked: the contract compiler is turned off on this deployment.",
+      httpStatus: null,
+      durationMs: Date.now() - started,
+      entitySets: stored.slice(0, MAX_STORED_ENTITY_SETS),
+      entitySetCount: stored.length,
+      detectedODataVersion: null,
+      suggestedEntitySet: null,
+      // Refused before SAP was asked: a throttle for the organisation's own time, unavailable for the switch.
+      auditStatus: admission.reason === "ALLOWANCE" ? 429 : 503,
+      failureReason: admission.reason === "ALLOWANCE" ? "CONTRACT_ALLOWANCE" : "CONTRACT_DISABLED",
+      compiled: {
+        ok: false,
+        reason: admission.reason,
+        detail: admission.detail,
+        ...(admission.retryAfterMs !== undefined ? { retryAfterMs: admission.retryAfterMs } : {}),
+      },
+    };
+  }
   const target = metadataTarget(input);
   const datasetNeeded = isTenantWideRootAskedWhole(input, target.scope);
   const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {

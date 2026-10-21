@@ -53,7 +53,7 @@ const { db, mocks } = vi.hoisted(() => ({
     /** Every raw statement sent, for the reads that must send none of some. */
     sql: [] as string[],
   },
-  mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn(), hub: vi.fn() },
+  mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn(), hub: vi.fn(), rate: vi.fn() },
 }));
 
 function matches(row: Row, where: Row | undefined): boolean {
@@ -193,7 +193,7 @@ vi.mock("@/lib/northbound/auth", () => ({
 }));
 vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof RateLimit>()),
-  checkRateLimit: async () => ({ allowed: true, remaining: 10, resetMs: 1000 }),
+  checkRateLimit: (key: string, config: unknown) => mocks.rate(key, config) as unknown,
 }));
 
 import { GET as getSchema } from "@/app/api/northbound/interfaces/[id]/schema/route";
@@ -208,6 +208,8 @@ import { compileContract } from "@/lib/contracts/compile";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { envelopeIsolates } from "@/lib/contracts/envelope";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
+import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
 const RAP = readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
@@ -285,6 +287,7 @@ beforeEach(() => {
   mocks.authHeaders.mockResolvedValue({ Authorization: "Basic dTpw" });
   mocks.audit.mockResolvedValue({ id: "a1" });
   mocks.hub.mockResolvedValue({ path: "/sap/opu/odata4/sap/api_salesorder/srvd_a2x/sap/salesorder/0001" });
+  mocks.rate.mockResolvedValue({ allowed: true, remaining: 10, resetMs: 1000 });
   vi.stubGlobal("fetch", vi.fn(async () => xml(RAP)));
 });
 afterEach(() => {
@@ -377,6 +380,33 @@ function schemaRoute() {
     { params: Promise.resolve({ id: "if_1" }) },
   );
 }
+
+/*
+ * Consolidated review round 1: every /schema read selects and copies up to
+ * 1 MiB of stored texts, and the only bucket was per credential, which an
+ * organisation mints without bound. Its reads now also spend the
+ * organisation's own bucket.
+ */
+describe("/schema is bounded per organisation, whatever its credential count", () => {
+  it("spends the credential's bucket and the organisation's, and refuses 429 with Retry-After once the organisation's is spent", async () => {
+    const keys: string[] = [];
+    mocks.rate.mockImplementation(async (key: string) => {
+      keys.push(key);
+      return key.startsWith("northbound-schema:")
+        ? { allowed: false, remaining: 0, resetMs: 30_000, reason: "limited" }
+        : { allowed: true, remaining: 10, resetMs: 1000 };
+    });
+    const res = await schemaRoute();
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("30");
+    expect(keys).toEqual(["northbound:client_1", "northbound-schema:org_a"]);
+    expect(mocks.rate).toHaveBeenLastCalledWith("northbound-schema:org_a", RATE_LIMITS.northboundSchemaPerOrg);
+    expect(RATE_LIMITS.northboundSchemaPerOrg).toEqual({ limit: 120, windowMs: 60_000 });
+    // Audited as the throttle it is, before anything is read.
+    expect(mocks.record).toHaveBeenLastCalledWith(expect.objectContaining({ status: 429, externalId: "-schema-" }));
+    expect(db.sql.some((q) => q.includes('"schemasText"'))).toBe(false);
+  });
+});
 
 describe("/schema serves the compiled contract, additively", () => {
   it("before any compile: every field it had, and contract.source none", async () => {
@@ -1050,16 +1080,17 @@ describe("the read paths and the compiler", () => {
     );
   }
 
-  it("/schema and /v1 of a 250 KB contract: served from the stored texts, no worker, no compiler time, the thread ticking", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => xml(wideDescription(4_000))));
+  it("/schema and /v1 of a contract with texts near their 1 MiB: served from the stored texts, no worker, no compiler time, the thread ticking", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => xml(wideDescription(800))));
     const verified = await data<{ contract: Row }>(await verify());
     expect(verified.contract).toMatchObject({ status: "RECORDED" });
-    expect(db.snapshots[0]!.irBytes as number).toBeGreaterThan(200_000);
+    expect(db.snapshots[0]!.irBytes as number).toBeGreaterThan(40_000);
+    expect((db.snapshots[0]!.schemasText as string).length).toBeGreaterThan(256 * 1024);
     envelopeIsolates();
     db.sql = [];
     const schema = await longestStall(() => schemaRoute());
     const d = await data<{ requestSchema: Row | null; contract: { schemas: { record: { properties: Row } } | null } }>(schema.value);
-    expect(Object.keys(d.contract.schemas!.record.properties)).toHaveLength(4_000);
+    expect(Object.keys(d.contract.schemas!.record.properties)).toHaveLength(800);
     expect(d.requestSchema).not.toBeNull();
     const v1 = await longestStall(() =>
       getSchemaV1(new NextRequest("http://localhost/api/northbound/v1/interfaces/if_1/schema", { headers: { authorization: "Bearer ce_x" } }), {
@@ -1079,14 +1110,35 @@ describe("the read paths and the compiler", () => {
   it("a snapshot whose texts are gone (recorded before them, or no longer the row last verified) answers NOT_RENDERED", async () => {
     await verify();
     const snap = db.snapshots[0]!;
-    Object.assign(snap, { schemasText: null, createBodyText: null, updateBodyText: null });
+    const rendered = await schemaRoute().then((r) => r.text());
+    Object.assign(snap, { schemasText: null, createBodyText: null, updateBodyText: null, schemaTextsVersion: null });
     const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
     expect(d.contract).toMatchObject({ source: "metadata", snapshotId: snap.id, schemas: null, schemasOmitted: "NOT_RENDERED" });
     expect(d.contract.schemasNote).toMatch(/Verify the service again/);
     expect(d.requestSchema).toBeNull();
-    // A verify of the same contract re-attaches them.
+    // A verify of the same contract re-attaches them, rendered from the row's own IR: the same bytes.
     expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
-    expect((await data<{ contract: Row }>(await schemaRoute())).contract.schemas).not.toBeNull();
+    expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
+  });
+
+  /*
+   * Consolidated review round 1: the stored texts carried no renderer
+   * version, so after a deploy that changed the renderer /schema kept serving
+   * the old render while the kit and the document served the new one under
+   * the same contentHash. Texts of another version are not served.
+   */
+  it("texts another renderer version wrote are NOT_RENDERED until a verify renders them again", async () => {
+    await verify();
+    const snap = db.snapshots[0]!;
+    expect(snap.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION);
+    const rendered = await schemaRoute().then((r) => r.text());
+    snap.schemaTextsVersion = SCHEMA_TEXTS_VERSION - 1;
+    const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
+    expect(d.contract).toMatchObject({ snapshotId: snap.id, schemas: null, schemasOmitted: "NOT_RENDERED" });
+    expect(d.requestSchema).toBeNull();
+    expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
+    expect(snap.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION);
+    expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
   });
 
   it("with the organisation's compiler time spent: /schema still serves; the kit and the document are 429 until 00:00 UTC; the verify's contract says so", async () => {
@@ -1106,8 +1158,14 @@ describe("the read paths and the compiler", () => {
       expect(kitError.message).toMatch(/^This starter kit could not be generated: your organisation has used its 40 s of contract compile time for today/);
       const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
       expect(doc.status).toBe(429);
-      const verified = await data<{ status: string; contract: { status: string; detail: string; retryAfterSeconds?: number } }>(await verify());
-      expect(verified.status).toBe("OK");
+      // SAP is not asked for a description its compile could not use (consolidated review round 1).
+      const sap = vi.fn(async () => xml(RAP));
+      vi.stubGlobal("fetch", sap);
+      const verified = await data<{ status: string; verified: boolean; entitySets: string[]; detail: string; contract: { status: string; detail: string; retryAfterSeconds?: number } }>(await verify());
+      expect(sap).not.toHaveBeenCalled();
+      expect(verified).toMatchObject({ status: "COMPILER_UNAVAILABLE", verified: false });
+      expect(verified.detail).toMatch(/SAP was not asked: your organisation has used its 40 s of contract compile time/);
+      expect(verified.entitySets).toContain("SalesOrder");
       expect(verified.contract).toMatchObject({ status: "NOT_COMPILED" });
       expect(verified.contract.detail).toMatch(/40 s of contract compile time/);
       expect(verified.contract.retryAfterSeconds).toBeGreaterThan(0);
@@ -1126,8 +1184,12 @@ describe("the read paths and the compiler", () => {
       expect(kit.status).toBe(503);
       const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
       expect(doc.status).toBe(503);
+      // The kill switch stops the work instead of moving it onto this thread: SAP is not asked (consolidated review round 1).
+      const sap = vi.fn(async () => xml(RAP));
+      vi.stubGlobal("fetch", sap);
       const verified = await data<{ status: string; entitySets: string[]; contract: { status: string; detail: string } }>(await verify());
-      expect(verified).toMatchObject({ status: "OK", contract: { status: "NOT_COMPILED" } });
+      expect(sap).not.toHaveBeenCalled();
+      expect(verified).toMatchObject({ status: "COMPILER_UNAVAILABLE", verified: false, contract: { status: "NOT_COMPILED" } });
       expect(verified.contract.detail).toMatch(/compiler disabled/);
       expect(verified.entitySets).toContain("SalesOrder");
     } finally {

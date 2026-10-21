@@ -5,8 +5,15 @@
 -- rendered ONCE in the compiler's worker when a verify or a capture records
 -- the snapshot, so the read path never renders anything. At most one row of
 -- an interface holds them (the writer nulls the others in the same
--- transaction), at most 4 MiB together; text, so PostgreSQL TOASTs and
+-- transaction), at most 1 MiB together; text, so PostgreSQL TOASTs and
 -- compresses them.
+--
+-- schemaTextsVersion: the renderer version that wrote them
+-- (lib/contracts/render-version.ts). /schema serves the texts only while it
+-- is the running code's version, so a renderer change never leaves /schema
+-- serving one render while the kit and the document serve another under the
+-- same contentHash; an older version answers NOT_RENDERED until the
+-- interface is verified again.
 --
 -- ContractTime: each organisation's compiler wall time per UTC day, the one
 -- allowance that remains (lib/contracts/contract-time.ts). No foreign key:
@@ -22,7 +29,8 @@
 -- AlterTable
 ALTER TABLE "ContractSnapshot" ADD COLUMN     "createBodyText" TEXT,
 ADD COLUMN     "schemasText" TEXT,
-ADD COLUMN     "updateBodyText" TEXT;
+ADD COLUMN     "updateBodyText" TEXT,
+ADD COLUMN     "schemaTextsVersion" INTEGER;
 
 -- CreateTable
 CREATE TABLE "ContractTime" (

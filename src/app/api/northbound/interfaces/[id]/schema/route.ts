@@ -31,7 +31,7 @@
  * the one high-frequency, consumer-facing read of a contract, so it renders
  * nothing: the schemas and the create and update bodies were rendered ONCE,
  * in the compiler's worker, when the snapshot was recorded (jobs.ts), and are
- * stored on the snapshot row as compact JSON, at most 4 MiB together. This
+ * stored on the snapshot row as compact JSON, at most 1 MiB together. This
  * route reads the interface, the current snapshot's summary (with the texts'
  * sizes), and one row of texts — the schemas and the one body its stamp
  * needs — and splices them into the answer as they are (RawJson), the same
@@ -108,7 +108,10 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
 
   // Per-credential throttle + audit, like discovery — see that route's comment.
   // A stolen token pulling every stored contract used to leave no trace.
-  const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
+  // Then the organisation's own bucket: it mints credentials without bound,
+  // and every read copies up to 1 MiB of texts (RATE_LIMITS.northboundSchemaPerOrg).
+  let rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
+  if (rate.allowed) rate = await checkRateLimit(`northbound-schema:${client.organizationId}`, RATE_LIMITS.northboundSchemaPerOrg);
   if (!rate.allowed) {
     // 429 for this credential's own use, 503 when the limiter is down (A44).
     const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests. Slow down and retry.");

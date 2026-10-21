@@ -138,3 +138,36 @@ export function boundedContractDigest(
     throw err;
   }
 }
+
+const utf8Encoder = new TextEncoder();
+
+/** PostgreSQL's jsonb key order: the shorter key in UTF-8 bytes first, then bytewise. */
+function jsonbKeyCompare(a: string, b: string): number {
+  const x = utf8Encoder.encode(a);
+  const y = utf8Encoder.encode(b);
+  if (x.length !== y.length) return x.length - y.length;
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
+  return 0;
+}
+
+/**
+ * A JSON value with every object's keys in the order PostgreSQL's jsonb keeps
+ * them, as `JSON.parse(ir::text)` of the stored row reads it back (P1.3).
+ *
+ * WHY. The IR is stored as jsonb, and the starter kit and the solution
+ * document render it from `ir::text`; so did GET /schema before its texts
+ * were rendered at record time. A renderer passes some IR objects through as
+ * they are (a property's `personalData`, which the compiler writes with
+ * entitySemantics before dataSubjectRole), so rendering the compiler's object
+ * instead of the stored one wrote the same members in another order, and
+ * /schema's bytes differed from the kit's and the document's (consolidated
+ * review round 1). The /schema texts are rendered from this. Arrays keep
+ * their order; the content hash, being canonical, is not affected.
+ */
+export function inJsonbKeyOrder<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((v: unknown) => inJsonbKeyOrder(v)) as T;
+  if (value === null || typeof value !== "object") return value;
+  const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined);
+  // fromEntries defines own properties, so a key named __proto__ stays a key.
+  return Object.fromEntries(entries.sort(([a], [b]) => jsonbKeyCompare(a, b)).map(([k, v]) => [k, inJsonbKeyOrder(v)])) as T;
+}

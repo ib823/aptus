@@ -282,7 +282,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     expect(body.records[24]!.a[91_999]).toBe(91_999 % 10);
   });
 
-  it("a recorded 690 KB contract crosses back and is stored as its text with its /schema texts: the event loop keeps ticking", async () => {
+  it("a recorded 100 KB contract (over half a MiB of /schema texts) crosses back and is stored as its text with its texts: the event loop keeps ticking", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const iface = await newInterface("recorded", { operation: "CREATE", mode: "WRITE" });
     const entitySet = iface.entitySet!;
@@ -296,17 +296,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
       );
       return { compiled: { value: c, ms: compiled.ms }, recorded };
     };
-    const first = await record(wideDescription(5_000));
+    const first = await record(wideDescription(750));
     expect(first.recorded.value).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
     const c = first.compiled.value;
     if (!c.ok || !c.dataset?.ok) throw new Error("not compiled");
-    expect(c.dataset.bytes).toBeGreaterThan(650_000);
+    expect(c.dataset.bytes).toBeGreaterThan(100_000);
+    expect(c.dataset.texts.schemas.byteLength + (c.dataset.texts.update?.byteLength ?? 0)).toBeGreaterThan(512 * 1024);
     // What crossed back from the worker is the contract's text, as transferred bytes, never its object graph.
     expect(c.dataset.ir).toBeInstanceOf(Uint8Array);
     expect(c.dataset.facts).toMatchObject({ source: "METADATA", odataVersion: "V2", bodies: { create: false, update: true } });
 
     // Another contract: a new version, its diff taken in the same job and stored as its text.
-    const second = await record(wideDescription(5_000, "Other"));
+    const second = await record(wideDescription(750, "Other"));
     expect(second.recorded.value).toMatchObject({ status: "RECORDED", semver: "2.0.0", bump: "major" });
     expect(second.compiled.ms).toBeLessThan(150);
     expect(second.recorded.ms).toBeLessThan(150);
@@ -318,7 +319,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     });
     expect(rows).toHaveLength(2);
     const ir = rows[1]!.ir as { entityType: { properties: { name: string }[] }; source: string };
-    expect(ir.entityType.properties).toHaveLength(5_000);
+    expect(ir.entityType.properties).toHaveLength(750);
     expect(ir.entityType.properties[0]!.name).toBe("Other0");
     expect(rows[1]).toMatchObject({ source: "METADATA", odataVersion: "V2", irVersion: 1 });
     expect((rows[1]!.diff as { bump: string; changes: unknown[] }).bump).toBe("major");
@@ -330,7 +331,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     expect(await snapshotBodies(prisma, scope, rows[1]!.id)).toEqual({ create: false, update: true });
   });
 
-  it("/schema texts past 4 MiB are refused at record (OUTPUT_TOO_LARGE), and nothing is stored", async () => {
+  it("/schema texts past 1 MiB are refused at record (OUTPUT_TOO_LARGE), and nothing is stored", async () => {
     const iface = await newInterface("too-wide");
     const entitySet = iface.entitySet!;
     const compiled = recordJob({ description: wideDescription(13_500), entitySet, previous: [], unchangedHashes: [] });

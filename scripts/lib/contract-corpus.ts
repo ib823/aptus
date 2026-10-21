@@ -28,7 +28,7 @@ export interface DescriptionReport {
   documentsInvalid: number;
   /**
    * Entity sets a verify would refuse to record because their /schema texts
-   * pass 4 MiB together (jobs.ts, OUTPUT_TOO_LARGE): none, for any real
+   * pass 1 MiB together (jobs.ts, OUTPUT_TOO_LARGE): none, for any real
    * service; and the largest /schema texts recorded, in bytes.
    */
   schemaTextsTooLarge: number;
@@ -66,7 +66,7 @@ export function evaluateDescription(text: string, now: () => number = () => perf
       documentsInvalid += 1;
       continue;
     }
-    // What a verify of this dataset records: its /schema texts, under their 4 MiB.
+    // What a verify of this dataset records: its /schema texts, under their 1 MiB.
     const recorded = recordableContract(slice.contract, r.sourceLength, set.name, { previous: [], unchangedHashes: [] });
     if (!recorded.ok && recorded.reason === "OUTPUT_TOO_LARGE") schemaTextsTooLarge += 1;
     if (recorded.ok) {

@@ -16,7 +16,7 @@
  *
  * /SCHEMA IS RENDERED HERE, ONCE. Its texts — the four schemas and the create
  * and update bodies — are rendered when the snapshot is recorded, under
- * schemaLimit (at most 4 MiB together; past it OUTPUT_TOO_LARGE, nothing
+ * schemaLimit (at most 1 MiB together; past it OUTPUT_TOO_LARGE, nothing
  * stored), and served from the snapshot row as they are, so the
  * consumer-facing read path never renders anything.
  *
@@ -31,7 +31,7 @@
 import { z } from "zod";
 
 import { BudgetExceeded, contractLimit, jsonText, LIMITS, OutputBudget, schemaLimit } from "@/lib/contracts/budget";
-import { contractDigest } from "@/lib/contracts/canonical";
+import { contractDigest, inJsonbKeyOrder } from "@/lib/contracts/canonical";
 import { compileContract, type CompileRefusal } from "@/lib/contracts/compile";
 import { readDatasets, summarizeDatasets, type DatasetSummary } from "@/lib/contracts/datasets";
 import { diffContracts, storedDiff, type Bump } from "@/lib/contracts/diff";
@@ -130,6 +130,15 @@ export interface PreviousHeads {
   previous: string[];
   /** Hashes whose record is certainly UNCHANGED: no diff is taken for them. */
   unchangedHashes: string[];
+  /**
+   * The interface's current row — the newest of its service and dataset, the
+   * row /schema serves — as its hash and stored IR text; absent or null when
+   * it has none. A contract with that hash IS that row's contract: it is
+   * recorded with that IR text, and its /schema texts are rendered from it,
+   * so an UNCHANGED verify of the same fields in another order never writes
+   * texts that differ from the row's IR, the kit and the document.
+   */
+  current?: { hash: string; ir: string } | null;
 }
 
 /** What a verify learns from a description: never the IR itself. */
@@ -187,8 +196,16 @@ export function recordableContract(
     if (!(err instanceof BudgetExceeded)) throw err;
     return { ok: false, reason: "TOO_LARGE", bytes: err.spent, detail: `The compiled contract is larger than ${Math.floor(limit / 1024)} KB, so it was not recorded.` };
   }
+  /*
+   * RENDERED FROM THE IR AS STORED. The row's IR is jsonb, which keeps keys in
+   * its own order, and the kit and the document render `ir::text`: so the
+   * texts are rendered from the same order (inJsonbKeyOrder), or — when this
+   * contract is the current row's (same hash) — from that row's stored text
+   * itself, which this record then keeps as its IR too.
+   */
+  const stored = heads.current && heads.current.hash === digest.hash ? heads.current.ir : null;
   try {
-    texts = renderSchemaTexts(contract, entitySet, digest.bytes);
+    texts = renderSchemaTexts(stored === null ? inJsonbKeyOrder(contract) : (JSON.parse(stored) as InterfaceContract), entitySet, digest.bytes);
   } catch (err) {
     if (!(err instanceof BudgetExceeded)) throw err;
     return {
@@ -214,7 +231,7 @@ export function recordableContract(
     hash: digest.hash,
     bytes: digest.bytes,
     facts: { source: contract.source, odataVersion: contract.odataVersion, irVersion: contract.irVersion, bodies: contractBodies(contract) },
-    ir: utf8(JSON.stringify(contract)),
+    ir: utf8(stored ?? JSON.stringify(contract)),
     texts: { schemas: utf8(texts.schemas), create: texts.create === null ? null : utf8(texts.create), update: texts.update === null ? null : utf8(texts.update) },
     diffs,
   };

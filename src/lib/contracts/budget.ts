@@ -24,8 +24,10 @@
  *   description  ≤ 8 MiB                                   (the verify's read)
  *   contract     ≤ max(128 KiB, 12 × description chars), ≤ 2 MiB  canonical JSON
  *   stored diff  ≤ 1 MiB
- *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 4 MiB (its texts, rendered
- *                  once at record time and stored on the snapshot)
+ *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 1 MiB (its texts, rendered
+ *                  once at record time and stored on the snapshot; every
+ *                  /schema read selects and copies them, so the cap is what
+ *                  one read costs: about 25 ms of CPU at 1 MiB)
  *   starter kit  ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB
  *   solution doc ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB,
  *                  over contracts (and captured schemas) adding up to ≤ 2 MiB,
@@ -66,7 +68,7 @@ export const LIMITS = {
   /** A snapshot's stored diff. */
   storedDiff: 1 * MiB,
   /** GET /schema: the four schemas and the create and update bodies, rendered once at record time and stored. */
-  schema: { perContractByte: 16, floor: 64 * KiB, cap: 4 * MiB },
+  schema: { perContractByte: 16, floor: 64 * KiB, cap: 1 * MiB },
   /** The starter kit (every file, before the response wraps them). */
   kit: { perContractByte: 32, perFixtureByte: 8, floor: 512 * KiB, cap: 32 * MiB },
   /** The per-solution OpenAPI document. */

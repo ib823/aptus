@@ -37,10 +37,13 @@
  * THE /SCHEMA TEXTS LIVE ON ONE ROW. The job renders what GET /schema serves
  * (jobs.ts, renderSchemaTexts), and the record writes the texts onto the row
  * that is now current for the interface — a new row, or an UNCHANGED one
- * re-attached — and nulls them on every other row of the interface, in the
- * same transaction as the row, its diff and the write interface's stamp. An
- * interface therefore holds at most 4 MiB of texts. A row without them is
- * served as NOT_RENDERED until the interface is verified again.
+ * re-attached, its texts rendered from its own stored IR (loadRecordHeads
+ * hands the job the current row) — and nulls them on every other row of the
+ * interface, in the same transaction as the row, its diff and the write
+ * interface's stamp. An interface therefore holds at most 1 MiB of texts. A
+ * row without them, or with texts of another renderer version
+ * (SCHEMA_TEXTS_VERSION, render-version.ts), is served as NOT_RENDERED until
+ * the interface is verified again.
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. Pointing the interface at another dataset
@@ -60,6 +63,7 @@ import { nextSemver, semverParts, type Bump, type StoredContractDiff } from "@/l
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import type { PreviousHeads, RecordableContract } from "@/lib/contracts/jobs";
 import { jsonTextRef } from "@/lib/contracts/render-input";
+import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
 import { JSON_TEXT_PLACEHOLDER, setJsonText, type RawExecutor } from "@/lib/db/json-text";
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -186,6 +190,8 @@ async function decisionRows(scope: TenantScope, interfaceId: string, environment
 export interface RecordHeads extends PreviousHeads {
   /** The row whose IR is previous[i]. */
   ids: string[];
+  /** The row `current` is (the interface's current row, its texts rendered from its own IR); null when none. */
+  currentId: string | null;
 }
 
 /**
@@ -196,22 +202,34 @@ export interface RecordHeads extends PreviousHeads {
  */
 export async function loadRecordHeads(
   scope: TenantScope,
-  iface: { id: string; externalId: string },
+  iface: { id: string; externalId: string; entitySet: string | null },
   environment: string | null,
 ): Promise<RecordHeads> {
-  const { latest, own, candidates } = await decisionRows(scope, iface.id, environment);
+  const [{ latest, own, candidates }, current] = await Promise.all([
+    decisionRows(scope, iface.id, environment),
+    // The row /schema serves now: an UNCHANGED record renders its texts from this row's own IR (jobs.ts).
+    iface.entitySet ? newest(scope, iface.id, { externalId: iface.externalId, entitySet: iface.entitySet }) : Promise.resolve(null),
+  ]);
   const ids = [...new Set([...candidates, ...(latest ? [latest] : [])].map((r) => r.id))];
+  const wanted = current && !ids.includes(current.id) ? [...ids, current.id] : ids;
   const texts =
-    ids.length === 0
+    wanted.length === 0
       ? []
       : await prisma.$queryRaw<{ id: string; ir: string }[]>(Prisma.sql`
           SELECT "id", "ir"::text AS "ir" FROM "ContractSnapshot"
-          WHERE "organizationId" = ${scope.organizationId} AND "id" IN (${Prisma.join(ids)})
+          WHERE "organizationId" = ${scope.organizationId} AND "id" IN (${Prisma.join(wanted)})
         `);
   const byId = new Map(texts.map((t) => [t.id, t.ir]));
   const present = ids.filter((id) => byId.has(id));
   const unchangedHashes = [latest, own].filter((r): r is HeadRow => r !== null && r.externalId === iface.externalId).map((r) => r.contentHash);
-  return { ids: present, previous: present.map((id) => byId.get(id)!), unchangedHashes };
+  const currentIr = current ? byId.get(current.id) : undefined;
+  return {
+    ids: present,
+    previous: present.map((id) => byId.get(id)!),
+    unchangedHashes,
+    current: current && currentIr !== undefined ? { hash: current.contentHash, ir: currentIr } : null,
+    currentId: current && currentIr !== undefined ? current.id : null,
+  };
 }
 
 /** The current snapshot of an interface, read in a transaction: what the texts and the stamp are decided by. */
@@ -246,7 +264,8 @@ export async function recordContractSnapshot(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string };
   contract: Extract<RecordableContract, { ok: true }>;
-  heads: { ids: readonly string[] };
+  /** The rows the job diffed against, and the current row it rendered an UNCHANGED contract's texts from (loadRecordHeads). */
+  heads: { ids: readonly string[]; currentId?: string | null };
   environment?: string | null;
   connectionId?: string | null;
   createdById?: string | null;
@@ -344,8 +363,20 @@ export async function recordContractSnapshot(input: {
           result = { status: "RECORDED", snapshot: summary(row), diff: next!.diff };
         }
         const current = await currentIn(tx, scope, iface);
-        // The texts are this contract's: they go on the row /schema serves only when that row is of this contract.
-        if (current && current.contentHash === hash) await setSchemaTexts(tx, scope, iface.id, current.id, contract.texts);
+        /*
+         * THE TEXTS GO ONLY ON THE ROW WHOSE IR THEY WERE RENDERED FROM: this
+         * record's new row, or — UNCHANGED — the current row the job was
+         * handed (heads.currentId), whose stored IR it rendered them from, so
+         * what an UNCHANGED record writes is what that row already holds (or
+         * held, before its texts were lost or written by another renderer
+         * version): never this compile's own order. Two systems listing the
+         * same fields in another order no longer flip /schema between them
+         * (consolidated review round 1).
+         */
+        const renderedFrom = result.status === "RECORDED" ? result.snapshot.id : (input.heads.currentId ?? null);
+        if (current && current.contentHash === hash && current.id === renderedFrom) {
+          await setSchemaTexts(tx, scope, iface.id, current.id, contract.texts);
+        }
         await input.alsoWrite?.(tx, result, current);
         return result;
       });
@@ -370,11 +401,12 @@ async function setSchemaTexts(
 ): Promise<void> {
   const text = (t: Uint8Array<ArrayBuffer> | null) => (t === null ? null : textOf(t));
   await tx.$executeRaw(Prisma.sql`
-    UPDATE "ContractSnapshot" SET "schemasText" = ${textOf(texts.schemas)}, "createBodyText" = ${text(texts.create)}, "updateBodyText" = ${text(texts.update)}
+    UPDATE "ContractSnapshot" SET "schemasText" = ${textOf(texts.schemas)}, "createBodyText" = ${text(texts.create)}, "updateBodyText" = ${text(texts.update)},
+      "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION}
     WHERE "id" = ${rowId} AND "organizationId" = ${scope.organizationId}
   `);
   await tx.$executeRaw(Prisma.sql`
-    UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL
+    UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL, "schemaTextsVersion" = NULL
     WHERE "organizationId" = ${scope.organizationId} AND "interfaceId" = ${interfaceId} AND "id" <> ${rowId} AND "schemasText" IS NOT NULL
   `);
 }
@@ -419,7 +451,7 @@ export function describesInterfaceNow(
 export interface CurrentSnapshotSummary extends SnapshotSummary {
   /** Canonical bytes of its contract; null on a row recorded before they were kept (measured on read). */
   irBytes: number | null;
-  /** octet_length of its /schema texts; null when it holds none (NOT_RENDERED). */
+  /** octet_length of its /schema texts; null when it holds none, or holds them from another renderer version (NOT_RENDERED). */
   schemasBytes: number | null;
   createBodyBytes: number | null;
   updateBodyBytes: number | null;
@@ -445,13 +477,14 @@ export async function currentSnapshotSummaries(
     schemasBytes: number | null;
     createBodyBytes: number | null;
     updateBodyBytes: number | null;
+    textsVersion: number | null;
   };
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT DISTINCT ON (s."interfaceId")
       s."interfaceId", s."id", s."semver", s."contentHash", s."source", s."odataVersion", s."entitySet", s."externalId",
       s."interfaceVersion", s."createdAt", s."irBytes",
       octet_length(s."schemasText") AS "schemasBytes", octet_length(s."createBodyText") AS "createBodyBytes",
-      octet_length(s."updateBodyText") AS "updateBodyBytes"
+      octet_length(s."updateBodyText") AS "updateBodyBytes", s."schemaTextsVersion" AS "textsVersion"
     FROM "ContractSnapshot" s
     JOIN unnest(${wanted.map((i) => i.id)}::text[], ${wanted.map((i) => i.externalId)}::text[], ${wanted.map((i) => i.entitySet)}::text[])
       AS w("interfaceId", "externalId", "entitySet")
@@ -461,12 +494,14 @@ export async function currentSnapshotSummaries(
   `);
   const n = (v: number | bigint | null) => (v === null ? null : Number(v));
   for (const hit of rows) {
+    // Texts another renderer version wrote are not this code's render: none, as far as a reader is concerned.
+    const servable = hit.textsVersion === SCHEMA_TEXTS_VERSION;
     out.set(hit.interfaceId, {
       ...summary(hit),
       irBytes: n(hit.irBytes),
-      schemasBytes: n(hit.schemasBytes),
-      createBodyBytes: n(hit.createBodyBytes),
-      updateBodyBytes: n(hit.updateBodyBytes),
+      schemasBytes: servable ? n(hit.schemasBytes) : null,
+      createBodyBytes: servable ? n(hit.createBodyBytes) : null,
+      updateBodyBytes: servable ? n(hit.updateBodyBytes) : null,
     });
   }
   return out;
@@ -475,20 +510,22 @@ export async function currentSnapshotSummaries(
 /**
  * GET /schema's texts of one snapshot, as stored: its schemas, and the write
  * body `operation` sends (UPDATE's or CREATE's) when `body` is asked for. One
- * statement; null when the row is gone.
+ * statement; null when the row is gone, or its texts are of another renderer
+ * version (SCHEMA_TEXTS_VERSION): /schema then answers NOT_RENDERED.
  */
 export async function snapshotSchemaTexts(
   scope: TenantScope,
   snapshotId: string,
   body: "CREATE" | "UPDATE" | null,
 ): Promise<{ schemas: string | null; body: string | null } | null> {
-  const rows = await prisma.$queryRaw<{ schemas: string | null; body: string | null }[]>(Prisma.sql`
-    SELECT "schemasText" AS "schemas",
+  const rows = await prisma.$queryRaw<{ schemas: string | null; body: string | null; version: number | null }[]>(Prisma.sql`
+    SELECT "schemasText" AS "schemas", "schemaTextsVersion" AS "version",
       ${body === "UPDATE" ? Prisma.sql`"updateBodyText"` : body === "CREATE" ? Prisma.sql`"createBodyText"` : Prisma.sql`NULL::text`} AS "body"
     FROM "ContractSnapshot"
     WHERE "organizationId" = ${scope.organizationId} AND "id" = ${snapshotId}
   `);
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row && row.version === SCHEMA_TEXTS_VERSION ? { schemas: row.schemas, body: row.body } : null;
 }
 
 /** The chosen snapshots' IRs, read in one query; each with its size, measured when it was not kept. */

@@ -111,7 +111,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const current = (await currentSnapshotSummaries(scope, [iface])).get(iface.id) ?? null;
   const preferred = current?.source === "METADATA" ? { snapshotId: current.id, semver: current.semver } : null;
   const record = preferred === null && iface.entitySet !== null;
-  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [] };
+  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [], current: null, currentId: null };
   const job = await runContractJob(
     "capture",
     async () => {
@@ -129,6 +129,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
           record,
           previous: heads.previous,
           unchangedHashes: heads.unchangedHashes,
+          current: heads.current ?? null,
         },
       };
     },

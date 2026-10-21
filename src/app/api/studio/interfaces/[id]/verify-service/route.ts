@@ -63,7 +63,7 @@ import { isODataVersion } from "@/lib/sap-public/service-path";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
+import { notCompiled, recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { MAX_STORED_ENTITY_SETS, VERIFY_REQUEST_BUDGET_MS, verifyServiceMetadata } from "@/lib/studio/service-verify";
 import { loadRecordHeads } from "@/lib/contracts/snapshot";
@@ -134,6 +134,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       odataVersion: true,
       entitySet: true,
       serviceVerifications: true,
+      serviceVerifiedEntitySets: true,
       operation: true,
       mode: true,
     },
@@ -234,6 +235,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     loadHeads: () => loadRecordHeads(scope, iface, environment),
     // Its organisation's share of the fetch gate and of the compiler, so another's verifies cannot crowd it out.
     organizationId: scope.organizationId,
+    // Listed when the compiler would refuse the job, so SAP is not asked (COMPILER_UNAVAILABLE).
+    storedEntitySets: Array.isArray(iface.serviceVerifiedEntitySets)
+      ? iface.serviceVerifiedEntitySets.filter((n): n is string => typeof n === "string")
+      : null,
     deadlineAt,
   });
 
@@ -330,7 +335,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }
   }
 
-  // Only a verified answer about THIS contract becomes its recorded contract.
+  // Only a verified answer about THIS contract becomes its recorded contract;
+  // a verify the compiler refused before SAP was asked says why, and when to retry.
   const contract: ContractOutcome | null = verified
     ? await recordVerifiedContract({
         scope,
@@ -341,7 +347,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         connectionId: connection.id,
         actorId: user.id,
       })
-    : null;
+    : result.status === "COMPILER_UNAVAILABLE" && result.compiled && !result.compiled.ok
+      ? notCompiled(result.compiled)
+      : null;
 
   await writeConfigAudit({
     organizationId: scope.organizationId,

@@ -11,7 +11,7 @@
  *                  bytes (their sha-256, tests/fixtures/contracts/golden/
  *                  read-paths.f54c6f5a.json) but for the one deliberate
  *                  change (asAtF54c6f5a), and so is every content hash;
- *   record         the contract digested, its /schema texts under 4 MiB, the
+ *   record         the contract digested, its /schema texts under 1 MiB, the
  *                  diffs only when the hash is not certainly unchanged;
  *   capture        the request parsed, validated and inferred in the job;
  *   fixture        the request parsed, validated, stripped and bounded;
@@ -255,24 +255,28 @@ describe("the record job", () => {
     expect(JSON.parse(textOf(changed.dataset.diffs![0]!.stored))).toMatchObject({ bump: changed.dataset.diffs![0]!.bump });
   });
 
-  it("refuses OUTPUT_TOO_LARGE a contract whose /schema texts pass 4 MiB together, and a real-shaped wide one fits", () => {
+  it("refuses OUTPUT_TOO_LARGE a contract whose /schema texts pass 1 MiB together, and a real-shaped wide one fits", () => {
     const huge = wide(13_500);
     expect(huge.bytes).toBeLessThanOrEqual(LIMITS.contract.cap);
     expect(recordableContract(huge.contract, undefined, "EmpJob", NO_HEADS)).toMatchObject({ ok: false, reason: "OUTPUT_TOO_LARGE" });
     expect(() => renderSchemaTexts(huge.contract, "EmpJob", huge.bytes)).toThrow();
-    // EmpJob-sized (about 750 fields): well inside.
+    // Consolidated review round 1: every /schema read copies the texts (about 23 ms of CPU per MB), so they are capped at
+    // 1 MiB, not 4: a dataset of 1,500 labelled fields (about 1.8 MB of texts) is refused at record.
+    expect(LIMITS.schema.cap).toBe(1024 * 1024);
+    expect(recordableContract(wide(1_500).contract, undefined, "EmpJob", NO_HEADS)).toMatchObject({ ok: false, reason: "OUTPUT_TOO_LARGE" });
+    // EmpJob-sized (about 750 fields): inside.
     const real = wide(750);
     const p = recordableContract(real.contract, undefined, "EmpJob", NO_HEADS);
     if (!p.ok) throw new Error(p.reason);
     const total = p.texts.schemas.byteLength + (p.texts.create?.byteLength ?? 0) + (p.texts.update?.byteLength ?? 0);
-    expect(total).toBeLessThan(4 * 1024 * 1024);
+    expect(total).toBeLessThan(1024 * 1024);
   });
 
   it("its description in and its texts back leave the event loop ticking, against four 1.9 MB previous heads", async () => {
     const c = wide(13_500);
     const previous = Array.from({ length: 4 }, () => JSON.stringify(c.contract));
-    // A narrower version of the same dataset: four diffs of 13,500 removed fields each, parsed and taken in the worker.
-    const changed = wide(3000);
+    // A narrower version of the same dataset: four diffs of 12,800 removed fields each (its /schema texts under their 1 MiB), parsed and taken in the worker.
+    const changed = wide(700);
     const r = await longestStall(() =>
       runJobInEnvelope({ kind: "record", input: { description: changed.description, entitySet: "EmpJob", previous, unchangedHashes: [] } }),
     );
@@ -473,7 +477,7 @@ describe("the verify: a bounded summary, and no description-sized work on this t
     expect(r).toMatchObject({ status: "OK", verified: true, entitySets: ["T0", "T1", "T2"], entitySetCount: 3 });
   });
 
-  it("when no job ran (the compiler off), this thread reads the datasets in slices, and the event loop keeps ticking", async () => {
+  it("when a job that was fetched for did not run (BUSY, RESOURCE_LIMIT), this thread reads the datasets in slices, and the event loop keeps ticking", async () => {
     const body = eightMiBOfSets();
     const slices: number[] = [];
     const sliced = await longestStall(() => readDatasetsSliced(body, "S184000", (n) => slices.push(n)));
@@ -481,21 +485,34 @@ describe("the verify: a bounded summary, and no description-sized work on this t
     expect(sliced.value.count).toBeGreaterThan(180_000);
     for (const n of slices) expect(n).toBeLessThanOrEqual(DATASET_SLICE_CHARS + 64);
     expect(sliced.ms).toBeLessThan(150);
+  });
 
+  /*
+   * Consolidated review round 1: with the compiler off (or the organisation's
+   * time spent), the verify fetched the description (up to 8 MiB) and read
+   * its datasets on this thread, uncharged — so the kill switch moved the
+   * parse onto the request thread instead of stopping it. The job's first
+   * step is now asked before SAP is.
+   */
+  it("with the compiler off, SAP is never asked: COMPILER_UNAVAILABLE, with the interface's stored datasets", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
-    const encoded = new TextEncoder().encode(body);
-    const r = await longestStall(() =>
-      verifyServiceMetadata(
-        { connection: CONNECTION, servicePath: "/sap/opu/odata/sap/Z_SRV", declaredVersion: null, entitySet: "S184000", organizationId: "org_off" },
-        (async () => new Response(encoded, { status: 200, headers: { "content-type": "application/xml" } })) as unknown as typeof fetch,
-      ),
+    const fetchImpl = vi.fn(async () => xml(eightMiBOfSets()));
+    const r = await verifyServiceMetadata(
+      {
+        connection: CONNECTION,
+        servicePath: "/sap/opu/odata/sap/Z_SRV",
+        declaredVersion: null,
+        entitySet: "S184000",
+        organizationId: "org_off",
+        storedEntitySets: ["S1", "S184000"],
+      },
+      fetchImpl as unknown as typeof fetch,
     );
-    expect(r.value.compiled).toMatchObject({ ok: false, reason: "DISABLED" });
-    expect(r.value.compiled && !r.value.compiled.ok && r.value.compiled.detail).toContain("compiler disabled");
-    expect(r.value).toMatchObject({ status: "OK", verified: true });
-    expect(r.value.entitySetCount).toBeGreaterThan(180_000);
-    expect(r.ms).toBeLessThan(250);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ status: "COMPILER_UNAVAILABLE", verified: false, entitySets: ["S1", "S184000"], entitySetCount: 2, httpStatus: null, auditStatus: 503 });
+    expect(r.compiled).toMatchObject({ ok: false, reason: "DISABLED" });
+    expect(r.detail).toMatch(/SAP was not asked: the contract compiler is turned off/);
   });
 
   it("the verify's budget and its margin fit the route's platform limit", () => {

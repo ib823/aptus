@@ -268,11 +268,8 @@ export async function runContractJob<K extends Job["kind"]>(
   const deadlineAt = opts.deadlineAt ?? null;
   const limits = opts.limits ?? CONTRACT_JOB_LIMITS;
   const left = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
-  if (contractIsolates() === 0) return refuse("DISABLED", kind, queuedAt);
-  if (tenant !== null) {
-    const allowance = await checkContractTime(tenant);
-    if (!allowance.ok) return refuse("ALLOWANCE", kind, queuedAt, "allowance", allowance.detail, allowance.retryAfterMs);
-  }
+  const admitted = await contractJobAdmission(kind, tenant);
+  if (admitted !== null) return admitted;
   const wait = left(GATE.maxWaitMs);
   const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
   if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
@@ -296,6 +293,24 @@ export async function runContractJob<K extends Job["kind"]>(
   }
   if (tenant !== null && wallMs > 0) await chargeContractTime(tenant, wallMs);
   return result;
+}
+
+/**
+ * Whether a job of this organisation may start at all: DISABLED while the
+ * compiler is off, ALLOWANCE once the organisation has used its day; null
+ * when it may. The first step of every job — and the verify asks it BEFORE it
+ * fetches a description (service-verify.ts), so an organisation whose time is
+ * spent, or a deployment with the compiler off, costs no 8 MiB fetch and no
+ * read of it on the request thread (consolidated review round 1).
+ */
+export async function contractJobAdmission<T = never>(kind: Job["kind"], tenant: string | null): Promise<EnvelopeResult<T> | null> {
+  const since = Date.now();
+  if (contractIsolates() === 0) return refuse("DISABLED", kind, since);
+  if (tenant !== null) {
+    const allowance = await checkContractTime(tenant);
+    if (!allowance.ok) return refuse("ALLOWANCE", kind, since, "allowance", allowance.detail, allowance.retryAfterMs);
+  }
+  return null;
 }
 
 /** runContractJob for a job already in hand. */

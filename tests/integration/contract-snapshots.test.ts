@@ -67,6 +67,8 @@ import { MissingTenantScopeError } from "@/lib/db/tenant-guard";
 import { prisma } from "@/lib/db/prisma";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
+import { referenceSchemaMembers } from "../helpers/schema-reference";
+
 const RUN = `p13-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
 const OTHER = `${RUN}-other`;
@@ -681,6 +683,52 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     expect(await rowsWithTexts(iface.id)).toEqual([third.snapshot.id]);
     const back = (await currentSnapshotSummaries(scope, [iface])).get(iface.id);
     expect(back).toMatchObject({ id: second.snapshot.id, schemasBytes: null });
+  });
+
+  /*
+   * Consolidated review round 1. (a) An UNCHANGED verify rewrote the row's
+   * texts from its own compile: two systems listing the same fields in
+   * another order (same hash, the IR's order kept) flipped /schema between
+   * them. (b) The texts were rendered from the compiler's object, not the
+   * stored jsonb, so x-personal-data's members came out in another order than
+   * f54c6f5a's /schema (and the kit and the document) rendered from ir::text.
+   */
+  it("an UNCHANGED verify of the same fields in another order leaves /schema's bytes as they were, which are the stored IR's render", async () => {
+    const iface = await newInterface("swapped");
+    const first = await record({ scope, iface, contract: salesOrder(), environment: "DEV" });
+    if (first.status !== "RECORDED") throw new Error(first.status);
+    const before = await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE");
+    expect(before?.schemas).toBeTruthy();
+    const swapped = salesOrder();
+    swapped.entityType.properties.reverse();
+    // Another system (PROD) that lists the same fields in another order: the same contract.
+    expect(await record({ scope, iface, contract: swapped, environment: "PROD" })).toMatchObject({ status: "UNCHANGED", snapshot: { id: first.snapshot.id } });
+    expect(await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE")).toEqual(before);
+    expect(await record({ scope, iface, contract: swapped, environment: "DEV" })).toMatchObject({ status: "UNCHANGED" });
+    expect(await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE")).toEqual(before);
+    // Lost, and re-rendered by the swapped verify: from the row's own IR, so the same bytes.
+    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL, "schemaTextsVersion" = NULL WHERE "id" = ${first.snapshot.id} AND "organizationId" = ${ORG}`;
+    expect(await record({ scope, iface, contract: swapped, environment: "PROD" })).toMatchObject({ status: "UNCHANGED" });
+    expect(await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE")).toEqual(before);
+    // And they are what f54c6f5a's /schema rendered from the stored row's ir::text.
+    const [row] = await prisma.$queryRaw<{ ir: string }[]>`SELECT "ir"::text AS "ir" FROM "ContractSnapshot" WHERE "id" = ${first.snapshot.id} AND "organizationId" = ${ORG}`;
+    const reference = referenceSchemaMembers(salesOrder(), "SalesOrder", first.snapshot.id, null, { version: iface.version, entitySet: "SalesOrder" }, row!.ir);
+    expect(`{"schemas":${before!.schemas},"requestSchema":null}`).toBe(reference);
+  });
+
+  it("a contract with personal data: /schema's texts are its stored IR's render, x-personal-data in jsonb's order", async () => {
+    const r = compileContract(readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/business-partner.v2.xml"), "utf8"));
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "A_Partner");
+    if (!s.ok) throw new Error(s.detail);
+    const iface = { ...(await newInterface("personal")), entitySet: "A_Partner" };
+    const recorded = await record({ scope, iface, contract: s.contract, environment: "DEV" });
+    if (recorded.status !== "RECORDED") throw new Error(recorded.status);
+    const texts = await snapshotSchemaTexts(scope, recorded.snapshot.id, null);
+    expect(texts!.schemas).toContain('"x-personal-data":{"dataSubjectRole"');
+    const [row] = await prisma.$queryRaw<{ ir: string }[]>`SELECT "ir"::text AS "ir" FROM "ContractSnapshot" WHERE "id" = ${recorded.snapshot.id} AND "organizationId" = ${ORG}`;
+    const reference = referenceSchemaMembers(s.contract, "A_Partner", recorded.snapshot.id, null, { version: iface.version, entitySet: "A_Partner" }, row!.ir);
+    expect(`{"schemas":${texts!.schemas},"requestSchema":null}`).toBe(reference);
   });
 
   /*

@@ -19,6 +19,7 @@ import {
   buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
@@ -51,6 +52,16 @@ export interface NorthboundReadResult {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 100;
+/**
+ * The most of a read's body that is read, in DECODED bytes: 32 KiB for each
+ * of the MAX_LIMIT rows a read may ask for (a real row, envelope and deferred
+ * links included, is a few KB). The body was read whole before, and fetch
+ * inflates before reading, so a builder's own host answering ~0.4 MB of gzip
+ * that expands to hundreds of MB could take a shared instance down with two
+ * reads at once (consolidated review round 1). Past it the stream is
+ * cancelled and the read is an invalid body, said as too large.
+ */
+export const MAX_READ_BODY_BYTES = MAX_LIMIT * 32 * 1024;
 
 /** OData v2 nests rows under `d.results`; v4 puts them in `value`. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -185,7 +196,15 @@ export async function readEntitySet(
     // JSON.parse throwing on it would surface as a generic crash rather than as
     // the honest status the response code already told us.
     let json: unknown = null;
-    const text = await res.text();
+    const { text, truncated } = await bodyPrefix(res, MAX_READ_BODY_BYTES);
+    if (truncated) {
+      return {
+        status: "ERROR", httpStatus: res.status, records: [],
+        detail: `The tenant's response is larger than ${MAX_READ_BODY_BYTES / (1024 * 1024)} MB, so it was not read. Ask for fewer records.`,
+        durationMs: Date.now() - started,
+        failureReason: FAILURE_REASON_INVALID_BODY,
+      };
+    }
     if (text) {
       try {
         json = JSON.parse(text);

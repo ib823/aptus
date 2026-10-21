@@ -8,7 +8,7 @@
  * 20 or more of SAP's own published descriptions, and fails when one does not
  * compile, when fewer than CONTRACT_CORPUS_MIN compile, when a generated
  * document does not validate against the OpenAPI 3.1 or 3.0.3 specification,
- * or when a dataset's /schema texts would pass the 4 MiB a record stores.
+ * or when a dataset's /schema texts would pass the 1 MiB a record stores.
  * It also measures PersonalData annotation coverage — the input P1.5 needs.
  *
  * WHAT IT NEVER DOES (roadmap §9.1 #17: SAP's $metadata is not bundled — its
@@ -140,7 +140,7 @@ async function main(): Promise<number> {
   }
   lines.push("");
   lines.push(`Compiled: ${compiled.length} of ${rows.length} requested (minimum ${min}).`);
-  lines.push(`Largest /schema texts recorded: ${Math.max(0, ...rows.map((r) => r.report?.maxSchemaTextBytes ?? 0))} bytes (limit 4 MiB).`);
+  lines.push(`Largest /schema texts recorded: ${Math.max(0, ...rows.map((r) => r.report?.maxSchemaTextBytes ?? 0))} bytes (limit 1 MiB).`);
   lines.push(
     `PersonalData coverage over ${coverage.properties} properties of ${coverage.entityTypes} entity types: ` +
       `${coverage.annotatedProperties} annotated (${pct(coverage.annotatedProperties, coverage.properties)}) — ` +
@@ -167,7 +167,7 @@ async function main(): Promise<number> {
   }
   const schemaTooLarge = rows.reduce((n, r) => n + (r.report?.schemaTextsTooLarge ?? 0), 0);
   if (schemaTooLarge > 0) {
-    console.error(`\n${schemaTooLarge} dataset(s) of SAP's own services would not be recorded: their /schema texts pass 4 MiB.`);
+    console.error(`\n${schemaTooLarge} dataset(s) of SAP's own services would not be recorded: their /schema texts pass 1 MiB.`);
     failed = true;
   }
   return failed ? 1 : 0;

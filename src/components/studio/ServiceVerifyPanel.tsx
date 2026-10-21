@@ -98,6 +98,7 @@ const CHIP: Record<string, { status: HonestStatus; label: string }> = {
   ERROR: { status: "PROBE_FAILED", label: "failed" },
   METADATA_TOO_LARGE: { status: "PROBE_FAILED", label: "too large" },
   BUSY: { status: "PROBE_FAILED", label: "busy, retry" },
+  COMPILER_UNAVAILABLE: { status: "PROBE_FAILED", label: "not run" },
   CHANGED_DURING_VERIFY: { status: "PROBE_FAILED", label: "changed meanwhile" },
   NOT_RECORDED: { status: "PROBE_FAILED", label: "not recorded" },
   BINDING_REFUSED: { status: "NOT_CHECKED", label: "no connection" },

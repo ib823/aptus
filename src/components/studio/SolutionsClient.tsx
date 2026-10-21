@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { refusalMessage } from "@/lib/studio/refusal-message";
 import { missingOwners, type SolutionStatus } from "@/lib/studio/solutions";
 import { DATA_CLASSES, dataClassLabel } from "@/lib/studio/data-class";
 
@@ -130,6 +131,33 @@ export function SolutionsClient({
       setBusy(false);
     }
   }, [router]);
+
+  /*
+   * THE SOLUTION DOCUMENT IS FETCHED, NOT LINKED. The route refuses by design
+   * (the organisation's compile time spent, the compiler busy or off, a
+   * document past its budget), and a plain download link saved that refusal's
+   * JSON as the document. A refusal is now said here, with its retry time.
+   */
+  const downloadDocument = useCallback(async (solutionId: string, version: "3.1" | "3.0") => {
+    setMessage(null);
+    const failed = "The solution document could not be generated.";
+    try {
+      const res = await fetch(`/api/studio/solutions/${encodeURIComponent(solutionId)}/openapi?version=${version}`);
+      if (!res.ok) {
+        const json: unknown = await res.json().catch(() => null);
+        setMessage({ kind: "error", text: refusalMessage(res, json, failed) });
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `openapi-${version}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      setMessage({ kind: "error", text: failed });
+    }
+  }, []);
 
   if (solutions.length === 0) {
     return (
@@ -251,21 +279,13 @@ export function SolutionsClient({
                   <Field label="Northbound contract">
                     {/* The whole solution's OpenAPI (P1.3): every interface's
                         served operation, compiled from its verified service. */}
-                    <a
-                      href={`/api/studio/solutions/${encodeURIComponent(selected.id)}/openapi?version=3.1`}
-                      download
-                      style={contractLink}
-                    >
+                    <button type="button" onClick={() => void downloadDocument(selected.id, "3.1")} style={contractLink}>
                       OpenAPI 3.1
-                    </a>
+                    </button>
                     {" · "}
-                    <a
-                      href={`/api/studio/solutions/${encodeURIComponent(selected.id)}/openapi?version=3.0`}
-                      download
-                      style={contractLink}
-                    >
+                    <button type="button" onClick={() => void downloadDocument(selected.id, "3.0")} style={contractLink}>
                       OpenAPI 3.0.3
-                    </a>
+                    </button>
                   </Field>
                 )}
                 <Field label="Access grants">
@@ -433,7 +453,16 @@ function OwnershipEditor({
 /* ── presentation ─────────────────────────────────────────────────────────── */
 
 /** The token the Studio's other in-text links use, so both themes keep their contrast. */
-const contractLink: React.CSSProperties = { color: "var(--brand-navy)", fontWeight: 600 };
+const contractLink: React.CSSProperties = {
+  color: "var(--brand-navy)",
+  fontWeight: 600,
+  background: "none",
+  border: "none",
+  padding: 0,
+  font: "inherit",
+  textDecoration: "underline",
+  cursor: "pointer",
+};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -14,6 +14,8 @@
  *                             a capture's schema, a charge of compiler time
  */
 
+import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
+
 type Row = Record<string, unknown>;
 interface RawQuery {
   sql?: string;
@@ -62,6 +64,7 @@ export function snapshotSummaryRows(snapshots: readonly Row[], q: unknown): Row[
         schemasBytes: octets(hit.schemasText),
         createBodyBytes: octets(hit.createBodyText),
         updateBodyBytes: octets(hit.updateBodyText),
+        textsVersion: textsVersionOf(hit),
       });
     }
   });
@@ -69,6 +72,9 @@ export function snapshotSummaryRows(snapshots: readonly Row[], q: unknown): Row[
 }
 
 const octets = (t: unknown) => (typeof t === "string" ? Buffer.byteLength(t, "utf8") : null);
+/** The renderer version of a row's texts; a test row given texts without one is taken as this code's. */
+const textsVersionOf = (r: Row): number | null =>
+  typeof r.schemaTextsVersion === "number" ? r.schemaTextsVersion : typeof r.schemasText === "string" && r.schemaTextsVersion === undefined ? SCHEMA_TEXTS_VERSION : null;
 
 /** snapshotSchemaTexts's statement (snapshot.ts). */
 export function isSchemaTextsQuery(q: unknown): boolean {
@@ -82,7 +88,7 @@ export function schemaTextsRows(snapshots: readonly Row[], q: unknown): Row[] {
   const row = snapshots.find((r) => (r.organizationId ?? org) === org && r.id === id);
   if (!row) return [];
   const body = sql.includes('"updateBodyText" AS') ? row.updateBodyText : sql.includes('"createBodyText" AS') ? row.createBodyText : null;
-  return [{ schemas: row.schemasText ?? null, body: body ?? null }];
+  return [{ schemas: row.schemasText ?? null, body: body ?? null, version: textsVersionOf(row) }];
 }
 
 /** snapshotBodies's statement (snapshot.ts). */
@@ -177,17 +183,17 @@ export function applyRawWrite(tables: { snapshots: Row[]; interfaces?: Row[]; fi
     let n = 0;
     for (const r of tables.snapshots) {
       if ((r.organizationId ?? org) === org && r.interfaceId === interfaceId && r.id !== keep && typeof r.schemasText === "string") {
-        Object.assign(r, { schemasText: null, createBodyText: null, updateBodyText: null });
+        Object.assign(r, { schemasText: null, createBodyText: null, updateBodyText: null, schemaTextsVersion: null });
         n += 1;
       }
     }
     return n;
   }
   if (/^UPDATE "ContractSnapshot" SET "schemasText" = /.test(sql)) {
-    const [schemasText, createBodyText, updateBodyText, id, org] = values as [string, string | null, string | null, string, string];
+    const [schemasText, createBodyText, updateBodyText, schemaTextsVersion, id, org] = values as [string, string | null, string | null, number, string, string];
     const r = tables.snapshots.find((x) => x.id === id && (x.organizationId ?? org) === org);
     if (!r) return 0;
-    Object.assign(r, { schemasText, createBodyText, updateBodyText });
+    Object.assign(r, { schemasText, createBodyText, updateBodyText, schemaTextsVersion });
     return 1;
   }
   if (/^UPDATE "Interface" SET "responseSchema" = /.test(sql)) {

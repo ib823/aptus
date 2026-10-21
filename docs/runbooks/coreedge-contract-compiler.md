@@ -196,7 +196,7 @@ review round 1; each asserted in that file, the stored ones in
   budget is the stored contract's own bound, so a contract the verify
   accepted is servable on every read path; `/schema` checks it the same way
   and answers `schemas: null` with `schemasOmitted: "TOO_LARGE"` past it.
-  `/schema`'s texts are rendered once, at record time, at most 4 MiB.
+  `/schema`'s texts are rendered once, at record time, at most 1 MiB.
   Every document is linear in what it carries: a kit response under 32 bytes
   per contract byte, a solution document under 16, `/schema`'s schemas under
   12 and its whole answer under 16, each in under 5 s, asserted at the worst
@@ -243,13 +243,30 @@ Everything the request thread only stores or sends crosses back as UTF-8
 bytes, transferred, and is written as text. **The `/schema` texts** — the
 four schemas, and the create and update bodies (or null) — are written by the
 one budgeted writer under `schemaLimit` (64 KiB + 16 × contract bytes, at
-most **4 MiB together**); past it the contract is refused `OUTPUT_TOO_LARGE`
-and nothing is stored. Each record or capture write is **one transaction**:
-the snapshot (or nothing, when UNCHANGED), its IR and diff, the texts on the
-row `/schema` will serve (when that row is of this contract — an UNCHANGED
-verify re-attaches them), the texts nulled on every other row of the
-interface, and the write interface's `requestSchema` stamp; a capture's
+most **1 MiB together**: every `/schema` read selects and copies them, so the
+cap is the cost of one read); past it the contract is refused
+`OUTPUT_TOO_LARGE` and nothing is stored. They are rendered **from the IR as
+it is stored**: the jsonb column keeps object keys shorter-first, then
+bytewise, and the kit and the document render `ir::text`, so the texts are
+rendered from the contract in that order (`inJsonbKeyOrder`), and a contract
+whose hash is the interface's current row's is rendered from that row's own
+`ir::text` (which a new row of it then stores too). They are stored with
+`SCHEMA_TEXTS_VERSION` (`src/lib/contracts/render-version.ts`) and served
+only while it is the running code's. Each record or capture write is **one
+transaction**: the snapshot (or nothing, when UNCHANGED), its IR and diff,
+the texts on the row they were rendered from when it is the row `/schema`
+will serve (a new row, or — UNCHANGED — the current row, re-rendered from its
+own IR, so the same bytes it held), the texts nulled on every other row of
+the interface, and the write interface's `requestSchema` stamp; a capture's
 schema on the interface in the same transaction, or nothing.
+
+**A renderer change means re-verifying.** Any change to what
+`renderSchemaTexts` writes (`json-schema.ts`, or how it is called) bumps
+`SCHEMA_TEXTS_VERSION` and adds its digest to
+`tests/fixtures/contracts/golden/schema-texts-versions.json` (the golden
+test fails until it does). After the deploy, every interface's `/schema`
+answers `schemasOmitted: NOT_RENDERED` until it is verified again; the kit
+and the document are unaffected.
 
 **The gate (`src/lib/contracts/envelope.ts`).**
 
@@ -280,14 +297,22 @@ the input.
 verifies of one organisation, and 16 of the process, in flight from before
 SAP is asked until the verify has answered, with **no queue**: past either,
 `status: BUSY` at once, SAP never asked. A hung SAP holds one of an
-organisation's three. The verify has 45 s (`maxDuration` 60): the SAP read
-(≤ 8 MiB, ≤ 30 s), then the allowance, the gate and the record job within
-what is left, then the writes. When the job did not run (BUSY, the
-organisation's time spent, the compiler off, `RESOURCE_LIMIT`), the verify
-answers exactly as before the compiler existed — the datasets read by the
-older reader in bounded slices on the request thread — with
+organisation's three. The verify has 45 s (`maxDuration` 60). **First the
+job's own admission** (`contractJobAdmission`: the compiler on, the
+organisation's time for today not spent), **before SAP is asked**: refused,
+the verify answers at once `status: COMPILER_UNAVAILABLE`, `verified: false`,
+the interface's stored datasets, and `contract.status: NOT_COMPILED` with the
+refusal's words and `retryAfterSeconds` — nothing fetched, nothing read on
+the request thread (audited 429 for the allowance, 503 for the switch). Then
+the SAP read (≤ 8 MiB, ≤ 30 s), the gate and the record job within what is
+left, then the writes. When a job that was fetched for did not run (BUSY,
+`RESOURCE_LIMIT`, or a day spent in between), the verify answers as before
+the compiler existed — the datasets read by the older reader in bounded
+slices on the request thread, bounded by the fetch gate — with
 `contract.status: NOT_COMPILED`, the refusal's own words and
-`retryAfterSeconds` where there is one.
+`retryAfterSeconds` where there is one. With the compiler off a verify
+therefore never verifies: custom writes cannot be unlocked until it is on
+again.
 
 **Each organisation's compiler time (`src/lib/contracts/contract-time.ts`).**
 One row per organisation and UTC day in `ContractTime`: a job is refused
@@ -306,12 +331,22 @@ never touches it.
 
 | Route | Busy | Time spent | Compiler off | Too large |
 |---|---|---|---|---|
-| verify-service | `contract: NOT_COMPILED`, retry in 5 s; a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
+| verify-service | `contract: NOT_COMPILED`, retry in 5 s; a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `status: COMPILER_UNAVAILABLE` before SAP is asked, the stored datasets, `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `status: COMPILER_UNAVAILABLE` before SAP is asked, `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
 | capture-schema, capture-fixture | 503, `Retry-After: 5`, nothing stored | 429 until 00:00 UTC, nothing stored | 503, nothing stored | 422 `TOO_LARGE`; a body past 4.5 MiB has its own message |
 | scaffold, solutions/[id]/openapi (deadline 25 s) | 503, `Retry-After: 5` | 429 until 00:00 UTC | 503 | 422 with the input's or the output's message |
-| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts |
+| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, or with texts of another `SCHEMA_TEXTS_VERSION` |
 
-**`/schema` (`src/app/api/northbound/interfaces/[id]/schema/route.ts`).** One
+The Studio screens say a refused download: the Test Console's Generate and
+the Solutions screen's OpenAPI buttons (fetched, no longer a plain link that
+saved the refusal as the file) show the route's message and its retry time
+(`src/lib/studio/refusal-message.ts`).
+
+**`/schema` (`src/app/api/northbound/interfaces/[id]/schema/route.ts`).** Two
+buckets before anything is read: the credential's (`northbound`, 60 a minute)
+and the organisation's (`northboundSchemaPerOrg`, `northbound-schema:<org>`,
+120 a minute), refused 429 with `Retry-After` and an audit row — an
+organisation mints credentials without bound (four per solution, solutions
+unlimited), so only the second bounds its reads. Then one
 query for the interface, the captured schema through the existing
 size-first decision, `currentSnapshotSummaries` (one `DISTINCT ON`, with the
 `octet_length` of the three texts), and one `SELECT` of the schemas text and
@@ -332,8 +367,22 @@ Upstash stays optional, for the existing rate limiters only.
 
 **Memory on a Hobby function (2 GB / 1 vCPU, Fluid).** The server about
 617 MB; one worker at its cap, +402-472 MB of RSS; 16 in-flight descriptions,
-≤ 256 MB (8 MiB each, twice as UTF-16); `/schema` transients ≤ 3 × 4 MiB per
-read: about 1.4 GB. `tests/unit/contracts/gate.test.ts` holds
+≤ 256 MB (8 MiB each, twice as UTF-16); `/schema` transients ≤ 3 × 1 MiB per
+read; every body read from a builder-named host ≤ its bound in decoded bytes
+(below): about 1.4 GB.
+
+**Every body from a builder-named host is read to a bound
+(`src/lib/sap-public/body-prefix.ts`).** fetch inflates gzip, deflate and
+brotli before `text()` sees a byte, so a body read whole costs whatever its
+sender inflates it to: about 0.4 MB of gzip from a BTP trial host can expand
+to hundreds of MB. Each reader stops at its bound in DECODED bytes and
+cancels the stream: the data read (`readEntitySet`: Studio's broker run, the
+northbound `/data` read, the lane sweep) 3.125 MiB (32 KiB for each of its
+100 rows; past it `ERROR`, invalid body, "ask for fewer records"); a write's
+answer 1 MiB (past it an invalid write response); an OAuth client-credentials
+token answer 64 KiB (as the SAML exchange already was); the verify's
+description 8 MiB and the probe's 8 KiB (as before); an Ariba page 8 MiB and
+token 64 KiB; a hub-harvest file 32 MiB. `tests/unit/contracts/gate.test.ts` holds
 768 + ISOLATES × 544 + 16 × 16 ≤ 2,048 for the default.
 
 **Before the first push: a Preview probe (not committed).** Vercel documents
@@ -368,7 +417,7 @@ spawned from the route's own trace, and the row rose to 1,703 ms.
 **On Pro.** Set function memory to 4 GB / 2 vCPU (Performance) for the five
 spawning routes, then `COREEDGE_CONTRACT_ISOLATES=2`; set
 `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` to 120, or 0 with Spend Management
-set above normal use. Nothing else differs.
+set above normal use. Nothing else differs: the `/schema` per-organisation bucket (120 a minute) and the body bounds are code constants sized for one vCPU, and stay as they are (on 2 vCPU they simply cost a smaller share).
 
 **The worker chunk is found and deployed.** webpack bundles the worker as
 `.next/server/chunks/contract-compiler-worker.js`, outside every route's chunk
@@ -390,7 +439,7 @@ wrote (so every stored content hash is unchanged):
 | Description | ≤ 8 MiB |
 | Contract (canonical JSON) | ≤ max(128 KiB, 12 × description chars), ≤ 2 MiB |
 | Stored diff | ≤ 1 MiB |
-| `/schema` texts | ≤ 64 KiB + 16 × contract bytes, ≤ 4 MiB together, rendered at record time |
+| `/schema` texts | ≤ 64 KiB + 16 × contract bytes, ≤ 1 MiB together, rendered at record time |
 | Starter kit (all files) | ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB |
 | Solution document | ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts and captured schemas adding up to ≤ 2 MiB, for ≤ 1,016 interfaces |
 | Render input | ≤ 16 MiB (`INPUT_TOO_LARGE`) |
@@ -409,7 +458,11 @@ every golden dataset and every fuzz-prepared contract, `/schema` spliced from
 the stored texts is f54c6f5a's rendered `/schema`, with and without a current
 stamp (`tests/unit/contracts/jobs.test.ts`,
 `tests/property/contracts-fuzz.property.test.ts`, against
-`tests/helpers/schema-reference.ts`); the kit and the document of every
+`tests/helpers/schema-reference.ts`, which renders the contract as jsonb
+returns it — f54c6f5a rendered `ir::text` — and, in
+`tests/integration/contract-snapshots.test.ts`, the stored row's own
+`ir::text`); each golden's texts are kept byte for byte
+(`tests/fixtures/contracts/golden/*/schema-texts.json`); the kit and the document of every
 golden dataset are f54c6f5a's bytes but for the one deliberate change in
 every generated OpenAPI document — `schemasOmitted`'s enum, whose
 `UNAVAILABLE` (never deployed) became `NOT_RENDERED`
@@ -434,21 +487,36 @@ it prevents.
 - **R1. Sybil organisations against Hobby's 4 CPU-hours a month.** One
   hostile organisation spends at most 40 s a day of worker wall time, about
   0.34 CPU-hours a month (about 9% of the quota); k organisations, k × 0.34:
-  about 12 sustained for a month exhaust the quota from compiles alone — and
-  the same organisations could spend it through ordinary routes anyway.
-  Mitigations: Vercel usage notifications, `COREEDGE_CONTRACT_ISOLATES=0`, Pro
-  Spend Management, and signup controls (outside P1.3).
+  about 12 sustained for a month exhaust the quota from compiles alone. Past
+  its 40 s an organisation's verifies cost a Postgres lookup each and no
+  fetch (they are refused before SAP is asked), so the 40 s is the bound; the
+  same holds for every verify while the compiler is off. Its `/schema` reads
+  cost at most 120 a minute × about 25 ms ≈ 3 s of CPU a minute (R3), which
+  is the larger term for a sustained attacker (about 1.2 CPU-hours a day
+  against a 4 CPU-hour month: one organisation reading flat out for about
+  3 days exhausts Hobby) — the same order as any authenticated route at its
+  rate limit. Mitigations: Vercel usage notifications, lowering
+  `northboundSchemaPerOrg`, `COREEDGE_CONTRACT_ISOLATES=0` (which now stops
+  verify work instead of moving it), Pro Spend Management, and signup
+  controls (outside P1.3).
 - **R2. Queue delay.** A job waits at most (distinct organisations ahead) ×
   10 s, and past its caller's wait it is `BUSY`; one hostile organisation adds
   at most 10 s.
-- **R3. `/schema`'s request-thread cost.** A ≤ 4 MiB text select and splice
-  (a copy, no escaping), plus the captured-schema read (≤ 1 MiB parsed, about
-  10-15 ms), at the northbound rates (60 a minute per credential, 300 per
-  IP).
+- **R3. `/schema`'s request-thread cost.** The texts come through Prisma
+  `$queryRaw`, so they are JSON-escaped by the driver and parsed, not copied:
+  measured about 23 ms of CPU per MB (as text or as bytea alike), so at most
+  about 25 ms per read at the 1 MiB cap, plus the captured-schema read
+  (≤ 1 MiB parsed, about 10-15 ms). The rates that bound it: 60 a minute per
+  credential (`northbound`), **120 a minute per organisation**
+  (`northboundSchemaPerOrg`, whatever its credential count), and the edge's
+  machine buckets (`machineCredential` 600 a minute per presented
+  credential, `machineIpBackstop` 6,000 per address). So one organisation
+  costs at most about 3 s of CPU a minute (5% of one vCPU); other tenants'
+  reads slow only when many organisations read flat out at once.
 - **R4. Request-thread copies.** A verify holds ≤ 8 MiB of description, ≤ 16
   per process; a kit or document loader copies ≤ 16 MiB per job, one per slot
-  (the record and capture loaders ≤ 6 head IRs, likewise); a capture holds
-  ≤ 4.5 MiB of text.
+  (the record and capture loaders ≤ 7 head IRs, likewise: the heads and the
+  interface's current row); a capture holds ≤ 4.5 MiB of text.
 - **R5. CPU sharing.** On 1 vCPU one job shares the CPU with the request
   thread for ≤ 10 s.
 - **R6. Allowance overshoot.** An organisation's concurrent jobs, each
@@ -456,16 +524,24 @@ it prevents.
 - **R7. `NOT_RENDERED` after an interface is pointed back to an earlier
   dataset without a re-verify.** The earlier row lost its texts to the newer
   one. Fix: verify again.
-- **R8. Storage.** Texts ≤ 4 MiB per interface; IR history as before. There is
+- **R8. Storage.** Texts ≤ 1 MiB per interface; IR history as before. There is
   no organisation storage quota; that gap predates this change.
 - **R9. Vercel's runtime heap flags are unverified.** The jobs fail closed
   (`UNAVAILABLE`, the verify's contract `NOT_COMPILED`) rather than run
   uncapped; the Preview probe above checks it.
 - **R10. Product-visible changes.** A contract whose `/schema` texts pass
-  4 MiB is refused `OUTPUT_TOO_LARGE` at record (real contracts: the goldens
-  2-11 KB of texts, an EmpJob-sized one about 170 KB; a write interface's
-  texts are about 5 × its schema, so an unlabelled 8,000-field dataset is past
-  it). A contract whose kit or document passes its budget is now recorded
+  1 MiB is refused `OUTPUT_TOO_LARGE` at record and answers `NOT_COMPILED`;
+  the verify itself still verifies. Measured: the goldens' texts are
+  0.9-13 KB; a labelled 750-field dataset (EmpJob-shaped, 102 KB of IR) is
+  911 KB of texts, so the cap falls at about 800 labelled fields with create
+  and update bodies, about 1,000 without — wider than any dataset of the
+  goldens or the corpus list we know of, but not proven against SAP's own
+  descriptions here (`pnpm contracts:corpus` needs
+  `SAP_API_HUB_SANDBOX_API_KEY`; run it before promoting). After this change,
+  `/schema` of every interface verified before it answers `NOT_RENDERED`
+  until verified again (the texts' version column is new). A verify of an
+  organisation whose compile time is spent, or with the compiler off, is
+  `COMPILER_UNAVAILABLE` and verifies nothing. A contract whose kit or document passes its budget is now recorded
   and refused only at download. A 4th concurrent verify of one organisation
   is `BUSY` at once. A kit or document download costs about 0.1-0.2 s of the
   organisation's allowance and one spawn. Two verifies of one interface
@@ -526,7 +602,7 @@ each, validates every dataset's read and create documents in both OpenAPI
 versions, and reports PersonalData coverage (P1.5's input). It fails when fewer
 than 20 compile (`CONTRACT_CORPUS_MIN`), when SAP publishes one the compiler
 refuses, when a document does not validate, or when a dataset's `/schema`
-texts would pass the 4 MiB a record stores (it reports the largest).
+texts would pass the 1 MiB a record stores (it reports the largest).
 
 **Nothing is stored.** Descriptions are held in memory and dropped; no
 artefact, no cache, and the log and step summary carry only API ids and counts.
