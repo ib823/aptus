@@ -26,12 +26,8 @@ import {
   getSapProduct,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
-import {
-  decideConsoleRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import type { Refusal } from "@/lib/governed/pipeline";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
 import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
 import { addressVerificationScope, recordAddressProbe } from "@/lib/sap-public/catalogue-address-verification";
@@ -162,38 +158,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    * ten-minute window. A deployment tenant has no connection and so no landscape
    * to cap — it is still recorded, and it is still admin-only above.
    */
-  const correlationId = newCorrelationId();
-  const conn = resolved.connection;
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
-    recordConsoleRead({
-      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: viewer.id,
-      // One row for the whole fan-out, rowCount carrying how many probes were
-      // made — the -probe-fanout- convention /entities uses, for its reason:
-      // the board is asking how much load this put on the tenant.
-      externalId: "-probe-all-",
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
-  if (conn && viewer.organizationId) {
-    const decision = await decideConsoleRead({
-      organizationId: viewer.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
-        { status: 403 },
-      );
-    }
-  }
+  const call = openConsoleCall({
+    viewer,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/hub-content/probe-all",
+    // One row for the whole fan-out, rowCount carrying how many probes were
+    // made — the -probe-fanout- convention /entities uses, for its reason:
+    // the board is asking how much load this put on the tenant.
+    externalId: "-probe-all-",
+    request: { includeDeprecated: body.includeDeprecated === true },
+  });
+  const correlationId = call.correlationId;
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
+  // ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings and
+  // the deployment tenant's host check, each refusal audited by it. A sandbox
+  // developer's SANDBOX ceiling (P0.13) is now applied here too, as on every
+  // other console read; the role is not a Studio builder, so the gate above
+  // already refused it, and this changes nothing for any role that works.
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
 
   /*
    * WHERE THIS RUN'S RESULTS ARE FILED. Derived once, outside the worker, from
@@ -348,22 +333,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       byOutcome[bucket] = (byOutcome[bucket] ?? 0) + 1;
     }
   }
-  const startedAt = Date.now();
-  try {
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
-  } catch (error) {
-    // The requests already reached the tenant; the row says so even when a
-    // write failed part-way through the run.
-    await audit(502, requested, { durationMs: Date.now() - startedAt });
-    throw error;
-  }
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
   // `as` because TypeScript cannot see the workers assign it.
-  const stopped = credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
+  const stoppedBy = () => credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
+  const run = await call.callSap(
+    () => Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker)),
+    {
+      // A setup problem is a refusal, recorded as one (403); only a token
+      // endpoint that failed is a 502. Either way, the tenant was not asked.
+      answered: () => {
+        const stopped = stoppedBy();
+        return { status: stopped ? (stopped.kind === "refused" ? 403 : 502) : 200, rowCount: requested };
+      },
+      // The requests already reached the tenant; the row says so even when a
+      // write failed part-way through the run.
+      failed: () => ({ status: 502, rowCount: requested }),
+    },
+  );
+  if (!run.ok) throw run.error;
+  const stopped = stoppedBy();
   if (stopped) {
-    // A setup problem is a refusal, recorded as one (403); only a token
-    // endpoint that failed is a 502. Either way, the tenant was not asked.
     const status = stopped.kind === "refused" ? 403 : 502;
-    await audit(status, requested, { durationMs: Date.now() - startedAt });
     return NextResponse.json(
       {
         error: {
@@ -377,8 +368,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status },
     );
   }
-  await audit(200, requested, { durationMs: Date.now() - startedAt });
-
   try {
     await logDecision({
       assessmentId: null,

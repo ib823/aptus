@@ -162,3 +162,18 @@ bad limits are refused whatever these are set to.
 - **v2 sourcing paths are still unverified** against a live tenant (2608 WS8).
   This item does not change that. It only makes the explorer show which version
   is being called.
+
+## On the console pipeline (P0.14b)
+
+`/api/sap/ariba/call` runs on the Workbench console pipeline
+(`src/lib/governed/console.ts`): after the probe guard and the request checks
+above, the call is authorised (a sandbox developer is refused, as before),
+`ARIBA_BASE_URL` and `ARIBA_OAUTH_TOKEN_URL` are checked against the SAP host
+allow-list (`COREEDGE_ENV_TENANT_HOSTS`, default `observe`: logged and
+recorded, never refused; `enforce`: `403 HOST_NOT_ALLOWED` before the token
+exchange), the console's own circuit for the realm is consulted (observing
+unless `COREEDGE_CIRCUIT_BREAKER=enforce`), and every call leaves a
+platform-scope row (`PlatformAuditEvent`, action `SAP_CONSOLE_READ`) naming the
+person, the endpoint and the realm, with the result's status and reason. The
+best-effort `logDecision` entry is still written beside it. See
+`docs/runbooks/coreedge-console-pipeline.md`.

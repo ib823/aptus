@@ -185,6 +185,11 @@ export const REFUSAL_STATUS = {
   ...BINDING_REFUSAL_STATUS,
   WRITES_DISABLED: 403,
   TRANSPORT_UNAVAILABLE: 503,
+  // A deployment tenant (`{PREFIX}_*`, ARIBA_*) on a host a stored connection
+  // could not be saved with, under COREEDGE_ENV_TENANT_HOSTS=enforce (P0.14b,
+  // governed/console.ts). The console's refusal; the broker binds stored
+  // connections only, which were checked when they were saved.
+  HOST_NOT_ALLOWED: 403,
   // contain
   CIRCUIT_OPEN: 503,
   // the write's idempotency store, between contain and callSap

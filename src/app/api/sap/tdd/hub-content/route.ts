@@ -18,13 +18,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { isStudioBuilder } from "@/lib/studio/rbac";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { openConsoleCall } from "@/lib/governed/console";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveReadWrite,
@@ -457,69 +451,56 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    */
   let dataProbeRan = false;
   let dataProbeRefusal: string | null = null;
-  if (tenant && dataProbe && user) {
+  if (resolvedTenant && tenant && dataProbe && user) {
     const probeRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
     if (probeRefusal) return probeRefusal;
-    const correlationId = newCorrelationId();
-    const conn = resolvedTenant?.connection ?? null;
-    const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-    const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
-      recordConsoleRead({
-        organizationId: user.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-        actorUserId: user.id,
-        // One row for the fan-out, rowCount carrying every request made — the
-        // $metadata probes AND the one-row data GETs.
-        externalId: "-hub-overlay-",
-        environment: auditEnvironment,
-        status,
-        rowCount,
-        correlationId,
-        connectionId: conn?.id ?? null,
-        connectionEnvironment: conn?.environment ?? null,
-        ...extra,
+    /*
+     * ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts). The ceilings,
+     * the deployment tenant's host check and the console circuit are its
+     * steps, each refusal audited by it; the overlay runs inside its
+     * `callSap`, which writes one row for the fan-out, rowCount carrying every
+     * request made — the $metadata probes AND the one-row data GETs.
+     */
+    const call = openConsoleCall({
+      viewer: user,
+      target: { kind: "odata", product, resolved: resolvedTenant },
+      route: "/api/sap/tdd/hub-content",
+      externalId: "-hub-overlay-",
+      request: { dataProbe: true },
+    });
+    const authorised = await call.authorise();
+    const bound = authorised.ok ? await call.bind() : authorised;
+    const contained = bound.ok ? await call.contain() : bound;
+    if (!contained.ok) {
+      // Refused, the overlay falls back to the stored results, and says why.
+      dataProbeRefusal = contained.refusal.message;
+    } else {
+      const overlay = await call.callSap(() => probeActivatedApiIds(product.envPrefix, tenant, product, scope, true), {
+        answered: (r) => ({ status: 200, rowCount: r.probed + r.dataReads }),
+        // The overlay is best-effort: its failure is recorded, and the stored results stand.
+        failed: () => ({ status: 502, rowCount: null }),
       });
-    let allowed = true;
-    if (conn && user.organizationId) {
-      const decision = await decideConsoleRead({
-        organizationId: user.organizationId,
-        environment: conn.environment,
-      });
-      if (!decision.allowed) {
-        await audit(403, null);
-        allowed = false;
-        dataProbeRefusal = decision.message;
-      }
-    }
-    // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-    // (P0.13); refused, the overlay falls back like any other refusal here.
-    const sandboxOnly = decideSandboxDeveloperRead(user.role, { tenant, connection: conn });
-    if (allowed && !sandboxOnly.allowed) {
-      await audit(403, null);
-      allowed = false;
-      dataProbeRefusal = sandboxOnly.message;
-    }
-    if (allowed) {
-      const startedAt = Date.now();
-      try {
-        const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);
-        await audit(200, r.probed + r.dataReads, { durationMs: Date.now() - startedAt });
+      if (overlay.ok) {
+        const r = overlay.value;
         // A live 200 on a V4 address is the proof that address is right on
-        // this system (P0.8); a 404 withdraws an earlier one.
-        for (const o of r.observed) {
-          await recordAddressProbe(verificationScope, {
-            service: o.service,
-            status: o.status,
-            actorUserId: user.id,
-            method: "catalogue-overlay",
-          });
+        // this system (P0.8); a 404 withdraws an earlier one. Best-effort, as
+        // the overlay is: the read has already happened and been recorded.
+        try {
+          for (const o of r.observed) {
+            await recordAddressProbe(verificationScope, {
+              service: o.service,
+              status: o.status,
+              actorUserId: user.id,
+              method: "catalogue-overlay",
+            });
+          }
+        } catch (err) {
+          console.error("[sap/tdd/hub-content] could not record a V4 address probe", { correlationId: call.correlationId, err });
         }
         for (const [k, v] of r.outcomes) outcomes.set(k, v);
         for (const [k, v] of r.capabilities) capabilities.set(k, v);
         dataConfirmed = r.dataConfirmed;
         dataProbeRan = true;
-      } catch {
-        /* overlay is best-effort; stored results stand */
-        await audit(502, null, { durationMs: Date.now() - startedAt });
       }
     }
   }

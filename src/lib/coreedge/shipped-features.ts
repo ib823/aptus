@@ -386,6 +386,22 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     terms: [/\bcorrelation[- ]id (?:search|lookup)\b/i],
   },
   {
+    id: "console-pipeline",
+    name: "The Workbench console on the governed pipeline, with a platform-scope audit row",
+    roadmap: "P0.14b",
+    cells: [GOVERN],
+    code: { file: "src/lib/governed/console.ts", exports: ["openConsoleCall", "CONSOLE_PRINCIPAL"] },
+    terms: [/\bconsole pipeline\b/i, /\bSAP_CONSOLE_READ\b/, /\bno[- ]side[- ]doors test\b/i],
+  },
+  {
+    id: "env-tenant-hosts",
+    name: "Deployment tenants checked against the SAP host allow-list",
+    roadmap: "P0.14b",
+    cells: [GOVERN],
+    code: { file: "src/lib/sap-public/env-tenant-hosts.ts", exports: ["envTenantHostMode", "checkConfiguredUrls"] },
+    terms: [/\bCOREEDGE_ENV_TENANT_HOSTS\b/, /\bcoreedge:env-tenant-hosts\b/, /\bHOST_NOT_ALLOWED\b/],
+  },
+  {
     id: "db-budget",
     name: "A database budget per governed call, asserted in CI",
     roadmap: "P0.19",

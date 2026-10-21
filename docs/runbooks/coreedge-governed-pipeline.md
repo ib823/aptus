@@ -150,3 +150,14 @@ migration drops it, which loses nothing (every row is `DIRECT`).
 - P4.1 adds the dispatcher, connector and integration-suite transports on the
   same interface, and moves `sapFetch` and the Ariba connector onto it.
 - P0.14b brings the remaining Workbench console routes onto the pipeline.
+
+## The Workbench console (P0.14b)
+
+The preview was the one console route ported here. Since P0.14b every
+Workbench route that reaches SAP or Ariba runs the console's version of these
+steps (`src/lib/governed/console.ts`: `authorise`, `bind`, `contain`,
+`callSap`), as the `console` principal, with a platform-scope audit row beside
+the organization's console row, and a new refusal in `REFUSAL_STATUS`,
+`HOST_NOT_ALLOWED` (403), for a deployment tenant on a host the SAP host
+allow-list refuses under `COREEDGE_ENV_TENANT_HOSTS=enforce`. See
+[`coreedge-console-pipeline.md`](coreedge-console-pipeline.md).

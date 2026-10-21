@@ -124,3 +124,16 @@ wrapper), for a file that names a helper without importing it from the module
 that defines it, and for a new POST, PUT, PATCH, MERGE or DELETE in the modules
 that talk to SAP, until someone classifies it. Follow
 `src/app/api/sap/tdd/write/route.ts`.
+
+## On the console pipeline (P0.14b)
+
+Both write routes now send to SAP only through a console call in write mode
+(`openConsoleCall(..., mode: "write")`, `src/lib/governed/console.ts`):
+`callSapWrite(handle, fn)` takes the handle `beginPlatformAudit` returned, so
+the write cannot reach SAP before its row exists. After the row is written,
+the deployment tenant's host is checked against the SAP host allow-list; under
+`COREEDGE_ENV_TENANT_HOSTS=enforce` an unlisted host is refused `403
+HOST_NOT_ALLOWED` and the row is completed `BLOCKED` with that reason. The
+default, `observe`, changes nothing here. The A.3 #9 static test
+(`tests/unit/security/no-side-doors.test.ts`) covers both routes; see
+`docs/runbooks/coreedge-console-pipeline.md`.

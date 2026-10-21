@@ -39,6 +39,7 @@ const h = vi.hoisted(() => ({
   reservation: "proceed" as "proceed" | "PAYLOAD_MISMATCH" | "IN_FLIGHT",
   sandboxOnly: false,
   consoleRefusal: null as null | string,
+  deploymentTenant: false,
   audits: [] as { status: number }[],
   /** What SAP answers a write with; null is the default success. */
   writeResult: null as null | Record<string, unknown>,
@@ -172,16 +173,22 @@ vi.mock("@/lib/db/prisma", () => ({
     interface: { findFirst: async () => ({ ...IFACE(), solutionId: "sol_1" }) },
     solutionClient: { findMany: async () => [{ id: "client_1", environment: "DEV", sapClient: null, expiresAt: null }] },
     sapHubContent: { findFirst: async () => null },
+    // The console's platform-scope row (P0.14b); its insert is not under test here.
+    platformAuditEvent: { create: async () => ({ id: "pae_1" }) },
   },
 }));
 vi.mock("@/lib/sap-public/probe-guard", () => ({ refuseUnlessMayProbeTenant: async () => null }));
 vi.mock("@/lib/sap-public/tenant-for-read", async (importOriginal) => ({
   ...(await importOriginal<typeof TenantForRead>()),
-  resolveReadTenant: async () => ({
-    tenant: { key: "dev", label: "DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap" },
-    source: "connection",
-    connection: { id: "conn_1", environment: "DEV" },
-  }),
+  resolveReadTenant: async () =>
+    h.deploymentTenant
+      ? // A deployment tenant (P0.14b): no connection, configured at a host the allow-list does not admit.
+        { tenant: { key: "env", label: "Env", baseUrl: "https://s4.landscape.example.net" }, source: "deployment", connection: null }
+      : {
+          tenant: { key: "dev", label: "DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap" },
+          source: "connection",
+          connection: { id: "conn_1", environment: "DEV" },
+        },
 }));
 vi.mock("@/lib/sap-public/resolve-hub-service", () => ({
   resolveHubService: async () => ({ key: "purchase-orders", path: "/sap/opu/odata/sap/X" }),
@@ -324,6 +331,15 @@ const CASES: readonly Case[] = [
   { reason: "SANDBOX_ONLY", routes: ["preview"], set: () => (h.sandboxOnly = true) },
   { reason: "NO_APPROVED_GRANT", routes: ["preview"], set: () => (h.consoleRefusal = "NO_APPROVED_GRANT") },
   { reason: "UNDECLARED_ENVIRONMENT", routes: ["preview"], set: () => (h.consoleRefusal = "UNDECLARED_ENVIRONMENT") },
+  // The deployment tenant's host check, enforced (P0.14b).
+  {
+    reason: "HOST_NOT_ALLOWED",
+    routes: ["preview"],
+    set: () => {
+      h.deploymentTenant = true;
+      vi.stubEnv("COREEDGE_ENV_TENANT_HOSTS", "enforce");
+    },
+  },
   // Containment, enforced.
   {
     reason: "CIRCUIT_OPEN",
@@ -347,6 +363,7 @@ function reset(): void {
     reservation: "proceed",
     sandboxOnly: false,
     consoleRefusal: null,
+    deploymentTenant: false,
     audits: [],
     writeBody: undefined,
     noKey: false,
@@ -499,6 +516,7 @@ describe("the correlation search attributes every refusal to the hop that refuse
     WRITES_DISABLED: "binding",
     TRANSPORT_UNAVAILABLE: "binding",
     CIRCUIT_OPEN: "binding",
+    HOST_NOT_ALLOWED: "binding",
     IDEMPOTENCY_CONFLICT: "request",
     IDEMPOTENCY_IN_FLIGHT: "request",
   };

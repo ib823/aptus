@@ -27,8 +27,9 @@
  *      a real change from the person who made it. The event is then left with
  *      no outcome, which is itself the signal — see below.
  *
- * APPEND-ONLY, BY CONSTRUCTION AND BY CONSTRAINT. This module exposes two
- * inserts and nothing else: no update, no delete. The outcome is its own row
+ * APPEND-ONLY, BY CONSTRUCTION AND BY CONSTRAINT. This module exposes
+ * inserts and nothing else (the write's two, and the console read's one,
+ * below): no update, no delete. The outcome is its own row
  * rather than a column stamped later, and `PlatformAuditOutcome.eventId` is
  * unique, so the database refuses a second outcome for the same event instead
  * of letting it replace the first. An audit trail that can be edited is not
@@ -42,6 +43,19 @@
  *
  * WHY DEDICATED TABLES rather than a nullable `organizationId` on an existing
  * one: see the `PlatformAuditEvent` model comment in schema.prisma.
+ *
+ * AND WHAT A PERSON READ, SINCE P0.14b. Every Workbench console call that
+ * reaches SAP (preview, entities, operations, capabilities, the catalogue
+ * probes, Probe all, the Ariba explorer) runs on the governed pipeline as the
+ * named "console" principal (lib/governed/console.ts) and leaves one row here:
+ * action `SAP_CONSOLE_READ`, written with its outcome in one statement
+ * (`recordPlatformConsoleRead`) after the call, because a read changes nothing
+ * in SAP and is not held to the write's fail-closed rule — exactly as the
+ * organization's own console row (NorthboundAuditEvent, `dryRun: true`) is
+ * not. It is never billed: the usage rollup reads only NorthboundAuditEvent.
+ * Readers of the WRITE trail filter on `PLATFORM_AUDIT_ACTIONS`, the write
+ * actions, so a console read never appears on the write ledger as a write
+ * whose outcome is unknown.
  */
 
 import { createHash } from "crypto";
@@ -56,6 +70,9 @@ import type { Prisma } from "@prisma/client";
 /** What a person did. One value per route that changes SAP data. */
 export const PLATFORM_AUDIT_ACTIONS = ["SAP_WORKBENCH_WRITE", "SAP_WORKBENCH_WRITE_TEST"] as const;
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];
+
+/** A read a person made from the Workbench console (P0.14b). Not a write: never on the write ledger. */
+export const PLATFORM_CONSOLE_READ_ACTION = "SAP_CONSOLE_READ" as const;
 
 /**
  * What happened. Named after the write ledger's kinds on purpose, so an
@@ -291,4 +308,91 @@ export function outcomeForWriteTest(result: {
 /** The outcome when the SAP call threw: it may or may not have landed. */
 export function outcomeForThrown(err: unknown): PlatformAuditCompletion {
   return { outcome: "OUTCOME_UNKNOWN", reason: failureReasonFromError(err) };
+}
+
+/* ── console reads (P0.14b) ───────────────────────────────────────────── */
+
+/** How a console read ended. Its own vocabulary: "the write may have been applied" means nothing for a read. */
+export const CONSOLE_READ_OUTCOMES = {
+  /** SAP (or Ariba) answered the read. */
+  SUCCEEDED: "SAP answered the read",
+  /** Refused by the console's own gates (the ceilings, the host allow-list, the circuit) before any request was sent. */
+  BLOCKED: "refused by the console before any request was sent to SAP",
+  /** SAP answered and refused it (4xx), or refused the credential. */
+  SAP_REFUSED: "SAP answered and refused the read",
+  /** SAP failed (5xx), did not answer, or could not be authenticated to. */
+  FAILED: "SAP failed, did not answer, or could not be authenticated to",
+} as const;
+export type ConsoleReadOutcomeKind = keyof typeof CONSOLE_READ_OUTCOMES;
+
+/** The outcome kind for a console read audited at `status`, refused by a gate or not. */
+export function consoleReadOutcome(status: number, blocked: boolean): ConsoleReadOutcomeKind {
+  if (blocked) return "BLOCKED";
+  if (status >= 200 && status < 300) return "SUCCEEDED";
+  if (status >= 400 && status < 500) return "SAP_REFUSED";
+  return "FAILED";
+}
+
+export interface PlatformConsoleReadInput {
+  actor: PlatformAuditActor;
+  /** What was read: a service key, or the fan-out's scope sentinel, as `serviceKey`; the entity set or "-". */
+  target: SapWriteTarget;
+  /** The parameters the person chose (entity, limit, endpoint …): fingerprinted, never stored. */
+  request: Record<string, unknown>;
+  /** The call's correlation id: the same one on the organization's console row, when there is one. */
+  correlationId: string;
+  outcome: ConsoleReadOutcomeKind;
+  /** The status the read is audited under (null when it was refused before any request). */
+  status: number | null;
+  /** A bounded code (HTTP_429, TIMEOUT, HOST_NOT_ALLOWED …), never free text. */
+  reason?: string | null;
+  durationMs?: number | null;
+  detail: Prisma.InputJsonValue;
+}
+
+/**
+ * Record one console read: the event and its outcome in ONE statement (a
+ * nested create), after the call. Never throws: a read is not refused, nor its
+ * answer lost, because the trail could not be written — the organization's
+ * console row follows the same rule (northbound/audit.ts). Logged loudly.
+ */
+export async function recordPlatformConsoleRead(input: PlatformConsoleReadInput): Promise<void> {
+  const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
+  try {
+    await prisma.platformAuditEvent.create({
+      data: {
+        action: PLATFORM_CONSOLE_READ_ACTION,
+        actorUserId: input.actor.id,
+        actorEmail: input.actor.email,
+        actorRole: input.actor.role,
+        actorOrganizationId: input.actor.organizationId,
+        product: input.target.product,
+        tenantKey: input.target.tenantKey,
+        tenantLabel: input.target.tenantLabel ?? null,
+        serviceKey: input.target.serviceKey,
+        servicePath: input.target.servicePath ?? null,
+        entitySet: input.target.entitySet,
+        payloadSha256,
+        payloadFields,
+        correlationId: input.correlationId,
+        result: {
+          create: {
+            outcome: input.outcome,
+            sapStatus: input.status,
+            reason: input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null,
+            detail: input.detail,
+            durationMs: input.durationMs ?? null,
+          },
+        },
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    console.error("[platform-audit] could not record a console read", {
+      actorUserId: input.actor.id,
+      correlationId: input.correlationId,
+      outcome: input.outcome,
+      err,
+    });
+  }
 }

@@ -69,7 +69,7 @@ export interface AttributableRow {
 }
 
 /** failureReasons CoreEdge itself records for a call it refused before SAP. */
-const REFUSED_BEFORE_SAP = new Set(["LIMITER_UNAVAILABLE", "CIRCUIT_OPEN"]);
+const REFUSED_BEFORE_SAP = new Set(["LIMITER_UNAVAILABLE", "CIRCUIT_OPEN", "HOST_NOT_ALLOWED"]);
 
 /**
  * Whether the call reached SAP (or the credential step on the way to it).
@@ -104,6 +104,9 @@ function hopFor(row: AttributableRow): CorrelatedCall["brokenHop"] {
   // Refused by the circuit breaker (P0.14): the call was bound to its
   // connection and stopped there, because that SAP system had been failing.
   if (failureReason === "CIRCUIT_OPEN") return "binding";
+  // A deployment tenant's configured host is not on the SAP host allow-list,
+  // under COREEDGE_ENV_TENANT_HOSTS=enforce (P0.14b): the system it is bound to.
+  if (failureReason === "HOST_NOT_ALLOWED") return "binding";
   if (status === 403 && bindingRefusal !== null) return "binding";
 
   // SAP's own answer, or the credential step on the way to it.
@@ -133,6 +136,9 @@ function describeOutcome(row: AttributableRow, rowCount: number | null): string 
   }
   if (failureReason === "CIRCUIT_OPEN") {
     return "The SAP system behind this connection had failed repeatedly, so the circuit breaker refused the call. Nothing was sent to SAP.";
+  }
+  if (failureReason === "HOST_NOT_ALLOWED") {
+    return "This deployment's SAP system is configured at a host that is not on the SAP host allow-list, so the console refused the call. Nothing was sent to SAP.";
   }
   if (status >= 200 && status < 300) {
     const succeeded =

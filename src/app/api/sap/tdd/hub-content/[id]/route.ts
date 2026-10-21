@@ -36,13 +36,7 @@ import {
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { openConsoleCall } from "@/lib/governed/console";
 import { probeStorageKey } from "@/lib/sap-public/hub-content";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
@@ -170,49 +164,25 @@ export async function GET(
    * `viewer` is implied by `tenant` (a tenant is only kept when the probe guard
    * found a session); naming it narrows the type for the row's actor.
    */
-  if (tenant && service && viewer && request.nextUrl.searchParams.get("probe") !== "0") {
-    const correlationId = newCorrelationId();
-    const conn = resolvedTenant?.connection ?? null;
-    const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-    const audit = (
-      status: number,
-      rowCount: number | null,
-      extra: { durationMs?: number; failureReason?: string | null } = {},
-    ) =>
-      recordConsoleRead({
-        organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-        actorUserId: viewer.id,
-        externalId: service.key,
-        environment: auditEnvironment,
-        status,
-        rowCount,
-        correlationId,
-        connectionId: conn?.id ?? null,
-        connectionEnvironment: conn?.environment ?? null,
-        ...extra,
-      });
-    let allowed = true;
-    if (conn && viewer.organizationId) {
-      const decision = await decideConsoleRead({
-        organizationId: viewer.organizationId,
-        environment: conn.environment,
-      });
-      if (!decision.allowed) {
-        await audit(403, null);
-        allowed = false;
-      }
-    }
-    // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-    // (P0.13); refused, the detail falls back to the stored probe like any
-    // other refusal here.
-    if (allowed && !decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn }).allowed) {
-      await audit(403, null);
-      allowed = false;
-    }
-    if (allowed) {
-      const startedAt = Date.now();
-      try {
-        const result = await probeService(product.envPrefix, tenant, service);
+  if (resolvedTenant && tenant && service && viewer && request.nextUrl.searchParams.get("probe") !== "0") {
+    // ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings,
+    // the deployment tenant's host check and the console circuit are its
+    // steps, each refusal audited by it; the probe runs inside its `callSap`,
+    // which writes the row.
+    const call = openConsoleCall({
+      viewer,
+      target: { kind: "odata", product, resolved: resolvedTenant },
+      route: "/api/sap/tdd/hub-content/[id]",
+      externalId: service.key,
+      servicePath: service.path,
+    });
+    const authorised = await call.authorise();
+    const bound = authorised.ok ? await call.bind() : authorised;
+    const contained = bound.ok ? await call.contain() : bound;
+    // Refused, the detail falls back to the stored probe like any other
+    // refusal here (already recorded by the pipeline).
+    if (contained.ok) {
+      const probed = await call.callSap(() => probeService(product.envPrefix, tenant, service), {
         // Like /entities: the status SAP gave ($metadata read), how many entity
         // sets it declared, and 502 when it never answered (probeService's 0).
         // A credential CoreEdge could not obtain is not SAP's answer at all: a
@@ -221,21 +191,30 @@ export async function GET(
         // answer is recorded as /preview records it: its 401/403/404 as
         // themselves, anything else — a 429 included, which recorded as itself
         // raised the 'throttled' incident — as 502 with HTTP_<n>.
-        const answered = !result.credentialError && result.status !== 0;
-        const auditStatus = result.credentialError
-          ? result.credentialError === "refused"
-            ? 403
-            : 502
-          : answered
-            ? answeredReadAuditStatus(result.status === 200, result.status)
-            : 502;
-        await audit(auditStatus, result.exposed ? (result.entitySetCount ?? 0) : null, {
-          durationMs: Date.now() - startedAt,
-          failureReason: answered ? failureReasonFromHttp(result.status) : null,
-        });
-        // Never shown as this service's status: the tenant was not asked, so
-        // the stored probe below stands instead, as for a probe that threw.
-        if (!result.credentialError) {
+        answered: (result) => {
+          const answered = !result.credentialError && result.status !== 0;
+          const status = result.credentialError
+            ? result.credentialError === "refused"
+              ? 403
+              : 502
+            : answered
+              ? answeredReadAuditStatus(result.status === 200, result.status)
+              : 502;
+          return {
+            status,
+            rowCount: result.exposed ? (result.entitySetCount ?? 0) : null,
+            failureReason: answered ? failureReasonFromHttp(result.status) : null,
+            sapStatus: answered ? result.status : null,
+          };
+        },
+        // probeService reports rather than throws; a throw is recorded as a 502.
+        failed: () => ({ status: 502, rowCount: null, failureReason: null }),
+      });
+      // Never shown as this service's status when the tenant was not asked:
+      // the stored probe below stands instead, as for a probe that threw.
+      if (probed.ok && !probed.value.credentialError) {
+        const result = probed.value;
+        try {
           // A 200 on a V4 address verifies it on this system; a 404 withdraws it.
           await recordAddressProbe(verificationScope, {
             service,
@@ -249,9 +228,9 @@ export async function GET(
           metadataFlavor = result.metadataFlavor ?? null;
           // Same shared derivation as the list — the collapsed chip must match this.
           if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
+        } catch {
+          probeStatus = null;
         }
-      } catch {
-        probeStatus = null;
       }
     }
   }

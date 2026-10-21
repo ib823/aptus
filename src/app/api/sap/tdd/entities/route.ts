@@ -8,13 +8,8 @@ import {
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import type { Refusal } from "@/lib/governed/pipeline";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -91,7 +86,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const service = await resolveHubService(product, serviceParam ?? "");
   const probe = probeParam === "1";
 
-  if (!tenant || !service) {
+  if (!resolved || !tenant || !service) {
     return NextResponse.json(
       {
         error: {
@@ -102,10 +97,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
-
-  const correlationId = newCorrelationId();
-  const conn = resolved?.connection ?? null;
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
 
   /*
    * WHAT THE AUDIT ROW COUNTS, and why `?probe=1` is recorded differently.
@@ -122,119 +113,93 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * one per probe: the operations board is answering "how much load did this put
    * on the tenant", and sixty rows that must be summed to answer it is a worse
    * answer than one row that states it.
+   *
+   * ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings, the
+   * deployment tenant's host check and the console circuit are its steps, each
+   * refusal audited by it, and each of the two reads below is made inside its
+   * `callSap`, which writes the row.
    */
-  const audit = (
-    externalId: string,
-    status: number,
-    rowCount: number | null,
-    extra: { durationMs?: number; failureReason?: string | null } = {},
-  ) =>
-    recordConsoleRead({
-      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: viewer.id,
-      externalId,
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
+  const call = openConsoleCall({
+    viewer,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/entities",
+    externalId: service.key,
+    servicePath: service.path,
+    request: { probe },
+  });
+  const correlationId = call.correlationId;
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
 
-  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-  // (P0.13). Every other role passes straight through it.
-  const sandboxOnly = decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn });
-  if (!sandboxOnly.allowed) {
-    await audit(service.key, 403, null);
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
+
+  // Short-TTL cache: inspect (+ probe, the ~3.6s path) is expensive; a warm
+  // instance serves repeats. ?refresh=1 forces a live re-read. Filed under the
+  // system that answered, not the bare tenant key, which another organization
+  // may share — see live-cache.
+  const cacheOwner = { tenant, connection: call.connection };
+  const cacheKey = `ent:${product.key}:${service.key}:${probe ? "1" : "0"}`;
+  const refresh = params.get("refresh") === "1";
+  if (!refresh) {
+    const cached = getLiveCache<{ entitySets: unknown; probes: unknown }>(cacheOwner, cacheKey);
+    if (cached) {
+      // A cache hit reached no tenant, so there is nothing to audit: the row
+      // would claim load this request did not cause. The read it was served
+      // from was audited when it happened.
+      return NextResponse.json({ data: { ...cached.value, generatedAt: new Date(cached.at).toISOString(), fromCache: true, correlationId } });
+    }
+  }
+
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
+
+  /*
+   * SAP's 401 on $metadata is an expired password, not "SAP metadata request
+   * failed", and a credential CoreEdge could not build reached no tenant at
+   * all — both were a 502 response and a 502 audit row (audit A26). The
+   * generic sentence stays for what is genuinely a failure.
+   */
+  const failed = (error: unknown) => {
+    const failure = consoleReadFailure(error, "SAP metadata request failed");
+    return { status: failure.auditStatus, rowCount: null, failureReason: failure.failureReason };
+  };
+  const failure = (error: unknown) => {
+    console.error("[sap/tdd/entities] request failed:", error);
+    const answer = consoleReadFailure(error, "SAP metadata request failed");
     return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
-      { status: 403 },
+      { error: { code: answer.code, message: answer.message, correlationId } },
+      { status: answer.status },
     );
-  }
+  };
 
-  // The environment ceiling. Only a stored connection has a landscape to cap.
-  if (conn && viewer.organizationId) {
-    /*
-     * BOTH CONDITIONS, AND THE SECOND IS NOT DEFENSIVE PADDING. `conn` is only
-     * ever set when `resolveReadTenant` matched a stored connection, and it will
-     * not look for one without an organization — so a connection implies an
-     * organization. Naming it here is what lets the guard take a real
-     * organization id rather than a fallback: a grant query against a sentinel
-     * would return nothing and refuse, which looks like a policy decision and is
-     * actually a missing value.
-     */
-    const decision = await decideConsoleRead({
-      organizationId: viewer.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(service.key, 403, null);
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
-        { status: 403 },
-      );
-    }
-  }
+  const inspected = await call.callSap(() => inspectSapService(product.envPrefix, tenant, service), {
+    answered: ({ entitySets }) => ({ status: 200, rowCount: entitySets.length }),
+    failed,
+  });
+  if (!inspected.ok) return failure(inspected.error);
+  const { entitySets } = inspected.value;
 
-  const startedAt = Date.now();
-  try {
-    // Short-TTL cache: inspect (+ probe, the ~3.6s path) is expensive; a warm
-    // instance serves repeats. ?refresh=1 forces a live re-read. Filed under the
-    // system that answered, not the bare tenant key, which another organization
-    // may share — see live-cache.
-    const cacheOwner = { tenant, connection: conn };
-    const cacheKey = `ent:${product.key}:${service.key}:${probe ? "1" : "0"}`;
-    const refresh = params.get("refresh") === "1";
-    if (!refresh) {
-      const cached = getLiveCache<{ entitySets: unknown; probes: unknown }>(cacheOwner, cacheKey);
-      if (cached) {
-        // A cache hit reached no tenant, so there is nothing to audit: the row
-        // would claim load this request did not cause. The read it was served
-        // from was audited when it happened.
-        return NextResponse.json({ data: { ...cached.value, generatedAt: new Date(cached.at).toISOString(), fromCache: true, correlationId } });
-      }
-    }
-    const { entitySets } = await inspectSapService(product.envPrefix, tenant, service);
-    await audit(service.key, 200, entitySets.length, { durationMs: Date.now() - startedAt });
-
-    const probes = probe
-      ? await probeSapEntitySets(
+  let probes: Awaited<ReturnType<typeof probeSapEntitySets>> = [];
+  if (probe) {
+    const fanOut = await call.callSap(
+      () =>
+        probeSapEntitySets(
           product.envPrefix,
           tenant,
           service,
           entitySets.map((entitySet) => entitySet.name),
-        )
-      : [];
-    if (probe) {
-      await audit(`-probe-fanout-${service.key}`, 200, probes.length, {
-        durationMs: Date.now() - startedAt,
-      });
-    }
-    const at = setLiveCache(cacheOwner, cacheKey, { entitySets, probes });
-    return NextResponse.json({ data: { entitySets, probes, generatedAt: new Date(at).toISOString(), fromCache: false, correlationId } });
-  } catch (error) {
-    console.error("[sap/tdd/entities] request failed:", error);
-    /*
-     * SAP's 401 on $metadata is an expired password, not "SAP metadata request
-     * failed", and a credential CoreEdge could not build reached no tenant at
-     * all — both were a 502 response and a 502 audit row (audit A26). The
-     * generic sentence stays for what is genuinely a failure.
-     */
-    const failure = consoleReadFailure(error, "SAP metadata request failed");
-    await audit(service.key, failure.auditStatus, null, {
-      durationMs: Date.now() - startedAt,
-      failureReason: failure.failureReason,
-    });
-    return NextResponse.json(
+        ),
       {
-        error: {
-          code: failure.code,
-          message: failure.message,
-          correlationId,
-        },
+        answered: (made) => ({ status: 200, rowCount: made.length, externalId: `-probe-fanout-${service.key}` }),
+        // A fan-out that threw is recorded against the service, as before.
+        failed,
       },
-      { status: failure.status },
     );
+    if (!fanOut.ok) return failure(fanOut.error);
+    probes = fanOut.value;
   }
+  const at = setLiveCache(cacheOwner, cacheKey, { entitySets, probes });
+  return NextResponse.json({ data: { entitySets, probes, generatedAt: new Date(at).toISOString(), fromCache: false, correlationId } });
 }

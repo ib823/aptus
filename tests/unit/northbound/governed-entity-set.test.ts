@@ -118,7 +118,14 @@ describe("the discovery console keeps its parameter, deliberately", () => {
   });
 
   it("but is capped and recorded", () => {
-    expect(src).toContain("decideConsoleRead");
-    expect(src).toContain("recordConsoleRead");
+    // Since P0.14b the ceiling and the row are the console pipeline's steps
+    // (src/lib/governed/console.ts: authorise() runs decideConsoleRead, and
+    // callSap records the read); the read is made only inside callSap.
+    expect(src).toContain("openConsoleCall(");
+    expect(src).toContain(".authorise()");
+    expect(src).toContain(".callSap(");
+    const consoleModule = read("src/lib/governed/console.ts");
+    expect(consoleModule).toContain("decideConsoleRead(");
+    expect(consoleModule).toContain("recordConsoleRead(");
   });
 });
