@@ -125,3 +125,78 @@ export function stalenessReason(at: Date | null | undefined, ttlMs: number, now:
 export function proofAge(at: Date | null | undefined, now: Date = new Date()): string {
   return describeAge(at, now) ?? "never checked";
 }
+
+/* ── connection health (P0.2, A19, A50) ──────────────────────────────────── */
+
+/**
+ * A connection's probe proof expires at 48 hours: comfortably more than the
+ * nightly probe's interval, so one missed run does not turn the fleet amber,
+ * and short enough that a connection nobody has probed since March cannot read
+ * green in September (A50). `lastValidatedAt` moves only on a real 200, so an
+ * "OK" older than this means no probe has succeeded — or run — since.
+ */
+export const CONNECTION_PROOF_TTL_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * The status the probe sweep and "Probe now" record when a connection's
+ * stored secret will not open (A50). No request reached SAP, so it is not a
+ * probe outcome; it is recorded anyway, because leaving the previous "OK"
+ * standing called a connection healthy that the broker refuses on every call
+ * (CONNECTION_UNREADABLE). `lastValidatedAt` is left alone: it is the last
+ * time SAP answered.
+ */
+export const CONNECTION_UNREADABLE_STATUS = "UNREADABLE";
+
+/** Probe outcomes that mean SAP is not answering this connection as it should. */
+export const CONNECTION_NEEDS_ATTENTION: readonly string[] = ["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+
+export type ConnectionHealthVerdict =
+  | "healthy"
+  /** The last probe said OK, longer ago than CONNECTION_PROOF_TTL_MS: a claim about our evidence, not SAP. */
+  | "stale"
+  | "needsAttention"
+  /** CoreEdge cannot open the stored secret: ours to fix, and every call is refused. */
+  | "unreadable"
+  /** NO_PROBE_PATH, or a value nobody defined: never assumed healthy. */
+  | "unknown"
+  | "neverTested";
+
+/**
+ * THE ONE READING of a connection's health, for every screen and count that
+ * states one (the connections-health route, the topology lens, the SAP systems
+ * screen). "OK" alone is not healthy: it must be recent.
+ */
+export function connectionHealthVerdict(
+  c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },
+  now: Date = new Date(),
+): ConnectionHealthVerdict {
+  const status = c.lastValidationStatus;
+  if (status === null) return "neverTested";
+  if (status === CONNECTION_UNREADABLE_STATUS) return "unreadable";
+  if (CONNECTION_NEEDS_ATTENTION.includes(status)) return "needsAttention";
+  if (status === "OK") {
+    return freshnessOf(c.lastValidatedAt, CONNECTION_PROOF_TTL_MS, now) === "fresh" ? "healthy" : "stale";
+  }
+  return "unknown";
+}
+
+/**
+ * The SAP systems screen's "Last probe" cell (A19). Whether a connection was
+ * ever checked is decided by its STATUS, not by `lastValidatedAt`: that moves
+ * only on a 200, so a connection the sweep probes and finds failing every
+ * night read "Never", with its failing status hidden.
+ */
+export function describeLastProbe(
+  c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },
+  now: Date = new Date(),
+): { readonly headline: string; readonly detail: string | null } {
+  if (c.lastValidationStatus === null) return { headline: "Never checked", detail: null };
+  const verdict = connectionHealthVerdict(c, now);
+  const headline =
+    verdict === "stale"
+      ? `${c.lastValidationStatus} · stale`
+      : verdict === "unreadable"
+        ? `${c.lastValidationStatus} · the secret would not open`
+        : c.lastValidationStatus;
+  return { headline, detail: `last succeeded ${describeAge(c.lastValidatedAt, now) ?? "never"}` };
+}

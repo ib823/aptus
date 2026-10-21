@@ -21,6 +21,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+import { CONNECTION_UNREADABLE_STATUS } from "@/lib/coreedge/freshness";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
@@ -111,7 +112,7 @@ async function swapProbeStatus(
   id: string,
   organizationId: string,
   believed: string | null,
-  next: ConnectionHealthStatus,
+  next: ConnectionHealthStatus | typeof CONNECTION_UNREADABLE_STATUS,
 ): Promise<string | null> {
   // lastValidatedAt moves ONLY on a real 200 — same rule as the Studio test
   // route. A failing probe must not touch the one record of when the
@@ -183,6 +184,18 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
       // A row that cannot be resolved is the CONNECTION_UNREADABLE state the
       // binding surfaces; the sweep counts it and moves on rather than dying.
       result.unreadable += groupRows.length;
+      /*
+       * AND SAYS SO ON EVERY ROW OF THE GROUP (P0.2, A50). It used to write
+       * nothing, so a connection's last "OK" stood forever while the broker
+       * refused every call for the product (it fails closed on the whole
+       * group, so every row is unusable, not just the bad one). No probe ran,
+       * so no probe event is written and `lastValidatedAt` — the last time SAP
+       * answered — is left alone; no alert is sent from here either (an open
+       * decision, docs/runbooks/coreedge-lane-truth.md).
+       */
+      for (const row of groupRows) {
+        await swapProbeStatus(row.id, organizationId, row.lastValidationStatus, CONNECTION_UNREADABLE_STATUS);
+      }
       continue;
     }
     const byKey = new Map(resolved.map((c) => [c.key, c]));
@@ -253,8 +266,10 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
  * as "no active connection with that id" on the screen built to diagnose it.
  * Same defect class as the Studio test route's bare 500 (R5), one file over.
  *
- * `unreadable` carries the resolver's own sentence, and writes NO health
- * status or probe event: no probe ran, so there is no tenant fact to record.
+ * `unreadable` carries the resolver's own sentence. It writes no probe event —
+ * no probe ran, so there is no tenant fact to record — but since P0.2 (A50) it
+ * records UNREADABLE as the row's status, so the last "OK" stops standing for
+ * a connection every call is refused on.
  */
 export type ProbeOneOutcome =
   | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
@@ -278,7 +293,13 @@ export async function probeOneConnection(
   } catch {
     // The resolver opens every row of the (organization, product) group and
     // fails closed on the set — the same refusal the binding path gives, with
-    // the same sentence, so the operator is sent to the same fix.
+    // the same sentence, so the operator is sent to the same fix. Recorded on
+    // the row as the sweep records it (P0.2, A50), so its last "OK" no longer
+    // stands; no probe ran, so no probe event and `lastValidatedAt` untouched.
+    await prisma.sapConnection.update({
+      where: { id: row.id, organizationId },
+      data: { lastValidationStatus: CONNECTION_UNREADABLE_STATUS },
+    });
     return { outcome: "unreadable", detail: connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? "") };
   }
   const conn = resolved.find((c) => c.key === row.key);

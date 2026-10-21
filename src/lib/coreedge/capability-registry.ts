@@ -267,7 +267,7 @@ export const BROKER_FACTS = {
   /** read.ts: MAX_LIMIT, and the only query options a read sends. */
   readMaxRows: 100,
   readQueryOptions: ["$top", "$format"],
-  /** access.ts refuses every other write operation (OPERATION_NOT_SUPPORTED). */
+  /** access.ts (authorisation.ts interfaceRefusal) refuses every other write operation (OPERATION_NOT_SUPPORTED). */
   writeOperations: ["CREATE"],
   /** Neither executor sends $batch. */
   batch: false,

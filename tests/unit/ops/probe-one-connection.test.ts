@@ -98,13 +98,15 @@ describe("probeOneConnection tells its three outcomes apart", () => {
     }
   });
 
-  it("writes NO health status and NO probe event when nothing was probed", async () => {
-    // No probe ran, so there is no tenant fact to record — the same rule the
-    // Studio test route (R5) applies. A written status here would be a verdict
-    // about a tenant nobody reached.
+  it("records UNREADABLE, and NO probe event, when the secret would not open (P0.2, A50)", async () => {
+    // No probe ran, so there is no tenant fact to record: no probe event, and
+    // lastValidatedAt — the last time SAP answered — untouched. But the row's
+    // status says UNREADABLE: leaving its last "OK" standing called a
+    // connection healthy that the broker refuses on every call.
     mocks.resolveSapConnections.mockRejectedValue(new Error("boom"));
     await probeOneConnection("org_a", "conn_1", "manual");
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update.mock.calls[0]![0].data).toEqual({ lastValidationStatus: "UNREADABLE" });
     expect(mocks.createEvent).not.toHaveBeenCalled();
   });
 

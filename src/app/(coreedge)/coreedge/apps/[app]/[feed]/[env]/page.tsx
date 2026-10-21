@@ -13,6 +13,7 @@ import {
   DISABLED_REASONS,
   HOPS_AFTER_THE_BREAK,
   laneAge,
+  RECHECK_COPY,
   UNCHECKED_EXPLANATION,
   WHY_NO_RECORDED_CALL,
   type WhyCase,
@@ -133,6 +134,12 @@ export default async function LaneDetail({
    * working credential to solve a problem nobody has.
    */
   const offerLink = keyHop?.state === "broken" || link !== null;
+  const recheckBlockedBecause =
+    recheckRefusal !== null
+      ? DISABLED_REASONS[recheckRefusal]
+      : lane.appStatus === "active" || lane.appStatus === "restricted"
+        ? null
+        : RECHECK_COPY.skipped.appNotLive;
   const sendBlockedBecause =
     lane.appStatus === "retired"
       ? CLAIM_LINK_COPY.appRetired
@@ -257,11 +264,17 @@ export default async function LaneDetail({
           </span>
         ) : null}
 
+        {/*
+          A RETIRED OR DRAFT APP IS NOT READ ON DEMAND EITHER (A70). The sweep
+          never reads it, and the button used to send a live read to the
+          client's SAP system anyway; the route refuses it as `appNotLive`, and
+          the screen says so before the press, in the same words.
+        */}
         <RecheckLane
           solutionId={lane.appId}
           interfaceId={lane.feedId}
           environment={environment}
-          {...(recheckRefusal === null ? {} : { blockedBecause: DISABLED_REASONS[recheckRefusal] })}
+          {...(recheckBlockedBecause === null ? {} : { blockedBecause: recheckBlockedBecause })}
           idPrefix="lane"
         />
       </section>

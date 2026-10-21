@@ -7,7 +7,8 @@ import { OpsTable } from "@/components/coreedge/OpsTable";
 import { DISABLED_REASONS, EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
 import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
-import { getSapSystemDetail, type ServiceHealthRow } from "@/lib/coreedge/queries";
+import { getSapSystemDetail } from "@/lib/coreedge/queries";
+import { readableServices } from "@/lib/coreedge/service-health";
 import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
 import { getCurrentUser } from "@/lib/auth/session";
 
@@ -71,9 +72,9 @@ export default async function SapSystemDetailPage({
 
   const now = new Date();
   const { system, services } = detail;
-  const readable = services.filter(
-    (s: ServiceHealthRow) => s.readStatus === "OK" || s.readStatus === "EMPTY",
-  ).length;
+  // The product's rule, not "any OK ever" (A60): fresh metadata and a fresh
+  // read, as the per-service chips below are judged.
+  const { readable, unproven } = readableServices(services, now);
 
   return (
     <CoreEdgeShell
@@ -97,7 +98,9 @@ export default async function SapSystemDetailPage({
         <div>
           <dt className="text-xs uppercase tracking-wide text-ink-muted">Services readable</dt>
           <dd className="text-ink">
-            {services.length === 0 ? "—" : `${readable} of ${services.length}`}
+            {services.length === 0
+              ? "—"
+              : `${readable} of ${services.length}${unproven === 0 ? "" : ` · ${unproven} not proven in 24 h`}`}
           </dd>
         </div>
       </dl>

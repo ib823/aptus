@@ -28,14 +28,11 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, requireOperations } from "@/lib/ops/guard";
+import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { studioOk } from "@/lib/studio/api";
 import { deploymentFallbackTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
-
-/** Observed probe outcomes. `null` is handled separately — it is not an outcome. */
-const NEEDS_ATTENTION = new Set(["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"]);
-const UNKNOWN = new Set(["NO_PROBE_PATH"]);
 
 export async function GET() {
   const guard = await requireOperations();
@@ -69,20 +66,42 @@ export async function GET() {
   let healthy = 0;
   let needsAttention = 0;
   let unknown = 0;
+  let stale = 0;
   let neverTested = 0;
   let bindingUnverified = 0;
   let prodConnections = 0;
 
+  const now = new Date();
   for (const r of rows) {
     const status = r.lastValidationStatus;
     const label = status ?? "NEVER_TESTED";
     byStatus[label] = (byStatus[label] ?? 0) + 1;
 
-    if (status === null) neverTested++;
-    else if (status === "OK") healthy++;
-    else if (NEEDS_ATTENTION.has(status)) needsAttention++;
-    else if (UNKNOWN.has(status)) unknown++;
-    else unknown++; // an unrecognised value is unknown, never assumed healthy
+    /*
+     * HEALTH DECAYS (P0.2, A50). "OK" counted as healthy whatever its age, so a
+     * connection whose probing stopped — or whose secret stopped opening, which
+     * skipped the write — kept its last green forever. `connectionHealthVerdict`
+     * is the one reading: an OK older than CONNECTION_PROOF_TTL_MS is `stale`,
+     * and UNREADABLE (recorded by the sweep since P0.2) needs attention.
+     */
+    switch (connectionHealthVerdict(r, now)) {
+      case "neverTested":
+        neverTested++;
+        break;
+      case "healthy":
+        healthy++;
+        break;
+      case "stale":
+        stale++;
+        break;
+      case "needsAttention":
+      case "unreadable":
+        needsAttention++;
+        break;
+      case "unknown":
+        unknown++; // NO_PROBE_PATH, or an unrecognised value: never assumed healthy
+        break;
+    }
 
     // The backlog, not a badge. A connection with no declared environment serves
     // reads flagged unverified and refuses writes outright; the count is work to
@@ -117,6 +136,8 @@ export async function GET() {
       needsAttention,
       unknown,
       neverTested,
+      // An OK older than CONNECTION_PROOF_TTL_MS (P0.2, A50): not counted healthy.
+      stale,
       byStatus,
     },
     /**
@@ -140,6 +161,8 @@ export async function GET() {
       // reactivated, so "we have 3 connections" and "3 are listed here" are
       // different claims.
       activeOnly: true,
+      // How old an OK may be and still count as healthy (P0.2, A50).
+      healthyWithinHours: CONNECTION_PROOF_TTL_MS / 3_600_000,
       excludedInactive: inactive,
       why: "A deactivated connection serves no traffic, so its probe status would be a stale claim about a system nothing is calling.",
       fallbackIsShared:

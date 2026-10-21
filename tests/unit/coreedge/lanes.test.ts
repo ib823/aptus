@@ -20,6 +20,7 @@ import {
   UNCHECKED_AGE,
   UNCHECKED_EXPLANATION,
 } from "@/lib/coreedge/copy";
+import { laneAuthorisation } from "@/lib/coreedge/lane-authorisation";
 import {
   CHECK_TTL_MS,
   ENVIRONMENT_LABELS,
@@ -28,10 +29,13 @@ import {
   deriveLaneStatus,
   notStartedVerdict,
   parseLaneEnvironment,
+  type AccessFacts,
+  type LaneEnvironment,
   type LaneFacts,
+  type LaneIdentity,
 } from "@/lib/coreedge/lanes";
 import { LANE_HOPS, LANE_STATUSES, LANE_STATUS_VOCABULARY } from "@/lib/coreedge/status-vocabulary";
-import { grantsRead, grantsWrite, isWriteOperation } from "@/lib/studio/grants";
+import { grantsRead, grantsWrite, isWriteOperation, type GrantOperation } from "@/lib/studio/grants";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
 const RECENT = new Date(NOW.getTime() - 60_000);
@@ -40,16 +44,77 @@ const ANCIENT = new Date(NOW.getTime() - CHECK_TTL_MS - 60_000);
 /** A lane where every hop proves. Each test spoils exactly one thing. */
 function healthy(): LaneFacts {
   return {
-    lane: { operation: "READ", environment: "TEST" },
+    lane: { operation: "READ", environment: "TEST", route: "read" },
     appRetired: false,
-    key: { exists: true, isActive: true, revokedAt: null, expiresAt: null },
-    access: { decision: "APPROVED", expiresAt: null, revokedAt: null },
-    binding: { matchingConnections: 1, secretUnreadable: false },
+    key: { exists: true, isActive: true, revokedAt: null, expiresAt: null, writeKeyIssued: true },
+    access: { decision: "APPROVED", expiresAt: null, revokedAt: null, refusal: null },
+    binding: { refusal: null },
     probe: { status: "OK", at: RECENT },
     read: { outcome: "OK", at: RECENT, rows: 5 },
+    evidenceSuperseded: false,
     sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: true },
     now: NOW,
   };
+}
+
+/** A lane of this operation in this environment, on the route its interface's mode takes. */
+function laneOf(operation: GrantOperation, environment: LaneEnvironment): LaneIdentity {
+  return { operation, environment, route: isWriteOperation(operation) ? "write" : "read" };
+}
+
+/**
+ * Access facts AS THE BOARD COMPUTES THEM (P0.2): one grant of `decision`,
+ * bound to the lane's ACTIVE interface, judged by the broker's own
+ * `authorisesHere` through `laneAuthorisation`. The derivation is never told
+ * whether access holds by hand.
+ */
+function accessOf(
+  decision: AccessFacts["decision"],
+  lane: LaneIdentity,
+  times: { expiresAt: Date | null; revokedAt: Date | null },
+): AccessFacts {
+  const iface = {
+    id: "if_1",
+    name: "Feed",
+    externalId: "API_X",
+    sapProduct: "s4hana",
+    operation: lane.operation,
+    mode: lane.route === "write" ? "WRITE" : "READ",
+    status: "ACTIVE",
+    solutionId: "sol_1",
+    entitySet: "A_X",
+    version: 1,
+    createdAt: new Date(NOW.getTime() - 86_400_000),
+    grantMatchChangedAt: null,
+  };
+  const grants =
+    decision === null
+      ? []
+      : [
+          {
+            id: "g_1",
+            decision: decision === "REVOKED" ? "APPROVED" : decision,
+            expiresAt: times.expiresAt,
+            revokedAt: times.revokedAt,
+            operation: lane.operation,
+            externalId: "API_X",
+            environment: lane.environment,
+            interfaceId: "if_1",
+            sapProduct: "s4hana",
+            createdAt: new Date(NOW.getTime() - 3_600_000),
+            unboundCutoffAt: null,
+          },
+        ];
+  return laneAuthorisation({
+    iface,
+    solutionId: "sol_1",
+    environment: lane.environment,
+    grants,
+    credential: null,
+    estate: { kind: "connections", connections: [] },
+    now: NOW,
+    bindingMode: "strict",
+  }).access;
 }
 
 function withFacts(patch: Partial<LaneFacts>): LaneFacts {
@@ -140,8 +205,8 @@ describe("the first failing hop decides, and nothing below it is consulted", () 
      */
     const v = deriveLaneStatus(
       withFacts({
-        key: { exists: false, isActive: false, revokedAt: null, expiresAt: null },
-        binding: { matchingConnections: 0, secretUnreadable: false },
+        key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true },
+        binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" },
       }),
     );
     expect(v.status).toBe("noKey");
@@ -157,8 +222,8 @@ describe("the first failing hop decides, and nothing below it is consulted", () 
      */
     const v = deriveLaneStatus(
       withFacts({
-        access: { decision: null, expiresAt: null, revokedAt: null },
-        key: { exists: false, isActive: false, revokedAt: null, expiresAt: null },
+        access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }),
+        key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true },
       }),
     );
     expect(v.status).toBe("noAccess");
@@ -169,13 +234,13 @@ describe("the first failing hop decides, and nothing below it is consulted", () 
 describe("access states map to the statuses that differ in what to do next", () => {
   it("distinguishes expiry from revocation, because one renews and one does not", () => {
     const expired = deriveLaneStatus(
-      withFacts({ access: { decision: "APPROVED", expiresAt: ANCIENT, revokedAt: null } }),
+      withFacts({ access: accessOf("APPROVED", healthy().lane, { expiresAt: ANCIENT, revokedAt: null }) }),
     );
     expect(expired.status).toBe("accessEnded");
     expect(expired.because).toContain("renewing keeps it");
 
     const revoked = deriveLaneStatus(
-      withFacts({ access: { decision: "REVOKED", expiresAt: null, revokedAt: RECENT } }),
+      withFacts({ access: accessOf("REVOKED", healthy().lane, { expiresAt: null, revokedAt: RECENT }) }),
     );
     expect(revoked.status).toBe("noAccess");
     expect(revoked.because).toContain("nothing to renew");
@@ -183,14 +248,14 @@ describe("access states map to the statuses that differ in what to do next", () 
 
   it("shows a pending request as In review", () => {
     expect(
-      deriveLaneStatus(withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }))
+      deriveLaneStatus(withFacts({ access: accessOf("REQUESTED", healthy().lane, { expiresAt: null, revokedAt: null }) }))
         .status,
     ).toBe("inReview");
   });
 
   it("treats a declined request as No access", () => {
     expect(
-      deriveLaneStatus(withFacts({ access: { decision: "REJECTED", expiresAt: null, revokedAt: null } }))
+      deriveLaneStatus(withFacts({ access: accessOf("REJECTED", healthy().lane, { expiresAt: null, revokedAt: null }) }))
         .status,
     ).toBe("noAccess");
   });
@@ -207,16 +272,16 @@ describe("access states map to the statuses that differ in what to do next", () 
     expect(
       deriveLaneStatus(
         withFacts({
-          lane: { operation: "READ", environment: "SANDBOX" },
-          access: { decision: "SANDBOX_ONLY", expiresAt: null, revokedAt: null },
+          lane: laneOf("READ", "SANDBOX"),
+          access: accessOf("SANDBOX_ONLY", laneOf("READ", "SANDBOX"), { expiresAt: null, revokedAt: null }),
         }),
       ).status,
     ).toBe("live");
     expect(
       deriveLaneStatus(
         withFacts({
-          lane: { operation: "READ", environment: "PROD" },
-          access: { decision: "READ_ONLY", expiresAt: null, revokedAt: null },
+          lane: laneOf("READ", "PROD"),
+          access: accessOf("READ_ONLY", laneOf("READ", "PROD"), { expiresAt: null, revokedAt: null }),
         }),
       ).status,
     ).toBe("live");
@@ -230,16 +295,30 @@ describe("access states map to the statuses that differ in what to do next", () 
    * proved" over that.
    */
   it("refuses Access to READ_ONLY on a lane that writes", () => {
-    for (const operation of ["CREATE", "UPDATE"] as const) {
+    const v = deriveLaneStatus(
+      withFacts({
+        lane: laneOf("CREATE", "PROD"),
+        access: accessOf("READ_ONLY", laneOf("CREATE", "PROD"), { expiresAt: null, revokedAt: null }),
+      }),
+    );
+    expect(v.status).toBe("noAccess");
+    expect(v.brokenHop).toBe("access");
+    expect(v.because).toContain("read-only");
+  });
+
+  it("refuses Access to an UPDATE lane whatever its grant, as the write route does (P0.2)", () => {
+    // The executor can only create; the write route refuses UPDATE before it
+    // looks at a grant (OPERATION_NOT_SUPPORTED). An approved UPDATE lane
+    // used to read Live.
+    for (const decision of ["APPROVED", "READ_ONLY"] as const) {
       const v = deriveLaneStatus(
         withFacts({
-          lane: { operation, environment: "PROD" },
-          access: { decision: "READ_ONLY", expiresAt: null, revokedAt: null },
+          lane: laneOf("UPDATE", "PROD"),
+          access: accessOf(decision, laneOf("UPDATE", "PROD"), { expiresAt: null, revokedAt: null }),
         }),
       );
-      expect(v.status, operation).toBe("noAccess");
-      expect(v.brokenHop).toBe("access");
-      expect(v.because).toContain("read-only");
+      expect(v.status, decision).toBe("noAccess");
+      expect(v.because).toContain("can only create");
     }
   });
 
@@ -248,8 +327,8 @@ describe("access states map to the statuses that differ in what to do next", () 
       for (const environment of ["DEV", "TEST", "PROD"] as const) {
         const v = deriveLaneStatus(
           withFacts({
-            lane: { operation, environment },
-            access: { decision: "SANDBOX_ONLY", expiresAt: null, revokedAt: null },
+            lane: laneOf(operation, environment),
+            access: accessOf("SANDBOX_ONLY", laneOf(operation, environment), { expiresAt: null, revokedAt: null }),
           }),
         );
         expect(v.status, `${operation} in ${environment}`).toBe("noAccess");
@@ -265,12 +344,13 @@ describe("access states map to the statuses that differ in what to do next", () 
         for (const decision of decisions) {
           const v = deriveLaneStatus(
             withFacts({
-              lane: { operation, environment },
-              access: { decision, expiresAt: null, revokedAt: null },
+              lane: laneOf(operation, environment),
+              access: accessOf(decision, laneOf(operation, environment), { expiresAt: null, revokedAt: null }),
             }),
           );
+          // The write route serves CREATE only (OPERATION_NOT_SUPPORTED).
           const authorises = isWriteOperation(operation)
-            ? grantsWrite(decision, environment)
+            ? operation === "CREATE" && grantsWrite(decision, environment)
             : grantsRead(decision, environment);
           expect(
             v.brokenHop !== "access",
@@ -288,19 +368,19 @@ describe("key states", () => {
     // it stopped working.
     expect(
       deriveLaneStatus(
-        withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+        withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
       ).status,
     ).toBe("noKey");
     expect(
       deriveLaneStatus(
-        withFacts({ key: { exists: true, isActive: true, revokedAt: RECENT, expiresAt: null } }),
+        withFacts({ key: { exists: true, isActive: true, revokedAt: RECENT, expiresAt: null, writeKeyIssued: true } }),
       ).status,
     ).toBe("keyNotValid");
   });
 
   it("never draws an expired key as live (P0.11)", () => {
     const v = deriveLaneStatus(
-      withFacts({ key: { exists: true, isActive: true, revokedAt: null, expiresAt: RECENT } }),
+      withFacts({ key: { exists: true, isActive: true, revokedAt: null, expiresAt: RECENT, writeKeyIssued: true } }),
     );
     expect(v.status).toBe("keyNotValid");
     expect(v.because).toContain("expired");
@@ -316,18 +396,18 @@ describe("key states", () => {
 describe("binding states all belong to the platform admin", () => {
   it("says no system when none matches", () => {
     expect(
-      deriveLaneStatus(withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } })).status,
+      deriveLaneStatus(withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } })).status,
     ).toBe("noSapSystem");
   });
 
   it("refuses to choose when two systems claim one environment", () => {
-    const v = deriveLaneStatus(withFacts({ binding: { matchingConnections: 2, secretUnreadable: false } }));
+    const v = deriveLaneStatus(withFacts({ binding: { refusal: "AMBIGUOUS" } }));
     expect(v.status).toBe("bindingRefused");
     expect(v.because).toContain("will not choose");
   });
 
   it("owns up when the secret cannot be decrypted", () => {
-    const v = deriveLaneStatus(withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }));
+    const v = deriveLaneStatus(withFacts({ binding: { refusal: "CONNECTION_UNREADABLE" } }));
     expect(v.status).toBe("secretUnreadable");
     expect(v.because).toContain("Our fault");
   });
@@ -367,13 +447,13 @@ describe("every verdict is usable", () => {
     const cases: LaneFacts[] = [
       healthy(),
       withFacts({ appRetired: true }),
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-      withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
-      withFacts({ access: { decision: "APPROVED", expiresAt: ANCIENT, revokedAt: null } }),
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
-      withFacts({ binding: { matchingConnections: 2, secretUnreadable: false } }),
-      withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ access: accessOf("REQUESTED", healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ access: accessOf("APPROVED", healthy().lane, { expiresAt: ANCIENT, revokedAt: null }) }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+      withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
+      withFacts({ binding: { refusal: "AMBIGUOUS" } }),
+      withFacts({ binding: { refusal: "CONNECTION_UNREADABLE" } }),
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ probe: { status: "TIMEOUT", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
@@ -391,9 +471,9 @@ describe("every verdict is usable", () => {
   it("names a broken hop that agrees with the vocabulary", () => {
     // The verdict and the status must not disagree about which hop failed.
     for (const facts of [
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+      withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
     ]) {
@@ -407,7 +487,7 @@ describe("every verdict is usable", () => {
     // rows with different next steps.
     expect(notStartedVerdict().status).toBe("notStarted");
     expect(
-      deriveLaneStatus(withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } })).status,
+      deriveLaneStatus(withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) })).status,
     ).toBe("noAccess");
   });
 });
@@ -424,13 +504,13 @@ describe("statuses this file deliberately cannot produce", () => {
       [
         healthy(),
         withFacts({ appRetired: true }),
-        withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-        withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
-        withFacts({ access: { decision: "APPROVED", expiresAt: ANCIENT, revokedAt: null } }),
-        withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-        withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
-        withFacts({ binding: { matchingConnections: 2, secretUnreadable: false } }),
-        withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+        withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+        withFacts({ access: accessOf("REQUESTED", healthy().lane, { expiresAt: null, revokedAt: null }) }),
+        withFacts({ access: accessOf("APPROVED", healthy().lane, { expiresAt: ANCIENT, revokedAt: null }) }),
+        withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+        withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
+        withFacts({ binding: { refusal: "AMBIGUOUS" } }),
+        withFacts({ binding: { refusal: "CONNECTION_UNREADABLE" } }),
         withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
         withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
         withFacts({ read: { outcome: "EMPTY", at: RECENT, rows: 0 } }),
@@ -461,11 +541,11 @@ describe("a lane with no age says why it has none", () => {
     const cases: LaneFacts[] = [
       healthy(),
       withFacts({ appRetired: true }),
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-      withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
-      withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ access: accessOf("REQUESTED", healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+      withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
+      withFacts({ binding: { refusal: "CONNECTION_UNREADABLE" } }),
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
       withFacts({ read: { outcome: null, at: null, rows: null } }),
@@ -494,10 +574,10 @@ describe("a lane with no age says why it has none", () => {
       withFacts({ read: noRead, sweep: { appIsActive: true, feedHasDataset: false, feedServiceResolves: true } }),
     );
     const noSystem = deriveLaneStatus(
-      withFacts({ read: noRead, binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ read: noRead, binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
     );
     const badSecret = deriveLaneStatus(
-      withFacts({ read: noRead, binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ read: noRead, binding: { refusal: "CONNECTION_UNREADABLE" } }),
     );
     // The sweep reached it and had no path to ask — not "has not reached it".
     const noService = deriveLaneStatus(
@@ -526,7 +606,7 @@ describe("a lane with no age says why it has none", () => {
     const both = deriveLaneStatus(
       withFacts({
         read: { outcome: null, at: null, rows: null },
-        binding: { matchingConnections: 0, secretUnreadable: false },
+        binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" },
         sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: false },
       }),
     );
@@ -538,9 +618,23 @@ describe("a lane with no age says why it has none", () => {
     // answers "why do we not know", never "what is true" — if it leaked into
     // the status, a board could be made greener by marking apps as drafts.
     const live = deriveLaneStatus(healthy());
-    const draft = deriveLaneStatus(withFacts({ sweep: { appIsActive: false, feedHasDataset: false, feedServiceResolves: true } }));
+    const draft = deriveLaneStatus(withFacts({ sweep: { appIsActive: false, feedHasDataset: true, feedServiceResolves: true } }));
     expect(draft.status).toBe(live.status);
     expect(draft.because).toBe(live.because);
+  });
+
+  it("never draws Live for a feed the broker refuses on its definition (P0.2)", () => {
+    // No dataset, or a service it cannot resolve, is a 400 on every call:
+    // whatever an old check says, the lane is not Live. Unlike the app's
+    // status, these two are the broker's facts as well as the sweep's.
+    for (const sweep of [
+      { appIsActive: true, feedHasDataset: false, feedServiceResolves: true },
+      { appIsActive: true, feedHasDataset: true, feedServiceResolves: false },
+    ]) {
+      const v = deriveLaneStatus(withFacts({ sweep }));
+      expect(v.status).toBe("unknown");
+      expect(v.because).toContain("refuses every call");
+    }
   });
 
   it("says nothing requested, not never checked, for a lane nobody started", () => {
@@ -613,12 +707,12 @@ describe("the gate strip and the chip cannot disagree", () => {
     const cases: LaneFacts[] = [
       healthy(),
       withFacts({ appRetired: true }),
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-      withFacts({ access: { decision: "REQUESTED", expiresAt: null, revokedAt: null } }),
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
-      withFacts({ binding: { matchingConnections: 2, secretUnreadable: false } }),
-      withFacts({ binding: { matchingConnections: 1, secretUnreadable: true } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ access: accessOf("REQUESTED", healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+      withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
+      withFacts({ binding: { refusal: "AMBIGUOUS" } }),
+      withFacts({ binding: { refusal: "CONNECTION_UNREADABLE" } }),
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ probe: { status: "TIMEOUT", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),
@@ -648,7 +742,7 @@ describe("the hops the strip draws", () => {
 
   it("marks access proven on a lane that has no key", () => {
     const v = deriveLaneStatus(
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
     );
     expect(v.status).toBe("noKey");
     expect(stateOf(v, "access")).toBe("ok");
@@ -660,7 +754,7 @@ describe("the hops the strip draws", () => {
   it("marks key unreached on a lane with no access, which is the other order", () => {
     // The mirror image: access fails first, so the key was never asked about.
     const v = deriveLaneStatus(
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
     );
     expect(v.status).toBe("noAccess");
     expect(stateOf(v, "access")).toBe("broken");
@@ -681,9 +775,9 @@ describe("the hops the strip draws", () => {
     // One broken hop at most, and it is the verdict's own brokenHop.
     for (const facts of [
       healthy(),
-      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null } }),
-      withFacts({ access: { decision: null, expiresAt: null, revokedAt: null } }),
-      withFacts({ binding: { matchingConnections: 0, secretUnreadable: false } }),
+      withFacts({ key: { exists: false, isActive: false, revokedAt: null, expiresAt: null, writeKeyIssued: true } }),
+      withFacts({ access: accessOf(null, healthy().lane, { expiresAt: null, revokedAt: null }) }),
+      withFacts({ binding: { refusal: "NO_MATCH_FOR_ENVIRONMENT" } }),
       withFacts({ probe: { status: "UNAUTHORIZED", at: RECENT } }),
       withFacts({ probe: { status: "TIMEOUT", at: RECENT } }),
       withFacts({ read: { outcome: "FORBIDDEN", at: RECENT, rows: null } }),

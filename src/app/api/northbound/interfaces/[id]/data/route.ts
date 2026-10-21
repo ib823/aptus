@@ -32,6 +32,7 @@ import { noteFirstCall } from "@/lib/coreedge/journey";
 import { resolveReadableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
+import { resolveBindingFor } from "@/lib/northbound/binding";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
 import { northboundErrorCodeFor } from "@/lib/northbound/read-status";
@@ -44,10 +45,7 @@ import {
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import {
-  connectionRefusalMessage,
-  resolveSapConnectionForEnvironment,
-} from "@/lib/sap-public/connection-resolver";
+import { connectionRefusalMessage } from "@/lib/sap-public/connection-resolver";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 
 export const dynamic = "force-dynamic";
@@ -127,19 +125,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // 3 — resolve the client's OWN SAP connection, BOUND TO THIS CREDENTIAL'S
   // ENVIRONMENT. Never the shared env tenant, and never simply the oldest row:
   // picking by creation order is how a sandbox credential reached production.
+  // The lane board's own binding (P0.2): `bindingFor` on the product's
+  // estate. An unknown product is its own reason, UNKNOWN_PRODUCT, not
+  // NO_CONNECTION: an interface-config defect with a different fix, and
+  // NO_CONNECTION is excluded from the incident rule — this must not be.
   const product = getSapProduct(iface.sapProduct);
-  const binding = product
-    ? await resolveSapConnectionForEnvironment(
-        client.organizationId,
-        iface.sapProduct,
-        client.environment,
-        "READ",
-        client.sapClient,
-      )
-    : // Its own reason, not NO_CONNECTION: an unknown product is an
-      // interface-config defect with a different fix, and NO_CONNECTION is
-      // excluded from the incident rule — this must not be.
-      ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
+  const binding = await resolveBindingFor(
+    client.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "read",
+    client.sapClient,
+  );
 
   if (!binding.ok) {
     await recordNorthboundCall({

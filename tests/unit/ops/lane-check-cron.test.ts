@@ -29,6 +29,8 @@ import type * as ConnectionHealthModule from "@/lib/studio/connection-health";
 const mocks = vi.hoisted(() => ({
   findSolutions: vi.fn(),
   findConnections: vi.fn(),
+  findGrants: vi.fn(),
+  findClients: vi.fn(),
   upsertLaneCheck: vi.fn(),
   upsertServiceHealth: vi.fn(),
   createCronRunLog: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     solution: { findMany: mocks.findSolutions },
     sapConnection: { findMany: mocks.findConnections },
+    // P0.2: the sweep reads SAP only for lanes the broker would serve, so it
+    // reads the grants and credentials the broker judges them on.
+    apiAccessGrant: { findMany: mocks.findGrants },
+    solutionClient: { findMany: mocks.findClients },
     // The catalogue row the broker's resolver reads — the sweep now resolves
     // through it rather than treating the catalogue id as a path.
     sapHubContent: { findFirst: mocks.findHubContent },
@@ -77,13 +83,41 @@ import { GET } from "@/app/api/cron/lane-checks/route";
 const SECRET = "test-cron-secret-value";
 
 /** One ACTIVE app with one feed that has an entity set — a checkable lane. */
-const SOLUTION = {
-  id: "sol_1",
-  organizationId: "org_a",
-  interfaces: [
-    { id: "if_1", sapProduct: "s4hana", externalId: "API_BUSINESS_PARTNER", entitySet: "A_BusinessPartner" },
-  ],
+const FEED = {
+  id: "if_1",
+  name: "Business partners",
+  solutionId: "sol_1",
+  sapProduct: "s4hana",
+  externalId: "API_BUSINESS_PARTNER",
+  entitySet: "A_BusinessPartner",
+  operation: "READ",
+  mode: "READ",
+  status: "ACTIVE",
+  version: 3,
+  servicePath: null,
+  odataVersion: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  grantMatchChangedAt: null,
 };
+const SOLUTION = { id: "sol_1", organizationId: "org_a", status: "ACTIVE", interfaces: [FEED] };
+
+/** An approved grant bound to the feed, in an environment. */
+const grantIn = (environment: string) => ({
+  id: `g_${environment}`,
+  organizationId: "org_a",
+  solutionId: "sol_1",
+  externalId: "API_BUSINESS_PARTNER",
+  operation: "READ",
+  environment,
+  decision: "APPROVED",
+  expiresAt: new Date(Date.now() + 86_400_000),
+  revokedAt: null,
+  interfaceId: "if_1",
+  sapProduct: "s4hana",
+  unboundLastUsedAt: null,
+  createdAt: new Date("2026-02-01T00:00:00Z"),
+  unboundCutoffAt: null,
+});
 
 /** DEV only, so the fixture yields exactly one lane rather than four. */
 const CONNECTION_ROW = { id: "conn_1", organizationId: "org_a", environment: "DEV" };
@@ -106,6 +140,8 @@ beforeEach(() => {
   vi.stubEnv("CRON_SECRET", SECRET);
   mocks.findSolutions.mockResolvedValue([SOLUTION]);
   mocks.findConnections.mockResolvedValue([CONNECTION_ROW]);
+  mocks.findGrants.mockResolvedValue([grantIn("DEV"), grantIn("TEST")]);
+  mocks.findClients.mockResolvedValue([]);
   mocks.resolveSapConnections.mockResolvedValue([RESOLVED]);
   mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "", durationMs: 9 });
   mocks.readEntitySet.mockResolvedValue({ status: "OK", httpStatus: 200, records: [{ id: 1 }] });
@@ -170,6 +206,8 @@ describe("a successful sweep writes the ledger AND the run log", () => {
     expect(arg.create.readRowCount).toBe(1);
     expect(arg.create.probeAt).toBeInstanceOf(Date);
     expect(arg.create.readAt).toBeInstanceOf(Date);
+    // What the evidence was gathered against (P0.2, A18).
+    expect(arg.create).toMatchObject({ connectionId: "conn_1", entitySet: "A_BusinessPartner", interfaceVersion: 3 });
   });
 
   it("records the CronRunLog row under the job name vercel.json schedules", async () => {

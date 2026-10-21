@@ -124,7 +124,7 @@ describe("BROKER_FACTS hold against the broker", () => {
   });
 
   it("the write executor performs CREATE only and neither executor sends $batch", () => {
-    const access = read("src/lib/northbound/access.ts");
+    const access = read("src/lib/northbound/authorisation.ts");
     expect(BROKER_FACTS.writeOperations).toEqual(["CREATE"]);
     expect(access).toMatch(/if \(iface\.operation !== "CREATE"\) \{\s*return \{\s*ok: false,\s*reason: "OPERATION_NOT_SUPPORTED"/);
     expect(BROKER_FACTS.batch).toBe(false);

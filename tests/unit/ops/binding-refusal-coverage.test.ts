@@ -43,7 +43,7 @@ describe("coverage is complete against the resolver's own union", () => {
      * would drift in exactly the way this test exists to prevent. The union
      * is a TypeScript type, so it has no runtime value to import.
      */
-    const src = SRC("src/lib/sap-public/connection-resolver.ts");
+    const src = SRC("src/lib/sap-public/connection-selection.ts");
     const union = src.slice(
       src.indexOf("export type ConnectionBindingFailure"),
       src.indexOf(";", src.indexOf("export type ConnectionBindingFailure")),

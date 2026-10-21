@@ -29,6 +29,8 @@ import { noteFirstCall } from "@/lib/coreedge/journey";
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
+import { customServiceUnverified } from "@/lib/northbound/authorisation";
+import { resolveBindingFor } from "@/lib/northbound/binding";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   completeIdempotencyKey,
@@ -45,12 +47,8 @@ import {
 } from "@/lib/northbound/respond";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
 import { writeEntitySet, writeHttpStatusFor } from "@/lib/northbound/write";
-import {
-  connectionRefusalMessage,
-  resolveSapConnectionForEnvironment,
-} from "@/lib/sap-public/connection-resolver";
+import { connectionRefusalMessage } from "@/lib/sap-public/connection-resolver";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
-import { isVerifiedForBinding } from "@/lib/sap-public/service-verifications";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 
@@ -236,17 +234,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // connections the organization has. `writeEnabled` is not a substitute — it is
   // a per-connection yes/no that says nothing about WHICH landscape it enables
   // writes on, so it cannot stand in for knowing you are not in production.
+  // `bindingFor` on the product's estate, as the read route and the lane
+  // board ask it (P0.2); an unknown product is UNKNOWN_PRODUCT — see the read
+  // route.
   const product = getSapProduct(iface.sapProduct);
-  const binding = product
-    ? await resolveSapConnectionForEnvironment(
-        client.organizationId,
-        iface.sapProduct,
-        client.environment,
-        "WRITE",
-        client.sapClient,
-      )
-    : // Its own reason, not NO_CONNECTION — see the read route.
-      ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
+  const binding = await resolveBindingFor(
+    client.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "write",
+    client.sapClient,
+  );
 
   if (!binding.ok) {
     await audit(403, iface.id, iface.externalId, undefined, undefined, binding.reason);
@@ -313,15 +311,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
    * nobody has looked. Refused here — before the idempotency key is reserved
    * — so nothing reaches SAP and the key stays free for the retry after Verify.
    */
-  if (
-    resolved!.source === "custom" &&
-    !isVerifiedForBinding(iface.serviceVerifications, {
-      environment: client.environment,
-      connectionId: connection.id,
-      sapClient: connection.client ?? null,
-      baseUrl: connection.baseUrl,
-    })
-  ) {
+  // The same gate the lane board previews (authorisation.ts, P0.2).
+  if (resolved!.source === "custom" && customServiceUnverified(iface, client.environment, connection)) {
     await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",

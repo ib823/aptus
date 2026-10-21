@@ -358,6 +358,8 @@ export const RECHECK_COPY = {
     noConnection: "Nothing to check: no SAP system is connected for this environment.",
     noService: "Nothing to check: CoreEdge cannot resolve the SAP service this feed names, so it would refuse every call on it too.",
     unreadable: "Could not check: the SAP system's secret would not open.",
+    appNotLive: "Nothing to check: the app is not live, so CoreEdge does not read the client's SAP system for it.",
+    accessRefused: "Nothing to check: northbound refuses this lane's access, so CoreEdge does not read the client's SAP system for it.",
   },
 } as const;
 
@@ -395,6 +397,8 @@ export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
   noSapSystemHere: "not checked · no system connected here",
   feedServiceUnresolved: "not checked · service cannot be resolved",
   secretWouldNotOpen: "not checked · the secret would not open",
+  accessRefused: "not checked · the broker refuses this lane",
+  changedSinceCheck: "not checked since it changed",
   notRunYet: "not checked yet",
 };
 
@@ -423,6 +427,10 @@ export const UNCHECKED_ANNOUNCED: Readonly<Record<UncheckedReason, string>> = {
     "and no check is scheduled because CoreEdge cannot resolve the SAP service this feed names",
   secretWouldNotOpen:
     "and no read was attempted because the SAP system's secret would not open",
+  accessRefused:
+    "and no check is scheduled because northbound refuses this lane's access",
+  changedSinceCheck:
+    "and no check has run since its SAP system, dataset or definition changed",
   notRunYet: "and the nightly check has not reached this lane yet",
 };
 
@@ -446,6 +454,10 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
     "CoreEdge cannot resolve the SAP service this feed names for its product, so the broker refuses every call on it and the nightly check has nothing it could honestly ask. Define the feed against a service from the catalogue, or register the service's own path in Studio → Interfaces.",
   secretWouldNotOpen:
     "The nightly check reached this SAP system and could not open its stored secret, so no read was attempted. That is ours to fix, not SAP's.",
+  accessRefused:
+    "Northbound refuses this lane's access, so the nightly check does not read the client's SAP system for it. Once access is approved here, the next nightly check covers it — or re-check it then.",
+  changedSinceCheck:
+    "The last check ran against a different SAP system, dataset or version of this feed, so it proves nothing about the lane now. The next nightly check covers it, or re-check it now.",
   notRunYet:
     "This lane is covered by the nightly check and no run has reached it yet.",
 };
@@ -530,6 +542,7 @@ export const LANE_SWEEP_LABELS = {
   skippedNoConnection: "Skipped · no system connected",
   skippedNoEntitySet: "Skipped · feed names no dataset",
   skippedNoService: "Skipped · feed's service cannot be resolved",
+  skippedNoAccess: "Skipped · the broker refuses the lane's access",
   unreadable: "Reached · the secret would not open",
 } as const;
 

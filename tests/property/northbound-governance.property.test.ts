@@ -57,6 +57,8 @@ interface World {
   interfaces: Row[];
   grants: Row[];
   connections: Row[];
+  /** The lane's check ledger row(s) — read by the lane board, never by the broker. */
+  checks: Row[];
 }
 
 const h = vi.hoisted(() => ({
@@ -86,6 +88,11 @@ function matches(row: Row, where: Row | undefined): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, value]) => {
     if (key === "OR") return (value as Row[]).some((w) => matches(row, w));
+    // The lane board's shapes (P0.2): NOT, and `in` over a list.
+    if (key === "NOT") return !matches(row, value as Row);
+    if (value !== null && typeof value === "object" && Array.isArray((value as Row).in)) {
+      return ((value as Row).in as unknown[]).includes(row[key] ?? null);
+    }
     if (value !== null && typeof value === "object" && !(value instanceof Date)) {
       throw new Error(`fake prisma: unsupported where on ${key}: ${JSON.stringify(value)}`);
     }
@@ -99,6 +106,8 @@ vi.mock("@/lib/db/prisma", () => {
     prisma: {
       solutionClient: {
         findUnique: async ({ where }: { where: Row }) => w().clients.find((c) => matches(c, where)) ?? null,
+        // The lane board's read of the app's credentials (P0.2).
+        findMany: async ({ where }: { where: Row }) => w().clients.filter((c) => matches(c, where)),
         update: async () => ({}),
       },
       retiredClientToken: {
@@ -107,7 +116,20 @@ vi.mock("@/lib/db/prisma", () => {
           return r ? { client: r.client } : null;
         },
       },
-      solution: { findFirst: async ({ where }: { where: Row }) => w().solutions.find((s) => matches(s, where)) ?? null },
+      solution: {
+        findFirst: async ({ where }: { where: Row }) => w().solutions.find((s) => matches(s, where)) ?? null,
+        // The lane board's read: the organisation's apps, each with its interfaces.
+        findMany: async ({ where }: { where: Row }) =>
+          w()
+            .solutions.filter((s) => matches(s, where))
+            .map((s) => ({
+              ...s,
+              slug: String(s.id),
+              name: String(s.id),
+              interfaces: w().interfaces.filter((i) => i.solutionId === s.id && i.organizationId === s.organizationId),
+            })),
+      },
+      laneCheck: { findMany: async ({ where }: { where: Row }) => w().checks.filter((c) => matches(c, where)) },
       interface: { findFirst: async ({ where }: { where: Row }) => w().interfaces.find((i) => matches(i, where)) ?? null },
       apiAccessGrant: {
         findMany: async ({ where }: { where: Row }) => w().grants.filter((g) => matches(g, where)),
@@ -203,6 +225,7 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
+import { listLanes, type LaneRow } from "@/lib/coreedge/queries";
 
 /* ── the factors ──────────────────────────────────────────────────────── */
 
@@ -296,6 +319,14 @@ interface Case {
   connections: Connection[];
   /** Another organisation's rows sit beside this one's (see the header). */
   foreign: boolean;
+  /**
+   * The lane's evidence (P0.2): a fresh, passing check made through
+   * `connections[via]` against this feed's dataset and version — or against
+   * another `version` of the feed, or none at all. The broker never reads it;
+   * the lane board may use it only when it was made through the connection
+   * the broker binds.
+   */
+  evidence?: { via: number; version: "current" | "earlier" } | null;
 }
 
 /* ── the oracle, from the decision-table runbook ──────────────────────── */
@@ -443,6 +474,10 @@ function buildWorld(c: Case): World {
     tokenHash: k.lookup === "current" ? TOKEN_HASH : "hash_of_the_current_key",
     previousTokenHash: k.lookup === "previous" ? TOKEN_HASH : null,
     overlapForTokenHash: null,
+    // A write key is sealed on the row exactly when the case presents a valid
+    // one (the write-key check itself is stubbed): the lane board reads only
+    // whether one exists.
+    secretsCiphertext: c.writeKey ? "sealed-write-key" : null,
   };
   client.overlapForTokenHash = k.overlapBound ? client.tokenHash : "hash_of_some_other_key";
 
@@ -586,6 +621,29 @@ function buildWorld(c: Case): World {
 
   const solutions: Row[] = c.solution === "MISSING" ? [] : [{ id: SOLUTION, organizationId: ORG, status: c.solution }];
   if (c.foreign) solutions.push({ id: "sol_b", organizationId: ORG_B, status: "ACTIVE" });
+
+  // The lane's check ledger row: fresh and passing, made through the named
+  // connection, against this dataset at the named version of the feed.
+  const evidence = c.evidence === undefined ? { via: 0, version: "current" as const } : c.evidence;
+  const checks: Row[] =
+    evidence === null
+      ? []
+      : [
+          {
+            organizationId: ORG,
+            solutionId: SOLUTION,
+            interfaceId: IFACE,
+            environment: k.env,
+            connectionId: `conn_${evidence.via}`,
+            entitySet: "A_SupplierInvoice",
+            interfaceVersion: evidence.version === "current" ? 1 : 0,
+            probeStatus: "OK",
+            probeAt: new Date(NOW - HOUR),
+            readStatus: "OK",
+            readAt: new Date(NOW - HOUR),
+            readRowCount: 1,
+          },
+        ];
   return {
     clients: k.lookup === "current" || k.lookup === "previous" ? [client] : [],
     retired: k.lookup === "dropped" ? [{ tokenHash: TOKEN_HASH, client }] : [],
@@ -593,6 +651,7 @@ function buildWorld(c: Case): World {
     interfaces,
     grants,
     connections,
+    checks,
   };
 }
 
@@ -684,6 +743,49 @@ async function runBroker(c: Case): Promise<Observed> {
     connectionId: o.connectionId,
   };
 }
+
+/* ── the lane board, on the same world (P0.2) ─────────────────────────── */
+
+/*
+ * THE BOARD IS A PREVIEW OF THE BROKER. For every case, the lane for this
+ * app's feed in the credential's environment is drawn by the real
+ * `listLanes` on the very world the broker just ran in, and two things must
+ * hold in 100% of cases:
+ *
+ *   - a lane drawn Live (or No data, the other "every hop proved") is a lane
+ *     the broker serves;
+ *   - a call the broker serves is never drawn refused at a gate the board
+ *     claims to know — access, key or binding.
+ *
+ * A case speaks for its lane only when the call it makes is the one the lane
+ * is about: the app's CURRENT key (the board holds no token, so a previous,
+ * dropped or unknown one is about the caller, not the lane), its own
+ * interface on the route that interface's mode takes, within its rate limit,
+ * with an idempotency key on a write (a caller's mistake, not the lane's).
+ */
+const GATE_HOPS: ReadonlySet<string> = new Set(["access", "key", "binding"]);
+
+function laneComparable(c: Case): boolean {
+  return (
+    c.cred.lookup === "current" &&
+    c.rate === "allowed" &&
+    c.solution !== "MISSING" &&
+    c.iface.where === "mine" &&
+    (c.route === "write") === (c.iface.mode === "WRITE") &&
+    (c.route === "read" || c.idempotencyKey)
+  );
+}
+
+async function runLane(c: Case): Promise<LaneRow | undefined> {
+  // The same world the broker runs in (buildWorld is deterministic per case).
+  h.world = buildWorld(c);
+  vi.stubEnv("COREEDGE_GRANT_BINDING", c.mode);
+  const lanes = await listLanes(ORG, { now: new Date(NOW) });
+  return lanes.find((l) => l.feedId === IFACE && l.environment === c.cred.env);
+}
+
+/** What the lane comparisons reached, across every grid — so the property is not vacuous. */
+const laneTally = { compared: 0, live: 0, refusedAtGate: 0, servedAndLive: 0, liveCases: [] as string[] };
 
 /* ── generating the cases ─────────────────────────────────────────────── */
 
@@ -957,6 +1059,11 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       mode: pick(["legacy", "strict"] as const),
       connections,
       foreign: flip(0.3),
+      // Through any of the case's connections, or none; rarely an earlier
+      // version of the feed (P0.2, A18).
+      evidence: flip(0.1)
+        ? null
+        : { via: Math.floor(rnd() * Math.max(1, connections.length)), version: flip(0.15) ? "earlier" : "current" },
     });
   }
   return out;
@@ -1012,6 +1119,24 @@ describe("the broker's governance decision agrees with the decision-table oracle
       // organisation's.
       const wantConnection = want.allow ? `conn_${want.connection}` : null;
       if (got.connectionId !== wantConnection) problems.push(`called SAP through ${got.connectionId}, oracle ${wantConnection}`);
+      // The lane board, on the same world (P0.2): Live ⇒ served; served ⇒ not refused at a gate.
+      if (laneComparable(c)) {
+        const lane = await runLane(c);
+        laneTally.compared++;
+        if (lane === undefined) {
+          problems.push("the board drew no lane for this feed and environment");
+        } else {
+          const { status, brokenHop } = lane.verdict;
+          const live = status === "live" || status === "noData";
+          if (live) laneTally.live++;
+          if (live && got.allow) laneTally.servedAndLive++;
+          if (live && laneTally.liveCases.length < 3) laneTally.liveCases.push(JSON.stringify(c));
+          const refusedAtGate = brokenHop !== null && GATE_HOPS.has(brokenHop);
+          if (refusedAtGate) laneTally.refusedAtGate++;
+          if (live && !got.allow) problems.push(`lane drawn ${status}, but the broker refused it (${got.reason})`);
+          if (got.allow && refusedAtGate) problems.push(`the broker served it, but the lane is drawn ${status} at ${brokenHop}`);
+        }
+      }
       if (problems.length > 0 && failures.length < 5) failures.push(`${problems.join("; ")}\n  case: ${JSON.stringify(c)}`);
       else if (problems.length > 0) failures.push("");
     }
@@ -1019,6 +1144,50 @@ describe("the broker's governance decision agrees with the decision-table oracle
     // Not vacuous: the grid reaches both answers.
     expect(reasons.get("ALLOWED") ?? 0).toBeGreaterThan(0);
     expect(reasons.size).toBeGreaterThan(2);
+    // Each grid also draws a lane per case (P0.2), so the largest takes a few
+    // seconds on a loaded machine: the default 5 s is a scheduler's limit, not
+    // the property's.
+  }, 60_000);
+
+  it("replacing a connection demotes the lane (P0.2 acceptance, A18)", async () => {
+    // Connection 0 served the lane and its check proves the lane Live. Then it
+    // is deactivated and connection 1 replaces it for the same environment:
+    // the broker binds 1 at once, and the check made through 0 proves nothing
+    // about 1. The lane must not stay Live on it.
+    const base = baseCase("read");
+    const served: Case = { ...base, connections: [GOOD_CONNECTION("TEST")], evidence: { via: 0, version: "current" } };
+    expect((await runBroker(served)).allow).toBe(true);
+    expect((await runLane(served))?.verdict.status).toBe("live");
+
+    const replaced: Case = {
+      ...base,
+      connections: [{ ...GOOD_CONNECTION("TEST"), active: false }, GOOD_CONNECTION("TEST")],
+      evidence: { via: 0, version: "current" },
+    };
+    const broker = await runBroker(replaced);
+    expect(broker.allow).toBe(true);
+    expect(broker.connectionId).toBe("conn_1");
+    const lane = (await runLane(replaced))!;
+    expect(lane.verdict.status).not.toBe("live");
+    expect(lane.verdict.status).toBe("unknown");
+    expect(lane.verdict.unchecked).toBe("changedSinceCheck");
+    // Once the new connection is checked, the lane is Live again.
+    expect((await runLane({ ...replaced, evidence: { via: 1, version: "current" } }))?.verdict.status).toBe("live");
+  });
+
+  it("an edited feed does not inherit its old proof (A18)", async () => {
+    const c: Case = { ...baseCase("read"), evidence: { via: 0, version: "earlier" } };
+    expect((await runBroker(c)).allow).toBe(true);
+    expect((await runLane(c))?.verdict.status).toBe("unknown");
+  });
+
+  it("compared the lane board with the broker on most cases, reaching Live and refusals alike (P0.2)", () => {
+    // Runs after the grids above (a file's tests run in order). Not vacuous:
+    // thousands of comparisons, lanes drawn Live that the broker served, and
+    // lanes refused at a gate.
+    expect(laneTally.compared).toBeGreaterThan(10_000);
+    expect(laneTally.servedAndLive).toBeGreaterThan(100);
+    expect(laneTally.refusedAtGate).toBeGreaterThan(1_000);
   });
 
   it("exercises the second organisation, the grant-match edit and every verification shape", () => {

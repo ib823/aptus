@@ -19,7 +19,8 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { LEGACY_TOKEN_PREFIX, overlapIsOpen, overlapStillBound } from "@/lib/northbound/key-policy";
+import { solutionRefusal } from "@/lib/northbound/authorisation";
+import { keyRefusal, LEGACY_TOKEN_PREFIX, overlapStillBound } from "@/lib/northbound/key-policy";
 import { tenantScopeOf, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /**
@@ -120,9 +121,9 @@ export async function checkSolutionRuntime(
     where: { id: solutionId, organizationId },
     select: { status: true },
   });
-  if (!solution) return { ok: false, reason: "SOLUTION_MISSING" };
-  if (solution.status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
-  return { ok: true };
+  // The lane board asks the same function of the app's status (P0.2).
+  const refused = solutionRefusal(solution?.status ?? null);
+  return refused === null ? { ok: true } : { ok: false, reason: refused };
 }
 
 /** What authentication reads from the row. Never the hashes, never the sealed write key. */
@@ -215,14 +216,9 @@ export async function authenticateClientToken(
   // Revocation is checked before "inactive": a revoked token is a security
   // event worth seeing in the audit as exactly that. It is also checked
   // before the overlap, so a revoked row refuses its previous key as REVOKED.
-  if (row.revokedAt !== null) return { ok: false, reason: "REVOKED" };
-  if (!row.isActive) return { ok: false, reason: "INACTIVE" };
-  if (viaPreviousKey && (!previousKeyBound || !overlapIsOpen(row.previousValidUntil, now))) {
-    return { ok: false, reason: "ROTATED_OUT" };
-  }
-  if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) {
-    return { ok: false, reason: "EXPIRED" };
-  }
+  // One rule with the lane board's key hop (key-policy.ts keyRefusal, P0.2).
+  const refused = keyRefusal(row, now, { viaPreviousKey, previousKeyBound });
+  if (refused !== null) return { ok: false, reason: refused };
 
   // Checked LAST, after the token's own states: a revoked token on a retired
   // solution should audit as REVOKED, which is the more specific event.

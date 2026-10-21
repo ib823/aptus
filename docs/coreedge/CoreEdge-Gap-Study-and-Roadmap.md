@@ -124,7 +124,7 @@ Durations are **[estimate]** and assume 3-4 engineers; P0 and P1 were re-estimat
    - the Workbench write-back audit (P0.7) needs no setting. Confirm that `S4_TDD_WRITE_ENABLED` is unset in production unless the write-back is wanted there (`docs/runbooks/sap-workbench-write-back.md`).
 
    Until then, the shared production host must not hold real SAP credentials. It also holds third-party client data [R1 §1].
-3. **Switch on the governance fixes, then close the rest.** P0.1 fixed grants not bound to an interface (A47), activation gates that could be bypassed (A46) and departed owners still counting as owners (A69). Move `COREEDGE_GRANT_BINDING` from `legacy` to `strict` once `pnpm grants:binding --check` exits 0 (`docs/runbooks/coreedge-grant-binding.md`), and `TENANT_SCOPE_GUARD` to `throw` after seven clean days (`docs/runbooks/coreedge-step-up.md`). Lanes that disagree with the broker are still open (P0.2).
+3. **Switch on the governance fixes, then close the rest.** P0.1 fixed grants not bound to an interface (A47), activation gates that could be bypassed (A46) and departed owners still counting as owners (A69). Move `COREEDGE_GRANT_BINDING` from `legacy` to `strict` once `pnpm grants:binding --check` exits 0 (`docs/runbooks/coreedge-grant-binding.md`), and `TENANT_SCOPE_GUARD` to `throw` after seven clean days (`docs/runbooks/coreedge-step-up.md`). P0.2 made the lane board answer from the broker's own authorisation predicate, so a lane drawn Live is one the broker serves.
 4. **Extract the governed pipeline** (P0.14). The simulator work is done (P0.15): CoreEdge's cells are generated from the code, CI regenerates and checks every simulated figure in this document, and a property test checks the broker's governance decision against the written rules on every pull request.
 5. **Product owner decisions** (section 9.3):
    - the licence for distributed SDKs, CLI and connector;
@@ -1097,6 +1097,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 - Acceptance:
   - Property test: "live" implies "the broker would serve" in 100% of generated cases.
   - Replacing a connection demotes the lane.
+- Status: shipped in Phase 0b wave 2. `authorisesHere`, `bindingFor` and the write route's gates live in `src/lib/northbound/authorisation.ts`; the read and write routes, discovery's `callable`, the lane board (`src/lib/coreedge/lane-authorisation.ts`, `queries.ts`) and the lane sweep and Re-check (`planLaneCheck`) all answer from them, wave 1a's grant binding and key state included. Evidence is keyed by connection, entity set and interface version (`LaneCheck.entitySet`, `interfaceVersion`; a re-saved connection drops its checks), unproven hops are drawn "not checked", and connection health decays after 48 hours (`connectionHealthVerdict`). The governance property test draws the lane for every case and asserts Live implies served and served implies not refused at a gate. No call-path behaviour changed and no setting was added. Operator notes: `docs/runbooks/coreedge-lane-truth.md`.
 
 **P0.3 Truthful registers and screens (A29, A30, A45, A51, A58, A59, A61, A62, A63).** Size M. Depends on: P0.2.
 - Problem: screens tell operators untrue things, for example Catalogue Health saying CURRENT after any probe, the passport listing expired access as current, and the jobs strip omitting two crons. Creates cannot be switched on from any screen either: no UI calls `/api/studio/clients/write-credential`, the connection form has no write-secret field, a re-save resets `writeEnabled` to false (`src/app/api/studio/connections/route.ts:559,587`) and PATCH refuses to enable writes (`:627-632`), while `src/components/studio/InterfacesClient.tsx:232` tells users to issue the write credential "under API Access".
@@ -2343,12 +2344,14 @@ The implementation counts every consumer of an SAP-side tuple at once, since the
 
 **Fixed in P0.6** (Phase 0b): A71, A72, A73, A74 and A75. Operator steps: `docs/runbooks/sap-ariba-explorer.md`.
 
-**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1, P0.5 and P0.6 have since fixed eleven of them, so 22 remain open:
+**Fixed in P0.2** (Phase 0b wave 2): A14, A15, A16, A17, A18, A19, A50, A60 and A70. Operator notes: `docs/runbooks/coreedge-lane-truth.md`.
+
+**Open after batches 1 and 2 (33)**, each assigned to a roadmap item; P0.1, P0.2, P0.4, P0.5 and P0.6 have since fixed twenty-four of them, so the nine of P0.3 remain open:
 
 | Findings | Subject | Item |
 |---|---|---|
 | A46, A47, A52, A69 | Activation gates, grant binding, twin activate 500, departed owners | P0.1 (fixed) |
-| A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 |
+| A14, A15, A16, A17, A18, A19, A50, A60, A70 | Lane evidence and broker disagreement | P0.2 (fixed) |
 | A29, A30, A45, A51, A58, A59, A61, A62, A63 | Untruthful registers and screens | P0.3 |
 | A38, A42, A56, A57 | Stale contracts and fixtures, discovery `callable`, dry-run reason | P0.4 (fixed) |
 | A43, A44 | Rate-limit attribution | P0.5 (fixed) |

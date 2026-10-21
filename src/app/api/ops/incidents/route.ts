@@ -18,6 +18,7 @@ import type { NextRequest } from "next/server";
 
 import type { $Enums } from "@prisma/client";
 
+import { CONNECTION_NEEDS_ATTENTION, CONNECTION_UNREADABLE_STATUS } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
@@ -33,7 +34,8 @@ import { studioOk } from "@/lib/studio/api";
 export const dynamic = "force-dynamic";
 
 /** Probe outcomes that mean the connection is not working, per connections-health. */
-const UNHEALTHY = ["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+// UNREADABLE since P0.2 (A50): the sweep records it when the secret will not open.
+const UNHEALTHY = [...CONNECTION_NEEDS_ATTENTION, CONNECTION_UNREADABLE_STATUS];
 
 /** How far ahead a credential expiry is close enough to act on. */
 const EXPIRY_RUNWAY_DAYS = 14;

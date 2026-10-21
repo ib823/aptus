@@ -1103,6 +1103,14 @@ model LaneCheck {
 
   /// The connection the check ran against, when one was bound.
   connectionId String?
+  /// The entity set the read asked for, and the version of the interface it
+  /// was asked for (P0.2, A18). Evidence proves something only about the
+  /// connection, dataset and feed definition that produced it: the board sets
+  /// aside a row whose connectionId, entitySet or interfaceVersion differs
+  /// from the lane's binding and feed today. NULL on rows written before
+  /// P0.2, which therefore prove nothing until the next check.
+  entitySet        String?
+  interfaceVersion Int?
 
   /// OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | ERROR — metadata reachability.
   probeStatus String?

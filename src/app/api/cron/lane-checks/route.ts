@@ -50,6 +50,7 @@ async function checkLanes(): Promise<NextResponse> {
       skippedNoConnection: result.skippedNoConnection,
       skippedNoEntitySet: result.skippedNoEntitySet,
       skippedNoService: result.skippedNoService,
+      skippedNoAccess: result.skippedNoAccess,
       unreadable: result.unreadable,
       byReadStatus: result.byReadStatus,
     });

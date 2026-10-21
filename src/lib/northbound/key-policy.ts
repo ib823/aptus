@@ -436,6 +436,40 @@ export function isKeyLive(key: KeyLiveness, now: Date): boolean {
   return key.expiresAt == null || key.expiresAt.getTime() > now.getTime();
 }
 
+/** Why a key that resolved to its row does not authenticate, most specific first. */
+export type KeyRefusal = "REVOKED" | "INACTIVE" | "ROTATED_OUT" | "EXPIRED";
+
+/** How the presented key matched its row: as the current key, or as one the row replaced. */
+export interface PresentedKey {
+  /** The key matched the row's previous key, or one the row has dropped. */
+  readonly viaPreviousKey: boolean;
+  /** The overlap still belongs to the row's current key (`overlapStillBound`). */
+  readonly previousKeyBound: boolean;
+}
+
+/** The row's CURRENT key: what the lane board asks about, since it holds no token. */
+export const CURRENT_KEY: PresentedKey = { viaPreviousKey: false, previousKeyBound: false };
+
+/**
+ * THE KEY HOP, as authentication applies it and the lane board previews it
+ * (P0.2): revoked before inactive (a revoked token is a security event worth
+ * seeing as exactly that), then the rotation overlap, then the row's expiry.
+ * `isKeyLive` is this rule for the current key, as a yes or no.
+ */
+export function keyRefusal(
+  row: KeyLiveness & { readonly previousValidUntil?: Date | null },
+  now: Date,
+  presented: PresentedKey = CURRENT_KEY,
+): KeyRefusal | null {
+  if (row.revokedAt != null) return "REVOKED";
+  if (!row.isActive) return "INACTIVE";
+  if (presented.viaPreviousKey && (!presented.previousKeyBound || !overlapIsOpen(row.previousValidUntil, now))) {
+    return "ROTATED_OUT";
+  }
+  if (row.expiresAt != null && row.expiresAt.getTime() <= now.getTime()) return "EXPIRED";
+  return null;
+}
+
 /** The same rule as a Prisma filter, for counts and lists. */
 export function liveKeyWhere(now: Date) {
   return {

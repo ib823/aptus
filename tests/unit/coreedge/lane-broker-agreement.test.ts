@@ -1,0 +1,362 @@
+/**
+ * P0.2: the lane board answers from the broker's own functions. One
+ * regression per audit finding (A14-A19, A50, A60), each written against the
+ * case the finding describes; the property test
+ * (tests/property/northbound-governance.property.test.ts) proves the general
+ * claim — "Live" implies "the broker would serve" — over every generated case.
+ *
+ * Pure: the facts are built by `laneAuthorisation` and `laneEvidence` from
+ * plain rows, exactly as `listLanes` and the sweep build them.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict, describeLastProbe } from "@/lib/coreedge/freshness";
+import {
+  laneAuthorisation,
+  laneEvidence,
+  narrowReadOutcome,
+  type LaneCheckRow,
+  type LaneConnection,
+  type LaneCredentialRow,
+  type LaneGrantRow,
+} from "@/lib/coreedge/lane-authorisation";
+import { deriveLaneStatus, LEDGER_READ_STATUSES, type LaneEnvironment, type LaneFacts } from "@/lib/coreedge/lanes";
+import { readableServices } from "@/lib/coreedge/service-health";
+import type { AuthorisableInterface, BindingEstate } from "@/lib/northbound/authorisation";
+import { ledgerReadStatus, planLaneCheck } from "@/lib/ops/lane-check-sweep";
+import { deriveConnection } from "@/lib/ops/topology";
+import type { GrantBindingMode } from "@/lib/studio/grant-binding";
+
+const NOW = new Date("2026-10-21T12:00:00Z");
+const HOUR = 3_600_000;
+const RECENT = new Date(NOW.getTime() - HOUR);
+
+function feed(patch: Partial<AuthorisableInterface> = {}): AuthorisableInterface {
+  return {
+    id: "if_1",
+    name: "Business partners",
+    solutionId: "sol_1",
+    externalId: "API_BUSINESS_PARTNER",
+    sapProduct: "s4hana",
+    operation: "READ",
+    mode: "READ",
+    status: "ACTIVE",
+    entitySet: "A_BusinessPartner",
+    version: 4,
+    servicePath: null,
+    odataVersion: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    grantMatchChangedAt: null,
+    ...patch,
+  };
+}
+
+function grant(patch: Partial<LaneGrantRow> = {}): LaneGrantRow {
+  return {
+    id: "g_1",
+    decision: "APPROVED",
+    expiresAt: new Date(NOW.getTime() + 30 * 24 * HOUR),
+    revokedAt: null,
+    operation: "READ",
+    externalId: "API_BUSINESS_PARTNER",
+    environment: "PROD",
+    interfaceId: "if_1",
+    sapProduct: "s4hana",
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+    unboundCutoffAt: null,
+    ...patch,
+  };
+}
+
+function credential(patch: Partial<LaneCredentialRow> = {}): LaneCredentialRow {
+  return {
+    environment: "PROD",
+    sapClient: null,
+    isActive: true,
+    revokedAt: null,
+    expiresAt: new Date(NOW.getTime() + 30 * 24 * HOUR),
+    writeKeyIssued: true,
+    ...patch,
+  };
+}
+
+function connection(patch: Partial<LaneConnection> = {}): LaneConnection {
+  return {
+    id: "conn_prod",
+    label: "S/4 PROD",
+    environment: "PROD",
+    client: null,
+    baseUrl: "https://my1.s4hana.ondemand.com",
+    writeEnabled: true,
+    ...patch,
+  };
+}
+
+const FRESH_CHECK: LaneCheckRow = {
+  connectionId: "conn_prod",
+  entitySet: "A_BusinessPartner",
+  interfaceVersion: 4,
+  probeStatus: "OK",
+  probeAt: RECENT,
+  readStatus: "OK",
+  readAt: RECENT,
+  readRowCount: 1,
+};
+
+/** A lane drawn the way listLanes draws it, from rows. */
+function laneFrom(input: {
+  iface?: AuthorisableInterface;
+  environment?: LaneEnvironment;
+  grants?: LaneGrantRow[];
+  credential?: LaneCredentialRow | null;
+  estate?: BindingEstate<LaneConnection>;
+  check?: LaneCheckRow | undefined;
+  bindingMode?: GrantBindingMode;
+}) {
+  const iface = input.iface ?? feed();
+  const auth = laneAuthorisation({
+    iface,
+    solutionId: "sol_1",
+    environment: input.environment ?? "PROD",
+    grants: input.grants ?? [grant()],
+    credential: input.credential === undefined ? credential() : input.credential,
+    estate: input.estate ?? { kind: "connections", connections: [connection()] },
+    now: NOW,
+    bindingMode: input.bindingMode ?? "legacy",
+  });
+  const evidence = laneEvidence("check" in input ? input.check : FRESH_CHECK, auth.connection, iface);
+  const facts: LaneFacts = {
+    lane: { operation: iface.operation as "READ", environment: input.environment ?? "PROD", route: auth.route },
+    appRetired: false,
+    key: auth.key,
+    access: auth.access,
+    binding: auth.binding,
+    probe: evidence.probe,
+    read: evidence.read,
+    evidenceSuperseded: evidence.superseded,
+    sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: true },
+    now: NOW,
+  };
+  return { auth, verdict: deriveLaneStatus(facts) };
+}
+
+describe("the healthy lane the regressions spoil", () => {
+  it("is Live", () => {
+    expect(laneFrom({}).verdict.status).toBe("live");
+  });
+});
+
+describe("A14: the access hop applies the broker's grant and interface rules", () => {
+  it("SANDBOX_ONLY does not authorise a PROD lane, and the sweep does not read it", () => {
+    const g = grant({ decision: "SANDBOX_ONLY" });
+    expect(laneFrom({ grants: [g] }).verdict).toMatchObject({ status: "noAccess", brokenHop: "access" });
+    const plan = planLaneCheck({
+      solutionStatus: "ACTIVE",
+      feed: feed(),
+      environment: "PROD",
+      grants: [g],
+      credential: credential(),
+      estate: { kind: "connections", connections: [connection()] },
+      now: NOW,
+    });
+    expect(plan).toEqual({ ok: false, skipped: "accessRefused" });
+  });
+
+  it("a DEPRECATED feed is refused at access", () => {
+    const v = laneFrom({ iface: feed({ status: "DEPRECATED" }) }).verdict;
+    expect(v.status).toBe("noAccess");
+    expect(v.because).toContain("deprecated");
+  });
+
+  it("READ_ONLY does not authorise a CREATE lane", () => {
+    const iface = feed({ operation: "CREATE", mode: "WRITE" });
+    const v = laneFrom({ iface, grants: [grant({ decision: "READ_ONLY", operation: "CREATE" })] }).verdict;
+    expect(v).toMatchObject({ status: "noAccess", brokenHop: "access" });
+  });
+
+  it("a legacy unbound grant is honoured under legacy and refused under strict, as the broker does (wave 1a)", () => {
+    const unbound = grant({ interfaceId: null, sapProduct: null, unboundCutoffAt: new Date("2026-03-01T00:00:00Z") });
+    expect(laneFrom({ grants: [unbound], bindingMode: "legacy" }).verdict.status).toBe("live");
+    const strict = laneFrom({ grants: [unbound], bindingMode: "strict" }).verdict;
+    expect(strict.status).toBe("noAccess");
+    expect(strict.because).toContain("approving again");
+  });
+
+  it("a grant bound to the same service on ANOTHER product authorises nothing here (A47)", () => {
+    const v = laneFrom({ grants: [grant({ sapProduct: "s4hana-onprem" })] }).verdict;
+    expect(v.status).toBe("noAccess");
+  });
+
+  it("a pending renewal beside a live approval is live access, not In review", () => {
+    // The newest grant used to decide; the broker asks whether ANY grant authorises.
+    const pending = grant({ id: "g_2", decision: "REQUESTED", createdAt: new Date("2026-10-01T00:00:00Z") });
+    expect(laneFrom({ grants: [pending, grant()] }).verdict.status).toBe("live");
+  });
+
+  it("a write lane with no write key issued is refused at the key", () => {
+    const iface = feed({ operation: "CREATE", mode: "WRITE" });
+    const v = laneFrom({
+      iface,
+      grants: [grant({ operation: "CREATE" })],
+      credential: credential({ writeKeyIssued: false }),
+    }).verdict;
+    expect(v).toMatchObject({ status: "noKey", brokenHop: "key" });
+  });
+});
+
+describe("A15: binding is the broker's, on product and SAP client", () => {
+  // Two products in one environment, through listLanes itself:
+  // tests/unit/ops/lane-check-custom-service.test.ts ("binds on the feed's product").
+
+  it("a credential bound to client 080 with only a client-100 connection is refused, never Live on 100's proof", () => {
+    const v = laneFrom({
+      credential: credential({ sapClient: "080" }),
+      estate: { kind: "connections", connections: [connection({ client: "100" })] },
+      check: { ...FRESH_CHECK },
+    }).verdict;
+    expect(v).toMatchObject({ status: "noSapSystem", brokenHop: "binding" });
+    expect(v.because).toContain("SAP client");
+  });
+
+  it("the sweep binds the same way, so it never reads through the other client's row", () => {
+    const plan = planLaneCheck({
+      solutionStatus: "ACTIVE",
+      feed: feed(),
+      environment: "PROD",
+      grants: [grant()],
+      credential: credential({ sapClient: "080" }),
+      estate: {
+        kind: "connections",
+        connections: [connection({ id: "c100", client: "100" }), connection({ id: "c080", client: "080" })],
+      },
+      now: NOW,
+    });
+    expect(plan.ok && plan.connection.id).toBe("c080");
+  });
+
+  it("a connection that will not open is drawn as the broker refuses it", () => {
+    expect(laneFrom({ estate: { kind: "unreadable" } }).verdict.status).toBe("secretUnreadable");
+  });
+
+  it("writes switched off on the bound connection draw the write lane System off", () => {
+    const iface = feed({ operation: "CREATE", mode: "WRITE" });
+    const v = laneFrom({
+      iface,
+      grants: [grant({ operation: "CREATE" })],
+      estate: { kind: "connections", connections: [connection({ writeEnabled: false })] },
+    }).verdict;
+    expect(v).toMatchObject({ status: "systemOff", brokenHop: "binding" });
+  });
+});
+
+describe("A16: an unproven hop is drawn unproven", () => {
+  it("no check at all: access, key and binding passed, the rest not checked", () => {
+    const { verdict } = laneFrom({ check: undefined });
+    expect(verdict.status).toBe("unknown");
+    const state = (hop: string) => verdict.hops.find((h) => h.hop === hop)?.state;
+    expect([state("access"), state("key"), state("binding")]).toEqual(["ok", "ok", "ok"]);
+    expect([state("sapMetadata"), state("sapDataRead"), state("app")]).toEqual(["unknown", "unknown", "unknown"]);
+  });
+
+  it("metadata proven but no read: the read hop and the app are not checked", () => {
+    const { verdict } = laneFrom({ check: { ...FRESH_CHECK, readStatus: null, readAt: null, readRowCount: null } });
+    const state = (hop: string) => verdict.hops.find((h) => h.hop === hop)?.state;
+    expect(state("sapMetadata")).toBe("ok");
+    expect(state("sapDataRead")).toBe("unknown");
+    expect(state("app")).toBe("unknown");
+  });
+});
+
+describe("A17: the reader keeps every status the ledger writes", () => {
+  it("every status ledgerReadStatus can emit narrows to itself", () => {
+    const emitted = new Set([
+      ledgerReadStatus("OK", 200),
+      ledgerReadStatus("EMPTY", 200),
+      ledgerReadStatus("NOT_FOUND", 404),
+      ledgerReadStatus("TIMEOUT", null),
+      ledgerReadStatus("ERROR", 403),
+      ledgerReadStatus("ERROR", 401),
+      ledgerReadStatus("ERROR", 500),
+    ]);
+    for (const s of emitted) {
+      expect(LEDGER_READ_STATUSES).toContain(s);
+      expect(narrowReadOutcome(s)).toBe(s);
+    }
+  });
+
+  it("a 401 read is a refused sign-in, not 'no read has been proven'", () => {
+    const v = laneFrom({ check: { ...FRESH_CHECK, readStatus: "UNAUTHORIZED" } }).verdict;
+    expect(v).toMatchObject({ status: "signInRefused", brokenHop: "sapDataRead" });
+  });
+
+  it("a 404 read says the dataset was not found", () => {
+    const v = laneFrom({ check: { ...FRESH_CHECK, readStatus: "NOT_FOUND" } }).verdict;
+    expect(v.status).not.toBe("live");
+    expect(v.because).toContain("404");
+    expect(v.because).not.toContain("no read has been proven");
+  });
+});
+
+describe("A18: evidence is tied to the connection, dataset and feed version that produced it", () => {
+  it("a check made through a replaced connection is set aside", () => {
+    const v = laneFrom({
+      estate: { kind: "connections", connections: [connection({ id: "conn_new" })] },
+    }).verdict;
+    expect(v).toMatchObject({ status: "unknown", unchecked: "changedSinceCheck" });
+  });
+
+  it("a check against another entity set, or an earlier version of the feed, is set aside", () => {
+    expect(laneFrom({ check: { ...FRESH_CHECK, entitySet: "A_Other" } }).verdict.status).toBe("unknown");
+    expect(laneFrom({ check: { ...FRESH_CHECK, interfaceVersion: 3 } }).verdict.status).toBe("unknown");
+    // A row written before P0.2 says nothing about what it proved.
+    expect(laneFrom({ check: { ...FRESH_CHECK, entitySet: null, interfaceVersion: null } }).verdict.status).toBe(
+      "unknown",
+    );
+  });
+});
+
+describe("A19: 'Never checked' is decided by the probe status, not by the last success", () => {
+  it("a connection failing every night is not 'Never'", () => {
+    const cell = describeLastProbe({ lastValidationStatus: "UNAUTHORIZED", lastValidatedAt: null }, NOW);
+    expect(cell.headline).toBe("UNAUTHORIZED");
+    expect(cell.detail).toBe("last succeeded never");
+  });
+
+  it("only a connection with no recorded status reads Never checked", () => {
+    expect(describeLastProbe({ lastValidationStatus: null, lastValidatedAt: null }, NOW).headline).toBe("Never checked");
+  });
+});
+
+describe("A50: connection health decays", () => {
+  const old = new Date(NOW.getTime() - CONNECTION_PROOF_TTL_MS - HOUR);
+
+  it("an OK older than the TTL is stale, not healthy", () => {
+    expect(connectionHealthVerdict({ lastValidationStatus: "OK", lastValidatedAt: RECENT }, NOW)).toBe("healthy");
+    expect(connectionHealthVerdict({ lastValidationStatus: "OK", lastValidatedAt: old }, NOW)).toBe("stale");
+    expect(connectionHealthVerdict({ lastValidationStatus: "UNREADABLE", lastValidatedAt: RECENT }, NOW)).toBe(
+      "unreadable",
+    );
+  });
+
+  it("the topology lens no longer draws a stale OK as observed-good", () => {
+    const d = deriveConnection(
+      { environment: "PROD", lastValidationStatus: "OK", lastValidatedAt: old, isActive: true },
+      NOW,
+    );
+    expect(d.state).toBe("never-observed");
+    expect(d.badge).toBe("STALE");
+  });
+});
+
+describe("A60: 'Services readable' counts only fresh proof", () => {
+  it("a read proven months ago is not readable", () => {
+    const months = new Date(NOW.getTime() - 120 * 24 * HOUR);
+    const rows = [
+      { metadataStatus: "OK", metadataAt: RECENT, readStatus: "OK", readAt: RECENT, readRowCount: 1 },
+      { metadataStatus: "OK", metadataAt: months, readStatus: "OK", readAt: months, readRowCount: 1 },
+      { metadataStatus: "OK", metadataAt: RECENT, readStatus: "EMPTY", readAt: RECENT, readRowCount: 0 },
+    ];
+    expect(readableServices(rows, NOW)).toEqual({ readable: 2, unproven: 1 });
+  });
+});

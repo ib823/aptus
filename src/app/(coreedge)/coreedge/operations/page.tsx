@@ -159,6 +159,7 @@ export default async function OperationsBoard(): Promise<ReactNode> {
                   ["skippedNoConnection", sweep.skippedNoConnection],
                   ["skippedNoEntitySet", sweep.skippedNoEntitySet],
                   ["skippedNoService", sweep.skippedNoService],
+                  ["skippedNoAccess", sweep.skippedNoAccess],
                   ["unreadable", sweep.unreadable],
                 ] as const
               ).map(([key, value]) => (

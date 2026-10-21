@@ -67,14 +67,42 @@ function feed(id: string, path: string | null, extra: Record<string, unknown> = 
   return {
     id,
     name: id,
+    solutionId: "sol_1",
     sapProduct: "s4hana-onprem",
     externalId: path ? `custom:${path}` : "API_BUSINESS_PARTNER",
     entitySet: "A_Travel",
     operation: "READ",
+    mode: "READ",
     status: "ACTIVE",
+    version: 1,
     servicePath: path,
     odataVersion: path ? "V2" : null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    grantMatchChangedAt: null,
     ...extra,
+  };
+}
+
+/**
+ * An approved DEV grant bound to the feed (P0.2: the sweep and the re-check
+ * read SAP only for a lane the broker would serve).
+ */
+function approved(f: { id: string; solutionId: string; externalId: string }, environment = "DEV") {
+  return {
+    id: `g_${f.id}_${environment}`,
+    organizationId: "org_a",
+    solutionId: f.solutionId,
+    externalId: f.externalId,
+    operation: "READ",
+    environment,
+    decision: "APPROVED",
+    expiresAt: null,
+    revokedAt: null,
+    interfaceId: f.id,
+    sapProduct: "s4hana-onprem",
+    unboundLastUsedAt: null,
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+    unboundCutoffAt: null,
   };
 }
 
@@ -138,9 +166,9 @@ describe("resolveLaneServicePath", () => {
 
 describe("the nightly sweep", () => {
   it("reads each custom feed on its own path, and never asks the catalogue", async () => {
-    mocks.findSolutions.mockResolvedValue([
-      { id: "sol_1", organizationId: "org_a", interfaces: [feed("if_a", PATH_A), feed("if_b", PATH_B)] },
-    ]);
+    const feeds = [feed("if_a", PATH_A), feed("if_b", PATH_B)];
+    mocks.findSolutions.mockResolvedValue([{ id: "sol_1", organizationId: "org_a", status: "ACTIVE", interfaces: feeds }]);
+    mocks.findGrants.mockResolvedValue(feeds.map((f) => approved(f)));
     const result = await sweepLaneChecks(new Date("2026-10-20T04:30:00Z"));
     expect(result.checked).toBe(2);
     expect(result.skippedNoService).toBe(0);
@@ -151,9 +179,9 @@ describe("the nightly sweep", () => {
   });
 
   it("skips a custom feed whose stored path no longer resolves, as the broker would refuse it", async () => {
-    mocks.findSolutions.mockResolvedValue([
-      { id: "sol_1", organizationId: "org_a", interfaces: [feed("if_bad", "/a/../b")] },
-    ]);
+    const bad = feed("if_bad", "/a/../b");
+    mocks.findSolutions.mockResolvedValue([{ id: "sol_1", organizationId: "org_a", status: "ACTIVE", interfaces: [bad] }]);
+    mocks.findGrants.mockResolvedValue([approved(bad)]);
     const result = await sweepLaneChecks();
     expect(result.skippedNoService).toBe(1);
     expect(mocks.readEntitySet).not.toHaveBeenCalled();
@@ -180,11 +208,15 @@ describe("a RESTRICTED app still carries traffic, so its lanes are still checked
   }
 
   it("the nightly sweep checks a RESTRICTED app's feeds, and never a DRAFT or RETIRED one's", async () => {
+    const r = feed("if_r", PATH_A, { solutionId: "sol_r" });
+    const d = feed("if_d", PATH_B, { solutionId: "sol_d" });
+    const x = feed("if_x", PATH_B, { solutionId: "sol_x" });
     solutionsByStatus([
-      { id: "sol_r", organizationId: "org_a", status: "RESTRICTED", interfaces: [feed("if_r", PATH_A)] },
-      { id: "sol_d", organizationId: "org_a", status: "DRAFT", interfaces: [feed("if_d", PATH_B)] },
-      { id: "sol_x", organizationId: "org_a", status: "RETIRED", interfaces: [feed("if_x", PATH_B)] },
+      { id: "sol_r", organizationId: "org_a", status: "RESTRICTED", interfaces: [r] },
+      { id: "sol_d", organizationId: "org_a", status: "DRAFT", interfaces: [d] },
+      { id: "sol_x", organizationId: "org_a", status: "RETIRED", interfaces: [x] },
     ]);
+    mocks.findGrants.mockResolvedValue([approved(r), approved(d), approved(x)]);
     const result = await sweepLaneChecks(new Date("2026-10-20T04:30:00Z"));
     expect(result.checked).toBe(1);
     expect(mocks.readEntitySet.mock.calls.map((c) => (c[0] as { servicePath: string }).servicePath)).toEqual([
@@ -195,18 +227,7 @@ describe("a RESTRICTED app still carries traffic, so its lanes are still checked
   it("the lane board does not call a RESTRICTED app's lane unchecked because the app is not live", async () => {
     const f = feed("if_a", PATH_A);
     solutionsByStatus([{ id: "sol_1", slug: "app", name: "App", status: "RESTRICTED", interfaces: [f] }]);
-    mocks.findGrants.mockResolvedValue([
-      {
-        solutionId: "sol_1",
-        externalId: f.externalId,
-        operation: "READ",
-        environment: "DEV",
-        decision: "APPROVED",
-        expiresAt: null,
-        revokedAt: null,
-        createdAt: new Date(),
-      },
-    ]);
+    mocks.findGrants.mockResolvedValue([approved(f)]);
     const lanes = await listLanes("org_a");
     const dev = lanes.find((l) => l.environment === "DEV")!;
     // Unchecked only because the sweep has not reached it yet, never as "not live".
@@ -216,7 +237,9 @@ describe("a RESTRICTED app still carries traffic, so its lanes are still checked
 
 describe("the manual re-check", () => {
   it("re-checks a custom feed on its own path", async () => {
-    mocks.findInterface.mockResolvedValue(feed("if_a", PATH_A));
+    const f = feed("if_a", PATH_A);
+    mocks.findInterface.mockResolvedValue({ ...f, solution: { status: "ACTIVE" } });
+    mocks.findGrants.mockResolvedValue([approved(f)]);
     const out = await recheckOneLane("org_a", "sol_1", "if_a", "DEV");
     expect(out).toMatchObject({ ok: true, readStatus: "OK" });
     expect(mocks.readEntitySet.mock.calls[0]![0]).toMatchObject({ servicePath: PATH_A, entitySet: "A_Travel" });
@@ -230,21 +253,31 @@ describe("the lane board", () => {
     return [{ id: "sol_1", slug: "app", name: "App", status: "ACTIVE", interfaces: [f] }];
   }
 
+  it("binds on the feed's product: another product's system in the same environment is not a second claimant (A15)", async () => {
+    // The organisation runs an on-premise ERP and SuccessFactors, both DEV.
+    // The board counted both as candidates for every DEV lane and drew
+    // "Binding refused", while the broker binds per product and served it.
+    const f = feed("if_a", PATH_A);
+    mocks.findSolutions.mockResolvedValue(solutionWith(f));
+    mocks.findGrants.mockResolvedValue([approved(f)]);
+    mocks.findConnections.mockResolvedValue([
+      { id: "conn_1", organizationId: "org_a", environment: "DEV", label: "ERP DEV" },
+      { id: "conn_sf", organizationId: "org_a", environment: "DEV", label: "SuccessFactors DEV" },
+    ]);
+    mocks.resolveSapConnections.mockImplementation(async (_org: string, product: string) =>
+      product === "s4hana-onprem"
+        ? [RESOLVED]
+        : [{ ...RESOLVED, id: "conn_sf", key: "sf-dev", product, label: "SuccessFactors DEV" }],
+    );
+    const dev = (await listLanes("org_a")).find((l) => l.environment === "DEV")!;
+    expect(dev.verdict.status).not.toBe("bindingRefused");
+    expect(dev.verdict.brokenHop).not.toBe("binding");
+  });
+
   it("does not claim a custom feed's service cannot be resolved", async () => {
     const f = feed("if_a", PATH_A);
     mocks.findSolutions.mockResolvedValue(solutionWith(f));
-    mocks.findGrants.mockResolvedValue([
-      {
-        solutionId: "sol_1",
-        externalId: f.externalId,
-        operation: "READ",
-        environment: "DEV",
-        decision: "APPROVED",
-        expiresAt: null,
-        revokedAt: null,
-        createdAt: new Date(),
-      },
-    ]);
+    mocks.findGrants.mockResolvedValue([approved(f)]);
     const lanes = await listLanes("org_a");
     const dev = lanes.find((l) => l.environment === "DEV")!;
     expect(JSON.stringify(dev.verdict)).not.toContain("feedServiceUnresolved");
@@ -253,18 +286,7 @@ describe("the lane board", () => {
   it("does say so for a custom feed whose path no longer resolves", async () => {
     const f = feed("if_bad", "/a/../b");
     mocks.findSolutions.mockResolvedValue(solutionWith(f));
-    mocks.findGrants.mockResolvedValue([
-      {
-        solutionId: "sol_1",
-        externalId: f.externalId,
-        operation: "READ",
-        environment: "DEV",
-        decision: "APPROVED",
-        expiresAt: null,
-        revokedAt: null,
-        createdAt: new Date(),
-      },
-    ]);
+    mocks.findGrants.mockResolvedValue([approved(f)]);
     const lanes = await listLanes("org_a");
     const dev = lanes.find((l) => l.environment === "DEV")!;
     expect(JSON.stringify(dev.verdict)).toContain("feedServiceUnresolved");

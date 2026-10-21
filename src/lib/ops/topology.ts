@@ -67,6 +67,8 @@
  */
 import type { $Enums } from "@prisma/client";
 
+import { connectionHealthVerdict } from "@/lib/coreedge/freshness";
+
 export type NodeKind =
   | "caller"
   | "credential"
@@ -408,7 +410,7 @@ export interface ConnectionInput {
  * asking and being answered. Undeclared environment outranks it, because that
  * is a standing defect while a missing probe is only an absence of information.
  */
-export function deriveConnection(c: ConnectionInput): DerivedGrant {
+export function deriveConnection(c: ConnectionInput, now: Date = new Date()): DerivedGrant {
   if (!c.environment) {
     return {
       state: "defect",
@@ -429,6 +431,14 @@ export function deriveConnection(c: ConnectionInput): DerivedGrant {
   }
   if (c.lastValidatedAt == null) {
     return { state: "never-observed", ended: null, quiet: false, badge: null };
+  }
+  /*
+   * GREEN MEANS RECENTLY (P0.2, A50). An OK older than the connection proof
+   * TTL is a claim about our evidence, not about SAP: drawn as not observed,
+   * with a badge saying why, never as observed-good.
+   */
+  if (connectionHealthVerdict(c, now) === "stale") {
+    return { state: "never-observed", ended: null, quiet: false, badge: "STALE" };
   }
   return { state: "observed-good", ended: null, quiet: false, badge: null };
 }

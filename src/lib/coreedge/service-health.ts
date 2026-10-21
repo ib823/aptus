@@ -27,6 +27,52 @@ export interface ServiceHealthFacts {
   readonly readRowCount: number | null;
 }
 
+const METADATA_STATUSES: readonly MetadataStatus[] = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+const READ_STATUSES: readonly ReadStatus[] = ["OK", "EMPTY", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR"];
+
+/**
+ * A stored SapServiceHealth row as facts. The columns are free text; a value
+ * nobody defined becomes null — "we do not know" — never a cast.
+ */
+export function serviceHealthFactsOf(row: {
+  readonly metadataStatus: string | null;
+  readonly metadataAt: Date | null;
+  readonly readStatus: string | null;
+  readonly readAt: Date | null;
+  readonly readRowCount: number | null;
+}): ServiceHealthFacts {
+  return {
+    metadataStatus: (METADATA_STATUSES as readonly string[]).includes(row.metadataStatus ?? "")
+      ? (row.metadataStatus as MetadataStatus)
+      : null,
+    metadataAt: row.metadataAt,
+    readStatus: (READ_STATUSES as readonly string[]).includes(row.readStatus ?? "") ? (row.readStatus as ReadStatus) : null,
+    readAt: row.readAt,
+    readRowCount: row.readRowCount,
+  };
+}
+
+/**
+ * "Services readable N of M" (A60): a service counts as readable only when
+ * its verdict is Live or No data — a fresh metadata check AND a fresh read.
+ * The screen counted every OK or EMPTY read of any age, so a service last read
+ * months ago for a since-retired app stayed "readable" forever. `unproven` is
+ * the rest that are not failing: no fresh proof either way.
+ */
+export function readableServices(
+  rows: readonly Parameters<typeof serviceHealthFactsOf>[0][],
+  now: Date = new Date(),
+): { readonly readable: number; readonly unproven: number } {
+  let readable = 0;
+  let unproven = 0;
+  for (const row of rows) {
+    const { status } = verdictForService(serviceHealthFactsOf(row), now);
+    if (status === "live" || status === "noData") readable++;
+    else if (status === "unknown") unproven++;
+  }
+  return { readable, unproven };
+}
+
 export interface ServiceVerdict {
   readonly status: LaneStatus;
   readonly because: string;

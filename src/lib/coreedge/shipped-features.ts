@@ -145,6 +145,14 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     ],
   },
   {
+    id: "lane-broker-agreement",
+    name: "One authorisation predicate for the lane board and the broker",
+    roadmap: "P0.2",
+    cells: [GOVERN],
+    code: { file: "src/lib/northbound/authorisation.ts", exports: ["authorisesHere", "bindingFor"] },
+    terms: [/\bauthorisesHere\b/, /\bone authorisation predicate\b/i],
+  },
+  {
     id: "owner-liveness",
     name: "Owner liveness (departed owners stop counting)",
     roadmap: "P0.1",
