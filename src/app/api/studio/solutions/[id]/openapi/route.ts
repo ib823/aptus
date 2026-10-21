@@ -50,6 +50,7 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { documentLimit, jsonBytesUpTo, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
 import {
+  documentAllowanceMessage,
   documentInputTooLargeMessage,
   documentOutputTooLargeMessage,
   documentTooLargeMessage,
@@ -63,7 +64,7 @@ import { multiInterfaceInfoVersion, type ContractForDoc, type SampledSchema } fr
 import { documentInputBytes, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
-import { studioError } from "@/lib/studio/api";
+import { studioError, studioUnavailableFor } from "@/lib/studio/api";
 import { withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { capturedSchemaFacts, capturedSchemaReadable, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
@@ -264,6 +265,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         return studioError("TOO_LARGE", documentInputTooLargeMessage("solution document", LIMITS.renderInput.bytes));
       case "UNAVAILABLE":
         return studioError("UNAVAILABLE", documentUnavailableMessage("solution document"));
+      case "ALLOWANCE":
+        return studioUnavailableFor(documentAllowanceMessage("solution document", rendered.detail), rendered.retryAfterSeconds);
     }
   }
   const body = rendered.texts[0]!;

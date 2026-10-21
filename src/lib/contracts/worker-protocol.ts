@@ -17,7 +17,7 @@ export interface WorkerReply {
   value?: unknown;
   /** The thrown error's name, or HEAP_NOT_CAPPED, when !ok. */
   error?: string;
-  /** The CPU time the job's thread used, in ms, when Node measures it (compile.worker.ts). */
+  /** The CPU time the job itself used on its thread, in ms — not its isolate's start — when Node measures it (compile.worker.ts). */
   cpuMs?: number | undefined;
 }
 

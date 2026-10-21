@@ -421,7 +421,8 @@ describe("OpenAPI 3.0.3 schemas mean what they say", () => {
     }
     const so = oas30Validator(doc30(slice("sales-order-rap.v4.xml", "SalesOrder"), "SalesOrder"), "SalesOrder");
     expect(so({ SalesOrder: "1", NetValue: null }), JSON.stringify(so.errors)).toBe(true);
-  });
+    // Compiles a validator for every component of six services: seconds on a loaded runner (7.7 s measured), not the default 5.
+  }, 60_000);
 });
 
 describe("Edm.Binary", () => {

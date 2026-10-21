@@ -73,7 +73,7 @@ import { Prisma } from "@prisma/client";
 import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { nextSemver, semverParts, type Bump, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
-import { runInEnvelope } from "@/lib/contracts/envelope";
+import { ALLOWANCE_CAUSE, runInEnvelope } from "@/lib/contracts/envelope";
 import { contractBodies } from "@/lib/contracts/json-schema";
 import { isJsonTextRef, jsonTextOf, jsonTextRef } from "@/lib/contracts/render-input";
 import type { InterfaceContract } from "@/lib/contracts/ir";
@@ -186,10 +186,21 @@ async function diffsInEnvelope(
   previous: InterfaceContract[],
   next: InterfaceContract,
   deadlineAt: number | null,
-): Promise<{ ok: true; value: DiffJobOutput } | { ok: false; reason: EnvelopeRefusal }> {
-  // Under the organisation's share of the envelope (envelope.ts), and inside the caller's own deadline.
-  const r = await runInEnvelope({ kind: "diff", input: { previous, next } }, undefined, { tenant: scope.organizationId, deadlineAt });
-  return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
+): Promise<{ ok: true; value: DiffJobOutput } | { ok: false; reason: EnvelopeRefusal; detail: string; cause?: string }> {
+  /*
+   * Under the organisation's share of the envelope (envelope.ts), and inside
+   * the caller's own deadline. ADMITTED (structural hardening round 6): a
+   * record diffs only a contract its verify's compile (or this record's
+   * prepare) was admitted for and ran, so the diff is charged to the
+   * allowance and never refused by it — a compile that was paid for is not
+   * then thrown away at its diff, nor reported as "too many at once".
+   */
+  const r = await runInEnvelope({ kind: "diff", input: { previous, next } }, undefined, {
+    tenant: scope.organizationId,
+    deadlineAt,
+    admitted: true,
+  });
+  return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason, detail: r.detail, ...(r.cause ? { cause: r.cause } : {}) };
 }
 
 /**
@@ -309,9 +320,12 @@ export async function recordContractSnapshot(input: {
           status: "REFUSED",
           reason: compared.reason,
           detail:
-            compared.reason === "BUSY"
-              ? "Too many contracts are being compiled at once, so this one was not compared with its previous version. Verify again in a moment."
-              : "The contract could not be compared with its previous version within the compiler's limits, so it was not recorded.",
+            // A spent allowance says whose time and when, in the envelope's words, never "in a moment".
+            compared.cause === ALLOWANCE_CAUSE
+              ? compared.detail
+              : compared.reason === "BUSY"
+                ? "Too many contracts are being compiled at once, so this one was not compared with its previous version. Verify again in a moment."
+                : "The contract could not be compared with its previous version within the compiler's limits, so it was not recorded.",
         };
       }
       const diffs = compared.value;

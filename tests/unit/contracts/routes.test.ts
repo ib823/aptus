@@ -23,6 +23,8 @@ import path from "path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { longestStall } from "../../helpers/stall";
+
 // Each compile, diff and record-time render runs in a real worker thread
 // (lib/contracts/envelope.ts), which loads the compiler from source here:
 // seconds per test on a loaded runner, not milliseconds.
@@ -184,6 +186,7 @@ import { kitLimit, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget"
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
+import { chargeEnvelopeAllowance, memoryAllowanceStore, setEnvelopeAllowanceForTest } from "@/lib/contracts/envelope-allowance";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
@@ -1032,24 +1035,6 @@ describe("a read of a contract at the caps does not block the request thread", (
     return { contract: slice.contract, bytes: contractDigest(slice.contract).bytes };
   }
 
-  /** The longest the event loop went without running a 5 ms ticker while `work` ran. */
-  async function longestStall<T>(work: () => Promise<T>): Promise<{ value: T; ms: number }> {
-    let longest = 0;
-    let last = performance.now();
-    const ticker = setInterval(() => {
-      const now = performance.now();
-      longest = Math.max(longest, now - last);
-      last = now;
-    }, 5);
-    try {
-      const value = await work();
-      longest = Math.max(longest, performance.now() - last);
-      return { value, ms: longest };
-    } finally {
-      clearInterval(ticker);
-    }
-  }
-
   /** Before any fix: 500-1,000 ms for /schema, 1,300-1,400 ms for the kit, ~900 ms for the document. */
   const STALL_MS = 250;
 
@@ -1091,6 +1076,55 @@ describe("a read of a contract at the caps does not block the request thread", (
     expect(solution.value.status).toBe(200);
     expect(await solution.value.text()).toContain('"F17999"');
     expect(solution.ms, "solution document").toBeLessThan(STALL_MS);
+  }, 180_000);
+
+  /*
+   * STRUCTURAL HARDENING, ROUND 6: a read refused because the organisation's
+   * read allowance is spent (envelope-allowance.ts) says so, and when there is
+   * more — /schema in its note, the kit and the document in a 503 with
+   * Retry-After — never "retry in a moment", which would be refused the same
+   * way for up to an hour or a day.
+   */
+  it("with the organisation's read allowance spent, /schema, the kit and the document say so and when it returns", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const hostile = hostileContract(18_000);
+    await verify();
+    const snap = db.snapshots[0]!;
+    snap.ir = hostile.contract;
+    snap.irBytes = hostile.bytes;
+    const clock = { now: Date.UTC(2026, 9, 21, 10, 30, 0) };
+    setEnvelopeAllowanceForTest({ store: memoryAllowanceStore(() => clock.now), clock: () => clock.now });
+    try {
+      vi.stubEnv("COREEDGE_ENVELOPE_READ_SECONDS_PER_HOUR", "30");
+      await chargeEnvelopeAllowance("org_a", 30_000, "read");
+
+      const d = await data<{ contract: { schemas: unknown; schemasOmitted?: string; schemasNote?: string } }>(await schemaRoute());
+      expect(d.contract.schemas).toBeNull();
+      expect(d.contract.schemasOmitted).toBe("UNAVAILABLE");
+      expect(d.contract.schemasNote).toMatch(/used all the time the contract compiler may spend rendering .* this hour/);
+      expect(d.contract.schemasNote).toMatch(/available again in about 30 minutes/);
+      expect(d.contract.schemasNote).not.toMatch(/in a moment/);
+
+      const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+      expect(kit.status).toBe(503);
+      expect(kit.headers.get("retry-after")).toBe("1800");
+      const kitError = ((await kit.json()) as { error: { code: string; message: string } }).error;
+      expect(kitError.code).toBe("UNAVAILABLE");
+      expect(kitError.message).toMatch(/^This starter kit could not be generated: This organisation has used all the time/);
+      expect(kitError.message).not.toMatch(/in a moment/);
+
+      const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
+      expect(doc.status).toBe(503);
+      expect(doc.headers.get("retry-after")).toBe("1800");
+      expect(((await doc.json()) as { error: { message: string } }).error.message).toMatch(/available again in about 30 minutes/);
+
+      // The organisation's builders still verify: reads never spend the compile allowance.
+      const verified = await data<{ contract: Row }>(await verify());
+      expect(verified.contract.status).not.toBe("NOT_COMPILED");
+    } finally {
+      setEnvelopeAllowanceForTest(null);
+      vi.unstubAllEnvs();
+    }
   }, 180_000);
 
   it("a small contract is still answered on the request thread, byte for byte as before", async () => {

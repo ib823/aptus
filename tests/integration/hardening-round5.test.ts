@@ -24,6 +24,8 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { longestStall } from "../helpers/stall";
+
 vi.setConfig({ testTimeout: 180_000 });
 
 /** Every statement the app's client sends, counted (the base client's query events). */
@@ -63,24 +65,6 @@ const ORG = `${RUN}-org`;
 const OTHER = `${RUN}-other`;
 const scope = tenantScopeOf(ORG);
 let solutionId = "";
-
-/** The longest the event loop went without running a 5 ms ticker while `work` ran. */
-async function longestStall<T>(work: () => Promise<T>): Promise<{ value: T; ms: number }> {
-  let longest = 0;
-  let last = performance.now();
-  const ticker = setInterval(() => {
-    const now = performance.now();
-    longest = Math.max(longest, now - last);
-    last = now;
-  }, 5);
-  try {
-    const value = await work();
-    longest = Math.max(longest, performance.now() - last);
-    return { value, ms: longest };
-  } finally {
-    clearInterval(ticker);
-  }
-}
 
 /** The statements `work` sent. */
 async function counted<T>(work: () => Promise<T>): Promise<{ value: T; queries: number }> {

@@ -532,9 +532,9 @@ envelope, and the envelope's resources over time
   31-day month), set by `COREEDGE_ENVELOPE_TENANT_SECONDS_PER_HOUR`,
   `COREEDGE_ENVELOPE_TENANT_SECONDS_PER_DAY` and
   `COREEDGE_ENVELOPE_DEPLOYMENT_SECONDS_PER_DAY`. A deployment on a plan
-  with more Active CPU (Pro, with Spend Management) raises them; read-path
-  renders are charged too, so a deployment whose consumers read very large
-  contracts' `/schema` often sizes the allowance for them.
+  with more Active CPU (Pro, with Spend Management) raises them. (Round 6
+  changed who the deployment's day refuses, gave read-path renders windows
+  of their own, and charges a job its own work: below.)
 - **The isolates leave the request thread a CPU.** `envelopeIsolateSlots()`
   is now also at most one fewer than the instance's CPUs, and at least one:
   one isolate on a one- or two-CPU instance. The CPUs are
@@ -554,6 +554,75 @@ envelope, and the envelope's resources over time
   of its size and refused it, while `/schema` and the solution document
   served the capture. A METADATA snapshot budgets the kit by its size;
   otherwise the captured schema it renders does.
+
+**Structural hardening, round 6.** Round 5's limits were each per job or
+per organisation; what they SHARED between organisations — the deployment's
+daily allowance and, on a one- or two-CPU instance, the only isolate — could
+be spent for everyone by one or two of them. Each shared resource is now
+handed out so that no group of organisations can take another's part of it
+(`tests/unit/contracts/hardening-round6.test.ts`):
+
+- **The deployment's day refuses only an organisation past its floor.** Two
+  organisations at their 60 s days (or four within one hour) spent the 110 s
+  deployment day, and every tenant's verify was `NOT_COMPILED` until 00:00
+  UTC. Now, once the deployment's day is spent, an organisation that has used
+  less than its floor of its own day (`tenantFloorDayMs`, 15 s,
+  `COREEDGE_ENVELOPE_TENANT_FLOOR_SECONDS_PER_DAY`) still compiles; only one
+  past its floor is refused for the deployment's day. The deployment's
+  compile time is then bounded by its day plus a floor per organisation
+  active that day — watch the `allowance` refusals' log lines, and lower the
+  floor or raise the day to suit the plan.
+- **Reads have an allowance of their own.** A read path's render in the
+  envelope (`/schema` and its `/v1` alias of a contract over 512 KiB, a kit
+  of large fixtures, a document of many interfaces) is charged to the
+  reading organisation's read hour and read day (30 s and 60 s,
+  `COREEDGE_ENVELOPE_READ_SECONDS_PER_HOUR`, `…_PER_DAY`), never to its
+  compile windows nor to the deployment's day. About 430 `/schema` reads of
+  a 553 KB contract spent the whole deployment's day before; now a
+  consumer's polling spends its own organisation's reads and nothing else,
+  and its builders keep verifying.
+- **A job is charged its own work.** The worker measures CPU from the start
+  of the job (`compile.worker.ts`), not from its isolate's start: that start
+  is 50-90 ms of CPU for every job in the production bundle, no description
+  can make it larger, and it was two to three times a real verify's own
+  work. Each job is charged its own CPU plus a flat 10 ms
+  (`JOB_BASE_CHARGE_MS`). A real verify (compile and diff of a 3-12 KB
+  description) then costs about 50-120 ms (30-100 ms of compile, a few of
+  diff, and the two flat charges), against 200-260 ms before: the 15 s floor
+  alone is well over a hundred verifies a day for each organisation, and its
+  60 s day several hundred.
+- **The verify's diff is admitted with its compile.** The allowance was
+  checked again before the record's diff, so a verify whose compile pushed
+  the organisation over its hour paid for the compile and then had its diff
+  refused, reported as "too many contracts are being compiled at once". The
+  record's diff now runs `admitted` (`EnvelopeOptions.admitted`): charged,
+  never refused for the allowance.
+- **A turn at the isolate.** With one isolate (any instance of one or two
+  CPUs), two organisations' hostile compiles — 9-15 s each — held it back to
+  back, and every other tenant's job behind them reached the end of its own
+  wait: a verify `NOT_COMPILED`, a large `/schema` `UNAVAILABLE`. A job now
+  holds an isolate at most `ENVELOPE_ISOLATE_TURN_MS` (2 s, counted from its
+  worker coming online; `COREEDGE_ENVELOPE_ISOLATE_TURN_MS`) while a job of
+  another organisation waits for one; then it is ended `BUSY`, cause
+  `isolate-turn`, its time charged. Real descriptions compile in tens to
+  hundreds of milliseconds, inside a turn; with nobody else waiting a job
+  keeps its isolate to its own deadline. Since the isolate's queue holds only
+  jobs with a compile or render slot (four at most), a job waits at most a
+  few turns for an isolate however many organisations queue.
+- **A refusal for the allowance says so.** `/schema` answered "too many
+  large contracts are being rendered at once. Retry in a moment", and the kit
+  and the document "Try again in a moment", while the wait was up to a day.
+  A read refused for the allowance is now `ALLOWANCE` in `read-render.ts`,
+  carrying the envelope's own detail and wait: `/schema`'s `schemasNote`
+  says whose time is spent and when it returns, and the kit and the solution
+  document answer 503 `UNAVAILABLE` with that message and `Retry-After`.
+- **The stall tests measure the thread's work.** The containment suites'
+  "the event loop kept ticking" assertions measured wall-clock gaps between
+  ticks, which a loaded runner stretches by itself (229-301 ms measured
+  against limits of 200 and 250, code unchanged). They now measure this
+  thread's CPU time between ticks (`tests/helpers/stall.ts`), which
+  contention does not add to; the slow golden 3.0-tooling test has its own
+  timeout.
 
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with

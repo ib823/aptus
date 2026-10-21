@@ -22,6 +22,8 @@ import path from "path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { longestStall } from "../../helpers/stall";
+
 import { kitLimit, LIMITS, schemaLimit } from "@/lib/contracts/budget";
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
@@ -98,24 +100,6 @@ function eightMiBOfSets(): string {
 }
 
 const xml = (body: string) => new Response(body, { status: 200, headers: { "content-type": "application/xml" } });
-
-/** The longest the event loop went without running a 5 ms ticker while `work` ran. */
-async function longestStall<T>(work: () => Promise<T>): Promise<{ value: T; ms: number }> {
-  let longest = 0;
-  let last = performance.now();
-  const ticker = setInterval(() => {
-    const now = performance.now();
-    longest = Math.max(longest, now - last);
-    last = now;
-  }, 5);
-  try {
-    const value = await work();
-    longest = Math.max(longest, performance.now() - last);
-    return { value, ms: longest };
-  } finally {
-    clearInterval(ticker);
-  }
-}
 
 describe("the verify: turns, a bounded summary, and no description-sized work on this thread", () => {
   it("one organisation's verifies take turns before SAP is asked: past its share, BUSY with nothing fetched", async () => {

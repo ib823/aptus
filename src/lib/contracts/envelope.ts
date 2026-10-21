@@ -49,7 +49,15 @@
  *     deployment's day (envelope-allowance.ts); a job of an organisation
  *     whose allowance is spent is refused BUSY before it takes a slot. And
  *     the isolates live at once leave the request thread a CPU
- *     (envelopeIsolateSlots).
+ *     (envelopeIsolateSlots);
+ *   - NOTHING SHARED IS SPENT FOR EVERYONE (structural hardening round 6): a
+ *     job holds an isolate at most a turn (envelopeIsolateTurnMs) while
+ *     another organisation's job waits for one, so two or ten organisations'
+ *     hostile compiles cannot keep a third's out of an instance's only
+ *     isolate; read-path renders spend an allowance of their own, and the
+ *     deployment's day refuses only an organisation past its floor of it
+ *     (envelope-allowance.ts); the diff of a verify whose compile was
+ *     admitted is charged, never refused, for the allowance (`admitted`).
  *
  * Whatever runs past any of them ends as a typed refusal (RESOURCE_LIMIT,
  * BUSY, UNAVAILABLE), which the verify reports as a contract that was not
@@ -92,7 +100,13 @@ import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
 import { LIMITS } from "@/lib/contracts/budget";
-import { allowanceRefusalDetail, chargeEnvelopeAllowance, checkEnvelopeAllowance } from "@/lib/contracts/envelope-allowance";
+import {
+  allowanceRefusalDetail,
+  chargeEnvelopeAllowance,
+  checkEnvelopeAllowance,
+  JOB_BASE_CHARGE_MS,
+  type AllowanceKind,
+} from "@/lib/contracts/envelope-allowance";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 import type { CompiledService, EnvelopeRefusal, Job, JobOutput, RenderSubject } from "@/lib/contracts/pipeline";
@@ -245,8 +259,12 @@ const EXIT_GRACE_MS = 5_000;
 
 export type EnvelopeResult<T> =
   | { ok: true; value: T; ms: number }
-  /** `cause`: a code or an error's name; INPUT_CAUSE when what the job was handed was past its bound. */
-  | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number; cause?: string };
+  /**
+   * `cause`: a code or an error's name; INPUT_CAUSE when what the job was
+   * handed was past its bound. `retryAfterMs`: for a spent allowance
+   * (ALLOWANCE_CAUSE), how long until there is more.
+   */
+  | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number; cause?: string; retryAfterMs?: number };
 
 const DETAIL: Record<EnvelopeRefusal, string> = {
   RESOURCE_LIMIT:
@@ -302,8 +320,10 @@ const pool = (concurrency: number, queue: number, tenantWaiting: number, tenantR
  * instance's memory is the deployment's (COREEDGE_INSTANCE_MEMORY_MB), or
  * 2,048 MB — the Hobby plan's fixed instance — and never more than the
  * process's own cgroup limit when Node reports one (process.constrainedMemory).
- * One organisation holds at most one isolate at a time, so another always
- * has one.
+ * One organisation holds at most one isolate at a time; and since several
+ * organisations — or one person's several — can hold every isolate there is,
+ * a job holds one at most a turn while another organisation waits for it
+ * (envelopeIsolateTurnMs, below).
  */
 export const DEFAULT_INSTANCE_MEMORY_MB = 2048;
 /** What the server itself holds beside the isolates: 617 MiB measured (next-server with the contract routes loaded), and margin. */
@@ -372,6 +392,122 @@ const POOLS = {
 };
 export type EnvelopePool = keyof typeof POOLS;
 const poolOf = (kind: Job["kind"]): EnvelopePool => (kind === "render" ? "render" : "compile");
+/** A read path's render spends the reading organisation's read allowance; every other job, its compile allowance. */
+const allowanceOf = (kind: Job["kind"]): AllowanceKind => (kind === "render" ? "read" : "compile");
+
+/**
+ * A TURN AT THE ISOLATE (structural hardening round 6). Round 5 left a one-
+ * or two-CPU instance (a Hobby function has one vCPU) one isolate, handed out
+ * first come, first served: two organisations' hostile compiles, each
+ * running to its 15 s deadline, held it back to back, and every other
+ * tenant's job behind them reached the end of its own wait — the verify's
+ * contract NOT_COMPILED, a large /schema UNAVAILABLE. The per-organisation
+ * share does not help (one running each), nor would more isolates: any
+ * number of organisations (signing up is self-service) hold any number.
+ *
+ * So a job holds an isolate at most ENVELOPE_ISOLATE_TURN_MS while a job of
+ * ANOTHER organisation is waiting for one — or for the compile or render
+ * slot it holds beside it: two organisations' long compiles hold both
+ * compile slots of an instance with two isolates just as well — then it
+ * gives the isolate (and its slot) up —
+ * its worker terminated, its time charged, and it answers BUSY (cause
+ * ISOLATE_TURN_CAUSE): a verify's contract NOT_COMPILED, "verify again". A
+ * real description compiles in tens to hundreds of milliseconds and a read
+ * path's render at its largest budget in about 1.5 s, inside a turn; only
+ * one that needs more, AND only while another organisation waits, is cut.
+ * With nobody else waiting a job keeps its isolate to its own deadline.
+ * What one job waits is then bounded however many organisations queue
+ * ahead: the isolate's queue holds only jobs that have a compile or render
+ * slot (ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY), and each of
+ * those ahead of it holds the isolate at most a turn while it waits.
+ * A job with no organisation (a test, a script) is outside it, as it is
+ * outside the shares.
+ */
+export const ENVELOPE_ISOLATE_TURN_MS = 2_000;
+const TURN_MS_RANGE = [100, 60_000] as const;
+
+/** A turn at the isolate, as the deployment configures it (COREEDGE_ENVELOPE_ISOLATE_TURN_MS). */
+export function envelopeIsolateTurnMs(): number {
+  return envInt("COREEDGE_ENVELOPE_ISOLATE_TURN_MS", TURN_MS_RANGE) ?? ENVELOPE_ISOLATE_TURN_MS;
+}
+
+/** The cause of a refusal because the job used its turn at the isolate while another organisation waited. */
+export const ISOLATE_TURN_CAUSE = "isolate-turn";
+
+const TURN_DETAIL =
+  "Other organisations' service descriptions were waiting for the contract compiler and this one had used its turn, so it was not compiled. Verify again in a moment.";
+
+/**
+ * A job holding an isolate: whose, since when its worker ran (its turn is
+ * counted from its worker coming online — the isolate's start is the same
+ * for every job, and no description's doing), and how to end its turn.
+ */
+interface IsolateHolder {
+  readonly tenant: string | null;
+  /** The pool whose slot the job also holds (its compile or render slot). */
+  readonly pool: EnvelopePool;
+  since: number | null;
+  stop: (() => void) | null;
+  stopped: boolean;
+  timer: ReturnType<typeof setTimeout> | undefined;
+}
+
+const holders = new Set<IsolateHolder>();
+
+/**
+ * For each organisation waiting for an isolate — or for the compile or
+ * render slot a running job holds beside its isolate, which two
+ * organisations' long jobs can hold just as well — and allowed one by its
+ * share, end the turn of the job that has held one longest past its turn,
+ * if it is another organisation's.
+ */
+function endTurnsForWaiters(): void {
+  const turnMs = envelopeIsolateTurnMs();
+  const now = Date.now();
+  for (const name of ["isolate", "compile", "render"] as const) {
+    const p = POOLS[name];
+    const served = new Set<string>();
+    // A turn already ended whose isolate is still exiting frees a place for one waiter: never end two for it.
+    let freeing = 0;
+    for (const h of holders) if (h.stopped && (name === "isolate" || h.pool === name)) freeing += 1;
+    for (const w of p.waiting) {
+      if (w.tenant === null || served.has(w.tenant) || !withinShare(p, w.tenant)) continue;
+      served.add(w.tenant);
+      if (freeing > 0) {
+        freeing -= 1;
+        continue;
+      }
+      let longest: IsolateHolder | undefined;
+      for (const h of holders) {
+        if (name !== "isolate" && h.pool !== name) continue;
+        if (h.stopped || h.stop === null || h.since === null || h.tenant === null || h.tenant === w.tenant || now - h.since < turnMs) continue;
+        if (!longest || h.since < longest.since!) longest = h;
+      }
+      if (!longest) continue;
+      longest.stopped = true;
+      longest.stop!();
+    }
+  }
+}
+
+/** A job takes an isolate: held, its turn counted once its worker runs (isolateRunning). */
+function holdIsolate(tenant: string | null, pool: EnvelopePool): IsolateHolder {
+  const h: IsolateHolder = { tenant, pool, since: null, stop: null, stopped: false, timer: undefined };
+  holders.add(h);
+  return h;
+}
+
+/** Its worker is online: its turn starts, and is looked at again once it is over. */
+function isolateRunning(h: IsolateHolder): void {
+  if (h.since !== null) return;
+  h.since = Date.now();
+  if (h.tenant !== null) h.timer = setTimeout(endTurnsForWaiters, envelopeIsolateTurnMs());
+}
+
+function letGoOfIsolate(h: IsolateHolder): void {
+  clearTimeout(h.timer);
+  holders.delete(h);
+}
 
 /** May a job of this tenant take a slot now (its organisation's share allowing)? */
 function withinShare(p: Pool, tenant: string | null): boolean {
@@ -638,6 +774,14 @@ export interface EnvelopeOptions {
    * (cause REQUEST_DEADLINE_CAUSE), never a description that needs too much.
    */
   deadlineAt?: number | null;
+  /**
+   * The job continues work the allowance already admitted — the diff of a
+   * verify whose compile (or the record's prepare) was checked and ran
+   * (structural hardening round 6): it is charged, and never refused for the
+   * allowance, so a compile that was paid for is not then thrown away at
+   * its diff.
+   */
+  admitted?: boolean;
 }
 
 /** The cause of a refusal because the caller's own deadline (deadlineAt) came first. */
@@ -663,6 +807,8 @@ export async function withEnvelopeSlot<R>(
   const turn = acquire(p, tenant);
   if (turn === false) return { ok: false, reason: "BUSY" };
   if (turn !== true) {
+    // Waiting for an isolate, or a compile or render slot: a job of another organisation past its turn gives one up (A TURN AT THE ISOLATE).
+    if (name !== "verify") endTurnsForWaiters();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = await Promise.race([
       turn.turn.then(() => false),
@@ -720,12 +866,15 @@ export async function runLoadedInEnvelope<K extends Job["kind"]>(
   const wait = within(limits.deadlineMs);
   if (wait <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
   // The organisation's time over the hour and the day, and the deployment's (envelope-allowance.ts): before any slot.
-  if (tenant !== null) {
-    const allowance = await checkEnvelopeAllowance(tenant);
-    if (!allowance.ok) return refuse("BUSY", kind, queuedAt, ALLOWANCE_CAUSE, allowanceRefusalDetail(allowance));
+  const allowanceKind = allowanceOf(kind);
+  if (tenant !== null && opts.admitted !== true) {
+    const allowance = await checkEnvelopeAllowance(tenant, undefined, allowanceKind);
+    if (!allowance.ok) {
+      return refuse("BUSY", kind, queuedAt, ALLOWANCE_CAUSE, allowanceRefusalDetail(allowance), allowance.retryAfterMs);
+    }
   }
   const charge = (ms: number) => {
-    if (tenant !== null) void chargeEnvelopeAllowance(tenant, ms);
+    if (tenant !== null) void chargeEnvelopeAllowance(tenant, ms, allowanceKind);
   };
   const r = await withEnvelopeSlot(poolOf(kind), tenant, wait, async () => {
     const job = await load();
@@ -734,11 +883,17 @@ export async function runLoadedInEnvelope<K extends Job["kind"]>(
     // Then one of the instance's isolates (envelopeIsolateSlots), waited for within the same time.
     const isolateWait = within(limits.deadlineMs - (Date.now() - queuedAt));
     if (isolateWait <= 0) return refuse<JobOutput<K>>("BUSY", kind, queuedAt, deadlineAt === null ? undefined : REQUEST_DEADLINE_CAUSE);
-    const ran = await withEnvelopeSlot("isolate", tenant, isolateWait, () => {
+    const ran = await withEnvelopeSlot("isolate", tenant, isolateWait, async () => {
       const runMs = within(limits.deadlineMs);
-      if (runMs <= 0) return Promise.resolve(refuse<JobOutput<K>>("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE));
-      // Answered once its worker has exited, so neither slot is free while its isolate lives (EXIT_GRACE_MS).
-      return runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs, charge);
+      if (runMs <= 0) return refuse<JobOutput<K>>("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
+      // Held a turn at a time while another organisation waits (A TURN AT THE ISOLATE).
+      const holder = holdIsolate(tenant, poolOf(kind));
+      try {
+        // Answered once its worker has exited, so neither slot is free while its isolate lives (EXIT_GRACE_MS).
+        return await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs, charge, holder);
+      } finally {
+        letGoOfIsolate(holder);
+      }
     });
     return ran.ok ? ran.value : refuse<JobOutput<K>>("BUSY", kind, queuedAt);
   });
@@ -770,10 +925,24 @@ export async function compileInEnvelope(
 }
 
 /** `cause`: what ended the job, as a code or an error's name — never a message, which can quote the description. */
-function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, cause?: string, detail?: string): EnvelopeResult<T> {
+function refuse<T>(
+  reason: EnvelopeRefusal,
+  kind: Job["kind"],
+  since: number,
+  cause?: string,
+  detail?: string,
+  retryAfterMs?: number,
+): EnvelopeResult<T> {
   const ms = Date.now() - since;
   console.error("[contracts] envelope refused", { job: kind, reason, ms, ...(cause ? { cause } : {}) });
-  return { ok: false, reason, detail: detail ?? DETAIL[reason], ms, ...(cause ? { cause } : {}) };
+  return {
+    ok: false,
+    reason,
+    detail: detail ?? DETAIL[reason],
+    ms,
+    ...(cause ? { cause } : {}),
+    ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+  };
 }
 
 /**
@@ -782,8 +951,12 @@ function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, ca
  * not RESOURCE_LIMIT.
  *
  * `charge`: told once, when the job ends, the worker time it used — the CPU
- * time its thread measured, or, for a worker ended before it could say, the
- * time it ran (envelope-allowance.ts).
+ * time the job measured, or, for a worker ended before it could say, the
+ * time it ran — and JOB_BASE_CHARGE_MS for its isolate's start, when one was
+ * made (envelope-allowance.ts).
+ *
+ * `holder`: the job's hold on its isolate, through which its turn is ended
+ * (A TURN AT THE ISOLATE): BUSY, cause ISOLATE_TURN_CAUSE.
  */
 function runWorker<T>(
   job: Job,
@@ -791,6 +964,7 @@ function runWorker<T>(
   since: number,
   cutByCaller = false,
   charge: (ms: number) => void = () => {},
+  holder?: IsolateHolder,
 ): Promise<EnvelopeResult<T>> {
   return new Promise((resolve) => {
     let result: EnvelopeResult<T> | null = null;
@@ -813,7 +987,7 @@ function runWorker<T>(
       if (result !== null) return;
       result = r;
       clearTimeout(timer);
-      charge(reportedCpuMs ?? (runningSince === null ? 0 : Date.now() - runningSince));
+      if (runningSince !== null) charge((reportedCpuMs ?? Date.now() - runningSince) + JOB_BASE_CHARGE_MS);
       // Its memory goes back now, however the job ended; the slot once it has.
       void worker?.terminate().catch(() => {});
       if (!gone) {
@@ -829,10 +1003,13 @@ function runWorker<T>(
       () => settle(cutByCaller ? refuse("BUSY", job.kind, since, REQUEST_DEADLINE_CAUSE) : refuse("RESOURCE_LIMIT", job.kind, since, "deadline")),
       limits.deadlineMs,
     );
+    if (holder) holder.stop = () => settle(refuse("BUSY", job.kind, since, ISOLATE_TURN_CAUSE, TURN_DETAIL));
     spawn(job, limits).then(
       (w) => {
         worker = w;
         runningSince = Date.now();
+        // Its turn at the isolate is counted from here (A TURN AT THE ISOLATE).
+        if (holder) w.once("online", () => isolateRunning(holder));
         w.once("exit", (code) => {
           // An exit before any message: killed by a limit V8 enforces without an error event, or a crash.
           if (result === null) settle(refuse(code === 0 ? "INTERNAL" : "RESOURCE_LIMIT", job.kind, since, `exit ${code}`));

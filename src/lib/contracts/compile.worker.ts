@@ -44,13 +44,21 @@ function withTransfer(job: Job, value: unknown): { value: unknown; transfer: Arr
 }
 
 /**
- * The CPU time this job's thread used (structural hardening round 5): what
- * the envelope charges the organisation's allowance (envelope-allowance.ts).
- * Null where Node has no per-thread measure; the envelope then charges the
- * time the job ran. All of the thread's time, its start and loading
- * included: every job pays for its own isolate.
+ * The CPU time this JOB used on its thread (structural hardening rounds 5
+ * and 6): what the envelope charges the organisation's allowance
+ * (envelope-allowance.ts). Measured from here, once the isolate has started
+ * and the compiler is loaded: that start is the same 50-90 ms for every job
+ * (the production bundle), no description can make it larger, and charging
+ * it made a real verify cost two to three times its own work. The allowance
+ * charges it at a flat rate instead (JOB_BASE_CHARGE_MS). Undefined where
+ * Node has no per-thread measure; the envelope then charges the time the
+ * job ran.
  */
-const cpuSpent = (): number | undefined => threadCpuMs() ?? undefined;
+const startedCpuMs = threadCpuMs();
+const cpuSpent = (): number | undefined => {
+  const at = threadCpuMs();
+  return at === null || startedCpuMs === null ? undefined : Math.max(0, at - startedCpuMs);
+};
 
 const input = workerData as WorkerInput;
 if (v8.getHeapStatistics().heap_size_limit > input.heapLimitBytes) {

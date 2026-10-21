@@ -108,6 +108,15 @@ export function documentUnavailableMessage(what: "starter kit" | "solution docum
 }
 
 /**
+ * A document refused because the organisation's read allowance is spent
+ * (read-render.ts: ALLOWANCE): the envelope's own words for whose time and
+ * when there is more — never "in a moment" (structural hardening round 6).
+ */
+export function documentAllowanceMessage(what: "starter kit" | "solution document", detail: string): string {
+  return `This ${what} could not be generated: ${detail}`;
+}
+
+/**
  * What a document's read knows BEFORE reading any contract (structural
  * hardening round 3): each interface's current snapshot without its IR, the
  * sizes kept at record time — refused past the budget here — and the grants.

@@ -43,6 +43,7 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { jsonBytesUpTo, kitLimit, LIMITS } from "@/lib/contracts/budget";
 import {
+  documentAllowanceMessage,
   documentInputTooLargeMessage,
   documentOutputTooLargeMessage,
   documentTooLargeMessage,
@@ -53,7 +54,7 @@ import {
 } from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
-import { studioError, studioOkJson } from "@/lib/studio/api";
+import { studioError, studioOkJson, studioUnavailableFor } from "@/lib/studio/api";
 import { partitionFixtures, withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { fixtureBodies, fixtureFacts, fixturesWithinBound } from "@/lib/studio/fixture-store";
 import { servedFixtures } from "@/lib/studio/fixtures";
@@ -237,6 +238,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         return studioError("TOO_LARGE", documentInputTooLargeMessage("starter kit", LIMITS.renderInput.bytes));
       case "UNAVAILABLE":
         return studioError("UNAVAILABLE", documentUnavailableMessage("starter kit"));
+      case "ALLOWANCE":
+        return studioUnavailableFor(documentAllowanceMessage("starter kit", rendered.detail), rendered.retryAfterSeconds);
     }
   }
 

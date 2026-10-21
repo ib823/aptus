@@ -88,8 +88,11 @@ describe("the envelope's allowance: an organisation's worker time over the hour 
     vi.stubEnv("COREEDGE_ENVELOPE_TENANT_SECONDS_PER_HOUR", "");
     vi.stubEnv("COREEDGE_ENVELOPE_TENANT_SECONDS_PER_DAY", "");
     vi.stubEnv("COREEDGE_ENVELOPE_DEPLOYMENT_SECONDS_PER_DAY", "");
+    vi.stubEnv("COREEDGE_ENVELOPE_TENANT_FLOOR_SECONDS_PER_DAY", "");
+    vi.stubEnv("COREEDGE_ENVELOPE_READ_SECONDS_PER_HOUR", "");
+    vi.stubEnv("COREEDGE_ENVELOPE_READ_SECONDS_PER_DAY", "");
     expect(envelopeAllowanceLimits()).toEqual(ENVELOPE_ALLOWANCE);
-    // A Hobby plan's Active CPU is 4 CPU-hours a month: the envelope's whole deployment at most a quarter of it.
+    // A Hobby plan's Active CPU is 4 CPU-hours a month: the envelope's whole deployment's compiles at most a quarter of it.
     expect((ENVELOPE_ALLOWANCE.deploymentDayMs * 31) / 3_600_000).toBeLessThanOrEqual(1);
     // One organisation cannot spend the deployment's day alone.
     expect(ENVELOPE_ALLOWANCE.tenantDayMs).toBeLessThan(ENVELOPE_ALLOWANCE.deploymentDayMs);
@@ -151,14 +154,18 @@ describe("the envelope's allowance: an organisation's worker time over the hour 
     expect(!dayOver.ok && dayOver.detail).toMatch(/may use this day/);
   });
 
-  it("the deployment's day bounds every organisation together", async () => {
+  it("the deployment's day bounds every organisation together — past its own floor (round 6)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     ownAllowance({ hour: 60, day: 120, deployment: 100 });
+    vi.stubEnv("COREEDGE_ENVELOPE_TENANT_FLOOR_SECONDS_PER_DAY", "15");
     await chargeEnvelopeAllowance("org_1", 50_000);
     await chargeEnvelopeAllowance("org_2", 50_000);
-    const third = await compileInEnvelope(PARTNER, "A_Partner", null, "org_3");
-    expect(third).toMatchObject({ ok: false, reason: "BUSY" });
-    expect(!third.ok && third.detail).toMatch(/used all the time it may use today on this deployment/);
+    // One that has used more than its floor of the spent day is refused for the deployment's day…
+    const first = await compileInEnvelope(PARTNER, "A_Partner", null, "org_1");
+    expect(first).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(!first.ok && first.detail).toMatch(/used all the time it may use today on this deployment/);
+    // …and one inside its floor is not: the two that spent it cannot take a third's share (round 6).
+    expect(await compileInEnvelope(PARTNER, "A_Partner", null, "org_3")).toMatchObject({ ok: true });
   });
 });
 

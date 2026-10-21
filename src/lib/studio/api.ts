@@ -45,6 +45,17 @@ export function studioError(
   );
 }
 
+/**
+ * UNAVAILABLE for a known wait (contracts/envelope-allowance.ts: an
+ * organisation's spent allowance): the message says when, and Retry-After
+ * says it to a client.
+ */
+export function studioUnavailableFor(message: string, retryAfterSeconds: number): NextResponse {
+  const res = studioError("UNAVAILABLE", message);
+  res.headers.set("retry-after", String(Math.max(1, Math.ceil(retryAfterSeconds))));
+  return res;
+}
+
 export function studioOk<T>(data: T, status = 200): NextResponse {
   return NextResponse.json({ data }, { status });
 }

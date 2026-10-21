@@ -25,6 +25,8 @@ import v8 from "node:v8";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { longestStall } from "../../helpers/stall";
+
 import {
   BudgetExceeded,
   documentLimit,
@@ -325,19 +327,11 @@ describe("the envelope", () => {
 
   it("a compile past its deadline is terminated wherever it is (RESOURCE_LIMIT), and the thread is never blocked", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    let maxGap = 0;
-    let last = performance.now();
-    const ticker = setInterval(() => {
-      const now = performance.now();
-      maxGap = Math.max(maxGap, now - last);
-      last = now;
-    }, 5);
+    const body = largeDescription(300, 110);
     const started = performance.now();
-    const r = await runInEnvelope(
-      { kind: "compile", input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } },
-      { ...ENVELOPE_LIMITS.compile, deadlineMs: 300 },
+    const { value: r, ms: maxGap } = await longestStall(() =>
+      runInEnvelope({ kind: "compile", input: { body, entitySet: "T1", subject: null } }, { ...ENVELOPE_LIMITS.compile, deadlineMs: 300 }),
     );
-    clearInterval(ticker);
     expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
     expect(performance.now() - started).toBeLessThan(2000);
     // The ticker kept running while the worker compiled: the request thread only waited.

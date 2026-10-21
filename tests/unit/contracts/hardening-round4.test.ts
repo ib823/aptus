@@ -25,6 +25,8 @@ import path from "path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { longestStall } from "../../helpers/stall";
+
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { LIMITS, schemaLimit, kitLimit, documentLimit, maxDocumentInterfaces } from "@/lib/contracts/budget";
@@ -148,24 +150,6 @@ const schemaInput = (contract: InterfaceContract, entitySet: string, bytes: numb
 });
 
 const refilled = () => new Promise((resolve) => setTimeout(resolve, 600));
-
-/** The longest the event loop went without running a 2 ms ticker while `work` ran. */
-async function longestStall<T>(work: () => Promise<T>): Promise<{ value: T; ms: number }> {
-  let longest = 0;
-  let last = performance.now();
-  const ticker = setInterval(() => {
-    const now = performance.now();
-    longest = Math.max(longest, now - last);
-    last = now;
-  }, 2);
-  try {
-    const value = await work();
-    longest = Math.max(longest, performance.now() - last);
-    return { value, ms: longest };
-  } finally {
-    clearInterval(ticker);
-  }
-}
 
 /** A solution document of `n` interfaces with no contract: what a builder can make without any SAP. */
 function documentOf(n: number): RenderJobInput {

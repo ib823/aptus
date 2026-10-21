@@ -58,19 +58,30 @@
  * one whose stored input is past what a render may be handed is
  * INPUT_TOO_LARGE, said as such (never as the output's budget); one it
  * cannot start (no free slot within its deadline, no worker) is UNAVAILABLE,
- * and the caller says so and that a retry may succeed.
+ * and the caller says so and that a retry may succeed; one refused because
+ * the reading organisation's read allowance is spent is ALLOWANCE, with the
+ * envelope's own words for whose time it was and when there is more, which
+ * the caller says and sends as Retry-After (round 6) — a retry "in a moment"
+ * would be refused the same way until then.
  */
 
 import { randomUUID } from "node:crypto";
 
 import { LIMITS } from "@/lib/contracts/budget";
-import { INPUT_CAUSE, runLoadedInEnvelope } from "@/lib/contracts/envelope";
+import { ALLOWANCE_CAUSE, INPUT_CAUSE, runLoadedInEnvelope } from "@/lib/contracts/envelope";
 import { renderForRead, type RenderedText, type RenderJobInput } from "@/lib/contracts/pipeline";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 
 export type ReadRender =
   | { ok: true; texts: RenderedText[]; where: "request" | "envelope" }
-  | { ok: false; reason: "TOO_LARGE" | "INPUT_TOO_LARGE" | "UNAVAILABLE"; limit: number };
+  | { ok: false; reason: "TOO_LARGE" | "INPUT_TOO_LARGE" | "UNAVAILABLE"; limit: number }
+  /**
+   * The reading organisation's read allowance is spent (envelope-allowance.ts,
+   * structural hardening round 6): `detail` says whose time and when there is
+   * more, and `retryAfterSeconds` is that wait — what a route says and sends
+   * (Retry-After), never "in a moment".
+   */
+  | { ok: false; reason: "ALLOWANCE"; detail: string; retryAfterSeconds: number; limit: number };
 
 /** What a route knows of a read before reading any of it. */
 export interface ReadPlan {
@@ -236,6 +247,9 @@ export async function renderReadPathLazy<R>(
   if (e === null) return { ok: false, reason: "REFUSED", refusal: (refusal as { value: R } | null)!.value };
   const limit = (input as RenderJobInput | null)?.limit ?? 0;
   if (!e.ok) {
+    if (e.cause === ALLOWANCE_CAUSE) {
+      return { ok: false, reason: "ALLOWANCE", detail: e.detail, retryAfterSeconds: Math.max(1, Math.ceil((e.retryAfterMs ?? 60_000) / 1000)), limit };
+    }
     return {
       ok: false,
       reason: e.cause === INPUT_CAUSE ? "INPUT_TOO_LARGE" : e.reason === "RESOURCE_LIMIT" ? "TOO_LARGE" : "UNAVAILABLE",

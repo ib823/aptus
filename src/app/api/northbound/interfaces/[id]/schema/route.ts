@@ -63,7 +63,9 @@
  * read holds a render slot, and the bytes that come back are spliced into
  * the answer as they are. A read waits its turn for a slot; one that gets
  * none before its deadline leaves `schemas` null with
- * `schemasOmitted: "UNAVAILABLE"`, to retry.
+ * `schemasOmitted: "UNAVAILABLE"`, to retry. One refused because the
+ * organisation's read allowance is spent (round 6) is UNAVAILABLE too, and
+ * its `schemasNote` says so and when there is more, not "in a moment".
  */
 
 import type { NextRequest } from "next/server";
@@ -227,6 +229,8 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   let schemas: string | null = null;
   let requestSchema: string | null = null;
   let unavailable = false;
+  /** Why the schemas could not be rendered, when it is the reading organisation's spent allowance (round 6): its own words. */
+  let unavailableNote: string | null = null;
   let rendered = false;
   if (servable && !tooLarge) {
     const r = await renderReadPathLazy(
@@ -257,6 +261,10 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       requestSchema = raw.slot(r.texts[1]!);
       rendered = true;
     } else if (r.reason === "UNAVAILABLE") unavailable = true;
+    else if (r.reason === "ALLOWANCE") {
+      unavailable = true;
+      unavailableNote = `This contract's schemas could not be rendered: ${r.detail}`;
+    }
     // GONE: the snapshot went while this read was waiting — served as if there were none.
     else if (r.reason !== "REFUSED" || r.refusal === "TOO_LARGE") tooLarge = true;
   }
@@ -279,7 +287,9 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
           : unavailable
             ? {
                 schemasOmitted: "UNAVAILABLE" as const,
-                schemasNote: "This contract's schemas could not be rendered just now (too many large contracts are being rendered at once). Retry in a moment.",
+                schemasNote:
+                  unavailableNote ??
+                  "This contract's schemas could not be rendered just now (too many large contracts are being rendered at once). Retry in a moment.",
               }
             : {}),
       }
