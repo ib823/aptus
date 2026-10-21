@@ -205,6 +205,39 @@ describe("the fleet probe is rate limited, per tenant", () => {
     expect(key).toContain("org-a");
     expect(key).toContain("x5m-100");
   });
+
+  it("an open console circuit refuses BEFORE the window is spent (P0.14b review)", async () => {
+    /*
+     * Enforcing, a run the circuit refuses never reaches the tenant. It must
+     * not cost the tenant its ten-minute window either: the person retrying
+     * after Retry-After would be told "a fleet probe ran moments ago" when
+     * none did.
+     */
+    const { __setGovernedCircuitStore, circuitKeyForConnection, circuitKeyForConsoleRead, governedCircuitBreaker } =
+      await import("@/lib/governed/containment");
+    const { FAILURE_THRESHOLD, MemoryCircuitStore } = await import("@/lib/northbound/circuit-breaker");
+    vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+    __setGovernedCircuitStore(new MemoryCircuitStore({ shared: true }));
+    try {
+      const consoleCircuit = circuitKeyForConsoleRead("org-a", circuitKeyForConnection("c1"));
+      for (let i = 0; i < FAILURE_THRESHOLD; i++) await governedCircuitBreaker().recordOutcome(consoleCircuit, "upstream-error");
+      mocks.requireAuthenticated.mockResolvedValue({ user: CONSULTANT });
+      mocks.resolveReadTenant.mockResolvedValue(OWN_CONNECTION);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const res = await POST(req(BODY) as never);
+
+      expect(res.status).toBe(503);
+      expect((await res.json()).error.code).toBe("CIRCUIT_OPEN");
+      expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+      expect(mocks.findMany).not.toHaveBeenCalled();
+      expect(mocks.probeService).not.toHaveBeenCalled();
+    } finally {
+      __setGovernedCircuitStore(null);
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 describe("the screen does not tell a builder that probing is an admin's job", () => {

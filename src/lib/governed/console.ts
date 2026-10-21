@@ -92,6 +92,7 @@ import {
   type HostCheck,
 } from "@/lib/sap-public/env-tenant-hosts";
 import type { ResolvedReadTenant } from "@/lib/sap-public/tenant-for-read";
+import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
 
 import { circuitKeyForConnection, circuitKeyForConsoleRead, circuitKeyForDeploymentTenant } from "./containment";
 import {
@@ -151,6 +152,14 @@ export interface ConsoleOutcome {
   readonly failureReason?: string | null;
   /** The HTTP status SAP itself gave, for the circuit: its 4xx to a builder's query is not a failing system. */
   readonly sapStatus?: number | null;
+  /**
+   * What the call says about the system's health, when `status` and
+   * `sapStatus` cannot say it: a FAN-OUT, whose row is recorded 200 when the
+   * fan-out itself returned, whatever each of its requests was answered
+   * (`circuitOutcomeForFanOut`). Omitted, the circuit is told
+   * `circuitOutcomeForConsoleRead(status, sapStatus)`: the preview's rule.
+   */
+  readonly circuit?: CallOutcome;
   /** This row's subject, when it is not the call's (a fan-out's sentinel). */
   readonly externalId?: string;
 }
@@ -320,7 +329,7 @@ export class ConsoleCall {
       result = { ok: false, error, durationMs: Date.now() - startedAt };
       outcome = describe.failed(error);
     }
-    await permit.record(circuitOutcomeForConsoleRead(outcome.status, outcome.sapStatus ?? null));
+    await permit.record(outcome.circuit ?? circuitOutcomeForConsoleRead(outcome.status, outcome.sapStatus ?? null));
     await this.record(outcome, { durationMs: result.durationMs, blocked: null });
     return result;
   }
@@ -416,6 +425,65 @@ export class ConsoleCall {
       },
     });
   }
+}
+
+/* ── what a fan-out tells the circuit ────────────────────────────────── */
+
+/**
+ * The circuit outcome of ONE request a fan-out made, from the HTTP status SAP
+ * answered it with; 0 or null when it was never answered (a timeout, a
+ * network error, a system that could not be reached). The preview's rule
+ * (pipeline.ts circuitOutcomeForConsoleRead): a 2xx is a serving system,
+ * SAP's 4xx (its 429 and 400 included) is SAP answering rather than failing,
+ * and only a 5xx or no answer at all counts against it.
+ */
+export function circuitOutcomeForSapStatus(status: number | null): CallOutcome {
+  if (status === null || status === 0) return "upstream-error";
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 504) return "timeout";
+  if (status >= 500) return "upstream-error";
+  return "refused";
+}
+
+/**
+ * WHAT A FAN-OUT SAYS ABOUT THE SYSTEM (P0.14b review). Capabilities, the
+ * entities probe, the catalogue overlay, Probe all and the operations
+ * dashboard each make many requests inside one `callSap`, and their row is
+ * recorded 200 whenever the fan-out itself returned, though every probe in it
+ * may have failed. Told "ok", the console circuit the organization's preview
+ * shares was CLOSED and its failure count reset by a fan-out against a system
+ * that was down, and a half-open circuit's one trial was spent closing it.
+ *
+ * So the circuit is told what the requests say, each by
+ * `circuitOutcomeForSapStatus`:
+ *   - any request answered 2xx: "ok", the system is serving;
+ *   - every request failed (5xx or no answer): ONE failure, since the fan-out
+ *     is one console action;
+ *   - otherwise (SAP's refusals, a mix of refusals and failures, or nothing
+ *     asked at all): "refused", the breaker's neutral answer, which counts
+ *     nothing either way and only releases a half-open trial.
+ */
+export function circuitOutcomeForFanOut(outcomes: readonly CallOutcome[]): CallOutcome {
+  if (outcomes.includes("ok")) return "ok";
+  if (outcomes.length > 0 && outcomes.every((o) => o === "upstream-error" || o === "timeout")) return "upstream-error";
+  return "refused";
+}
+
+/**
+ * A capability probe fan-out's outcome (capability-probe.ts rows): each
+ * service's $metadata status, and its one-row data read's when one was made.
+ * A row whose credential could not be obtained asked the system nothing and
+ * says nothing about it.
+ */
+export function circuitOutcomeForProbes(
+  rows: readonly { readonly status: number; readonly dataStatus?: number; readonly credentialError?: unknown }[],
+): CallOutcome {
+  return circuitOutcomeForFanOut(
+    rows
+      .filter((r) => !r.credentialError)
+      .flatMap((r) => [r.status, ...(r.dataStatus === undefined ? [] : [r.dataStatus])])
+      .map(circuitOutcomeForSapStatus),
+  );
 }
 
 /** The JSON a console route answers a step's refusal with: its code, its sentence, the correlation id. */

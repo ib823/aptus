@@ -55,7 +55,10 @@
  * not. It is never billed: the usage rollup reads only NorthboundAuditEvent.
  * Readers of the WRITE trail filter on `PLATFORM_AUDIT_ACTIONS`, the write
  * actions, so a console read never appears on the write ledger as a write
- * whose outcome is unknown.
+ * whose outcome is unknown. A console read row expires with the
+ * organization's copy of the same read (northbound/retention.ts
+ * `sweepConsoleReads`, the one module allowed to delete audit rows); a write's
+ * rows never do.
  */
 
 import { createHash } from "crypto";

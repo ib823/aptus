@@ -11,11 +11,12 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
-import type { Refusal } from "@/lib/governed/pipeline";
+import { circuitOutcomeForFanOut, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import { circuitOutcomeForConsoleRead, type Refusal } from "@/lib/governed/pipeline";
 import { getCurrentUser } from "@/lib/auth/session";
 import { failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { answeredReadAuditStatus, consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { SapHttpError } from "@/lib/sap-public/upstream-failure";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -54,6 +55,10 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
  * a refused section is a 401/403/404, not a tenant 5xx. And the failureReason
  * beside it, as /preview records it: without one, a row of SAP 429s read 502
  * and nothing else, indistinguishable from a 5xx or a timeout.
+ *
+ * And what the section tells the console circuit, by the preview's own rule
+ * (circuitOutcomeForConsoleRead with SAP's status): a section SAP answered
+ * 429 is recorded 502 but is SAP answering, not failing (P0.14b review).
  */
 async function loadOperationSection(
   product: SapOdataProduct,
@@ -74,8 +79,10 @@ async function loadOperationSection(
       config.limit,
     );
     const fields = chooseFields(preview.rows, config.fields);
+    const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
     return {
-      auditStatus: answeredReadAuditStatus(preview.ok, preview.status),
+      auditStatus,
+      circuit: circuitOutcomeForConsoleRead(auditStatus, preview.status),
       failureReason: failureReasonFromHttp(preview.status),
       section: {
         key: config.key,
@@ -101,6 +108,7 @@ async function loadOperationSection(
     const failure = consoleReadFailure(error, "SAP section load failed");
     return {
       auditStatus: failure.auditStatus,
+      circuit: circuitOutcomeForConsoleRead(failure.auditStatus, error instanceof SapHttpError ? error.status : null),
       failureReason: failure.failureReason,
       section: {
         key: config.key,
@@ -252,6 +260,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           status: decisive === null ? 200 : decisive === undefined || decisive.auditStatus >= 500 ? 502 : decisive.auditStatus,
           rowCount: loaded.length,
           failureReason: decisive?.failureReason ?? null,
+          // The circuit hears what the sections were answered, not the row's
+          // status: every section refused 429 is a 502 row and a healthy
+          // system; every section failing 5xx is one failure.
+          circuit: circuitOutcomeForFanOut(loaded.map((l) => l.circuit)),
         };
       },
       failed: () => ({ status: 502, rowCount: null }),

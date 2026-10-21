@@ -36,7 +36,15 @@ vi.mock("@/lib/audit/platform-audit", async (importOriginal) => ({
   },
 }));
 
-import { ConsolePipelineError, CONSOLE_PRINCIPAL, openConsoleCall, type ConsoleCallInput } from "@/lib/governed/console";
+import {
+  circuitOutcomeForFanOut,
+  circuitOutcomeForProbes,
+  circuitOutcomeForSapStatus,
+  ConsolePipelineError,
+  CONSOLE_PRINCIPAL,
+  openConsoleCall,
+  type ConsoleCallInput,
+} from "@/lib/governed/console";
 import { __setGovernedCircuitStore, governedCircuitBreaker } from "@/lib/governed/containment";
 import { FAILURE_THRESHOLD, MemoryCircuitStore } from "@/lib/northbound/circuit-breaker";
 import {
@@ -296,6 +304,60 @@ describe("contain and callSap", () => {
     });
     expect(h.orgRows[0]).toMatchObject({ externalId: "-probe-fanout-purchase-orders", rowCount: 3 });
     expect(h.platformRows[0]).toMatchObject({ target: { serviceKey: "-probe-fanout-purchase-orders" } });
+  });
+
+  /*
+   * P0.14b review: a fan-out's row is 200 whenever the fan-out returned, so
+   * its circuit outcome is what its requests were answered. Before, the
+   * reviewer's sequence (four failing previews, a capabilities run against the
+   * same dead system, a fifth failing preview) left the sixth preview SENT.
+   */
+  it("a fan-out against a dead system does not reset the circuit the preview counts into", async () => {
+    vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const failingPreview = async () => {
+      const c = open({ target: connection("DEV") });
+      await throughContain(c);
+      await c.callSap(async () => {
+        throw new Error("down");
+      }, { answered: () => ({ status: 200, rowCount: 1 }), failed: () => ({ status: 502, rowCount: null, sapStatus: 500 }) });
+    };
+    for (let i = 0; i < FAILURE_THRESHOLD - 1; i++) await failingPreview();
+    const fanOut = open({ target: connection("DEV"), route: "/api/sap/tdd/capabilities", externalId: "-capabilities-" });
+    await throughContain(fanOut);
+    await fanOut.callSap(async () => [{ status: 503 }, { status: 0 }], {
+      answered: (made) => ({ status: 200, rowCount: made.length, circuit: circuitOutcomeForProbes(made) }),
+      failed: () => ({ status: 502, rowCount: null }),
+    });
+    // The fan-out was ONE failure, so the circuit is open now: the next preview is refused.
+    const next = open({ target: connection("DEV") });
+    await next.authorise();
+    await next.bind();
+    const r = await next.contain();
+    expect(!r.ok && r.refusal.reason).toBe("CIRCUIT_OPEN");
+  });
+
+  it("the circuit hears a fan-out's requests, and the row still records the fan-out", async () => {
+    expect(circuitOutcomeForSapStatus(200)).toBe("ok");
+    expect(circuitOutcomeForSapStatus(204)).toBe("ok");
+    for (const s of [400, 401, 403, 404, 405, 410, 429]) expect(circuitOutcomeForSapStatus(s), String(s)).toBe("refused");
+    expect(circuitOutcomeForSapStatus(500)).toBe("upstream-error");
+    expect(circuitOutcomeForSapStatus(503)).toBe("upstream-error");
+    expect(circuitOutcomeForSapStatus(504)).toBe("timeout");
+    expect(circuitOutcomeForSapStatus(0)).toBe("upstream-error");
+    expect(circuitOutcomeForSapStatus(null)).toBe("upstream-error");
+
+    expect(circuitOutcomeForFanOut(["upstream-error", "ok", "refused"])).toBe("ok");
+    expect(circuitOutcomeForFanOut(["upstream-error", "timeout"])).toBe("upstream-error");
+    expect(circuitOutcomeForFanOut(["upstream-error", "refused"])).toBe("refused");
+    expect(circuitOutcomeForFanOut(["refused", "refused"])).toBe("refused");
+    expect(circuitOutcomeForFanOut([])).toBe("refused");
+
+    // A row whose credential could not be obtained asked nothing; a data read counts.
+    expect(circuitOutcomeForProbes([{ status: 0, credentialError: "unavailable" }])).toBe("refused");
+    expect(circuitOutcomeForProbes([{ status: 503 }, { status: 0, credentialError: "refused" }])).toBe("upstream-error");
+    expect(circuitOutcomeForProbes([{ status: 404 }, { status: 200, dataStatus: 503 }])).toBe("ok");
+    expect(circuitOutcomeForProbes([{ status: 429 }, { status: 429 }])).toBe("refused");
   });
 
   it("records SAP's own refusal as SAP_REFUSED", async () => {

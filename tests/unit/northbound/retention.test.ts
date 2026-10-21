@@ -20,11 +20,18 @@ const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   deleteMany: vi.fn(),
   permit: vi.fn(),
+  platformFindMany: vi.fn(),
+  platformDeleteMany: vi.fn(),
+  outcomeDeleteMany: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     northboundAuditEvent: { findMany: mocks.findMany, deleteMany: mocks.deleteMany },
+    platformAuditEvent: { findMany: mocks.platformFindMany, deleteMany: mocks.platformDeleteMany },
+    platformAuditOutcome: { deleteMany: mocks.outcomeDeleteMany },
+    $transaction: mocks.transaction,
   },
 }));
 vi.mock("@/lib/db/tenant-guard", () => ({ permitCrossTenantReads: mocks.permit }));
@@ -46,6 +53,16 @@ beforeEach(() => {
   mocks.permit.mockReset();
   mocks.findMany.mockResolvedValue([]);
   mocks.deleteMany.mockResolvedValue({ count: 0 });
+  mocks.platformFindMany.mockReset();
+  mocks.platformDeleteMany.mockReset();
+  mocks.outcomeDeleteMany.mockReset();
+  mocks.transaction.mockReset();
+  mocks.platformFindMany.mockResolvedValue([]);
+  mocks.platformDeleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => ({ count: where.id.in.length }));
+  mocks.outcomeDeleteMany.mockImplementation(async ({ where }: { where: { eventId: { in: string[] } } }) => ({
+    count: where.eventId.in.length,
+  }));
+  mocks.transaction.mockImplementation(async (ops: Promise<unknown>[]) => Promise.all(ops));
 });
 
 describe("the configured period", () => {
@@ -226,6 +243,62 @@ describe("the sweep", () => {
     const result = await enforceNorthboundAuditRetention(NOW, 45);
     expect(result.retentionDays).toBe(45);
     expect(result.cutoff).toBe("2026-07-29T00:00:00.000Z");
+  });
+});
+
+/*
+ * P0.14b review: since the console runs on the governed pipeline, every
+ * console read also leaves a platform-scope copy in PlatformAuditEvent
+ * (action SAP_CONSOLE_READ) with the reader's email and the client's tenant,
+ * service and entity set. The organization's copy of the same read expires
+ * here, on the period and legal basis above; the platform copy was kept
+ * forever, on a table that grows by a row per console call and that no
+ * screen shows. It expires with the organization's copy now. The WRITE
+ * actions on that table (P0.7's fail-closed write-back trail) are never
+ * touched.
+ */
+describe("the console's platform-scope read rows expire with the organization's", () => {
+  const CUTOFF = new Date("2026-08-13T00:00:00.000Z");
+
+  it("selects only SAP_CONSOLE_READ rows, by age, oldest first, bounded by the batch", async () => {
+    await enforceNorthboundAuditRetention(NOW, 30);
+    expect(mocks.platformFindMany).toHaveBeenCalledWith({
+      where: { action: "SAP_CONSOLE_READ", at: { lt: CUTOFF } },
+      select: { id: true },
+      orderBy: { at: "asc" },
+      take: RETENTION_BATCH_LIMIT,
+    });
+  });
+
+  it("deletes each row's outcome and the row together, re-asserting the action and the age in both", async () => {
+    mocks.platformFindMany.mockResolvedValueOnce([{ id: "e1" }, { id: "e2" }]).mockResolvedValue([]);
+    const result = await enforceNorthboundAuditRetention(NOW, 30);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.outcomeDeleteMany).toHaveBeenCalledWith({
+      where: { eventId: { in: ["e1", "e2"] }, event: { is: { action: "SAP_CONSOLE_READ", at: { lt: CUTOFF } } } },
+    });
+    expect(mocks.platformDeleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["e1", "e2"] }, action: "SAP_CONSOLE_READ", at: { lt: CUTOFF } },
+    });
+    expect(result).toMatchObject({ deleted: 0, consoleReadsDeleted: 2, moreRemaining: false });
+  });
+
+  it("keeps taking batches until one comes back short, and reports a backlog left on the time budget", async () => {
+    const batch = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `e${i}` }));
+    mocks.platformFindMany.mockResolvedValueOnce(batch(3)).mockResolvedValueOnce(batch(1)).mockResolvedValue([]);
+    expect(await enforceNorthboundAuditRetention(NOW, 30, 3)).toMatchObject({ consoleReadsDeleted: 4, moreRemaining: false });
+
+    mocks.platformFindMany.mockReset();
+    mocks.platformFindMany.mockResolvedValue(batch(3));
+    expect(await enforceNorthboundAuditRetention(NOW, 30, 3, 0)).toMatchObject({ consoleReadsDeleted: 3, moreRemaining: true });
+  });
+
+  it("does not start on them when the organization trail's sweep has already spent the budget", async () => {
+    mocks.findMany.mockResolvedValue(Array.from({ length: 2 }, (_, i) => ({ id: `r${i}`, organizationId: "org_a" })));
+    mocks.deleteMany.mockResolvedValue({ count: 2 });
+    const result = await enforceNorthboundAuditRetention(NOW, 30, 2, 0);
+    expect(result.moreRemaining).toBe(true);
+    expect(mocks.platformFindMany).not.toHaveBeenCalled();
   });
 });
 

@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { NextRequest } from "next/server";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as DynamicCatalog from "@/lib/sap-public/dynamic-catalog";
 
@@ -46,7 +46,8 @@ const RUN_TAG = `P014B${randomUUID().slice(0, 6).toUpperCase()}`;
 
 const h = vi.hoisted(() => ({
   user: null as null | Record<string, unknown>,
-  sap: "ok" as "ok" | "500" | "401",
+  /** "429"/"400": SAP refuses everything (in OData's JSON); "data503": $metadata answers, every data read is a 503. */
+  sap: "ok" as "ok" | "500" | "401" | "429" | "400" | "data503",
   runTag: "",
 }));
 
@@ -83,6 +84,13 @@ import { POST as writeTestRoute } from "@/app/api/sap/tdd/hub-content/write-test
 import { POST as writeRoute } from "@/app/api/sap/tdd/write/route";
 import { GET as aribaCallRoute } from "@/app/api/sap/ariba/call/route";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
+import {
+  __setGovernedCircuitStore,
+  circuitKeyForConnection,
+  circuitKeyForConsoleRead,
+  governedCircuitBreaker,
+} from "@/lib/governed/containment";
+import { FAILURE_THRESHOLD, MemoryCircuitStore } from "@/lib/northbound/circuit-breaker";
 import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 
 const GOLDEN_DIR = join(process.cwd(), "tests/fixtures/console-pipeline");
@@ -160,6 +168,16 @@ async function fakeSap(input: string | URL | Request, init?: RequestInit): Promi
   }
   if (h.sap === "401") return new Response("no", { status: 401, headers: { "content-type": "text/plain" } });
   if (h.sap === "500") return new Response("boom", { status: 500, headers: { "content-type": "text/plain" } });
+  if (h.sap === "429" || h.sap === "400") {
+    const status = Number(h.sap);
+    return new Response(JSON.stringify({ error: { code: String(status), message: { value: "refused" } } }), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (h.sap === "data503" && !url.includes("$metadata")) {
+    return new Response("unavailable", { status: 503, headers: { "content-type": "text/plain" } });
+  }
   if (url.includes("$metadata")) {
     return new Response(edmx(), { status: 200, headers: { "content-type": "application/xml" } });
   }
@@ -571,5 +589,125 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
       expect(writes(a.platform), key).toEqual(writes(b.platform));
       expect(b.platform.filter((r) => (r as { action: string }).action === "SAP_CONSOLE_READ"), key).toEqual([]);
     }
+  });
+
+  /*
+   * THE SHARED CONSOLE CIRCUIT COUNTS ONLY A FAILING SYSTEM (P0.14b review).
+   * Every console read of one system in one organization shares one circuit
+   * (circuitKeyForConsoleRead), so under COREEDGE_CIRCUIT_BREAKER=enforce what
+   * one route tells it decides whether the preview, entities, operations,
+   * capabilities, the catalogue and Probe all answer at all. The preview's
+   * rule holds for every route: SAP's own 4xx (its 429 and 400 included) is
+   * SAP answering, not failing, and counts nothing; a fan-out against a system
+   * that is down is a failure, never the "ok" that closes the circuit.
+   *
+   * Each case gets its own stored connection, so its circuit and Probe all's
+   * per-tenant limit start clean.
+   */
+  describe("the console circuit, under COREEDGE_CIRCUIT_BREAKER=enforce", () => {
+    let n = 0;
+    const fresh = async (product: "s4hana" | "successfactors") => {
+      const key = `${RUN}-circuit-${n++}`;
+      const saved = await upsertSapConnection({
+        organizationId: ORG,
+        product,
+        key,
+        label: `circuit ${n}`,
+        baseUrl: product === "s4hana" ? "https://my000001-api.s4hana.cloud.sap" : "https://api17.sapsf.com",
+        authType: "basic",
+        secrets: { username: "COMM_USER", password: "not-a-real-password" },
+        environment: "DEV",
+        writeEnabled: false,
+      });
+      return { tenant: key, circuit: circuitKeyForConsoleRead(ORG, circuitKeyForConnection(saved.id)) };
+    };
+    /** The circuit one short of opening: the preview has failed FAILURE_THRESHOLD - 1 times. */
+    const almostOpen = async (circuit: string) => {
+      for (let i = 0; i < FAILURE_THRESHOLD - 1; i++) await governedCircuitBreaker().recordOutcome(circuit, "upstream-error");
+    };
+    const state = async (circuit: string) => {
+      const s = await governedCircuitBreaker().snapshot(circuit);
+      return { state: s?.state ?? "closed", failures: s?.consecutiveFailures ?? 0 };
+    };
+
+    beforeAll(() => {
+      vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+    });
+    beforeEach(() => {
+      __setGovernedCircuitStore(new MemoryCircuitStore());
+      h.user = users.dev;
+    });
+    afterEach(async () => {
+      h.sap = "ok";
+      await newRows();
+    });
+    afterAll(() => {
+      vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "");
+      __setGovernedCircuitStore(null);
+      vi.restoreAllMocks();
+    });
+
+    it.each(["429", "400"] as const)("entities: SAP's %s to $metadata is not a failing system", async (answer) => {
+      const t = await fresh("s4hana");
+      await almostOpen(t.circuit);
+      h.sap = answer;
+      expect((await entities(`${S4}&tenant=${t.tenant}&service=purchase-orders&refresh=1`)).status).toBe(502);
+      expect(await state(t.circuit)).toEqual({ state: "closed", failures: FAILURE_THRESHOLD - 1 });
+      // And the preview the organization shares the circuit with still answers.
+      h.sap = "ok";
+      expect((await preview(`${S4}&tenant=${t.tenant}&${PO}`)).status).toBe(200);
+    });
+
+    it.each(["429", "400"] as const)("operations: every section answered %s is not a failing system", async (answer) => {
+      const t = await fresh("s4hana");
+      await almostOpen(t.circuit);
+      h.sap = answer;
+      expect((await operations(`${S4}&tenant=${t.tenant}&refresh=1`)).status).toBe(200);
+      expect(await state(t.circuit)).toEqual({ state: "closed", failures: FAILURE_THRESHOLD - 1 });
+      h.sap = "ok";
+      expect((await preview(`${S4}&tenant=${t.tenant}&${PO}`)).status).toBe(200);
+    });
+
+    it("operations: every section failing 5xx is still one failure", async () => {
+      const t = await fresh("s4hana");
+      await almostOpen(t.circuit);
+      h.sap = "500";
+      await operations(`${S4}&tenant=${t.tenant}&refresh=1`);
+      expect((await state(t.circuit)).state).toBe("open");
+    });
+
+    const deadFanOuts: readonly { route: string; product: "s4hana" | "successfactors"; call: (tenant: string) => Promise<Response> }[] = [
+      { route: "capabilities", product: "s4hana", call: (tenant) => capabilities(`${S4}&tenant=${tenant}`) },
+      { route: "hub-content overlay", product: "successfactors", call: (tenant) => hubList(`${SF}&tenant=${tenant}&dataProbe=1`) },
+      { route: "probe-all", product: "s4hana", call: (tenant) => probeAll({ product: "s4hana", tenant }) },
+    ];
+
+    it.each(deadFanOuts)("$route: a fan-out against a system that is down counts as a failure, never as ok", async (c) => {
+      const t = await fresh(c.product);
+      await almostOpen(t.circuit);
+      h.sap = "500";
+      await c.call(t.tenant);
+      expect(await state(t.circuit)).toEqual({ state: "open", failures: FAILURE_THRESHOLD });
+      // So the next console read is refused before anything is sent, as it would have been.
+      expect((await governedCircuitBreaker().beforeCall(t.circuit)).allowed).toBe(false);
+      if (c.product === "s4hana") expect((await preview(`${S4}&tenant=${t.tenant}&${PO}`)).status).toBe(503);
+    });
+
+    it("entities: a probe fan-out whose every read failed counts, after the $metadata that answered", async () => {
+      const t = await fresh("s4hana");
+      h.sap = "data503";
+      expect((await entities(`${S4}&tenant=${t.tenant}&service=purchase-orders&probe=1&refresh=1`)).status).toBe(200);
+      expect(await state(t.circuit)).toEqual({ state: "closed", failures: 1 });
+    });
+
+    it("a fan-out the system answered still closes the circuit", async () => {
+      const t = await fresh("s4hana");
+      await almostOpen(t.circuit);
+      h.sap = "ok";
+      expect((await capabilities(`${S4}&tenant=${t.tenant}`)).status).toBe(200);
+      expect(await state(t.circuit)).toEqual({ state: "closed", failures: 0 });
+    });
   });
 });

@@ -1765,7 +1765,9 @@ model NorthboundAuditEvent {
 /// two; neither alone is the whole answer.
 model PlatformAuditEvent {
   id     String @id @default(cuid())
-  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST
+  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST (P0.7, kept at any age) |
+  /// SAP_CONSOLE_READ (P0.14b, a console read; deleted with the northbound
+  /// audit after NORTHBOUND_AUDIT_RETENTION_DAYS, lib/northbound/retention.ts)
   action String
 
   /// The person. Not a relation: an audit row must outlive the user it names
@@ -1816,8 +1818,10 @@ model PlatformAuditOutcome {
   eventId String             @unique
   event   PlatformAuditEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND — see
-  /// PLATFORM_AUDIT_OUTCOMES in lib/audit/platform-audit.ts.
+  /// A write: SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND
+  /// (PLATFORM_AUDIT_OUTCOMES). A console read: SUCCEEDED | BLOCKED |
+  /// SAP_REFUSED | FAILED (CONSOLE_READ_OUTCOMES). Both in
+  /// lib/audit/platform-audit.ts.
   outcome    String
   /// The HTTP status SAP answered the create with, when it answered.
   sapStatus  Int?

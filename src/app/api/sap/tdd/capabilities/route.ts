@@ -19,7 +19,7 @@ import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
-import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import { circuitOutcomeForProbes, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
 import type { Refusal } from "@/lib/governed/pipeline";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
@@ -145,9 +145,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const contained = await call.contain();
   if (!contained.ok) return refuse(contained.refusal);
   // probeTenantCapabilities reports each service's outcome rather than
-  // throwing; a throw here is a defect, recorded as a 502 and rethrown.
+  // throwing; a throw here is a defect, recorded as a 502 and rethrown. The
+  // row says the probe ran; the console circuit hears what each service was
+  // answered, so a probe of a system that is down is not an "ok" (P0.14b review).
   const probed = await call.callSap(() => probeTenantCapabilities(product.envPrefix, tenant, services), {
-    answered: (made) => ({ status: 200, rowCount: made.length }),
+    answered: (made) => ({ status: 200, rowCount: made.length, circuit: circuitOutcomeForProbes(made) }),
     failed: () => ({ status: 502, rowCount: null }),
   });
   if (!probed.ok) throw probed.error;

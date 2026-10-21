@@ -26,7 +26,7 @@ import {
   getSapProduct,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
-import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import { circuitOutcomeForProbes, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
 import type { Refusal } from "@/lib/governed/pipeline";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, probeStorageKey, type HubContentType } from "@/lib/sap-public/hub-content";
 import { persistStoredProbe } from "@/lib/sap-public/hub-probe-store";
@@ -181,6 +181,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!bound.ok) return refuse(bound.refusal);
 
   /*
+   * PROBE THE REQUESTED PRODUCT'S OWN CATALOGUE. This queried
+   * `appliesToPublic: true` regardless of `?product=`, so "Probe all" on a
+   * SuccessFactors or RISE tenant fired the S/4 PUBLIC list at it —
+   * manufactured URLs against SF (404 by construction), and the wrong
+   * published set against private/on-prem. Non-edition scopes have no
+   * dynamically-probeable rows at all (path derivation waits for a live
+   * system), and ECC has no list — both refuse honestly instead of storing
+   * hundreds of meaningless outcomes under the tenant's key.
+   */
+  const scope = hubCatalogueScope(product);
+  if (scope.kind !== "edition") {
+    const message =
+      scope.kind === "none"
+        ? scope.reason
+        : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
+    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
+  }
+  // The console's circuit, before the rate limit too (P0.14b review): enforcing,
+  // a run an open circuit refuses never reaches the tenant, so it must not spend
+  // the tenant's ten-minute window either. The permit is recorded only inside
+  // callSap, so taking it here changes nothing else; the product check above
+  // comes first so a request refused for what it asks never takes the circuit's
+  // half-open trial (a 429 below holds it at most PROBE_LEASE_MS).
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
+
+  /*
    * WHERE THIS RUN'S RESULTS ARE FILED. Derived once, outside the worker, from
    * the same resolution that produced the tenant — so the row written here and
    * the row the catalogue reads back cannot be keyed differently.
@@ -218,24 +245,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  /*
-   * PROBE THE REQUESTED PRODUCT'S OWN CATALOGUE. This queried
-   * `appliesToPublic: true` regardless of `?product=`, so "Probe all" on a
-   * SuccessFactors or RISE tenant fired the S/4 PUBLIC list at it —
-   * manufactured URLs against SF (404 by construction), and the wrong
-   * published set against private/on-prem. Non-edition scopes have no
-   * dynamically-probeable rows at all (path derivation waits for a live
-   * system), and ECC has no list — both refuse honestly instead of storing
-   * hundreds of meaningless outcomes under the tenant's key.
-   */
-  const scope = hubCatalogueScope(product);
-  if (scope.kind !== "edition") {
-    const message =
-      scope.kind === "none"
-        ? scope.reason
-        : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
-    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
-  }
   // 2608 WS3 — SAP-deprecated services are skipped by default: probing a
   // retirement proves nothing about readiness and its bucket is DEPRECATED
   // regardless of the answer. `includeDeprecated: true` opts in (the result is
@@ -291,6 +300,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    * and their real answers are stored; nothing more is started.
    */
   let credentialFailure: { kind: "refused" | "unavailable"; detail: string } | null = null;
+  // What each request that left was answered, for the console circuit.
+  const answers: Array<{ status: number }> = [];
 
   async function worker(): Promise<void> {
     while (cursor < targets.length && !credentialFailure) {
@@ -313,6 +324,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         credentialFailure ??= { kind: result.credentialError, detail: result.error ?? "" };
         continue;
       }
+      answers.push({ status: result.status });
       const { read, write } = deriveReadWrite(result.entities ?? []);
       // MERGE under THIS tenant's OWNER-SCOPED key — preserves sibling keys
       // (source/apiId/steps), the legacy singular `probe`, and every other
@@ -333,8 +345,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       byOutcome[bucket] = (byOutcome[bucket] ?? 0) + 1;
     }
   }
-  const contained = await call.contain();
-  if (!contained.ok) return refuse(contained.refusal);
   // `as` because TypeScript cannot see the workers assign it.
   const stoppedBy = () => credentialFailure as { kind: "refused" | "unavailable"; detail: string } | null;
   const run = await call.callSap(
@@ -342,13 +352,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     {
       // A setup problem is a refusal, recorded as one (403); only a token
       // endpoint that failed is a 502. Either way, the tenant was not asked.
+      //
+      // The circuit hears what the services were answered, not the row's 200
+      // (P0.14b review): a run against a system that is down is a failure,
+      // never the "ok" that closes the circuit the preview shares. A run a
+      // credential stopped is told by its status, as the preview tells it.
       answered: () => {
         const stopped = stoppedBy();
-        return { status: stopped ? (stopped.kind === "refused" ? 403 : 502) : 200, rowCount: requested };
+        return stopped
+          ? { status: stopped.kind === "refused" ? 403 : 502, rowCount: requested }
+          : { status: 200, rowCount: requested, circuit: circuitOutcomeForProbes(answers) };
       },
       // The requests already reached the tenant; the row says so even when a
-      // write failed part-way through the run.
-      failed: () => ({ status: 502, rowCount: requested }),
+      // write failed part-way through the run. That failure is the database's,
+      // not SAP's: the circuit hears only what SAP answered.
+      failed: () => ({ status: 502, rowCount: requested, circuit: circuitOutcomeForProbes(answers) }),
     },
   );
   if (!run.ok) throw run.error;

@@ -29,6 +29,11 @@
  * module-local helper, is followed into only where it is mentioned outside
  * those callbacks — the code that runs is the code that is followed.
  *
+ * A mention inside a governed callback is governed only while it runs there:
+ * a SAP-reaching function value the callback returns, assigns out or pushes
+ * onto something outside it would run after `callSap` recorded its outcome,
+ * and is reported (`escapingFrom`, which says what it does not see).
+ *
  * Pure: it takes the sources as data, so the test can feed it sources written
  * to fail it.
  */
@@ -368,6 +373,18 @@ export function routeReaches(graph: SapGraph, file: string): boolean {
   return entry.some((k) => graph.reaching.has(k));
 }
 
+/** A function a governed callback can create or be. */
+function isFunctionLike(n: ts.Node): n is ts.FunctionLikeDeclaration {
+  return (
+    ts.isArrowFunction(n) ||
+    ts.isFunctionExpression(n) ||
+    ts.isFunctionDeclaration(n) ||
+    ts.isMethodDeclaration(n) ||
+    ts.isGetAccessorDeclaration(n) ||
+    ts.isSetAccessorDeclaration(n)
+  );
+}
+
 /** A console call's governed step: what is passed to it runs inside the pipeline. */
 const GOVERNED_METHODS = new Set(["callSap", "callSapWrite"]);
 
@@ -389,6 +406,177 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
   const findings: RouteFinding[] = [];
   const followed = new Set<ts.Node>();
 
+  /** The SAP-reaching binding a reference names, outside the pipeline's own modules; null when none. */
+  const reachingTarget = (ref: Ref): string | null => {
+    if (ref.kind === "fetch") return "global fetch";
+    for (const t of graph.targets(file, ref)) {
+      if (graph.reaching.has(t) && !pipelineModules.has(t.slice(0, t.indexOf("#")))) return t;
+    }
+    return null;
+  };
+
+  /**
+   * A SAP-reaching FUNCTION VALUE that leaves a governed callback, to be called
+   * after `callSap` has recorded its outcome: no row, no circuit (P0.14b review).
+   * What runs inside the callback is governed; a closure it hands out is not.
+   *
+   * A mention of a reaching binding (an import, a module-local helper, an
+   * inner function of the handler, or a local the callback stored one in)
+   * carries a function value when it is not called right there, or when it
+   * sits inside a function the callback creates. That value ESCAPES when it
+   * reaches, through parentheses, `await`, `as`, `?:`, `||`/`??`, `.bind()`,
+   * array and object literals:
+   *   - the callback's return value (its concise body, or a `return` of the
+   *     callback itself),
+   *   - an assignment to anything not declared inside the callback (a
+   *     variable, or a property of one, or of `this`),
+   *   - `push` / `unshift` / `set` / `add` / `splice` on something not
+   *     declared inside the callback.
+   * Stored in a local of the callback instead, the local carries it on.
+   *
+   * WHAT IS NOT SEEN, said plainly: a value handed to a call the callback
+   * makes is taken to be consumed by it (`items.map(k => read(k))`,
+   * `Array.from({ length }, worker)`), so a closure returned through such a
+   * call (`return items.map(k => () => read(k))`) or stored by a helper the
+   * callback calls is not followed; nor is a value that leaves through a
+   * module-level variable a helper writes. Those are the review's to catch.
+   */
+  const escapingFrom = (
+    callback: ts.Node,
+    method: string,
+    inner: ReadonlyMap<string, ts.Node>,
+    innerReaches: (name: string) => boolean,
+  ): Array<Omit<RouteFinding, "handler">> => {
+    const out: Array<Omit<RouteFinding, "handler">> = [];
+    const body = ts.isVariableDeclaration(callback) ? callback.initializer : callback;
+    if (!body || !isFunctionLike(body)) return out;
+
+    // Names declared anywhere inside the callback (shadowing is not modelled: over-approximates "local").
+    const declared = new Set<string>();
+    const collectDeclared = (n: ts.Node): void => {
+      // A catch clause's variable is a VariableDeclaration too.
+      if (ts.isVariableDeclaration(n) || ts.isParameter(n)) for (const nm of bindingNames(n.name)) declared.add(nm);
+      if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name) declared.add(n.name.text);
+      ts.forEachChild(n, collectDeclared);
+    };
+    collectDeclared(body);
+
+    const enclosingFunction = (n: ts.Node): ts.Node | undefined => {
+      for (let p = n.parent; p; p = p.parent) if (isFunctionLike(p)) return p;
+      return undefined;
+    };
+    const rootName = (target: ts.Expression): string | null => {
+      let e: ts.Expression = target;
+      while (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e) || ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e)) {
+        e = e.expression;
+      }
+      return ts.isIdentifier(e) ? e.text : null;
+    };
+    const ASSIGN = new Set([
+      ts.SyntaxKind.EqualsToken,
+      ts.SyntaxKind.QuestionQuestionEqualsToken,
+      ts.SyntaxKind.BarBarEqualsToken,
+      ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ]);
+    const PASS_THROUGH = new Set([ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.QuestionQuestionToken]);
+    const STORE = new Set(["push", "unshift", "set", "add", "splice"]);
+
+    /** Up through what passes a value on unchanged. */
+    const climb = (x: ts.Node): ts.Node => {
+      let cur = x;
+      for (;;) {
+        const p = cur.parent;
+        if (!p || cur === body) return cur;
+        if (
+          ts.isParenthesizedExpression(p) ||
+          ts.isAsExpression(p) ||
+          ts.isSatisfiesExpression(p) ||
+          ts.isNonNullExpression(p) ||
+          ts.isTypeAssertionExpression(p) ||
+          ts.isAwaitExpression(p) ||
+          ts.isSpreadElement(p) ||
+          ts.isArrayLiteralExpression(p) ||
+          ts.isObjectLiteralExpression(p) ||
+          ts.isShorthandPropertyAssignment(p) ||
+          (ts.isPropertyAssignment(p) && p.initializer === cur) ||
+          (ts.isConditionalExpression(p) && p.condition !== cur) ||
+          (ts.isBinaryExpression(p) && PASS_THROUGH.has(p.operatorToken.kind)) ||
+          (ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.CommaToken && p.right === cur)
+        ) {
+          cur = p;
+          continue;
+        }
+        if (ts.isPropertyAccessExpression(p) && p.expression === cur && p.name.text === "bind" && ts.isCallExpression(p.parent) && p.parent.expression === p) {
+          cur = p.parent;
+          continue;
+        }
+        return cur;
+      }
+    };
+
+    const carriers = new Set<string>();
+    const reported = new Set<ts.Node>();
+    /** Where a function value that `x` is ends up: an escape is reported; a local of the callback carries it on. */
+    const trace = (x: ts.Node, at: ts.Node, target: string): void => {
+      const top = climb(x);
+      const p = top.parent;
+      if (!p) return;
+      let escapes = false;
+      if (top === body) escapes = false;
+      else if (ts.isArrowFunction(p) && p === body && p.body === top) escapes = true;
+      else if (ts.isReturnStatement(p) && enclosingFunction(p) === body) escapes = true;
+      else if (ts.isBinaryExpression(p) && p.right === top && ASSIGN.has(p.operatorToken.kind)) {
+        const root = rootName(p.left);
+        if (root === null || !declared.has(root)) escapes = true;
+        else carriers.add(root);
+      } else if (ts.isVariableDeclaration(p) && p.initializer === top) {
+        for (const nm of bindingNames(p.name)) carriers.add(nm);
+      } else if (
+        ts.isCallExpression(p) &&
+        p.arguments.some((a) => a === top) &&
+        ts.isPropertyAccessExpression(p.expression) &&
+        STORE.has(p.expression.name.text)
+      ) {
+        const root = rootName(p.expression.expression);
+        if (root === null || !declared.has(root)) escapes = true;
+        else carriers.add(root);
+      }
+      if (escapes && !reported.has(at)) {
+        reported.add(at);
+        out.push({ via: at.getText(mod.sf), target: `${target} (escapes ${method})`, line: line(at) });
+      }
+    };
+    /** A mention of something that reaches SAP: the value it is, and every function around it inside the callback. */
+    const mention = (at: ts.Node, target: string): void => {
+      const p = at.parent;
+      const called = !!p && ts.isCallExpression(p) && p.expression === at;
+      if (!called) trace(at, at, target);
+      for (let a = at.parent; a && a !== body; a = a.parent) if (isFunctionLike(a)) trace(a, at, target);
+    };
+
+    for (const { ref, at } of refsOf(body, mod)) {
+      const target = reachingTarget(ref);
+      if (target !== null) mention(at, target);
+    }
+    const identifiers: ts.Identifier[] = [];
+    const collectIds = (n: ts.Node): void => {
+      if (ts.isIdentifier(n) && isValueReference(n)) identifiers.push(n);
+      ts.forEachChild(n, collectIds);
+    };
+    collectIds(body);
+    for (const id of identifiers) {
+      if (!declared.has(id.text) && inner.has(id.text) && innerReaches(id.text)) mention(id, `inner function ${id.text}`);
+    }
+    // A local that holds a reaching function value passes it on wherever it goes.
+    const seen = new Set<string>();
+    while ([...carriers].some((c) => !seen.has(c))) {
+      const round = [...carriers].filter((c) => !seen.has(c));
+      for (const c of round) seen.add(c);
+      for (const id of identifiers) if (round.includes(id.text)) mention(id, `a function value stored in ${id.text}`);
+    }
+    return out;
+  };
+
   const isInnerFunction = (n: ts.Node): n is ts.FunctionDeclaration | ts.VariableDeclaration =>
     ts.isFunctionDeclaration(n) ||
     (ts.isVariableDeclaration(n) &&
@@ -408,11 +596,41 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
     const innerNodes = new Set(inner.values());
     const isGoverned = (n: ts.Node): n is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
       ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && GOVERNED_METHODS.has(n.expression.name.text);
+    /** Whether an inner function of this handler reaches SAP, through anything it mentions. */
+    const innerReachCache = new Map<string, boolean>();
+    const innerReaches = (name: string): boolean => {
+      const cached = innerReachCache.get(name);
+      if (cached !== undefined) return cached;
+      innerReachCache.set(name, false); // a recursive mention adds nothing
+      const fn = inner.get(name);
+      let reaches = false;
+      if (fn) {
+        reaches = refsOf(fn, mod).some(({ ref }) => reachingTarget(ref) !== null);
+        if (!reaches) {
+          const names: string[] = [];
+          const collect = (n: ts.Node): void => {
+            if (ts.isIdentifier(n) && isValueReference(n) && n.text !== name && inner.has(n.text)) names.push(n.text);
+            ts.forEachChild(n, collect);
+          };
+          collect(fn);
+          reaches = names.some(innerReaches);
+        }
+      }
+      innerReachCache.set(name, reaches);
+      return reaches;
+    };
     const mentions = refsOf(node, mod, (n) => {
       if (n !== node && innerNodes.has(n)) return false;
       if (isGoverned(n)) {
-        // The receiver is walked; the callbacks run inside the pipeline.
+        // The receiver is walked; the callbacks run inside the pipeline —
+        // unless a SAP-reaching function value leaves them, to run after.
         for (const { ref, at } of refsOf(n.expression.expression, mod)) check(ref, at, handler);
+        for (const arg of n.arguments) {
+          const callback = ts.isIdentifier(arg) && inner.has(arg.text) ? inner.get(arg.text)! : arg;
+          if (isFunctionLike(callback) || ts.isVariableDeclaration(callback)) {
+            for (const f of escapingFrom(callback, n.expression.name.text, inner, innerReaches)) findings.push({ handler, ...f });
+          }
+        }
         return false;
       }
       return true;

@@ -8,7 +8,13 @@ import {
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import {
+  circuitOutcomeForFanOut,
+  circuitOutcomeForSapStatus,
+  consoleRefusalBody,
+  consoleRefusalInit,
+  openConsoleCall,
+} from "@/lib/governed/console";
 import type { Refusal } from "@/lib/governed/pipeline";
 import {
   readTenantRefusalResponse,
@@ -17,6 +23,7 @@ import {
 } from "@/lib/sap-public/tenant-for-read";
 import { getCurrentUser } from "@/lib/auth/session";
 import { consoleReadFailure } from "@/lib/sap-public/console-read-failure";
+import { SapHttpError } from "@/lib/sap-public/upstream-failure";
 import { ERROR_CODES } from "@/types/api";
 
 /** Reject array / duplicate query params (?tenant=a&tenant=b) instead of silently coercing. */
@@ -160,10 +167,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * failed", and a credential CoreEdge could not build reached no tenant at
    * all — both were a 502 response and a 502 audit row (audit A26). The
    * generic sentence stays for what is genuinely a failure.
+   *
+   * SAP's own status goes to the console circuit, as the preview's does: a
+   * 429 or a 400 is recorded 502 (consoleReadFailure), but it is SAP
+   * answering, not failing, and must not open the circuit this
+   * organization's preview and other console reads share (P0.14b review).
    */
   const failed = (error: unknown) => {
     const failure = consoleReadFailure(error, "SAP metadata request failed");
-    return { status: failure.auditStatus, rowCount: null, failureReason: failure.failureReason };
+    return {
+      status: failure.auditStatus,
+      rowCount: null,
+      failureReason: failure.failureReason,
+      sapStatus: error instanceof SapHttpError ? error.status : null,
+    };
   };
   const failure = (error: unknown) => {
     console.error("[sap/tdd/entities] request failed:", error);
@@ -192,7 +209,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           entitySets.map((entitySet) => entitySet.name),
         ),
       {
-        answered: (made) => ({ status: 200, rowCount: made.length, externalId: `-probe-fanout-${service.key}` }),
+        // The row says the fan-out ran; the circuit hears what the probes were answered.
+        answered: (made) => ({
+          status: 200,
+          rowCount: made.length,
+          externalId: `-probe-fanout-${service.key}`,
+          circuit: circuitOutcomeForFanOut(made.map((p) => circuitOutcomeForSapStatus(p.status))),
+        }),
         // A fan-out that threw is recorded against the service, as before.
         failed,
       },

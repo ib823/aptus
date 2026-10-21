@@ -19,8 +19,8 @@ write-test) open a console call (`openConsoleCall`,
 | authenticate | the route's own role gate (unchanged), and a signed-in person | as before |
 | `authorise()` | a sandbox developer reads SANDBOX systems only (P0.13); a stored connection's environment ceiling (Sandbox and Dev freely, TEST, PROD or undeclared only under a live grant) | `SANDBOX_ONLY`, `NO_APPROVED_GRANT`, `UNDECLARED_ENVIRONMENT` (403) |
 | `bind()` | a deployment tenant's (and Ariba's) configured hosts against the SAP host allow-list | `HOST_NOT_ALLOWED` (403), only under `COREEDGE_ENV_TENANT_HOSTS=enforce` |
-| `contain()` | the console's own circuit for this system in this organization (reads only) | `CIRCUIT_OPEN` (503), only under `COREEDGE_CIRCUIT_BREAKER=enforce` |
-| `callSap(fn, describe)` | the connector call, timed, its outcome told to the circuit | none: SAP's answer is reported as before |
+| `contain()` | the console's own circuit for this system in this organization (reads only), shared by every console route | `CIRCUIT_OPEN` (503), only under `COREEDGE_CIRCUIT_BREAKER=enforce` |
+| `callSap(fn, describe)` | the connector call, timed, its outcome told to the circuit: SAP's 4xx (429 and 400 included) counts nothing, and a fan-out tells what its requests were answered, not its row's 200 (see `docs/runbooks/coreedge-circuit-breaker.md`) | none: SAP's answer is reported as before |
 | audit | automatic: every refusal above and every `callSap` | none |
 
 `callSap` refuses to run (a programming error, `ConsolePipelineError`) until
@@ -68,7 +68,10 @@ suffix or `SAP_HOST_ALLOWLIST_EXTRA`. Stored connections are not re-checked.
 **The no-side-doors test (A.3 #9).** `tests/unit/security/no-side-doors.test.ts`
 builds a call graph of `src/` (`tests/helpers/sap-reach.ts`) and fails when a
 route reaches SAP outside the pipeline, or on the pipeline without an audit
-row, unless the route is on its reviewed exemption list. It runs in CI as part
+row, unless the route is on its reviewed exemption list. Every `route.ts` under
+`src/app` is a route, route groups included; a page, a layout, any other
+server component, a server action or middleware that reaches SAP fails it
+outright. It runs in CI as part
 of `pnpm test` (Quality Gates).
 
 ## The setting: `COREEDGE_ENV_TENANT_HOSTS`
@@ -133,10 +136,16 @@ exemption that no longer reaches SAP outside the pipeline fails it too.
 
 ## Open decisions
 
-- **Retention of console read rows.** `PlatformAuditEvent` has no retention
-  sweep (P0.7 kept the write-back's rows indefinitely). Console reads add a row
-  per console call. Whether they expire (and after how long) is the product
-  owner's decision; until then they are kept.
+- **Retention of console read rows.** The platform-scope console read rows
+  (`SAP_CONSOLE_READ`) now expire with the organization's copy of the same
+  reads: the nightly `/api/cron/northbound-retention` run deletes them past
+  `NORTHBOUND_AUDIT_RETENTION_DAYS` (default 30), on the legal basis stated in
+  `src/lib/northbound/retention.ts`, and records how many as
+  `consoleReadsDeleted` in its CronRunLog row. The write-back's rows on the
+  same table (P0.7) are not swept at any age. Open: whether the platform
+  trail should keep console reads LONGER than the organization's trail (a
+  separate period would need its own setting), which is the product owner's
+  decision; until then they share the one period.
 - **The `-deployment-` organization rows.** A reader with no organization
   reading the deployment tenant is still filed under `-deployment-` in
   `NorthboundAuditEvent`, as before, beside the new platform row. Whether to

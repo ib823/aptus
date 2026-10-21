@@ -11,7 +11,9 @@
  * SAP (or Ariba) or not — and the census is pinned, so a new request to
  * anywhere fails here until someone says what it is. A route reaches SAP when
  * one of its handlers mentions, through any number of modules, a binding that
- * reaches a SAP fetch.
+ * reaches a SAP fetch. A route is every `route.ts` under src/app, route groups
+ * included; every other way in — a page, a layout, a server component, a
+ * server action, middleware — may not reach SAP at all.
  *
  * HOW "USES THE PIPELINE" IS DECIDED: every mention of a SAP-reaching binding
  * on a handler's path must be either a step of the broker pipeline
@@ -19,7 +21,11 @@
  * inside the callback a console call's `callSap` / `callSapWrite` takes
  * (src/lib/governed/console.ts), which refuses to run until the console's
  * authorise, bind and contain steps have passed (tests/unit/governed/
- * console.test.ts).
+ * console.test.ts). A SAP-reaching function value that LEAVES that callback
+ * (returned, assigned out, pushed onto an outer array) runs after the call
+ * was recorded and fails the check; a closure handed out through a call the
+ * callback makes, or by a helper it calls, is not followed (sap-reach.ts
+ * `escapingFrom` names the limits), so review still reads callSap callbacks.
  *
  * HOW "WRITES AN AUDIT ROW" IS DECIDED: a route on the broker pipeline builds
  * its `GovernedAudit`; a console read's `callSap` writes the organization's
@@ -76,6 +82,8 @@ const NOT_SAP_FETCHERS: Record<string, string> = {
   "src/app/api/sap/tdd/hub-content/api-reference-import/route.ts#POST":
     "the committed API catalogue file on raw.githubusercontent.com, at the deployed commit",
   "src/lib/sap-public/hub-harvest-remote.ts#fetchHarvestRows": "the committed harvest files on raw.githubusercontent.com",
+  "src/app/(external)/c/sign/route.ts#POST":
+    "this application's own /api/presales/sign-pdf, then the signed PDF it stored in Vercel Blob storage",
   "src/lib/analyzer/classifier.ts#classifyBatch": "the Anthropic API",
   "src/lib/intelligence/ai-orchestrator.ts#AIOrchestrator": "the configured LLM providers",
   "src/lib/auth/step-up-client.ts#fetchWithStepUp": "this application's own API, from the browser",
@@ -164,8 +172,52 @@ const SOURCES: SourceInput[] = walk(path.join(ROOT, "src")).map((f) => ({
   file: path.relative(ROOT, f).split(path.sep).join("/"),
   src: readFileSync(f, "utf8"),
 }));
-const ROUTES = SOURCES.map((s) => s.file).filter((f) => f.startsWith("src/app/api/") && f.endsWith("/route.ts"));
-const isServer = (key: string) => key.startsWith("src/lib/") || key.startsWith("src/app/api/");
+
+/**
+ * A Next.js route handler: `route.ts` ANYWHERE under src/app. A route group —
+ * src/app/(external)/c/sign/route.ts — is as much a route as src/app/api/ is,
+ * and this test scanned only the latter (P0.14b review).
+ */
+const isRouteFile = (file: string) => file.startsWith("src/app/") && /\/route\.tsx?$/.test(file);
+
+const fileOf = (key: string) => key.slice(0, key.indexOf("#"));
+
+/** The directive prologue a module opens with: "use client", "use server". */
+function directives(g: SapGraph, file: string): Set<string> {
+  const out = new Set<string>();
+  for (const stmt of g.modules.get(file)?.sf.statements ?? []) {
+    if (!ts.isExpressionStatement(stmt) || !ts.isStringLiteral(stmt.expression)) break;
+    out.add(stmt.expression.text);
+  }
+  return out;
+}
+
+/**
+ * Server code: every module that is not a "use client" one, wherever it lives
+ * — a page, a layout, a route in a route group, middleware.ts. A client
+ * module's `fetch` runs in the browser, with no credential to send to SAP.
+ */
+const serverFetchers = (g: SapGraph) => g.fetchers.filter((k) => !directives(g, fileOf(k)).has("use client"));
+
+/**
+ * A way into SAP that is not a route handler: a SAP-reaching binding in a page,
+ * a layout or any other server component, a server action ("use server"),
+ * middleware.ts or instrumentation.ts. A route's handlers are checked against
+ * the pipeline above; nothing else may reach SAP at all. Shared code that
+ * reaches SAP lives in src/lib (outside a "use server" module), where every
+ * route that mentions it is checked.
+ */
+function sideEntrances(g: SapGraph): string[] {
+  return [...g.reaching]
+    .filter((key) => {
+      const file = fileOf(key);
+      if (isRouteFile(file)) return false;
+      return !file.startsWith("src/lib/") || directives(g, file).has("use server");
+    })
+    .sort();
+}
+
+const ROUTES = SOURCES.map((s) => s.file).filter(isRouteFile);
 
 const graph = buildSapGraph(SOURCES, { sapFetchers: new Set(Object.keys(SAP_FETCHERS)), cuts: new Set(Object.keys(CUTS)) });
 
@@ -185,7 +237,7 @@ function auditFindings(g: SapGraph, file: string, src = SOURCES.find((s) => s.fi
 
 describe("every request CoreEdge's server code sends is classified", () => {
   it("the census of `fetch` callers is exactly the two tables", () => {
-    const census = graph.fetchers.filter(isServer).sort();
+    const census = serverFetchers(graph).sort();
     expect(
       census,
       "A server binding calls fetch and is not classified. If it reaches SAP or Ariba, add it to SAP_FETCHERS (its routes\n" +
@@ -224,6 +276,19 @@ describe("A.3 #9: every route that reaches SAP uses the pipeline and writes an a
     ]) {
       expect(reaching, known).toContain(known);
     }
+  });
+
+  it("scans every route handler under src/app, route groups included (P0.14b review)", () => {
+    expect(ROUTES).toContain("src/app/(external)/c/sign/route.ts");
+    expect(ROUTES.some((r) => !r.startsWith("src/app/api/"))).toBe(true);
+  });
+
+  it("nothing but a route handler reaches SAP: no page, layout, server action, middleware or instrumentation", () => {
+    expect(
+      sideEntrances(graph),
+      "These bindings reach SAP from outside a route handler, where no pipeline and no audit row is checked. Make the\n" +
+        "call from a route handler on the pipeline, or move shared SAP code into src/lib (not a \"use server\" module).",
+    ).toEqual([]);
   });
 
   it("the Workbench's catalogue and seed routes make no live call (they serve configuration)", () => {
@@ -370,6 +435,112 @@ describe("the check itself", () => {
       export async function GET(call: { callSap(f: () => unknown): unknown }) { return call.callSap(() => previewSapEntitySet("x")); }`);
     expect(unaudited.findings).toEqual([]);
     expect(unaudited.audit).toContain("calls callSap( without opening the call with openConsoleCall");
+  });
+
+  /*
+   * P0.14b review: a SAP-reaching closure that leaves callSap runs after the
+   * call has been recorded, with no row and no circuit. Each of these was
+   * reported compliant ({ reaches: true, findings: [] }) before.
+   */
+  describe("a SAP-reaching function value that escapes callSap fails the check", () => {
+    const head = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+      import * as sap from "@/lib/sap-public/tdd-connector";
+      import { openConsoleCall } from "@/lib/governed/console";`;
+    const escapes = (body: string) => check(`${head}\nexport async function GET() { const call = openConsoleCall(); ${body} }`).findings;
+
+    it.each([
+      [
+        "assigned to a variable declared outside the callback",
+        `let again: () => Promise<unknown> = async () => 1;
+         await call.callSap(async () => { again = () => previewSapEntitySet("y"); return previewSapEntitySet("x"); });
+         return again();`,
+      ],
+      ["returned from the callback", `const r = await call.callSap(async () => () => previewSapEntitySet("x")); return r;`],
+      ["returned by a return statement", `return call.callSap(async () => { const x = 1; return x ? () => previewSapEntitySet("x") : null; });`],
+      ["returned inside an object", `return call.callSap(async () => ({ later: () => previewSapEntitySet("x") }));`],
+      ["the function itself, assigned to a property", `const holder: Record<string, unknown> = {}; await call.callSap(async () => { holder.fn = previewSapEntitySet; }); return holder;`],
+      ["bound and assigned out", `let f: unknown; await call.callSap(async () => { f = previewSapEntitySet.bind(null, "x"); }); return f;`],
+      ["pushed onto an outer array", `const later: Array<() => unknown> = []; await call.callSap(async () => { later.push(() => sap.previewSapEntitySet("x")); }); return later;`],
+      [
+        "stored in a local of the callback first",
+        `let out: unknown; await call.callSap(async () => { const f = () => previewSapEntitySet("x"); const g = f; out = g; }); return out;`,
+      ],
+      [
+        "an inner function of the handler, handed out",
+        `async function worker() { return previewSapEntitySet("x"); }
+         let out: unknown; await call.callSap(async () => { out = worker; }); return out;`,
+      ],
+    ])("%s", (_name, body) => {
+      expect(escapes(body).length).toBeGreaterThan(0);
+    });
+
+    it("passes what runs inside the callback, values handed to calls it makes, and data it hands out", () => {
+      expect(
+        escapes(`let total = 0; let rows: unknown = null;
+          async function worker() { total++; return previewSapEntitySet("w"); }
+          const r = await call.callSap(async () => {
+            const read = await previewSapEntitySet("x");
+            rows = read;
+            await Promise.all(["a", "b"].map((k) => previewSapEntitySet(k)));
+            await Promise.all(Array.from({ length: 2 }, worker));
+            const local = () => previewSapEntitySet("z");
+            await local();
+            return read;
+          });
+          return [r, rows, total];`),
+      ).toEqual([]);
+    });
+  });
+
+  /*
+   * P0.14b review: the scan covered only src/app/api. A route in a route group,
+   * a page or a server action that called the connector passed every check.
+   */
+  describe("outside src/app/api", () => {
+    const sources = (extra: SourceInput[]) =>
+      buildSapGraph([CONNECTOR, CONSOLE, BARREL, ...extra], {
+        sapFetchers: new Set(["src/lib/sap-public/tdd-connector.ts#sapFetch"]),
+        cuts: new Set(),
+      });
+    const PEEK = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";`;
+
+    it("a route in a route group is a route, and fails the check like any other", () => {
+      const file = "src/app/(studio)/studio/peek/route.ts";
+      expect(isRouteFile(file)).toBe(true);
+      expect(isRouteFile("src/app/(external)/x/route.tsx")).toBe(true);
+      const g = sources([{ file, src: `${PEEK}\nexport async function GET() { return previewSapEntitySet("x"); }` }]);
+      expect(routeReaches(g, file)).toBe(true);
+      expect(routeFindings(g, file, PIPE).map((f) => f.via)).toEqual(["previewSapEntitySet"]);
+    });
+
+    it.each([
+      ["a page (a server component)", "src/app/(studio)/studio/peek/page.tsx#Page", `export default async function Page() { return previewSapEntitySet("x"); }`],
+      ["a layout", "src/app/(studio)/layout.tsx#Layout", `export default async function Layout() { await previewSapEntitySet("x"); return null; }`],
+      ["a server component outside src/app", "src/components/sap/Peek.tsx#Peek", `export async function Peek() { return previewSapEntitySet("x"); }`],
+      ["a server action, even in src/lib", "src/lib/actions/peek.ts#peek", `export async function peek() { return previewSapEntitySet("x"); }`, `"use server";\n`],
+      ["middleware", "src/middleware.ts#middleware", `export async function middleware() { await previewSapEntitySet("x"); }`],
+      ["a route's helper kept beside it", "src/app/api/sap/tdd/peek/load.ts#load", `export const load = () => previewSapEntitySet("x");`],
+    ])("%s that reaches SAP is a side entrance", (_name, key, body, prologue = "") => {
+      const file = fileOf(key);
+      expect(sideEntrances(sources([{ file, src: `${prologue}${PEEK}\n${body}` }]))).toEqual([key]);
+    });
+
+    it("but shared code in src/lib, and the routes themselves, are not", () => {
+      expect(sideEntrances(sources([]))).toEqual([]);
+    });
+
+    it("counts a server component's fetch in the census, and not a client component's", () => {
+      const g = sources([
+        { file: "src/app/(external)/x/route.ts", src: `export async function POST() { return fetch("https://example.invalid"); }` },
+        { file: "src/app/(studio)/x/page.tsx", src: `export default async function Page() { return fetch("https://example.invalid"); }` },
+        { file: "src/app/(studio)/x/Client.tsx", src: `"use client";\nexport function Client() { return fetch("/api/x"); }` },
+      ]);
+      expect(serverFetchers(g)).toEqual([
+        "src/app/(external)/x/route.ts#POST",
+        "src/app/(studio)/x/page.tsx#Page",
+        "src/lib/sap-public/tdd-connector.ts#sapFetch",
+      ]);
+    });
   });
 
   it("ignores a name used only as a type, in a comment or in a string", () => {

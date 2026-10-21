@@ -18,7 +18,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { isStudioBuilder } from "@/lib/studio/rbac";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import { openConsoleCall } from "@/lib/governed/console";
+import { circuitOutcomeForProbes, openConsoleCall } from "@/lib/governed/console";
+import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveReadWrite,
@@ -97,6 +98,8 @@ async function probeActivatedApiIds(
   dataReads: number;
   /** Each answered probe with the service it asked about — for the V4 address record (P0.8). */
   observed: Array<{ service: SapServiceDefinition; status: number }>;
+  /** What the probes say about the system, for the console circuit (P0.14b review). */
+  circuit: CallOutcome;
 }> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
   /*
@@ -138,7 +141,15 @@ async function probeActivatedApiIds(
   const curated = getSapServices(product).map((s) => ({ ...s, key: serviceApiId(s) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
   if (targets.length === 0) {
-    return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0, dataReads: 0, observed: [] };
+    return {
+      outcomes: new Map(),
+      dataConfirmed: new Set(),
+      capabilities: new Map(),
+      probed: 0,
+      dataReads: 0,
+      observed: [],
+      circuit: circuitOutcomeForProbes([]),
+    };
   }
   const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });
   // Keep the FULL outcome (HTTP status) per probed service — not just the 200s —
@@ -166,6 +177,7 @@ async function probeActivatedApiIds(
     probed: targets.length,
     dataReads: results.filter((r) => r.dataStatus !== undefined).length,
     observed,
+    circuit: circuitOutcomeForProbes(results),
   };
 }
 
@@ -476,7 +488,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       dataProbeRefusal = contained.refusal.message;
     } else {
       const overlay = await call.callSap(() => probeActivatedApiIds(product.envPrefix, tenant, product, scope, true), {
-        answered: (r) => ({ status: 200, rowCount: r.probed + r.dataReads }),
+        // The row says the overlay ran; the circuit hears what the probes were answered.
+        answered: (r) => ({ status: 200, rowCount: r.probed + r.dataReads, circuit: r.circuit }),
         // The overlay is best-effort: its failure is recorded, and the stored results stand.
         failed: () => ({ status: 502, rowCount: null }),
       });

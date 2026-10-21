@@ -10,16 +10,30 @@ Roadmap item P0.14 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 One circuit per SAP system: per stored connection on the northbound read and
 write and the Studio Test Console.
 
-The Workbench preview has circuits of its own, one per organization and
-system (stored connection or deployment tenant), under
-`coreedge:circuit:console:<organization>:<system>`. The builder chooses the
-preview's entity set, so its outcomes must not reach anyone else: a builder's
-previews never count into the circuit that guards the deployed application's
-calls, and one organization's previews of the shared deployment tenant
-(`S4_TDD_*`) never refuse another organization's. SAP's own 4xx answer to a
-preview (a parameterised entity set asked without its parameters, a set the
-arrangement does not release) counts as a refusal, not a failure, though the
-audit row still records it as 502.
+The Workbench console has circuits of its own, one per organization and
+system (stored connection, deployment tenant or Ariba realm), under
+`coreedge:circuit:console:<organization>:<system>`. The builder chooses what
+the console reads, so its outcomes must not reach anyone else: a builder's
+console reads never count into the circuit that guards the deployed
+application's calls, and one organization's reads of the shared deployment
+tenant (`S4_TDD_*`) never refuse another organization's.
+
+Since P0.14b every console route that reaches SAP shares that circuit (one
+per organization and system), not the preview alone:
+
+| Console route | What it tells the circuit | Under `enforce`, while open |
+|---|---|---|
+| Preview, entities ($metadata), the catalogue's detail probe, the Ariba call | SAP's answer to the one request | 503 `CIRCUIT_OPEN` (the detail probe falls back to the stored result) |
+| Entities with `probe=1`, capabilities, the catalogue's live overlay, Probe all, operations | what the fan-out's requests were answered: any 2xx closes it, every request failing (5xx or no answer) counts ONE failure, anything else counts nothing | 503 `CIRCUIT_OPEN` (the overlay falls back to stored results) |
+
+SAP's own 4xx to a console read (a parameterised entity set asked without its
+parameters, a set the arrangement does not release, a 400 or 405 to a
+`$metadata` the person chose, a 429) counts as a refusal, not a failure,
+though the audit row still records a 400 or 429 as 502. A fan-out's row is
+recorded 200 whenever the fan-out returned; the circuit hears what its
+requests were answered instead (`circuitOutcomeForFanOut`,
+`src/lib/governed/console.ts`), so a Capabilities run against a system that is
+down does not close the circuit the preview counts into.
 
 | Event | What the circuit does |
 |---|---|
@@ -87,8 +101,9 @@ with the limiter.
    configured (otherwise each instance judges alone and the logs say
    `shared: false`).
 2. Search the logs for `[circuit] would refuse`. Each entry is one call that
-   `enforce` would have refused (a `console:` circuit is a Workbench preview's,
-   not the deployed application's). Every entry should fall inside a real SAP
+   `enforce` would have refused (a `console:` circuit is the Workbench
+   console's, shared by its routes for one organization and system, not the
+   deployed application's). Every entry should fall inside a real SAP
    outage (the same window shows 502 and 504 rows for that connection in
    Operations, or the customer confirms one). An entry outside an outage means
    a system that fails often enough to trip it while serving: find out why
@@ -114,4 +129,4 @@ The next call after the 30 seconds probes it and closes it on success. There is
 no operator button yet to close one early (`closeEarly` exists in
 `circuit-breaker.ts` for this instance's memory only). To clear a shared one by
 hand, delete its key in Upstash: `DEL coreedge:circuit:connection:<connection id>`
-(a preview's: `DEL coreedge:circuit:console:<organization id>:connection:<connection id>`).
+(the console's: `DEL coreedge:circuit:console:<organization id>:connection:<connection id>`).
