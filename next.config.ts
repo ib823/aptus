@@ -72,14 +72,12 @@ const nextConfig: NextConfig = {
      * of the route's chunk graph, so the trace left it out, and a deployed
      * function would have no compiler: every verify answered as if the
      * description could not be compiled. Each route that spawns it carries it.
-     * scripts/check-runtime-assets.mjs --built fails the build if either
-     * trace lacks it.
+     * scripts/check-runtime-assets.mjs --built fails the build if any of
+     * their traces lacks it. GET /schema never spawns it, so it carries none.
      */
     "/api/studio/interfaces/[id]/verify-service": ["./.next/server/chunks/contract-compiler-worker.js"],
     "/api/studio/interfaces/[id]/capture-schema": ["./.next/server/chunks/contract-compiler-worker.js"],
-    // And the read paths that render a large contract there (read-render.ts, structural hardening round 2).
-    "/api/northbound/interfaces/[id]/schema": ["./.next/server/chunks/contract-compiler-worker.js"],
-    "/api/northbound/v1/interfaces/[id]/schema": ["./.next/server/chunks/contract-compiler-worker.js"],
+    "/api/studio/interfaces/[id]/capture-fixture": ["./.next/server/chunks/contract-compiler-worker.js"],
     "/api/studio/interfaces/[id]/scaffold": ["./.next/server/chunks/contract-compiler-worker.js"],
     "/api/studio/solutions/[id]/openapi": ["./.next/server/chunks/contract-compiler-worker.js"],
   },

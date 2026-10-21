@@ -49,7 +49,6 @@ import {
   type IrProperty,
   type ODataVersion,
 } from "@/lib/contracts/ir";
-import { renderTick } from "@/lib/contracts/budget";
 import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 
 export type SchemaDialect = "2020-12" | "oas30";
@@ -370,8 +369,6 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   ) =>
     Object.fromEntries(
       props.filter(include).map((p) => {
-        // The render clock, per property (budget.ts, round 4): a schema tree is built before a byte of it is written.
-        renderTick();
         const s = annotate(valueSchema(p, facets), p, readOnlyOf(p));
         // A $ref beside sibling keywords is legal in 2020-12 but ignored by
         // 3.0 tooling: wrap it so the label survives in both.
@@ -485,7 +482,6 @@ function defRefs(schema: unknown): string[] {
   const out: string[] = [];
   const stack: unknown[] = [schema];
   while (stack.length > 0) {
-    renderTick();
     const x = stack.pop();
     if (Array.isArray(x)) {
       for (const y of x) stack.push(y);

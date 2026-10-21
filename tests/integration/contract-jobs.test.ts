@@ -1,20 +1,23 @@
 // @vitest-environment node
 /**
- * STRUCTURAL HARDENING, ROUND 5 (P1.3), against real PostgreSQL. Not another
- * expensive shape: the request thread's work around the envelope, each
- * bounded by construction whatever the input —
+ * THE CONTRACT COMPILER'S JOBS AND WRITES, against real PostgreSQL (P1.3).
+ * The request thread's work around the jobs, each bounded by construction
+ * whatever the input —
  *
  *   one statement     a document's current snapshots are one DISTINCT ON,
- *                     however many interfaces it carries, never one query
- *                     each (1,016 queries filled the pool and blocked the
- *                     thread for 230-610 ms);
+ *                     however many interfaces it carries;
  *   what is rendered  a document's grants are only the granting, live rows,
  *                     distinct — never every grant request ever filed;
- *   text, both ways   stored JSON is written from its text (json-text.ts):
- *                     a fixture at its bound, and a recorded 2 MiB contract
- *                     with its diff, cross back from the worker and into
- *                     PostgreSQL as strings, never as object graphs that
- *                     Prisma walks on the request thread.
+ *   text, both ways   a fixture and a recorded contract with its diff and its
+ *                     /schema texts cross back from the worker and into
+ *                     PostgreSQL as strings, never as object graphs;
+ *   one transaction   a capture stores its schema, its SAMPLED snapshot and
+ *                     its texts together, or nothing — and a capture the
+ *                     compiler could not take stores nothing and says so;
+ *   compiler time     each organisation's worker time per UTC day
+ *                     (contract-time.ts): refused past it with 00:00 UTC,
+ *                     charged with the wall time of every job, downloads
+ *                     included, another organisation never affected.
  *
  * Opt-in on TEST_DATABASE_URL; rows are namespaced and removed.
  */
@@ -49,12 +52,15 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: vi.fn() }));
 
 import { POST as captureFixture } from "@/app/api/studio/interfaces/[id]/capture-fixture/route";
+import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-schema/route";
+import { GET as scaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
 import { LIMITS } from "@/lib/contracts/budget";
 import { compileContract } from "@/lib/contracts/compile";
+import { chargeContractTime, checkContractTime, nextUtcMidnight } from "@/lib/contracts/contract-time";
 import { planDocInputs } from "@/lib/contracts/doc-inputs";
-import { compileInEnvelope } from "@/lib/contracts/envelope";
-import { isJsonTextRef } from "@/lib/contracts/render-input";
-import { recordVerifiedContract } from "@/lib/contracts/record";
+import { runJobInEnvelope } from "@/lib/contracts/envelope";
+import { recordJob, type CompiledService } from "@/lib/contracts/jobs";
+import { recordVerifiedContract, snapshotBodies } from "@/lib/contracts/record";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import * as snapshots from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
@@ -104,7 +110,16 @@ async function newInterface(name: string, over: Record<string, unknown> = {}) {
   });
 }
 
-describe.skipIf(!process.env.TEST_DATABASE_URL)("structural hardening round 5, against real PostgreSQL", () => {
+/** The organisation's compiler time today, in ms (0 when no row). */
+async function msToday(organizationId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<{ ms: number }[]>`SELECT "ms" FROM "ContractTime" WHERE "organizationId" = ${organizationId} AND "day" = ${new Date().toISOString().slice(0, 10)}::date`;
+  return rows[0]?.ms ?? 0;
+}
+
+const post = (url: string, body: string) =>
+  new NextRequest(url, { method: "POST", headers: { "content-type": "application/json" }, body });
+
+describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs and writes, against real PostgreSQL", () => {
   beforeAll(async () => {
     for (const id of [ORG, OTHER]) await prisma.organization.create({ data: { id, name: `R5 ${id}`, type: "client" } });
     const s = await prisma.solution.create({
@@ -123,6 +138,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("structural hardening round 5, a
   });
 
   afterAll(async () => {
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" IN (${ORG}, ${OTHER})`;
     await prisma.apiAccessGrant.deleteMany({ where: { organizationId: ORG } });
     await prisma.mockFixture.deleteMany({ where: { organizationId: ORG } });
     await prisma.contractSnapshot.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
@@ -247,23 +263,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("structural hardening round 5, a
     const bodyText = JSON.stringify({ rows, readStatus: "OK", interfaceVersion: iface.version, entitySet: iface.entitySet, sourceStatus: 200 });
     expect(bodyText.length).toBeGreaterThan(4_500_000);
     expect(bodyText.length).toBeLessThan(LIMITS.fixture.bytes);
-    const post = () =>
-      captureFixture(
-        new NextRequest(`http://localhost/api/studio/interfaces/${iface.id}/capture-fixture`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: bodyText,
-        }),
-        { params: Promise.resolve({ id: iface.id }) },
-      );
-    // Created, then replaced: both writes.
+    const send = () => captureFixture(post(`http://localhost/api/studio/interfaces/${iface.id}/capture-fixture`, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    // Created, then replaced: both writes. The body is parsed in the fixture job, never here.
+    const parse = vi.spyOn(JSON, "parse");
     for (const replaced of [false, true]) {
-      const r = await longestStall(post);
+      const r = await longestStall(send);
       expect(r.value.status).toBe(200);
       expect(((await r.value.json()) as { data: { replaced: boolean; rows: number } }).data).toMatchObject({ replaced, rows: 25 });
-      // Before: Prisma serialised the 2.3 million nodes on this thread — 1.4-1.7 s.
+      // Before: parsed here, and Prisma serialised the 2.3 million nodes on this thread — 1.4-1.7 s.
       expect(r.ms).toBeLessThan(600);
     }
+    expect(parse.mock.calls.some(([text]) => text === bodyText)).toBe(false);
+    parse.mockRestore();
     const stored = await prisma.mockFixture.findMany({ where: { organizationId: ORG, interfaceId: iface.id }, select: { body: true, scenario: true } });
     expect(stored).toHaveLength(1);
     const body = stored[0]!.body as { records: { a: number[] }[] };
@@ -271,53 +282,62 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("structural hardening round 5, a
     expect(body.records[24]!.a[91_999]).toBe(91_999 % 10);
   });
 
-  it("a recorded 1.9 MB contract crosses back and is stored as its text: the event loop keeps ticking", async () => {
+  it("a recorded 690 KB contract crosses back and is stored as its text with its /schema texts: the event loop keeps ticking", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const iface = await newInterface("recorded", { operation: "CREATE", mode: "WRITE" });
+    const entitySet = iface.entitySet!;
     const record = async (description: string) => {
-      const compiled = await longestStall(() => compileInEnvelope(description, "EmpJob", null, ORG));
+      const heads = await snapshots.loadRecordHeads(scope, iface, "DEV");
+      const compiled = await longestStall(() => runJobInEnvelope({ kind: "record", input: { description, entitySet, ...heads } }, { tenant: ORG }));
+      const value = compiled.value;
+      const c: CompiledService = value.ok ? value.value : { ok: false, reason: value.reason, detail: value.detail };
       const recorded = await longestStall(() =>
-        recordVerifiedContract({
-          scope,
-          iface: { ...iface, entitySet: iface.entitySet },
-          compiled: compiled.value,
-          environment: "DEV",
-          connectionId: "conn_dev",
-          actorId: "u_r5",
-        }),
+        recordVerifiedContract({ scope, iface: { ...iface, entitySet }, compiled: c, heads, environment: "DEV", connectionId: "conn_dev", actorId: "u_r5" }),
       );
-      return { compiled, recorded };
+      return { compiled: { value: c, ms: compiled.ms }, recorded };
     };
-    const first = await record(wideDescription(13_000));
+    const first = await record(wideDescription(5_000));
     expect(first.recorded.value).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
     const c = first.compiled.value;
     if (!c.ok || !c.dataset?.ok) throw new Error("not compiled");
-    expect(c.dataset.bytes).toBeGreaterThan(1_800_000);
-    // What crossed back from the worker is the contract's text, never its object graph.
-    expect(isJsonTextRef(c.dataset.contract)).toBe(true);
+    expect(c.dataset.bytes).toBeGreaterThan(650_000);
+    // What crossed back from the worker is the contract's text, as transferred bytes, never its object graph.
+    expect(c.dataset.ir).toBeInstanceOf(Uint8Array);
     expect(c.dataset.facts).toMatchObject({ source: "METADATA", odataVersion: "V2", bodies: { create: false, update: true } });
 
-    // Another contract: a new version, its diff run in the envelope and stored as its text.
-    const second = await record(wideDescription(13_000, "Other"));
+    // Another contract: a new version, its diff taken in the same job and stored as its text.
+    const second = await record(wideDescription(5_000, "Other"));
     expect(second.recorded.value).toMatchObject({ status: "RECORDED", semver: "2.0.0", bump: "major" });
-    // Before: the reply rebuilt node by node here (50-170 ms) and Prisma's serialisation of the IR (110-280 ms).
     expect(second.compiled.ms).toBeLessThan(150);
     expect(second.recorded.ms).toBeLessThan(150);
 
     const rows = await prisma.contractSnapshot.findMany({
       where: { organizationId: ORG, interfaceId: iface.id },
       orderBy: { semverMajor: "asc" },
-      select: { id: true, ir: true, diff: true, irBytes: true, source: true, odataVersion: true, irVersion: true },
+      select: { id: true, ir: true, diff: true, irBytes: true, source: true, odataVersion: true, irVersion: true, schemasText: true },
     });
     expect(rows).toHaveLength(2);
     const ir = rows[1]!.ir as { entityType: { properties: { name: string }[] }; source: string };
-    expect(ir.entityType.properties).toHaveLength(13_000);
+    expect(ir.entityType.properties).toHaveLength(5_000);
     expect(ir.entityType.properties[0]!.name).toBe("Other0");
     expect(rows[1]).toMatchObject({ source: "METADATA", odataVersion: "V2", irVersion: 1 });
     expect((rows[1]!.diff as { bump: string; changes: unknown[] }).bump).toBe("major");
     expect(rows[0]!.diff).toBeNull();
+    // The /schema texts on the newest row only.
+    expect(rows[0]!.schemasText).toBeNull();
+    expect(JSON.parse(rows[1]!.schemasText!)).toHaveProperty("record");
     // The write's body is decided from the two capabilities, read in the database.
-    expect(await snapshots.snapshotBodies(scope, rows[1]!.id)).toEqual({ create: false, update: true });
+    expect(await snapshotBodies(prisma, scope, rows[1]!.id)).toEqual({ create: false, update: true });
+  });
+
+  it("/schema texts past 4 MiB are refused at record (OUTPUT_TOO_LARGE), and nothing is stored", async () => {
+    const iface = await newInterface("too-wide");
+    const entitySet = iface.entitySet!;
+    const compiled = recordJob({ description: wideDescription(13_500), entitySet, previous: [], unchangedHashes: [] });
+    expect(compiled).toMatchObject({ ok: true, dataset: { ok: false, reason: "OUTPUT_TOO_LARGE" } });
+    const outcome = await recordVerifiedContract({ scope, iface: { ...iface, entitySet }, compiled, heads: { ids: [] }, environment: "DEV", connectionId: "c", actorId: "u" });
+    expect(outcome).toMatchObject({ status: "NOT_COMPILED" });
+    expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(0);
   });
 
   it("a snapshot's bodies are read from its capabilities as the IR states them", async () => {
@@ -353,8 +373,107 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("structural hardening round 5, a
         },
         select: { id: true },
       });
-      expect(await snapshots.snapshotBodies(scope, row.id)).toEqual(expected);
+      expect(await snapshotBodies(prisma, scope, row.id)).toEqual(expected);
     }
-    expect(await snapshots.snapshotBodies(tenantScopeOf(OTHER), "nope")).toBeNull();
+    expect(await snapshotBodies(prisma, tenantScopeOf(OTHER), "nope")).toBeNull();
+  });
+
+  it("a capture stores its schema, its SAMPLED snapshot and its texts together, or nothing and says why", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const iface = await newInterface("capture", { odataVersion: "V2", servicePath: "/sap/opu/odata/sap/ZR5_SRV" });
+    const url = `http://localhost/api/studio/interfaces/${iface.id}/capture-schema`;
+    const bodyText = JSON.stringify({ rows: [{ Id: "1", Amount: 2 }, { Id: "2", Amount: 3 }], interfaceVersion: iface.version, entitySet: iface.entitySet });
+    const stored = async () => ({
+      schema: (await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { responseSchema: true } }))?.responseSchema ?? null,
+      snapshots: await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } }),
+    });
+
+    // The compiler turned off: 503, and nothing stored.
+    vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
+    const off = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(off.status).toBe(503);
+    expect(((await off.json()) as { error: { message: string } }).error.message).toContain("Nothing was captured");
+    expect(await stored()).toEqual({ schema: null, snapshots: 0 });
+
+    // The organisation's time spent: 429 until 00:00 UTC, its own words, and nothing stored.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "1");
+    await chargeContractTime(ORG, 1_000);
+    const spent = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(spent.status).toBe(429);
+    expect(Number(spent.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(Number(spent.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
+    expect(((await spent.json()) as { error: { message: string } }).error.message).toContain("1 s of contract compile time");
+    expect(await stored()).toEqual({ schema: null, snapshots: 0 });
+
+    // Captured: the schema, the SAMPLED snapshot and its texts, in one transaction — and the body never parsed here.
+    const parse = vi.spyOn(JSON, "parse");
+    const ok = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    expect(parse.mock.calls.some(([text]) => text === bodyText)).toBe(false);
+    parse.mockRestore();
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { data: { fields: number; contract: { status: string } } }).data).toMatchObject({ fields: 2, contract: { status: "RECORDED" } });
+    const after = await stored();
+    expect(after.schema).toMatchObject({ type: "object", properties: { Id: { type: "string" } } });
+    expect(after.snapshots).toBe(1);
+    const row = await prisma.contractSnapshot.findFirst({ where: { organizationId: ORG, interfaceId: iface.id }, select: { source: true, schemasText: true } });
+    expect(row?.source).toBe("SAMPLED");
+    expect(row?.schemasText).not.toBeNull();
+  });
+
+  it("each organisation's compiler time: refused past it with 00:00 UTC, another organisation unaffected, old days pruned", async () => {
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    // A fake day: the allowance is the UTC day's, whatever the clock says.
+    const day = new Date("2031-03-04T22:15:00.000Z");
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    await chargeContractTime(OTHER, 39_999, day);
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    await chargeContractTime(OTHER, 1, day);
+    const refused = await checkContractTime(OTHER, day);
+    expect(refused).toMatchObject({ ok: false, retryAfterMs: nextUtcMidnight(day).getTime() - day.getTime() });
+    expect(nextUtcMidnight(day).toISOString()).toBe("2031-03-05T00:00:00.000Z");
+    expect(!refused.ok && refused.detail).toContain("40 s of contract compile time");
+    // Another organisation's day, and the next day, are untouched.
+    expect(await checkContractTime(ORG, day)).toEqual({ ok: true });
+    expect(await checkContractTime(OTHER, new Date("2031-03-05T00:00:01.000Z"))).toEqual({ ok: true });
+    // 0 is unlimited.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "0");
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    vi.unstubAllEnvs();
+    // A charge more than a week later deletes the old rows (at most once an hour per process: a fresh hour here).
+    await chargeContractTime(OTHER, 1, new Date("2031-03-20T10:00:00.000Z"));
+    const days = await prisma.$queryRaw<{ day: Date }[]>`SELECT "day" FROM "ContractTime" WHERE "organizationId" = ${OTHER} ORDER BY "day"`;
+    expect(days.map((d) => d.day.toISOString().slice(0, 10))).toEqual(["2031-03-20"]);
+  });
+
+  it("every job is charged its wall time, a killed one and a download included", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const before = await msToday(ORG);
+    const startedAt = Date.now();
+    const r = await runJobInEnvelope(
+      { kind: "record", input: { description: wideDescription(20_000), entitySet: "EmpJob", previous: [], unchangedHashes: [] } },
+      { tenant: ORG, limits: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 300 } },
+    );
+    const took = Date.now() - startedAt;
+    expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT", cause: "deadline" });
+    const charged = (await msToday(ORG)) - before;
+    // From spawn to exit: at least the deadline, never more than the whole call took.
+    expect(charged).toBeGreaterThanOrEqual(300);
+    expect(charged).toBeLessThanOrEqual(took);
+
+    // A starter kit download is a job of the downloading organisation's.
+    const iface = await newInterface("kit");
+    const kitBefore = await msToday(ORG);
+    const kit = await scaffold(new NextRequest(`http://localhost/api/studio/interfaces/${iface.id}/scaffold`), { params: Promise.resolve({ id: iface.id }) });
+    expect(kit.status).toBe(200);
+    expect(await msToday(ORG)).toBeGreaterThan(kitBefore);
+    // Its time spent: 429 until 00:00 UTC.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "1");
+    await chargeContractTime(ORG, 1_000);
+    const refused = await scaffold(new NextRequest(`http://localhost/api/studio/interfaces/${iface.id}/scaffold`), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(refused.status).toBe(429);
+    expect(Number(refused.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
   });
 });

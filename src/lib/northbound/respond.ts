@@ -153,7 +153,7 @@ export function northboundOk<T>(data: T, correlationId: string, status = 200): N
 
 /**
  * northboundOk for an answer already written as JSON — `{"data":…}`, with
- * rendered text spliced in (contracts/read-render.ts, RawJson): the same
+ * stored text spliced in (contracts/raw-json.ts): the same
  * status, headers and content type, and the body as given.
  */
 export function northboundOkJson(text: string | Uint8Array<ArrayBuffer>, correlationId: string, status = 200): NextResponse {

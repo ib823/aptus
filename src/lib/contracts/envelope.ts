@@ -1,115 +1,59 @@
 /**
- * THE HARD RESOURCE ENVELOPE around the Contract Compiler (P1.3, structural
- * containment).
+ * THE CONTRACT COMPILER'S ENVELOPE: every job that parses tenant-supplied
+ * bytes or renders a Studio download runs here, in a worker thread, through
+ * ONE fair gate (P1.3).
  *
- * The description the compiler reads comes from a customer's SAP system,
- * which an attacker may control, and three reviews in a row found a new way
- * for one to make the compile superlinear in time or memory. Each was fixed;
- * the next one nobody has found yet would still have run on the server's own
- * thread, where it blocks every other request, or exhausted the process's
- * heap and taken every request with it. So the whole compile — parse, IR,
- * annotate, slice, canonical digest, the diff against earlier snapshots,
- * and every render and measurement taken at record time (pipeline.ts) — runs
- * HERE, in a worker thread with:
+ * The description, the sampled rows and the fixture body a job reads come
+ * from a customer's SAP system, which a builder with a free BTP trial
+ * controls. So a job (jobs.ts) never runs on a request's own thread; it runs
+ * in a worker spawned for it, with
  *
- *   - a heap of its own, capped (resourceLimits: old and young generation),
- *     so the worst a description can do to memory is end its own worker;
- *   - a stack of its own, capped, so recursion ends in a RangeError there;
- *   - a wall-clock deadline, after which the worker is terminated — V8
- *     stops it wherever it is, in a loop with no await or not;
- *   - a concurrency cap, so a burst of verifies queues instead of
- *     multiplying the heaps — shared fairly between organisations, so one
- *     builder's hostile SAP cannot hold every slot and queue place and have
- *     every other tenant's compile refused (structural hardening round 1);
- *   - an input bound: a contract handed in (prepare, diff) is measured, up to
- *     its cap and no further, before it is copied into the worker, so the
- *     request thread's copy is bounded by the cap and not by the input;
- *   - SLOT FIRST (structural hardening round 3): a job takes its slot before
- *     anything is loaded, measured or copied for it — a read path hands in
- *     a loader, not a loaded input (runLoadedInEnvelope) — so a job refused
- *     BUSY has cost the request thread nothing, and waiting for a slot costs
- *     nothing either;
- *   - ONE ISOLATE BUDGET FOR THE INSTANCE (structural hardening round 4):
- *     however many pools hand out slots, at most envelopeIsolateSlots()
- *     isolates live at once, sized so that they, each at its heap cap, and
- *     the server itself fit the instance's memory (instanceMemoryMb) — a
- *     compile pool and a render pool of two each held four, 1.7 GB of
- *     isolates beside a 600 MB server on a 2 GB instance;
- *   - TEXT, NOT OBJECT GRAPHS (structural hardening round 4): stored JSON a
- *     job is handed crosses as its text (render-input.ts), counted by its
- *     length and parsed in the worker, so what the request thread pays to
- *     hand a job over is a copy of strings, not a walk and a structured
- *     clone of everything in them;
- *   - A CALLER'S OWN DEADLINE (structural hardening round 4): a job may be
- *     given the time its request has left (deadlineAt), which bounds its
- *     wait for a slot and its run together, so a verify answers inside the
- *     request's own limit instead of being cut off by the platform;
- *   - AN ALLOWANCE OVER TIME (structural hardening round 5): every job's
- *     worker time is charged to its organisation's hour and day, and to the
- *     deployment's day (envelope-allowance.ts); a job of an organisation
- *     whose allowance is spent is refused BUSY before it takes a slot. And
- *     the isolates live at once leave the request thread a CPU
- *     (envelopeIsolateSlots);
- *   - NOTHING SHARED IS SPENT FOR EVERYONE (structural hardening round 6): a
- *     job holds an isolate at most a turn (envelopeIsolateTurnMs) while
- *     another organisation's job waits for one, so two or ten organisations'
- *     hostile compiles cannot keep a third's out of an instance's only
- *     isolate; read-path renders spend an allowance of their own, and the
- *     deployment's day refuses only an organisation past its floor of it
- *     (envelope-allowance.ts); the diff of a verify whose compile was
- *     admitted is charged, never refused, for the allowance (`admitted`).
+ *   - its own capped heap and stack (CONTRACT_JOB_LIMITS), so the worst an
+ *     input can do to memory is end its own worker;
+ *   - a wall-clock deadline (10 s from spawn, or less when the caller's own
+ *     deadline is nearer), after which V8 stops it wherever it is;
+ *   - ONE GATE for the process: COREEDGE_CONTRACT_ISOLATES workers at once
+ *     (default 1; 0 turns the compiler off); per organisation at most one
+ *     running and three waiting, at most 32 waiting in all, and past either
+ *     a job is BUSY at once, before anything is loaded for it; a freed slot
+ *     goes to the waiting job whose organisation was served least recently,
+ *     so a job waits behind at most one job per other organisation; a waiter
+ *     leaves the queue when its wait (at most 10 s) ends;
+ *   - SLOT FIRST: a job's inputs are loaded only once it holds its slot
+ *     (runContractJob's loader), so a job refused or still waiting has cost
+ *     the request thread nothing;
+ *   - its organisation's daily allowance (contract-time.ts): checked before
+ *     the job is queued, and charged with the job's wall time from spawn to
+ *     exit once the worker has gone.
  *
- * Whatever runs past any of them ends as a typed refusal (RESOURCE_LIMIT,
- * BUSY, UNAVAILABLE), which the verify reports as a contract that was not
- * compiled (NOT_COMPILED) while the verify itself answers exactly as it did
- * before the compiler existed. Never an out-of-memory, a crash or a blocked
- * event loop: the request thread only copies the description (or stored
- * texts) in and a bounded result out (pipeline.ts says what crosses).
- *
- * The worker is spawned per job and terminated after it, so its memory goes
- * back when the job ends however the job ended — and the job's slot is free
- * only once the worker has exited (EXIT_GRACE_MS, below).
- *
- * READ PATHS TOO (structural hardening round 2). /schema, the starter kit
- * and the solution document render a stored contract on every read; one too
- * large to render on the request thread (read-render.ts) is rendered here,
- * as a `render` job, in slots of its own (ENVELOPE_RENDER_CONCURRENCY).
+ * Whatever runs past a limit ends as a typed refusal (EnvelopeRefusal), never
+ * an out-of-memory, a crash or a blocked event loop. A job's slot is free only
+ * once its worker has exited (EXIT_GRACE_MS), so the isolates alive at once
+ * never pass COREEDGE_CONTRACT_ISOLATES.
  *
  * WHY A WORKER, NOT A COOPERATIVE BUDGET. A budget threaded through every
  * loop bounds only the loops someone remembered to thread it through, which
- * is the property the reviews kept finding missing. A worker's limits are
- * enforced by V8 whatever the code does.
+ * is what six hostile reviews kept finding. A worker's limits are enforced by
+ * V8 whatever the code does.
  *
  * LOADING. `new Worker(new URL("./compile.worker.ts", import.meta.url))` is
  * the form webpack (Next's server build) recognises: it bundles the worker as
  * its own chunk (chunks/contract-compiler-worker.js, traced into the routes
  * that spawn it by next.config.ts and checked after every build by
- * scripts/check-runtime-assets.mjs), and the routes that spawn it run on the
- * Node.js runtime. Run from source (vitest, tsx scripts) there is no bundle,
- * and the worker loads the TypeScript file through tsx's require hook.
- *
- * PROVED IN A PRODUCTION BUILD (`pnpm build`, `pnpm start`, a real POST
- * verify-service against a local SAP stub): see the runbook,
- * docs/runbooks/coreedge-contract-compiler.md, "Structural containment".
+ * scripts/check-runtime-assets.mjs). Run from source (vitest, tsx scripts)
+ * there is no bundle, and the worker loads the TypeScript file through tsx.
  */
 
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
 import { LIMITS } from "@/lib/contracts/budget";
-import {
-  allowanceRefusalDetail,
-  chargeEnvelopeAllowance,
-  checkEnvelopeAllowance,
-  JOB_BASE_CHARGE_MS,
-  type AllowanceKind,
-} from "@/lib/contracts/envelope-allowance";
+import { chargeContractTime, checkContractTime } from "@/lib/contracts/contract-time";
+import type { EnvelopeRefusal, Job, JobOutput } from "@/lib/contracts/jobs";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
-import type { CompiledService, EnvelopeRefusal, Job, JobOutput, RenderSubject } from "@/lib/contracts/pipeline";
 
 declare const __webpack_require__: unknown;
 // webpack's publicPath, as a bundled module reads and writes it (see construct).
@@ -120,461 +64,150 @@ declare var __webpack_public_path__: string;
 const BUNDLED = typeof __webpack_require__ !== "undefined";
 
 export interface EnvelopeLimits {
-  /** V8 old generation (MB): the heap a compile may hold. */
+  /** V8 old generation (MB). */
   maxOldGenerationSizeMb: number;
   /** V8 young generation (MB). */
   maxYoungGenerationSizeMb: number;
   /** Stack (MB). */
   stackSizeMb: number;
-  /** Wall-clock deadline (ms), from the moment the job starts running. */
+  /** Wall-clock deadline (ms), from the worker's spawn. */
   deadlineMs: number;
 }
 
 /**
- * THE ENVELOPE'S SIZE. Measured on a loaded 4-CPU runner: an 8 MB V2
- * description of 400 entity types compiles in 1-2 s holding about 70 MB of
- * heap, and every render of one of its slices takes tens of milliseconds; a
- * real service's description is a fraction of that. The most expensive
- * description found — 8 MB of CSDL JSON members, refused by the member cap
- * once read — takes 8-15 s and about 360 MB: the limits are what such a
- * description meets, not what a real one does.
+ * ONE SET OF LIMITS FOR EVERY JOB. Measured: an 8 MB V2 description of 400
+ * entity types compiles in 1-2 s holding about 70 MB; a 32 MiB kit renders
+ * in about 1.5 s; the most expensive description found (8 MB of CSDL JSON
+ * members) is stopped by these limits. A worker at its cap is 402-472 MB of
+ * RSS.
  */
-export const ENVELOPE_LIMITS: Readonly<Record<Job["kind"], EnvelopeLimits>> = {
-  compile: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 15_000 },
-  prepare: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
-  diff: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
-  /**
-   * A read path's render past what the request thread may render
-   * (read-render.ts): at the largest budget (a 32 MiB kit or document) about
-   * 1.5 s and a few hundred MB measured, the same order as the record-time
-   * renders a compile already does.
-   */
-  render: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 10_000 },
+export const CONTRACT_JOB_LIMITS: Readonly<EnvelopeLimits> = {
+  maxOldGenerationSizeMb: 384,
+  maxYoungGenerationSizeMb: 32,
+  stackSizeMb: 4,
+  deadlineMs: 10_000,
 };
 
-/**
- * A deployment may set its own heap cap and deadline
- * (COREEDGE_CONTRACT_HEAP_MB, COREEDGE_CONTRACT_DEADLINE_MS), within these
- * bounds; anything else unset or unreadable is the default above.
- */
-const HEAP_MB_RANGE = [16, 1024] as const;
-const DEADLINE_MS_RANGE = [100, 60_000] as const;
+/** The gate's sizes (see the header). */
+export const GATE = { perOrgRunning: 1, perOrgWaiting: 3, maxWaiting: 32, maxWaitMs: 10_000 } as const;
 
-function envInt(name: string, [min, max]: readonly [number, number]): number | null {
-  const raw = process.env[name];
-  if (raw === undefined || !/^\d+$/.test(raw.trim())) return null;
-  const n = Number(raw.trim());
-  return n >= min && n <= max ? n : null;
+/** Workers at once (COREEDGE_CONTRACT_ISOLATES): default 1, 0 turns the compiler off. */
+export function contractIsolates(): number {
+  const raw = process.env.COREEDGE_CONTRACT_ISOLATES?.trim();
+  return raw !== undefined && /^\d{1,2}$/.test(raw) ? Number(raw) : 1;
 }
 
-/** The limits a job of this kind runs under here: the defaults, as the deployment configures them. */
-export function envelopeLimitsFor(kind: Job["kind"]): EnvelopeLimits {
-  const base = ENVELOPE_LIMITS[kind];
-  const heap = envInt("COREEDGE_CONTRACT_HEAP_MB", HEAP_MB_RANGE);
-  const deadline = envInt("COREEDGE_CONTRACT_DEADLINE_MS", DEADLINE_MS_RANGE);
-  return {
-    ...base,
-    ...(heap !== null ? { maxOldGenerationSizeMb: heap } : {}),
-    ...(deadline !== null ? { deadlineMs: deadline } : {}),
-  };
-}
-
-/** Jobs running at once in this process, and how many more may wait for a turn. */
-export const ENVELOPE_CONCURRENCY = 2;
-export const ENVELOPE_QUEUE = 16;
-
-/**
- * READ-PATH RENDERS HAVE SLOTS OF THEIR OWN (structural hardening round 2).
- * A render too large for the request thread (read-render.ts) runs here, but
- * never in a compile's slot: a builder's loop of kit downloads must not
- * queue every tenant's verify behind it, nor a burst of verifies every
- * northbound /schema. One running per organisation, as compiles.
- *
- * AND A READ WAITS FOR ITS TURN (structural hardening round 3). With two
- * waiting places per organisation, a consumer fetching /schema for four
- * interfaces at start-up had its fourth answered UNAVAILABLE. A read loads
- * its input only once it has a slot (runLoadedInEnvelope), so waiting costs
- * nothing, and an organisation may keep ENVELOPE_RENDER_TENANT_WAITING reads
- * waiting, each until its deadline.
- */
-export const ENVELOPE_RENDER_CONCURRENCY = 2;
-export const ENVELOPE_RENDER_QUEUE = 64;
-export const ENVELOPE_RENDER_TENANT_WAITING = 16;
-
-/**
- * A VERIFY TAKES A TURN TOO, BEFORE IT READS ANYTHING (structural hardening
- * round 3). A verify reads up to 8 MiB of description from SAP and works on
- * it; nothing stopped one builder sending twenty at once, each doing
- * description-sized work. So a verify holds one of these slots from before
- * it asks SAP for the description until it has answered: one at a time per
- * organisation, ENVELOPE_TENANT_WAITING more waiting at most VERIFY_WAIT_MS,
- * and the next refused at once (service-verify.ts: BUSY) — before any
- * description is read. Across organisations it is no tighter than the
- * compile slots behind it.
- */
-export const ENVELOPE_VERIFY_CONCURRENCY = 16;
-export const ENVELOPE_VERIFY_QUEUE = 64;
-export const VERIFY_WAIT_MS = 20_000;
-/**
- * HOW MANY OF ONE ORGANISATION'S VERIFIES MAY READ AT ONCE (structural
- * hardening round 4). Round 3 let one at a time hold the turn — through the
- * SAP read itself — so one interface whose SAP hung for its 30 s timeout made
- * every teammate's verify of a healthy system wait 20 s and answer BUSY,
- * SAP never asked. The turn bounds the descriptions an organisation holds in
- * flight (at most this many × LIMITS.sourceBytes), not one at a time: as
- * many as its compiles can run or wait for (ENVELOPE_TENANT_RUNNING +
- * ENVELOPE_TENANT_WAITING), so a slow system holds one of them and the
- * others still read, and none of them is refused a compile for want of a
- * place in the queue.
- */
-export const ENVELOPE_VERIFY_TENANT_RUNNING = 3;
-
-/**
- * ONE ORGANISATION'S SHARE. The slots and the queue are the process's, and
- * verify-service is a builder's to call: with no share, one builder whose
- * SAP serves a description that takes seconds to compile kept eighteen
- * verifies in flight, and every other organisation's compile on the
- * instance was refused BUSY (NOT_COMPILED). So an organisation runs at most
- * ENVELOPE_TENANT_RUNNING job at a time and keeps at most
- * ENVELOPE_TENANT_WAITING waiting; past that its next job is refused BUSY at
- * once, before it can take a shared place, and a free slot goes to the
- * first waiting job whose organisation has none running. With fewer running
- * per organisation than there are slots, a slot is always left for another.
- * A job with no tenant (a test, a script) is outside the shares.
- */
-export const ENVELOPE_TENANT_RUNNING = 1;
-export const ENVELOPE_TENANT_WAITING = 2;
-
-/**
- * A SLOT IS FREE WHEN ITS ISOLATE IS GONE (structural hardening round 2).
- * The slot used to be handed on the moment the job's result was in, while
- * the terminated worker — up to its whole heap — was still exiting: a burst
- * of jobs ending at their deadline held three and four isolates against a
- * cap of two. Now a job holds its slot until its worker's 'exit' (and its
- * caller is answered then, so nothing that awaited a job sees its slot
- * still taken); should an exit never come, the slot is handed on after
- * EXIT_GRACE_MS all the same, and that is logged.
- */
+/** A job's slot is handed on this long after its worker was told to stop, should its 'exit' never come (logged). */
 const EXIT_GRACE_MS = 5_000;
 
-export type EnvelopeResult<T> =
-  | { ok: true; value: T; ms: number }
-  /**
-   * `cause`: a code or an error's name; INPUT_CAUSE when what the job was
-   * handed was past its bound. `retryAfterMs`: for a spent allowance
-   * (ALLOWANCE_CAUSE), how long until there is more.
-   */
-  | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number; cause?: string; retryAfterMs?: number };
-
-const DETAIL: Record<EnvelopeRefusal, string> = {
-  RESOURCE_LIMIT:
-    "The service description needs more memory or time to compile than a description may use, so it was not compiled.",
-  BUSY: "Too many service descriptions are being compiled at once. Verify again in a moment.",
-  UNAVAILABLE: "The contract compiler could not be started, so the description was not compiled.",
-  INTERNAL: "The service description could not be read as a service description.",
-};
+// ---------------------------------------------------------------- the gate
 
 interface Waiter {
-  tenant: string | null;
-  turn: Promise<void>;
-  start: () => void;
-}
-
-/** A set of slots and the queue for them, with each organisation's share (above). */
-interface Pool {
-  readonly concurrency: number;
-  readonly queue: number;
-  /** How many of one organisation's jobs may wait at once. */
-  readonly tenantWaiting: number;
-  /** How many of one organisation's jobs may run at once. */
-  readonly tenantRunning: number;
-  running: number;
-  readonly runningByTenant: Map<string, number>;
-  readonly waiting: Waiter[];
-}
-
-const pool = (concurrency: number, queue: number, tenantWaiting: number, tenantRunning: number = ENVELOPE_TENANT_RUNNING): Pool => ({
-  concurrency,
-  queue,
-  tenantWaiting,
-  tenantRunning,
-  running: 0,
-  runningByTenant: new Map(),
-  waiting: [],
-});
-
-/**
- * THE INSTANCE'S MEMORY, AND THE ISOLATES IT HOLDS (structural hardening
- * round 4). Each pool's slots were sized on their own — two compiles, two
- * renders — so one instance could hold four isolates, each allowed its whole
- * heap cap: 4 × 432 MB measured beside a 617 MB server, 2.3 GB, on a Vercel
- * Hobby function instance that has 2 GB and cannot be given more. Past it the
- * platform kills the instance, and every tenant's in-flight request with it:
- * exactly what "the worst a description can do to memory is end its own
- * worker" must exclude.
- *
- * So every job, whatever its pool, also holds one of envelopeIsolateSlots()
- * isolate slots while its worker lives, and that number is DERIVED from the
- * instance's memory: what is left after the server's own headroom, divided by
- * the most one isolate may hold (its heap cap and its overhead). The
- * instance's memory is the deployment's (COREEDGE_INSTANCE_MEMORY_MB), or
- * 2,048 MB — the Hobby plan's fixed instance — and never more than the
- * process's own cgroup limit when Node reports one (process.constrainedMemory).
- * One organisation holds at most one isolate at a time; and since several
- * organisations — or one person's several — can hold every isolate there is,
- * a job holds one at most a turn while another organisation waits for it
- * (envelopeIsolateTurnMs, below).
- */
-export const DEFAULT_INSTANCE_MEMORY_MB = 2048;
-/** What the server itself holds beside the isolates: 617 MiB measured (next-server with the contract routes loaded), and margin. */
-export const SERVER_HEADROOM_MB = 768;
-/** What an isolate holds beyond its heap (its own code, stacks, buffers): about 7 MB measured; this is the allowance. */
-export const ISOLATE_OVERHEAD_MB = 32;
-const INSTANCE_MB_RANGE = [512, 65_536] as const;
-
-/** The memory the instance has, in MB (see above). */
-export function instanceMemoryMb(): number {
-  let mb = envInt("COREEDGE_INSTANCE_MEMORY_MB", INSTANCE_MB_RANGE) ?? DEFAULT_INSTANCE_MEMORY_MB;
-  const constrained = typeof process.constrainedMemory === "function" ? process.constrainedMemory() : 0;
-  if (Number.isFinite(constrained) && constrained > 0) mb = Math.min(mb, Math.floor(constrained / (1024 * 1024)));
-  return mb;
-}
-
-/** The most memory one isolate may hold, in MB: the largest heap cap of any job kind, and its overhead. */
-export function isolateFootprintMb(): number {
-  let heap = 0;
-  for (const kind of Object.keys(ENVELOPE_LIMITS) as Job["kind"][]) heap = Math.max(heap, heapLimitBytes(envelopeLimitsFor(kind)));
-  return Math.ceil(heap / (1024 * 1024)) + ISOLATE_OVERHEAD_MB;
-}
-
-/**
- * THE INSTANCE'S CPUS (structural hardening round 5). The isolate budget was
- * memory's alone: two on a 2 GB Hobby instance, which has one vCPU, so two
- * hostile compiles and the request thread shared one CPU and every tenant's
- * requests ran at half speed for as long as the compiles did. Now an isolate
- * also needs a CPU the request thread is not using: at most one fewer
- * isolates than the instance has CPUs, and at least one. The CPUs are the
- * deployment's (COREEDGE_INSTANCE_CPUS — set it where the platform shows the
- * process more CPUs than its quota gives it), or what Node reports
- * (os.availableParallelism).
- */
-export function instanceCpus(): number {
-  return envInt("COREEDGE_INSTANCE_CPUS", [1, 1024]) ?? Math.max(1, os.availableParallelism());
-}
-
-/**
- * How many isolates may live at once in this process: as many as the
- * instance's memory holds beside the server, and as its CPUs leave one for
- * the request thread — at least one.
- */
-export function envelopeIsolateSlots(): number {
-  const room = instanceMemoryMb() - SERVER_HEADROOM_MB;
-  const byMemory = Math.floor(room / isolateFootprintMb());
-  const byCpu = instanceCpus() - 1;
-  return Math.max(1, Math.min(ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY, byMemory, byCpu));
-}
-
-/**
- * Compiles, prepares and diffs share one pool; read-path renders have their
- * own; verifies take a turn in a third; and every job's worker holds one of
- * the instance's isolate slots (above) while it lives.
- */
-const POOLS = {
-  compile: pool(ENVELOPE_CONCURRENCY, ENVELOPE_QUEUE, ENVELOPE_TENANT_WAITING),
-  render: pool(ENVELOPE_RENDER_CONCURRENCY, ENVELOPE_RENDER_QUEUE, ENVELOPE_RENDER_TENANT_WAITING),
-  verify: pool(ENVELOPE_VERIFY_CONCURRENCY, ENVELOPE_VERIFY_QUEUE, ENVELOPE_TENANT_WAITING, ENVELOPE_VERIFY_TENANT_RUNNING),
-  // Every job that holds a compile or a render slot may wait here, so the queue is theirs together.
-  isolate: pool(
-    envelopeIsolateSlots(),
-    ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY,
-    ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY,
-  ),
-};
-export type EnvelopePool = keyof typeof POOLS;
-const poolOf = (kind: Job["kind"]): EnvelopePool => (kind === "render" ? "render" : "compile");
-/** A read path's render spends the reading organisation's read allowance; every other job, its compile allowance. */
-const allowanceOf = (kind: Job["kind"]): AllowanceKind => (kind === "render" ? "read" : "compile");
-
-/**
- * A TURN AT THE ISOLATE (structural hardening round 6). Round 5 left a one-
- * or two-CPU instance (a Hobby function has one vCPU) one isolate, handed out
- * first come, first served: two organisations' hostile compiles, each
- * running to its 15 s deadline, held it back to back, and every other
- * tenant's job behind them reached the end of its own wait — the verify's
- * contract NOT_COMPILED, a large /schema UNAVAILABLE. The per-organisation
- * share does not help (one running each), nor would more isolates: any
- * number of organisations (signing up is self-service) hold any number.
- *
- * So a job holds an isolate at most ENVELOPE_ISOLATE_TURN_MS while a job of
- * ANOTHER organisation is waiting for one — or for the compile or render
- * slot it holds beside it: two organisations' long compiles hold both
- * compile slots of an instance with two isolates just as well — then it
- * gives the isolate (and its slot) up —
- * its worker terminated, its time charged, and it answers BUSY (cause
- * ISOLATE_TURN_CAUSE): a verify's contract NOT_COMPILED, "verify again". A
- * real description compiles in tens to hundreds of milliseconds and a read
- * path's render at its largest budget in about 1.5 s, inside a turn; only
- * one that needs more, AND only while another organisation waits, is cut.
- * With nobody else waiting a job keeps its isolate to its own deadline.
- * What one job waits is then bounded however many organisations queue
- * ahead: the isolate's queue holds only jobs that have a compile or render
- * slot (ENVELOPE_CONCURRENCY + ENVELOPE_RENDER_CONCURRENCY), and each of
- * those ahead of it holds the isolate at most a turn while it waits.
- * A job with no organisation (a test, a script) is outside it, as it is
- * outside the shares.
- */
-export const ENVELOPE_ISOLATE_TURN_MS = 2_000;
-const TURN_MS_RANGE = [100, 60_000] as const;
-
-/** A turn at the isolate, as the deployment configures it (COREEDGE_ENVELOPE_ISOLATE_TURN_MS). */
-export function envelopeIsolateTurnMs(): number {
-  return envInt("COREEDGE_ENVELOPE_ISOLATE_TURN_MS", TURN_MS_RANGE) ?? ENVELOPE_ISOLATE_TURN_MS;
-}
-
-/** The cause of a refusal because the job used its turn at the isolate while another organisation waited. */
-export const ISOLATE_TURN_CAUSE = "isolate-turn";
-
-const TURN_DETAIL =
-  "Other organisations' service descriptions were waiting for the contract compiler and this one had used its turn, so it was not compiled. Verify again in a moment.";
-
-/**
- * A job holding an isolate: whose, since when its worker ran (its turn is
- * counted from its worker coming online — the isolate's start is the same
- * for every job, and no description's doing), and how to end its turn.
- */
-interface IsolateHolder {
   readonly tenant: string | null;
-  /** The pool whose slot the job also holds (its compile or render slot). */
-  readonly pool: EnvelopePool;
-  since: number | null;
-  stop: (() => void) | null;
-  stopped: boolean;
-  timer: ReturnType<typeof setTimeout> | undefined;
+  readonly start: (release: () => void) => void;
 }
 
-const holders = new Set<IsolateHolder>();
-
 /**
- * For each organisation waiting for an isolate — or for the compile or
- * render slot a running job holds beside its isolate, which two
- * organisations' long jobs can hold just as well — and allowed one by its
- * share, end the turn of the job that has held one longest past its turn,
- * if it is another organisation's.
+ * THE ONE GATE: slots, each organisation's running and waiting jobs, and
+ * least-recently-served dispatch (see the header). A job with no
+ * organisation (a test, a script) has no per-organisation share and is
+ * served first in turn.
  */
-function endTurnsForWaiters(): void {
-  const turnMs = envelopeIsolateTurnMs();
-  const now = Date.now();
-  for (const name of ["isolate", "compile", "render"] as const) {
-    const p = POOLS[name];
-    const served = new Set<string>();
-    // A turn already ended whose isolate is still exiting frees a place for one waiter: never end two for it.
-    let freeing = 0;
-    for (const h of holders) if (h.stopped && (name === "isolate" || h.pool === name)) freeing += 1;
-    for (const w of p.waiting) {
-      if (w.tenant === null || served.has(w.tenant) || !withinShare(p, w.tenant)) continue;
-      served.add(w.tenant);
-      if (freeing > 0) {
-        freeing -= 1;
-        continue;
+export class ContractGate {
+  private running = 0;
+  private readonly runningByOrg = new Map<string, number>();
+  private readonly waiting: Waiter[] = [];
+  /** When each organisation was last served: an order (a counter) for dispatch, and a time for pruning. */
+  private readonly served = new Map<string, { order: number; at: number }>();
+  private order = 0;
+  private prunedAt = 0;
+
+  constructor(private readonly slots: () => number = contractIsolates) {}
+
+  /** A slot within `waitMs` — the function that frees it — or null (BUSY). */
+  acquire(tenant: string | null, waitMs: number): Promise<(() => void) | null> {
+    if (this.waiting.length === 0 && this.running < this.slots() && this.mayRun(tenant)) return Promise.resolve(this.occupy(tenant));
+    if (this.waiting.length >= GATE.maxWaiting) return Promise.resolve(null);
+    if (tenant !== null && this.waiting.filter((w) => w.tenant === tenant).length >= GATE.perOrgWaiting) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const waiter: Waiter = {
+        tenant,
+        start: (release) => {
+          clearTimeout(timer);
+          resolve(release);
+        },
+      };
+      const timer = setTimeout(() => {
+        const i = this.waiting.indexOf(waiter);
+        if (i >= 0) this.waiting.splice(i, 1);
+        resolve(null);
+      }, Math.max(0, waitMs));
+      this.waiting.push(waiter);
+      // A slot may be free for this one (its organisation's job ahead of others).
+      this.dispatch();
+    });
+  }
+
+  /** For a test: the gate as it stands. */
+  state(): { running: number; waiting: number; runningByOrg: Record<string, number> } {
+    return { running: this.running, waiting: this.waiting.length, runningByOrg: Object.fromEntries(this.runningByOrg) };
+  }
+
+  private mayRun(tenant: string | null): boolean {
+    return tenant === null || (this.runningByOrg.get(tenant) ?? 0) < GATE.perOrgRunning;
+  }
+
+  private occupy(tenant: string | null): () => void {
+    this.running += 1;
+    if (tenant !== null) {
+      this.runningByOrg.set(tenant, (this.runningByOrg.get(tenant) ?? 0) + 1);
+      const now = Date.now();
+      this.served.set(tenant, { order: ++this.order, at: now });
+      if (now - this.prunedAt > 60_000) {
+        this.prunedAt = now;
+        for (const [k, v] of this.served) if (now - v.at > 3_600_000) this.served.delete(k);
       }
-      let longest: IsolateHolder | undefined;
-      for (const h of holders) {
-        if (name !== "isolate" && h.pool !== name) continue;
-        if (h.stopped || h.stop === null || h.since === null || h.tenant === null || h.tenant === w.tenant || now - h.since < turnMs) continue;
-        if (!longest || h.since < longest.since!) longest = h;
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.running -= 1;
+      if (tenant !== null) {
+        const n = (this.runningByOrg.get(tenant) ?? 1) - 1;
+        if (n > 0) this.runningByOrg.set(tenant, n);
+        else this.runningByOrg.delete(tenant);
       }
-      if (!longest) continue;
-      longest.stopped = true;
-      longest.stop!();
+      this.dispatch();
+    };
+  }
+
+  /** Free slots to the waiting jobs whose organisations were served least recently (first in, first out on a tie). */
+  private dispatch(): void {
+    while (this.running < this.slots()) {
+      let best = -1;
+      let bestOrder = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < this.waiting.length; i++) {
+        const w = this.waiting[i]!;
+        if (!this.mayRun(w.tenant)) continue;
+        const order = w.tenant === null ? 0 : (this.served.get(w.tenant)?.order ?? 0);
+        if (order < bestOrder) {
+          best = i;
+          bestOrder = order;
+        }
+      }
+      if (best < 0) return;
+      const [next] = this.waiting.splice(best, 1);
+      next!.start(this.occupy(next!.tenant));
     }
   }
 }
 
-/** A job takes an isolate: held, its turn counted once its worker runs (isolateRunning). */
-function holdIsolate(tenant: string | null, pool: EnvelopePool): IsolateHolder {
-  const h: IsolateHolder = { tenant, pool, since: null, stop: null, stopped: false, timer: undefined };
-  holders.add(h);
-  return h;
-}
+const gate = new ContractGate();
 
-/** Its worker is online: its turn starts, and is looked at again once it is over. */
-function isolateRunning(h: IsolateHolder): void {
-  if (h.since !== null) return;
-  h.since = Date.now();
-  if (h.tenant !== null) h.timer = setTimeout(endTurnsForWaiters, envelopeIsolateTurnMs());
-}
-
-function letGoOfIsolate(h: IsolateHolder): void {
-  clearTimeout(h.timer);
-  holders.delete(h);
-}
-
-/** May a job of this tenant take a slot now (its organisation's share allowing)? */
-function withinShare(p: Pool, tenant: string | null): boolean {
-  return tenant === null || (p.runningByTenant.get(tenant) ?? 0) < p.tenantRunning;
-}
-
-function occupy(p: Pool, tenant: string | null): void {
-  p.running += 1;
-  if (tenant !== null) p.runningByTenant.set(tenant, (p.runningByTenant.get(tenant) ?? 0) + 1);
-}
-
-/** A slot now (true), a place in the queue (the waiter), or neither (false: BUSY). */
-function acquire(p: Pool, tenant: string | null): true | false | Waiter {
-  if (p.running < p.concurrency && withinShare(p, tenant)) {
-    occupy(p, tenant);
-    return true;
-  }
-  if (p.waiting.length >= p.queue) return false;
-  if (tenant !== null) {
-    let mine = 0;
-    for (const w of p.waiting) if (w.tenant === tenant) mine += 1;
-    if (mine >= p.tenantWaiting) return false;
-  }
-  let start!: () => void;
-  const turn = new Promise<void>((resolve) => (start = resolve));
-  const waiter: Waiter = { tenant, turn, start };
-  p.waiting.push(waiter);
-  return waiter;
-}
-
-/** Hand free slots to the first waiting jobs whose organisations' shares allow them. */
-function dispatch(p: Pool): void {
-  while (p.running < p.concurrency) {
-    const i = p.waiting.findIndex((w) => withinShare(p, w.tenant));
-    if (i < 0) return;
-    const [next] = p.waiting.splice(i, 1);
-    occupy(p, next!.tenant);
-    next!.start();
-  }
-}
-
-function release(p: Pool, tenant: string | null): void {
-  p.running -= 1;
-  if (tenant !== null) {
-    const n = (p.runningByTenant.get(tenant) ?? 1) - 1;
-    if (n > 0) p.runningByTenant.set(tenant, n);
-    else p.runningByTenant.delete(tenant);
-  }
-  dispatch(p);
-}
-
-/** Leave the queue (a wait that timed out): false when the turn was already given. */
-function abandon(p: Pool, waiter: Waiter): boolean {
-  const i = p.waiting.indexOf(waiter);
-  if (i < 0) return false;
-  p.waiting.splice(i, 1);
-  return true;
-}
-
-/** A pool as it stands, for a test: running, by tenant, and waiting (the compile pool unless asked). */
-export function envelopeQueueState(kind: EnvelopePool = "compile"): {
-  running: number;
-  waiting: number;
-  runningByTenant: Record<string, number>;
-} {
-  const p = POOLS[kind];
-  return { running: p.running, waiting: p.waiting.length, runningByTenant: Object.fromEntries(p.runningByTenant) };
+/** For a test: the process's gate as it stands. */
+export function contractGateState(): ReturnType<ContractGate["state"]> {
+  return gate.state();
 }
 
 /** Worker isolates spawned and not yet exited, and the most there were at once since the last look (for a test). */
@@ -585,6 +218,100 @@ export function envelopeIsolates(): { live: number; peak: number } {
   peakIsolates = liveIsolates;
   return r;
 }
+
+// ---------------------------------------------------------------- a job
+
+export type EnvelopeResult<T> =
+  | { ok: true; value: T; ms: number }
+  /**
+   * `cause`: a code or an error's name; INPUT_CAUSE when what the job was
+   * handed was past its bound. `retryAfterMs`: for ALLOWANCE, until 00:00 UTC.
+   */
+  | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number; cause?: string; retryAfterMs?: number };
+
+const DETAIL: Record<EnvelopeRefusal, string> = {
+  RESOURCE_LIMIT: "It needs more memory or time than one contract compiler job may use, so it was not processed.",
+  BUSY: "The contract compiler is busy with other organisations' jobs. Try again in a moment.",
+  ALLOWANCE: "Your organisation has used its contract compile time for today.",
+  DISABLED: "The contract compiler is turned off on this deployment (compiler disabled).",
+  UNAVAILABLE: "The contract compiler could not be started, so nothing was processed.",
+  INTERNAL: "It could not be read.",
+};
+
+/** The cause of a refusal for what the job was handed, not for what it did. */
+export const INPUT_CAUSE = "input";
+/** The cause of a refusal because the caller's own deadline (deadlineAt) came first. */
+export const REQUEST_DEADLINE_CAUSE = "request-deadline";
+
+export interface EnvelopeOptions {
+  /** The organisation the job is for: its share of the gate, and its allowance. Null: a test or a script. */
+  tenant?: string | null;
+  /** When the caller must have its answer (ms since the epoch): the wait and the run end by then. */
+  deadlineAt?: number | null;
+  /** The limits (a test tightens them). */
+  limits?: EnvelopeLimits;
+}
+
+/**
+ * Run one job in a fresh worker, in order: the allowance, the gate, `load`
+ * (only once the slot is held; null declines the job, and null is answered),
+ * the worker, its exit, the slot freed, the wall time charged. Resolves,
+ * never rejects.
+ */
+export async function runContractJob<K extends Job["kind"]>(
+  kind: K,
+  load: () => Promise<Extract<Job, { kind: K }> | null>,
+  opts: EnvelopeOptions = {},
+): Promise<EnvelopeResult<JobOutput<K>> | null> {
+  const queuedAt = Date.now();
+  const tenant = opts.tenant ?? null;
+  const deadlineAt = opts.deadlineAt ?? null;
+  const limits = opts.limits ?? CONTRACT_JOB_LIMITS;
+  const left = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
+  if (contractIsolates() === 0) return refuse("DISABLED", kind, queuedAt);
+  if (tenant !== null) {
+    const allowance = await checkContractTime(tenant);
+    if (!allowance.ok) return refuse("ALLOWANCE", kind, queuedAt, "allowance", allowance.detail, allowance.retryAfterMs);
+  }
+  const wait = left(GATE.maxWaitMs);
+  const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
+  if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
+  let wallMs = 0;
+  let result: EnvelopeResult<JobOutput<K>> | null;
+  try {
+    const job = await load();
+    if (job === null) return null;
+    const runMs = left(limits.deadlineMs);
+    if (job.kind === "render" && inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes) {
+      result = refuse("RESOURCE_LIMIT", kind, queuedAt, INPUT_CAUSE);
+    } else if (runMs <= 0) {
+      result = refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
+    } else {
+      const ran = await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
+      wallMs = ran.wallMs;
+      result = ran.result;
+    }
+  } finally {
+    release();
+  }
+  if (tenant !== null && wallMs > 0) await chargeContractTime(tenant, wallMs);
+  return result;
+}
+
+/** runContractJob for a job already in hand. */
+export async function runJobInEnvelope<J extends Job>(job: J, opts: EnvelopeOptions = {}): Promise<EnvelopeResult<JobOutput<J["kind"]>>> {
+  const r = await runContractJob(job.kind, () => Promise.resolve(job as unknown as Extract<Job, { kind: J["kind"] }>), opts);
+  return r as EnvelopeResult<JobOutput<J["kind"]>>;
+}
+
+/** `cause`: what ended the job, as a code or an error's name — never a message, which can quote the input. */
+function refuse<T>(reason: EnvelopeRefusal, kind: Job["kind"], since: number, cause?: string, detail?: string, retryAfterMs?: number): EnvelopeResult<T> {
+  const ms = Date.now() - since;
+  console.error("[contracts] envelope refused", { job: kind, reason, ms, ...(cause ? { cause } : {}) });
+  return { ok: false, reason, detail: detail ?? DETAIL[reason], ms, ...(cause ? { cause } : {}), ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) };
+}
+
+// ---------------------------------------------------------------- the worker
 
 /** Errors that mean the job hit a limit rather than a defect. */
 function isResourceError(name: string | undefined, code: string | undefined): boolean {
@@ -597,35 +324,25 @@ function isLoadError(code: string | undefined): boolean {
 }
 
 /**
- * THE HEAP CAP MUST HOLD WHATEVER THE PROCESS WAS STARTED WITH. A process
- * started with --max-old-space-size (NODE_OPTIONS commonly sets it, and this
- * one's build does) has that V8 flag, and V8 lets the flag override every
- * isolate's own resource limits: a worker asked for 384 MB got the whole
- * process's 8 GB, and a hostile description could use all of it. So the flag
- * is set to the worker's cap while its isolate is created — each spawn waits
- * for the previous one to come online, so no two ask at once — and put back
- * the moment it is online: the request thread's own heap was sized at start
- * and is not touched. And the worker checks the heap it was given before it
- * runs anything (compile.worker.ts): one past its cap refuses the job
- * (UNAVAILABLE), so a compile never runs uncapped.
+ * THE HEAP CAP MUST HOLD WHATEVER THE PROCESS WAS STARTED WITH. V8 lets a
+ * process-wide --max-old-space-size (NODE_OPTIONS commonly sets it) override
+ * a worker's own resource limits, and --max-semi-space-size its young
+ * generation: a worker asked for 384 MB got the process's 8 GB. So both
+ * flags are set to the worker's caps while its isolate is created — each
+ * spawn waits for the previous one to come online, so no two ask at once —
+ * and put back the moment it is online (or has exited): the request
+ * thread's own heap was sized at start and is not touched. And the worker
+ * checks the heap it was given before it runs anything (compile.worker.ts):
+ * one past its cap refuses the job (UNAVAILABLE), so nothing ever runs
+ * uncapped.
  */
 const OLD_SPACE_FLAG = /^--max[-_]old[-_]space[-_]size=(\d+)$/;
-/**
- * THE YOUNG GENERATION TOO. --max-semi-space-size (a common GC tuning,
- * NODE_OPTIONS="--max-semi-space-size=64") overrides a worker's
- * maxYoungGenerationSizeMb the same way: the worker got 3 × 64 MB of young
- * generation, passed its cap check, and every compile was refused
- * UNAVAILABLE (structural hardening round 1). So it is set to 0 — "not set",
- * deferring to the worker's resourceLimits — for the same moment, and put
- * back to what the process started with.
- */
 const SEMI_SPACE_FLAG = /^--max[-_]semi[-_]space[-_]size=(\d+)$/;
 
 /** A size flag the process was started with, in MB; 0 when none (V8's "not set"). */
 function startupFlagMb(flag: RegExp): number {
-  const flags = [...(process.env.NODE_OPTIONS ?? "").split(/\s+/), ...process.execArgv];
   let mb = 0;
-  for (const f of flags) {
+  for (const f of [...(process.env.NODE_OPTIONS ?? "").split(/\s+/), ...process.execArgv]) {
     const m = flag.exec(f);
     if (m) mb = Number(m[1]);
   }
@@ -635,17 +352,6 @@ function startupFlagMb(flag: RegExp): number {
 const STARTUP_OLD_SPACE_MB = startupFlagMb(OLD_SPACE_FLAG);
 const STARTUP_SEMI_SPACE_MB = startupFlagMb(SEMI_SPACE_FLAG);
 
-/** The process-wide heap flags while a worker's isolate is created, and back. */
-function capHeapFlags(limits: EnvelopeLimits): void {
-  v8.setFlagsFromString(`--max-old-space-size=${limits.maxOldGenerationSizeMb}`);
-  v8.setFlagsFromString("--max-semi-space-size=0");
-}
-
-function restoreHeapFlags(): void {
-  v8.setFlagsFromString(`--max-old-space-size=${STARTUP_OLD_SPACE_MB}`);
-  v8.setFlagsFromString(`--max-semi-space-size=${STARTUP_SEMI_SPACE_MB}`);
-}
-
 /** The heap a worker with these limits can at most be given: V8's limit is old generation plus young generation space. */
 export function heapLimitBytes(limits: EnvelopeLimits): number {
   return (limits.maxOldGenerationSizeMb + 3 * limits.maxYoungGenerationSizeMb + 16) * 1024 * 1024;
@@ -653,32 +359,33 @@ export function heapLimitBytes(limits: EnvelopeLimits): number {
 
 let spawning: Promise<void> = Promise.resolve();
 
-/** Spawn with the V8 flag set to the worker's cap until its isolate exists (see above). */
+/** Spawn with the V8 flags set to the worker's caps until its isolate exists (see above). */
 async function spawn(job: Job, limits: EnvelopeLimits): Promise<Worker> {
   const previous = spawning;
   let done!: () => void;
   spawning = new Promise((resolve) => (done = resolve));
   await previous;
-  capHeapFlags(limits);
+  v8.setFlagsFromString(`--max-old-space-size=${limits.maxOldGenerationSizeMb}`);
+  v8.setFlagsFromString("--max-semi-space-size=0");
+  let restored = false;
+  const restore = () => {
+    // Once: a later exit must not reset the flags while the next spawn has them set.
+    if (restored) return;
+    restored = true;
+    v8.setFlagsFromString(`--max-old-space-size=${STARTUP_OLD_SPACE_MB}`);
+    v8.setFlagsFromString(`--max-semi-space-size=${STARTUP_SEMI_SPACE_MB}`);
+    done();
+  };
   let worker: Worker;
   try {
     worker = construct({ job, heapLimitBytes: heapLimitBytes(limits) }, limits);
   } catch (err) {
-    restoreHeapFlags();
-    done();
+    restore();
     throw err;
   }
   liveIsolates += 1;
   peakIsolates = Math.max(peakIsolates, liveIsolates);
   worker.once("exit", () => (liveIsolates -= 1));
-  let restored = false;
-  const restore = () => {
-    // Once: a later exit must not reset the flag while the next spawn has it set.
-    if (restored) return;
-    restored = true;
-    restoreHeapFlags();
-    done();
-  };
   worker.once("online", restore);
   worker.once("exit", restore); // never came online: restore all the same
   return worker;
@@ -699,13 +406,11 @@ function construct(input: WorkerInput, limits: EnvelopeLimits): Worker {
   };
   if (BUNDLED) {
     /*
-     * webpack bundles the worker as its own chunk and resolves this URL as
-     * publicPath + chunk file against the server's chunks directory. Next's
-     * server bundle carries the CLIENT's publicPath ("/_next/"), which made
-     * it file:///_next/<chunk>.js — a file that does not exist, so every
-     * compile in a production build was UNAVAILABLE. Empty for exactly this
-     * expression, and put back before anything else can run, it resolves to
-     * the chunk beside the server's own.
+     * webpack resolves this URL as publicPath + chunk file against the
+     * server's chunks directory; Next's server bundle carries the CLIENT's
+     * publicPath ("/_next/"), which made it file:///_next/<chunk>.js. Empty
+     * for exactly this expression, and put back before anything else can
+     * run, it resolves to the chunk beside the server's own.
      */
     const publicPath = __webpack_public_path__;
     __webpack_public_path__ = "";
@@ -721,273 +426,31 @@ function construct(input: WorkerInput, limits: EnvelopeLimits): Worker {
 }
 
 /**
- * WHAT CROSSES INTO THE WORKER IS BOUNDED. A contract handed to a job is
- * copied into workerData on this thread, in proportion to its size; a
- * sampled capture of 358,000 fields blocked the event loop for 287 ms doing
- * it, only for the worker to refuse the contract at once. So a contract is
- * measured first, by the budgeted size walk, which stops at the cap — at
- * most the cap's worth of work, whatever the input — and one past the cap
- * never reaches the worker. A render's input is bounded the same way, by
- * LIMITS.renderInput, which every input a read path stores fits by
- * construction. A description (compile) is a string, copied whole in one
- * step, and the reader already capped it (LIMITS.sourceBytes). Measured only
- * once the job holds its slot, so a refused job is never measured. Stored
- * JSON handed in as its text (render-input.ts) is counted by its length,
- * never walked: the walk covers only the job's own structure.
+ * Run one job in a worker: its result, answered once the worker has exited
+ * (or EXIT_GRACE_MS after it was told to stop), and the wall time from its
+ * spawn to its exit — what the organisation is charged, a job killed at its
+ * deadline or heap included. `cutByCaller`: the deadline is the caller's,
+ * shorter than the job's own, so a job that meets it is BUSY, not
+ * RESOURCE_LIMIT.
  */
-function overInputBound(job: Job): boolean {
-  const cap = LIMITS.contract.cap;
-  if (job.kind === "prepare") return inputBytesUpTo(job.input.contract, cap) > cap;
-  if (job.kind === "render") return inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes;
-  if (job.kind === "diff") {
-    // A stored IR crosses as its jsonb text, at most twice its canonical bytes (render-input.ts).
-    const n = (Array.isArray(job.input.previous) ? job.input.previous.length : 0) + 1;
-    return inputBytesUpTo(job.input, 2 * n * cap) > 2 * n * cap;
-  }
-  return false;
-}
-
-/** The cause of a refusal for what the job was handed, not for what it did (read-render.ts tells the two apart). */
-export const INPUT_CAUSE = "input";
-
-/** How a job past the input bound is answered: a prepared contract that is too large, or a refusal saying so. */
-function inputRefusal<J extends Job>(job: J, since: number): EnvelopeResult<JobOutput<J["kind"]>> {
-  if (job.kind === "prepare") {
-    const value: JobOutput<"prepare"> = {
-      ok: false,
-      reason: "TOO_LARGE",
-      bytes: LIMITS.contract.cap + 1,
-      detail: `The compiled contract is larger than ${Math.floor(LIMITS.contract.cap / 1024)} KB, so it was not recorded.`,
-    };
-    return { ok: true, value: value as JobOutput<J["kind"]>, ms: Date.now() - since };
-  }
-  return refuse("RESOURCE_LIMIT", job.kind, since, INPUT_CAUSE);
-}
-
-export interface EnvelopeOptions {
-  /** The organisation the job is for: its share of the slots and the queue (ENVELOPE_TENANT_*). */
-  tenant?: string | null;
-  /**
-   * The time (ms since the epoch) by which the caller must have its answer —
-   * its request's own limit (structural hardening round 4). The wait for a
-   * slot and the run together end by then; a job cut short by it is BUSY
-   * (cause REQUEST_DEADLINE_CAUSE), never a description that needs too much.
-   */
-  deadlineAt?: number | null;
-  /**
-   * The job continues work the allowance already admitted — the diff of a
-   * verify whose compile (or the record's prepare) was checked and ran
-   * (structural hardening round 6): it is charged, and never refused for the
-   * allowance, so a compile that was paid for is not then thrown away at
-   * its diff.
-   */
-  admitted?: boolean;
-}
-
-/** The cause of a refusal because the caller's own deadline (deadlineAt) came first. */
-export const REQUEST_DEADLINE_CAUSE = "request-deadline";
-
-/** The cause of a refusal because the organisation's (or the deployment's) allowance is spent (envelope-allowance.ts). */
-export const ALLOWANCE_CAUSE = "allowance";
-
-/**
- * Hold one of a pool's slots while `body` runs, waiting for one at most
- * `waitMs`: the body's value, or BUSY — at once when the organisation's share
- * of the queue (or the queue) is full, or when the wait ends with no slot.
- * Nothing of the body runs before it has its slot, so a refusal costs the
- * caller nothing. Released however the body ends.
- */
-export async function withEnvelopeSlot<R>(
-  name: EnvelopePool,
-  tenant: string | null,
-  waitMs: number,
-  body: () => Promise<R>,
-): Promise<{ ok: true; value: R } | { ok: false; reason: "BUSY" }> {
-  const p = POOLS[name];
-  const turn = acquire(p, tenant);
-  if (turn === false) return { ok: false, reason: "BUSY" };
-  if (turn !== true) {
-    // Waiting for an isolate, or a compile or render slot: a job of another organisation past its turn gives one up (A TURN AT THE ISOLATE).
-    if (name !== "verify") endTurnsForWaiters();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timedOut = await Promise.race([
-      turn.turn.then(() => false),
-      new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(true), waitMs))),
-    ]);
-    clearTimeout(timer);
-    // Out of the queue the moment the wait ends, so a stale waiter never holds a place;
-    // a turn given just as the wait ended is handed straight on.
-    if (timedOut) {
-      if (!abandon(p, turn)) release(p, tenant);
-      return { ok: false, reason: "BUSY" };
-    }
-  }
-  try {
-    return { ok: true, value: await body() };
-  } finally {
-    release(p, tenant);
-  }
-}
-
-/**
- * Run one job in a fresh worker under its limits. Resolves, never rejects:
- * the value, or the refusal that ended it.
- */
-export async function runInEnvelope<J extends Job>(
-  job: J,
-  limits: EnvelopeLimits = envelopeLimitsFor(job.kind),
-  opts: EnvelopeOptions = {},
-): Promise<EnvelopeResult<JobOutput<J["kind"]>>> {
-  const r = await runLoadedInEnvelope(job.kind, () => Promise.resolve<Job>(job), limits, opts);
-  // The loader always hands the job over, so there is always a result.
-  return r as EnvelopeResult<JobOutput<J["kind"]>>;
-}
-
-/**
- * runInEnvelope for a job whose input is loaded only once it has a slot: a
- * read path's render, whose contract, schema and fixtures are read from the
- * database, measured and copied into the worker only when it is its turn —
- * never for a read that is refused or still waiting. `load` answering null
- * declines the job (its caller found it need not run); the slot is handed on
- * and null is answered.
- */
-export async function runLoadedInEnvelope<K extends Job["kind"]>(
-  kind: K,
-  load: () => Promise<Job | null>,
-  limits: EnvelopeLimits = envelopeLimitsFor(kind),
-  opts: EnvelopeOptions = {},
-): Promise<EnvelopeResult<JobOutput<K>> | null> {
-  const queuedAt = Date.now();
-  const tenant = opts.tenant ?? null;
-  const deadlineAt = opts.deadlineAt ?? null;
-  /** What is left of the caller's own time, capped at `ms`. */
-  const within = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
-  // A job waits for its slot at most its own deadline (and never past the caller's), then runs at most its deadline.
-  const wait = within(limits.deadlineMs);
-  if (wait <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
-  // The organisation's time over the hour and the day, and the deployment's (envelope-allowance.ts): before any slot.
-  const allowanceKind = allowanceOf(kind);
-  if (tenant !== null && opts.admitted !== true) {
-    const allowance = await checkEnvelopeAllowance(tenant, undefined, allowanceKind);
-    if (!allowance.ok) {
-      return refuse("BUSY", kind, queuedAt, ALLOWANCE_CAUSE, allowanceRefusalDetail(allowance), allowance.retryAfterMs);
-    }
-  }
-  const charge = (ms: number) => {
-    if (tenant !== null) void chargeEnvelopeAllowance(tenant, ms, allowanceKind);
-  };
-  const r = await withEnvelopeSlot(poolOf(kind), tenant, wait, async () => {
-    const job = await load();
-    if (job === null) return null;
-    if (overInputBound(job)) return inputRefusal(job, queuedAt) as EnvelopeResult<JobOutput<K>>;
-    // Then one of the instance's isolates (envelopeIsolateSlots), waited for within the same time.
-    const isolateWait = within(limits.deadlineMs - (Date.now() - queuedAt));
-    if (isolateWait <= 0) return refuse<JobOutput<K>>("BUSY", kind, queuedAt, deadlineAt === null ? undefined : REQUEST_DEADLINE_CAUSE);
-    const ran = await withEnvelopeSlot("isolate", tenant, isolateWait, async () => {
-      const runMs = within(limits.deadlineMs);
-      if (runMs <= 0) return refuse<JobOutput<K>>("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
-      // Held a turn at a time while another organisation waits (A TURN AT THE ISOLATE).
-      const holder = holdIsolate(tenant, poolOf(kind));
-      try {
-        // Answered once its worker has exited, so neither slot is free while its isolate lives (EXIT_GRACE_MS).
-        return await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs, charge, holder);
-      } finally {
-        letGoOfIsolate(holder);
-      }
-    });
-    return ran.ok ? ran.value : refuse<JobOutput<K>>("BUSY", kind, queuedAt);
-  });
-  return r.ok ? r.value : refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
-}
-
-/**
- * Compile a description in the envelope, as the verify does: what comes
- * back is the bounded summary (pipeline.ts) with the dataset, when one is
- * named, already sliced, digested and measured for every read path — or a
- * refusal. A job that threw (a defect) is refused as a description that
- * could not be read, logged by name only (P1 wave A review); one that ran out
- * of memory, stack or time is RESOURCE_LIMIT.
- */
-export async function compileInEnvelope(
-  body: string,
-  entitySet: string | null,
-  subject: RenderSubject | null,
-  tenant: string | null = null,
-  deadlineAt: number | null = null,
-): Promise<CompiledService> {
-  const r = await runInEnvelope({ kind: "compile", input: { body, entitySet, subject } }, undefined, { tenant, deadlineAt });
-  if (r.ok) return r.value;
-  if (r.reason === "INTERNAL") {
-    console.error("[contracts] compile failed", { error: "INTERNAL" });
-    return { ok: false, reason: "INVALID_CSDL", detail: r.detail };
-  }
-  return { ok: false, reason: r.reason, detail: r.detail };
-}
-
-/** `cause`: what ended the job, as a code or an error's name — never a message, which can quote the description. */
-function refuse<T>(
-  reason: EnvelopeRefusal,
-  kind: Job["kind"],
-  since: number,
-  cause?: string,
-  detail?: string,
-  retryAfterMs?: number,
-): EnvelopeResult<T> {
-  const ms = Date.now() - since;
-  console.error("[contracts] envelope refused", { job: kind, reason, ms, ...(cause ? { cause } : {}) });
-  return {
-    ok: false,
-    reason,
-    detail: detail ?? DETAIL[reason],
-    ms,
-    ...(cause ? { cause } : {}),
-    ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
-  };
-}
-
-/**
- * `cutByCaller`: the run's deadline is the caller's (deadlineAt), shorter than
- * the job's own — a job that meets it was not given its time, so it is BUSY,
- * not RESOURCE_LIMIT.
- *
- * `charge`: told once, when the job ends, the worker time it used — the CPU
- * time the job measured, or, for a worker ended before it could say, the
- * time it ran — and JOB_BASE_CHARGE_MS for its isolate's start, when one was
- * made (envelope-allowance.ts).
- *
- * `holder`: the job's hold on its isolate, through which its turn is ended
- * (A TURN AT THE ISOLATE): BUSY, cause ISOLATE_TURN_CAUSE.
- */
-function runWorker<T>(
-  job: Job,
-  limits: EnvelopeLimits,
-  since: number,
-  cutByCaller = false,
-  charge: (ms: number) => void = () => {},
-  holder?: IsolateHolder,
-): Promise<EnvelopeResult<T>> {
+function runWorker<T>(job: Job, limits: EnvelopeLimits, since: number, cutByCaller: boolean): Promise<{ result: EnvelopeResult<T>; wallMs: number }> {
   return new Promise((resolve) => {
     let result: EnvelopeResult<T> | null = null;
     let worker: Worker | undefined;
-    /** When the worker was made, and the CPU time it reported. */
-    let runningSince: number | null = null;
-    let reportedCpuMs: number | null = null;
-    /** The isolate is gone: it exited, or it was never made. */
+    let spawnedAt: number | null = null;
+    let exitedAt: number | null = null;
     let gone = false;
     let grace: ReturnType<typeof setTimeout> | undefined;
-    let answered = false;
-    // Answered once there is a result AND its isolate is gone; the caller frees the slot right after.
     const answer = () => {
-      if (answered || result === null || !gone) return;
-      answered = true;
+      if (result === null || !gone) return;
       clearTimeout(grace);
-      resolve(result);
+      const wallMs = spawnedAt === null ? 0 : (exitedAt ?? Date.now()) - spawnedAt;
+      resolve({ result, wallMs });
     };
     const settle = (r: EnvelopeResult<T>) => {
       if (result !== null) return;
       result = r;
       clearTimeout(timer);
-      if (runningSince !== null) charge((reportedCpuMs ?? Date.now() - runningSince) + JOB_BASE_CHARGE_MS);
       // Its memory goes back now, however the job ended; the slot once it has.
       void worker?.terminate().catch(() => {});
       if (!gone) {
@@ -1003,14 +466,12 @@ function runWorker<T>(
       () => settle(cutByCaller ? refuse("BUSY", job.kind, since, REQUEST_DEADLINE_CAUSE) : refuse("RESOURCE_LIMIT", job.kind, since, "deadline")),
       limits.deadlineMs,
     );
-    if (holder) holder.stop = () => settle(refuse("BUSY", job.kind, since, ISOLATE_TURN_CAUSE, TURN_DETAIL));
     spawn(job, limits).then(
       (w) => {
         worker = w;
-        runningSince = Date.now();
-        // Its turn at the isolate is counted from here (A TURN AT THE ISOLATE).
-        if (holder) w.once("online", () => isolateRunning(holder));
+        spawnedAt = Date.now();
         w.once("exit", (code) => {
+          exitedAt = Date.now();
           // An exit before any message: killed by a limit V8 enforces without an error event, or a crash.
           if (result === null) settle(refuse(code === 0 ? "INTERNAL" : "RESOURCE_LIMIT", job.kind, since, `exit ${code}`));
           gone = true;
@@ -1022,19 +483,13 @@ function runWorker<T>(
           return;
         }
         w.once("message", (m: WorkerReply) => {
-          if (typeof m.cpuMs === "number" && Number.isFinite(m.cpuMs)) reportedCpuMs = m.cpuMs;
           if (m.ok) settle({ ok: true, value: m.value as T, ms: Date.now() - since });
           else if (m.error === HEAP_NOT_CAPPED) settle(refuse("UNAVAILABLE", job.kind, since, HEAP_NOT_CAPPED));
           else settle(refuse(isResourceError(m.error, undefined) ? "RESOURCE_LIMIT" : "INTERNAL", job.kind, since, m.error));
         });
         w.once("error", (err: Error & { code?: string }) => {
           settle(
-            refuse(
-              isResourceError(err.name, err.code) ? "RESOURCE_LIMIT" : isLoadError(err.code) ? "UNAVAILABLE" : "INTERNAL",
-              job.kind,
-              since,
-              err.code ?? err.name,
-            ),
+            refuse(isResourceError(err.name, err.code) ? "RESOURCE_LIMIT" : isLoadError(err.code) ? "UNAVAILABLE" : "INTERNAL", job.kind, since, err.code ?? err.name),
           );
         });
       },
@@ -1050,7 +505,6 @@ function runWorker<T>(
             code ?? (err instanceof Error ? err.name : "unknown"),
           ),
         );
-        answer();
       },
     );
   });

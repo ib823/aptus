@@ -39,7 +39,7 @@
  * Pure and deterministic: the same input renders the same document.
  */
 
-import { chargeJson, jsonBytesUpTo, jsonText, LIMITS, renderCheckpoint, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
+import { chargeJson, jsonBytesUpTo, jsonText, LIMITS, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
 import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
@@ -341,8 +341,6 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   });
 
   for (const iface of input.interfaces) {
-    // The render clock, once per interface, whether or not a budget was given (budget.ts, round 4).
-    renderCheckpoint();
     // What this interface adds, charged to the build budget before it joins the document.
     const own = { schemas: {} as Record<string, JsonSchema>, paths: {} as Record<string, Obj> };
     const stem = stemFor(toTypeName(iface.entitySet ?? iface.name));
@@ -838,9 +836,9 @@ function contractDocumentSchema(dialect: SchemaDialect): Obj {
               schemas: anyObjectOrNull(dialect, "JSON Schema 2020-12 documents: record, create, update, key."),
               schemasOmitted: {
                 type: "string",
-                enum: ["TOO_LARGE", "UNAVAILABLE"],
+                enum: ["TOO_LARGE", "NOT_RENDERED"],
                 description:
-                  "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; UNAVAILABLE, it could not be rendered just now, and a retry may succeed.",
+                  "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; NOT_RENDERED, its schemas were not rendered when it was recorded, and verifying the service again renders them.",
               },
               schemasNote: { type: "string" },
             },

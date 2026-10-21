@@ -1,21 +1,19 @@
 // @vitest-environment node
 /**
- * STRUCTURAL CONTAINMENT of the Contract Compiler (P1.3, after three
- * hostile-input review rounds that each found a new superlinear path).
+ * STRUCTURAL CONTAINMENT of the Contract Compiler (P1.3).
  *
  * Not another shape that is expensive, but the mechanisms that bound every
  * shape, found or not:
  *
- *   the envelope   the whole compile runs in a worker with a capped heap, a
- *                  capped stack and a deadline (envelope.ts) — and the cap
- *                  holds even in a process started with --max-old-space-size,
- *                  which V8 otherwise lets override a worker's own limits;
+ *   the envelope   every job runs in a worker with a capped heap, a capped
+ *                  stack and a deadline (envelope.ts) — and the cap holds
+ *                  even in a process started with --max-old-space-size or
+ *                  --max-semi-space-size, which V8 otherwise lets override a
+ *                  worker's own limits; a job's slot is free only once its
+ *                  worker has exited;
  *   the budget     one writer counts every byte of contract-derived output as
  *                  it is written and stops at a stated limit (budget.ts),
- *                  writing exactly what JSON.stringify wrote before;
- *   record time    every read path's output is rendered under that read
- *                  path's budget inside the envelope before a contract is
- *                  stored (pipeline.ts), so no read meets an unrendered one.
+ *                  writing exactly what JSON.stringify wrote before.
  */
 
 import { createHash } from "crypto";
@@ -41,20 +39,10 @@ import {
 } from "@/lib/contracts/budget";
 import { boundedContractDigest, canonicalJson, contractDigest, MAX_CONTRACT_BYTES, normalizeContract } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
-import {
-  ENVELOPE_CONCURRENCY,
-  ENVELOPE_LIMITS,
-  ENVELOPE_QUEUE,
-  ENVELOPE_TENANT_RUNNING,
-  ENVELOPE_TENANT_WAITING,
-  envelopeIsolates,
-  envelopeQueueState,
-  heapLimitBytes,
-  runInEnvelope,
-} from "@/lib/contracts/envelope";
+import { CONTRACT_JOB_LIMITS, contractGateState, envelopeIsolates, heapLimitBytes, runJobInEnvelope } from "@/lib/contracts/envelope";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { prepareContract, renderAndMeasure, renderForRead, type RenderJobInput } from "@/lib/contracts/pipeline";
-import { RawJson, renderReadPath, renderReadPathLazy, requestThreadShare } from "@/lib/contracts/read-render";
+import { recordableContract, textOf, type Job } from "@/lib/contracts/jobs";
+import { RawJson } from "@/lib/contracts/raw-json";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
 import { buildScaffold } from "@/lib/studio/scaffold";
@@ -198,12 +186,6 @@ describe("the budget stops the writer at its limit, however much the value share
     }
   });
 
-  it("a budget with a deadline stops on the clock as well", () => {
-    const budget = new OutputBudget("document", Number.POSITIVE_INFINITY, Date.now() - 1);
-    const many = { a: Array.from({ length: 50_000 }, (_, i) => ({ i, more: [i, i] })) };
-    expect(() => jsonText(many, budget, { indent: 2 })).toThrow(expect.objectContaining({ budget: "time" }));
-  });
-
   it("the canonical digest of a contract past its budget is refused while it is written", () => {
     const c = sliced("sales-order-rap.v4.xml", "SalesOrder");
     const label = "l".repeat(1024 * 1024);
@@ -228,34 +210,19 @@ describe("the budget stops the writer at its limit, however much the value share
   });
 });
 
-describe("every read path's output is rendered and measured at record time", () => {
-  it("a real contract renders well inside every read path's budget", () => {
+describe("the record job's budgets", () => {
+  it("a real contract's /schema texts are well inside their budget", () => {
     const c = sliced("sales-order-rap.v4.xml", "SalesOrder");
-    const p = prepareContract({ contract: c, subject: null });
-    expect(p.ok).toBe(true);
-    if (!p.ok) return;
-    expect(p.rendered.schema).toBeLessThan(schemaLimit(p.bytes));
-    expect(p.rendered.kit).toBeLessThan(kitLimit(p.bytes));
-    expect(p.rendered.document).toBeLessThan(documentLimit([p.bytes]));
-  });
-
-  it("a contract whose outputs would not fit its read path's budget is refused before it is stored (OUTPUT_TOO_LARGE)", () => {
-    const c = sliced("sales-order-rap.v4.xml", "SalesOrder");
-    // The same contract against budgets a tenth of the size: whatever shape
-    // grows past a budget — found or not — ends here, not on a read.
-    const tight = {
-      schema: { ...LIMITS.schema, floor: 1024, perContractByte: 1 },
-      kit: { ...LIMITS.kit, floor: 1024, perContractByte: 1 },
-      document: { ...LIMITS.document, floor: 1024, perInterface: 0, perContractByte: 1 },
-    };
-    expect(prepareContract({ contract: c, subject: null, limits: tight })).toMatchObject({ ok: false, reason: "OUTPUT_TOO_LARGE" });
-    expect(() => renderAndMeasure(c, 1, null, tight)).toThrow(BudgetExceeded);
+    const p = recordableContract(c, undefined, "SalesOrder", { previous: [], unchangedHashes: [] });
+    if (!p.ok) throw new Error(p.reason);
+    const total = p.texts.schemas.byteLength + (p.texts.create?.byteLength ?? 0) + (p.texts.update?.byteLength ?? 0);
+    expect(total).toBeLessThan(schemaLimit(p.bytes) / 4);
   });
 
   it("a contract over the contract budget is refused (TOO_LARGE), with its size", () => {
     const c = sliced("sales-order-rap.v4.xml", "SalesOrder");
     for (let i = 0; i < 40_000; i++) c.entityType.properties.push({ name: `ZZ1_FIELD_${i}`, type: "Edm.String", nullable: true, label: "x".repeat(40) });
-    const p = prepareContract({ contract: c, subject: null });
+    const p = recordableContract(c, undefined, "SalesOrder", { previous: [], unchangedHashes: [] });
     expect(p).toMatchObject({ ok: false, reason: "TOO_LARGE" });
     expect(!p.ok && p.bytes).toBeGreaterThan(MAX_CONTRACT_BYTES);
   });
@@ -300,80 +267,105 @@ function largeDescription(types: number, props: number): string {
   return `${s}<EntityContainer Name="C" m:IsDefaultEntityContainer="true">${sets.join("")}</EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`;
 }
 
+const record = (description: string, entitySet: string | null): Job => ({
+  kind: "record",
+  input: { description, entitySet, previous: [], unchangedHashes: [] },
+});
+
 describe("the envelope", () => {
-  it("compiles a real description, its dataset sliced, digested and measured, and sends back no IR", async () => {
-    const r = await runInEnvelope({ kind: "compile", input: { body: fixture("business-partner.v2.xml"), entitySet: "A_Partner", subject: null } });
-    expect(r.ok).toBe(true);
-    if (!r.ok || !r.value.ok) throw new Error("not compiled");
-    expect(r.value.datasets).toMatchObject({ hasEntitySet: true, suggestion: null });
-    expect(r.value.datasets.names).toContain("A_Partner");
-    expect(r.value.dataset).toMatchObject({ ok: true, hash: contractDigest(sliced("business-partner.v2.xml", "A_Partner")).hash });
-    expect(Object.keys(r.value)).not.toContain("ir");
+  it("compiles a real description, its dataset sliced, digested and rendered, and sends back no IR of the service", async () => {
+    const r = await runJobInEnvelope(record(fixture("business-partner.v2.xml"), "A_Partner"));
+    if (!r.ok || r.value === null || !("ok" in r.value) || !r.value.ok) throw new Error("not compiled");
+    const v = r.value as Extract<typeof r.value, { format: string }>;
+    expect(v.datasets).toMatchObject({ hasEntitySet: true, suggestion: null });
+    expect(v.datasets.names).toContain("A_Partner");
+    expect(v.dataset).toMatchObject({ ok: true, hash: contractDigest(sliced("business-partner.v2.xml", "A_Partner")).hash });
+    // Texts crossed as transferred bytes.
+    expect(v.dataset?.ok && v.dataset.texts.schemas).toBeInstanceOf(Uint8Array);
+    expect(JSON.parse(textOf((v.dataset as { texts: { schemas: Uint8Array<ArrayBuffer> } }).texts.schemas))).toHaveProperty("record");
+    expect(Object.keys(v)).not.toContain("ir");
   }, 30_000);
 
-  it("a compile that needs more heap than its cap ends its own worker (RESOURCE_LIMIT), whatever the process's own flag", async () => {
+  it("a job that needs more heap than its cap ends its own worker (RESOURCE_LIMIT), whatever the process's own flag", async () => {
     // As in a process started with NODE_OPTIONS=--max-old-space-size=4096:
     // V8 lets that flag override a worker's own resource limits.
     v8.setFlagsFromString("--max-old-space-size=4096");
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const r = await runInEnvelope(
-      { kind: "compile", input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } },
-      { maxOldGenerationSizeMb: 16, maxYoungGenerationSizeMb: 4, stackSizeMb: 4, deadlineMs: 60_000 },
-    );
+    const r = await runJobInEnvelope(record(largeDescription(300, 110), "T1"), {
+      limits: { maxOldGenerationSizeMb: 16, maxYoungGenerationSizeMb: 4, stackSizeMb: 4, deadlineMs: 60_000 },
+    });
     expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
     // The request thread's own heap is the one it started with.
-    expect(v8.getHeapStatistics().heap_size_limit).toBeGreaterThan(heapLimitBytes(ENVELOPE_LIMITS.compile));
+    expect(v8.getHeapStatistics().heap_size_limit).toBeGreaterThan(heapLimitBytes(CONTRACT_JOB_LIMITS));
   }, 60_000);
 
-  it("a compile past its deadline is terminated wherever it is (RESOURCE_LIMIT), and the thread is never blocked", async () => {
+  it("a heap of 64 MB is a worker out of memory, never this thread's", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await runJobInEnvelope(record(csdlJsonMembers(7.3 * 1024 * 1024), "Set0"), {
+      limits: { ...CONTRACT_JOB_LIMITS, maxOldGenerationSizeMb: 64, deadlineMs: 60_000 },
+    });
+    expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT", cause: "ERR_WORKER_OUT_OF_MEMORY" });
+  }, 90_000);
+
+  it("a job past its deadline is terminated wherever it is (RESOURCE_LIMIT), and the thread is never blocked", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const body = largeDescription(300, 110);
     const started = performance.now();
-    const { value: r, ms: maxGap } = await longestStall(() =>
-      runInEnvelope({ kind: "compile", input: { body, entitySet: "T1", subject: null } }, { ...ENVELOPE_LIMITS.compile, deadlineMs: 300 }),
-    );
-    expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
-    expect(performance.now() - started).toBeLessThan(2000);
-    // The ticker kept running while the worker compiled: the request thread only waited.
-    expect(maxGap).toBeLessThan(250);
+    const { value: r, ms: maxStall } = await longestStall(() => runJobInEnvelope(record(body, "T1"), { limits: { ...CONTRACT_JOB_LIMITS, deadlineMs: 300 } }));
+    expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT", cause: "deadline" });
+    expect(performance.now() - started).toBeLessThan(300 + 5_000);
+    // The thread only waited while the worker compiled: its own CPU between ticks stayed small.
+    expect(maxStall).toBeLessThan(200);
   }, 30_000);
 
-  it("past its concurrency and queue, a compile is refused at once (BUSY), and every queued one still runs", async () => {
+  it("7.3 MB of CSDL JSON members ends ok or RESOURCE_LIMIT inside its deadline, while the event loop ticks", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const job = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
-    // A deadline long enough that waiting for a turn never ends one, however loaded the runner.
-    const limits = { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 };
-    const all = Array.from({ length: ENVELOPE_CONCURRENCY + ENVELOPE_QUEUE + 1 }, () => runInEnvelope(job, limits));
-    const results = await Promise.all(all);
-    expect(results.filter((r) => !r.ok && r.reason === "BUSY")).toHaveLength(1);
-    expect(results.filter((r) => r.ok)).toHaveLength(ENVELOPE_CONCURRENCY + ENVELOPE_QUEUE);
-  }, 300_000);
+    const body = csdlJsonMembers(7.3 * 1024 * 1024);
+    expect(body.length).toBeGreaterThan(7 * 1024 * 1024);
+    const started = performance.now();
+    const { value: r, ms: maxStall } = await longestStall(() => runJobInEnvelope(record(body, "Set0")));
+    // The default limits: whatever it does, it ends by its 10 s deadline (and its worker's exit).
+    expect(performance.now() - started).toBeLessThan(CONTRACT_JOB_LIMITS.deadlineMs + 5_000);
+    expect(r.ok || r.reason === "RESOURCE_LIMIT").toBe(true);
+    expect(maxStall).toBeLessThan(200);
+  }, 60_000);
 
   it("a job that throws is INTERNAL, never a rejected promise", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const r = await runInEnvelope({ kind: "compile", input: { body: 7 as unknown as string, entitySet: null, subject: null } });
+    const r = await runJobInEnvelope(record(7 as unknown as string, null));
     expect(r).toMatchObject({ ok: false, reason: "INTERNAL" });
   }, 30_000);
+
+  it("compiles in a process started with --max-semi-space-size, which V8 also lets override a worker's limits", async () => {
+    // As under NODE_OPTIONS="--max-semi-space-size=64": a worker otherwise gets 3 × 64 MB of young generation.
+    v8.setFlagsFromString("--max-semi-space-size=64");
+    try {
+      const r = await runJobInEnvelope(record(fixture("business-partner.v2.xml"), "A_Partner"));
+      expect(r).toMatchObject({ ok: true, value: { ok: true } });
+    } finally {
+      v8.setFlagsFromString("--max-semi-space-size=0");
+    }
+  }, 60_000);
+
+  it("a slot is free only once its worker has exited: never more live isolates than the one slot", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    envelopeIsolates();
+    const slow = record(largeDescription(300, 110), "T1");
+    const quick = record(fixture("z-travel-booking.v2.xml"), "BookingSet");
+    // Slots held by jobs that end at their deadline, then handed on to queued jobs that run to the end.
+    const ended = Array.from({ length: 2 }, () => runJobInEnvelope(slow, { limits: { ...CONTRACT_JOB_LIMITS, deadlineMs: 500 } }));
+    const queued = Array.from({ length: 2 }, () => runJobInEnvelope(quick));
+    const [endedResults, queuedResults] = await Promise.all([Promise.all(ended), Promise.all(queued)]);
+    for (const r of endedResults) expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
+    for (const r of queuedResults) expect(r.ok).toBe(true);
+    // Answered only once exited: nothing awaited is still alive, and no slot outlived its isolate.
+    expect(envelopeIsolates()).toEqual({ live: 0, peak: 1 });
+    expect(contractGateState()).toEqual({ running: 0, waiting: 0, runningByOrg: {} });
+  }, 120_000);
 });
 
-/*
- * STRUCTURAL HARDENING, ROUND 1: the envelope's own edges — what crosses into
- * it, how its slots are shared, and the heap flag it did not cap — and the
- * two places outside it that did work in proportion to a hostile input.
- */
-describe("structural hardening, round 1", () => {
-  /** A contract of `n` properties: about 60 bytes of canonical JSON each. */
-  function wideContract(n: number): InterfaceContract {
-    const c = sliced("business-partner.v2.xml", "A_Partner");
-    return {
-      ...c,
-      entityType: {
-        ...c.entityType,
-        properties: Array.from({ length: n }, (_, i) => ({ name: `Field${i}`, type: "x-json:string", nullable: false })),
-      },
-    };
-  }
-
+/* What a capture infers is bounded, and so is the solution document's build. */
+describe("bounded inputs and builds", () => {
   it("inference stops past the field bound, before it sorts or builds anything", () => {
     const row: Record<string, unknown> = {};
     for (let i = 0; i < 358_000; i++) row[`k${i}`] = 0;
@@ -399,18 +391,6 @@ describe("structural hardening, round 1", () => {
     expect((refused as BudgetExceeded).budget).toBe("capturedSchema");
   });
 
-  it("a contract past the cap never crosses into a worker: prepare answers TOO_LARGE before it is copied", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const contract = wideContract(60_000);
-    expect(measureJson(contract)).toBeGreaterThan(LIMITS.contract.cap);
-    // A heap the copy alone would exhaust: had it crossed, the worker would have died of it.
-    const tight = { maxOldGenerationSizeMb: 16, maxYoungGenerationSizeMb: 4, stackSizeMb: 4, deadlineMs: 60_000 };
-    const r = await runInEnvelope({ kind: "prepare", input: { contract, subject: null } }, tight);
-    expect(r).toMatchObject({ ok: true, value: { ok: false, reason: "TOO_LARGE" } });
-    const d = await runInEnvelope({ kind: "diff", input: { previous: [contract], next: contract } }, tight);
-    expect(d).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
-  }, 60_000);
-
   it("the solution document's build stops at the interface that passes its budget", () => {
     const ifaces = Array.from({ length: 2000 }, (_, i) => ({
       id: `if_${i}`,
@@ -434,183 +414,9 @@ describe("structural hardening, round 1", () => {
     );
   });
 
-  it("one organisation cannot hold every slot and queue place: another's job runs at once", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    const quick = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
-    const limits = { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 };
-    const done: string[] = [];
-    const track = <T>(name: string, p: Promise<T>) =>
-      p.then((r) => {
-        done.push(name);
-        return r;
-      });
-    const a = Array.from({ length: ENVELOPE_TENANT_RUNNING + ENVELOPE_TENANT_WAITING + 2 }, (_, i) =>
-      track(`a${i}`, runInEnvelope(slow, limits, { tenant: "org_a" })),
-    );
-    const b = track("b", runInEnvelope(quick, { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 }, { tenant: "org_b" }));
-    const [aResults, bResult] = await Promise.all([Promise.all(a), b]);
-    // Past its share, the organisation's own jobs are refused at once…
-    const busy = aResults.filter((r) => !r.ok && r.reason === "BUSY");
-    expect(busy).toHaveLength(2);
-    for (const r of busy) expect(r.ms).toBeLessThan(1000);
-    expect(aResults.filter((r) => r.ok)).toHaveLength(ENVELOPE_TENANT_RUNNING + ENVELOPE_TENANT_WAITING);
-    // …and the other organisation's job took the slot left for it, ahead of the first one's queue.
-    expect(bResult.ok).toBe(true);
-    expect(done.indexOf("b")).toBeLessThan(done.indexOf("a1"));
-    expect(envelopeQueueState()).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
-  }, 300_000);
-
-  it("a job whose wait ends leaves the queue at once, so no stale waiter holds a place", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    const running = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }));
-    const waiters = Array.from({ length: 3 }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 150 }));
-    for (const r of await Promise.all(waiters)) expect(r).toMatchObject({ ok: false, reason: "BUSY" });
-    // The slots are still taken; the places those three held are free again.
-    expect(envelopeQueueState()).toMatchObject({ running: ENVELOPE_CONCURRENCY, waiting: 0 });
-    await Promise.all(running);
-    expect(envelopeQueueState()).toMatchObject({ running: 0, waiting: 0 });
-  }, 300_000);
-
-  it("compiles in a process started with --max-semi-space-size, which V8 also lets override a worker's limits", async () => {
-    // As under NODE_OPTIONS="--max-semi-space-size=64": a worker otherwise gets 3 × 64 MB of young generation.
-    v8.setFlagsFromString("--max-semi-space-size=64");
-    try {
-      const r = await runInEnvelope({ kind: "compile", input: { body: fixture("business-partner.v2.xml"), entitySet: "A_Partner", subject: null } });
-      expect(r).toMatchObject({ ok: true, value: { ok: true } });
-    } finally {
-      v8.setFlagsFromString("--max-semi-space-size=0");
-    }
-  }, 60_000);
 });
 
-/*
- * STRUCTURAL HARDENING, ROUND 2: the envelope's slots count isolates, not
- * results; and a read path renders on the request thread only what is cheap
- * by construction, in the envelope otherwise, with the same bytes either way.
- */
-describe("structural hardening, round 2", () => {
-  it("a slot is free only once its worker has exited: never more live isolates than slots", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(envelopeIsolates().live).toBe(0);
-    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    const quick = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
-    // Slots held by jobs that end at their deadline, then handed on to queued jobs that run to the end.
-    const ended = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 500 }));
-    const queued = Array.from({ length: ENVELOPE_CONCURRENCY + 2 }, () => runInEnvelope(quick, { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 }));
-    const [endedResults, queuedResults] = await Promise.all([Promise.all(ended), Promise.all(queued)]);
-    for (const r of endedResults) expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT" });
-    for (const r of queuedResults) expect(r.ok).toBe(true);
-    // Answered only once exited: nothing awaited is still alive, and no slot outlived its isolate.
-    expect(envelopeIsolates()).toEqual({ live: 0, peak: expect.any(Number) as number });
-    expect(envelopeQueueState()).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
-  }, 120_000);
-
-  it("and the peak of live isolates in such a burst never passes the slots", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    envelopeIsolates();
-    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    const quick = { kind: "diff" as const, input: { previous: [], next: sliced("z-travel-booking.v2.xml", "BookingSet") } };
-    const ended = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 500 }));
-    const queued = Array.from({ length: ENVELOPE_CONCURRENCY + 2 }, () => runInEnvelope(quick, { ...ENVELOPE_LIMITS.diff, deadlineMs: 600_000 }));
-    await Promise.all([...ended, ...queued]);
-    expect(envelopeIsolates().peak).toBeLessThanOrEqual(ENVELOPE_CONCURRENCY);
-  }, 120_000);
-
-  const schemaInput = (limit: number): RenderJobInput => ({
-    path: "schema",
-    contract: sliced("business-partner.v2.xml", "A_Partner"),
-    entitySet: "A_Partner",
-    snapshotId: "snap_1",
-    requestSchema: null,
-    iface: { version: 1, entitySet: "A_Partner" },
-    limit,
-  });
-  const asText = (t: string | Uint8Array) => (typeof t === "string" ? t : new TextDecoder().decode(t));
-  /** Lets the request thread's share of render time refill. */
-  const refilled = () => new Promise((resolve) => setTimeout(resolve, 500));
-
-  it("a read whose stored input is past what the request thread renders renders in the envelope, the same bytes as here", async () => {
-    await refilled();
-    const here = renderForRead(schemaInput(LIMITS.schema.cap));
-    expect(here.ok).toBe(true);
-    const load = () => Promise.resolve({ ok: true as const, input: schemaInput(LIMITS.schema.cap) });
-    const small = await renderReadPathLazy({ inputBytes: LIMITS.inlineRender.inputBytes }, load, { tenant: null });
-    expect(small).toMatchObject({ ok: true, where: "request" });
-    const large = await renderReadPathLazy({ inputBytes: LIMITS.inlineRender.inputBytes + 1 }, load, { tenant: null });
-    expect(large).toMatchObject({ ok: true, where: "envelope" });
-    if (!here.ok || !large.ok || !small.ok) throw new Error("not rendered");
-    // From the envelope: the same text, as transferred bytes.
-    expect(large.texts.every((t) => t instanceof Uint8Array)).toBe(true);
-    expect(large.texts.map(asText)).toEqual(here.texts);
-    expect(small.texts).toEqual(here.texts);
-    // Its budget still stops it, wherever it renders.
-    expect(await renderReadPath(schemaInput(1000), { tenant: null })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
-  }, 60_000);
-
-  it("a render that meets the request thread's clock, or finds its share spent, is handed to the envelope, not refused", async () => {
-    // A contract with enough in it for the writer to look at the clock while it writes.
-    const compiled = compileContract(largeDescription(1, 1500));
-    if (!compiled.ok) throw new Error("not compiled");
-    const slice = sliceForEntitySet(compiled.ir, "T0", compiled.sourceLength);
-    if (!slice.ok) throw new Error("not sliced");
-    const input: RenderJobInput = {
-      path: "schema",
-      contract: slice.contract,
-      entitySet: "T0",
-      snapshotId: "snap_1",
-      requestSchema: null,
-      iface: { version: 1, entitySet: "T0" },
-      limit: LIMITS.schema.cap,
-    };
-    expect(renderForRead(input).ok).toBe(true);
-    // On this thread a clock that has run out stops it…
-    expect(renderForRead(input, Date.now() - 60_000)).toMatchObject({ ok: false, reason: "TIME" });
-    // …and with the thread's share of render time spent, the envelope renders it.
-    await refilled();
-    requestThreadShare(10_000);
-    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: true, where: "envelope" });
-  }, 60_000);
-
-  it("what a render is handed is measured before it is copied: past the bound it never reaches a worker, and says so", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const input: RenderJobInput = {
-      path: "kit",
-      iface: { id: "if_1", name: "x", externalId: "custom:/x", sapProduct: "s4hana", operation: "READ", entitySet: "X", version: 1, solutionName: "S" },
-      baseUrl: "https://x",
-      fixtures: [{ scenario: "success", status: 200, body: { value: "x".repeat(LIMITS.renderInput.bytes) }, sourceStatus: 200, capturedAt: "2026-10-01T00:00:00.000Z" }],
-      withheld: [],
-      limit: LIMITS.kit.cap,
-    };
-    const before = envelopeIsolates().live;
-    const started = Date.now();
-    // Its own reason — what it was handed — never the output's budget.
-    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: false, reason: "INPUT_TOO_LARGE" });
-    expect(Date.now() - started).toBeLessThan(2000);
-    expect(envelopeIsolates().peak).toBe(before);
-  });
-
-  it("renders have slots of their own: a read is not refused behind every compile, and waits only for an isolate", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
-    // Two other organisations' compiles hold both compile slots — and, the instance's isolates
-    // being shared since round 4 (envelopeIsolateSlots), the isolates they need.
-    const compiles = ["org_b", "org_c"].map((tenant) =>
-      runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }, { tenant }),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(envelopeQueueState("compile").running).toBe(ENVELOPE_CONCURRENCY);
-    const r = await renderReadPathLazy({ inputBytes: null }, () => Promise.resolve({ ok: true as const, input: schemaInput(LIMITS.schema.cap) }), {
-      tenant: "org_a",
-    });
-    // Its render slot was its own; it waited for an isolate, and was served.
-    expect(r).toMatchObject({ ok: true, where: "envelope" });
-    await Promise.all(compiles);
-    expect(envelopeQueueState("render")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
-    expect(envelopeQueueState("isolate")).toEqual({ running: 0, waiting: 0, runningByTenant: {} });
-  }, 300_000);
-
+describe("spliced text, and the stall measure", () => {
   it("rendered text is spliced in verbatim: the answer is what JSON.stringify writes of the value", () => {
     const value = { a: [1, "two", { three: null }], b: "\u0000raw:not-a-slot:0\u0000" };
     const raw = new RawJson();
@@ -622,4 +428,44 @@ describe("structural hardening, round 2", () => {
     const answer = bytes.bytes({ data: { x: bytes.slot(new TextEncoder().encode(JSON.stringify(value))), é: "ü" } });
     expect(new TextDecoder().decode(answer)).toBe(JSON.stringify({ data: { x: value, é: "ü" } }));
   });
+
+  it("a thread kept off the CPU (what a loaded runner does to it) is not a stall; a loop with no await is", async () => {
+    // Off the CPU for 300 ms without running: the wall-clock gap a busy machine makes.
+    const parked = await longestStall(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(parked.wallMs).toBeGreaterThanOrEqual(250);
+    expect(parked.ms).toBeLessThan(100);
+    // 300 ms of this thread's CPU in synchronous work: a real stall, however idle or busy the machine.
+    const usage = (process as unknown as { threadCpuUsage: () => { user: number; system: number } }).threadCpuUsage;
+    const cpu = () => {
+      const u = usage.call(process);
+      return (u.user + u.system) / 1000;
+    };
+    const busy = await longestStall(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      const until = cpu() + 300;
+      let spin = 0;
+      while (cpu() < until) spin += 1;
+      expect(spin).toBeGreaterThan(0);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(busy.ms).toBeGreaterThanOrEqual(150);
+  });
 });
+
+/** CSDL JSON of one entity type with as many members as fit in `chars`: the most expensive description found. */
+function csdlJsonMembers(chars: number): string {
+  const head = '{"$Version":"4.0","NS":{"T0":{"$Kind":"EntityType","$Key":["P0"]';
+  const parts: string[] = [head];
+  let n = head.length;
+  for (let i = 0; n < chars - 200; i++) {
+    const p = `,"P${i}":{"$Type":"Edm.String","$MaxLength":40}`;
+    parts.push(p);
+    n += p.length;
+  }
+  parts.push('},"C":{"$Kind":"EntityContainer","Set0":{"$Collection":true,"$Type":"NS.T0"}}}}');
+  return parts.join("");
+}

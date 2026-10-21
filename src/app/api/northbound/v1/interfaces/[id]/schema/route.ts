@@ -15,5 +15,4 @@ export { GET } from "@/app/api/northbound/interfaces/[id]/schema/route";
 // Segment config must be a literal in the route file itself; Next does not
 // follow a re-export for it.
 export const dynamic = "force-dynamic";
-/** A large contract's schemas render in a worker thread (lib/contracts/read-render.ts): Node.js only. */
 export const runtime = "nodejs";

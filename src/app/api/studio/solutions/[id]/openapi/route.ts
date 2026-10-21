@@ -38,10 +38,11 @@
  *   4. the document is built under its budget, each interface's part charged
  *      as it is built, so the build stops at the interface that passes it;
  *   5. and written under the same budget —
- *   6. on the request thread only while that budget is small enough to be
- *      cheap by construction, in the compiler's envelope otherwise
- *      (read-render.ts, structural hardening round 2: a document inside its
- *      32 MiB budget blocked this thread for a second, on every download).
+ *   6. in a render job, in the Contract Compiler's worker, through its one
+ *      fair gate and charged to the downloading organisation's daily
+ *      compiler time (envelope.ts): never on the request thread (a document
+ *      inside its 32 MiB budget takes a second to build). Busy: 503, retry
+ *      in seconds; the organisation's time spent: 429 until 00:00 UTC.
  */
 
 import { createHash } from "crypto";
@@ -50,21 +51,19 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { documentLimit, jsonBytesUpTo, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
 import {
-  documentAllowanceMessage,
-  documentInputTooLargeMessage,
-  documentOutputTooLargeMessage,
   documentTooLargeMessage,
   documentTooManyInterfacesMessage,
-  documentUnavailableMessage,
+  STUDIO_JOB_DEADLINE_MS,
+  downloadRefusal,
   loadDocContracts,
   MAX_DOCUMENT_CONTRACT_BYTES,
   planDocInputs,
 } from "@/lib/contracts/doc-inputs";
+import { runContractJob } from "@/lib/contracts/envelope";
 import { multiInterfaceInfoVersion, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
-import { documentInputBytes, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
-import { studioError, studioUnavailableFor } from "@/lib/studio/api";
+import { studioError } from "@/lib/studio/api";
 import { withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { capturedSchemaFacts, capturedSchemaReadable, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
@@ -73,12 +72,13 @@ import { isCapturedSchema } from "@/lib/studio/schema-capture";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
-/** A large document renders in a worker thread (lib/contracts/read-render.ts): Node.js only. */
+/** The document renders in a worker thread (lib/contracts/envelope.ts): Node.js only. */
 export const runtime = "nodejs";
 
 const CAPTURE_TOO_LARGE_NOTE = `Its captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not described. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`;
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const deadlineAt = Date.now() + STUDIO_JOB_DEADLINE_MS;
   const user = await getCurrentUser();
   if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
   if (!canAccessStudio(user.role)) return studioError("FORBIDDEN", "Developer Studio is role-gated.");
@@ -138,24 +138,28 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   /*
-   * 3-6. LOADED ONLY WHEN IT IS ITS TURN (read-render.ts, structural
-   * hardening round 3): the contracts' IRs and the captured schemas are read
-   * by the loader below — on this thread for a small document, and for a
-   * large one only once it holds a render slot, so a download refused for
-   * want of one has read none of them.
+   * 3-6. LOADED ONLY ONCE IT HOLDS ITS SLOT (envelope.ts): the contracts'
+   * IRs and the captured schemas are read by the loader below, so a
+   * download refused or still waiting has read none of them.
    */
   let limit = 0;
-  const rendered = await renderReadPathLazy(
-    // Routed by what it carries, and by how many interfaces it renders (documentInputBytes).
-    { inputBytes: documentInputBytes(plan.contractBytes === null ? null : plan.contractBytes + capturedBytes, interfaces.length) },
-    async (): Promise<ReadLoad<number>> => {
+  let refused: number | null = null;
+  const rendered = await runContractJob(
+    "render",
+    async () => {
       const contracts = await loadDocContracts(scope, plan);
-      if (!contracts.ok) return { ok: false, refusal: contracts.limit };
+      if (!contracts.ok) {
+        refused = contracts.limit;
+        return null;
+      }
       const compiledById = contracts.compiled;
       // Rows that predate the kept size were measured as they were read: the same bound, again.
       let carriedNow = capturedBytes;
       for (const c of compiledById.values()) if (c.source === "METADATA") carriedNow += c.irBytes;
-      if (carriedNow > MAX_DOCUMENT_CONTRACT_BYTES) return { ok: false, refusal: MAX_DOCUMENT_CONTRACT_BYTES };
+      if (carriedNow > MAX_DOCUMENT_CONTRACT_BYTES) {
+        refused = MAX_DOCUMENT_CONTRACT_BYTES;
+        return null;
+      }
       // 3. Only those, each inside the captured-schema bound.
       const captures = await readCurrentCapturedSchemas(organizationId, sampledOnly, facts);
 
@@ -214,9 +218,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
        * what was stored — each interface's compiled contract's kept size, or
        * its captured schema's. 4. The build charges each interface's part to
        * it as the part is made, and stops at the interface that passes it; 5.
-       * the writer charges every byte written, and stops the same way. Each
-       * contract was rendered under its share of this budget in the
-       * compiler's envelope (pipeline.ts) before it was stored.
+       * the writer charges every byte written, and stops the same way.
        */
       limit = documentLimit(
         docInterfaces.map((i) =>
@@ -228,7 +230,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         ),
       );
       return {
-        ok: true,
+        kind: "render",
         input: {
           path: "document",
           doc: {
@@ -253,23 +255,12 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         },
       };
     },
-    { tenant: organizationId },
+    { tenant: organizationId, deadlineAt },
   );
-  if (!rendered.ok) {
-    switch (rendered.reason) {
-      case "REFUSED":
-        return studioError("TOO_LARGE", documentTooLargeMessage("solution document", rendered.refusal));
-      case "TOO_LARGE":
-        return studioError("TOO_LARGE", documentOutputTooLargeMessage("solution document", limit));
-      case "INPUT_TOO_LARGE":
-        return studioError("TOO_LARGE", documentInputTooLargeMessage("solution document", LIMITS.renderInput.bytes));
-      case "UNAVAILABLE":
-        return studioError("UNAVAILABLE", documentUnavailableMessage("solution document"));
-      case "ALLOWANCE":
-        return studioUnavailableFor(documentAllowanceMessage("solution document", rendered.detail), rendered.retryAfterSeconds);
-    }
-  }
-  const body = rendered.texts[0]!;
+  if (rendered === null) return studioError("TOO_LARGE", documentTooLargeMessage("solution document", refused ?? plan.limit));
+  if (!rendered.ok) return downloadRefusal("solution document", rendered, limit);
+  if (!rendered.value.ok) return downloadRefusal("solution document", { reason: "RESOURCE_LIMIT", detail: "" }, rendered.value.limit);
+  const body = rendered.value.text;
 
   return new Response(body, {
     status: 200,

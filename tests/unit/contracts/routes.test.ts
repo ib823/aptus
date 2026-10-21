@@ -8,7 +8,9 @@
  *                    description the compiler refuses still verifies, and a
  *                    failed verify records nothing;
  *   /schema          serves the compiled contract and the request schema,
- *                    additively, and only while they describe the interface;
+ *                    additively, and only while they describe the interface —
+ *                    from the texts the record stored, never rendering, never
+ *                    starting a worker or asking for compiler time;
  *   capture-schema   records the sampled fallback;
  *   scaffold         builds openapi.json and openapi-3.0.json from the contract;
  *   solutions/…/openapi  the per-solution document, in both versions, valid.
@@ -25,7 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { longestStall } from "../../helpers/stall";
 
-// Each compile, diff and record-time render runs in a real worker thread
+// Each verify, capture and download runs a real worker thread
 // (lib/contracts/envelope.ts), which loads the compiler from source here:
 // seconds per test on a loaded runner, not milliseconds.
 vi.setConfig({ testTimeout: 60_000 });
@@ -46,6 +48,10 @@ const { db, mocks } = vi.hoisted(() => ({
     solutions: [] as Row[],
     grants: [] as Row[],
     failSnapshotCreate: false,
+    /** The organisation's compiler time today (contract-time.ts), in ms. */
+    contractTimeMs: 0,
+    /** Every raw statement sent, for the reads that must send none of some. */
+    sql: [] as string[],
   },
   mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn(), hub: vi.fn() },
 }));
@@ -90,15 +96,20 @@ function ordered(rows: Row[], orderBy: unknown): Row[] {
 vi.mock("@/lib/db/prisma", async () => {
   const { capturedSchemaFactRows, isSnapshotIrTextQuery, snapshotIrTextRows } = await import("../../helpers/captured-schema-facts");
   const {
-    applyJsonTextUpdate,
+    applyRawWrite,
     grantRows,
     isGrantsQuery,
+    isSchemaTextsQuery,
     isSnapshotBodiesQuery,
     isSnapshotSummariesQuery,
-    jsonTextUpdateTable,
+    schemaTextsRows,
     snapshotBodiesRows,
     snapshotSummaryRows,
   } = await import("../../helpers/raw-sql-standin");
+  const sqlOf = (q: unknown) => {
+    const r = q as { sql?: string; strings?: readonly string[] } | null;
+    return r?.sql ?? r?.strings?.join("") ?? "";
+  };
   const table = (name: "interfaces" | "snapshots" | "solutions" | "grants") => ({
     findFirst: async ({ where, select, orderBy }: { where?: Row; select?: Row; orderBy?: unknown }) => {
       const hit = ordered(db[name].filter((r) => matches(r, where)), orderBy)[0];
@@ -136,18 +147,27 @@ vi.mock("@/lib/db/prisma", async () => {
       // capturedSchemaFacts (response-schema-states.ts): the stamp and size of each stored schema.
       // And the IRs a read path hands to its render, as their stored text (snapshot.ts, snapshotIrTexts).
       // And what the contract paths ask in one statement each (raw-sql-standin.ts).
-      $queryRaw: async (q: unknown) =>
-        isSnapshotSummariesQuery(q)
-          ? snapshotSummaryRows(db.snapshots, q)
-          : isSnapshotBodiesQuery(q)
-            ? snapshotBodiesRows(db.snapshots, q)
-            : isGrantsQuery(q)
-              ? grantRows(db.grants, q)
-              : isSnapshotIrTextQuery(q)
-                ? snapshotIrTextRows(db.snapshots, q)
-                : capturedSchemaFactRows(db.interfaces, q),
-      // A JSON column written from its text (json-text.ts), in the row's own transaction.
-      $executeRaw: async (q: unknown) => (jsonTextUpdateTable(q) === "ContractSnapshot" ? applyJsonTextUpdate(db.snapshots, q) : 0),
+      $queryRaw: async (q: unknown) => {
+        db.sql.push(sqlOf(q));
+        return sqlOf(q).includes('"ContractTime"')
+          ? [{ ms: db.contractTimeMs }]
+          : isSnapshotSummariesQuery(q)
+            ? snapshotSummaryRows(db.snapshots, q)
+            : isSchemaTextsQuery(q)
+              ? schemaTextsRows(db.snapshots, q)
+              : isSnapshotBodiesQuery(q)
+                ? snapshotBodiesRows(db.snapshots, q)
+                : isGrantsQuery(q)
+                  ? grantRows(db.grants, q)
+                  : isSnapshotIrTextQuery(q)
+                    ? snapshotIrTextRows(db.snapshots, q)
+                    : capturedSchemaFactRows(db.interfaces, q);
+      },
+      // Every write sent as SQL (raw-sql-standin.ts), in the record's own transaction.
+      $executeRaw: async (q: unknown) => {
+        db.sql.push(sqlOf(q));
+        return applyRawWrite({ snapshots: db.snapshots, interfaces: db.interfaces }, q);
+      },
       $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn((await import("@/lib/db/prisma")).prisma),
     },
   };
@@ -186,7 +206,7 @@ import { kitLimit, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget"
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
-import { chargeEnvelopeAllowance, memoryAllowanceStore, setEnvelopeAllowanceForTest } from "@/lib/contracts/envelope-allowance";
+import { envelopeIsolates } from "@/lib/contracts/envelope";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
@@ -257,6 +277,8 @@ beforeEach(() => {
   db.solutions = [{ id: "sol_1", organizationId: "org_a", name: "Order portal" }];
   db.grants = [];
   db.failSnapshotCreate = false;
+  db.contractTimeMs = 0;
+  db.sql = [];
   seed();
   mocks.user.mockResolvedValue(BUILDER);
   mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
@@ -661,11 +683,12 @@ describe("the starter kit and the solution document use the compiled contract", 
       return snap;
     };
 
-    it("/schema: TOO_LARGE, its schemas omitted", async () => {
+    it("/schema: the texts the record rendered, whatever the IR became — it renders nothing", async () => {
       const snap = await grow();
-      const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
-      expect(d.contract).toMatchObject({ source: "metadata", snapshotId: snap.id, schemas: null, schemasOmitted: "TOO_LARGE" });
-      expect(d.requestSchema).toBeNull();
+      const d = await data<{ requestSchema: Row | null; contract: { snapshotId: string; schemas: { record: { properties: Row } } } }>(await schemaRoute());
+      expect(d.contract.snapshotId).toBe(snap.id);
+      expect(Object.keys(d.contract.schemas.record.properties)).not.toContain("ZZ1_EXT_0");
+      expect(d.requestSchema).not.toBeNull();
     });
 
     it("the starter kit: TOO_LARGE", async () => {
@@ -1009,125 +1032,110 @@ describe("a captured schema is bounded where it is written and where it is read"
 });
 
 /*
- * STRUCTURAL HARDENING, ROUND 2: WHAT A READ COSTS THE REQUEST THREAD. A
- * builder's SAP serves a 1.2 MB description of one entity type with 18,000
- * decimal properties; it slices to a 1.4 MB contract, under every cap, and is
- * recorded. Every GET /schema, kit download and solution document then
- * re-rendered 10-25 MB from it on the request thread, 0.5-1.4 s each with
- * the event loop blocked, on every call. The render is now on the request
- * thread only while its budget is small enough to be cheap by construction
- * (read-render.ts), and in the envelope otherwise: the answers are the same,
- * and the thread keeps ticking while they are made.
+ * GET /schema IS NEVER RENDERED (P1.3): it serves the texts the record
+ * rendered once in the compiler's worker, spliced in as they are, and never
+ * starts a worker, waits for the compiler's gate or asks for compiler time.
+ * The Studio downloads render in a job of the downloading organisation's,
+ * and say so when the compiler cannot take one.
  */
-describe("a read of a contract at the caps does not block the request thread", () => {
-  /** The hostile contract, sliced and digested as the record would keep it: on the dataset the seeded interface reads. */
-  function hostileContract(properties: number) {
+describe("the read paths and the compiler", () => {
+  /** A wide contract, sliced and digested as the record would keep it: on the dataset the seeded interface reads. */
+  function wideDescription(properties: number) {
     const props = Array.from({ length: properties }, (_, i) => `<Property Name="F${i}" Type="Edm.Decimal" Precision="9" Scale="2"/>`).join("");
-    const description =
+    return (
       `<?xml version="1.0" encoding="utf-8"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" ` +
       `xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"><edmx:DataServices m:DataServiceVersion="2.0">` +
       `<Schema Namespace="S" xmlns="http://schemas.microsoft.com/ado/2008/09/edm"><EntityType Name="SalesOrderType"><Key><PropertyRef Name="F0"/></Key>${props}</EntityType>` +
-      `<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="SalesOrder" EntityType="S.SalesOrderType"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`;
-    const compiled = compileContract(description);
-    if (!compiled.ok) throw new Error("not compiled");
-    const slice = sliceForEntitySet(compiled.ir, "SalesOrder", description.length);
-    if (!slice.ok) throw new Error("not sliced");
-    return { contract: slice.contract, bytes: contractDigest(slice.contract).bytes };
+      `<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="SalesOrder" EntityType="S.SalesOrderType"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`
+    );
   }
 
-  /** Before any fix: 500-1,000 ms for /schema, 1,300-1,400 ms for the kit, ~900 ms for the document. */
-  const STALL_MS = 250;
-
-  it("/schema, the starter kit and the solution document answer in full, and the thread keeps ticking", async () => {
-    const hostile = hostileContract(18_000);
-    // Under every cap: the contract a verify of that description records.
-    expect(hostile.bytes).toBeGreaterThan(1_000_000);
-    expect(hostile.bytes).toBeLessThanOrEqual(MAX_DOCUMENT_CONTRACT_BYTES);
-    await verify();
-    const snap = db.snapshots[0]!;
-    snap.ir = hostile.contract;
-    snap.irBytes = hostile.bytes;
-
+  it("/schema and /v1 of a 250 KB contract: served from the stored texts, no worker, no compiler time, the thread ticking", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => xml(wideDescription(4_000))));
+    const verified = await data<{ contract: Row }>(await verify());
+    expect(verified.contract).toMatchObject({ status: "RECORDED" });
+    expect(db.snapshots[0]!.irBytes as number).toBeGreaterThan(200_000);
+    envelopeIsolates();
+    db.sql = [];
     const schema = await longestStall(() => schemaRoute());
     const d = await data<{ requestSchema: Row | null; contract: { schemas: { record: { properties: Row } } | null } }>(schema.value);
-    expect(Object.keys(d.contract.schemas!.record.properties)).toHaveLength(18_000);
+    expect(Object.keys(d.contract.schemas!.record.properties)).toHaveLength(4_000);
     expect(d.requestSchema).not.toBeNull();
-    expect(schema.ms, "/schema").toBeLessThan(STALL_MS);
-
     const v1 = await longestStall(() =>
       getSchemaV1(new NextRequest("http://localhost/api/northbound/v1/interfaces/if_1/schema", { headers: { authorization: "Bearer ce_x" } }), {
         params: Promise.resolve({ id: "if_1" }),
       }),
     );
-    expect(Object.keys((await data<{ contract: { schemas: { record: { properties: Row } } } }>(v1.value)).contract.schemas.record.properties)).toHaveLength(18_000);
-    expect(v1.ms, "/v1 /schema").toBeLessThan(STALL_MS);
-
-    const kit = await longestStall(() =>
-      getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) }),
-    );
-    expect(kit.value.status).toBe(200);
-    const files = (await data<{ files: { path: string; contents: string }[] }>(kit.value)).files;
-    expect(files.find((f) => f.path === "openapi.json")!.contents).toContain('"F17999"');
-    expect(kit.ms, "kit").toBeLessThan(STALL_MS);
-
-    const solution = await longestStall(() =>
-      getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) }),
-    );
-    expect(solution.value.status).toBe(200);
-    expect(await solution.value.text()).toContain('"F17999"');
-    expect(solution.ms, "solution document").toBeLessThan(STALL_MS);
+    expect(await v1.value.text()).toBe(await schemaRoute().then((r) => r.text()));
+    // No worker was started, no compiler time was asked for or charged, no IR was read.
+    expect(envelopeIsolates()).toEqual({ live: 0, peak: 0 });
+    expect(db.sql.some((q) => q.includes('"ContractTime"'))).toBe(false);
+    expect(db.sql.some((q) => q.includes('"ir"'))).toBe(false);
+    // A copy of stored text: well under a render's cost (a load-robust bound on this thread's own CPU).
+    expect(schema.ms, "/schema").toBeLessThan(200);
+    expect(v1.ms, "/v1 /schema").toBeLessThan(200);
   }, 180_000);
 
-  /*
-   * STRUCTURAL HARDENING, ROUND 6: a read refused because the organisation's
-   * read allowance is spent (envelope-allowance.ts) says so, and when there is
-   * more — /schema in its note, the kit and the document in a 503 with
-   * Retry-After — never "retry in a moment", which would be refused the same
-   * way for up to an hour or a day.
-   */
-  it("with the organisation's read allowance spent, /schema, the kit and the document say so and when it returns", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const hostile = hostileContract(18_000);
+  it("a snapshot whose texts are gone (recorded before them, or no longer the row last verified) answers NOT_RENDERED", async () => {
     await verify();
     const snap = db.snapshots[0]!;
-    snap.ir = hostile.contract;
-    snap.irBytes = hostile.bytes;
-    const clock = { now: Date.UTC(2026, 9, 21, 10, 30, 0) };
-    setEnvelopeAllowanceForTest({ store: memoryAllowanceStore(() => clock.now), clock: () => clock.now });
+    Object.assign(snap, { schemasText: null, createBodyText: null, updateBodyText: null });
+    const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
+    expect(d.contract).toMatchObject({ source: "metadata", snapshotId: snap.id, schemas: null, schemasOmitted: "NOT_RENDERED" });
+    expect(d.contract.schemasNote).toMatch(/Verify the service again/);
+    expect(d.requestSchema).toBeNull();
+    // A verify of the same contract re-attaches them.
+    expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
+    expect((await data<{ contract: Row }>(await schemaRoute())).contract.schemas).not.toBeNull();
+  });
+
+  it("with the organisation's compiler time spent: /schema still serves; the kit and the document are 429 until 00:00 UTC; the verify's contract says so", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await verify();
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    db.contractTimeMs = 40_000;
     try {
-      vi.stubEnv("COREEDGE_ENVELOPE_READ_SECONDS_PER_HOUR", "30");
-      await chargeEnvelopeAllowance("org_a", 30_000, "read");
-
-      const d = await data<{ contract: { schemas: unknown; schemasOmitted?: string; schemasNote?: string } }>(await schemaRoute());
-      expect(d.contract.schemas).toBeNull();
-      expect(d.contract.schemasOmitted).toBe("UNAVAILABLE");
-      expect(d.contract.schemasNote).toMatch(/used all the time the contract compiler may spend rendering .* this hour/);
-      expect(d.contract.schemasNote).toMatch(/available again in about 30 minutes/);
-      expect(d.contract.schemasNote).not.toMatch(/in a moment/);
-
+      expect((await data<{ contract: Row }>(await schemaRoute())).contract.schemas).not.toBeNull();
       const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
-      expect(kit.status).toBe(503);
-      expect(kit.headers.get("retry-after")).toBe("1800");
+      expect(kit.status).toBe(429);
+      const retryAfter = Number(kit.headers.get("retry-after"));
+      expect(retryAfter).toBeGreaterThan(0);
+      expect(retryAfter).toBeLessThanOrEqual(86_400);
       const kitError = ((await kit.json()) as { error: { code: string; message: string } }).error;
-      expect(kitError.code).toBe("UNAVAILABLE");
-      expect(kitError.message).toMatch(/^This starter kit could not be generated: This organisation has used all the time/);
-      expect(kitError.message).not.toMatch(/in a moment/);
-
+      expect(kitError.code).toBe("RATE_LIMITED");
+      expect(kitError.message).toMatch(/^This starter kit could not be generated: your organisation has used its 40 s of contract compile time for today/);
       const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
-      expect(doc.status).toBe(503);
-      expect(doc.headers.get("retry-after")).toBe("1800");
-      expect(((await doc.json()) as { error: { message: string } }).error.message).toMatch(/available again in about 30 minutes/);
-
-      // The organisation's builders still verify: reads never spend the compile allowance.
-      const verified = await data<{ contract: Row }>(await verify());
-      expect(verified.contract.status).not.toBe("NOT_COMPILED");
+      expect(doc.status).toBe(429);
+      const verified = await data<{ status: string; contract: { status: string; detail: string; retryAfterSeconds?: number } }>(await verify());
+      expect(verified.status).toBe("OK");
+      expect(verified.contract).toMatchObject({ status: "NOT_COMPILED" });
+      expect(verified.contract.detail).toMatch(/40 s of contract compile time/);
+      expect(verified.contract.retryAfterSeconds).toBeGreaterThan(0);
     } finally {
-      setEnvelopeAllowanceForTest(null);
       vi.unstubAllEnvs();
     }
   }, 180_000);
 
-  it("a small contract is still answered on the request thread, byte for byte as before", async () => {
+  it("with the compiler turned off: /schema unaffected, the kit and the document 503, the verify's contract NOT_COMPILED", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await verify();
+    vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
+    try {
+      expect((await data<{ contract: Row }>(await schemaRoute())).contract.schemas).not.toBeNull();
+      const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+      expect(kit.status).toBe(503);
+      const doc = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), { params: Promise.resolve({ id: "sol_1" }) });
+      expect(doc.status).toBe(503);
+      const verified = await data<{ status: string; entitySets: string[]; contract: { status: string; detail: string } }>(await verify());
+      expect(verified).toMatchObject({ status: "OK", contract: { status: "NOT_COMPILED" } });
+      expect(verified.contract.detail).toMatch(/compiler disabled/);
+      expect(verified.entitySets).toContain("SalesOrder");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 180_000);
+
+  it("a small contract is answered byte for byte as before", async () => {
     await verify();
     const res = await schemaRoute();
     expect(res.headers.get("content-type")).toMatch(/^application\/json/);

@@ -11,10 +11,15 @@
  * would be the claim P0.1 stopped the broker making.
  */
 
+import type { NextResponse } from "next/server";
+
 import { LIMITS } from "@/lib/contracts/budget";
+import { INPUT_CAUSE } from "@/lib/contracts/envelope";
+import type { EnvelopeRefusal } from "@/lib/contracts/jobs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { currentSnapshotSummaries, snapshotContractTexts, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
+import { studioError, studioErrorRetryAfter } from "@/lib/studio/api";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
 import { Prisma, type GrantDecision } from "@prisma/client";
@@ -25,7 +30,7 @@ export interface CompiledForDoc {
   contentHash: string;
   compiledAt: string;
   /**
-   * The contract — carried as its stored text until a render parses it
+   * The contract — carried as its stored text until the render job parses it
    * (render-input.ts): read its `source` above, never this, on the request thread.
    */
   contract: InterfaceContract;
@@ -66,8 +71,8 @@ export interface DocInputsTooLarge {
  *
  * It is the input side of the documents' budget (budget.ts, LIMITS.document):
  * the output side is the bytes the document is then written in, charged as
- * they are written (documentLimit, kitLimit), against the same function of
- * each contract's size that the record measured it against in the envelope.
+ * they are written (documentLimit, kitLimit), a function of each contract's
+ * kept size, in the download's render job (envelope.ts).
  */
 export const MAX_DOCUMENT_CONTRACT_BYTES = LIMITS.document.contractsCap;
 
@@ -102,26 +107,56 @@ export function fixtureTooLargeNote(maxBytes: number): string {
   return `This recording is larger than the ${Math.floor(maxBytes / (1024 * 1024))} MB of recorded fixtures a starter kit carries, so it is not included. Record it again from a run with fewer or narrower rows.`;
 }
 
-/** A document that could not be rendered just now (read-render.ts: no free render slot, or no worker). */
-export function documentUnavailableMessage(what: "starter kit" | "solution document"): string {
-  return `This ${what} could not be generated just now: too many large documents are being generated at once. Try again in a moment.`;
+/** How long a Studio download or capture waits for the compiler's gate and runs, together (envelope.ts). */
+export const STUDIO_JOB_DEADLINE_MS = 25_000;
+
+/** A Contract Compiler job's refusal (envelope.ts), as a Studio route reports it. */
+export interface JobRefusal {
+  reason: EnvelopeRefusal;
+  detail: string;
+  cause?: string;
+  retryAfterMs?: number;
 }
 
 /**
- * A document refused because the organisation's read allowance is spent
- * (read-render.ts: ALLOWANCE): the envelope's own words for whose time and
- * when there is more — never "in a moment" (structural hardening round 6).
+ * A job that did not run, as a Studio route answers it: `sentence` says what
+ * did not happen ("This starter kit could not be generated"). BUSY is a 503
+ * to retry in seconds; the organisation's compiler time spent a 429 until
+ * 00:00 UTC, saying so; the compiler turned off or not starting a 503. Null
+ * for RESOURCE_LIMIT, which each route says in its own words.
  */
-export function documentAllowanceMessage(what: "starter kit" | "solution document", detail: string): string {
-  return `This ${what} could not be generated: ${detail}`;
+export function jobRefusal(sentence: string, r: JobRefusal): NextResponse | null {
+  switch (r.reason) {
+    case "RESOURCE_LIMIT":
+      return null;
+    case "ALLOWANCE":
+      return studioErrorRetryAfter("RATE_LIMITED", `${sentence}: ${r.detail}`, (r.retryAfterMs ?? 60_000) / 1000);
+    case "BUSY":
+      return studioErrorRetryAfter("UNAVAILABLE", `${sentence} just now: the contract compiler is busy. Try again in a few seconds.`, 5);
+    case "DISABLED":
+      return studioError("UNAVAILABLE", `${sentence}: the contract compiler is turned off on this deployment.`);
+    default:
+      return studioError("UNAVAILABLE", `${sentence} just now. Try again in a moment.`);
+  }
+}
+
+/** A download whose render job did not give its document: jobRefusal, and a render past its input or budget TOO_LARGE. */
+export function downloadRefusal(what: "starter kit" | "solution document", r: JobRefusal, limit: number): NextResponse {
+  return (
+    jobRefusal(`This ${what} could not be generated`, r) ??
+    studioError(
+      "TOO_LARGE",
+      r.cause === INPUT_CAUSE ? documentInputTooLargeMessage(what, LIMITS.renderInput.bytes) : documentOutputTooLargeMessage(what, limit),
+    )
+  );
 }
 
 /**
  * What a document's read knows BEFORE reading any contract (structural
  * hardening round 3): each interface's current snapshot without its IR, the
  * sizes kept at record time — refused past the budget here — and the grants.
- * A read path decides from this where it renders, and takes its render slot
- * before any IR is read (read-render.ts); loadDocContracts reads them.
+ * The download's render job takes its slot before any IR is read
+ * (envelope.ts); loadDocContracts reads them, once it has.
  */
 export interface DocPlan {
   ok: true;

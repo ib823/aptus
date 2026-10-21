@@ -731,7 +731,9 @@ describe("personal-data coverage (the measure P1.5 decides on)", () => {
 
   it("the corpus job's evaluation compiles, validates both documents per dataset, and reports numbers only", () => {
     const report = evaluateDescription(read("sales-order-rap.v4.xml"));
-    expect(report).toMatchObject({ compiled: true, odataVersion: "V4", entitySets: 3, documentsValid: 3, documentsInvalid: 0 });
+    expect(report).toMatchObject({ compiled: true, odataVersion: "V4", entitySets: 3, documentsValid: 3, documentsInvalid: 0, schemaTextsTooLarge: 0 });
+    expect(report.maxSchemaTextBytes).toBeGreaterThan(0);
+    expect(report.maxSchemaTextBytes).toBeLessThan(64 * 1024);
     expect(JSON.stringify(report)).not.toMatch(/SalesOrder|SoldToParty/);
     expect(evaluateDescription("<html/>")).toMatchObject({ compiled: false, refusal: "NOT_EDMX" });
   });

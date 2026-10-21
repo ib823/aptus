@@ -9,6 +9,7 @@
  */
 
 import { compileContract } from "@/lib/contracts/compile";
+import { recordableContract } from "@/lib/contracts/jobs";
 import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
 import { personalDataCoverage, type PersonalDataCoverage } from "@/lib/contracts/personal-data";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
@@ -25,6 +26,13 @@ export interface DescriptionReport {
   documentsValid: number;
   /** Entity sets for which a document failed validation. */
   documentsInvalid: number;
+  /**
+   * Entity sets a verify would refuse to record because their /schema texts
+   * pass 4 MiB together (jobs.ts, OUTPUT_TOO_LARGE): none, for any real
+   * service; and the largest /schema texts recorded, in bytes.
+   */
+  schemaTextsTooLarge: number;
+  maxSchemaTextBytes: number;
   coverage: PersonalDataCoverage | null;
   compileMs: number;
 }
@@ -41,18 +49,29 @@ export function evaluateDescription(text: string, now: () => number = () => perf
       entitySets: 0,
       documentsValid: 0,
       documentsInvalid: 0,
+      schemaTextsTooLarge: 0,
+      maxSchemaTextBytes: 0,
       coverage: null,
       compileMs,
     };
   }
   let documentsValid = 0;
   let documentsInvalid = 0;
+  let schemaTextsTooLarge = 0;
+  let maxSchemaTextBytes = 0;
   for (const set of r.ir.entitySets) {
     if (set.singleton) continue;
     const slice = sliceForEntitySet(r.ir, set.name);
     if (!slice.ok) {
       documentsInvalid += 1;
       continue;
+    }
+    // What a verify of this dataset records: its /schema texts, under their 4 MiB.
+    const recorded = recordableContract(slice.contract, r.sourceLength, set.name, { previous: [], unchangedHashes: [] });
+    if (!recorded.ok && recorded.reason === "OUTPUT_TOO_LARGE") schemaTextsTooLarge += 1;
+    if (recorded.ok) {
+      const t = recorded.texts;
+      maxSchemaTextBytes = Math.max(maxSchemaTextBytes, t.schemas.byteLength + (t.create?.byteLength ?? 0) + (t.update?.byteLength ?? 0));
     }
     let ok = true;
     for (const version of ["3.1.0", "3.0.3"] as const) {
@@ -81,6 +100,8 @@ export function evaluateDescription(text: string, now: () => number = () => perf
     entitySets: r.ir.entitySets.length,
     documentsValid,
     documentsInvalid,
+    schemaTextsTooLarge,
+    maxSchemaTextBytes,
     coverage: personalDataCoverage(r.ir),
     compileMs,
   };

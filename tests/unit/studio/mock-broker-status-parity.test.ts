@@ -278,7 +278,8 @@ describe("mock and broker answer every failure reason alike", () => {
     }
     expect([...outcomes].sort()).toEqual([...READ_STATUSES].sort());
     expect([...scenarios].sort()).toEqual([...FIXTURE_SCENARIOS].sort());
-  });
+    // Each capture's body is parsed in the Contract Compiler's worker (a spawn each, from source here).
+  }, 120_000);
 
   it("records the run's own sentence, never a different one", async () => {
     arrange(CASES.find((c) => c.name.startsWith("tenant 404"))!);

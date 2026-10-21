@@ -122,9 +122,10 @@ vi.mock("@/lib/db/prisma", async () => {
           ? capturedSchemaFactRows([store.iface], q)
           : [];
   prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
-  // A fixture body written from its text (json-text.ts), in the row's own transaction.
-  const { applyJsonTextUpdate, jsonTextUpdateTable } = await import("../../helpers/raw-sql-standin");
-  prisma.$executeRaw = async (q: unknown) => (jsonTextUpdateTable(q) === "MockFixture" ? applyJsonTextUpdate(store.fixtures, q) : 0);
+  // A fixture body written from its text (json-text.ts), and a capture's schema, in the row's own transaction.
+  const { applyRawWrite } = await import("../../helpers/raw-sql-standin");
+  prisma.$executeRaw = async (q: unknown) =>
+    applyRawWrite({ snapshots: [], interfaces: store.iface ? [store.iface] : [], fixtures: store.fixtures }, q);
   return { prisma };
 });
 vi.mock("@/lib/auth/session", () => ({

@@ -67,8 +67,8 @@ export function isSnapshotIrTextQuery(query: unknown): boolean {
 
 /**
  * Whether a raw statement is one of the contract paths' others
- * (raw-sql-standin.ts): a snapshot summary, a snapshot's bodies, the grants,
- * a JSON column written from its text — never capturedSchemaFacts's.
+ * (raw-sql-standin.ts): a snapshot summary, its texts or bodies, the grants,
+ * a write — never capturedSchemaFacts's.
  */
 function isOtherContractQuery(query: unknown): boolean {
   const q = query as { sql?: string; strings?: readonly string[] } | null;

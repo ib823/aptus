@@ -33,11 +33,12 @@
 
 import { LIMITS } from "@/lib/contracts/budget";
 import { MAX_LISTED_DATASETS, readDatasetsSliced, type DatasetSummary } from "@/lib/contracts/datasets";
-import { compileInEnvelope, VERIFY_WAIT_MS, withEnvelopeSlot } from "@/lib/contracts/envelope";
-import type { CompiledService, RenderSubject } from "@/lib/contracts/pipeline";
+import { runContractJob } from "@/lib/contracts/envelope";
+import type { CompiledService } from "@/lib/contracts/jobs";
+import type { RecordHeads } from "@/lib/contracts/snapshot";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
-import { DEFAULT_TIMEOUT_MS, fetchMetadataDocument, MAX_TIMEOUT_MS, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
+import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
 
 /**
  * The service roots that describe a whole tenant and answer
@@ -112,7 +113,7 @@ export type ServiceVerifyStatus =
   | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "TIMEOUT"
-  /** The organisation already has verifies in flight, past its share (envelope.ts): nothing was read. */
+  /** The organisation (or the instance) already has verifies in flight, past its share (FETCH_GATE): nothing was read. */
   | "BUSY"
   | "ERROR";
 
@@ -139,12 +140,14 @@ export interface ServiceVerifyResult {
   failureReason: string | null;
   /**
    * What compiling the description (P1.3) gave, when one was read in full;
-   * absent when none was. A description the compiler refuses — or one the
-   * envelope stopped (RESOURCE_LIMIT, BUSY, UNAVAILABLE) — still verifies as
-   * it did before the compiler existed: the dataset list then comes from the
-   * older reader, and the refusal is said here.
+   * absent when none was. A description the compiler refuses — or a job that
+   * did not run (BUSY, its time spent, the compiler off, RESOURCE_LIMIT) —
+   * still verifies as it did before the compiler existed: the dataset list
+   * then comes from the older reader, and the refusal is said here.
    */
   compiled?: CompiledService;
+  /** The snapshot rows the record job diffed against (snapshot.ts, loadRecordHeads), by id. */
+  heads?: { ids: string[] };
 }
 
 /**
@@ -170,23 +173,44 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
 }
 
 /**
- * The compile, IN THE ENVELOPE (envelope.ts): a worker with its own capped
- * heap and stack and a deadline, so a description built to be expensive
- * ends its own worker and never this request's thread or the process. What
- * comes back is a refusal or the bounded summary the verify needs
- * (pipeline.ts), with the interface's dataset already sliced, digested and
- * measured for every read path. Refuses, never rejects: a description the
- * compiler refuses is read by the older reader in the same job, inside the
- * envelope, as before the compiler (pipeline.ts, compileJob).
+ * The record job, IN THE ENVELOPE (envelope.ts): a worker with its own capped
+ * heap and stack and a deadline, through the compiler's one fair gate and
+ * the organisation's daily compiler time, so a description built to be
+ * expensive ends its own worker and never this request's thread. The heads
+ * its contract is diffed against are loaded only once it holds its slot.
+ * Refuses, never rejects: a description the compiler refuses is read by the
+ * older reader in the same job, as before the compiler (jobs.ts); a job that
+ * did not run is said as the refusal it was, with its retry time.
  */
-function compileOrRefuse(
+async function recordOrRefuse(
   body: string,
   entitySet: string | null,
-  subject: RenderSubject | null,
+  loadHeads: (() => Promise<RecordHeads>) | undefined,
   tenant: string | null,
   deadlineAt: number,
-): Promise<CompiledService> {
-  return compileInEnvelope(body, entitySet, subject, tenant, deadlineAt);
+): Promise<{ compiled: CompiledService; heads?: { ids: string[] } }> {
+  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [] };
+  const r = await runContractJob(
+    "record",
+    async () => {
+      if (entitySet && loadHeads) {
+        // A database that does not answer is no reason to fail the verify: with no heads, the record decides (snapshot.ts).
+        heads = await loadHeads().catch((err: unknown) => {
+          console.error("[contracts] snapshot heads not read", { error: err instanceof Error ? err.name : "unknown" });
+          return heads;
+        });
+      }
+      return { kind: "record", input: { description: body, entitySet, previous: heads.previous, unchangedHashes: heads.unchangedHashes } };
+    },
+    { tenant, deadlineAt },
+  );
+  if (r?.ok) return { compiled: r.value, heads: { ids: heads.ids } };
+  if (!r || r.reason === "INTERNAL") {
+    // A job that threw is a defect: refused as a description that could not be read, logged by name only.
+    console.error("[contracts] compile failed", { error: "INTERNAL" });
+    return { compiled: { ok: false, reason: "INVALID_CSDL", detail: "The service description could not be read as a service description." } };
+  }
+  return { compiled: { ok: false, reason: r.reason, detail: r.detail, ...(r.retryAfterMs !== undefined ? { retryAfterMs: r.retryAfterMs } : {}) } };
 }
 
 function versionLabel(v: ODataVersion): string {
@@ -212,74 +236,79 @@ export interface VerifyServiceInput {
   /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
   sapProduct?: string | null;
   /**
-   * The interface the dataset's contract would be recorded for, so the
-   * compile renders and measures every read path's output for it inside
-   * the envelope (pipeline.ts). Omitted, a stand-in of the same shape.
+   * The interface's previous snapshot heads, as their stored text, for the
+   * record job to diff the dataset's contract against (snapshot.ts,
+   * loadRecordHeads): called only once the job holds its slot.
    */
-  subject?: RenderSubject | null;
-  /** The organisation verifying: its share of verifies and of the compiler's envelope (envelope.ts). */
+  loadHeads?: () => Promise<RecordHeads>;
+  /** The organisation verifying: its share of the fetch gate and of the compiler (envelope.ts). */
   organizationId?: string | null;
   /**
-   * When the request must have its answer (ms since the epoch): the turn's
-   * wait and the compile are bounded by it (see VERIFY_REQUEST_BUDGET_MS);
-   * omitted, VERIFY_REQUEST_BUDGET_MS from now.
+   * When the request must have its answer (ms since the epoch): the job's
+   * wait and run are bounded by it (see VERIFY_REQUEST_BUDGET_MS); omitted,
+   * VERIFY_REQUEST_BUDGET_MS from now.
    */
   deadlineAt?: number | null;
 }
 
 /**
- * ONE DEADLINE FOR THE WHOLE VERIFY (structural hardening round 4). The
- * route's platform limit (maxDuration, 60 s) was shorter than the waits the
- * envelope allows in sequence — the verify turn (20 s), the SAP read (up to
- * 30 s), the compile slot (15 s) and the compile (15 s), the diff at record
- * time (10 s + 10 s, up to three times) — so a slow SAP and a busy compiler
- * had the platform cut the request off with a 504, nothing answered, audited
- * or recorded. Now the verify has this much from the moment the request
- * starts, and every wait and run inside it is clamped to what is left: the
- * turn waits only while the SAP read would still fit after it, the SAP read
- * keeps its own timeout, and the compile and the record's diff get the rest;
- * past it they are refused BUSY, the contract is NOT_COMPILED, and the
- * verify answers as it did before the compiler existed. What remains of the
- * platform's limit (VERIFY_RESPONSE_MARGIN_MS) is for a worker cut at the
- * deadline to exit and for the route's own writes.
+ * ONE DEADLINE FOR THE WHOLE VERIFY. The route's platform limit (maxDuration,
+ * 60 s) must hold the SAP read (up to 30 s), the job's wait for the gate and
+ * its run (each clamped to what is left), and the route's writes. So the
+ * verify has this much from the moment the request starts; past it the job
+ * is refused BUSY, the contract is NOT_COMPILED, and the verify answers as it
+ * did before the compiler existed. What remains of the platform's limit
+ * (VERIFY_RESPONSE_MARGIN_MS) is for a worker cut at the deadline to exit
+ * (5 s) and for the route's own writes.
  */
 export const VERIFY_REQUEST_BUDGET_MS = 45_000;
 /** What the route keeps beyond the verify's budget: a worker's exit grace (5 s) and the route's own writes and audit. */
 export const VERIFY_RESPONSE_MARGIN_MS = 15_000;
 
-/** The SAP read's own timeout for this connection (connection-health.ts). */
-function fetchTimeoutMs(connection: ResolvedSapConnection): number {
-  return Math.min(connection.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
-}
-
 export const VERIFY_BUSY_DETAIL =
   "This organisation is already verifying other services. Verify again when those have answered.";
 
 /**
- * ONE ORGANISATION'S VERIFIES TAKE TURNS, BEFORE ANYTHING IS READ
- * (structural hardening round 3). A verify reads up to 8 MiB of description
- * and works on it; with no gate, one builder sent twenty at once, seventeen
- * were refused a compile slot and each then read the whole description on
- * this thread. Now a verify holds a turn (envelope.ts, the `verify` pool)
- * from before SAP is asked for the description until it has answered, a few
- * more waiting, and past that BUSY at once — nothing fetched, nothing read.
- * Across organisations it is the compile slots behind it that bound the work.
- *
- * SEVERAL TURNS PER ORGANISATION, NOT ONE (structural hardening round 4).
- * The turn is held across the SAP read, so with one per organisation a
- * single hung system — a DEV tenant running to its 30 s timeout — made every
- * teammate's verify of a healthy system wait 20 s and answer BUSY, SAP never
- * asked. An organisation now holds ENVELOPE_VERIFY_TENANT_RUNNING turns: what
- * the turn bounds is the descriptions it holds in flight (that many × 8 MiB),
- * and a slow system takes one of them, not all.
+ * THE FETCH GATE: at most this many verifies in flight per organisation, and
+ * per process, from before SAP is asked for the description until the
+ * verify has answered — with no queue: past either, BUSY at once, nothing
+ * fetched. What it bounds is the descriptions held in memory (each up to
+ * 8 MiB); a hung SAP holds one of an organisation's three, not all of them,
+ * and another organisation's verifies are not behind it.
  */
+export const FETCH_GATE = { perOrganization: 3, perProcess: 16 } as const;
+
+const inFlight = { total: 0, byOrganization: new Map<string, number>() };
+
+/** Enter the fetch gate: the function that leaves it, or null (BUSY). */
+function enterFetchGate(organizationId: string | null): (() => void) | null {
+  const mine = organizationId === null ? 0 : (inFlight.byOrganization.get(organizationId) ?? 0);
+  if (inFlight.total >= FETCH_GATE.perProcess || mine >= FETCH_GATE.perOrganization) return null;
+  inFlight.total += 1;
+  if (organizationId !== null) inFlight.byOrganization.set(organizationId, mine + 1);
+  let left = false;
+  return () => {
+    if (left) return;
+    left = true;
+    inFlight.total -= 1;
+    if (organizationId === null) return;
+    const n = (inFlight.byOrganization.get(organizationId) ?? 1) - 1;
+    if (n > 0) inFlight.byOrganization.set(organizationId, n);
+    else inFlight.byOrganization.delete(organizationId);
+  };
+}
+
 export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl: typeof fetch = fetch): Promise<ServiceVerifyResult> {
   const started = Date.now();
   const deadlineAt = input.deadlineAt ?? started + VERIFY_REQUEST_BUDGET_MS;
-  // Wait for a turn only while the SAP read, at its own timeout, would still end inside the verify's deadline.
-  const wait = Math.max(0, Math.min(VERIFY_WAIT_MS, deadlineAt - Date.now() - fetchTimeoutMs(input.connection)));
-  const turn = await withEnvelopeSlot("verify", input.organizationId ?? null, wait, () => verifyOnce(input, fetchImpl, deadlineAt));
-  if (turn.ok) return turn.value;
+  const leave = enterFetchGate(input.organizationId ?? null);
+  if (leave) {
+    try {
+      return await verifyOnce(input, fetchImpl, deadlineAt);
+    } finally {
+      leave();
+    }
+  }
   return {
     status: "BUSY",
     verified: false,
@@ -364,7 +393,7 @@ async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, de
    * the older readers below still list the datasets — so no service that
    * verified yesterday stops verifying today.
    */
-  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null, input.organizationId ?? null, deadlineAt);
+  const { compiled, heads } = await recordOrRefuse(r.body, input.entitySet || null, input.loadHeads, input.organizationId ?? null, deadlineAt);
   /*
    * THE DATASETS, AS A BOUNDED SUMMARY (datasets.ts, structural hardening
    * round 3): the first MAX_STORED_ENTITY_SETS names, how many there are,
@@ -372,8 +401,9 @@ async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, de
    * whether the compiler read the description or refused it (a singleton is
    * one record, not a dataset the broker can page through; a name
    * PostgreSQL cannot hold is no dataset anyone can address). Only when the
-   * envelope never ran the job (no free slot, no worker) does this thread
-   * read them, in slices that give the event loop back between them.
+   * job never ran (busy, its time spent, the compiler off, no worker) does
+   * this thread read them, in slices that give the event loop back between
+   * them.
    */
   const datasets: DatasetSummary =
     compiled.ok ? compiled.datasets : (compiled.datasets ?? (await readDatasetsSliced(r.body, input.entitySet || null)));
@@ -431,5 +461,6 @@ async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, de
     suggestedEntitySet: null,
     auditStatus: 200,
     compiled,
+    ...(heads ? { heads } : {}),
   };
 }

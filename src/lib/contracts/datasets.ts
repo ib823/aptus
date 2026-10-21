@@ -8,12 +8,12 @@
  * there are, and whether the interface's dataset is among them (or a name
  * that differs only in case). So that is all that is ever made of them —
  * here, as a tally that keeps only those — and the tally is taken where the
- * names are read: inside the compiler's envelope (pipeline.ts), whether the
+ * names are read: inside the compiler's envelope (jobs.ts), whether the
  * compiler read the description or refused it and the older reader did. What
  * crosses back to the request thread is this summary, never one entry per
  * declared set.
  *
- * When the envelope itself could not run (no free slot, no worker), the
+ * When the job itself did not run (busy, its time spent, no worker), the
  * request thread reads the names with the older reader in slices of bounded
  * size, giving the event loop back between them (readDatasetsSliced): what
  * one slice costs is fixed, whatever the description holds.

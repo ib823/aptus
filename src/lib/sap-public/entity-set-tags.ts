@@ -3,7 +3,7 @@
  * `<EntitySet …>` start tags, no XML parser. The SAP connectors read with it,
  * and the verify falls back to it when the Contract Compiler refuses a
  * description (service-verify.ts). Pure, with no imports, so the compiler's
- * worker runs it inside its envelope (pipeline.ts) without carrying the
+ * worker runs it inside its envelope (jobs.ts) without carrying the
  * connectors along.
  */
 

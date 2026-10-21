@@ -5,9 +5,13 @@
  * against PostgreSQL (tests/integration/hardening-round5.test.ts).
  *
  *   currentSnapshotSummaries  one DISTINCT ON over the snapshots (snapshot.ts)
+ *   snapshotSchemaTexts       one snapshot's /schema texts (snapshot.ts)
  *   snapshotBodies            two capabilities and the singleton flag of an IR
  *   planDocInputs's grants    the granting, unexpired, unrevoked rows, distinct
- *   jsonTextUpdate            a row's JSON columns set from their text (json-text.ts)
+ *   applyRawWrite             every write the contract paths send as SQL: a
+ *                             row's JSON columns from their text (json-text.ts),
+ *                             the /schema texts on one row and off the others,
+ *                             a capture's schema, a charge of compiler time
  */
 
 type Row = Record<string, unknown>;
@@ -55,10 +59,30 @@ export function snapshotSummaryRows(snapshots: readonly Row[], q: unknown): Row[
         interfaceVersion: hit.interfaceVersion,
         createdAt: hit.createdAt ?? new Date(0),
         irBytes: hit.irBytes ?? null,
+        schemasBytes: octets(hit.schemasText),
+        createBodyBytes: octets(hit.createBodyText),
+        updateBodyBytes: octets(hit.updateBodyText),
       });
     }
   });
   return out;
+}
+
+const octets = (t: unknown) => (typeof t === "string" ? Buffer.byteLength(t, "utf8") : null);
+
+/** snapshotSchemaTexts's statement (snapshot.ts). */
+export function isSchemaTextsQuery(q: unknown): boolean {
+  return sqlOf(q).includes('"schemasText" AS "schemas"');
+}
+
+/** One snapshot's schemas text and the body the statement names. Values: the organisation, the id. */
+export function schemaTextsRows(snapshots: readonly Row[], q: unknown): Row[] {
+  const sql = sqlOf(q);
+  const [org, id] = valuesOf(q) as [string, string];
+  const row = snapshots.find((r) => (r.organizationId ?? org) === org && r.id === id);
+  if (!row) return [];
+  const body = sql.includes('"updateBodyText" AS') ? row.updateBodyText : sql.includes('"createBodyText" AS') ? row.createBodyText : null;
+  return [{ schemas: row.schemasText ?? null, body: body ?? null }];
 }
 
 /** snapshotBodies's statement (snapshot.ts). */
@@ -135,4 +159,46 @@ export function applyJsonTextUpdate(rows: Row[], q: unknown): number {
     }
   }
   return written;
+}
+
+/**
+ * Every write the contract paths send as SQL, applied to in-memory rows: the
+ * /schema texts set on one row (setSchemaTexts) and nulled on the
+ * interface's others, a capture's schema on its interface (recordCapture),
+ * a JSON column from its text (json-text.ts); a charge of compiler time
+ * (contract-time.ts) is accepted and kept nowhere. The rows written.
+ */
+export function applyRawWrite(tables: { snapshots: Row[]; interfaces?: Row[]; fixtures?: Row[] }, q: unknown): number {
+  const sql = sqlOf(q).trim();
+  const values = valuesOf(q);
+  if (sql.includes('"ContractTime"')) return 1;
+  if (/^UPDATE "ContractSnapshot" SET "schemasText" = NULL/.test(sql)) {
+    const [org, interfaceId, keep] = values as [string, string, string];
+    let n = 0;
+    for (const r of tables.snapshots) {
+      if ((r.organizationId ?? org) === org && r.interfaceId === interfaceId && r.id !== keep && typeof r.schemasText === "string") {
+        Object.assign(r, { schemasText: null, createBodyText: null, updateBodyText: null });
+        n += 1;
+      }
+    }
+    return n;
+  }
+  if (/^UPDATE "ContractSnapshot" SET "schemasText" = /.test(sql)) {
+    const [schemasText, createBodyText, updateBodyText, id, org] = values as [string, string | null, string | null, string, string];
+    const r = tables.snapshots.find((x) => x.id === id && (x.organizationId ?? org) === org);
+    if (!r) return 0;
+    Object.assign(r, { schemasText, createBodyText, updateBodyText });
+    return 1;
+  }
+  if (/^UPDATE "Interface" SET "responseSchema" = /.test(sql)) {
+    const [text, id, org, version, entitySet] = values as [string, string, string, number, string | null];
+    const r = (tables.interfaces ?? []).find((x) => x.id === id && (x.organizationId ?? org) === org && x.version === version && (x.entitySet ?? null) === entitySet);
+    if (!r) return 0;
+    r.responseSchema = JSON.parse(text);
+    return 1;
+  }
+  const table = jsonTextUpdateTable(q);
+  if (table === "ContractSnapshot") return applyJsonTextUpdate(tables.snapshots, q);
+  if (table === "MockFixture") return applyJsonTextUpdate(tables.fixtures ?? [], q);
+  return 0;
 }

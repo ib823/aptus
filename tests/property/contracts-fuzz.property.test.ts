@@ -20,17 +20,21 @@
  *
  * FOR EVERY CASE:
  *   - the compile never throws: it compiles, or refuses with a typed reason;
- *   - it is within the envelope's own bounds: a sample of cases is compiled
- *     in the real envelope (envelope.ts) and gives the same answer —
- *     compiled or refused alike, field by field (expectSameAnswer) — never
- *     RESOURCE_LIMIT or INTERNAL; every case compiles in time linear in its
- *     length;
- *   - every dataset's contract is prepared (sliced, digested, rendered and
- *     measured) without throwing, inside the contract budget, in proportion
- *     to the description (budget.ts);
- *   - every read path — /schema, the starter kit, the solution document —
- *     renders a prepared contract under its stated budget, in time linear in
- *     what it writes, and so does the diff against the previous case's.
+ *   - it is within the envelope's own bounds: a sample of cases runs as the
+ *     verify's record job in the real envelope (envelope.ts) and gives the
+ *     same answer as the same job in process — compiled or refused alike,
+ *     field by field (expectSameAnswer) — never RESOURCE_LIMIT or INTERNAL;
+ *     every case compiles in time linear in its length;
+ *   - every dataset's contract is made ready to record (sliced, digested,
+ *     its /schema texts rendered, diffed against the previous case's)
+ *     without throwing, inside the contract budget, in proportion to the
+ *     description (budget.ts), or refused for a stated budget;
+ *   - /schema spliced from those texts is, byte for byte, what f54c6f5a
+ *     rendered on every read (tests/helpers/schema-reference.ts), with and
+ *     without a current stamp;
+ *   - the starter kit and the solution document render under their stated
+ *     budgets, or are refused there (at download), in time linear in what
+ *     they write; the stored diff is bounded.
  *
  * CI runs CONTRACTS_FUZZ_ITERATIONS (default 120) cases from
  * CONTRACTS_FUZZ_SEED (default 13). A long local run:
@@ -39,16 +43,18 @@
 
 import { describe, expect, it } from "vitest";
 
-import { contractLimit, documentLimit, kitLimit, measureJson, OutputBudget, schemaLimit, LIMITS } from "@/lib/contracts/budget";
+import { referenceSchemaMembers } from "../helpers/schema-reference";
+
+import { contractLimit, documentLimit, kitLimit, LIMITS } from "@/lib/contracts/budget";
 import { compileContract, type CompileResult } from "@/lib/contracts/compile";
 import { MAX_STORED_DIFF_BYTES } from "@/lib/contracts/diff";
-import { runInEnvelope } from "@/lib/contracts/envelope";
+import { runJobInEnvelope } from "@/lib/contracts/envelope";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { standaloneSchemas } from "@/lib/contracts/json-schema";
-import { toTypeName } from "@/lib/contracts/names";
-import { buildNorthboundOpenApi, documentJson } from "@/lib/contracts/openapi";
-import { compiledServiceOf, diffJob, prepareContract, type CompiledService, type PreparedContract } from "@/lib/contracts/pipeline";
-import { buildScaffold, safeName } from "@/lib/studio/scaffold";
+import { recordableContract, recordJob, renderJob, textOf, type CompiledService, type RecordableContract } from "@/lib/contracts/jobs";
+import { RawJson } from "@/lib/contracts/raw-json";
+import { requestSchemaText, type RequestSchemaStamp } from "@/lib/contracts/request-schema";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { safeName } from "@/lib/studio/scaffold";
 
 const ITERATIONS = Number(process.env.CONTRACTS_FUZZ_ITERATIONS ?? 120);
 const SEED = Number(process.env.CONTRACTS_FUZZ_SEED ?? 13);
@@ -646,10 +652,26 @@ function timed<T>(fn: () => T): { value: T; ms: number } {
   return { value, ms: performance.now() - started };
 }
 
-/** Every read path's render of a prepared contract, under its own budget; returns what each wrote. */
-function readPaths(p: Extract<PreparedContract, { ok: true }>, entitySet: string): { schema: number; kit: number; document: number } {
-  const schemas = standaloneSchemas(p.contract, toTypeName(entitySet));
-  const schema = measureJson({ schemas, requestSchema: schemas.create }, schemaLimit(p.bytes));
+/**
+ * /schema as the route serves it — spliced from the stored texts — against
+ * what f54c6f5a rendered on every read, with no stamp and with a current
+ * CREATE and UPDATE stamp: the same bytes, or a failure naming the case.
+ */
+function expectSchemaAsBefore(where: string, p: Extract<RecordableContract, { ok: true }>, contract: InterfaceContract, entitySet: string): void {
+  const texts = { schemas: textOf(p.texts.schemas), create: p.texts.create && textOf(p.texts.create), update: p.texts.update && textOf(p.texts.update) };
+  for (const operation of [null, "CREATE", "UPDATE"]) {
+    const stamp: RequestSchemaStamp | null =
+      operation === null ? null : { semver: "1.0.0", entitySet, operation, snapshotId: "snap_1", contentHash: p.hash, interfaceVersion: 1 };
+    const raw = new RawJson();
+    const body = stamp ? requestSchemaText(operation === "UPDATE" ? texts.update : texts.create, stamp) : null;
+    const served = raw.stringify({ schemas: raw.slot(texts.schemas), requestSchema: body === null ? null : raw.slot(body) });
+    const before = referenceSchemaMembers(contract, entitySet, "snap_1", stamp ? { "x-contract": stamp } : null, { version: 1, entitySet });
+    if (served !== before) throw new Error(`${where}: /schema (${operation ?? "no stamp"}) differs from f54c6f5a's`);
+  }
+}
+
+/** The starter kit and the solution document of a contract, each under its own budget: what each wrote, or null when refused there. */
+function downloads(contract: InterfaceContract, bytes: number, entitySet: string): { kit: number | null; document: number | null } {
   const iface = {
     id: "c".repeat(25),
     name: "Fuzzed interface",
@@ -660,25 +682,23 @@ function readPaths(p: Extract<PreparedContract, { ok: true }>, entitySet: string
     entitySet,
     version: 1,
     solutionName: "Fuzz",
-    compiled: { semver: "1.0.0", snapshotId: "s", contentHash: "0", compiledAt: "2026-10-21T00:00:00.000Z", contract: p.contract },
+    compiled: { semver: "1.0.0", snapshotId: "s", contentHash: "0", compiledAt: "2026-10-21T00:00:00.000Z", contract },
   };
-  const kitBudget = new OutputBudget("kit", kitLimit(p.bytes));
-  buildScaffold(iface, "https://coreedge.example/api/northbound", [], [], kitBudget);
-  const docBudget = new OutputBudget("document", documentLimit([p.bytes]));
-  documentJson(
-    buildNorthboundOpenApi({
+  const kit = renderJob({ path: "kit", iface, baseUrl: "https://coreedge.example/api/northbound", fixtures: [], withheld: [], limit: kitLimit(bytes) });
+  const document = renderJob({
+    path: "document",
+    doc: {
       version: "3.1.0",
       baseUrl: "https://coreedge.example/api/northbound",
-      title: "Fuzz",
+      title: `${safeName("Fuzz")} — CoreEdge northbound`,
       infoVersion: "1.0.0",
       description: "Fuzz",
-      interfaces: [{ ...iface, contract: { source: "metadata", contract: p.contract, semver: "1.0.0" } }],
+      interfaces: [{ ...iface, contract: { source: "metadata", contract, semver: "1.0.0" } }],
       discovery: true,
-      safe: safeName,
-    }),
-    docBudget,
-  );
-  return { schema, kit: kitBudget.spent, document: docBudget.spent };
+    },
+    limit: documentLimit([bytes]),
+  });
+  return { kit: kit.ok ? kit.text.byteLength : null, document: document.ok ? document.text.byteLength : null };
 }
 
 interface Stats {
@@ -693,6 +713,10 @@ interface Stats {
   envelopeAgreements: number;
   maxInput: number;
   maxContractPerSource: number;
+  /** Datasets whose /schema was compared with f54c6f5a's, byte for byte. */
+  schemaAsBefore: number;
+  /** Datasets whose kit or document is refused at download (past its budget). */
+  downloadsRefused: number;
   maxSchemaPerContract: number;
   maxKitPerContract: number;
   maxDocumentPerContract: number;
@@ -744,12 +768,15 @@ describe("the Contract Compiler against generated descriptions", () => {
         envelopeAgreements: 0,
         maxInput: 0,
         maxContractPerSource: 0,
+        schemaAsBefore: 0,
+        downloadsRefused: 0,
         maxSchemaPerContract: 0,
         maxKitPerContract: 0,
         maxDocumentPerContract: 0,
         maxCompileMsPerMb: 0,
       };
-      let previous: InterfaceContract | null = null;
+      /** The previous case's contract, as a record stores its IR (its text). */
+      let previous: string | null = null;
 
       for (let i = 0; i < ITERATIONS; i++) {
         naming = chooseNaming(r);
@@ -770,14 +797,15 @@ describe("the Contract Compiler against generated descriptions", () => {
         }
         expect(compiled.ms, `${where}: compile time`).toBeLessThan(compileBudgetMs(doc.length));
         stats.maxCompileMsPerMb = Math.max(stats.maxCompileMsPerMb, (compiled.ms * 1024 * 1024) / Math.max(doc.length, 64 * 1024));
-        // What the verify learns in process: the summary, with the first dataset prepared (or the refusal).
+        // What the verify's record job answers in process, with the first dataset made ready (or the refusal).
         const firstSet = compiled.value.ok ? (compiled.value.ir.entitySets[0]?.name ?? null) : null;
-        const summary = compiledServiceOf(compiled.value, firstSet, null);
+        const job = { description: doc, entitySet: firstSet, previous: [], unchangedHashes: [] };
+        const summary = recordJob(job);
 
         // 4. The real envelope, for a sample — refused descriptions too: the same answer, never stopped by its limits.
         if (i % ENVELOPE_EVERY === 0) {
           stats.envelopeRuns += 1;
-          const e = await runInEnvelope({ kind: "compile", input: { body: doc, entitySet: firstSet, subject: null } });
+          const e = await runJobInEnvelope({ kind: "record", input: job });
           if (!e.ok) throw new Error(`${where}: the envelope refused it (${e.reason})`);
           expectSameAnswer(where, e.value, summary);
           stats.envelopeAgreements += 1;
@@ -791,46 +819,44 @@ describe("the Contract Compiler against generated descriptions", () => {
         }
         stats.compiled += 1;
         const ir = compiled.value.ir;
+        const sourceLength = compiled.value.sourceLength;
 
-        // 2. Every dataset (a sample of a large service's): prepared without throwing, inside its budgets.
+        // 2. Every dataset (a sample of a large service's): made ready to record without throwing, inside its budgets.
         const sets = ir.entitySets.length <= 6 ? ir.entitySets : [ir.entitySets[0]!, ...Array.from({ length: 5 }, () => r.pick(ir.entitySets))];
         for (const set of sets) {
           stats.datasets += 1;
-          const service = set === sets[0] ? summary : compiledServiceOf(compiled.value, set.name, null);
-          if (!service.ok) throw new Error(`${where}: the summary refused what compiled`);
-          const p = service.dataset;
-          if (!p) throw new Error(`${where}: no dataset for ${set.name}`);
+          const slice = sliceForEntitySet(ir, set.name, sourceLength);
+          const heads = { previous: previous === null ? [] : [previous], unchangedHashes: [] };
+          const timedPrepare = timed(() => (slice.ok ? recordableContract(slice.contract, sourceLength, set.name, heads) : slice));
+          const p = timedPrepare.value;
           if (!p.ok) {
             expect(DATASET_REFUSALS.has(p.reason), `${where}: dataset refusal ${p.reason}`).toBe(true);
             bump(stats.datasetRefusals, p.reason);
             continue;
           }
+          if (!slice.ok) throw new Error(`${where}: prepared what did not slice`);
           stats.prepared += 1;
           // The contract is in proportion to its description, and capped.
-          expect(p.bytes, `${where}: contract bytes`).toBeLessThanOrEqual(contractLimit(compiled.value.sourceLength));
+          expect(p.bytes, `${where}: contract bytes`).toBeLessThanOrEqual(contractLimit(sourceLength));
           stats.maxContractPerSource = Math.max(stats.maxContractPerSource, p.bytes / doc.length);
-          // What the record measured is inside each read path's budget…
-          expect(p.rendered.schema).toBeLessThanOrEqual(schemaLimit(p.bytes));
-          expect(p.rendered.kit).toBeLessThanOrEqual(kitLimit(p.bytes));
-          expect(p.rendered.document).toBeLessThanOrEqual(documentLimit([p.bytes]));
-          // …and each read path, rendering it again, stays inside it, in linear time.
-          const read = timed(() => readPaths(p, set.name));
-          expect(read.ms, `${where}: read paths' time`).toBeLessThan(renderBudgetMs(read.value.kit + read.value.document + read.value.schema));
-          // The factor each read path writes per contract byte, beyond its budget's floor (its fixed text).
-          const factor = (out: number, floor: number) => Math.max(0, out - floor) / p.bytes;
-          stats.maxSchemaPerContract = Math.max(stats.maxSchemaPerContract, factor(read.value.schema, LIMITS.schema.floor));
+          // 3. /schema from its stored texts is f54c6f5a's /schema, byte for byte.
+          expectSchemaAsBefore(where, p, slice.contract, set.name);
+          stats.schemaAsBefore += 1;
+          const schemaBytes = p.texts.schemas.byteLength + (p.texts.create?.byteLength ?? 0) + (p.texts.update?.byteLength ?? 0);
+          // The diff against the previous case's contract, as stored: bounded, and the whole record in linear time.
+          if (previous !== null) expect(p.diffs!.every((d) => d.stored.byteLength <= MAX_STORED_DIFF_BYTES)).toBe(true);
+          expect(timedPrepare.ms, `${where}: record time`).toBeLessThan(renderBudgetMs(schemaBytes + p.bytes * 4));
+          // The downloads, each under its budget or refused there, in linear time.
+          const read = timed(() => downloads(slice.contract, p.bytes, set.name));
+          if (read.value.kit === null || read.value.document === null) stats.downloadsRefused += 1;
+          expect(read.ms, `${where}: downloads' time`).toBeLessThan(renderBudgetMs((read.value.kit ?? kitLimit(p.bytes)) + (read.value.document ?? documentLimit([p.bytes]))));
+          // The factor each output writes per contract byte, beyond its budget's floor (its fixed text).
+          const factor = (out: number | null, floor: number) => (out === null ? 0 : Math.max(0, out - floor) / p.bytes);
+          stats.maxSchemaPerContract = Math.max(stats.maxSchemaPerContract, factor(schemaBytes, LIMITS.schema.floor));
           stats.maxKitPerContract = Math.max(stats.maxKitPerContract, factor(read.value.kit, LIMITS.kit.floor));
           stats.maxDocumentPerContract = Math.max(stats.maxDocumentPerContract, factor(read.value.document, LIMITS.document.floor + LIMITS.document.perInterface));
-
-          // 3. The diff against the previous case's contract, as stored: bounded, in linear time.
-          if (previous) {
-            const d = timed(() => diffJob({ previous: [previous!], next: p.contract }));
-            expect(measureJson(d.value[0]!.stored)).toBeLessThanOrEqual(MAX_STORED_DIFF_BYTES);
-            expect(d.ms, `${where}: diff time`).toBeLessThan(renderBudgetMs(p.bytes * 4));
-          }
-          previous = p.contract;
+          previous = textOf(p.ir);
         }
-
       }
 
       const report = {
@@ -849,6 +875,8 @@ describe("the Contract Compiler against generated descriptions", () => {
       expect(stats.compiled).toBeGreaterThan(ITERATIONS / 4);
       expect(stats.prepared).toBeGreaterThan(ITERATIONS / 4);
       expect(stats.refusals.size).toBeGreaterThan(1);
+      // /schema was compared, not merely rendered.
+      expect(stats.schemaAsBefore).toBe(stats.prepared);
       // The envelope was compared, not merely run.
       expect(stats.envelopeAgreements).toBe(stats.envelopeRuns);
       expect(stats.envelopeAgreements).toBeGreaterThan(0);

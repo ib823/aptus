@@ -1,9 +1,6 @@
 /**
  * The stamp a write interface's stored requestSchema carries, and the write
- * body /schema serves from it (P1.3). Pure — no database, no I/O — so the
- * request thread (record.ts re-exports it) and the envelope's worker, which
- * renders a large /schema (pipeline.ts, read-render.ts), decide it the same
- * way.
+ * body /schema serves from it (P1.3). Pure — no database, no I/O.
  */
 
 import type { JsonSchema } from "@/lib/contracts/json-schema";
@@ -51,19 +48,13 @@ export function currentRequestSchemaStamp(
 }
 
 /**
- * The write body /schema serves as `requestSchema`: the current snapshot's
- * create (or, for an UPDATE interface, update) schema, rendered from that
- * snapshot (`schemas`, standaloneSchemas of it) and carrying the stamp —
- * exactly what was stored before only the stamp was. Null when the stamp
- * does not describe the current contract, or that contract has no such body.
+ * The write body /schema serves as `requestSchema`, spliced from the text the
+ * record stored (the current snapshot's create or, for an UPDATE interface,
+ * update body, as compact JSON): the body with the stamp as its last member —
+ * exactly what JSON.stringify({ ...body, "x-contract": stamp }) writes, without
+ * parsing the body back. Null when there is no body.
  */
-export function renderedRequestSchema(
-  stored: unknown,
-  iface: { version: number; entitySet: string | null },
-  current: { id: string; schemas: { create: JsonSchema | null; update: JsonSchema | null } } | null,
-): JsonSchema | null {
-  const stamp = currentRequestSchemaStamp(stored, iface, current?.id ?? null);
-  if (!stamp || !current) return null;
-  const body = stamp.operation === "UPDATE" ? current.schemas.update : current.schemas.create;
-  return body ? { ...body, "x-contract": stamp } : null;
+export function requestSchemaText(bodyText: string | null, stamp: RequestSchemaStamp): string | null {
+  if (bodyText === null) return null;
+  return `${bodyText.slice(0, -1)}${bodyText === "{}" ? "" : ","}"x-contract":${JSON.stringify(stamp)}}`;
 }

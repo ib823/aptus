@@ -66,7 +66,7 @@ import { writeConfigAudit } from "@/lib/studio/audit";
 import { recordVerifiedContract, type ContractOutcome } from "@/lib/contracts/record";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { MAX_STORED_ENTITY_SETS, VERIFY_REQUEST_BUDGET_MS, verifyServiceMetadata } from "@/lib/studio/service-verify";
-import { measuredSubject } from "@/lib/contracts/pipeline";
+import { loadRecordHeads } from "@/lib/contracts/snapshot";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -78,15 +78,12 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 /**
  * The platform's limit for this request. The verify itself has
- * VERIFY_REQUEST_BUDGET_MS of it (service-verify.ts): every wait and run
- * inside — the verify turn, the SAP read, the compile slot and the compile,
- * the record's diff — is clamped to what is left of that budget, so the
- * envelope, not the platform, is what stops a slow compile, and the verify
- * answers, audits and records inside this limit (structural hardening round
- * 4: the waits added up to about 110 s against 60, and the platform cut the
- * request off with a 504). The rest (VERIFY_RESPONSE_MARGIN_MS) is for a
- * worker cut at the deadline to exit and for the writes below;
- * tests/unit/contracts/hardening-round4.test.ts holds the sum to this.
+ * VERIFY_REQUEST_BUDGET_MS of it (service-verify.ts): the SAP read keeps its
+ * own timeout, and the record job's wait for the compiler's gate and its run
+ * are clamped to what is left, so the envelope, not the platform, is what
+ * stops a slow compile, and the verify answers, audits and records inside
+ * this limit. The rest (VERIFY_RESPONSE_MARGIN_MS) is for a worker cut at the
+ * deadline to exit and for the writes below.
  */
 export const maxDuration = 60;
 
@@ -233,11 +230,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     entitySet: iface.entitySet,
     // SuccessFactors describes one dataset at a time (service-verify.ts).
     sapProduct: iface.sapProduct,
-    // What the dataset's contract is rendered for, in the envelope, before it
-    // can be recorded: this interface, under the longest names a solution and
-    // an interface may have, so a rename never takes a read past its budget.
-    subject: iface.entitySet ? measuredSubject({ ...iface, entitySet: iface.entitySet }) : null,
-    // Its organisation's share of the compiler, so another's verifies cannot crowd it out.
+    // The heads the dataset's contract is diffed against, read only once the record job holds its slot.
+    loadHeads: () => loadRecordHeads(scope, iface, environment),
+    // Its organisation's share of the fetch gate and of the compiler, so another's verifies cannot crowd it out.
     organizationId: scope.organizationId,
     deadlineAt,
   });
@@ -341,10 +336,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         scope,
         iface,
         compiled: result.compiled,
+        heads: result.heads,
         environment,
         connectionId: connection.id,
         actorId: user.id,
-        deadlineAt,
       })
     : null;
 

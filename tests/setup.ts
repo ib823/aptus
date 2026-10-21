@@ -15,15 +15,11 @@ import "@testing-library/jest-dom/vitest";
 process.env.COREEDGE_STEP_UP ??= "off";
 
 /*
- * THE ENVELOPE'S ALLOWANCE OVER TIME IS A DEPLOYMENT'S, NOT A SUITE'S
- * (lib/contracts/envelope-allowance.ts). A suite compiles hundreds of
+ * THE CONTRACT COMPILER'S DAILY TIME IS A DEPLOYMENT'S, NOT A SUITE'S
+ * (lib/contracts/contract-time.ts). A suite compiles hundreds of
  * descriptions — many built to run to their limits — under a handful of
- * organisation ids, in one process, within the hour: past any production
- * allowance. Generous here, so the envelope's other limits are what each
- * suite meets; the allowance's own suite sets its store, clock and sizes.
+ * organisation ids, in one process: past any production allowance. Unlimited
+ * here (0), so the compiler's other limits are what each suite meets; the
+ * allowance's own suite sets it.
  */
-process.env.COREEDGE_ENVELOPE_TENANT_SECONDS_PER_HOUR ??= "10000000";
-process.env.COREEDGE_ENVELOPE_TENANT_SECONDS_PER_DAY ??= "10000000";
-process.env.COREEDGE_ENVELOPE_DEPLOYMENT_SECONDS_PER_DAY ??= "10000000";
-process.env.COREEDGE_ENVELOPE_READ_SECONDS_PER_HOUR ??= "10000000";
-process.env.COREEDGE_ENVELOPE_READ_SECONDS_PER_DAY ??= "10000000";
+process.env.COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY ??= "0";

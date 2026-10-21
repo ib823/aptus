@@ -24,7 +24,8 @@
  *   description  ≤ 8 MiB                                   (the verify's read)
  *   contract     ≤ max(128 KiB, 12 × description chars), ≤ 2 MiB  canonical JSON
  *   stored diff  ≤ 1 MiB
- *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB
+ *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 4 MiB (its texts, rendered
+ *                  once at record time and stored on the snapshot)
  *   starter kit  ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB
  *   solution doc ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB,
  *                  over contracts (and captured schemas) adding up to ≤ 2 MiB,
@@ -33,46 +34,23 @@
  *                  ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB,
  *                  and served (by /schema, the kit and the document alike)
  *                  only while its served JSON is ≤ 520 KiB
- *   request thread a read path renders here only from ≤ 512 KiB of stored
- *                  input (2 KiB more per interface of a document), within
- *                  100 ms read on a time basis, writing ≤ 4 MiB, and only
- *                  while the thread's share of render time (250 ms a second)
- *                  and its organisation's part of it (60 ms a second) have
- *                  time left; anything else runs in the envelope
- *                  (read-render.ts), on ≤ 16 MiB of input, stored JSON
- *                  carried as its text — every stored input fits it by
+ *   render input ≤ 16 MiB handed to a kit or document render job, stored
+ *                  JSON carried as its text — every stored input fits it by
  *                  construction
  *   fixture        ≤ 4.5 MiB of compact JSON, from a request body as large;
  *                  a kit reads fixtures only while their stored text adds up
  *                  to ≤ 8 MiB, and names the others as too large
  *   snapshot history ≤ 100 rows per interface, plus each environment's newest
- *   envelope input  ≤ the description cap (compile) or the contract cap per
- *                  contract (prepare, diff), measured before it is copied in
  *
  * The factors are the worst shapes measured (tests/unit/contracts and the
  * fuzz property test); a real slice renders at 2-16x, and its fixed text
  * (README, mock server, error envelopes) is what the floors are for.
  *
- * WHERE THE WORK IS BOUNDED. Bytes are counted here; CPU and memory of the
- * compile are bounded by the envelope it runs in (envelope.ts: a worker with
- * a heap cap and a wall-clock deadline). Every read path renders under the
- * budget its contract was measured against at record time, inside that
- * envelope (pipeline.ts), so what a read renders was rendered once already,
- * within the same bytes, before the contract was ever stored.
- *
- * AND WHERE A READ RENDERS IT (structural hardening rounds 2 and 3).
- * Bounding a read's bytes did not bound the request thread: a contract under
- * every cap still rendered 13-25 MB, 0.5-1.4 s of blocked event loop, on
- * every call of /schema, the kit and the solution document. So the request
- * thread renders only what LIMITS.inlineRender allows — from stored input
- * of at most `inputBytes` (known before anything is read), under a deadline
- * of `ms`, and only while its share of render time (`sharePerSecondMs`, a
- * token bucket) lasts — and everything else renders in the envelope, on a
- * thread of its own, under the same budget (read-render.ts), with its slot
- * taken BEFORE anything is loaded, measured or copied for it. What reads
- * cost the request thread is then bounded by that share, whatever shape of
- * contract makes the render expensive, found or not, and however many reads
- * arrive at once.
+ * WHERE THE WORK IS BOUNDED. Bytes are counted here; CPU and memory are
+ * bounded by the worker every job runs in (envelope.ts: a heap cap and a
+ * wall-clock deadline). Nothing derived from a contract is rendered on a
+ * request thread: /schema serves texts rendered at record time, and the
+ * starter kit and the solution document render in a job of their own.
  *
  * PURE. No I/O; usable in the worker and on a read path alike.
  */
@@ -87,8 +65,8 @@ export const LIMITS = {
   contract: { perSourceChar: 12, floor: 128 * KiB, cap: 2 * MiB },
   /** A snapshot's stored diff. */
   storedDiff: 1 * MiB,
-  /** GET /schema: the four schemas and the write body beside them. */
-  schema: { perContractByte: 16, floor: 64 * KiB, cap: 16 * MiB },
+  /** GET /schema: the four schemas and the create and update bodies, rendered once at record time and stored. */
+  schema: { perContractByte: 16, floor: 64 * KiB, cap: 4 * MiB },
   /** The starter kit (every file, before the response wraps them). */
   kit: { perContractByte: 32, perFixtureByte: 8, floor: 512 * KiB, cap: 32 * MiB },
   /** The per-solution OpenAPI document. */
@@ -118,50 +96,6 @@ export const LIMITS = {
    */
   snapshotHistory: 100,
   /**
-   * WHAT A READ PATH MAY RENDER ON THE REQUEST THREAD (read-render.ts).
-   * ROUTED BY COST, NOT BY BUDGET (structural hardening round 3): a render
-   * whose stored input (contract, captured schema, fixtures — sizes known
-   * before any of it is read) is at most `inputBytes` is tried here, under a
-   * deadline of `ms`, and handed to the envelope only when it meets that
-   * clock. Real contracts are 1-100 KB: they all render here, in
-   * milliseconds, however large their worst-case budget. And the thread
-   * gives renders at most `sharePerSecondMs` of every second (a token bucket
-   * holding at most `ms`): past it, a read renders in the envelope however
-   * cheap it would have been, so no burst of reads — expensive or not, found
-   * or not — holds the thread for longer than one clock.
-   */
-  inlineRender: {
-    inputBytes: 512 * KiB,
-    ms: 100,
-    sharePerSecondMs: 250,
-    /**
-     * ONE ORGANISATION'S PART OF THAT SHARE (structural hardening round 4).
-     * The share was one bucket for the whole process: one builder downloading
-     * a large kit five times a second spent it, every overrun was charged to
-     * it, and every other tenant's 1 ms /schema read went to the envelope —
-     * a worker per read. Now each organisation draws on a bucket of its own
-     * too (holding at most `tenantMs`, refilled at `tenantSharePerSecondMs`),
-     * a render's deadline is the lesser of the two, and its whole cost —
-     * overrun included — is charged to both: one organisation can spend at
-     * most a fraction of the thread's share, and the rest stays for the
-     * others.
-     */
-    tenantMs: 50,
-    tenantSharePerSecondMs: 60,
-    /**
-     * What an interface adds to a solution document's input when routing it
-     * (its names and grants; about 11 KB of document each): a document of
-     * many interfaces without contracts is not "0 bytes" and never cheap.
-     */
-    perInterfaceBytes: 2 * KiB,
-    /**
-     * The most bytes a render on the request thread writes: past it the
-     * render is handed to the envelope (a soft budget, OutputBudget), so the
-     * native writer's single uninterruptible call is bounded too.
-     */
-    outputBytes: 4 * MiB,
-  },
-  /**
    * What a render job in the envelope may be handed: every input a read path
    * stores fits it by construction — a contract (2 MiB canonical; carried as
    * its stored text, at most twice that), a captured schema as served
@@ -170,7 +104,7 @@ export const LIMITS = {
    * the 1,016 a document carries need) — so it refuses only what was stored
    * before those bounds, and says so (INPUT_TOO_LARGE), never as the
    * output's budget. Stored JSON crosses as its text and is counted by its
-   * length, never walked on the request thread (render-input.ts, round 4).
+   * length, never walked on the request thread (render-input.ts).
    */
   renderInput: { bytes: 16 * MiB },
   /**
@@ -203,9 +137,7 @@ export type BudgetName =
   | "kit"
   | "document"
   | "capturedSchema"
-  | "envelopeInput"
   | "measure"
-  | "time"
   | "depth";
 
 /** A budget spent: a refusal, typed, never an error the caller has to guess at. */
@@ -220,123 +152,23 @@ export class BudgetExceeded extends Error {
   }
 }
 
-/**
- * THE RENDER CLOCK (structural hardening round 4). A read path rendered on
- * the request thread runs under a deadline; round 3 read that deadline once
- * every 1,024 charges (and every 4,096 nodes of one size walk), so a render
- * whose work was not charging bytes — a solution document's 1,016 small
- * parts, each charged once after it was built, a schema tree built before
- * its first byte was written — never looked at the clock at all, and a 10 ms
- * grant blocked the thread for half a second.
- *
- * So the deadline is AMBIENT for the whole render (withRenderDeadline: a
- * render is synchronous, so nothing else runs while it is set), and it is
- * read on a time basis, not a count basis: renderTick() — called by every
- * budget charge, every size walk, and every builder's per-property and
- * per-interface loop — looks at the clock at least once every TICK_EVERY
- * calls, and every look that finds the deadline passed ends the render with
- * the typed refusal (BudgetExceeded "time"). A builder that forgot a tick is
- * still caught at its next charge or walk; the envelope (no deadline) pays a
- * comparison per call.
- */
-let ambientDeadline: number | null = null;
-let ticks = 0;
-
-/**
- * WHICH CLOCK A DEADLINE IS READ ON (structural hardening round 5). Wall
- * time by default: on the request thread, what a render costs is how long
- * the thread is blocked. A render measured at record time in the envelope
- * reads its own thread's CPU time instead (withRenderClock, pipeline.ts), so
- * whether a contract renders "in time" is a property of the contract, not of
- * how busy the instance was: on wall time the same contract was refused in
- * two of six identical compiles on a loaded runner.
- */
-let clock: () => number = Date.now;
-
-/** Run `fn` with every render deadline read on `read` (ms, any origin; deadlines given in it). */
-export function withRenderClock<T>(read: () => number, fn: () => T): T {
-  const previous = clock;
-  clock = read;
-  try {
-    return fn();
-  } finally {
-    clock = previous;
-  }
-}
-
-/**
- * This thread's CPU time in ms (process.threadCpuUsage: user and system), or
- * null where Node has no per-thread measure; a worker reads its own thread.
- */
-export function threadCpuMs(): number | null {
-  const usage = (process as { threadCpuUsage?: () => { user: number; system: number } }).threadCpuUsage;
-  if (typeof usage !== "function") return null;
-  const u = usage.call(process);
-  return (u.user + u.system) / 1000;
-}
-/** Calls of renderTick between two looks at the clock: a look is ~30 ns, a tick's worth of work far more. */
-const TICK_EVERY = 16;
-
-/** Run `fn` with `deadline` (ms since the epoch; null for none) as the render's ambient deadline. */
-export function withRenderDeadline<T>(deadline: number | null, fn: () => T): T {
-  const previous = ambientDeadline;
-  // An inner deadline never extends an outer one.
-  ambientDeadline = deadline === null ? previous : previous === null ? deadline : Math.min(previous, deadline);
-  try {
-    return fn();
-  } finally {
-    ambientDeadline = previous;
-  }
-}
-
-/** Look at the clock, now and then: BudgetExceeded("time") once the ambient deadline has passed. */
-export function renderTick(): void {
-  if (ambientDeadline === null || ++ticks % TICK_EVERY !== 0) return;
-  renderCheckpoint();
-}
-
-/** Look at the clock now, whatever the count (a stage boundary). */
-export function renderCheckpoint(): void {
-  if (ambientDeadline === null) return;
-  const now = clock();
-  if (now > ambientDeadline) throw new BudgetExceeded("time", ambientDeadline, now);
-}
-
-/**
- * Bytes, counted as they are written, refused past `limit`. Optionally a
- * wall-clock deadline too (ms since the epoch), read on the render clock's
- * basis (above) — and the render's ambient deadline is honoured whether or
- * not the budget was given one: a read path that renders far slower than its
- * bytes justify stops with the same typed refusal.
- *
- * And optionally a SOFT limit (structural hardening round 4): past it the
- * render is not refused for its size but handed on, as a render past its
- * clock is (BudgetExceeded "time") — what bounds the bytes, and so the native
- * writer's uninterruptible work, of a render on the request thread
- * (LIMITS.inlineRender.outputBytes) without changing what the envelope may
- * render under the same budget.
- */
+/** Bytes, counted as they are written, refused past `limit`. */
 export class OutputBudget {
   spent = 0;
-  private charges = 0;
 
   constructor(
     readonly budget: BudgetName,
     readonly limit: number,
-    private readonly deadline: number | null = null,
-    private readonly softLimit: number = Number.POSITIVE_INFINITY,
   ) {}
 
   charge(bytes: number): void {
     this.spent += bytes;
-    if (this.spent > this.limit || this.spent > this.softLimit) throw this.exceeded(this.spent);
-    if (++this.charges % TICK_EVERY === 0) this.checkClock();
+    if (this.spent > this.limit) throw this.exceeded(this.spent);
   }
 
-  /** The refusal for having spent `spent`: the budget's own past its limit, a hand-over ("time") past the soft one. */
+  /** The refusal for having spent `spent`. */
   exceeded(spent: number): BudgetExceeded {
-    if (spent > this.limit) return new BudgetExceeded(this.budget, this.limit, spent);
-    return new BudgetExceeded("time", this.softLimit, spent);
+    return new BudgetExceeded(this.budget, this.limit, spent);
   }
 
   /** Charge a string's UTF-8 length. */
@@ -345,26 +177,12 @@ export class OutputBudget {
   }
 
   get remaining(): number {
-    return Math.max(0, Math.min(this.limit, this.softLimit) - this.spent);
+    return Math.max(0, this.limit - this.spent);
   }
 
-  /** No limit and no deadline: nothing for a writer to stop at. */
+  /** No limit: nothing for a writer to stop at. */
   get unbounded(): boolean {
-    return (
-      this.limit === Number.POSITIVE_INFINITY &&
-      this.softLimit === Number.POSITIVE_INFINITY &&
-      this.deadline === null &&
-      ambientDeadline === null
-    );
-  }
-
-  /** Look at the clock now — its own deadline and the render's: for work that is not writing bytes (compactSize's walk). */
-  checkClock(): void {
-    const deadline =
-      this.deadline === null ? ambientDeadline : ambientDeadline === null ? this.deadline : Math.min(this.deadline, ambientDeadline);
-    if (deadline === null) return;
-    const now = clock();
-    if (now > deadline) throw new BudgetExceeded("time", deadline, now);
+    return this.limit === Number.POSITIVE_INFINITY;
   }
 }
 
@@ -599,9 +417,6 @@ function quotedBytes(s: string): number {
   return PLAIN.test(s) ? s.length + 2 : utf8Length(JSON.stringify(s));
 }
 
-/** Nodes the size walk visits between two looks at a budget's clock (and the render's). */
-const CLOCK_EVERY_NODES = 256;
-
 /**
  * THE EXACT UTF-8 LENGTH OF JSON.stringify(value), compact, refused
  * (BudgetExceeded) as soon as it is known to pass `budget.remaining`.
@@ -619,9 +434,6 @@ const CLOCK_EVERY_NODES = 256;
 function compactSize(value: unknown, budget: OutputBudget, opaque?: (v: object) => number | null): number {
   const limit = budget.remaining;
   let n = 0;
-  let nodes = 0;
-  // Every walk looks at the clock before it starts, whatever its size (round 4).
-  budget.checkClock();
   const add = (k: number) => {
     n += k;
     if (n > limit) throw budget.exceeded(budget.spent + n);
@@ -656,7 +468,6 @@ function compactSize(value: unknown, budget: OutputBudget, opaque?: (v: object) 
         return inArray;
     }
     if (depth >= LIMITS.jsonDepth) throw new BudgetExceeded("depth", LIMITS.jsonDepth, depth);
-    if (++nodes % CLOCK_EVERY_NODES === 0) budget.checkClock();
     // A value counted by its own size, without walking it (a stored text, render-input.ts).
     const own = opaque?.(v as object);
     if (own !== undefined && own !== null) {

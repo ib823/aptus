@@ -4,7 +4,7 @@
  * entry, whose top level runs a job.
  */
 
-import type { Job } from "@/lib/contracts/pipeline";
+import type { Job } from "@/lib/contracts/jobs";
 
 /** What the worker is handed: its job, and the most heap it may have been given to run it. */
 export interface WorkerInput {
@@ -17,8 +17,6 @@ export interface WorkerReply {
   value?: unknown;
   /** The thrown error's name, or HEAP_NOT_CAPPED, when !ok. */
   error?: string;
-  /** The CPU time the job itself used on its thread, in ms — not its isolate's start — when Node measures it (compile.worker.ts). */
-  cpuMs?: number | undefined;
 }
 
 /** The worker found its heap larger than its cap, and ran nothing. */

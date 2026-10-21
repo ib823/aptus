@@ -24,14 +24,14 @@
  * captured-schema bound (response-schema-states.ts, structural hardening
  * round 1); past it the kit says it was set aside, and why.
  *
- * RENDERED OFF THE REQUEST THREAD WHEN IT IS LARGE (structural hardening
- * rounds 2 and 3). A kit inside its 32 MiB budget took a second or more to
- * build, on this thread, on every download. It is built by
- * renderReadPathLazy (read-render.ts): here while its stored input is small
- * and the thread's share of render time allows, in the compiler's envelope
- * otherwise — and there its contract, captured schema and fixture bodies are
- * read only once it holds a render slot. Its files' JSON is sent as the
- * envelope wrote it, as bytes.
+ * RENDERED IN THE CONTRACT COMPILER'S WORKER, NEVER HERE (P1.3). A kit
+ * inside its 32 MiB budget takes a second or more to build. It is a builder's
+ * download, so it is built by a render job (envelope.ts) through the
+ * compiler's one fair gate, charged to the downloading organisation's daily
+ * compiler time: its contract, captured schema and fixture bodies are read
+ * only once the job holds its slot, and its files' JSON is sent as the
+ * worker wrote it, as bytes. Busy: 503, retry in seconds; the organisation's
+ * time spent: 429 until 00:00 UTC.
  *
  * FIXTURES BY SIZE FIRST (round 3): their stored sizes are read before their
  * bodies, and a kit carries at most LIMITS.fixture.storedTextBytes of them;
@@ -43,31 +43,31 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { jsonBytesUpTo, kitLimit, LIMITS } from "@/lib/contracts/budget";
 import {
-  documentAllowanceMessage,
-  documentInputTooLargeMessage,
-  documentOutputTooLargeMessage,
   documentTooLargeMessage,
-  documentUnavailableMessage,
+  STUDIO_JOB_DEADLINE_MS,
+  downloadRefusal,
   fixtureTooLargeNote,
   loadDocContracts,
   planDocInputs,
 } from "@/lib/contracts/doc-inputs";
+import { runContractJob } from "@/lib/contracts/envelope";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
-import { studioError, studioOkJson, studioUnavailableFor } from "@/lib/studio/api";
+import { studioError, studioOkJson } from "@/lib/studio/api";
 import { partitionFixtures, withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { fixtureBodies, fixtureFacts, fixturesWithinBound } from "@/lib/studio/fixture-store";
 import { servedFixtures } from "@/lib/studio/fixtures";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { capturedSchemaFacts, capturedSchemaReadable, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
-import { RawJson, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
+import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
+import { RawJson } from "@/lib/contracts/raw-json";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
-/** A large kit renders in a worker thread (lib/contracts/read-render.ts): Node.js only. */
+/** The kit renders in a worker thread (lib/contracts/envelope.ts): Node.js only. */
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const deadlineAt = Date.now() + STUDIO_JOB_DEADLINE_MS;
   const user = await getCurrentUser();
   if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
   if (!canAccessStudio(user.role)) return studioError("FORBIDDEN", "Developer Studio is role-gated.");
@@ -129,29 +129,28 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
   const facts = (await capturedSchemaFacts(organizationId, [iface])).get(iface.id) ?? { state: "none" as const, storedBytes: null };
   const schemaState = facts.state;
-  const contractBytes = plan.contractBytes;
-  const capturedBytes = schemaState === "current" && capturedSchemaReadable(facts.storedBytes) ? (facts.storedBytes ?? 0) : 0;
 
   /*
    * UNDER THE KIT'S BUDGET (budget.ts, kitLimit): a function of what was
    * stored — the compiled contract's kept size, or the captured schema's,
    * and the recorded fixtures' — never of what rendering it turns out to
    * cost. Every file is charged as it is written and the kit stops at the
-   * budget (TOO_LARGE). The record rendered the same contract under the same
-   * budget in the compiler's envelope (pipeline.ts) before storing it.
+   * budget (TOO_LARGE).
    *
-   * WHAT IS LOADED, IS LOADED ONLY WHEN IT IS ITS TURN (read-render.ts,
-   * structural hardening round 3): the contract's IR, the captured schema and
-   * the fixtures' bodies are read by the loader below, which runs on this
-   * thread for a small kit and, for a large one, only once it holds a render
-   * slot — a download refused for want of one has read none of them.
+   * LOADED ONLY ONCE IT HOLDS ITS SLOT (envelope.ts): the contract's IR, the
+   * captured schema and the fixtures' bodies are read by the loader below,
+   * so a download refused or still waiting has read none of them.
    */
   let limit = 0;
-  const rendered = await renderReadPathLazy(
-    { inputBytes: contractBytes === null ? null : contractBytes + capturedBytes + fixtureBytes },
-    async (): Promise<ReadLoad<number>> => {
+  let refused: number | null = null;
+  const rendered = await runContractJob(
+    "render",
+    async () => {
       const contracts = await loadDocContracts(scope, plan);
-      if (!contracts.ok) return { ok: false, refusal: contracts.limit };
+      if (!contracts.ok) {
+        refused = contracts.limit;
+        return null;
+      }
       const compiled = contracts.compiled.get(iface.id);
       const captured =
         schemaState === "current"
@@ -186,7 +185,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         fixtureBytes,
       );
       return {
-        ok: true,
+        kind: "render",
         input: {
           path: "kit",
           iface: {
@@ -226,24 +225,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         },
       };
     },
-    { tenant: organizationId },
+    { tenant: organizationId, deadlineAt },
   );
-  if (!rendered.ok) {
-    switch (rendered.reason) {
-      case "REFUSED":
-        return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", rendered.refusal));
-      case "TOO_LARGE":
-        return studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", limit));
-      case "INPUT_TOO_LARGE":
-        return studioError("TOO_LARGE", documentInputTooLargeMessage("starter kit", LIMITS.renderInput.bytes));
-      case "UNAVAILABLE":
-        return studioError("UNAVAILABLE", documentUnavailableMessage("starter kit"));
-      case "ALLOWANCE":
-        return studioUnavailableFor(documentAllowanceMessage("starter kit", rendered.detail), rendered.retryAfterSeconds);
-    }
-  }
+  if (rendered === null) return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", refused ?? plan.limit));
+  if (!rendered.ok) return downloadRefusal("starter kit", rendered, limit);
+  if (!rendered.value.ok) return downloadRefusal("starter kit", { reason: "RESOURCE_LIMIT", detail: "" }, rendered.value.limit);
 
   // As studioOk sends it, with the files' JSON spliced in as it was written (RawJson).
   const raw = new RawJson();
-  return studioOkJson(raw.bytes({ data: { files: raw.slot(rendered.texts[0]!) } }));
+  return studioOkJson(raw.bytes({ data: { files: raw.slot(rendered.value.text) } }));
 }

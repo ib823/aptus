@@ -1,25 +1,24 @@
 /**
  * STORED JSON CROSSES AS ITS TEXT (P1.3, structural hardening round 4).
  *
- * A job handed to the envelope (envelope.ts) is measured and then copied into
- * its worker on the request thread. Round 3 handed it object graphs: a kit's
- * fixtures (up to 8 MiB of stored text) and the IRs a diff compares (up to six
- * of 2 MiB) were parsed by Prisma on this thread, walked by the size bound,
- * and structured-cloned node by node — 130 to 600 ms of blocked event loop
- * per job, before the job reached the isolate whose limits were meant to
- * bound it.
+ * A starter kit's or solution document's render job (jobs.ts) is measured
+ * and then copied into its worker on the request thread. Handed object
+ * graphs — a kit's fixtures (up to 8 MiB of stored text), a document's
+ * contracts — they were parsed by Prisma on this thread, walked by the size
+ * bound, and structured-cloned node by node: 130 to 600 ms of blocked event
+ * loop per job, before the job reached the isolate whose limits were meant
+ * to bound it.
  *
  * So stored JSON that a job only hands on is read from the database as its
  * TEXT (`ir::text`, `body::text`) and carried as a reference to that text
  * (jsonTextRef): its size is its length, known without walking it; copying
  * it into the worker is one copy of a string; and it is parsed where it is
  * used — in the worker, under the heap cap and the deadline — by
- * hydrateJsonTexts, before the job runs. On the request thread (a small read,
- * read-render.ts) it is parsed the same way, inside the render's clock.
+ * hydrateJsonTexts, before the job runs.
  *
  * A reference stands where the parsed value will stand; its type is the
  * value's, so the job's own types are unchanged, and nothing reads it before
- * it is hydrated (the job runners hydrate first, pipeline.ts).
+ * it is hydrated (renderJob hydrates first, jobs.ts).
  *
  * Pure; no I/O.
  */
@@ -67,17 +66,6 @@ export function jsonTextRef<T>(text: string): T {
   return { [JSON_TEXT]: text } as unknown as T;
 }
 
-/** Whether a value is still a reference to stored text (not yet hydrated). */
-export function isJsonTextRef(v: unknown): boolean {
-  return isRef(v);
-}
-
-/** The JSON text a reference carries, to store as it is (json-text.ts); a value that is no reference throws. */
-export function jsonTextOf(v: unknown): string {
-  if (!isRef(v)) throw new TypeError("jsonTextOf: not a reference to JSON text");
-  return v[JSON_TEXT];
-}
-
 /**
  * How deep the walks below look for references: they stand in a job's own
  * structure (a document's interfaces' contracts, a kit's fixtures), never
@@ -89,8 +77,7 @@ const REF_DEPTH = 8;
  * `value` with every reference replaced by the value its text is the JSON of.
  * Not in place: what is copied is only the structure on the way to a
  * reference (the job's own, to REF_DEPTH), so the input a caller holds still
- * carries its texts (a render handed on to the envelope, read-render.ts). A
- * parsed value is never walked.
+ * carries its texts. A parsed value is never walked.
  */
 export function hydrateJsonTexts<T>(value: T): T {
   return hydrate(value, 0) as T;

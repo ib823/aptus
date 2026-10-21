@@ -38,3 +38,16 @@ export function contractFromSample(
     operations: [],
   };
 }
+
+/**
+ * Which OData version sampled rows came from: what the interface or the
+ * service it reads declares, or what the rows' own envelope says (V2 carries
+ * `__metadata`, V4 `@odata.*` keys) — though rows the broker served have had
+ * that envelope stripped. Null when nothing tells — nothing is guessed.
+ */
+export function sampledODataVersion(declared: string | null, rows: readonly Record<string, unknown>[]): ODataVersion | null {
+  if (declared === "V2" || declared === "V4") return declared;
+  if (rows.some((r) => "__metadata" in r)) return "V2";
+  if (rows.some((r) => Object.keys(r).some((k) => k.startsWith("@odata.")))) return "V4";
+  return null;
+}

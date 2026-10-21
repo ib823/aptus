@@ -2363,9 +2363,9 @@
                     "type": "string",
                     "enum": [
                       "TOO_LARGE",
-                      "UNAVAILABLE"
+                      "NOT_RENDERED"
                     ],
-                    "description": "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; UNAVAILABLE, it could not be rendered just now, and a retry may succeed."
+                    "description": "Present when `schemas` is null for a contract that is recorded: TOO_LARGE, it is larger than a generated document may carry; NOT_RENDERED, its schemas were not rendered when it was recorded, and verifying the service again renders them."
                   },
                   "schemasNote": {
                     "type": "string"
