@@ -1,5 +1,8 @@
+import { createHash, randomBytes } from "node:crypto";
+
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * Accessibility — the CoreEdge design system, in both themes.
@@ -203,6 +206,180 @@ test.describe("Control Tower · time to first call", () => {
       await page.goto(JOURNEY_ROUTE);
       await page.waitForLoadState("load");
       await expect(page.getByRole("heading", { name: "Time to first real call" })).toBeVisible();
+      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+
+      const results = await new AxeBuilder({ page })
+        .include("main[data-studio-main]")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+      const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+      expect(report(violations)).toBe("");
+    });
+  }
+});
+
+/**
+ * Studio · Interfaces, POPULATED, in both themes.
+ *
+ * This screen's contrast defects lived only in the populated state: the
+ * selected row's secondary line (4.44:1 in light), the disabled Mapping card
+ * (drawn at opacity 0.55: 2.11:1 to 3.71:1 in light, 2.51:1 in dark), and in
+ * dark the selected row itself, which kept the light --brand-navy-soft under
+ * light text (1.05:1) because the .dark block never redefined it. An empty
+ * Interfaces screen renders none of them, so a scan of one passes for the
+ * wrong reason.
+ *
+ * So the spec seeds the populated state for ITSELF, in an organization of its
+ * own: the organization, a user (admin, so the authoring controls render and
+ * are scanned too) with a session, a solution, an interface on the customer's
+ * own API (the "· own API" secondary line the defect was reported on), and an
+ * active, declared SapConnection (so the Verify panel renders its target).
+ * Nothing is added to the shared E2E organization, so no parallel spec meets a
+ * row it did not expect, and afterAll removes every row created here.
+ *
+ * SERIAL, because the fixture is created once and removed once: under
+ * fullyParallel two workers would each seed, and one worker's teardown could
+ * delete the rows the other is still scanning.
+ *
+ * Scoped to `main[data-studio-main]` for the reason the Control Tower scan
+ * above gives: the Studio shell's dark-mode defects are tracked separately,
+ * and a whole-page scan would report them whatever this screen renders.
+ */
+const IFC = {
+  organizationId: "e2e-studio-ifc-org",
+  userEmail: "e2e-studio-interfaces@abeam.test",
+  solutionId: "e2e-studio-ifc-solution",
+  interfaceId: "e2e-studio-ifc-interface",
+  connectionId: "e2e-studio-ifc-connection",
+  servicePath: "/sap/opu/odata/sap/ZE2E_CONTRAST_SRV",
+  interfaceName: "Contrast check orders",
+  solutionName: "E2E Contrast Solution",
+} as const;
+
+async function removeInterfacesFixture(prisma: PrismaClient): Promise<void> {
+  await prisma.session.deleteMany({ where: { user: { email: IFC.userEmail } } });
+  await prisma.interface.deleteMany({ where: { id: IFC.interfaceId } });
+  await prisma.solution.deleteMany({ where: { id: IFC.solutionId } });
+  await prisma.sapConnection.deleteMany({ where: { id: IFC.connectionId } });
+  await prisma.user.deleteMany({ where: { email: IFC.userEmail } });
+  await prisma.organization.deleteMany({ where: { id: IFC.organizationId } });
+}
+
+test.describe("Studio · Interfaces with a seeded interface", () => {
+  test.describe.configure({ mode: "serial" });
+
+  let prisma: PrismaClient;
+  let sessionToken = "";
+
+  test.beforeAll(async () => {
+    prisma = new PrismaClient();
+    // Idempotent: a run that died before afterAll leaves nothing behind that
+    // makes this one pass or fail for the wrong reason.
+    await removeInterfacesFixture(prisma);
+
+    await prisma.organization.create({
+      data: { id: IFC.organizationId, name: "E2E Studio Interfaces Org", type: "partner" },
+    });
+    const user = await prisma.user.create({
+      data: {
+        email: IFC.userEmail,
+        name: "E2E Studio Interfaces",
+        role: "admin",
+        isActive: true,
+        organizationId: IFC.organizationId,
+      },
+    });
+    sessionToken = randomBytes(32).toString("hex");
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        tokenHash: createHash("sha256").update(sessionToken).digest("hex"),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        ipAddress: "127.0.0.1",
+        userAgent: "Playwright E2E (studio interfaces)",
+      },
+    });
+    await prisma.solution.create({
+      data: {
+        id: IFC.solutionId,
+        organizationId: IFC.organizationId,
+        name: IFC.solutionName,
+        slug: "e2e-contrast-solution",
+        classification: "CLIENT_APP",
+        businessProblem: "Renders the populated Interfaces screen for the contrast scan.",
+        dataClass: "internal",
+        status: "ACTIVE",
+      },
+    });
+    await prisma.interface.create({
+      data: {
+        id: IFC.interfaceId,
+        solutionId: IFC.solutionId,
+        organizationId: IFC.organizationId,
+        name: IFC.interfaceName,
+        sapProduct: "s4hana",
+        externalId: `custom:${IFC.servicePath}`,
+        servicePath: IFC.servicePath,
+        odataVersion: "V2",
+        operation: "READ",
+        mode: "READ",
+        status: "DRAFT",
+      },
+    });
+    await prisma.sapConnection.create({
+      data: {
+        id: IFC.connectionId,
+        organizationId: IFC.organizationId,
+        product: "s4hana",
+        key: "e2e-studio-ifc",
+        label: "E2E Studio Interfaces Dev",
+        baseUrl: "https://sap.invalid",
+        authType: "basic",
+        // Never decrypted: the page reads connection METADATA only.
+        secretsCiphertext: "e2e-not-a-real-ciphertext",
+        environment: "DEV",
+        isActive: true,
+      },
+    });
+  });
+
+  test.afterAll(async () => {
+    await removeInterfacesFixture(prisma);
+    await prisma.$disconnect();
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`/studio/interfaces has no serious or critical violations in ${theme}`, async ({ page }) => {
+      // Signs in as the fixture's own user. Same cookie name, domain and path
+      // as the project's storageState, so this replaces the shared admin's.
+      await page.context().addCookies([
+        {
+          name: "abeam-session",
+          value: sessionToken,
+          domain: "localhost",
+          path: "/",
+          httpOnly: true,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ]);
+      if (theme === "dark") {
+        // Seeded before navigation, for the reason the design-system scan gives.
+        await page.addInitScript(() => {
+          window.localStorage.setItem("theme", "dark");
+        });
+      }
+
+      await page.goto("/studio/interfaces");
+      await page.waitForLoadState("load");
+
+      // The populated state, not the empty one: the row, the selected detail
+      // and the Mapping card are what the scan is for. If any is missing, the
+      // scan would pass on a page that never rendered the defect.
+      const main = page.locator("main[data-studio-main]");
+      await expect(main.getByRole("heading", { name: "Interfaces", exact: true })).toBeVisible();
+      await expect(main.getByText(`${IFC.solutionName} · own API`)).toBeVisible();
+      await expect(main.getByRole("heading", { name: /^Mapping/ })).toBeVisible();
       if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
 
       const results = await new AxeBuilder({ page })
