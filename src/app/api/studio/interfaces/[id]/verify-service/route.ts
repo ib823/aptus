@@ -253,33 +253,53 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
      */
     let stored = iface.serviceVerifications ?? null;
     let recorded = false;
-    for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
-      const { count } = await prisma.interface.updateMany({
-        where: {
-          id: iface.id,
-          organizationId: scope.organizationId,
-          version: iface.version,
-          serviceVerifications: stored === null ? { equals: Prisma.DbNull } : { equals: stored },
-        },
-        data: {
-          serviceVerifiedAt: verifiedAt,
-          serviceVerifiedEnvironment: environment,
-          serviceVerifiedEntitySets: result.entitySets.slice(0, MAX_STORED_ENTITY_SETS),
-          serviceVerifications: withServiceVerification(stored, environment, entry) as unknown as Prisma.InputJsonObject,
-        },
-      });
-      if (count > 0) {
-        recorded = true;
-        break;
+    /*
+     * A DATABASE THAT REFUSES THE WRITE IS AN OUTCOME, NOT A 500. What is
+     * written comes from SAP's answer (the dataset names); one PostgreSQL
+     * cannot hold made this throw, and the verify answered 500 on every
+     * attempt (hostile-input review round 3). The names are filtered before
+     * they get here (service-verify.ts); whatever else refuses is reported as
+     * a verify that was not recorded, and nothing is marked verified.
+     */
+    let writeFailed = false;
+    try {
+      for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
+        const { count } = await prisma.interface.updateMany({
+          where: {
+            id: iface.id,
+            organizationId: scope.organizationId,
+            version: iface.version,
+            serviceVerifications: stored === null ? { equals: Prisma.DbNull } : { equals: stored },
+          },
+          data: {
+            serviceVerifiedAt: verifiedAt,
+            serviceVerifiedEnvironment: environment,
+            serviceVerifiedEntitySets: result.entitySets.slice(0, MAX_STORED_ENTITY_SETS),
+            serviceVerifications: withServiceVerification(stored, environment, entry) as unknown as Prisma.InputJsonObject,
+          },
+        });
+        if (count > 0) {
+          recorded = true;
+          break;
+        }
+        const now = await prisma.interface.findFirst({
+          where: scopedById(scope, id),
+          select: { version: true, serviceVerifications: true },
+        });
+        if (!now || now.version !== iface.version) break;
+        stored = now.serviceVerifications ?? null;
       }
-      const now = await prisma.interface.findFirst({
-        where: scopedById(scope, id),
-        select: { version: true, serviceVerifications: true },
+    } catch (err) {
+      console.error("[studio] service verification not recorded", {
+        interfaceId: iface.id,
+        error: err instanceof Error ? err.name : "unknown",
       });
-      if (!now || now.version !== iface.version) break;
-      stored = now.serviceVerifications ?? null;
+      writeFailed = true;
     }
-    if (!recorded) {
+    if (writeFailed) {
+      status = "NOT_RECORDED";
+      verified = false;
+    } else if (!recorded) {
       status = "CHANGED_DURING_VERIFY";
       verified = false;
     }
@@ -332,7 +352,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     detail:
       status === "CHANGED_DURING_VERIFY"
         ? "The interface changed while SAP was answering, so this result describes an older version. Verify again."
-        : result.detail,
+        : status === "NOT_RECORDED"
+          ? "The service answered, but the verification could not be recorded, so the interface is not marked verified. Verify again."
+          : result.detail,
     httpStatus: result.httpStatus,
     durationMs: result.durationMs,
     entitySets: result.entitySets,

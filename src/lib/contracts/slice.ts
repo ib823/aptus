@@ -28,9 +28,32 @@
  * nothing that could have been is refused here. The operations the slice
  * keeps are charged the same way: each import is its own copy of its
  * action's parameters.
+ *
+ * AND IN PROPORTION TO THE DESCRIPTION. The absolute bound alone let a tiny
+ * description make the largest contract stored: one labelled base type
+ * folded into 100 derived types was 1.8 MB from 31 KB (58x), an action of 200
+ * parameters imported 200 times 2.1 MB from 19 KB (107x), and every /schema
+ * call rendered that back at 245x (hostile-input review round 3). So when the
+ * caller says how long the document was (CompileResult.sourceLength, which
+ * the verify passes), the slice is also refused once it would be larger, as
+ * JSON, than SLICE_BYTES_PER_SOURCE_CHAR times that length, or
+ * SLICE_BYTES_FLOOR, whichever is more. The copies are charged as they are
+ * made; whatever the slice carries that is not a copy (the set, its types'
+ * own headers, the enum types, the restrictions folded in) is measured once
+ * at the end, by a walk that stops at the limit (jsonBytesAtLeast). So what
+ * the slice accepts is at most that many bytes of JSON (exactly, for plain
+ * ASCII), and so is what is stored and read back.
+ *
+ * WHY 12. A slice holds the part of the description its dataset reaches,
+ * and the IR spells a declaration out in full where the document may not:
+ * CSDL JSON's `"P":{}` is a 48-byte property in the IR (its type, its
+ * nullability), and a type definition's facets are copied into every
+ * property that uses it. A real description's base chains are short and
+ * shared by few types, so its slice stays well under 12x. The floor keeps a
+ * small description's ordinary folding from being refused.
  */
 
-import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
+import { jsonBytesAtLeast, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import {
   CONTRACT_IR_VERSION,
   type ContractIR,
@@ -47,16 +70,33 @@ const MAX_INHERITANCE_DEPTH = 16;
 /** The allowance on top of twice the description's own members (see above). */
 const SLICE_MEMBER_ALLOWANCE = 10_000;
 
+/** A slice's JSON may be this many bytes per character of the description it was cut from (see above)… */
+export const SLICE_BYTES_PER_SOURCE_CHAR = 12;
+/** …or this many, whichever is more; never more than MAX_CONTRACT_BYTES. */
+export const SLICE_BYTES_FLOOR = 128 * 1024;
+
+/** The most bytes of JSON a slice of a `sourceLength`-character description may be. */
+export function sliceByteLimit(sourceLength: number | undefined): number {
+  if (sourceLength === undefined) return MAX_CONTRACT_BYTES;
+  return Math.min(MAX_CONTRACT_BYTES, Math.max(SLICE_BYTES_FLOOR, SLICE_BYTES_PER_SOURCE_CHAR * sourceLength));
+}
+
 export type SliceResult =
   | { ok: true; contract: InterfaceContract }
   | { ok: false; reason: "NO_SUCH_ENTITY_SET" | "NO_SUCH_ENTITY_TYPE" | "TOO_LARGE"; detail: string };
 
-/** Properties, navigations and parameters the description itself declares. */
+/**
+ * Properties, navigations and parameters the description itself declares.
+ * In V4 an unbound operation in the IR is an IMPORT, a copy of its action's
+ * parameters, so its parameters are not counted: counting every copy let the
+ * copies raise the very bound they are charged against (hostile-input review
+ * round 3). The allowance covers what a real service's imports carry.
+ */
 function membersOf(ir: ContractIR): number {
   let n = 0;
   for (const t of ir.entityTypes) n += t.properties.length + t.navigations.length;
   for (const t of ir.complexTypes) n += t.properties.length + t.navigations.length;
-  for (const op of ir.operations) n += op.parameters.length;
+  for (const op of ir.operations) n += ir.odataVersion === "V4" && op.bound !== true ? 1 : 1 + op.parameters.length;
   return n;
 }
 
@@ -66,20 +106,34 @@ class SliceTooLarge extends Error {
   }
 }
 
-export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceResult {
+/**
+ * `sourceLength`: the length of the document `ir` was compiled from
+ * (CompileResult.sourceLength). Given, the slice is bounded in proportion to
+ * it as well as absolutely (see above); every caller that stores or serves
+ * the slice passes it.
+ */
+export function sliceForEntitySet(ir: ContractIR, entitySetName: string, sourceLength?: number): SliceResult {
   const limit = 2 * membersOf(ir) + SLICE_MEMBER_ALLOWANCE;
+  const byteLimit = sliceByteLimit(sourceLength);
+  const tooLarge = (by: "members" | "bytes"): SliceResult => ({
+    ok: false,
+    reason: "TOO_LARGE",
+    detail:
+      by === "members"
+        ? `The dataset "${entitySetName}" reaches more than ${limit} members once its types' base types are folded in.`
+        : byteLimit < MAX_CONTRACT_BYTES
+          ? `The dataset "${entitySetName}" would be more than ${SLICE_BYTES_PER_SOURCE_CHAR} times the size of the service's description once its types' base types and its operations' parameters are copied in.`
+          : `The dataset "${entitySetName}" would be larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB once its types' base types are folded in.`,
+  });
   try {
-    return slice(ir, entitySetName, limit, MAX_CONTRACT_BYTES);
+    const r = slice(ir, entitySetName, limit, byteLimit);
+    // What is not a copy, measured once: never past the limit (jsonBytesAtLeast stops there).
+    // At the absolute bound the digest measures it exactly (boundedContractDigest, canonical.ts).
+    if (r.ok && byteLimit < MAX_CONTRACT_BYTES && jsonBytesAtLeast(r.contract, byteLimit) > byteLimit) return tooLarge("bytes");
+    return r;
   } catch (err) {
     if (!(err instanceof SliceTooLarge)) throw err;
-    return {
-      ok: false,
-      reason: "TOO_LARGE",
-      detail:
-        err.by === "members"
-          ? `The dataset "${entitySetName}" reaches more than ${limit} members once its types' base types are folded in.`
-          : `The dataset "${entitySetName}" would be larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB once its types' base types are folded in.`,
-    };
+    return tooLarge(err.by);
   }
 }
 

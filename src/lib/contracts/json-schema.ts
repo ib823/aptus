@@ -53,6 +53,22 @@ import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 
 export type SchemaDialect = "2020-12" | "oas30";
 
+/**
+ * TEXT FROM THE DESCRIPTION, ESCAPED AT THE SINK. A `title` or
+ * `description` is rendered as markdown or HTML by Swagger UI, Redoc and API
+ * portals, and every one written here carries what the customer's $metadata
+ * said: a label (sap:label, Common.Label), a quick info, a dataset or type
+ * name. A label of `<img src=x onerror=…>` arrived verbatim in the kit's
+ * openapi.json, the solution document and /schema, while the names beside it
+ * went through the scaffold's safeName (hostile-input review round 3). The
+ * same rule, here, where every contract-derived title and description is
+ * written: angle brackets and ampersand, so a label is still readable.
+ * Extension values (`x-…`) are data, not prose, and are kept as stated.
+ */
+export function docText(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export type JsonSchema = Record<string, unknown>;
 
 export interface ContractSchemaNames {
@@ -95,6 +111,8 @@ const INTEGER_STRING = "^-?\\d+$";
  * honouring the format would reject every real value. A pattern says it exactly.
  */
 const TIME_OF_DAY = "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$";
+/** base64url (RFC 4648 §5), padded or not: what a V4 service sends for Edm.Binary. */
+const BASE64URL = "^[A-Za-z0-9_-]*={0,2}$";
 
 /**
  * Whether a schema VALIDATES a length or only states it. A request body
@@ -163,8 +181,20 @@ function primitiveSchema(
       // (V4), four characters per three bytes. The bound on the string is the
       // padded encoded length — never less than the unpadded one — and the
       // byte count travels as an extension.
+      //
+      // OpenAPI 3.0's `format: byte` IS standard base64 (RFC 4648 §4), so it
+      // describes V2 only. A V4 value is base64url ('-', '_', often
+      // unpadded), which a format-checking validator refused under `byte` —
+      // about half of all values — and a client generated with a standard
+      // decoder threw on, while the 3.1 document beside it said base64url
+      // (hostile-input review round 3). 3.0 has no keyword for it: a pattern
+      // says it exactly, and the encoding travels as an extension.
       const s: JsonSchema =
-        dialect === "oas30" ? { type: "string", format: "byte" } : { type: "string", contentEncoding: v === "V4" ? "base64url" : "base64" };
+        dialect === "oas30"
+          ? v === "V4"
+            ? { type: "string", pattern: BASE64URL, "x-odata-encoding": "base64url" }
+            : { type: "string", format: "byte" }
+          : { type: "string", contentEncoding: v === "V4" ? "base64url" : "base64" };
       return typeof p.maxLength === "number"
         ? { ...s, ...(facets === "validate" ? { maxLength: 4 * Math.ceil(p.maxLength / 3) } : {}), "x-odata-max-length": p.maxLength }
         : s;
@@ -215,8 +245,8 @@ function nullable(s: JsonSchema, dialect: SchemaDialect, refType: "object" | "st
 
 function annotate(s: JsonSchema, p: IrProperty, readOnly: boolean): JsonSchema {
   const out: JsonSchema = { ...s };
-  if (p.label) out.title = p.label;
-  if (p.quickInfo && p.quickInfo !== p.label) out.description = p.quickInfo;
+  if (p.label) out.title = docText(p.label);
+  if (p.quickInfo && p.quickInfo !== p.label) out.description = docText(p.quickInfo);
   if (!p.type.startsWith(SAMPLED_TYPE_PREFIX)) out["x-odata-type"] = p.collection ? `Collection(${p.type})` : p.type;
   if (p.semantics) out["x-sap-semantics"] = p.semantics;
   if (p.displayFormat) out["x-sap-display-format"] = p.displayFormat;
@@ -251,27 +281,28 @@ function deepInsertProperties(
   const out: Record<string, JsonSchema> = {};
   for (const n of navigations) {
     if (taken.has(n.name)) continue;
+    const target = docText(n.target);
     const about = { "x-odata-navigation": { target: n.target, collection: n.collection, ...(n.containsTarget ? { containsTarget: true } : {}) } };
     if (v === "V4") {
       out[n.name] = n.collection
-        ? { type: "array", items: record, description: `Related ${n.target} records to create with this one.`, ...about }
-        : { ...record, description: `A related ${n.target} record to create with this one.`, ...about };
+        ? { type: "array", items: record, description: `Related ${target} records to create with this one.`, ...about }
+        : { ...record, description: `A related ${target} record to create with this one.`, ...about };
       // A contained record exists only inside its parent: it is created with it, never linked.
       const bind = `${n.name}@odata.bind`;
       if (n.containsTarget !== true && !taken.has(bind)) {
         out[bind] = n.collection
-          ? { type: "array", items: { type: "string" }, description: `Existing ${n.target} records to link, by their address.` }
-          : { type: "string", description: `An existing ${n.target} record to link, by its address.` };
+          ? { type: "array", items: { type: "string" }, description: `Existing ${target} records to link, by their address.` }
+          : { type: "string", description: `An existing ${target} record to link, by its address.` };
       }
     } else {
       const many: JsonSchema = { type: "array", items: record };
       out[n.name] = n.collection
         ? {
             anyOf: [{ type: "object", properties: { results: many }, required: ["results"] }, many],
-            description: `Related ${n.target} records to create with this one.`,
+            description: `Related ${target} records to create with this one.`,
             ...about,
           }
-        : { ...record, description: `A related ${n.target} record to create with this one, or a link to an existing one.`, ...about };
+        : { ...record, description: `A related ${target} record to create with this one, or a link to an existing one.`, ...about };
     }
   }
   return out;
@@ -359,7 +390,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   function complexSchema(ct: IrComplexType): JsonSchema {
     return {
       type: "object",
-      ...(ct.label ? { title: ct.label } : {}),
+      ...(ct.label ? { title: docText(ct.label) } : {}),
       "x-odata-type": ct.qualifiedName,
       // Shared by the record and the bodies, so it states lengths (FacetMode).
       properties: objectOf(ct.properties, () => true, () => false, "state"),
@@ -371,21 +402,23 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     // V4 JSON carries an enum value as its member NAME; a flags enum as a
     // comma-separated list of names, which no enum keyword can state.
     return en.isFlags
-      ? { type: "string", "x-odata-type": en.qualifiedName, description: `Comma-separated members of ${en.name}.` }
+      ? { type: "string", "x-odata-type": en.qualifiedName, description: `Comma-separated members of ${docText(en.name)}.` }
       : { type: "string", "x-odata-type": en.qualifiedName, enum: en.members.map((m) => m.name) };
   }
 
   const et = contract.entityType;
   const set = contract.entitySet;
   const keySet = new Set(et.key);
-  const title = set.label ?? et.label;
+  const label = set.label ?? et.label;
+  const title = label === undefined ? undefined : docText(label);
+  const setName = docText(set.name);
 
   schemas[stem] = {
     type: "object",
     ...(title ? { title } : {}),
     description: sampled
       ? "Inferred from rows a live read returned, because the service's description could not be read. Fields outside the sample are not described."
-      : `A ${set.name} record as the service returns it, compiled from the service's own description.`,
+      : `A ${setName} record as the service returns it, compiled from the service's own description.`,
     "x-odata-entity-set": set.name,
     ...(sampled ? {} : { "x-odata-entity-type": et.qualifiedName, "x-odata-key": et.key }),
     ...(et.personalData ? { "x-personal-data": et.personalData } : {}),
@@ -405,7 +438,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     schemas[names.create] = {
       type: "object",
       ...(title ? { title: `${title} (create)` } : {}),
-      description: `The record a create sends to ${set.name}. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert)${v === "V4" ? " or, as <navigation>@odata.bind, the records to link" : ""}.`,
+      description: `The record a create sends to ${setName}. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert)${v === "V4" ? " or, as <navigation>@odata.bind, the records to link" : ""}.`,
       properties: { ...objectOf(props, () => true, () => false, "validate"), ...deepInsertProperties(et.navigations, new Set(et.properties.map((p) => p.name)), v) },
       ...(required.length > 0 ? { required } : {}),
       additionalProperties: false,
@@ -421,7 +454,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     schemas[names.update] = {
       type: "object",
       ...(title ? { title: `${title} (update)` } : {}),
-      description: `The changes an update sends to one ${set.name} record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.`,
+      description: `The changes an update sends to one ${setName} record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.`,
       properties: objectOf(props, () => true, () => false, "validate"),
       additionalProperties: false,
     };
@@ -432,7 +465,7 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     schemas[names.key] = {
       type: "object",
       ...(title ? { title: `${title} (key)` } : {}),
-      description: `The key that names one ${set.name} record.`,
+      description: `The key that names one ${setName} record.`,
       // A key is read from a row before it addresses one: it states lengths, as the record does.
       properties: objectOf(et.properties, (p) => keySet.has(p.name), () => false, "state"),
       required: [...et.key],

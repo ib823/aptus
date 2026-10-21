@@ -176,13 +176,6 @@ describe("minor", () => {
     ["a length grew", (c) => (prop(c, "PurchaseOrderByCustomer").maxLength = 70)],
     ["the dataset is now deletable", (c) => (c.entitySet.capabilities.deletable = true)],
     ["a navigation added", (c) => c.entityType.navigations.push({ name: "_Notes", target: "ns.Note", collection: true })],
-    [
-      "a member added to a flags enum (a string in every schema)",
-      (c) => {
-        c.enumTypes[0]!.isFlags = true;
-        c.enumTypes[0]!.members.push({ name: "Cancelled", value: "4" });
-      },
-    ],
     ["an operation added", (c) => c.operations.push({ name: "Archive", kind: "action", bound: true, bindingType: c.entityType.qualifiedName, parameters: [] })],
     [
       "an optional parameter added",
@@ -191,6 +184,13 @@ describe("minor", () => {
     ["a property no longer mandatory", (c) => (prop(c, "SoldToParty").capabilities = {})],
   ])("%s", (_label, edit) => {
     expect(bumpOf(edit)).toBe("minor");
+  });
+
+  it("a member added to a flags enum (a string in every schema)", () => {
+    const flags = changed((c) => (c.enumTypes[0]!.isFlags = true));
+    const more = structuredClone(flags);
+    more.enumTypes[0]!.members.push({ name: "Cancelled", value: "4" });
+    expect(diffContracts(flags, more).bump).toBe("minor");
   });
 });
 
@@ -423,5 +423,86 @@ describe("a minor bump never makes new rows fail the previous version's record s
     // What a write sends is still refused past its length: SAP would refuse it.
     expect(validate(standaloneSchemas(before, "Orders").create!, { ID: "1", Material: "M".repeat(19) })).toBe(false);
     expect(standaloneSchemas(before, "Orders").record.properties).toMatchObject({ Material: { "x-odata-max-length": 18 } });
+  });
+});
+
+/*
+ * Hostile-input review round 3: changes of a schema's SHAPE that the rules
+ * read as nothing, or as a patch, while the previous version's schemas refuse
+ * what the new one describes.
+ */
+describe("a change of shape the previous version's schemas refuse is never a patch", () => {
+  const HEAD =
+    '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices><Schema Namespace="Z_SRV" xmlns="http://docs.oasis-open.org/odata/ns/edm">';
+  const ORDER = (props: string) =>
+    `<EntityType Name="Order"><Key><PropertyRef Name="ID"/></Key><Property Name="ID" Type="Edm.String" Nullable="false"/>${props}</EntityType>` +
+    '<EntityType Name="Item"><Key><PropertyRef Name="ID"/></Key><Property Name="ID" Type="Edm.String" Nullable="false"/></EntityType>';
+  const contract = (types: string, props: string, container = '<EntitySet Name="Orders" EntityType="Z_SRV.Order"/>'): InterfaceContract => {
+    const r = compileContract(
+      `${HEAD}${types}${ORDER(props)}<EntityContainer Name="C">${container}<EntitySet Name="Items" EntityType="Z_SRV.Item"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`,
+    );
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "Orders");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  };
+  const validate = (schema: Record<string, unknown> | null, value: Record<string, unknown>) => {
+    if (!schema) return false;
+    const ajv = new Ajv2020({ strict: false, allErrors: true });
+    addFormats(ajv);
+    return ajv.compile(schema)(value) === true;
+  };
+  const status = (flags: boolean) =>
+    contract(
+      `<EnumType Name="Status"${flags ? ' IsFlags="true"' : ""}><Member Name="Open" Value="1"/><Member Name="Closed" Value="2"/></EnumType>`,
+      '<Property Name="Status" Type="Z_SRV.Status"/>',
+    );
+  const items = (contained: boolean) =>
+    contract("", `<NavigationProperty Name="Items" Type="Collection(Z_SRV.Item)"${contained ? ' ContainsTarget="true"' : ""}/>`);
+
+  it("an enum that became a flags enum is major: the previous record schema refuses the new rows", () => {
+    const before = status(false);
+    const after = status(true);
+    const row = { ID: "1", Status: "Open,Closed" };
+    expect(validate(standaloneSchemas(after, "Orders").record, row)).toBe(true);
+    expect(validate(standaloneSchemas(before, "Orders").record, row)).toBe(false);
+    expect(diffContracts(before, after).bump).toBe("major");
+  });
+
+  it("a flags enum that became a closed one is major: bodies the previous create schema accepted are refused", () => {
+    const before = status(true);
+    const after = status(false);
+    const body = { ID: "1", Status: "Open,Closed" };
+    expect(validate(standaloneSchemas(before, "Orders").create, body)).toBe(true);
+    expect(validate(standaloneSchemas(after, "Orders").create, body)).toBe(false);
+    expect(diffContracts(before, after).bump).toBe("major");
+  });
+
+  it("a navigation that now contains its target is major: a body that links records is refused", () => {
+    const before = items(false);
+    const after = items(true);
+    const body = { ID: "1", "Items@odata.bind": ["Items('7')"] };
+    expect(validate(standaloneSchemas(before, "Orders").create, body)).toBe(true);
+    expect(validate(standaloneSchemas(after, "Orders").create, body)).toBe(false);
+    expect(diffContracts(before, after).bump).toBe("major");
+  });
+
+  it("one that no longer contains its target is minor: the previous body is still valid, and linking is added", () => {
+    const before = items(true);
+    const after = items(false);
+    const body = { ID: "1", Items: [{ ID: "7" }] };
+    expect(validate(standaloneSchemas(before, "Orders").create, body)).toBe(true);
+    expect(validate(standaloneSchemas(after, "Orders").create, body)).toBe(true);
+    expect(diffContracts(before, after).bump).toBe("minor");
+  });
+
+  it("a dataset that became a singleton, or stopped being one, is major: its create body comes and goes", () => {
+    const set = contract("", "");
+    const singleton = contract("", "", '<Singleton Name="Orders" Type="Z_SRV.Order"/>');
+    expect(singleton.entitySet.singleton).toBe(true);
+    expect(standaloneSchemas(set, "Orders").create).not.toBeNull();
+    expect(standaloneSchemas(singleton, "Orders").create).toBeNull();
+    expect(diffContracts(set, singleton).bump).toBe("major");
+    expect(diffContracts(singleton, set).bump).toBe("major");
   });
 });

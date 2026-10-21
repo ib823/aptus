@@ -26,7 +26,7 @@ import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, standaloneSchemas } from "@/lib/contracts/json-schema";
 import { MAX_TYPE_NAME_LENGTH, toTypeName } from "@/lib/contracts/names";
 import { buildNorthboundOpenApi, documentJson, multiInterfaceInfoVersion, type OpenApiVersion } from "@/lib/contracts/openapi";
-import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { SLICE_BYTES_FLOOR, SLICE_BYTES_PER_SOURCE_CHAR, sliceByteLimit, sliceForEntitySet } from "@/lib/contracts/slice";
 import { DEFAULT_XML_LIMITS, parseXml } from "@/lib/contracts/xml";
 import { buildScaffold, buildTypeScriptClient, safeName } from "@/lib/studio/scaffold";
 
@@ -421,11 +421,13 @@ describe("compiled contracts that are expensive to read back", () => {
   }, 60_000);
 
   it("whatever the slice accepts has a canonical form in proportion to the description", () => {
-    // Just under the old trigger: a few long labels folded a few times.
+    // Just under the old trigger: a few long labels folded a few times. A
+    // label the IR KEEPS (Common.Label): Core.Description is dropped, so
+    // folding it copied nothing and this measured nothing (round 3).
     const label = "L".repeat(50_000);
     const doc =
       EDMX_HEAD +
-      `<ComplexType Name="B"><Property Name="b" Type="Edm.String"><Annotation Term="Org.OData.Core.V1.Description" String="${label}"/></Property></ComplexType>` +
+      `<ComplexType Name="B"><Property Name="b" Type="Edm.String"><Annotation Term="com.sap.vocabularies.Common.v1.Label" String="${label}"/></Property></ComplexType>` +
       Array.from({ length: 5 }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.B"/>`).join("") +
       '<EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
       Array.from({ length: 5 }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
@@ -433,9 +435,10 @@ describe("compiled contracts that are expensive to read back", () => {
       EDMX_TAIL;
     const r = compileContract(doc);
     if (!r.ok) throw new Error(r.detail);
-    const slice = sliceForEntitySet(r.ir, "S");
+    const slice = sliceForEntitySet(r.ir, "S", r.sourceLength);
     if (!slice.ok) throw new Error(slice.detail);
     expect(slice.contract.complexTypes).toHaveLength(5);
+    expect(slice.contract.complexTypes.every((t) => t.properties[0]?.label === label)).toBe(true);
     let bytes = -1;
     expect(() => (bytes = contractDigest(slice.contract as InterfaceContract).bytes)).not.toThrow();
     expect(bytes).toBeLessThan(16 * doc.length);
@@ -986,6 +989,253 @@ describe("hostile-input review round 2", () => {
       expect(multiInterfaceInfoVersion([metadata("1.5.0"), metadata("3.1.0")], "c")).toBe("3.7.0+c");
       expect(multiInterfaceInfoVersion([metadata("1.4.1"), metadata("3.1.0")], "d")).toBe("3.6.1+d");
       expect(multiInterfaceInfoVersion([{ version: 3, contract: { source: "none" } }], "e")).toBe("1.3.0+e");
+    });
+  });
+});
+
+/*
+ * Hostile-input review round 3. THE BOUNDS:
+ *
+ *   text     a description holding U+0000 or an unpaired surrogate anywhere
+ *            (CSDL JSON can spell both) is INVALID_CSDL: PostgreSQL can store
+ *            neither, and the verify that wrote one answered 500;
+ *   slice    given the description's length (the verify passes it), a slice
+ *            is at most max(SLICE_BYTES_FLOOR, SLICE_BYTES_PER_SOURCE_CHAR x
+ *            that length) bytes of JSON, and never over MAX_CONTRACT_BYTES:
+ *            what is stored, and read back by every /schema call, is in
+ *            proportion to what SAP sent, refused (TOO_LARGE) otherwise;
+ *   diff     linear in the operations, however many share one signature: a
+ *            contract at MAX_CONTRACT_BYTES of identical imports diffs in
+ *            under DIFF_BUDGET_MS;
+ *   escape   every title and description written from the description is
+ *            escaped at the sink, in the kit, the solution document and
+ *            /schema.
+ */
+describe("hostile-input review round 3", () => {
+  const timed = <T>(fn: () => T): { value: T; ms: number } => {
+    const started = performance.now();
+    const value = fn();
+    return { value, ms: performance.now() - started };
+  };
+
+  describe("text no database column can hold", () => {
+    const json = (setName: string, propName = "k", label?: string) =>
+      JSON.stringify({
+        $Version: "4.0",
+        $Reference: { x: { $Include: [{ $Namespace: "com.sap.vocabularies.Common.v1", $Alias: "Common" }] } },
+        ns: {
+          T: {
+            $Kind: "EntityType",
+            $Key: ["k"],
+            k: {},
+            [propName]: label === undefined ? {} : { "@Common.Label": label },
+          },
+          C: { $Kind: "EntityContainer", S: { $Collection: true, $Type: "ns.T" }, [setName]: { $Collection: true, $Type: "ns.T" } },
+        },
+      });
+
+    it.each([
+      ["U+0000", "x\u0000y"],
+      ["an unpaired high surrogate", "x\ud800y"],
+      ["an unpaired low surrogate", "x\udc00y"],
+    ])("%s in an entity set's name, a property's name or a label is INVALID_CSDL (CSDL JSON)", (_label, bad) => {
+      for (const doc of [json(bad), json("S2", bad), json("S2", "p", bad)]) {
+        expect(compileContract(doc)).toMatchObject({ ok: false, reason: "INVALID_CSDL" });
+      }
+    });
+
+    it("an unpaired surrogate handed to the XML reader is refused the same way", () => {
+      const doc =
+        EDMX_HEAD +
+        '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>' +
+        '<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/><EntitySet Name="x\ud800y" EntityType="ns.T"/></EntityContainer>' +
+        EDMX_TAIL;
+      expect(compileContract(doc)).toMatchObject({ ok: false, reason: "INVALID_CSDL" });
+    });
+
+    it("a surrogate PAIR is text like any other, and is kept", () => {
+      const r = compileContract(json("S2", "p", "Grüße 😀"));
+      expect(r.ok).toBe(true);
+      expect(r.ok && r.ir.entityTypes[0]!.properties.find((p) => p.name === "p")?.label).toBe("Grüße 😀");
+    });
+
+    it("is found in linear time, however deep or wide the document", () => {
+      const wide = JSON.stringify({ $Version: "4.0", ns: { x: Array.from({ length: 200_000 }, (_, i) => `v${i}`), y: "\ud800" } });
+      const { value, ms } = timed(() => compileContract(wide));
+      expect(value).toMatchObject({ ok: false, reason: "INVALID_CSDL" });
+      expect(ms).toBeLessThan(2000);
+    });
+  });
+
+  describe("a slice is in proportion to the description it was cut from", () => {
+    const V2_HEAD =
+      '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">' +
+      '<edmx:DataServices m:DataServiceVersion="2.0"><Schema Namespace="ns" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">';
+    const V2_TAIL = "</Schema></edmx:DataServices></edmx:Edmx>";
+    /** One base complex type of `b` labelled properties, `n` types derived from it, one entity property each. */
+    const folded = (n: number, b = 100) =>
+      V2_HEAD +
+      `<ComplexType Name="B">${Array.from({ length: b }, (_, i) => `<Property Name="b${i}" Type="Edm.String" sap:label="${`L${i}`.padEnd(120, "l")}"/>`).join("")}</ComplexType>` +
+      Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.B"/>`).join("") +
+      '<EntityType Name="E"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="S" EntityType="ns.E"/></EntityContainer>' +
+      V2_TAIL;
+    /** One action of `p` parameters, imported `m` times into the dataset. */
+    const imported = (m: number, p = 200) =>
+      EDMX_HEAD +
+      '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>' +
+      `<Action Name="a">${Array.from({ length: p }, (_, i) => `<Parameter Name="p${i}" Type="Edm.String"/>`).join("")}</Action>` +
+      `<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/>${Array.from({ length: m }, (_, i) => `<ActionImport Name="i${i}" Action="ns.a" EntitySet="S"/>`).join("")}</EntityContainer>` +
+      EDMX_TAIL;
+
+    const sliceOf = (doc: string) => {
+      const r = compileContract(doc);
+      if (!r.ok) throw new Error(r.detail);
+      return { r, s: sliceForEntitySet(r.ir, "S", r.sourceLength) };
+    };
+
+    it("100 types over one labelled base type of 100 properties is refused (TOO_LARGE)", () => {
+      // 31 KB → 1.8 MB stored (58x), 7.7 MB per /schema call, before.
+      const doc = folded(100);
+      const { r, s } = sliceOf(doc);
+      // Under the absolute bound: only the proportional one refuses it.
+      const unbounded = sliceForEntitySet(r.ir, "S");
+      expect(unbounded.ok && boundedContractDigest(unbounded.contract).ok).toBe(true);
+      expect(s).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+      expect(!s.ok && s.detail).toMatch(/times the size of the service's description/);
+    });
+
+    it("an action of 200 parameters imported 180 times is refused (TOO_LARGE): its copies no longer raise their own bound", () => {
+      // 19 KB → 1.9 MB stored (100x), just under the absolute bound, before:
+      // the member bound counted every import's copy as a declaration.
+      const doc = imported(180);
+      expect(180 * JSON.stringify({ name: "i100", kind: "action", entitySet: "S", parameters: Array.from({ length: 200 }, (_, i) => ({ name: `p${i}`, type: "Edm.String", nullable: true })) }).length).toBeLessThan(MAX_CONTRACT_BYTES);
+      const { r, s } = sliceOf(doc);
+      expect(s).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+      expect(sliceForEntitySet(r.ir, "S")).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+    });
+
+    it.each([
+      ["a few types over the labelled base type", folded(8)],
+      ["an action imported a few times", imported(8)],
+    ])("%s is accepted, and stores less than 16 bytes per byte of the description", (_label, doc) => {
+      const { s } = sliceOf(doc);
+      if (!s.ok) throw new Error(s.detail);
+      const digest = boundedContractDigest(s.contract);
+      expect(digest.ok).toBe(true);
+      expect(digest.bytes).toBeLessThan(16 * Buffer.byteLength(doc, "utf8"));
+    });
+
+    it("the bound is the stated one: a floor for a small description, a multiple of a large one, never past the absolute bound", () => {
+      expect(sliceByteLimit(1_000)).toBe(SLICE_BYTES_FLOOR);
+      expect(sliceByteLimit(100_000)).toBe(SLICE_BYTES_PER_SOURCE_CHAR * 100_000);
+      expect(sliceByteLimit(1_000_000)).toBe(MAX_CONTRACT_BYTES);
+      expect(sliceByteLimit(undefined)).toBe(MAX_CONTRACT_BYTES);
+    });
+  });
+
+  describe("the diff is linear in operations sharing one signature", () => {
+    const DIFF_BUDGET_MS = 1000;
+    const withImports = (n: number): InterfaceContract => {
+      const r = compileContract(
+        `${EDMX_HEAD}<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>` +
+          `<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>${EDMX_TAIL}`,
+      );
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S");
+      if (!s.ok) throw new Error(s.detail);
+      for (let i = 0; i < n; i++) s.contract.operations.push({ name: "a", kind: "action", entitySet: "S", parameters: [] });
+      return s.contract;
+    };
+
+    it("34,000 imports of one action, at the contract bound, diff against the stored row in under the budget", () => {
+      const contract = withImports(34_000);
+      // As large as a stored contract may be, and no larger.
+      expect(boundedContractDigest(contract).ok).toBe(true);
+      const stored = JSON.parse(JSON.stringify(contract)) as InterfaceContract;
+      const { value, ms } = timed(() => diffContracts(stored, contract));
+      expect(value).toEqual({ bump: null, changes: [] });
+      expect(ms).toBeLessThan(DIFF_BUDGET_MS);
+    });
+
+    it("and each one left over is still an overload removed or added", () => {
+      const before = withImports(3);
+      const after = withImports(5);
+      expect(diffContracts(before, after).changes.filter((c) => c.bump === "minor")).toHaveLength(2);
+      expect(diffContracts(after, before).changes.filter((c) => c.bump === "major")).toHaveLength(2);
+    });
+  });
+
+  describe("text from the description is escaped wherever a document is rendered", () => {
+    const PAYLOAD = "<img src=x onerror=alert(document.domain)>";
+    const ESCAPED = "&lt;img src=x onerror=alert(document.domain)&gt;";
+    const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const doc =
+      '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">' +
+      '<edmx:DataServices m:DataServiceVersion="2.0"><Schema Namespace="ns" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">' +
+      `<ComplexType Name="Addr" sap:label="${attr(PAYLOAD)}"><Property Name="Street" Type="Edm.String" sap:label="${attr(PAYLOAD)}"/></ComplexType>` +
+      `<EntityType Name="E" sap:label="${attr(PAYLOAD)}"><Key><PropertyRef Name="k"/></Key>` +
+      `<Property Name="k" Type="Edm.String" Nullable="false" sap:label="${attr(PAYLOAD)}" sap:quickinfo="${attr(`q ${PAYLOAD}`)}"/>` +
+      '<Property Name="Address" Type="ns.Addr"/></EntityType>' +
+      `<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="S" EntityType="ns.E" sap:label="${attr(PAYLOAD)}"/></EntityContainer>` +
+      "</Schema></edmx:DataServices></edmx:Edmx>";
+    const contract = () => {
+      const r = compileContract(doc);
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S", r.sourceLength);
+      if (!s.ok) throw new Error(s.detail);
+      return s.contract;
+    };
+    const kitInterface = (c: InterfaceContract) => ({
+      id: "if_1",
+      name: "x",
+      externalId: "custom:/x",
+      sapProduct: "s4hana",
+      operation: "CREATE",
+      mode: "WRITE",
+      entitySet: "S",
+      version: 1,
+      solutionName: "s",
+      compiled: { semver: "1.0.0", snapshotId: "snap", contentHash: "0", compiledAt: "2026-10-20T00:00:00.000Z", contract: c },
+    });
+    const expectEscaped = (text: string) => {
+      expect(text).not.toContain("<img");
+      expect(text).toContain(ESCAPED);
+      expect(text).toContain(`q ${ESCAPED}`);
+    };
+
+    it("in the kit's openapi.json and openapi-3.0.json", () => {
+      const files = buildScaffold(kitInterface(contract()), "https://x");
+      for (const name of ["openapi.json", "openapi-3.0.json"]) {
+        const file = files.find((f) => f.path === name);
+        expect(file, name).toBeDefined();
+        expectEscaped(file!.contents);
+      }
+    });
+
+    it("in the per-solution document, in both versions", () => {
+      for (const version of ["3.1.0", "3.0.3"] as const) {
+        const c = contract();
+        expectEscaped(
+          JSON.stringify(
+            buildNorthboundOpenApi({
+              version,
+              baseUrl: "https://x",
+              title: "t",
+              infoVersion: "1.0.0",
+              description: "d",
+              interfaces: [{ ...kitInterface(c), contract: { source: "metadata", contract: c, semver: "1.0.0" } }],
+              discovery: true,
+              safe: safeName,
+            }),
+          ),
+        );
+      }
+    });
+
+    it("in what /schema serves", () => {
+      expectEscaped(JSON.stringify(standaloneSchemas(contract(), "S")));
     });
   });
 });

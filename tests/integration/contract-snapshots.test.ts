@@ -275,6 +275,55 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(0);
   });
 
+  it("a contract out of proportion to its description is not recorded, though under the absolute bound (round 3)", async () => {
+    // One labelled base type folded into 100 types: 31 KB stored as 1.8 MB, before.
+    const iface = await newInterface("proportion");
+    const n = 100;
+    const doc =
+      '<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">' +
+      '<edmx:DataServices m:DataServiceVersion="2.0"><Schema Namespace="ns" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">' +
+      `<ComplexType Name="B">${Array.from({ length: n }, (_, i) => `<Property Name="b${i}" Type="Edm.String" sap:label="${`L${i}`.padEnd(120, "l")}"/>`).join("")}</ComplexType>` +
+      Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.B"/>`).join("") +
+      '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="SalesOrder" EntityType="ns.T"/></EntityContainer>' +
+      "</Schema></edmx:DataServices></edmx:Edmx>";
+    const outcome = await recordVerifiedContract({
+      scope,
+      iface: { ...iface, operation: "READ", mode: "READ" },
+      compiled: compileContract(doc),
+      environment: "DEV",
+      connectionId: "conn_1",
+      actorId: "u1",
+    });
+    expect(outcome).toMatchObject({ status: "NOT_COMPILED" });
+    expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(0);
+  });
+
+  it.each([
+    ["U+0000", "p\u0000"],
+    ["an unpaired surrogate", "p\ud800"],
+  ])("a property named with %s is refused at compile, never a snapshot PostgreSQL cannot store (round 3)", async (_label, bad) => {
+    const iface = await newInterface(`unstorable-${bad.length}-${bad.charCodeAt(1)}`);
+    const doc = JSON.stringify({
+      $Version: "4.0",
+      ns: {
+        T: { $Kind: "EntityType", $Key: ["k"], k: {}, [bad]: {} },
+        C: { $Kind: "EntityContainer", SalesOrder: { $Collection: true, $Type: "ns.T" } },
+      },
+    });
+    const outcome = await recordVerifiedContract({
+      scope,
+      iface: { ...iface, operation: "READ", mode: "READ" },
+      compiled: compileContract(doc),
+      environment: "DEV",
+      connectionId: "conn_1",
+      actorId: "u1",
+    });
+    expect(outcome).toMatchObject({ status: "NOT_COMPILED" });
+    expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(0);
+  });
+
   it("is current only while the interface names the same service and dataset", async () => {
     const iface = await newInterface("repoint");
     await recordContractSnapshot({ scope, iface, contract: salesOrder() });

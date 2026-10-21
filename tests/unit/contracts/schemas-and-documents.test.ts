@@ -476,6 +476,28 @@ describe("Edm.Binary", () => {
     const ok = oas30Validator(doc, "TSet");
     expect(ok({ Id: "1", Hash: Buffer.alloc(16, 1).toString("base64") }), JSON.stringify(ok.errors)).toBe(true);
   });
+
+  it("a V4 value in the 3.0.3 document is base64url, as the broker serves it, not format: byte (hostile-input review round 3)", () => {
+    // `format: byte` is standard base64: a format-checking validator refused
+    // every value carrying '-' or '_', or unpadded, while the 3.1 document said base64url.
+    const doc = buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version: "3.0.3",
+      interfaces: [iface({ entitySet: "TSet", contract: { source: "metadata", contract: contractOf("4.0"), semver: "1.0.0" } })],
+    }) as Doc;
+    const ok = oas30Validator(doc, "TSet");
+    const bytes = Buffer.from([0xfb, 0xff, 0xbf, ...Array.from({ length: 13 }, (_, i) => i + 1)]);
+    const padded = bytes.toString("base64url").padEnd(24, "=");
+    for (const value of [padded, bytes.toString("base64url")]) {
+      expect(value).toMatch(/[-_]/);
+      expect(ok({ Id: "1", Hash: value }), `${value} ${JSON.stringify(ok.errors)}`).toBe(true);
+    }
+    // What base64url is not, it still refuses.
+    expect(ok({ Id: "1", Hash: "not base64!" })).toBe(false);
+    const hash = (doc.components.schemas.TSet as { properties: Record<string, Record<string, unknown>> }).properties.Hash;
+    expect(hash).not.toHaveProperty("format");
+    expect(hash).toMatchObject({ "x-odata-encoding": "base64url" });
+  });
 });
 
 describe("slicing", () => {

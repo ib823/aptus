@@ -80,7 +80,8 @@ export async function recordVerifiedContract(input: {
   if (!iface.entitySet) {
     return { status: "NO_DATASET", detail: "The interface names no dataset, so there is no contract to record yet." };
   }
-  const slice = sliceForEntitySet(compiled.ir, iface.entitySet);
+  // In proportion to the description as well as absolutely (slice.ts).
+  const slice = sliceForEntitySet(compiled.ir, iface.entitySet, compiled.sourceLength);
   if (!slice.ok) {
     return slice.reason === "TOO_LARGE"
       ? { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${slice.detail}` }

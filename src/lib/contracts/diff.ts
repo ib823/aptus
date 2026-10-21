@@ -22,11 +22,19 @@
  *     client type a closed union), or a property added to a closed complex
  *     type (`additionalProperties: false`). A consumer pinned to ^1.0 who
  *     validates rows with 1.0.0's record schema would reject every row that
- *     carried the new value (hostile-input review round 2).
+ *     carried the new value (hostile-input review round 2). The same for
+ *     what a schema's SHAPE refuses (hostile-input review round 3): an enum
+ *     type that became a flags enum or stopped being one (a closed list ↔ a
+ *     comma-separated string: rows, or bodies, valid under one fail the
+ *     other); a navigation that now contains its target (the create body no
+ *     longer offers `<nav>@odata.bind`, so a body that links records is
+ *     refused); a dataset that became a singleton or stopped being one (its
+ *     create body, and how it is read, change).
  *   MINOR — something was added or loosened: an optional property,
  *     navigation, operation (or overload), member of a flags enum (a string,
  *     not a closed list) or optional parameter added, or a property added to
- *     an open complex type; a length, precision or scale grew (what a read
+ *     an open complex type; a navigation that no longer contains its
+ *     target (the body may now link records); a length, precision or scale grew (what a read
  *     returns STATES its facets, x-odata-max-length, and only a request body
  *     validates them, json-schema.ts); a capability granted; a closed entity
  *     or complex type opened.
@@ -165,6 +173,14 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
   }
 
   // Entity set and type.
+  // A singleton is read as one record and has no create body (contractBodies, json-schema.ts).
+  if ((prev.entitySet.singleton === true) !== (next.entitySet.singleton === true)) {
+    add(
+      "major",
+      "entitySet",
+      next.entitySet.singleton === true ? "The dataset is now a singleton: one record, never created." : "The dataset is no longer a singleton.",
+    );
+  }
   diffSetCapabilities(prev.entitySet.capabilities, next.entitySet.capabilities, add);
   if ((prev.entitySet.label ?? "") !== (next.entitySet.label ?? "")) add("patch", "entitySet", "The dataset's label changed.");
   if (canon(prev.entitySet.navigationBindings ?? []) !== canon(next.entitySet.navigationBindings ?? [])) {
@@ -209,6 +225,18 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
   for (const t of next.enumTypes) {
     const before = prevEnum.get(t.qualifiedName);
     if (!before) continue;
+    // A closed list of names ↔ a comma-separated string of them (json-schema.ts): either way, what one
+    // version's schema accepts the other's refuses, so the members are not compared further.
+    if ((before.isFlags === true) !== (t.isFlags === true)) {
+      add(
+        "major",
+        `enumType:${t.name}`,
+        t.isFlags === true
+          ? `${t.name} is now a flags enum: rows carrying several members fail the previous version's record schema.`
+          : `${t.name} is no longer a flags enum: bodies carrying several members are now refused.`,
+      );
+      continue;
+    }
     const now = new Map(t.members.map((m) => [m.name, m.value]));
     for (const m of before.members) {
       if (!now.has(m.name)) add("major", `enumType:${t.name}`, `The value ${m.name} was removed.`);
@@ -343,13 +371,22 @@ function diffNavigations(prev: readonly IrNavigation[], next: readonly IrNavigat
     const b = after.get(a.name);
     if (!b) add("major", at, `${a.name} was removed.`);
     else if (a.target !== b.target || a.collection !== b.collection) add("major", at, "Its target or cardinality changed.");
-    else if (
-      (a.nullable ?? null) !== (b.nullable ?? null) ||
-      (a.partner ?? "") !== (b.partner ?? "") ||
-      (a.containsTarget ?? false) !== (b.containsTarget ?? false) ||
-      canon(a.referentialConstraints ?? []) !== canon(b.referentialConstraints ?? [])
-    ) {
-      add("patch", at, "Its partner, containment or constraints changed.");
+    else {
+      // A contained record is created with its parent, never linked: the create body drops
+      // `<nav>@odata.bind` (deepInsertProperties, json-schema.ts).
+      const contained = (a.containsTarget ?? false) !== (b.containsTarget ?? false);
+      if (contained && b.containsTarget === true) {
+        add("major", at, "It now contains its target: a create can no longer link existing records through it.");
+      } else if (contained) {
+        add("minor", at, "It no longer contains its target: a create may now link existing records through it.");
+      }
+      if (
+        (a.nullable ?? null) !== (b.nullable ?? null) ||
+        (a.partner ?? "") !== (b.partner ?? "") ||
+        canon(a.referentialConstraints ?? []) !== canon(b.referentialConstraints ?? [])
+      ) {
+        add("patch", at, "Its partner, nullability or constraints changed.");
+      }
     }
   }
   const before = new Set(prev.map((n) => n.name));
@@ -400,15 +437,21 @@ function matchOperations(
       pairs.push([as[0]!, bs[0]!]);
       continue;
     }
-    const bySignature = group(bs, signature);
+    // A cursor per list, not shift(): shifting a long array is linear each
+    // time, and 34,000 imports of one action sharing one signature made the
+    // diff quadratic, seconds of CPU on each verify (hostile-input review
+    // round 3).
+    const bySignature = new Map<string, { list: IrOperation[]; next: number }>();
+    for (const [sig, list] of group(bs, signature)) bySignature.set(sig, { list, next: 0 });
     for (const a of as) {
-      const b = bySignature.get(signature(a))?.shift();
+      const entry = bySignature.get(signature(a));
+      const b = entry && entry.next < entry.list.length ? entry.list[entry.next++] : undefined;
       if (b) pairs.push([a, b]);
       else removed.push(a);
     }
-    for (const rest of bySignature.values()) added.push(...rest);
+    for (const { list, next } of bySignature.values()) for (let i = next; i < list.length; i++) added.push(list[i]!);
   }
-  for (const [k, bs] of after) if (!before.has(k)) added.push(...bs);
+  for (const [k, bs] of after) if (!before.has(k)) for (const b of bs) added.push(b);
   return { pairs, removed, added };
 }
 

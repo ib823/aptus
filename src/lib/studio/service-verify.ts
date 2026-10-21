@@ -32,6 +32,7 @@
  */
 
 import { compileContract, type CompileResult } from "@/lib/contracts/compile";
+import { unstorableText } from "@/lib/contracts/storable";
 import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
@@ -267,10 +268,18 @@ export async function verifyServiceMetadata(
    * verified yesterday stops verifying today.
    */
   const compiled = compileOrRefuse(r.body);
-  const entitySets = compiled.ok
-    ? // A singleton is one record, not a dataset the broker can page through.
-      [...new Set(compiled.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name))]
-    : [...new Set(parseEntitySets(r.body).map((e) => e.name))];
+  const entitySets = (
+    compiled.ok
+      ? // A singleton is one record, not a dataset the broker can page through.
+        [...new Set(compiled.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name))]
+      : [...new Set(parseEntitySets(r.body).map((e) => e.name))]
+  ).filter(
+    // Stored on the interface: a name PostgreSQL cannot hold (U+0000, an
+    // unpaired surrogate) is no dataset anyone can address. The compiler
+    // refuses such a document; the older readers are not the compiler
+    // (hostile-input review round 3).
+    (name) => !unstorableText(name),
+  );
   const detected = compiled.ok ? compiled.ir.odataVersion : edmxODataVersion(r.body);
 
   if (input.declaredVersion !== null && detected !== null && detected !== input.declaredVersion) {
