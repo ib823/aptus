@@ -781,7 +781,11 @@ export async function PATCH(request: NextRequest) {
   // Deactivating is the other remedy a "will not open" answer names: once the
   // product's set opens without this row, its siblings stop reading refused
   // (P0.2 review round 5; connection-resolver.ts clearUnreadableOnceGroupOpens).
-  if (existing.isActive && !updated.isActive) {
+  // Activating asks the same question (round 6): a row that was inactive while
+  // the fix was made kept its GROUP_UNREADABLE, and brought it back on
+  // reactivation while the broker served. A row that will not open itself
+  // keeps the set refused, so its activation clears nothing.
+  if (existing.isActive !== updated.isActive) {
     await clearUnreadableOnceGroupOpens(organizationId, existing.product);
   }
 

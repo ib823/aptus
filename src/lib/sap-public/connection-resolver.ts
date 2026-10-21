@@ -19,7 +19,7 @@
  */
 import { createHash } from "crypto";
 
-import { CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
+import { CONNECTION_GROUP_UNREADABLE_STATUS, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_API_KEY_HEADER,
@@ -750,7 +750,24 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
    * already running against the previous settings records nothing when it
    * finishes, for the same revision reason as a lane check
    * (connection-probe-sweep.ts `revisionGuard`).
+   *
+   * EXCEPT GROUP_UNREADABLE (P0.2 review round 6). That status is not about
+   * this row's settings: it says another connection for the product will not
+   * open, so the broker refuses every call through this one. Re-entering this
+   * row's secret — the natural reaction to a refused row, and the wrong row —
+   * changes nothing of that, so the status stays. Clearing it turned the row
+   * neutral ("never tested"), dropped the line naming the row to fix, and took
+   * it out of the unhealthy-connection count while every call was still
+   * refused. The clear below removes it, to "never tested", once the set opens
+   * — straight away when this save is what fixed the set (for instance the
+   * other row was deactivated meanwhile).
    */
+  const before = await prisma.sapConnection.findFirst({
+    where: { organizationId: input.organizationId, product: input.product, key: input.key },
+    select: { lastValidationStatus: true },
+  });
+  const keptStatus =
+    before?.lastValidationStatus === CONNECTION_GROUP_UNREADABLE_STATUS ? CONNECTION_GROUP_UNREADABLE_STATUS : null;
   const row = await prisma.$transaction(async (tx) => {
     const saved = await tx.sapConnection.upsert({
       where: {
@@ -789,7 +806,7 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
         environment: normalizeEnvironment(input.environment),
         client: input.client ?? null,
         revision: { increment: 1 },
-        lastValidationStatus: null,
+        lastValidationStatus: keptStatus,
         lastValidatedAt: null,
       },
     });
@@ -818,15 +835,25 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
  * systems, a MAJOR unhealthy-connection incident, and an operator told their
  * fix had not worked. The reverse of A.3.
  *
- * So the two places a row can leave or mend the set — the re-save above and
- * Studio's deactivate toggle — ask the broker's own question afterwards: does
- * the set open now (`resolveSapConnections`, the read the binding path fails
- * closed on)? When it does, no active row of it is unreadable any more, and
- * the statuses that said so are cleared to "never tested" — not to OK: no
- * probe has run. `lastValidatedAt` (the last time SAP answered) and the probe
- * history the drift alert is judged against are left alone. When the set
- * still will not open (another sibling is broken too), nothing changes: the
- * broker still refuses, and the statuses still say so.
+ * So the places a row can leave, join or mend the set — the re-save above and
+ * Studio's Deactivate and Activate toggles — ask the broker's own question
+ * afterwards: does the set open now (`resolveSapConnections`, the read the
+ * binding path fails closed on)? When it does, no active row of it is
+ * unreadable any more, and the statuses that said so are cleared to "never
+ * tested" — not to OK: no probe has run. `lastValidatedAt` (the last time SAP
+ * answered) and the probe history the drift alert is judged against are left
+ * alone. When the set still will not open (another sibling is broken too),
+ * nothing changes: the broker still refuses, and the statuses still say so.
+ *
+ * "Never tested" loses nothing a probe found (P0.2 review round 6):
+ * GROUP_UNREADABLE is never written over a failure SAP reported
+ * (connection-probe-sweep.ts `keepsOverGroupUnreadable`), so a sibling SAP
+ * was refusing keeps that refusal throughout. Activate is a door too (round
+ * 6): a sibling that was inactive while the fix was made held its
+ * GROUP_UNREADABLE, out of reach of an active-rows clear, and brought it back
+ * on reactivation while the broker served. And the probe writers run this
+ * after writing their marks, so a fix that commits while they attribute the
+ * group cannot leave a mark behind (`clearIfFixedMeanwhile`).
  *
  * Compare-and-set on the status itself, so a probe that recorded a real
  * outcome in the meantime is never overwritten. Returns how many rows changed.

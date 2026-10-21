@@ -26,7 +26,11 @@
  *   5. the remedy that answer names (re-save or deactivate the row that will
  *      not open) clears GROUP_UNREADABLE on the healthy siblings at once, so
  *      the screens stop saying "refused" while the broker serves, and the
- *      Studio test audits the status it records (P0.2 review round 5).
+ *      Studio test audits the status it records (P0.2 review round 5);
+ *   6. that clear cannot erase a failure SAP reported, cannot be outrun by a
+ *      re-save landing mid-attribution, reaches a sibling that was inactive
+ *      when the remedy ran, and re-saving the wrong row does not make it read
+ *      "never tested" while the broker still refuses (P0.2 review round 6).
  *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
@@ -48,6 +52,8 @@ vi.mock("@/lib/db/prisma", async () => {
 const hooks = vi.hoisted(() => ({
   org: "",
   duringProbe: null as null | (() => Promise<void>),
+  /** Runs once, right after a row of the group fails to open on its own (round 6). */
+  afterBadOpen: null as null | (() => Promise<void>),
   probedHosts: [] as string[],
   status: "OK" as string,
   captureMessage: vi.fn(),
@@ -66,8 +72,17 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
     ...real,
     resolveSapConnections: (organizationId: string, product: string) =>
       organizationId === hooks.org ? real.resolveSapConnections(organizationId, product) : Promise.resolve([]),
-    resolveSapConnection: (organizationId: string, product: string, key?: string | null) =>
-      organizationId === hooks.org ? real.resolveSapConnection(organizationId, product, key) : Promise.resolve(null),
+    resolveSapConnection: async (organizationId: string, product: string, key?: string | null) => {
+      if (organizationId !== hooks.org) return null;
+      try {
+        return await real.resolveSapConnection(organizationId, product, key);
+      } catch (err) {
+        const after = hooks.afterBadOpen;
+        hooks.afterBadOpen = null;
+        if (after) await after();
+        throw err;
+      }
+    },
   };
 });
 vi.mock("@/lib/studio/connection-health", async (importOriginal) => {
@@ -177,6 +192,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
 
   beforeEach(async () => {
     hooks.duringProbe = null;
+    hooks.afterBadOpen = null;
     hooks.probedHosts = [];
     hooks.status = "OK";
     hooks.captureMessage.mockReset();
@@ -504,6 +520,129 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       expect(hooks.probedHosts).toEqual(["https://prod.example.com"]);
       expect((await stored(good.id))?.lastValidationStatus).toBe("OK");
       expect(hooks.noteConnectionProbe).toHaveBeenCalledTimes(1);
+    });
+
+    it("a refusal SAP reported on the sibling survives the group's failure and its fix (round 6)", async () => {
+      // SAP answers 401 through acme-prod: needs attention, in the incident.
+      const good = await save("acme-prod", "https://prod.example.com");
+      hooks.status = "UNAUTHORIZED";
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("UNAUTHORIZED");
+
+      // A second connection arrives sealed under a key this deployment lacks.
+      const bad = await save("acme-dev", "https://dev.example.com");
+      await prisma.sapConnection.update({
+        where: { id: bad.id, organizationId: org },
+        data: { secretsCiphertext: "v1:not-a-sealed-bundle" },
+      });
+      await sweepConnectionProbes();
+      // The broken row says so; the 401 on the sibling is not traded for a
+      // statement about another row — one the remedy would later erase.
+      expect((await stored(bad.id))?.lastValidationStatus).toBe("UNREADABLE");
+      expect((await stored(good.id))?.lastValidationStatus).toBe("UNAUTHORIZED");
+      // Nor by the Studio test: 409 naming the row to fix, nothing recorded.
+      const res = await studioTestOf(good.id);
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.message).toContain("S/4 acme-dev");
+      expect((await stored(good.id))?.lastValidationStatus).toBe("UNAUTHORIZED");
+      expect(hooks.writeConfigAudit).not.toHaveBeenCalled();
+
+      // The documented remedy. SAP still answers 401 through acme-prod, and
+      // every screen and the incident must still say so.
+      await save("acme-dev", "https://dev.example.com");
+
+      const after = await stored(good.id);
+      expect(after?.lastValidationStatus).toBe("UNAUTHORIZED");
+      expect(connectionHealthVerdict(after!, new Date())).toBe("needsAttention");
+      expect(await unhealthyCount()).toBe(1);
+    });
+
+    it("a re-save of the broken row landing while the sweep attributes the group leaves no sibling refused (round 6)", async () => {
+      const { good, bad } = await brokenSibling();
+      // The fix commits between the sweep opening the rows and writing their
+      // statuses: the re-save's own clear finds nothing marked yet.
+      hooks.afterBadOpen = async () => {
+        await save("acme-dev", "https://dev.example.com");
+      };
+
+      await sweepConnectionProbes();
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toMatchObject({ ok: true });
+      expect((await stored(good.id))?.lastValidationStatus).toBeNull();
+      expect((await stored(bad.id))?.lastValidationStatus).toBeNull();
+      expect(await unhealthyCount()).toBe(0);
+    });
+
+    it("the same race through Probe now leaves no sibling refused (round 6)", async () => {
+      const { good } = await brokenSibling();
+      hooks.afterBadOpen = async () => {
+        await save("acme-dev", "https://dev.example.com");
+      };
+
+      const out = await probeOneConnection(org, good.id, "manual");
+
+      expect(out.outcome).toBe("unreadable");
+      // Whatever it wrote did not stand: the set opened again before it returned.
+      if (out.outcome === "unreadable") expect(out.recorded).toBeUndefined();
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toMatchObject({ ok: true });
+      expect((await stored(good.id))?.lastValidationStatus).toBeNull();
+      expect(await unhealthyCount()).toBe(0);
+    });
+
+    it("a sibling inactive when the remedy ran stops reading refused once it is reactivated (round 6)", async () => {
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+
+      expect((await patchConnection({ id: good.id, isActive: false })).status).toBe(200);
+      await save("acme-dev", "https://dev.example.com");
+      expect((await patchConnection({ id: good.id, isActive: true })).status).toBe(200);
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toMatchObject({ ok: true });
+      const after = await stored(good.id);
+      expect(after?.lastValidationStatus).toBeNull();
+      expect(connectionHealthVerdict(after!, new Date())).toBe("neverTested");
+      expect(await unhealthyCount()).toBe(0);
+    });
+
+    it("reactivating a sibling while the broken row still will not open keeps GROUP_UNREADABLE (round 6)", async () => {
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await patchConnection({ id: good.id, isActive: false })).status).toBe(200);
+      expect((await patchConnection({ id: good.id, isActive: true })).status).toBe(200);
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+    });
+
+    it("re-saving the GROUP_UNREADABLE row instead of the broken one changes nothing (round 6)", async () => {
+      // Re-entering the secret is the natural reaction to a refused row. It
+      // is the wrong row: the broker still refuses every call for the product,
+      // so the row must not turn neutral ("never tested"), lose the line that
+      // names the row to fix, or leave the unhealthy-connection count.
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect(await unhealthyCount()).toBe(2);
+
+      await save("acme-prod", "https://prod.example.com");
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+      const after = await stored(good.id);
+      expect(after).toMatchObject({ revision: 2, lastValidationStatus: "GROUP_UNREADABLE" });
+      expect(connectionHealthVerdict(after!, new Date())).toBe("unreadable");
+      expect(await unhealthyCount()).toBe(2);
+
+      // Then the right row: the set opens, and the re-saved settings, never
+      // probed, read "never tested".
+      await save("acme-dev", "https://dev.example.com");
+      expect((await stored(good.id))?.lastValidationStatus).toBeNull();
+      expect(await unhealthyCount()).toBe(0);
     });
   });
 });

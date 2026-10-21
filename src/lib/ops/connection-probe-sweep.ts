@@ -23,6 +23,7 @@ import * as Sentry from "@sentry/nextjs";
 
 import {
   CONNECTION_GROUP_UNREADABLE_STATUS,
+  CONNECTION_NEEDS_ATTENTION,
   CONNECTION_NOT_PROBED_STATUSES,
   CONNECTION_UNREADABLE_STATUS,
 } from "@/lib/coreedge/freshness";
@@ -35,6 +36,7 @@ import { isDriftTransition } from "@/lib/ops/incidents";
 import { countedProbeEvents, probeEventSource, type ProbeSource } from "@/lib/ops/probe-event-source";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
 import {
+  clearUnreadableOnceGroupOpens,
   connectionRefusalMessage,
   resolveSapConnection,
   resolveSapConnections,
@@ -119,6 +121,32 @@ function revisionGuard(revision: number | undefined): { revision: number } | nul
 }
 
 /**
+ * A FAILURE SAP REPORTED IS NOT TRADED FOR A STATEMENT ABOUT ANOTHER ROW
+ * (P0.2 review round 6).
+ *
+ * GROUP_UNREADABLE says "this row's secret opens; a sibling's will not". It
+ * replaced whatever the row held — including UNAUTHORIZED, TIMEOUT, NOT_FOUND
+ * or ERROR that SAP itself had answered. When the sibling was then fixed, the
+ * clear (connection-resolver.ts `clearUnreadableOnceGroupOpens`) had nothing
+ * to put back but "never tested": the 401 SAP was still returning through
+ * this row vanished from every screen, the row left the unhealthy-connection
+ * count so the MAJOR incident closed, and the drift baseline later saw
+ * UNAUTHORIZED → UNAUTHORIZED, so no alert fired either.
+ *
+ * Such a row already reads refused (needs attention), already counts toward
+ * the incident, and its failure stays true whatever the sibling does. So
+ * GROUP_UNREADABLE is written only over a status that claims no failure of
+ * this row's own — never tested, OK, NO_PROBE_PATH, UNREADABLE — and the
+ * clear can only ever put back "never tested" over something no worse.
+ * UNREADABLE (this row's own secret will not open) still replaces anything:
+ * it is about this row, and the sibling's hint names the row "marked
+ * unreadable" as the one to fix.
+ */
+function keepsOverGroupUnreadable(status: string | null): boolean {
+  return status !== null && CONNECTION_NEEDS_ATTENTION.includes(status);
+}
+
+/**
  * A superseded probe still leaves its trace (P0.2 review round 3). It reached
  * the client's SAP system with the previous settings, so a probe event says
  * so, marked superseded: the drift baseline and the incident history skip it
@@ -180,8 +208,10 @@ async function swapProbeStatus(
     ...(next === "OK" ? { lastValidatedAt: new Date() } : {}),
   };
 
+  const groupMarker = next === CONNECTION_GROUP_UNREADABLE_STATUS;
   let expected = believed;
   for (let attempt = 0; attempt < SWAP_ATTEMPTS; attempt++) {
+    if (groupMarker && keepsOverGroupUnreadable(expected)) return { recorded: false };
     const swapped = await prisma.sapConnection.updateMany({
       where: { id, organizationId, ...guard, lastValidationStatus: expected },
       data,
@@ -200,7 +230,18 @@ async function swapProbeStatus(
   // Still moving after every attempt. Record the observation anyway and claim
   // no transition: an alert this sweep cannot attribute risks being the
   // duplicate, and the next sweep judges against whatever is stored by then.
-  const last = await prisma.sapConnection.updateMany({ where: { id, organizationId, ...guard }, data });
+  const last = await prisma.sapConnection.updateMany({
+    where: {
+      id,
+      organizationId,
+      ...guard,
+      // Never over a failure SAP reported (`keepsOverGroupUnreadable`).
+      ...(groupMarker
+        ? { OR: [{ lastValidationStatus: null }, { lastValidationStatus: { notIn: [...CONNECTION_NEEDS_ATTENTION] } }] }
+        : {}),
+    },
+    data,
+  });
   return last.count === 1 ? { recorded: true, previous: next } : { recorded: false };
 }
 
@@ -257,16 +298,36 @@ async function recordUnreadableGroup(
 ): Promise<void> {
   const opened = await openEachRow(organizationId, product, rows);
   if (!opened.some((o) => o.opens === false)) return;
+  let wrote = false;
   for (const { row, opens } of opened) {
     if (opens === null) continue;
-    await swapProbeStatus(
+    const write = await swapProbeStatus(
       row.id,
       organizationId,
       row.lastValidationStatus,
       opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS,
       row.revision,
     );
+    wrote ||= write.recorded;
   }
+  if (wrote) await clearIfFixedMeanwhile(organizationId, product);
+}
+
+/**
+ * A FIX THAT LANDED WHILE THE GROUP WAS BEING ATTRIBUTED (P0.2 review round 6).
+ *
+ * The rows are opened, then their statuses written. A re-save of the broken
+ * row that commits in between bumps ITS revision, so its own write misses —
+ * but a healthy sibling's revision is unchanged, so GROUP_UNREADABLE lands on
+ * it. The re-save's clear had already run and found nothing marked, so the
+ * sibling read refused, and raised the MAJOR incident, until the next nightly
+ * probe while the broker served every call. So after writing, the writer asks
+ * the broker's question once more: when the set opens now, the clear runs
+ * here too. Whichever runs last — this, or the fix's own clear — sees both
+ * the fix and the marks. Returns whether anything was cleared.
+ */
+async function clearIfFixedMeanwhile(organizationId: string, product: string): Promise<boolean> {
+  return (await clearUnreadableOnceGroupOpens(organizationId, product)) > 0;
 }
 
 interface GroupRow {
@@ -507,7 +568,10 @@ export async function recordUnreadableOne(
 
   const status = self.opens ? CONNECTION_GROUP_UNREADABLE_STATUS : CONNECTION_UNREADABLE_STATUS;
   const write = await swapProbeStatus(self.row.id, organizationId, self.row.lastValidationStatus, status, self.row.revision);
-  const recorded: Pick<Extract<ProbeOneOutcome, { outcome: "unreadable" }>, "recorded"> = write.recorded
+  // A fix that landed meanwhile clears what this just wrote (round 6); a
+  // status that did not stand is not reported, or audited, as recorded.
+  const stands = write.recorded && !(await clearIfFixedMeanwhile(organizationId, target.product));
+  const recorded: Pick<Extract<ProbeOneOutcome, { outcome: "unreadable" }>, "recorded"> = stands
     ? { recorded: status }
     : {};
   if (!self.opens) return { outcome: "unreadable", detail: ownSentence, ...recorded };
