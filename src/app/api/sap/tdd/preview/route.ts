@@ -66,11 +66,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // A preview is a LIVE READ of a customer tenant, not a catalogue lookup, so
   // the gate is a role and not merely a session. See refuseUnlessMayProbeTenant.
-  const roleRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const roleRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer });
   if (roleRefusal) return roleRefusal;
 
   const tenantKey = request.nextUrl.searchParams.get("tenant") ?? "";
-  const viewer = await getCurrentUser();
   // `refuseUnlessMayProbeTenant` has already established a session, so a null
   // viewer here is unreachable; the check is kept because the audit row cannot
   // be written without an actor, and a read we cannot attribute must not run.

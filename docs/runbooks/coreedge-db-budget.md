@@ -11,13 +11,37 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Read (served, or refused by grant, interface or binding) | **4** | 3 | the key, the interface with its grants and connections, the audit row |
 | Read refused by its key (revoked, expired, rotated out, dropped, unknown) | 4 | 1 | the key; no audit row, as before |
 | Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the claim that finds the key held, and the stored outcome) |
-
-| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run, an Ariba call), stored connection | **4** | 3 | the connection, the organization's console row, the platform-scope row with its outcome in one statement |
-| The same, refused by the environment ceiling (TEST, PROD or undeclared without a grant) | 4 | 4 | the connection, the grant lookup, the two rows |
-| The same, on a deployment tenant | 4 | 2 | the two rows |
+| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run) on a stored SANDBOX or DEV connection | **5** | 4 | the person's session, the connection, the organization's console row, the platform-scope row with its outcome in one statement |
+| The same on a TEST, PROD or undeclared connection, served under a grant or refused by the environment ceiling | 5 | 5 | the session, the connection, the ceiling's grant lookup, the two rows |
+| The same on a deployment tenant | 5 | 3 (by construction) | the session and the two rows; no connection or grant to read |
+| An Ariba call (`/api/sap/ariba/call`) | 5 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
+
+**The console counts its session** (P0.14b review round 4). The console's
+`authenticate` step is the person's session, as the broker's is the key, but
+the budget test mocked `getCurrentUser`, so the figures above left it out.
+Validating a session was three statements (Prisma's nested select of the
+session, its user and the user's organization) and every console route
+validated it twice (the probe guard and the route each called
+`getCurrentUser`; React's `cache()` memoises only inside a render, not in a
+route handler), so a warm DEV preview sent 9 statements, not the 3 written
+here. The session is now one joined statement (`sessionLookup`,
+`src/lib/auth/session.ts`, held to the Prisma select it replaced by
+`tests/integration/session-lookup.test.ts`), which every signed-in request
+benefits from, and each console route validates it once and hands it to the
+probe guard (`refuseUnlessMayProbeTenant({ viewer })`). The test stubs only
+the cookie. The session's `lastActiveAt` stamp is occasional: at most once
+every five minutes per session, +1.
+
+**Why the console's budget is 5, not the read's 4.** A TEST or PROD console
+read must consult the organization's grants (the environment ceiling), and
+every console read is recorded on two trails, the organization's and the
+platform's. The two rows stay two statements so that either can fail without
+losing the other or the read; the grant lookup is not cached, since a cached
+answer would outlive a revoked grant. A SANDBOX or DEV read, the Workbench's
+common case, is 4.
 
 **The console's platform row is one statement** (P0.14b review round 3).
 `recordPlatformConsoleRead` wrote the `PlatformAuditEvent` and its

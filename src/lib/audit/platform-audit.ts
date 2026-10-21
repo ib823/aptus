@@ -363,26 +363,37 @@ export interface PlatformConsoleReadInput {
  * where it had sent 2, over the read budget (governed/db-budget.ts). One
  * statement is atomic in PostgreSQL without a transaction around it, so the
  * event is still never stored without its outcome. The ids are made here
- * (the model's `cuid()` default is Prisma's, not the database's); both `at`
- * columns take the database default, as the nested create left them to.
+ * (the model's `cuid()` default is Prisma's, not the database's), and so is
+ * `at` (review round 4): `@default(now())` is Prisma's too — the nested create
+ * sent the time, in UTC. Left to the column's DEFAULT CURRENT_TIMESTAMP, a
+ * `timestamp(3)` without a zone took the SESSION's wall time, so on a database
+ * or role set to any other zone every console row was off by the offset from
+ * the organization's copy of the same read, and the retention sweep's UTC
+ * cutoff deleted it early or late. Both rows are bound as UTC wall time,
+ * whatever the session's zone, as idempotency.ts and grant-binding.ts do.
  */
-export function consoleReadInsert(input: PlatformConsoleReadInput, ids = { event: randomUUID(), outcome: randomUUID() }): Prisma.Sql {
+export function consoleReadInsert(
+  input: PlatformConsoleReadInput,
+  ids = { event: randomUUID(), outcome: randomUUID() },
+  now: Date = new Date(),
+): Prisma.Sql {
   const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
   const reason = input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null;
+  const at = Prisma.sql`(${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
   return Prisma.sql`/* governed:console-read-audit */
     WITH "event" AS (
       INSERT INTO "PlatformAuditEvent"
         ("id", "action", "actorUserId", "actorEmail", "actorRole", "actorOrganizationId", "product", "tenantKey",
-         "tenantLabel", "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId")
+         "tenantLabel", "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId", "at")
       VALUES (${ids.event}, ${PLATFORM_CONSOLE_READ_ACTION}, ${input.actor.id}, ${input.actor.email}, ${input.actor.role},
         ${input.actor.organizationId}, ${input.target.product}, ${input.target.tenantKey}, ${input.target.tenantLabel ?? null},
         ${input.target.serviceKey}, ${input.target.servicePath ?? null}, ${input.target.entitySet}, ${payloadSha256},
-        ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId})
+        ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId}, ${at})
       RETURNING "id"
     )
-    INSERT INTO "PlatformAuditOutcome" ("id", "eventId", "outcome", "sapStatus", "reason", "detail", "durationMs")
+    INSERT INTO "PlatformAuditOutcome" ("id", "eventId", "outcome", "sapStatus", "reason", "detail", "durationMs", "at")
     SELECT ${ids.outcome}, "event"."id", ${input.outcome}, ${input.status}::integer, ${reason},
-      ${JSON.stringify(input.detail)}::jsonb, ${input.durationMs ?? null}::integer
+      ${JSON.stringify(input.detail)}::jsonb, ${input.durationMs ?? null}::integer, ${at}
     FROM "event"`;
 }
 

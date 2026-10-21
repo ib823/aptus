@@ -55,7 +55,9 @@ export async function GET(
   if (!product) {
     return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } }, { status: 400 });
   }
-  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
+  // The session is validated once, here, and used throughout (P0.19's budget).
+  const viewer = await getCurrentUser();
+  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !viewer) {
     return NextResponse.json({ error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } }, { status: 401 });
   }
 
@@ -70,7 +72,6 @@ export async function GET(
   // The caller's organization, so a DECLARED CONNECTION key resolves here too
   // — the tenant switcher offers connection keys and this route used to accept
   // only deployment ones.
-  const viewer = await getCurrentUser();
   /*
    * THE LIVE PROBE IS GATED LIKE EVERY OTHER LIVE READ. This route accepted
    * "catalogue may be browsed" (PUBLIC_ACCESS) as permission to open a
@@ -81,7 +82,7 @@ export async function GET(
    * customer's system is limited to Studio roles, and everyone else falls
    * through to the stored probe below, which is what the list renders from.
    */
-  const mayProbe = (await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true })) === null;
+  const mayProbe = (await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer })) === null;
   /*
    * RESOLVED WHETHER OR NOT A LIVE PROBE IS ALLOWED, because the STORED read
    * below runs either way and has to be filed under the right owner. This is a

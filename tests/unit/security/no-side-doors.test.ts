@@ -500,6 +500,31 @@ describe("the check itself", () => {
       expect(r.audit.some((f) => /not a console call opened with openConsoleCall/.test(f))).toBe(true);
     });
 
+    /*
+     * P0.14b review round 4: a const opened as a console call whose method is
+     * then replaced is no console call. A const stops the NAME being rebound,
+     * not its methods.
+     */
+    it.each([
+      ["its callSap assigned", `(call as any).callSap = (fn: () => unknown) => fn();`],
+      ["its callSap assigned by element access", `(call as Record<string, unknown>)["callSap"] = (fn: () => unknown) => fn();`],
+      ["Object.assign over it", `Object.assign(call, { callSap: (fn: () => unknown) => fn() });`],
+      ["Object.defineProperty on it", `Object.defineProperty(call, "callSap", { value: (fn: () => unknown) => fn() });`],
+      ["Reflect.set on it", `Reflect.set(call, "callSap", (fn: () => unknown) => fn());`],
+      ["a destructuring assignment into it", `[(call as any).callSap] = [(fn: () => unknown) => fn()];`],
+    ])("fails a callSap on a console call with %s", (_name, mutate) => {
+      const r = check(`${head}\nexport async function GET() { const call = openConsoleCall(); ${mutate} return call.callSap(() => previewSapEntitySet("x")); }`);
+      expect(r.reaches).toBe(true);
+      expect(r.findings).toContain("previewSapEntitySet");
+      expect(r.audit.some((f) => /not a console call opened with openConsoleCall/.test(f))).toBe(true);
+    });
+
+    it("still passes a console call whose properties are only read", () => {
+      expect(
+        check(`${head}\nexport async function GET() { const call = openConsoleCall(); const id = (call as any).correlationId; return call.callSap(() => previewSapEntitySet(id)); }`),
+      ).toEqual({ reaches: true, findings: [], audit: [] });
+    });
+
     it("still passes a console call awaited, or opened through a namespace import", () => {
       expect(
         check(`import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
@@ -561,6 +586,38 @@ describe("the check itself", () => {
           });
           return [r, rows, total];`),
       ).toEqual([]);
+    });
+  });
+
+  /*
+   * P0.14b review round 4: only the function `callSap` (or `callSapWrite`)
+   * runs is inside the pipeline. Its other arguments are ordinary handler code:
+   * an argument expression is evaluated before the call is entered, and
+   * `describe`'s callbacks run after its outcome is recorded. Each of these
+   * was reported compliant before.
+   */
+  describe("a SAP call beside the governed callback, not in it, fails the check", () => {
+    const head = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+      import { openConsoleCall } from "@/lib/governed/console";`;
+    const run = (body: string) => check(`${head}\nexport async function GET() { const call = openConsoleCall(); ${body} }`);
+
+    it.each([
+      ["evaluated eagerly in the callback's place", `return call.callSap(((v: unknown) => async () => v)(await previewSapEntitySet("x")));`],
+      ["in describe's answered", `return call.callSap(async () => 1, { answered: () => previewSapEntitySet("x"), failed: () => null });`],
+      ["in describe's failed", `return call.callSap(async () => 1, { answered: () => null, failed() { return previewSapEntitySet("x"); } });`],
+      ["in describe, built before the call", `const describe = { answered: () => previewSapEntitySet("x") }; return call.callSap(async () => 1, describe);`],
+      ["in a write's handle argument", `return call.callSapWrite(await previewSapEntitySet("x"), async () => 1);`],
+      ["an inner function as describe's callback", `async function after() { return previewSapEntitySet("x"); } return call.callSap(async () => 1, { answered: after, failed: () => null });`],
+    ])("%s", (_name, body) => {
+      const r = run(body);
+      expect(r.reaches).toBe(true);
+      expect(r.findings.length).toBeGreaterThan(0);
+    });
+
+    it("passes the callback given by name, an inner function or an import, and a write's callback", () => {
+      expect(run(`return call.callSap(previewSapEntitySet as never, { answered: () => null, failed: () => null });`).findings).toEqual([]);
+      expect(run(`async function worker() { return previewSapEntitySet("x"); } return call.callSap(worker, { answered: () => null, failed: () => null });`).findings).toEqual([]);
+      expect(run(`const handle = { id: "a" }; return call.callSapWrite(handle, () => previewSapEntitySet("x"));`).findings).toEqual([]);
     });
   });
 

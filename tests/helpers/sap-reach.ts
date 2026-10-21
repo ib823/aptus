@@ -33,6 +33,11 @@
  * pipeline only on a `const` the route initialised from `openConsoleCall`
  * (`consoleCallNames`), and a handler the route re-exports from another
  * module that reaches SAP is reported, since its body is never walked here.
+ * Only the function the step runs is governed (review round 4): `callSap`'s
+ * first argument and `callSapWrite`'s second, written in place or passed by
+ * name. Its other arguments (`describe`'s callbacks, an expression evaluated
+ * before the step is entered) are the handler's own code, and a console call
+ * whose methods could have been replaced is no console call.
  *
  * A mention inside a governed callback is governed only while it runs there:
  * a SAP-reaching function value the callback returns, assigns out or pushes
@@ -390,8 +395,18 @@ function isFunctionLike(n: ts.Node): n is ts.FunctionLikeDeclaration {
   );
 }
 
-/** A console call's governed step: what is passed to it runs inside the pipeline. */
-const GOVERNED_METHODS = new Set(["callSap", "callSapWrite"]);
+/**
+ * A console call's governed steps, and which argument of each is the function
+ * it runs inside the pipeline: `callSap(fn, describe)`, `callSapWrite(handle,
+ * fn)`. Every other argument is ordinary handler code (review round 4): it is
+ * evaluated before the step is entered, or (`describe`'s callbacks) run after
+ * its outcome is recorded.
+ */
+const GOVERNED_ARGUMENT: ReadonlyMap<string, number> = new Map([
+  ["callSap", 0],
+  ["callSapWrite", 1],
+]);
+const GOVERNED_METHODS: ReadonlySet<string> = new Set(GOVERNED_ARGUMENT.keys());
 
 /** The functions, exported by a pipeline module, that open a console call. */
 export const CONSOLE_OPENERS: ReadonlySet<string> = new Set(["openConsoleCall"]);
@@ -424,6 +439,15 @@ function unwrap(e: ts.Expression): ts.Expression {
  * a pipeline module exports, named directly or through a namespace import.
  * Scopes are not modelled: a name declared otherwise anywhere in the file is
  * not trusted anywhere in it, which over-reports rather than under-reports.
+ *
+ * A `const` stops the NAME being rebound, not its methods being replaced
+ * (review round 4): `(call as any).callSap = (fn) => fn()` keeps the name and
+ * drops the pipeline. So a name also loses its trust when, anywhere in the
+ * file, it is mentioned other than as the object of a member READ — a
+ * member's assignment target (`=`, `+=`, a destructuring assignment), the
+ * operand of `delete`, `++` or `--`, an argument (`Object.assign(call, …)`,
+ * `Object.defineProperty`, `Reflect.set`, any helper that might do the same),
+ * an alias (`const c = call`), a spread or a return value.
  */
 export function consoleCallNames(
   graph: SapGraph,
@@ -460,6 +484,17 @@ export function consoleCallNames(
       for (const nm of bindingNames(n.name)) note(nm, false);
     } else if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassDeclaration(n) || ts.isClassExpression(n)) && n.name) {
       note(n.name.text, false);
+    } else if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      for (const nm of targetRoots(n.left)) note(nm, false);
+    } else if (ts.isDeleteExpression(n)) {
+      for (const nm of targetRoots(n.expression)) note(nm, false);
+    } else if (
+      (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
+      (n.operator === ts.SyntaxKind.PlusPlusToken || n.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      for (const nm of targetRoots(n.operand)) note(nm, false);
+    } else if (ts.isIdentifier(n) && isValueReference(n) && !isMemberRead(n)) {
+      note(n.text, false);
     }
     ts.forEachChild(n, visit);
   };
@@ -467,6 +502,61 @@ export function consoleCallNames(
   // An imported name is a declaration too: never a console call opened here.
   for (const name of mod.imports.keys()) note(name, false);
   return new Set([...verdict].filter(([, ok]) => ok).map(([name]) => name));
+}
+
+/** Up from `n` through what passes a value on unchanged: parentheses, `as`, `!`, `satisfies`. */
+function climbWrappers(n: ts.Node): ts.Node {
+  let cur = n;
+  while (
+    cur.parent &&
+    (ts.isParenthesizedExpression(cur.parent) ||
+      ts.isAsExpression(cur.parent) ||
+      ts.isSatisfiesExpression(cur.parent) ||
+      ts.isNonNullExpression(cur.parent) ||
+      ts.isTypeAssertionExpression(cur.parent))
+  ) {
+    cur = cur.parent;
+  }
+  return cur;
+}
+
+/** Whether identifier `id` is only the object a member is read from (`id.x`, `(id as T)[k]`). */
+function isMemberRead(id: ts.Identifier): boolean {
+  const top = climbWrappers(id);
+  const p = top.parent;
+  return !!p && (ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === top;
+}
+
+/** The root names an assignment target writes into: `a.b[c] = …` writes into `a`; destructuring targets each. */
+function targetRoots(target: ts.Node): string[] {
+  let e: ts.Node = target;
+  for (;;) {
+    if (
+      ts.isParenthesizedExpression(e) ||
+      ts.isAsExpression(e) ||
+      ts.isSatisfiesExpression(e) ||
+      ts.isNonNullExpression(e) ||
+      ts.isTypeAssertionExpression(e) ||
+      ts.isPropertyAccessExpression(e) ||
+      ts.isElementAccessExpression(e) ||
+      ts.isSpreadElement(e) ||
+      ts.isSpreadAssignment(e)
+    ) {
+      e = e.expression;
+      continue;
+    }
+    break;
+  }
+  if (ts.isIdentifier(e)) return [e.text];
+  if (ts.isArrayLiteralExpression(e)) return e.elements.flatMap(targetRoots);
+  if (ts.isObjectLiteralExpression(e)) {
+    return e.properties.flatMap((p) =>
+      ts.isPropertyAssignment(p) ? targetRoots(p.initializer) : ts.isShorthandPropertyAssignment(p) ? [p.name.text] : ts.isSpreadAssignment(p) ? targetRoots(p) : [],
+    );
+  }
+  // `[x = d] = …`: the default's target is its left side.
+  if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.EqualsToken) return targetRoots(e.left);
+  return [];
 }
 
 /** Whether `n` is `x.callSap(...)` / `x.callSapWrite(...)`, whatever `x` is. */
@@ -742,32 +832,47 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
       innerReachCache.set(name, reaches);
       return reaches;
     };
-    const mentions = refsOf(node, mod, (n) => {
+    /**
+     * The function a governed call runs inside the pipeline, when `n` is that
+     * argument: a function written in place, or a name passed (an inner
+     * function of the handler is checked for what escapes it; an import or a
+     * module-local binding is called inside). Anything else in that place —
+     * `makeFn(await read())` — is evaluated before the call is entered, so it
+     * is null and walked as handler code.
+     */
+    const governedCallback = (n: ts.Node): ts.Node | "named" | null => {
+      const top = climbWrappers(n);
+      const call = top.parent;
+      if (top !== n || !call || !isGoverned(call)) return null;
+      if (call.arguments.indexOf(n as ts.Expression) !== GOVERNED_ARGUMENT.get(call.expression.name.text)) return null;
+      const arg = unwrap(n as ts.Expression);
+      if (isFunctionLike(arg)) return arg;
+      if (ts.isIdentifier(arg)) return inner.get(arg.text) ?? "named";
+      return null;
+    };
+    const visitor = (n: ts.Node): boolean => {
       if (n !== node && innerNodes.has(n)) return false;
-      if (isGoverned(n)) {
-        // The receiver is walked; the callbacks run inside the pipeline —
-        // unless a SAP-reaching function value leaves them, to run after.
-        for (const { ref, at } of refsOf(n.expression.expression, mod)) check(ref, at, handler);
-        for (const arg of n.arguments) {
-          const callback = ts.isIdentifier(arg) && inner.has(arg.text) ? inner.get(arg.text)! : arg;
-          if (isFunctionLike(callback) || ts.isVariableDeclaration(callback)) {
-            for (const f of escapingFrom(callback, n.expression.name.text, inner, innerReaches)) findings.push({ handler, ...f });
-          }
+      const callback = governedCallback(n);
+      if (callback !== null) {
+        // It runs inside the pipeline — unless a SAP-reaching function value
+        // leaves it, to run after. The receiver and the other arguments are
+        // walked as the handler's own code.
+        const method = (climbWrappers(n).parent as ts.CallExpression & { expression: ts.PropertyAccessExpression }).expression.name.text;
+        if (callback !== "named" && (isFunctionLike(callback) || ts.isVariableDeclaration(callback))) {
+          for (const f of escapingFrom(callback, method, inner, innerReaches)) findings.push({ handler, ...f });
         }
         return false;
       }
       return true;
-    });
+    };
+    const mentions = refsOf(node, mod, visitor);
     for (const { ref, at } of mentions) check(ref, at, handler);
     // Inner functions mentioned outside the governed callbacks run on the handler's path.
     const mentionedNames = new Set<string>();
     const collectMentions = (n: ts.Node): void => {
       if (ts.isTypeNode(n)) return;
       if (n !== node && innerNodes.has(n)) return;
-      if (isGoverned(n)) {
-        collectMentions(n.expression.expression);
-        return;
-      }
+      if (governedCallback(n) !== null) return;
       if (ts.isIdentifier(n) && isValueReference(n)) mentionedNames.add(n.text);
       if (ts.isShorthandPropertyAssignment(n)) mentionedNames.add(n.name.text);
       ts.forEachChild(n, collectMentions);

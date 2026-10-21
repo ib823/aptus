@@ -65,7 +65,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Inspecting a service is a LIVE READ of a customer tenant — and with
   // ?probe=1 it is many of them — so the gate is a role, not merely a session.
   // Same guard as /preview, deliberately shared: see refuseUnlessMayProbeTenant.
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer });
   if (refusal) return refusal;
 
   // Standardized with /operations: omitted tenant → the first configured tenant;
@@ -73,7 +75,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const tenantKey = tenantParam ?? getConfiguredSapTenants(product.envPrefix)[0]?.key ?? "";
   // BOTH REGISTRIES. A key from the Studio tenant switcher is a CONNECTION key,
   // not a deployment key — see tenant-for-read.
-  const viewer = await getCurrentUser();
   // The probe guard above has already established a session; this keeps the
   // audit row's actor non-null, and a read we cannot attribute must not run.
   if (!viewer) {

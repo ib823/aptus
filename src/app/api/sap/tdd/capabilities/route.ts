@@ -57,10 +57,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * Found by an unauthenticated curl during a browser-agent audit — the same
    * way the earlier incident in that file was found.
    */
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const user = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer: user });
   if (refusal) return refusal;
 
-  const user = await getCurrentUser();
   if (!user) {
     // Unreachable: the guard above already 401s without a session. Kept so the
     // narrowing below is a fact rather than an assumption.

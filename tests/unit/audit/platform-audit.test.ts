@@ -214,6 +214,28 @@ describe("recordPlatformConsoleRead — a console read's row (P0.14b review roun
     expect(statement.values).not.toContain(2);
   });
 
+  it("binds both rows' `at` in UTC, whatever the database session's time zone (review round 4)", async () => {
+    /*
+     * Left to the column default, CURRENT_TIMESTAMP was cast into a
+     * `timestamp(3)` (no zone) at the SESSION's wall time: on a non-UTC
+     * session every console row was off by the offset from every row Prisma
+     * writes, and the retention sweep's UTC cutoff deleted them early or late.
+     * tests/integration/console-read-utc.test.ts runs it on PostgreSQL.
+     */
+    mocks.executeRaw.mockResolvedValue(1);
+    await recordPlatformConsoleRead(READ);
+    const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
+    const flat = statement.sql.replace(/\s+/g, " ");
+    expect(flat).toMatch(/INSERT INTO "PlatformAuditEvent" \([^)]*"correlationId", "at"\)/);
+    expect(flat).toMatch(/INSERT INTO "PlatformAuditOutcome" \([^)]*"durationMs", "at"\)/);
+    expect(flat.match(/\?::timestamptz AT TIME ZONE 'UTC'/g)).toHaveLength(2);
+    expect(flat).not.toMatch(/CURRENT_TIMESTAMP|now\(\)/i);
+    const stamps = statement.values.filter((v): v is string => typeof v === "string" && /^\d{4}-\d\d-\d\dT.*Z$/.test(v));
+    expect(stamps).toHaveLength(2);
+    expect(stamps[0]).toBe(stamps[1]);
+    expect(Math.abs(Date.parse(stamps[0]!) - Date.now())).toBeLessThan(60_000);
+  });
+
   it("never throws: the read is answered though the row could not be written", async () => {
     mocks.executeRaw.mockRejectedValue(new Error("database unavailable"));
     await expect(recordPlatformConsoleRead(READ)).resolves.toBeUndefined();

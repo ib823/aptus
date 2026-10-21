@@ -164,10 +164,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // the same role gate. It was found by checking the siblings of the two routes
   // where the gap was reported, which is the only reliable way to close a
   // per-route omission: the omission is never in the route you were told about.
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer });
   if (refusal) return refusal;
 
-  const viewer = await getCurrentUser();
   // The probe guard above has already established a session; this keeps the
   // audit row's actor non-null, and a read we cannot attribute must not run.
   if (!viewer) {

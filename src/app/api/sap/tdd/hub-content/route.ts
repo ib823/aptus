@@ -464,7 +464,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let dataProbeRan = false;
   let dataProbeRefusal: string | null = null;
   if (resolvedTenant && tenant && dataProbe && user) {
-    const probeRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+    const probeRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer: user });
     if (probeRefusal) return probeRefusal;
     /*
      * ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts). The ceilings,

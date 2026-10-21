@@ -73,9 +73,15 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
-// The Workbench console's session (P0.14b review round 3): who previews.
-const session = vi.hoisted(() => ({ user: null as null | Record<string, unknown> }));
-vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => session.user }));
+// The Workbench console's session: who previews. Only the COOKIE is stood in
+// (P0.14b review round 4): the session is validated against PostgreSQL, so
+// the console's `authenticate` step is counted, as the northbound read counts
+// its key. Mocking getCurrentUser hid every statement validating it sent.
+const session = vi.hoisted(() => ({ token: "" }));
+vi.mock("next/headers", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  cookies: async () => ({ get: (name: string) => (name === "abeam-session" && session.token ? { name, value: session.token } : undefined) }),
+}));
 
 // after(): collected, so the statements it runs are counted apart.
 vi.mock("next/server", async (importOriginal) => ({
@@ -88,10 +94,12 @@ vi.mock("next/server", async (importOriginal) => ({
 import { PrismaClient } from "@prisma/client";
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
+import { GET as consoleAribaRoute } from "@/app/api/sap/ariba/call/route";
 import { GET as consoleOperationsRoute } from "@/app/api/sap/tdd/operations/route";
 import { GET as consolePreviewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
+import { generateSessionToken, hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { DB_BUDGET } from "@/lib/governed/db-budget";
 import { hashClientToken } from "@/lib/northbound/auth";
@@ -117,6 +125,11 @@ async function fakeSap(_input: string | URL | Request, init?: RequestInit): Prom
     WHERE datname = current_database() AND application_name = ${q.app} AND state LIKE 'idle in transaction%'`;
   sapSaw.push({ openInLog: q.open, idleInTransaction: Number(rows[0]?.n ?? 0) });
   const method = (init?.method ?? "GET").toUpperCase();
+  const url = String(_input instanceof Request ? _input.url : _input);
+  if (url.includes("ariba.com")) {
+    const body = url.includes("oauth/token") ? { access_token: "ariba-token" } : { content: [{ EventId: "Doc1" }] };
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  }
   if (method === "GET" && new Headers(init?.headers).get("x-csrf-token") === "Fetch") {
     return new Response("{}", { status: 200, headers: { "x-csrf-token": "c", "content-type": "application/json" } });
   }
@@ -316,7 +329,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       secrets: { username: "COMM_USER", password: "not-a-real-password" },
       environment: "PROD",
     });
-    session.user = { id: ids.user, email: `${RUN}@abeam.com`, name: "Dev", role: "consultant", organizationId: ORG, authMethod: "session", mfaVerified: true };
+    // A signed-in builder, active in the last five minutes (so no lastActiveAt stamp is due).
+    expect(SESSION_COOKIE_NAME).toBe("abeam-session");
+    session.token = generateSessionToken();
+    await prisma.session.create({
+      data: { userId: ids.user, tokenHash: hashSessionToken(session.token), expiresAt: new Date(Date.now() + DAY), mfaVerified: true, lastActiveAt: new Date() },
+    });
 
     // A warm instance: one call made, its milestone recorded.
     forgetRecordedJourneyMilestones();
@@ -335,6 +353,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     await prisma.northboundIdempotencyKey.deleteMany({ where: { organizationId: ORG } });
     await prisma.developerJourneyEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
+    await prisma.session.deleteMany({ where: { userId: ids.user } });
     await prisma.user.deleteMany({ where: { id: ids.user } });
     await observer.$disconnect();
   });
@@ -490,16 +509,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
    * create, it was BEGIN, two INSERTs, a SELECT and COMMIT, so a warm preview
    * of a DEV connection sent 7 statements where it had sent 2. The row is one
    * statement now; the console's budget is stated in db-budget.ts.
+   *
+   * REVIEW ROUND 4. The console's `authenticate` step is the person's session,
+   * and it was mocked here, so it was never counted: validating it was three
+   * statements (Prisma's nested select), sent twice (the probe guard and the
+   * route each validated it), six before the call's own. Only the cookie is
+   * stood in now. The session is one statement and validated once.
    */
   describe("the Workbench console (P0.14b)", () => {
     const S4 = "product=s4hana";
     const PO = "service=purchase-orders&entity=A_PurchaseOrder";
     const consoleGet = (route: (r: NextRequest) => Promise<Response>, url: string) => () => route(new NextRequest(`http://localhost${url}`));
+    /** The session is validated once, in one statement. */
+    const sessionLookups = (c: Counted) => c.response.filter((s) => s.includes("auth:session-lookup") || s.includes('"Session"'));
 
     it("a served preview stays within the console budget, its platform row in one statement", async () => {
       const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-dev&${PO}&limit=2`));
       expect(c.status, report("console preview", c)).toBe(200);
       expect(c.total, report("console preview", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+      // A DEV connection needs no grant lookup: the session, the connection, two rows.
+      expect(c.total, report("console preview", c)).toBe(4);
+      expect(sessionLookups(c), report("console preview", c)).toHaveLength(1);
       expect(c.response.filter((s) => /^(BEGIN|COMMIT)\b/i.test(s)), report("console preview", c)).toEqual([]);
       expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console preview", c)).toHaveLength(1);
       // ...and the row is whole: the event with its outcome.
@@ -515,12 +545,60 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-prod&${PO}`));
       expect(c.status, report("console preview refused", c)).toBe(403);
       expect(c.total, report("console preview refused", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+      expect(sessionLookups(c), report("console preview refused", c)).toHaveLength(1);
+      // The session, the connection, the ceiling's grant lookup, two rows.
+      expect(c.total, report("console preview refused", c)).toBe(5);
+    });
+
+    it("a preview of a PROD connection its grant opens stays within the console budget", async () => {
+      const grant = await prisma.apiAccessGrant.create({
+        data: {
+          organizationId: ORG,
+          solutionId: ids.solution,
+          interfaceId: ids.read,
+          sapProduct: "s4hana",
+          externalId: "purchase-orders",
+          operation: "READ",
+          environment: "PROD",
+          justification: "Budget, PROD console read.",
+          decision: "APPROVED",
+          decidedAt: new Date(),
+          expiresAt: new Date(Date.now() + DAY),
+        },
+      });
+      try {
+        const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-prod&${PO}&limit=2`));
+        expect(c.status, report("console preview PROD", c)).toBe(200);
+        expect(c.total, report("console preview PROD", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+        expect(sessionLookups(c), report("console preview PROD", c)).toHaveLength(1);
+        expect(c.total, report("console preview PROD", c)).toBe(5);
+      } finally {
+        await prisma.apiAccessGrant.delete({ where: { id: grant.id, organizationId: ORG } });
+      }
     });
 
     it("a fan-out (the operations dashboard) stays within the console budget", async () => {
       const c = await count(consoleGet(consoleOperationsRoute, `/api/sap/tdd/operations?${S4}&tenant=${RUN}-dev&refresh=1`));
       expect(c.status, report("console operations", c)).toBe(200);
       expect(c.total, report("console operations", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+      expect(sessionLookups(c), report("console operations", c)).toHaveLength(1);
+      expect(c.total, report("console operations", c)).toBe(4);
+    });
+
+    it("an Ariba call reads no connection and writes no organization row", async () => {
+      vi.stubEnv("ARIBA_BASE_URL", "https://openapi.ariba.com");
+      vi.stubEnv("ARIBA_API_KEY", "ariba-key");
+      vi.stubEnv("ARIBA_OAUTH_TOKEN_URL", "https://api.ariba.com/v2/oauth/token");
+      vi.stubEnv("ARIBA_CLIENT_ID", "ariba-client");
+      vi.stubEnv("ARIBA_CLIENT_SECRET", "ariba-secret");
+      vi.stubEnv("ARIBA_REALM", "myrealm-T");
+      vi.stubEnv("ARIBA_REALMS_JSON", "");
+      const c = await count(consoleGet(consoleAribaRoute, "/api/sap/ariba/call?endpoint=sourcing-events&realm=myrealm-T&limit=2"));
+      expect(c.status, report("console ariba", c)).toBe(200);
+      // The session, the platform row, and the decision-log entry the route has always written beside it.
+      expect(c.total, report("console ariba", c)).toBe(3);
+      expect(sessionLookups(c), report("console ariba", c)).toHaveLength(1);
+      expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console ariba", c)).toHaveLength(1);
     });
   });
 

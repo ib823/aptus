@@ -48,7 +48,9 @@ import { ERROR_CODES } from "@/types/api";
  * the realm; the `logDecision` entry it used to rely on is kept beside it.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const refusal = await refuseUnlessMayProbeTenant();
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ viewer });
   if (refusal) return refusal;
 
   if (!isAribaConfigured()) {
@@ -67,7 +69,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   const { endpointKey: endpoint, realm, limit } = parsed;
 
-  const viewer = await getCurrentUser();
   // The guard above has established a session; a call nobody is accountable
   // for must not run, and the audit row cannot be written without an actor.
   if (!viewer) {
