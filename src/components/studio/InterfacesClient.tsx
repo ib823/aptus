@@ -17,9 +17,15 @@
  * On the disabled mapping card: it is shown rather than hidden because the shape
  * of the eventual feature is part of the design, and hiding it would invite
  * someone to build a private version. It is inert in three independent ways —
- * greyed, `pointer-events: none`, and (the one that actually matters) the API
- * refuses to accept `mappingVersion` at all. A greyed card is a hint; an
- * unaccepted field is a guarantee.
+ * drawn as a placeholder, `pointer-events: none`, and (the one that actually
+ * matters) the API refuses to accept `mappingVersion` at all. A placeholder is
+ * a hint; an unaccepted field is a guarantee.
+ *
+ * "Placeholder" means a quiet SURFACE and the COPY, never opacity. The card
+ * used to be drawn at opacity 0.55, which fades every ink into the page: its
+ * heading read at 3.71:1 and its text at 2.11:1 in light, 2.51:1 in dark. Its
+ * text is the explanation of why it is inert, so it is read, and it keeps full
+ * ink on --surface-ink-tint inside a dashed edge.
  *
  * Runtime values are shown as PLATFORM DEFAULTS, read-only. There are no columns
  * behind them, and rendering an editable box over a value nothing reads would
@@ -230,30 +236,50 @@ export function InterfacesClient({
             </tr>
           </thead>
           <tbody>
-            {interfaces.map((i) => (
-              <tr
-                key={i.id}
-                onClick={() => setSelectedId(i.id)}
-                style={{
-                  borderTop: "1px solid var(--border-default)",
-                  cursor: "pointer",
-                  background: i.id === selectedId ? "var(--brand-navy-soft)" : "transparent",
-                }}
-              >
-                <Td>
-                  <span style={{ fontWeight: 600 }}>{i.name}</span>
-                  <span style={{ display: "block", ...muted }}>
-                    {i.solutionName}
-                    {i.servicePath ? " · own API" : ""}
-                  </span>
-                </Td>
-                <Td>{i.operation}</Td>
-                <Td>v{i.version}</Td>
-                <Td>
-                  <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} meaning={STATUS_MEANING[i.status]} />
-                </Td>
-              </tr>
-            ))}
+            {interfaces.map((i) => {
+              const isSelected = i.id === selectedId;
+              return (
+                <tr
+                  key={i.id}
+                  onClick={() => setSelectedId(i.id)}
+                  style={{
+                    borderTop: "1px solid var(--border-default)",
+                    cursor: "pointer",
+                    background: isSelected ? "var(--brand-navy-soft)" : "transparent",
+                  }}
+                >
+                  {/* Selection is not carried by the fill alone (1.37:1 from the
+                      page in dark): the selected cell has a --brand-navy bar, and
+                      the name is a button marked aria-current — which a plain
+                      <tr> cannot honestly carry without a grid role — so the row
+                      is also reachable and selectable from the keyboard. */}
+                  <Td style={isSelected ? { boxShadow: "inset 3px 0 0 var(--brand-navy)" } : undefined}>
+                    <button
+                      type="button"
+                      aria-current={isSelected ? "true" : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(i.id);
+                      }}
+                      style={rowSelectBtn}
+                    >
+                      {i.name}
+                    </button>
+                    {/* --ink-muted is 4.45:1 on --brand-navy-soft in light; the
+                        selected row reads its secondary line in --ink-secondary. */}
+                    <span style={{ display: "block", ...muted, color: isSelected ? "var(--ink-secondary)" : "var(--ink-muted)" }}>
+                      {i.solutionName}
+                      {i.servicePath ? " · own API" : ""}
+                    </span>
+                  </Td>
+                  <Td>{i.operation}</Td>
+                  <Td>v{i.version}</Td>
+                  <Td>
+                    <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} meaning={STATUS_MEANING[i.status]} />
+                  </Td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -401,16 +427,19 @@ export function InterfacesClient({
           {/* Disabled by design — see the file header. No aria-disabled: nothing
               here is interactive, so the state is carried by the copy ("not in
               this version") rather than by an ARIA attribute that a region does
-              not support and screen readers would ignore anyway. */}
+              not support and screen readers would ignore anyway. Visually it is
+              a placeholder — a quiet surface with a dashed edge — and not a
+              faded card: every line on it is read, at full ink. */}
           <section
             style={{
               ...card,
-              opacity: 0.55,
               pointerEvents: "none",
               background: "var(--surface-ink-tint)",
+              border: "1px dashed var(--border-strong)",
+              boxShadow: "none",
             }}
           >
-            <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600 }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "var(--ink-primary)" }}>
               Mapping <span style={{ ...muted, fontWeight: 500 }}>· not in this version</span>
             </h3>
             <p style={{ ...body, fontSize: 13 }}>
@@ -497,9 +526,22 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th style={{ padding: "9px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-secondary)", whiteSpace: "nowrap" }}>{children}</th>;
 }
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <td style={{ padding: "9px 12px", verticalAlign: "top", color: "var(--ink-primary)" }}>{children}</td>;
+function Td({ children, style }: { children: React.ReactNode; style?: React.CSSProperties | undefined }) {
+  return <td style={{ padding: "9px 12px", verticalAlign: "top", color: "var(--ink-primary)", ...style }}>{children}</td>;
 }
+
+/** The row's name as a control: reads as the bold name it replaced, focuses with the Studio ring. */
+const rowSelectBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  margin: 0,
+  font: "inherit",
+  fontWeight: 600,
+  color: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
 
 /**
  * The entity set, editable in place.
