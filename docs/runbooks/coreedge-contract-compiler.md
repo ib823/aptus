@@ -345,6 +345,26 @@ worst-case description and read `/schema`, the kit and the document. If the
 worker's heap is not capped the jobs fail closed (`UNAVAILABLE`, the verify's
 contract `NOT_COMPILED`), never uncapped.
 
+**Measured on the production build (local, not Vercel).** `pnpm build` with
+`CI` unset, then `pnpm start` (Node 22.22, 4 vCPU, `COREEDGE_CONTRACT_ISOLATES`
+at its default 1) against a local SAP stub, each verify sent while a second
+client polled `GET /api/northbound/versions` every 50 ms (idle: p50 12 ms,
+max 21 ms):
+
+| Verify | Description | Answer | Verify | Poll p50 / p95 / max |
+|---|---|---|---|---|
+| Normal | `business-partner.v2.xml`, 9.6 KB | `RECORDED` 1.0.0 | 489 ms | 13 / 18 / 18 ms |
+| Hostile | one dataset of 62,373 properties, 8.39 MB | `NOT_COMPILED` (dataset past 2 MB) | 1,340 ms | 13 / 23 / 42 ms |
+| Normal again | the same | `UNCHANGED` | 285 ms | 15 / 19 / 19 ms |
+
+The organisation's `ContractTime` row held 1,461 ms after the three, the
+jobs' wall time; the one snapshot holds the `/schema` texts (7,557 + 2,574
+bytes). The hostile description was read whole and parsed in the worker; the
+server's event loop was not, which is what the poll column shows. Then the
+normal interface's starter kit (162,300 bytes, 322 ms) and its solution's
+document (86,754 bytes, 188 ms) downloaded with 200, each rendered in a worker
+spawned from the route's own trace, and the row rose to 1,703 ms.
+
 **On Pro.** Set function memory to 4 GB / 2 vCPU (Performance) for the five
 spawning routes, then `COREEDGE_CONTRACT_ISOLATES=2`; set
 `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` to 120, or 0 with Spend Management
