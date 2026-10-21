@@ -80,7 +80,13 @@ The documents describe the wire format: on an OData V2 service an `Int64`,
 `Decimal` or date arrives as a string (`"/Date(1717171717000)/"`), on V4 as a
 number or an RFC 3339 string. Only the operations CoreEdge serves are drawn as
 paths; `x-coreedge-interfaces[].operations` says which others the service
-allows and when CoreEdge will serve them.
+allows and when CoreEdge will serve them. Both documents list
+`/api/northbound/v1` first in `servers` and the original `/api/northbound`
+second (one implementation), take the optional `CoreEdge-Version` header on
+every operation, name it on every answer with `Deprecation` and `Sunset`, and
+document `400 UNSUPPORTED_VERSION` and `GET /versions` (see *API versions and
+deprecation*). A kit downloaded from Studio calls the `v1` path; one downloaded
+before calls the original path, which keeps working.
 
 ### Testing offline
 

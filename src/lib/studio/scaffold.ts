@@ -27,10 +27,25 @@ import {
   type OpenApiVersion,
   type SampledSchema,
 } from "@/lib/contracts/openapi";
+import { supportedVersions, V1_BASE_PATH, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
 import { FIXTURE_SCENARIOS, stripFixtureEnvelope } from "@/lib/studio/fixtures";
 
 export { toTypeName };
+
+/**
+ * The base URL a kit is generated for when the caller names none: the
+ * versioned path (P1.10), which the developer guide tells new code to use.
+ * Studio's download passes its own origin with the same path. Kits generated
+ * before carry the original /api/northbound, which keeps working: one
+ * implementation serves both.
+ */
+export const DEFAULT_KIT_BASE_URL = `https://coreedge.example${V1_BASE_PATH}`;
+
+/** The version an unpinned call is served today, as the kit's examples name it. */
+function defaultVersionName(): string {
+  return supportedVersions(new Date())[0]?.version ?? "";
+}
 
 export interface ScaffoldInterface {
   id: string;
@@ -118,7 +133,7 @@ function contractForDoc(iface: ScaffoldInterface): ContractForDoc {
  */
 export function buildOpenApi(
   iface: ScaffoldInterface,
-  baseUrl = "https://coreedge.example/api/northbound",
+  baseUrl = DEFAULT_KIT_BASE_URL,
   version: OpenApiVersion = "3.1.0",
 ): string {
   const contract = contractForDoc(iface);
@@ -296,7 +311,7 @@ function buildRecordBody(stored: unknown, compiled?: InterfaceContract): string 
  */
 export function buildTypeScriptClient(
   iface: ScaffoldInterface,
-  baseUrl = "https://coreedge.example/api/northbound",
+  baseUrl = DEFAULT_KIT_BASE_URL,
 ): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
   /*
@@ -350,7 +365,7 @@ export interface CoreEdgeErrorBody {
 }
 
 /** What a read response body may parse to: the data envelope, the error envelope, or neither. */
-type ReadEnvelope = { data?: Omit<ReadResult, "draft"> } & Partial<CoreEdgeErrorBody>;
+type ReadEnvelope = { data?: Omit<ReadResult, "draft" | "apiVersion"> } & Partial<CoreEdgeErrorBody>;
 
 /** What a 200 carries — every field the broker sends, not only the records. */
 export interface ReadResult {
@@ -373,6 +388,11 @@ export interface ReadResult {
    * contract may still change.
    */
   draft: boolean;
+  /**
+   * The northbound API version that served the call (the CoreEdge-Version
+   * response header), or null when the answer named none.
+   */
+  apiVersion: string | null;
 }
 
 export interface CoreEdgeClientOptions {
@@ -380,6 +400,12 @@ export interface CoreEdgeClientOptions {
   baseUrl: string;
   /** Per-solution client token issued in Developer Studio. Keep it server-side. */
   token: string;
+  /**
+   * Pin a northbound API version, sent as CoreEdge-Version (e.g. "${defaultVersionName()}").
+   * Omitted, the call is served the oldest version still supported. A version
+   * the deployment does not serve fails with code UNSUPPORTED_VERSION.
+   */
+  apiVersion?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -412,7 +438,13 @@ export function createClient(options: CoreEdgeClientOptions) {
     async read(limit = 10): Promise<ReadResult> {
       const res = await doFetch(
         \`\${options.baseUrl}/interfaces/\${interfaceId}/data?limit=\${limit}\`,
-        { headers: { Authorization: \`Bearer \${options.token}\`, Accept: "application/json" } },
+        {
+          headers: {
+            Authorization: \`Bearer \${options.token}\`,
+            Accept: "application/json",
+            ...(options.apiVersion ? { "${VERSION_HEADER}": options.apiVersion } : {}),
+          },
+        },
       );
       /*
        * PARSE DEFENSIVELY, AND LET THE STATUS DECIDE.
@@ -449,7 +481,11 @@ export function createClient(options: CoreEdgeClientOptions) {
           res.headers.get("x-correlation-id") ?? "",
         );
       }
-      return { ...json.data, draft: res.headers.get("x-coreedge-interface-status") === "DRAFT" };
+      return {
+        ...json.data,
+        draft: res.headers.get("x-coreedge-interface-status") === "DRAFT",
+        apiVersion: res.headers.get("${VERSION_HEADER}"),
+      };
     },
   };
 }
@@ -460,7 +496,7 @@ export function createClient(options: CoreEdgeClientOptions) {
 export function buildReadme(
   iface: ScaffoldInterface,
   fixtures: readonly ScaffoldFixture[] = [],
-  baseUrl = "https://coreedge.example/api/northbound",
+  baseUrl = DEFAULT_KIT_BASE_URL,
   withheld: readonly WithheldFixture[] = [],
 ): string {
   const captured = fixtures.map((f) => f.scenario);
@@ -574,10 +610,26 @@ openapi-generator-cli generate -i openapi.json -g python -o ./client
 | \`200\` with \`records: []\` | **No records** | Treat as data, not failure |
 | \`403\` | Not set up, or no approved grant | Fix access — do not retry |
 | \`404\` | No such interface, or its dataset does not exist on the tenant | Fix the configuration — do not retry |
+| \`400\` \`UNSUPPORTED_VERSION\` | Your \`CoreEdge-Version\` header names a version this deployment does not serve | Send one of \`error.supportedVersions\`, or omit the header |
 | \`5xx\` | Tenant or broker failed (\`502\`, \`504\` timeout) | Retry or escalate |
 
 An empty result is **not** an error. Conflating the two is the single most common
 way an integration lies to its users.
+
+## API versions
+
+This kit calls the versioned path, \`/api/northbound/v1\`. The original
+\`/api/northbound\` path is the same implementation and keeps working, so a kit
+generated before carries on as it is.
+
+Every answer names the API version that served it in the \`CoreEdge-Version\`
+header (\`apiVersion\` in the client's read result). Send the same header to pin
+one (\`createClient({ ..., apiVersion: "${defaultVersionName()}" })\`); without it you
+are served the oldest version still supported. A version that is unknown or past
+its Sunset date is refused with \`400 UNSUPPORTED_VERSION\`. From the day a
+version's deprecation is announced, its answers carry \`Deprecation\` and
+\`Sunset\` headers: log them. The versions and the policy are served at
+\`$COREEDGE_BASE_URL/versions\` (no token needed) and described in \`openapi.json\`.
 
 ## Interface
 
@@ -604,7 +656,7 @@ way an integration lies to its users.
  * is a parameter here for the same reason it is one in buildOpenApi: the kit is
  * generated per request and knows where it came from.
  */
-export function buildEnvExample(baseUrl = "https://coreedge.example/api/northbound"): string {
+export function buildEnvExample(baseUrl = DEFAULT_KIT_BASE_URL): string {
   return `# The CoreEdge northbound base URL, pre-filled for the deployment that
 # generated this kit. Point it at your local mock to develop offline.
 COREEDGE_BASE_URL=${baseUrl}
@@ -816,6 +868,10 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 const INTERFACE_ID = ${JSON.stringify(iface.id)};
 const INTERFACE = ${JSON.stringify({ id: iface.id, name: safeName(iface.name), version: iface.version })};
+// The northbound API versions the deployment served when this kit was
+// generated, oldest (the default) first: the mock names the version that
+// served each answer, as the broker does, and refuses one the broker would.
+const SUPPORTED_VERSIONS = ${JSON.stringify(supportedVersions(new Date()).map((v) => v.version))};
 
 function pick(scenario) {
   const found = fixtures.fixtures.find((f) => f.scenario === scenario);
@@ -866,18 +922,37 @@ function applyLimit(body, raw) {
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", \`http://localhost:\${PORT}\`);
 
+  // First, as the broker does: a version it does not serve is a 400.
+  const pinned = String(req.headers["coreedge-version"] ?? "").trim();
+  if (pinned && !SUPPORTED_VERSIONS.includes(pinned)) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: {
+          code: "UNSUPPORTED_VERSION",
+          message: \`CoreEdge-Version "\${pinned}" is not served. Supported: \${SUPPORTED_VERSIONS.join(", ")}.\`,
+          correlationId: "mock",
+          requestedVersion: pinned,
+          supportedVersions: SUPPORTED_VERSIONS,
+        },
+      }),
+    );
+    return;
+  }
+  const served = { "${VERSION_HEADER}": pinned || SUPPORTED_VERSIONS[0] };
+
   // The mock does not check the token — it is a local stand-in, not a security
   // boundary. It DOES require one, so code that forgets the header fails here
   // rather than in production.
   const auth = req.headers.authorization ?? "";
   if (!auth.toLowerCase().startsWith("bearer ")) {
-    res.writeHead(401, { "content-type": "application/json" });
+    res.writeHead(401, { "content-type": "application/json", ...served });
     res.end(JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token.", correlationId: "mock" } }));
     return;
   }
 
   if (!url.pathname.startsWith(\`/interfaces/\${INTERFACE_ID}/data\`)) {
-    res.writeHead(404, { "content-type": "application/json" });
+    res.writeHead(404, { "content-type": "application/json", ...served });
     res.end(JSON.stringify({ error: { code: "NOT_FOUND", message: \`This mock only serves /interfaces/\${INTERFACE_ID}/data\`, correlationId: "mock" } }));
     return;
   }
@@ -889,7 +964,7 @@ createServer((req, res) => {
     fixture.status < 400
       ? { data: { interface: INTERFACE, ...applyLimit(fixture.body, url.searchParams.get("limit")) } }
       : fixture.body;
-  res.writeHead(fixture.status, { "content-type": "application/json", "x-correlation-id": "mock" });
+  res.writeHead(fixture.status, { "content-type": "application/json", "x-correlation-id": "mock", ...served });
   res.end(JSON.stringify(payload, null, 2));
 }).listen(PORT, () => {
   const names = fixtures.fixtures.map((f) => f.scenario).join(", ") || "(none captured)";

@@ -136,10 +136,12 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
 }));
 
 import { GET as getSchema } from "@/app/api/northbound/interfaces/[id]/schema/route";
+import { GET as getSchemaV1 } from "@/app/api/northbound/v1/interfaces/[id]/schema/route";
 import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-schema/route";
 import { GET as getScaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
 import { POST as verifyService } from "@/app/api/studio/interfaces/[id]/verify-service/route";
 import { GET as getSolutionOpenApi } from "@/app/api/studio/solutions/[id]/openapi/route";
+import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
 const RAP = readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
 const BUILDER = { id: "u_builder", email: "dev@abeam.com", role: "consultant", organizationId: "org_a" };
@@ -396,6 +398,39 @@ describe("capture-schema records the sampled fallback", () => {
   });
 });
 
+describe("/schema on both base paths (P1.10)", () => {
+  const call = (route: typeof getSchema, base: string, headers: Record<string, string> = {}) =>
+    route(new NextRequest(`http://localhost${base}/interfaces/if_1/schema`, { headers: { authorization: "Bearer ce_x", ...headers } }), {
+      params: Promise.resolve({ id: "if_1" }),
+    });
+  const body = async (res: Response) => {
+    const json = (await res.json()) as { data: Row };
+    return json.data;
+  };
+
+  it("the v1 alias serves the same compiled snapshot, and both name the version that served them", async () => {
+    await verify();
+    const original = await call(getSchema, "/api/northbound");
+    const v1 = await call(getSchemaV1, "/api/northbound/v1");
+    expect(original.status).toBe(200);
+    expect(v1.status).toBe(200);
+    const [a, b] = [await body(original), await body(v1)];
+    expect(b).toEqual(a);
+    expect((b.contract as Row).source).toBe("metadata");
+    expect((b.contract as Row).snapshotId).toBe(db.snapshots[0]!.id);
+    for (const res of [original, v1]) expect(res.headers.get("CoreEdge-Version")).toBe(NORTHBOUND_API_VERSIONS[0]!.version);
+  });
+
+  it("a pinned version is served the same contract; an unknown one is refused before the snapshot is read", async () => {
+    await verify();
+    const pinned = await call(getSchemaV1, "/api/northbound/v1", { "CoreEdge-Version": NORTHBOUND_API_VERSIONS[0]!.version });
+    expect((await body(pinned)).contract).toMatchObject({ source: "metadata", semver: "1.0.0" });
+    const refused = await call(getSchemaV1, "/api/northbound/v1", { "CoreEdge-Version": "1999-01" });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: Row }).error).toMatchObject({ code: "UNSUPPORTED_VERSION", requestedVersion: "1999-01" });
+  });
+});
+
 describe("/schema and a sampled contract of an earlier contract", () => {
   it("does not serve the sampled snapshot while the capture it came from is withheld as stale", async () => {
     seed({ operation: "READ", mode: "READ" });
@@ -443,7 +478,12 @@ describe("the starter kit and the solution document use the compiled contract", 
     expect(v30.openapi).toBe("3.0.3");
     expect(validateOpenApi31(v31).errors).toEqual([]);
     expect(validateOpenApi30(v30).errors).toEqual([]);
-    expect(Object.keys(v31.paths)).toEqual(["/interfaces/if_1/data/write", "/interfaces/if_1/schema"]);
+    expect(Object.keys(v31.paths)).toEqual(["/interfaces/if_1/data/write", "/interfaces/if_1/schema", "/versions"]);
+    // The kit calls the versioned path (P1.10); its documents list the original second.
+    expect(files.find((f) => f.path === ".env.example")!.contents).toContain("COREEDGE_BASE_URL=http://localhost/api/northbound/v1\n");
+    for (const doc of [v31, v30]) {
+      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound/v1", "http://localhost/api/northbound"]);
+    }
     expect(v31.components.schemas.SalesOrder_Create.required).toEqual(["SoldToParty", "PurchaseOrderByCustomer"]);
     expect(v31["x-coreedge-interfaces"][0].contract).toMatchObject({ source: "metadata", semver: "1.0.0" });
     const client = files.find((f) => f.path === "client.ts")!.contents;
@@ -476,8 +516,9 @@ describe("the starter kit and the solution document use the compiled contract", 
         "/interfaces/if_1/schema",
         "/interfaces/if_2/data",
         "/interfaces/if_2/schema",
+        "/versions",
       ]);
-      expect(doc.servers).toEqual([{ url: "http://localhost/api/northbound" }]);
+      expect(doc.servers.map((s: Row) => s.url)).toEqual(["http://localhost/api/northbound/v1", "http://localhost/api/northbound"]);
       const if2 = doc["x-coreedge-interfaces"].find((i: Row) => i.id === "if_2");
       // A contract is recorded per interface: if_2 has not been verified itself.
       expect(if2.contract).toEqual({ source: "none" });

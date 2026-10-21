@@ -25,9 +25,10 @@ import { compileContract } from "@/lib/contracts/compile";
 import type { ContractIR, InterfaceContract } from "@/lib/contracts/ir";
 import { standaloneSchemas } from "@/lib/contracts/json-schema";
 import { ALL_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS } from "@/lib/contracts/northbound-errors";
-import { buildNorthboundOpenApi, type InterfaceForDoc } from "@/lib/contracts/openapi";
+import { buildNorthboundOpenApi, northboundServers, type InterfaceForDoc } from "@/lib/contracts/openapi";
 import { personalDataCoverage } from "@/lib/contracts/personal-data";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
 import { validateOpenApi30, validateOpenApi31 } from "../../helpers/openapi-validate";
 import { evaluateDescription } from "../../../scripts/lib/contract-corpus";
@@ -189,6 +190,7 @@ describe("the northbound document", () => {
       "/interfaces/if_r/data",
       "/interfaces/if_r/schema",
       "/interfaces/if_u/schema",
+      "/versions",
     ]);
     const ops = Object.fromEntries(doc["x-coreedge-interfaces"].map((i) => [i.id, i.operations]));
     expect(ops.if_u!.update!.served).toBe(false);
@@ -200,7 +202,10 @@ describe("the northbound document", () => {
     const doc = buildNorthboundOpenApi({ ...BASE_DOC, version: "3.1.0", interfaces: [iface({ operation: "CREATE", mode: "WRITE" })] }) as Doc;
     const post = doc.paths["/interfaces/if_1/data/write"].post;
     expect(post.security).toEqual([{ bearerAuth: [], writeKey: [] }]);
-    expect(post.parameters).toEqual([{ $ref: "#/components/parameters/IdempotencyKey" }]);
+    expect(post.parameters).toEqual([
+      { $ref: "#/components/parameters/IdempotencyKey" },
+      { $ref: "#/components/parameters/CoreEdgeVersion" },
+    ]);
     expect(doc.components.parameters.IdempotencyKey).toMatchObject({ in: "header", name: "Idempotency-Key", required: true });
     expect(doc.components.securitySchemes.writeKey).toMatchObject({ type: "apiKey", in: "header", name: "X-CoreEdge-Write-Key" });
     const body = doc.components.schemas[post.requestBody.content["application/json"].schema.$ref.split("/").pop()];
@@ -219,6 +224,53 @@ describe("the northbound document", () => {
     }
     expect(doc.components.responses.RateLimited.headers["Retry-After"]).toBeTruthy();
     expect(doc.components.responses.LimiterUnavailable.headers["Retry-After"]).toBeTruthy();
+  });
+
+  it.each(["3.1.0", "3.0.3"] as const)("describes API versioning as P1.10 serves it (%s)", (version) => {
+    const doc = buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version,
+      discovery: true,
+      interfaces: [iface({ id: "if_r" }), iface({ id: "if_c", operation: "CREATE", mode: "WRITE" })],
+    }) as Doc;
+    // The versioned path is the recommended server; the original stays listed.
+    expect(doc.servers.map((s: { url: string }) => s.url)).toEqual([
+      "https://coreedge.example/api/northbound/v1",
+      "https://coreedge.example/api/northbound",
+    ]);
+    expect(doc.components.parameters.CoreEdgeVersion).toMatchObject({ name: "CoreEdge-Version", in: "header", required: false });
+    expect(doc.components.parameters.CoreEdgeVersion.description).toContain(NORTHBOUND_API_VERSIONS[0]!.version);
+    for (const [route, ops] of Object.entries<Doc>(doc.paths)) {
+      for (const [method, op] of Object.entries<Doc>(ops)) {
+        const where = `${method.toUpperCase()} ${route}`;
+        expect(op.parameters, where).toContainEqual({ $ref: "#/components/parameters/CoreEdgeVersion" });
+        // Every operation documents the version refusal under its 400.
+        const bad = op.responses["400"].$ref ? doc.components.responses[op.responses["400"].$ref.split("/").pop()] : op.responses["400"];
+        expect(bad["x-coreedge-error-codes"].map((c: { code: string }) => c.code), where).toContain("UNSUPPORTED_VERSION");
+        // Every answer a version served names it; the version refusal does not.
+        for (const [status, r] of Object.entries<Doc>(op.responses)) {
+          const resolved = r.$ref ? doc.components.responses[r.$ref.split("/").pop()] : r;
+          const codes = (resolved["x-coreedge-error-codes"] ?? []).map((c: { code: string }) => c.code);
+          const onlyVersionRefusal = codes.length === 1 && codes[0] === "UNSUPPORTED_VERSION";
+          expect(Boolean(resolved.headers["CoreEdge-Version"]), `${where} ${status}`).toBe(!onlyVersionRefusal);
+        }
+      }
+    }
+    for (const h of ["CoreEdgeVersion", "Deprecation", "Sunset", "Link"]) expect(doc.components.headers[h], h).toBeTruthy();
+    // The refusal's own fields, and the changelog route with no credential.
+    expect(Object.keys(doc.components.schemas.Error.properties.error.properties)).toEqual(
+      expect.arrayContaining(["requestedVersion", "supportedVersions"]),
+    );
+    expect(doc.paths["/versions"].get.security).toEqual([]);
+    expect(doc.paths["/versions"].get.responses["200"].content["application/json"].schema).toEqual({ $ref: "#/components/schemas/Versions" });
+  });
+
+  it("lists a base URL that is not a CoreEdge path as given", () => {
+    expect(northboundServers("http://localhost:4010")).toEqual([{ url: "http://localhost:4010" }]);
+    expect(northboundServers("https://ce.example/api/northbound/").map((s) => s.url)).toEqual([
+      "https://ce.example/api/northbound/v1",
+      "https://ce.example/api/northbound",
+    ]);
   });
 
   it("the error envelope lists every code the broker can send, and the reasons behind them", () => {

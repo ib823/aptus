@@ -24,6 +24,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { loadDocInputs } from "@/lib/contracts/doc-inputs";
 import { buildNorthboundOpenApi, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
 import { prisma } from "@/lib/db/prisma";
+import { V1_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError } from "@/lib/studio/api";
 import { currentResponseSchema, responseSchemaState, withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -122,7 +123,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
   const doc = buildNorthboundOpenApi({
     version,
-    baseUrl: `${request.nextUrl.origin}/api/northbound`,
+    // The versioned path first, the original second (northboundServers; P1.10).
+    baseUrl: `${request.nextUrl.origin}${V1_BASE_PATH}`,
     title: `${safeName(solution.name)} — CoreEdge northbound`,
     infoVersion: `1.0.0+${digest}`,
     description: [

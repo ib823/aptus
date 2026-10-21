@@ -25,6 +25,16 @@
  * the error envelope with every code the broker can send, per status, and the
  * internal refusal reasons behind them (northbound-errors.ts).
  *
+ * EVERY VERSION AND BOTH PATHS (P1.10). The documents list the versioned base
+ * path (/api/northbound/v1) first in `servers`, as the one to use in new code,
+ * and the original path second: one implementation serves both. Every
+ * operation takes the optional CoreEdge-Version request header and every
+ * answer names its version in the same header (with Deprecation, Sunset and
+ * Link once a deprecation is announced); a version the deployment does not
+ * serve is a 400 UNSUPPORTED_VERSION. GET /versions, the changelog, is drawn
+ * like any other route. The versions come from version-policy.ts, so the
+ * document cannot name one the broker does not have.
+ *
  * Pure and deterministic: the same input renders the same document.
  */
 
@@ -33,6 +43,13 @@ import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialec
 import { toTypeName } from "@/lib/contracts/names";
 import { ALL_ERROR_CODES, NORTHBOUND_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS } from "@/lib/contracts/northbound-errors";
 import type { NorthboundErrorCode } from "@/lib/northbound/respond";
+import {
+  CHANGELOG_PATH,
+  NORTHBOUND_API_VERSIONS,
+  UNVERSIONED_BASE_PATH,
+  V1_BASE_PATH,
+  VERSION_HEADER,
+} from "@/lib/northbound/version-policy";
 
 export type OpenApiVersion = "3.1.0" | "3.0.3";
 
@@ -44,6 +61,10 @@ export const BROKER_OPERATIONS = {
   update: { served: false, roadmap: "P2.4" },
   delete: { served: false, roadmap: "P2.4" },
 } as const;
+
+/** Every registered version, oldest first, and the newest (the documents' example). */
+const VERSION_LIST = NORTHBOUND_API_VERSIONS.map((v) => v.version).join(", ");
+const NEWEST_VERSION = NORTHBOUND_API_VERSIONS[NORTHBOUND_API_VERSIONS.length - 1]!.version;
 
 /** The broker's own bound on ?limit (read.ts clamps to it). */
 export const READ_LIMIT_MAX = 100;
@@ -99,6 +120,40 @@ export interface NorthboundDocInput {
 
 type Obj = Record<string, unknown>;
 
+export interface ServerEntry {
+  url: string;
+  description?: string;
+}
+
+/**
+ * The `servers` a northbound document lists for a base URL (P1.10).
+ *
+ * A base URL on either northbound path names a deployment: the document then
+ * lists `/api/northbound/v1` first — what the developer guide tells new code
+ * to call, and the server generators pick by default — and the original path
+ * second, which keeps working. Any other base URL (a local mock, a proxy in
+ * front of CoreEdge) is listed as given: its paths are not ours to rewrite.
+ */
+export function northboundServers(baseUrl: string): ServerEntry[] {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  const origin = trimmed.endsWith(V1_BASE_PATH)
+    ? trimmed.slice(0, -V1_BASE_PATH.length)
+    : trimmed.endsWith(UNVERSIONED_BASE_PATH)
+      ? trimmed.slice(0, -UNVERSIONED_BASE_PATH.length)
+      : null;
+  if (origin === null) return [{ url: baseUrl }];
+  return [
+    {
+      url: `${origin}${V1_BASE_PATH}`,
+      description: "The versioned path. Use it in new code.",
+    },
+    {
+      url: `${origin}${UNVERSIONED_BASE_PATH}`,
+      description: "The original path: the same implementation, the same versions and the same credentials. It keeps working.",
+    },
+  ];
+}
+
 const H = {
   correlation: "CorrelationId",
   request: "RequestId",
@@ -107,10 +162,14 @@ const H = {
   interfaceStatus: "InterfaceStatus",
   replayed: "IdempotencyReplayed",
   cache: "CacheControl",
+  version: "CoreEdgeVersion",
+  deprecation: "Deprecation",
+  sunset: "Sunset",
+  link: "Link",
 } as const;
 
 /** Component schemas every document defines beside its interfaces' own. */
-const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery"] as const;
+const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery", "Versions"] as const;
 
 export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   const dialect: SchemaDialect = input.version === "3.1.0" ? "2020-12" : "oas30";
@@ -142,13 +201,26 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       "x-coreedge-interface-status": H.interfaceStatus,
       "Idempotency-Replayed": H.replayed,
       "Cache-Control": H.cache,
+      [VERSION_HEADER]: H.version,
+      Deprecation: H.deprecation,
+      Sunset: H.sunset,
+      Link: H.link,
     })[name]!;
-  const commonHeaders = () => ({
+  /** What every answer carries but a version refusal: the version that served it (P1.10). */
+  const versionHeaders = () => ({
+    ...header(VERSION_HEADER),
+    ...header("Deprecation"),
+    ...header("Sunset"),
+    ...header("Link"),
+  });
+  /** What the edge and the route put on every answer, a version refusal included. */
+  const baseHeaders = () => ({
     ...header("x-correlation-id"),
     ...header("X-Request-Id"),
     ...header("X-RateLimit-Remaining"),
     ...header("Cache-Control"),
   });
+  const commonHeaders = () => ({ ...baseHeaders(), ...versionHeaders() });
 
   /** One error response: its codes, in the description and as x-coreedge-error-codes. */
   const errorResponse = (status: number, codes: readonly NorthboundErrorCode[], lead: string, retryAfter = false): Obj => ({
@@ -157,9 +229,22 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
     content: { "application/json": { schema: ref("schemas", "Error") } },
     "x-coreedge-error-codes": codes.map((c) => ({ code: c, status, action: NORTHBOUND_ERROR_CODES[c].action })),
   });
+  /** A 400 an operation already documents, with the version refusal beside its own codes. */
+  const UNSUPPORTED_VERSION_LEAD =
+    "Or UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date); error.supportedVersions lists what may be sent, and nothing ran.";
+  const badRequest = (codes: readonly NorthboundErrorCode[], lead: string): Obj =>
+    errorResponse(400, [...codes, "UNSUPPORTED_VERSION"], `${lead} ${UNSUPPORTED_VERSION_LEAD}`);
 
   // The answers every operation shares, defined once (components.responses).
   const sharedResponses: Record<string, Obj> = {
+    UnsupportedVersion: {
+      // No CoreEdge-Version here: no version served this answer.
+      description:
+        "UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date). Refused before anything else; error.supportedVersions lists what may be sent. Send one of them, or omit the header. Codes: UNSUPPORTED_VERSION.",
+      headers: baseHeaders(),
+      content: { "application/json": { schema: ref("schemas", "Error") } },
+      "x-coreedge-error-codes": [{ code: "UNSUPPORTED_VERSION", status: 400, action: NORTHBOUND_ERROR_CODES.UNSUPPORTED_VERSION.action }],
+    },
     Unauthenticated: errorResponse(401, ["UNAUTHENTICATED"], "Missing, unknown, revoked, expired or rotated-out client token — one answer for all of them."),
     RateLimited: errorResponse(429, ["RATE_LIMITED", "RATE_LIMITED_ADDRESS"], "Rate limited: this credential's budget, or the caller's address.", true),
     LimiterUnavailable: errorResponse(503, ["LIMITER_UNAVAILABLE"], "The rate limiter could not be asked; nothing reached SAP.", true),
@@ -241,14 +326,14 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           description:
             "Reads records through CoreEdge from the customer's SAP system, through the connection bound to this credential's environment. " +
             "An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
-          parameters: [ref("parameters", "Limit")],
+          parameters: [ref("parameters", "Limit"), ref("parameters", "CoreEdgeVersion")],
           responses: {
             "200": {
               description: "Records, or an empty array meaning 'no records' — not an error.",
               headers: { ...commonHeaders(), ...header("x-coreedge-interface-status") },
               content: { "application/json": { schema: ref("schemas", resultName) } },
             },
-            "400": errorResponse(400, ["VALIDATION_ERROR"], "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry."),
+            "400": badRequest(["VALIDATION_ERROR"], "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry."),
             "403": errorResponse(403, ["FORBIDDEN", "CONNECTION_NOT_CONFIGURED"], "Not set up: no approved access grant for this interface in this environment, a deprecated interface, or the customer's connection is not bound yet."),
             "404": errorResponse(404, ["NOT_FOUND"], "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry."),
             ...commonErrors(),
@@ -307,7 +392,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           description:
             "Creates one record in the customer's SAP system. Requires the solution's write key beside the bearer token, and an Idempotency-Key: a retry with the same key and payload is answered from the stored outcome (Idempotency-Replayed: true) and never writes twice.",
           security: [{ bearerAuth: [], writeKey: [] }],
-          parameters: [ref("parameters", "IdempotencyKey")],
+          parameters: [ref("parameters", "IdempotencyKey"), ref("parameters", "CoreEdgeVersion")],
           requestBody: { required: true, content: { "application/json": { schema: ref("schemas", bodyName) } } },
           responses: {
             "201": {
@@ -315,7 +400,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
               headers: { ...commonHeaders(), ...header("Idempotency-Replayed") },
               content: { "application/json": { schema: ref("schemas", resultName) } },
             },
-            "400": errorResponse(400, ["VALIDATION_ERROR"], "The request or the interface's definition cannot be used: a missing or malformed Idempotency-Key, a body that is not { record }, an `entity` that differs from the interface's dataset, no dataset, or an own service not yet verified in this environment."),
+            "400": badRequest(["VALIDATION_ERROR"], "The request or the interface's definition cannot be used: a missing or malformed Idempotency-Key, a body that is not { record }, an `entity` that differs from the interface's dataset, no dataset, or an own service not yet verified in this environment."),
             "403": errorResponse(403, ["FORBIDDEN", "CONNECTION_NOT_CONFIGURED"], "Not set up: a missing or invalid write key, no approved WRITE grant in this environment, an interface that is not ACTIVE, writes disabled on the connection, or the connection is not bound."),
             "404": errorResponse(404, ["NOT_FOUND"], "No such interface for this solution, or the dataset does not exist on the tenant."),
             "409": errorResponse(409, ["CONFLICT"], "The Idempotency-Key was used with a different payload or destination; or, with Retry-After, the first request under it is still running — retry with the same key.", true),
@@ -335,12 +420,14 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         summary: "Fetch this interface's contract",
         description:
           "The interface's request and response schemas, and where they came from (the service's own description, sampled rows, or none). Makes no SAP call.",
+        parameters: [ref("parameters", "CoreEdgeVersion")],
         responses: {
           "200": {
             description: "The contract.",
             headers: commonHeaders(),
             content: { "application/json": { schema: ref("schemas", "ContractDocument") } },
           },
+          "400": ref("responses", "UnsupportedVersion"),
           "404": errorResponse(404, ["NOT_FOUND"], "No such interface for this solution."),
           ...commonErrors(),
         },
@@ -402,18 +489,43 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         operationId: "listInterfaces",
         summary: "List the interfaces this credential's solution defines",
         description: "Metadata only; makes no SAP call. `callable` says whether a data call would be made, and `refusal` why not.",
+        parameters: [ref("parameters", "CoreEdgeVersion")],
         responses: {
           "200": {
             description: "This solution's interfaces.",
             headers: commonHeaders(),
             content: { "application/json": { schema: ref("schemas", "Discovery") } },
           },
+          "400": ref("responses", "UnsupportedVersion"),
           ...commonErrors(),
         },
       },
     };
     schemas.Discovery = discoverySchema(dialect);
   }
+
+  // The changelog (P1.10): no credential, and served on both paths like the rest.
+  paths["/versions"] = {
+    get: {
+      operationId: "listApiVersions",
+      summary: "List the northbound API versions and the deprecation policy",
+      description:
+        "The changelog as JSON: which versions exist, which this deployment serves, which one an unpinned request gets, and when each is deprecated or sunset. Needs no credential; reads nothing but the deployment's own version registry.",
+      security: [],
+      parameters: [ref("parameters", "CoreEdgeVersion")],
+      responses: {
+        "200": {
+          description: "The versions, newest first.",
+          headers: commonHeaders(),
+          content: { "application/json": { schema: ref("schemas", "Versions") } },
+        },
+        "400": ref("responses", "UnsupportedVersion"),
+        "429": ref("responses", "RateLimited"),
+        "503": ref("responses", "LimiterUnavailable"),
+      },
+    },
+  };
+  schemas.Versions = versionsSchema(dialect);
 
   schemas.InterfaceRef = {
     type: "object",
@@ -437,6 +549,15 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           code: { type: "string", enum: ALL_ERROR_CODES },
           message: { type: "string", description: "A sentence for a person. Never a host, a URL or SAP's raw answer." },
           correlationId: { type: "string", description: "Identifies the audit row for this call." },
+          requestedVersion: {
+            type: "string",
+            description: "UNSUPPORTED_VERSION only: the CoreEdge-Version value the request sent.",
+          },
+          supportedVersions: {
+            type: "array",
+            items: { type: "string" },
+            description: "UNSUPPORTED_VERSION only: the versions this deployment serves, oldest (the default) first.",
+          },
         },
       },
     },
@@ -453,7 +574,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       version: input.infoVersion,
       description: input.description,
     },
-    servers: [{ url: input.baseUrl }],
+    servers: northboundServers(input.baseUrl),
     security: [{ bearerAuth: [] }],
     tags: docInterfaces.map((i) => ({ name: i.tag as string, description: `${i.name as string} (${i.externalId as string})` })),
     paths,
@@ -480,6 +601,14 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           required: false,
           description: `How many records to return. The broker clamps it to 1–${READ_LIMIT_MAX}.`,
           schema: { type: "integer", minimum: 1, maximum: READ_LIMIT_MAX, default: READ_LIMIT_DEFAULT },
+        },
+        CoreEdgeVersion: {
+          name: VERSION_HEADER,
+          in: "header",
+          required: false,
+          description: `The northbound API version to be served, one of the versions this API has had (${VERSION_LIST}). Omit it to be served the oldest version still supported, which keeps code written before it behaving as it was written. A version this deployment does not serve is refused with 400 UNSUPPORTED_VERSION. The versions and their dates: GET /versions.`,
+          schema: { type: "string", pattern: "^\\d{4}-(0[1-9]|1[0-2])$" },
+          example: NEWEST_VERSION,
         },
         IdempotencyKey: {
           name: "Idempotency-Key",
@@ -510,6 +639,23 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           schema: { type: "string", enum: ["true"] },
         },
         [H.cache]: { description: "Always no-store: customer data never sits in a shared cache.", schema: { type: "string" } },
+        [H.version]: {
+          description:
+            "The northbound API version that served this answer: the one the request pinned, or the default. Absent only on 400 UNSUPPORTED_VERSION, which no version served.",
+          schema: { type: "string" },
+        },
+        [H.deprecation]: {
+          description: `RFC 9745: present once the serving version's deprecation is announced, as @<unix seconds> of its deprecation date. Move to a newer version before its Sunset; ${CHANGELOG_PATH} says which.`,
+          schema: { type: "string" },
+        },
+        [H.sunset]: {
+          description: "RFC 8594: the HTTP-date from which the serving version is refused, once announced.",
+          schema: { type: "string" },
+        },
+        [H.link]: {
+          description: `With Deprecation or Sunset: <${CHANGELOG_PATH}>; rel="deprecation" and rel="sunset", the changelog.`,
+          schema: { type: "string" },
+        },
       },
       schemas,
     },
@@ -643,6 +789,51 @@ function discoverySchema(dialect: SchemaDialect): Obj {
                     odataVersion: nullableType("string", dialect),
                   },
                 },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+/** GET /versions's body (src/app/api/northbound/versions/route.ts). */
+function versionsSchema(dialect: SchemaDialect): Obj {
+  return {
+    type: "object",
+    required: ["data"],
+    properties: {
+      data: {
+        type: "object",
+        required: ["header", "defaultVersion", "supportedVersions", "basePaths", "policy", "versions"],
+        properties: {
+          header: { type: "string", enum: [VERSION_HEADER] },
+          defaultVersion: nullableType("string", dialect, { description: "What a request without the header is served." }),
+          supportedVersions: { type: "array", items: { type: "string" } },
+          basePaths: { type: "array", items: { type: "string" } },
+          policy: {
+            type: "object",
+            properties: {
+              minimumOverlapMonths: { type: "integer" },
+              unpinned: { type: "string" },
+              breakingChanges: { type: "string" },
+            },
+          },
+          versions: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["version", "status", "releasedOn", "deprecatedOn", "announcedOn", "sunsetOn", "summary", "changes"],
+              properties: {
+                version: { type: "string" },
+                status: { type: "string", enum: ["supported", "deprecated", "retired"] },
+                releasedOn: { type: "string", format: "date" },
+                deprecatedOn: nullableType("string", dialect, { format: "date" }),
+                announcedOn: nullableType("string", dialect, { format: "date" }),
+                sunsetOn: nullableType("string", dialect, { format: "date" }),
+                summary: { type: "string" },
+                changes: { type: "array", items: { type: "string" } },
               },
             },
           },

@@ -117,7 +117,7 @@ not mean every SAP release has been tested end to end.
 | Connection to S/4HANA Cloud Public Edition, with Test | The host must be on the SAP domain allow-list and reachable from the CoreEdge host. |
 | Northbound read of an SAP-published service | Returns the first N rows of one entity set, where N is at most 100. There is no filter (section 8). |
 | Test Console | Reads only, with `limit` at most 50 (`src/app/api/studio/test/broker-run/route.ts:62`). |
-| Starter kit download | A TypeScript/Node client, the contract as OpenAPI 3.1 (`openapi.json`) and 3.0.3 (`openapi-3.0.json`), a mock server and fixtures (`src/lib/studio/scaffold.ts:1055-1076`). The OpenAPI files draw `POST …/data/write`, with its body, for a create interface (`src/lib/contracts/openapi.ts:297`); the client, demo and mock cover reads only. |
+| Starter kit download | A TypeScript/Node client, the contract as OpenAPI 3.1 (`openapi.json`) and 3.0.3 (`openapi-3.0.json`), a mock server and fixtures (`src/lib/studio/scaffold.ts:1130-1151`). The OpenAPI files draw `POST …/data/write`, with its body, for a create interface (`src/lib/contracts/openapi.ts:387`); the client, demo and mock cover reads only. |
 
 ### Works with conditions
 
@@ -249,7 +249,7 @@ Keep them in your secrets manager.
 | `DIRECT_DATABASE_URL` | Required. The Prisma CLI refuses to run without it (`prisma/schema.prisma:5-9`). | Yes | The same as `DATABASE_URL` when no connection pooler is used. With a pooler (typical on option B), the direct, unpooled URL, which migrations use. |
 | `NEXTAUTH_SECRET` | Required | Yes | From 4.2 |
 | `NEXTAUTH_URL` | Required | No | Your public `https://` URL |
-| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request (`src/app/api/studio/interfaces/[id]/scaffold/route.ts:48-50`), so check `COREEDGE_BASE_URL` in a downloaded kit. |
+| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request, on the versioned path `/api/northbound/v1` (`src/app/api/studio/interfaces/[id]/scaffold/route.ts:72-77`), so check `COREEDGE_BASE_URL` in a downloaded kit. A kit downloaded before P1.10 carries `/api/northbound`, which serves the same API. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Required in practice. Without `SMTP_USER`, a production instance sends no magic link and nobody can sign in (`auth-options.ts:60-68`). | `SMTP_PASS` is | Your relay. Optionally set `EMAIL_SENDER_NAME` too, so that emails do not carry the original branding. |
 | `SAP_CONNECTION_ENCRYPTION_KEY` | Required for CoreEdge. The preflight only warns, but without it no SAP connection can be saved. | Yes | From 4.2 |
 | `CRON_SECRET` | Required by the production preflight. With it unset, every scheduled job refuses all callers (`src/lib/ops/cron.ts:28-33`). | Yes | From 4.2 |

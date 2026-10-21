@@ -7,7 +7,12 @@
   },
   "servers": [
     {
-      "url": "https://coreedge.example/api/northbound"
+      "url": "https://coreedge.example/api/northbound/v1",
+      "description": "The versioned path. Use it in new code."
+    },
+    {
+      "url": "https://coreedge.example/api/northbound",
+      "description": "The original path: the same implementation, the same versions and the same credentials. It keeps working."
     }
   ],
   "security": [
@@ -37,6 +42,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CoreEdgeVersion"
           }
         ],
         "responses": {
@@ -55,6 +63,18 @@
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
               },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              },
               "x-coreedge-interface-status": {
                 "$ref": "#/components/headers/InterfaceStatus"
               }
@@ -68,7 +88,7 @@
             }
           },
           "400": {
-            "description": "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Codes: VALIDATION_ERROR.",
+            "description": "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Or UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date); error.supportedVersions lists what may be sent, and nothing ran. Codes: VALIDATION_ERROR, UNSUPPORTED_VERSION.",
             "headers": {
               "x-correlation-id": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -81,6 +101,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -95,6 +127,11 @@
                 "code": "VALIDATION_ERROR",
                 "status": 400,
                 "action": "Fix the request or the interface. Do not retry unchanged."
+              },
+              {
+                "code": "UNSUPPORTED_VERSION",
+                "status": 400,
+                "action": "Send one of error.supportedVersions, or omit the header to be served the default. Do not retry unchanged."
               }
             ]
           },
@@ -115,6 +152,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -151,6 +200,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -185,6 +246,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -219,6 +292,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -250,6 +335,11 @@
         ],
         "summary": "Fetch this interface's contract",
         "description": "The interface's request and response schemas, and where they came from (the service's own description, sampled rows, or none). Makes no SAP call.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CoreEdgeVersion"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The contract.",
@@ -265,6 +355,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -274,6 +376,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/UnsupportedVersion"
           },
           "401": {
             "$ref": "#/components/responses/Unauthenticated"
@@ -292,6 +397,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -329,6 +446,11 @@
         ],
         "summary": "Fetch this interface's contract",
         "description": "The interface's request and response schemas, and where they came from (the service's own description, sampled rows, or none). Makes no SAP call.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CoreEdgeVersion"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The contract.",
@@ -344,6 +466,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -353,6 +487,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/UnsupportedVersion"
           },
           "401": {
             "$ref": "#/components/responses/Unauthenticated"
@@ -371,6 +508,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -405,6 +554,11 @@
         "operationId": "listInterfaces",
         "summary": "List the interfaces this credential's solution defines",
         "description": "Metadata only; makes no SAP call. `callable` says whether a data call would be made, and `refusal` why not.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CoreEdgeVersion"
+          }
+        ],
         "responses": {
           "200": {
             "description": "This solution's interfaces.",
@@ -420,6 +574,18 @@
               },
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
               }
             },
             "content": {
@@ -429,6 +595,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/UnsupportedVersion"
           },
           "401": {
             "$ref": "#/components/responses/Unauthenticated"
@@ -441,6 +610,66 @@
           },
           "5XX": {
             "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/versions": {
+      "get": {
+        "operationId": "listApiVersions",
+        "summary": "List the northbound API versions and the deprecation policy",
+        "description": "The changelog as JSON: which versions exist, which this deployment serves, which one an unpinned request gets, and when each is deprecated or sunset. Needs no credential; reads nothing but the deployment's own version registry.",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CoreEdgeVersion"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The versions, newest first.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Versions"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/UnsupportedVersion"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/LimiterUnavailable"
           }
         }
       }
@@ -461,6 +690,37 @@
       }
     },
     "responses": {
+      "UnsupportedVersion": {
+        "description": "UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date). Refused before anything else; error.supportedVersions lists what may be sent. Send one of them, or omit the header. Codes: UNSUPPORTED_VERSION.",
+        "headers": {
+          "x-correlation-id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemaining"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "x-coreedge-error-codes": [
+          {
+            "code": "UNSUPPORTED_VERSION",
+            "status": 400,
+            "action": "Send one of error.supportedVersions, or omit the header to be served the default. Do not retry unchanged."
+          }
+        ]
+      },
       "Unauthenticated": {
         "description": "Missing, unknown, revoked, expired or rotated-out client token — one answer for all of them. Codes: UNAUTHENTICATED.",
         "headers": {
@@ -475,6 +735,18 @@
           },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
+          },
+          "CoreEdge-Version": {
+            "$ref": "#/components/headers/CoreEdgeVersion"
+          },
+          "Deprecation": {
+            "$ref": "#/components/headers/Deprecation"
+          },
+          "Sunset": {
+            "$ref": "#/components/headers/Sunset"
+          },
+          "Link": {
+            "$ref": "#/components/headers/Link"
           }
         },
         "content": {
@@ -506,6 +778,18 @@
           },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
+          },
+          "CoreEdge-Version": {
+            "$ref": "#/components/headers/CoreEdgeVersion"
+          },
+          "Deprecation": {
+            "$ref": "#/components/headers/Deprecation"
+          },
+          "Sunset": {
+            "$ref": "#/components/headers/Sunset"
+          },
+          "Link": {
+            "$ref": "#/components/headers/Link"
           },
           "Retry-After": {
             "$ref": "#/components/headers/RetryAfter"
@@ -546,6 +830,18 @@
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
           },
+          "CoreEdge-Version": {
+            "$ref": "#/components/headers/CoreEdgeVersion"
+          },
+          "Deprecation": {
+            "$ref": "#/components/headers/Deprecation"
+          },
+          "Sunset": {
+            "$ref": "#/components/headers/Sunset"
+          },
+          "Link": {
+            "$ref": "#/components/headers/Link"
+          },
           "Retry-After": {
             "$ref": "#/components/headers/RetryAfter"
           }
@@ -579,6 +875,18 @@
           },
           "Cache-Control": {
             "$ref": "#/components/headers/CacheControl"
+          },
+          "CoreEdge-Version": {
+            "$ref": "#/components/headers/CoreEdgeVersion"
+          },
+          "Deprecation": {
+            "$ref": "#/components/headers/Deprecation"
+          },
+          "Sunset": {
+            "$ref": "#/components/headers/Sunset"
+          },
+          "Link": {
+            "$ref": "#/components/headers/Link"
           }
         },
         "content": {
@@ -609,6 +917,17 @@
           "maximum": 100,
           "default": 10
         }
+      },
+      "CoreEdgeVersion": {
+        "name": "CoreEdge-Version",
+        "in": "header",
+        "required": false,
+        "description": "The northbound API version to be served, one of the versions this API has had (2026-10). Omit it to be served the oldest version still supported, which keeps code written before it behaving as it was written. A version this deployment does not serve is refused with 400 UNSUPPORTED_VERSION. The versions and their dates: GET /versions.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+        },
+        "example": "2026-10"
       },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
@@ -670,6 +989,30 @@
       },
       "CacheControl": {
         "description": "Always no-store: customer data never sits in a shared cache.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CoreEdgeVersion": {
+        "description": "The northbound API version that served this answer: the one the request pinned, or the default. Absent only on 400 UNSUPPORTED_VERSION, which no version served.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Deprecation": {
+        "description": "RFC 9745: present once the serving version's deprecation is announced, as @<unix seconds> of its deprecation date. Move to a newer version before its Sunset; /api/northbound/versions says which.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Sunset": {
+        "description": "RFC 8594: the HTTP-date from which the serving version is refused, once announced.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Link": {
+        "description": "With Deprecation or Sunset: </api/northbound/versions>; rel=\"deprecation\" and rel=\"sunset\", the changelog.",
         "schema": {
           "type": "string"
         }
@@ -1011,6 +1354,129 @@
           }
         }
       },
+      "Versions": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "header",
+              "defaultVersion",
+              "supportedVersions",
+              "basePaths",
+              "policy",
+              "versions"
+            ],
+            "properties": {
+              "header": {
+                "type": "string",
+                "enum": [
+                  "CoreEdge-Version"
+                ]
+              },
+              "defaultVersion": {
+                "description": "What a request without the header is served.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "supportedVersions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "basePaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "minimumOverlapMonths": {
+                    "type": "integer"
+                  },
+                  "unpinned": {
+                    "type": "string"
+                  },
+                  "breakingChanges": {
+                    "type": "string"
+                  }
+                }
+              },
+              "versions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "status",
+                    "releasedOn",
+                    "deprecatedOn",
+                    "announcedOn",
+                    "sunsetOn",
+                    "summary",
+                    "changes"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "supported",
+                        "deprecated",
+                        "retired"
+                      ]
+                    },
+                    "releasedOn": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "deprecatedOn": {
+                      "format": "date",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "announcedOn": {
+                      "format": "date",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sunsetOn": {
+                      "format": "date",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "changes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "InterfaceRef": {
         "type": "object",
         "required": [
@@ -1205,6 +1671,17 @@
               "correlationId": {
                 "type": "string",
                 "description": "Identifies the audit row for this call."
+              },
+              "requestedVersion": {
+                "type": "string",
+                "description": "UNSUPPORTED_VERSION only: the CoreEdge-Version value the request sent."
+              },
+              "supportedVersions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "UNSUPPORTED_VERSION only: the versions this deployment serves, oldest (the default) first."
               }
             }
           }

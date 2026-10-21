@@ -103,6 +103,7 @@ export const NORTHBOUND_API_VERSIONS: readonly NorthboundApiVersion[] = [
       "Credentials: keys minted from P0.11 start ce_live_ (PROD) or ce_test_; keys minted before start ce_ and keep working until they expire. The prefix is never read to authenticate.",
       "Rate limits are per credential (60 reads and 60 writes a minute) with an address backstop: 429 RATE_LIMITED or 429 RATE_LIMITED_ADDRESS, and 503 LIMITER_UNAVAILABLE when the limiter cannot be asked.",
       "A grant authorises the one interface it was approved for (P0.1).",
+      "Added: GET /interfaces/{id}/schema also returns `contract` (where the contract came from, its semantic version and its JSON Schemas), and `requestSchema`, null until then, is the compiled body of a write interface's record once its service is verified (P1.3). Every field that was there before means what it meant.",
     ],
   },
 ];

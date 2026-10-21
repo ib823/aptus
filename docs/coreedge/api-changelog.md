@@ -59,3 +59,10 @@ sends or receives changed, except the additions marked *Added*.
   address backstop: `429 RATE_LIMITED` or `429 RATE_LIMITED_ADDRESS`, and
   `503 LIMITER_UNAVAILABLE` when the limiter cannot be asked.
 - A grant authorises the one interface it was approved for (P0.1).
+- *Added:* `GET /interfaces/{id}/schema` also returns `contract` (where the
+  contract came from, its semantic version and its JSON Schemas), and
+  `requestSchema`, null until then, is the compiled body of a write
+  interface's record once its service is verified (P1.3). Every field that was
+  there before means what it meant. The starter kit's `openapi.json` and
+  `openapi-3.0.json` describe the `CoreEdge-Version` header, `400
+  UNSUPPORTED_VERSION` and both base paths, `/api/northbound/v1` first.

@@ -24,6 +24,7 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { loadDocInputs } from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
+import { V1_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError, studioOk } from "@/lib/studio/api";
 import {
   partitionFixtures,
@@ -69,8 +70,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   const compiled = inputs.compiled.get(iface.id);
 
   // The base URL the generated client will call. Derived from the request so the
-  // artifact works against whatever host the developer is actually using.
-  const baseUrl = `${request.nextUrl.origin}/api/northbound`;
+  // artifact works against whatever host the developer is actually using, on
+  // the versioned path new code is told to use (P1.10). The original path is
+  // the same implementation: kits downloaded before keep working on it, and
+  // the kit's OpenAPI lists it as the second server.
+  const baseUrl = `${request.nextUrl.origin}${V1_BASE_PATH}`;
 
   // Recorded responses, so the kit runs offline. Absent → it still ships, and
   // the README says which scenarios are missing rather than pretending the mock
