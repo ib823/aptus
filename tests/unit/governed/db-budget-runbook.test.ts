@@ -12,7 +12,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DB_BUDGET } from "@/lib/governed/db-budget";
+import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET } from "@/lib/governed/db-budget";
 
 const RUNBOOK = readFileSync(path.join(process.cwd(), "docs/runbooks/coreedge-db-budget.md"), "utf8");
 
@@ -51,6 +51,32 @@ describe("the db budget runbook's table", () => {
     expect(budgetOf(/^\| Read \(served/)).toBe(DB_BUDGET.read);
     expect(budgetOf(/^\| Write/)).toBe(DB_BUDGET.write);
     expect(budgetOf(/^\| Workbench console read/)).toBe(DB_BUDGET.consoleRead);
+  });
+
+  /*
+   * P0.14b review round 6: the console read's row named the capability probe,
+   * the catalogue probes and Probe all, measured at 4, while the capability
+   * probe sends 6 and Probe all 6 plus one per service. The read's row names
+   * only the routes held to 4, and the others' figures are db-budget.ts's.
+   */
+  it("files under the console read's 4 only the routes that do nothing but the read", () => {
+    const rows = budgetSection().filter((l) => l.trimStart().startsWith("|"));
+    const consoleRow = rows.find((r) => /^\| Workbench console read/.test(r));
+    expect(consoleRow).toBeDefined();
+    expect(consoleRow).not.toMatch(/capabilit|catalogue|Probe all/i);
+  });
+
+  it("states each other console route's statements as db-budget.ts does", () => {
+    const rows = budgetSection().filter((l) => l.trimStart().startsWith("|"));
+    const figuresOf = (pattern: RegExp) => {
+      const row = rows.find((r) => pattern.test(r));
+      expect(row, String(pattern)).toBeDefined();
+      return [...row!.matchAll(/\*\*(\d+)\*\*/g)].map((m) => Number(m[1]));
+    };
+    expect(figuresOf(/^\| Entity list with its probe fan-out/)).toEqual([CONSOLE_ROUTE_STATEMENTS.entityListWithProbe]);
+    expect(figuresOf(/^\| Capability probe/)).toEqual([CONSOLE_ROUTE_STATEMENTS.capabilityProbe]);
+    expect(figuresOf(/^\| Catalogue detail with a live probe/)).toEqual([CONSOLE_ROUTE_STATEMENTS.catalogueDetailProbe]);
+    expect(figuresOf(/^\| Probe all/)).toEqual([CONSOLE_ROUTE_STATEMENTS.probeAllFixed, CONSOLE_ROUTE_STATEMENTS.probeAllPerService]);
   });
 
   it("does not file an Ariba call under the stored connection's statements", () => {

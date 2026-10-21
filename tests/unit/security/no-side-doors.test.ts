@@ -708,6 +708,11 @@ describe("the check itself", () => {
       ["a class's static initializer", `class Warm { static ready = previewSapEntitySet("x"); }`],
       ["a class's static block", `class Warm { static { void previewSapEntitySet("x"); } }`],
       ["an export default value", `export default previewSapEntitySet("x");`],
+      // Review round 6: a default in a binding pattern runs when the value is undefined.
+      ["a default in an object binding pattern", `const { warmed = previewSapEntitySet("x") } = {} as { warmed?: unknown };`],
+      ["a default in an array binding pattern", `const [w = previewSapEntitySet("x")] = [] as unknown[];`],
+      ["a default in a nested binding pattern", `const { a: { b = previewSapEntitySet("x") } = {} } = {} as { a?: { b?: unknown } };`],
+      ["a computed key in a binding pattern", `const { [String(previewSapEntitySet("x"))]: k } = {} as Record<string, unknown>;`],
     ])("fails %s", (_name, moduleCode) => {
       const r = check(`${head}\n${moduleCode}\n${quietGet}`);
       expect(r.reaches).toBe(true);
@@ -717,7 +722,8 @@ describe("the check itself", () => {
     it("a module-scope helper that only holds a function is followed where a handler mentions it, not on import", () => {
       const helpers = `const ops = { read: (k: string) => previewSapEntitySet(k), other() { return previewSapEntitySet("o"); } };
         const load = (k: string) => previewSapEntitySet(k);
-        class Reader { read(k: string) { return previewSapEntitySet(k); } }`;
+        class Reader { read(k: string) { return previewSapEntitySet(k); } }
+        const { later = (k: string) => previewSapEntitySet(k) } = {} as { later?: (k: string) => unknown };`;
       // Not mentioned by any handler: nothing runs, the route does not reach SAP.
       const unused = check(`${head}\n${helpers}\n${quietGet}`);
       expect(unused.reaches).toBe(false);

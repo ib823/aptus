@@ -32,6 +32,8 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import type * as DynamicCatalog from "@/lib/sap-public/dynamic-catalog";
+
 
 
 const q = vi.hoisted(() => ({
@@ -91,17 +93,36 @@ vi.mock("next/server", async (importOriginal) => ({
   },
 }));
 
+// Probe all's candidates: only this run's catalogue rows (P0.14b review round
+// 6), so its per-service count does not depend on what another test file has
+// put in the shared catalogue table (the golden test's convention).
+const hub = vi.hoisted(() => ({ tag: `P019HUB${Math.random().toString(36).slice(2, 10).toUpperCase()}` }));
+vi.mock("@/lib/sap-public/dynamic-catalog", async (importOriginal) => {
+  const real = await importOriginal<typeof DynamicCatalog>();
+  return {
+    ...real,
+    probeAllCandidateWhere: (...args: Parameters<typeof real.probeAllCandidateWhere>) => ({
+      AND: [real.probeAllCandidateWhere(...args), { externalId: { contains: hub.tag } }],
+    }),
+  };
+});
+
 import { PrismaClient } from "@prisma/client";
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
 import { GET as consoleAribaRoute } from "@/app/api/sap/ariba/call/route";
+import { GET as consoleCapabilitiesRoute } from "@/app/api/sap/tdd/capabilities/route";
+import { GET as consoleEntitiesRoute } from "@/app/api/sap/tdd/entities/route";
+import { GET as consoleHubItemRoute } from "@/app/api/sap/tdd/hub-content/[id]/route";
+import { GET as consoleHubListRoute } from "@/app/api/sap/tdd/hub-content/route";
+import { POST as consoleProbeAllRoute } from "@/app/api/sap/tdd/hub-content/probe-all/route";
 import { GET as consoleOperationsRoute } from "@/app/api/sap/tdd/operations/route";
 import { GET as consolePreviewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import { generateSessionToken, hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { DB_BUDGET } from "@/lib/governed/db-budget";
+import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET } from "@/lib/governed/db-budget";
 import { hashClientToken } from "@/lib/northbound/auth";
 import { generateClientToken } from "@/lib/northbound/issue";
 import { setWriteCredential } from "@/lib/northbound/write-credential";
@@ -111,7 +132,17 @@ import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 const RUN = `p019-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
 const DAY = 86_400_000;
-const ids = { solution: "", read: "", write: "", noGrant: "", legacy: "", legacyGrant: "", user: `${RUN}-dev`, client: "" };
+const ids = {
+  solution: "",
+  read: "",
+  write: "",
+  noGrant: "",
+  legacy: "",
+  legacyGrant: "",
+  user: `${RUN}-dev`,
+  client: "",
+  hubRows: [] as string[],
+};
 const tokens = { live: "", revoked: "", dropped: "", expired: "" };
 let writeKey = "";
 
@@ -329,6 +360,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       secrets: { username: "COMM_USER", password: "not-a-real-password" },
       environment: "PROD",
     });
+    // Two probeable catalogue rows for Probe all and the detail probe (P0.14b review round 6).
+    for (const suffix of ["A", "B"]) {
+      const row = await prisma.sapHubContent.create({
+        data: {
+          contentType: "API",
+          externalId: `API_${hub.tag}_${suffix}_SRV`,
+          title: `Budget ${suffix}`,
+          description: "",
+          status: "Released",
+          hubUrl: "u",
+          apiType: "ODATAV2",
+          appliesToPublic: true,
+        },
+        select: { id: true },
+      });
+      ids.hubRows.push(row.id);
+    }
     // A signed-in builder, active in the last five minutes (so no lastActiveAt stamp is due).
     expect(SESSION_COOKIE_NAME).toBe("abeam-session");
     session.token = generateSessionToken();
@@ -352,6 +400,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     await prisma.platformAuditEvent.deleteMany({ where: { id: { in: platform.map((p) => p.id) } } });
     await prisma.northboundIdempotencyKey.deleteMany({ where: { organizationId: ORG } });
     await prisma.developerJourneyEvent.deleteMany({ where: { organizationId: ORG } });
+    await prisma.catalogueAddressVerification.deleteMany({ where: { organizationId: ORG } });
+    await prisma.sapHubContent.deleteMany({ where: { id: { in: ids.hubRows } } });
     await prisma.organization.delete({ where: { id: ORG } });
     await prisma.session.deleteMany({ where: { userId: ids.user } });
     await prisma.user.deleteMany({ where: { id: ids.user } });
@@ -599,6 +649,97 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.total, report("console operations", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
       expect(sessionLookups(c), report("console operations", c)).toHaveLength(1);
       expect(c.total, report("console operations", c)).toBe(4);
+    });
+
+    /*
+     * REVIEW ROUND 6. The figures above were claimed for every console route
+     * (a capability or catalogue probe, Probe all's run) while CI measured
+     * only the preview, operations and the Ariba call: the capability probe
+     * sends 6, Probe all 6 plus one per service. Each console route is
+     * measured here; the console read's 4 (`DB_BUDGET.consoleRead`) is held
+     * by the routes that do nothing but the read, and the work the others add
+     * to it is stated in `CONSOLE_ROUTE_STATEMENTS` with its reason.
+     */
+    /** The console call's own statements: the session, the connection, the two rows. */
+    const consoleOwn = (c: Counted) =>
+      c.response.filter(
+        (s) =>
+          s.includes("auth:session-lookup") ||
+          s.includes("governed:console-connection") ||
+          s.includes('"NorthboundAuditEvent"') ||
+          s.includes("governed:console-read-audit"),
+      );
+    const routeOwn = (c: Counted) => {
+      const own = new Set(consoleOwn(c));
+      return c.response.filter((s) => !own.has(s));
+    };
+
+    it("the entity list stays within the console budget; its probe fan-out is two calls, each with its two rows", async () => {
+      const c = await count(consoleGet(consoleEntitiesRoute, `/api/sap/tdd/entities?${S4}&tenant=${RUN}-dev&service=purchase-orders&refresh=1`));
+      expect(c.status, report("console entities", c)).toBe(200);
+      expect(c.total, report("console entities", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
+      expect(c.total, report("console entities", c)).toBe(4);
+      const fan = await count(
+        consoleGet(consoleEntitiesRoute, `/api/sap/tdd/entities?${S4}&tenant=${RUN}-dev&service=purchase-orders&probe=1&refresh=1`),
+      );
+      expect(fan.status, report("console entities probe", fan)).toBe(200);
+      expect(fan.total, report("console entities probe", fan)).toBe(CONSOLE_ROUTE_STATEMENTS.entityListWithProbe);
+      expect(fan.response.filter((s) => s.includes("governed:console-read-audit")), report("console entities probe", fan)).toHaveLength(2);
+      expect(routeOwn(fan), report("console entities probe", fan)).toEqual([]);
+    });
+
+    it("a capability probe sends the console read's 4, its catalogue read and its decision-log entry", async () => {
+      const c = await count(consoleGet(consoleCapabilitiesRoute, `/api/sap/tdd/capabilities?${S4}&tenant=${RUN}-dev&refresh=1`));
+      expect(c.status, report("console capabilities", c)).toBe(200);
+      expect(c.total, report("console capabilities", c)).toBe(CONSOLE_ROUTE_STATEMENTS.capabilityProbe);
+      expect(consoleOwn(c), report("console capabilities", c)).toHaveLength(DB_BUDGET.consoleRead);
+      const own = routeOwn(c);
+      expect(own, report("console capabilities", c)).toHaveLength(2);
+      expect(own.filter((s) => s.includes('"SapApiReference"')), report("console capabilities", c)).toHaveLength(1);
+      expect(own.filter((s) => s.includes('"DecisionLogEntry"')), report("console capabilities", c)).toHaveLength(1);
+    });
+
+    it("a catalogue detail probe sends the console read's 4 and the catalogue row it shows", async () => {
+      const id = ids.hubRows[0]!;
+      const c = await count(() =>
+        consoleHubItemRoute(new NextRequest(`http://localhost/api/sap/tdd/hub-content/${id}?${S4}&tenant=${RUN}-dev`), {
+          params: Promise.resolve({ id }),
+        }),
+      );
+      expect(c.status, report("console catalogue detail", c)).toBe(200);
+      expect(c.total, report("console catalogue detail", c)).toBe(CONSOLE_ROUTE_STATEMENTS.catalogueDetailProbe);
+      expect(consoleOwn(c), report("console catalogue detail", c)).toHaveLength(DB_BUDGET.consoleRead);
+      expect(routeOwn(c).every((s) => s.includes('"SapHubContent"')), report("console catalogue detail", c)).toBe(true);
+    });
+
+    it("the catalogue list's live overlay adds one console read to the page's own catalogue statements", async () => {
+      const c = await count(consoleGet(consoleHubListRoute, `/api/sap/tdd/hub-content?${S4}&tenant=${RUN}-dev&dataProbe=1&q=${hub.tag}`));
+      expect(c.status, report("console catalogue overlay", c)).toBe(200);
+      expect(consoleOwn(c), report("console catalogue overlay", c)).toHaveLength(DB_BUDGET.consoleRead);
+      // Everything else is the catalogue page: its rows, counts and the V4 addresses the overlay verified.
+      expect(
+        routeOwn(c).every((s) => s.includes('"SapHubContent"') || s.includes('"CatalogueAddressVerification"')),
+        report("console catalogue overlay", c),
+      ).toBe(true);
+    });
+
+    it("Probe all sends a fixed number of statements plus one per service it probed", async () => {
+      const c = await count(() =>
+        consoleProbeAllRoute(
+          new NextRequest("http://localhost/api/sap/tdd/hub-content/probe-all", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES", product: "s4hana", tenant: `${RUN}-dev` }),
+          }),
+        ),
+      );
+      expect(c.status, report("console probe all", c)).toBe(200);
+      const services = ids.hubRows.length;
+      expect(c.response.filter((s) => s.startsWith('UPDATE "SapHubContent"')), report("console probe all", c)).toHaveLength(services);
+      expect(c.total, report("console probe all", c)).toBe(
+        CONSOLE_ROUTE_STATEMENTS.probeAllFixed + CONSOLE_ROUTE_STATEMENTS.probeAllPerService * services,
+      );
+      expect(consoleOwn(c), report("console probe all", c)).toHaveLength(DB_BUDGET.consoleRead);
     });
 
     it("an Ariba call reads no connection and writes no organization row", async () => {

@@ -44,7 +44,10 @@
  * class's static initializer, `export default <value>` — on every cold start,
  * before any handler's gate. That code is walked as a handler's
  * (`importTimeCode`), except the functions it only stores, which are followed
- * where a handler calls them. And a route that re-exports ANOTHER ROUTE's
+ * where a handler calls them. A destructuring declaration runs its binding
+ * pattern too (review round 6): `const { warmed = sapCall() } = {}` runs the
+ * default on every cold start, and so does a computed key
+ * (`patternRunsOnImport`). And a route that re-exports ANOTHER ROUTE's
  * handler (P1.10's /api/northbound/v1/* aliases) is that route, judged by
  * its verdict (`routeAliases`); only a handler from a module that is not a
  * route stays unwalked, and a finding.
@@ -504,12 +507,38 @@ function importTimeCode(mod: ModuleInfo): ImportTimeCode[] {
         if (decl.initializer && name !== undefined && !isFunctionValue(decl.initializer)) {
           out.push({ key: keyOf(mod.file, name), node: decl.initializer });
         }
+        // The binding pattern runs too (review round 6): its defaults and computed keys.
+        for (const node of patternRunsOnImport(decl.name)) out.push({ key: keyOf(mod.file, name ?? "default"), node });
       }
     } else if (ts.isClassDeclaration(stmt) || ts.isEnumDeclaration(stmt)) {
       out.push({ key: keyOf(mod.file, stmt.name?.text ?? "default"), node: stmt });
     } else if (ts.isExportAssignment(stmt) && !isFunctionValue(stmt.expression)) {
       out.push({ key: keyOf(mod.file, "default"), node: stmt.expression });
     }
+  }
+  return out;
+}
+
+/**
+ * The code a destructuring pattern runs when it binds (P0.14b review round 6):
+ * a default (`const { warmed = sapCall() } = {}`, `const [w = sapCall()] = []`)
+ * runs whenever the value it stands in for is undefined, which on a module's
+ * top level is every cold start, and a computed key (`{ [sapCall()]: k }`) runs
+ * always. Nested patterns are walked. A default that is a function is only
+ * stored, like a `const` whose value is a function, and is followed where a
+ * handler calls it.
+ */
+function patternRunsOnImport(name: ts.BindingName): ts.Node[] {
+  if (ts.isIdentifier(name)) return [];
+  const out: ts.Node[] = [];
+  for (const el of name.elements) {
+    if (ts.isOmittedExpression(el)) continue;
+    if (el.propertyName && ts.isComputedPropertyName(el.propertyName)) out.push(el.propertyName.expression);
+    if (el.initializer) {
+      const v = unwrap(el.initializer);
+      if (!ts.isArrowFunction(v) && !ts.isFunctionExpression(v)) out.push(el.initializer);
+    }
+    out.push(...patternRunsOnImport(el.name));
   }
   return out;
 }

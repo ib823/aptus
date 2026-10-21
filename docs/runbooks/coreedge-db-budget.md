@@ -11,12 +11,32 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Read (served, or refused by grant, interface or binding) | **4** | 3 | the key, the interface with its grants and connections, the audit row |
 | Read refused by its key (revoked, expired, rotated out, dropped, unknown) | 4 | 1 | the key; no audit row, as before |
 | Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the claim that finds the key held, and the stored outcome) |
-| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run) on a stored connection of any environment, served or refused | **4** | 4 | the person's session, the connection with the grants its environment ceiling judges (one statement), the organization's console row, the platform-scope row with its outcome in one statement |
+| Workbench console read making one SAP call and nothing else (P0.14b: preview, the entity list without its probe fan-out, operations) on a stored connection of any environment, served or refused | **4** | 4 | the person's session, the connection with the grants its environment ceiling judges (one statement), the organization's console row, the platform-scope row with its outcome in one statement |
 | The same on a deployment tenant | 4 | 3 (by construction) | the session and the two rows; no connection or grant to read |
 | An Ariba call (`/api/sap/ariba/call`) | 4 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
+
+**The console routes that do more than one read** (P0.14b review round 6).
+Rounds 3 to 5 filed the capability probe, the catalogue probes and Probe all
+under the console read's 4, while CI measured only the preview, operations
+and the Ariba call; the capability probe sends 6 and Probe all 6 plus one per
+service. They are not held to 4: each sends the console read's statements and
+work of its own that predates the pipeline. Their figures are measured, warm,
+on a stored DEV connection, served (`CONSOLE_ROUTE_STATEMENTS`,
+`src/lib/governed/db-budget.ts`), and the budget test asserts each exactly,
+so a change in any of them is seen. Size the pool with these when operators
+use them; they are triggered by a person, behind the role gate (Probe all
+also once per tenant per ten minutes), not by an application's calls.
+
+| Console route | Statements | What they are |
+|---|---|---|
+| Entity list with its probe fan-out (`/api/sap/tdd/entities?probe=1`) | **6** | two calls (the metadata, then the fan-out), each with its two rows: the session, the connection, 2 + 2 |
+| Capability probe (`/api/sap/tdd/capabilities`) | **6** | the console read's 4, the dynamic catalogue read its probe targets come from, and the decision-log entry the route has always written |
+| Catalogue detail with a live probe (`/api/sap/tdd/hub-content/[id]`) | **5** | the console read's 4 and the catalogue row it shows; a V4 address adds 2 (its verification written, then read back), an item with prerequisites its scope-item reads |
+| Catalogue list with the live overlay (`/api/sap/tdd/hub-content?dataProbe=1`) | the page's own, plus 4 | the console read's 4, beside the catalogue page's counts and rows and the V4 addresses the overlay verified, which vary with the page (measured once, for a one-page search: 7 in all without the overlay, 14 with it); the test asserts the console's 4 and that everything else is the catalogue's |
+| Probe all (`/api/sap/tdd/hub-content/probe-all`), per run | **6** + **1** per service | the console read's 4, the candidate rows and the decision-log entry; then one stored result per service probed, and one more per V4 address it verifies or withdraws |
 
 **The console counts its session** (P0.14b review round 4). The console's
 `authenticate` step is the person's session, as the broker's is the key, but
@@ -59,7 +79,9 @@ atomic without a transaction, so an event is still never stored without its
 outcome. A console route that makes two SAP calls (the entity list with its
 probe fan-out) writes each call's two rows; work a route does besides the
 call (Probe all's catalogue query and result writes, the capability probe's
-own audit) is the route's own and is not counted against the pipeline.
+catalogue read and decision-log entry) is the route's own, and is stated and
+measured in the console routes' table above (review round 6), not hidden in
+the read's 4.
 
 **Why a write has its own budget.** The Idempotency-Key must be claimed
 before SAP is called (so a duplicate never reaches SAP) and its outcome stored
