@@ -216,7 +216,18 @@ export function describeLastProbe(
   c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },
   now: Date = new Date(),
 ): { readonly headline: string; readonly detail: string | null } {
-  if (c.lastValidationStatus === null) return { headline: "Never checked", detail: null };
+  if (c.lastValidationStatus === null) {
+    /*
+     * No status, but a last success (P0.2 review round 7): a "will not open"
+     * status was cleared once the product's set opened again, and no probe
+     * has run since. Not checked since — but checked before, and the cell
+     * says when it last succeeded rather than "Never checked" (A19).
+     */
+    const age = describeAge(c.lastValidatedAt, now);
+    return age === null
+      ? { headline: "Never checked", detail: null }
+      : { headline: "Awaiting a probe", detail: `last succeeded ${age}` };
+  }
   const verdict = connectionHealthVerdict(c, now);
   const headline =
     verdict === "stale"

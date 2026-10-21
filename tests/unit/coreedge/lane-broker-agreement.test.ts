@@ -436,6 +436,44 @@ describe("A50: connection health decays", () => {
     expect(d.state).toBe("never-observed");
     expect(d.badge).toBe("STALE");
   });
+
+  /*
+   * P0.2 review round 7. Clearing UNREADABLE / GROUP_UNREADABLE once the set
+   * opens writes a null status and keeps the last success time. Topology
+   * decided "never observed" from `lastValidatedAt` alone, so that row — no
+   * probe since the clear, its last success 30 days old — was drawn green
+   * while every other screen said "never tested".
+   */
+  it("a cleared status beside an old last success is not drawn observed-good (round 7)", () => {
+    for (const at of [RECENT, old, new Date(NOW.getTime() - 30 * 24 * HOUR)]) {
+      const cleared = { environment: "PROD", lastValidationStatus: null, lastValidatedAt: at, isActive: true };
+      expect(connectionHealthVerdict(cleared, NOW)).toBe("neverTested");
+      expect(deriveConnection(cleared, NOW).state).toBe("never-observed");
+    }
+  });
+
+  it("topology draws observed-good exactly when the shared verdict is healthy (round 7)", () => {
+    const statuses = [null, "OK", "UNREADABLE", "GROUP_UNREADABLE", "UNAUTHORIZED", "TIMEOUT", "NO_PROBE_PATH"];
+    const dates = [null, RECENT, old, new Date(NOW.getTime() - 30 * 24 * HOUR)];
+    for (const lastValidationStatus of statuses) {
+      for (const lastValidatedAt of dates) {
+        const c = { environment: "PROD", lastValidationStatus, lastValidatedAt, isActive: true };
+        const verdict = connectionHealthVerdict(c, NOW);
+        expect({ lastValidationStatus, lastValidatedAt, good: deriveConnection(c, NOW).state === "observed-good" }).toEqual({
+          lastValidationStatus,
+          lastValidatedAt,
+          good: verdict === "healthy",
+        });
+      }
+    }
+  });
+
+  it("SAP systems does not say 'Never checked' for a cleared status with a probe history (round 7)", () => {
+    const cell = describeLastProbe({ lastValidationStatus: null, lastValidatedAt: old }, NOW);
+    expect(cell.headline).not.toBe("Never checked");
+    expect(cell.detail).toMatch(/^last succeeded /);
+    expect(cell.detail).not.toBe("last succeeded never");
+  });
 });
 
 describe("A60: 'Services readable' counts only fresh proof", () => {

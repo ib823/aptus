@@ -30,7 +30,13 @@
  *   6. that clear cannot erase a failure SAP reported, cannot be outrun by a
  *      re-save landing mid-attribution, reaches a sibling that was inactive
  *      when the remedy ran, and re-saving the wrong row does not make it read
- *      "never tested" while the broker still refuses (P0.2 review round 6).
+ *      "never tested" while the broker still refuses (P0.2 review round 6);
+ *   7. every change to the set — a Studio save, Deactivate or Activate —
+ *      leaves each row's status saying what the broker now does, whichever
+ *      status the row held before; a database fault while it does so never
+ *      undoes the audit row or the answer the builder gets; and the status
+ *      the clear leaves is read the same way by every screen, topology
+ *      included (P0.2 review round 7).
  *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
@@ -46,7 +52,20 @@ vi.mock("@/lib/db/prisma", async () => {
   const base = new PrismaClient({
     datasourceUrl: process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused",
   });
-  return { prisma: base.$extends(tenantScopeGuard()) };
+  return {
+    prisma: base.$extends(tenantScopeGuard()).$extends({
+      query: {
+        sapConnection: {
+          // A transient database fault (a pool timeout) on every list read of
+          // the table while the flag is up (round 7).
+          findMany({ args, query }) {
+            if (hooks.failConnectionReads) return Promise.reject(new Error("pool timeout"));
+            return query(args);
+          },
+        },
+      },
+    }),
+  };
 });
 
 const hooks = vi.hoisted(() => ({
@@ -59,6 +78,7 @@ const hooks = vi.hoisted(() => ({
   captureMessage: vi.fn(),
   noteConnectionProbe: vi.fn(),
   writeConfigAudit: vi.fn(),
+  failConnectionReads: false,
 }));
 
 /*
@@ -126,15 +146,17 @@ vi.mock("@/lib/coreedge/journey", async (importOriginal) => {
 });
 
 import { POST as studioTest } from "@/app/api/studio/connections/[id]/test/route";
-import { PATCH as patchConnections } from "@/app/api/studio/connections/route";
+import { PATCH as patchConnections, POST as postConnections } from "@/app/api/studio/connections/route";
 import {
   CONNECTION_NEEDS_ATTENTION,
   CONNECTION_NOT_PROBED_STATUSES,
   connectionHealthVerdict,
+  describeLastProbe,
 } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
-import { probeOneConnection, sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
+import { probeOneConnection, settleConnectionGroup, sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
 import { countedProbeEvents } from "@/lib/ops/probe-event-source";
+import { deriveConnection } from "@/lib/ops/topology";
 import { resolveSapConnectionForEnvironment, upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import { clearDataKeyCache } from "@/lib/sap-public/keys/org-data-key";
 
@@ -150,8 +172,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
   const org = `org_p02_probe_${randomUUID().slice(0, 8)}`;
   const savedEnv: Record<string, string | undefined> = {};
 
-  const save = (key: string, baseUrl: string) =>
-    upsertSapConnection({
+  /**
+   * A save as Studio's POST makes it: the write, then (after its audit row)
+   * the group's statuses brought in line with what the broker now does
+   * (round 7). `studioSave` below goes through the route itself.
+   */
+  const save = async (key: string, baseUrl: string) => {
+    const saved = await upsertSapConnection({
       organizationId: org,
       product: "s4hana",
       key,
@@ -161,6 +188,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       secrets: { username: "comm_user", password: "secret" },
       environment: key.endsWith("prod") ? "PROD" : "DEV",
     });
+    await settleConnectionGroup(org, "s4hana");
+    return saved;
+  };
+
+  /** The same save through Studio's POST route, audit row and answer included. */
+  const studioSave = (key: string, baseUrl: string) =>
+    postConnections(
+      new Request("http://localhost/api/studio/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          product: "s4hana",
+          key,
+          label: `S/4 ${key}`,
+          baseUrl,
+          authType: "basic",
+          username: "comm_user",
+          password: "secret",
+          environment: key.endsWith("prod") ? "PROD" : "DEV",
+        }),
+      }) as never,
+    );
 
   const stored = (id: string) =>
     prisma.sapConnection.findFirst({
@@ -198,11 +247,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
     hooks.captureMessage.mockReset();
     hooks.noteConnectionProbe.mockReset();
     hooks.writeConfigAudit.mockReset();
+    hooks.failConnectionReads = false;
+    // Saving a connection asks for a fresh passkey; not the subject here.
+    vi.stubEnv("COREEDGE_STEP_UP", "off");
+    // The fixtures' hosts, which Studio's POST otherwise refuses as not SAP-served.
+    vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "example.com");
     await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: org } });
     await prisma.sapConnection.deleteMany({ where: { organizationId: org } });
   });
 
   afterAll(async () => {
+    vi.unstubAllEnvs();
     await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: org } });
     await prisma.sapConnection.deleteMany({ where: { organizationId: org } });
     await prisma.organization.deleteMany({ where: { id: org } });
@@ -643,6 +698,140 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       await save("acme-dev", "https://dev.example.com");
       expect((await stored(good.id))?.lastValidationStatus).toBeNull();
       expect(await unhealthyCount()).toBe(0);
+    });
+
+    /** What the topology lens and the SAP systems screen are handed for a row. */
+    const shown = (id: string) =>
+      prisma.sapConnection.findFirstOrThrow({
+        where: { id, organizationId: org },
+        select: { environment: true, isActive: true, lastValidationStatus: true, lastValidatedAt: true },
+      });
+
+    it("the remedy's clear never has topology draw green a sibling no probe has passed in 30 days (round 7)", async () => {
+      // The clear writes "never tested" and keeps the last success time.
+      // Topology read the time alone and drew the row observed-good — a row
+      // every screen called STALE a moment before, and no probe since.
+      const { good, bad } = await brokenSibling();
+      const now = new Date();
+      await prisma.sapConnection.update({
+        where: { id: good.id, organizationId: org },
+        data: { lastValidationStatus: "OK", lastValidatedAt: new Date(now.getTime() - 30 * 24 * 3_600_000) },
+      });
+      expect(deriveConnection(await shown(good.id), now)).toMatchObject({ state: "never-observed", badge: "STALE" });
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+
+      expect((await patchConnection({ id: bad.id, isActive: false })).status).toBe(200);
+
+      const after = await shown(good.id);
+      expect(after.lastValidationStatus).toBeNull();
+      expect(after.lastValidatedAt).not.toBeNull();
+      expect(hooks.probedHosts).toEqual([]);
+      expect(connectionHealthVerdict(after, now)).toBe("neverTested");
+      expect(deriveConnection(after, now).state).toBe("never-observed");
+      // And SAP systems does not call a row with a probe history "Never checked" (A19).
+      expect(describeLastProbe(after, now).headline).not.toBe("Never checked");
+    });
+
+    it("a database fault after a toggle commits still audits it and answers for it (round 7)", async () => {
+      const { bad } = await brokenSibling();
+      await sweepConnectionProbes();
+
+      hooks.failConnectionReads = true;
+      let res: Response;
+      try {
+        res = await patchConnection({ id: bad.id, isActive: false });
+      } finally {
+        hooks.failConnectionReads = false;
+      }
+
+      // The deactivation stands, so the answer says so and the audit names who did it.
+      expect(res.status).toBe(200);
+      expect((await prisma.sapConnection.findFirstOrThrow({ where: { id: bad.id, organizationId: org } })).isActive).toBe(
+        false,
+      );
+      expect(hooks.writeConfigAudit).toHaveBeenCalledTimes(1);
+      expect(hooks.writeConfigAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityId: bad.id,
+          action: "UPDATE",
+          after: expect.objectContaining({ event: "connection_toggled", isActive: false }),
+        }),
+      );
+    });
+
+    it("a database fault after a re-save commits never tells the builder it was not saved (round 7)", async () => {
+      const { good } = await brokenSibling();
+      await sweepConnectionProbes();
+
+      hooks.failConnectionReads = true;
+      let res: Response;
+      try {
+        res = await studioSave("acme-prod", "https://prod-new.example.com");
+      } finally {
+        hooks.failConnectionReads = false;
+      }
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ data: { replaced: true } });
+      expect(await stored(good.id)).toMatchObject({ baseUrl: "https://prod-new.example.com", revision: 2 });
+      expect(hooks.writeConfigAudit).toHaveBeenCalledTimes(1);
+      expect(hooks.writeConfigAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityId: good.id,
+          after: expect.objectContaining({ event: "connection_replaced", secretsRotated: true }),
+        }),
+      );
+    });
+
+    it("re-saving a sibling that kept a refusal SAP reported, while another row will not open, reads refused (round 7)", async () => {
+      // Round 6 keeps UNAUTHORIZED rather than write GROUP_UNREADABLE over it.
+      // The operator, told to fix acme-prod's sign-in, re-saves it: the save
+      // cleared the status to "never tested" while the broker still refused
+      // every call for the product.
+      const good = await save("acme-prod", "https://prod.example.com");
+      hooks.status = "UNAUTHORIZED";
+      await sweepConnectionProbes();
+      const bad = await save("acme-dev", "https://dev.example.com");
+      await prisma.sapConnection.update({
+        where: { id: bad.id, organizationId: org },
+        data: { secretsCiphertext: "v1:not-a-sealed-bundle" },
+      });
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("UNAUTHORIZED");
+      expect(await unhealthyCount()).toBe(2);
+
+      const res = await studioSave("acme-prod", "https://prod.example.com");
+
+      expect(res.status).toBe(200);
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+      const after = await stored(good.id);
+      expect(after).toMatchObject({ revision: 2, lastValidationStatus: "GROUP_UNREADABLE" });
+      expect(connectionHealthVerdict(after!, new Date())).toBe("unreadable");
+      expect(await unhealthyCount()).toBe(2);
+    });
+
+    it("activating a row whose secret will not open marks the group as the broker now refuses it (round 7)", async () => {
+      const { good, bad } = await brokenSibling();
+      await sweepConnectionProbes();
+      expect((await patchConnection({ id: bad.id, isActive: false })).status).toBe(200);
+      await sweepConnectionProbes();
+      expect((await stored(good.id))?.lastValidationStatus).toBe("OK");
+
+      expect((await patchConnection({ id: bad.id, isActive: true })).status).toBe(200);
+
+      expect(await resolveSapConnectionForEnvironment(org, "s4hana", "PROD", "READ", null)).toEqual({
+        ok: false,
+        reason: "CONNECTION_UNREADABLE",
+      });
+      const after = await stored(good.id);
+      expect(after?.lastValidationStatus).toBe("GROUP_UNREADABLE");
+      expect(connectionHealthVerdict(after!, new Date())).toBe("unreadable");
+      expect((await stored(bad.id))?.lastValidationStatus).toBe("UNREADABLE");
+      expect(await unhealthyCount()).toBe(2);
     });
   });
 });

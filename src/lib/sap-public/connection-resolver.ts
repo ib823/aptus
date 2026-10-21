@@ -758,9 +758,11 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
    * changes nothing of that, so the status stays. Clearing it turned the row
    * neutral ("never tested"), dropped the line naming the row to fix, and took
    * it out of the unhealthy-connection count while every call was still
-   * refused. The clear below removes it, to "never tested", once the set opens
-   * — straight away when this save is what fixed the set (for instance the
-   * other row was deactivated meanwhile).
+   * refused. The caller's settle (connection-probe-sweep.ts
+   * `settleConnectionGroup`) removes it, to "never tested", once the set
+   * opens — straight away when this save is what fixed the set (for instance
+   * the other row was deactivated meanwhile) — and writes it when the set
+   * still does not open, whatever the row held before (round 7).
    */
   const before = await prisma.sapConnection.findFirst({
     where: { organizationId: input.organizationId, product: input.product, key: input.key },
@@ -815,9 +817,16 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
     await tx.sapServiceHealth.deleteMany(dropped);
     return saved;
   });
-  // A re-save is the remedy the "will not open" answer names: the siblings it
-  // was standing in the way of stop reading refused (P0.2 review round 5).
-  await clearUnreadableOnceGroupOpens(input.organizationId, input.product);
+  /*
+   * Nothing runs here after the commit (P0.2 review round 7). A re-save
+   * changes which secrets the broker must open for the product, so the
+   * group's statuses are brought in line afterwards — by the caller, after it
+   * has recorded who made the change (Studio's POST calls
+   * connection-probe-sweep.ts `settleConnectionGroup` after its audit row).
+   * Run here, a database fault in that follow-up threw out of a save that had
+   * already committed: the route told the builder "not saved" and wrote no
+   * audit row for new credentials that were live.
+   */
   return redactConnection(row);
 }
 
@@ -835,8 +844,9 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
  * systems, a MAJOR unhealthy-connection incident, and an operator told their
  * fix had not worked. The reverse of A.3.
  *
- * So the places a row can leave, join or mend the set — the re-save above and
- * Studio's Deactivate and Activate toggles — ask the broker's own question
+ * So the places a row can leave, join or mend the set — Studio's save and its
+ * Deactivate and Activate toggles, through connection-probe-sweep.ts
+ * `settleConnectionGroup` (round 7) — ask the broker's own question
  * afterwards: does the set open now (`resolveSapConnections`, the read the
  * binding path fails closed on)? When it does, no active row of it is
  * unreadable any more, and the statuses that said so are cleared to "never
@@ -844,6 +854,12 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
  * answered) and the probe history the drift alert is judged against are left
  * alone. When the set still will not open (another sibling is broken too),
  * nothing changes: the broker still refuses, and the statuses still say so.
+ *
+ * That leaves a null status beside a last success time, which nothing else
+ * writes. Every reader decides from the status (freshness.ts
+ * `connectionHealthVerdict`), so it reads "never tested" everywhere: the
+ * topology lens once read the time alone and drew such a row green, however
+ * old the success (round 7).
  *
  * "Never tested" loses nothing a probe found (P0.2 review round 6):
  * GROUP_UNREADABLE is never written over a failure SAP reported

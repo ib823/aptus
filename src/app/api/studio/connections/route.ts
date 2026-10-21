@@ -39,8 +39,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
+import { settleConnectionGroup } from "@/lib/ops/connection-probe-sweep";
 import {
-  clearUnreadableOnceGroupOpens,
   isAllowedApiKeyHeader,
   normalizeEnvironment,
   upsertSapConnection,
@@ -661,6 +661,16 @@ export async function POST(request: NextRequest) {
   });
 
   /*
+   * The save changed a secret the broker must open for the product, so the
+   * group's statuses follow what the broker now does (P0.2 review rounds
+   * 5-7; connection-probe-sweep.ts `settleConnectionGroup`): cleared when the
+   * set opens, GROUP_UNREADABLE / UNREADABLE when it still does not —
+   * whatever the saved row held before. After the audit row and best effort:
+   * the save has committed, so a fault here must not answer "not saved".
+   */
+  await settleConnectionGroup(organizationId, input.product);
+
+  /*
    * SAP-ADMIN SET-UP WAIT STARTS WHEN A CONNECTION IS FIRST SAVED (P2.12),
    * and ends at its first successful probe. A re-save is credential rotation,
    * not set-up, so only a new connection is a milestone.
@@ -778,17 +788,6 @@ export async function PATCH(request: NextRequest) {
     throw error;
   }
 
-  // Deactivating is the other remedy a "will not open" answer names: once the
-  // product's set opens without this row, its siblings stop reading refused
-  // (P0.2 review round 5; connection-resolver.ts clearUnreadableOnceGroupOpens).
-  // Activating asks the same question (round 6): a row that was inactive while
-  // the fix was made kept its GROUP_UNREADABLE, and brought it back on
-  // reactivation while the broker served. A row that will not open itself
-  // keeps the set refused, so its activation clears nothing.
-  if (existing.isActive !== updated.isActive) {
-    await clearUnreadableOnceGroupOpens(organizationId, existing.product);
-  }
-
   await writeConfigAudit({
     organizationId,
     actorId: userId,
@@ -801,6 +800,20 @@ export async function PATCH(request: NextRequest) {
       writeEnabled: updated.writeEnabled,
     },
   });
+
+  /*
+   * The product's set changed, so its statuses follow what the broker now
+   * does (P0.2 review rounds 5-7; connection-probe-sweep.ts
+   * `settleConnectionGroup`). Deactivating the row that will not open is a
+   * remedy the "will not open" answer names: its siblings stop reading
+   * refused. Activating one that will not open makes the set refused: it and
+   * its siblings say so at once, not after the next nightly sweep. After the
+   * audit row and best effort: the toggle has committed, and a fault here
+   * must not hide who made it or answer 500 for it.
+   */
+  if (existing.isActive !== updated.isActive) {
+    await settleConnectionGroup(organizationId, existing.product);
+  }
 
   return studioOk({ connection: updated });
 }

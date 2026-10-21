@@ -330,6 +330,62 @@ async function clearIfFixedMeanwhile(organizationId: string, product: string): P
   return (await clearUnreadableOnceGroupOpens(organizationId, product)) > 0;
 }
 
+/**
+ * A ROW LEFT, JOINED OR CHANGED THE SET: ITS STATUSES FOLLOW THE BROKER (P0.2
+ * review round 7).
+ *
+ * Studio's save and its Deactivate / Activate toggles are the places a person
+ * changes which secrets the broker must open for a product. Rounds 5 and 6
+ * answered only one direction — the set opens again, so its "will not open"
+ * statuses are cleared — and missed the other two:
+ *
+ *   - Activate on a row whose secret will not open makes the set unopenable:
+ *     the broker and the lane board refused every call while the healthy
+ *     siblings read OK, healthy, until the next nightly sweep;
+ *   - a re-save writes "never tested" on the saved row, and kept
+ *     GROUP_UNREADABLE only when the row held exactly that. A sibling that
+ *     held UNAUTHORIZED (round 6 never writes GROUP_UNREADABLE over it) read
+ *     "never tested" after its re-save while the broker still refused.
+ *
+ * So after such a change the broker's own question is asked once
+ * (`resolveSapConnections`, the read the binding path fails closed on): when
+ * the set opens, the marks are cleared (`clearUnreadableOnceGroupOpens`); when
+ * it does not, the group is attributed exactly as the sweep attributes it
+ * (`recordUnreadableGroup`): UNREADABLE on the row that will not open,
+ * GROUP_UNREADABLE on each sibling that does, never over a failure SAP
+ * reported. One writer, so the screens cannot disagree with the broker by
+ * which door the change came through.
+ *
+ * BEST EFFORT, AFTER THE CHANGE HAS COMMITTED. The caller's change is already
+ * in the table, and its audit row and its answer must say so: a database
+ * fault here (a pool timeout) once made a committed deactivation answer 500
+ * with no audit row, and a committed re-save answer "was not saved". So this
+ * never throws; a failure is logged and the next probe, or the next change,
+ * puts the statuses right.
+ */
+export async function settleConnectionGroup(organizationId: string, product: string): Promise<void> {
+  try {
+    let opens = true;
+    try {
+      await resolveSapConnections(organizationId, product);
+    } catch {
+      opens = false;
+    }
+    if (opens) {
+      await clearUnreadableOnceGroupOpens(organizationId, product);
+      return;
+    }
+    const rows = await prisma.sapConnection.findMany({
+      where: { organizationId, product, isActive: true },
+      select: { id: true, key: true, label: true, lastValidationStatus: true, revision: true },
+      orderBy: { createdAt: "asc" },
+    });
+    await recordUnreadableGroup(organizationId, product, rows);
+  } catch (err) {
+    console.error("[probe-sweep] settling a connection group's statuses failed", { organizationId, product, err });
+  }
+}
+
 interface GroupRow {
   id: string;
   key: string;

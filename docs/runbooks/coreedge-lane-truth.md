@@ -124,13 +124,26 @@ already holds a failure SAP reported (`UNAUTHORIZED`, `NOT_FOUND`, `TIMEOUT`,
 the incident, and that failure is still true whatever the other row does.
 The fix is to re-save or deactivate the row marked `UNREADABLE`; re-saving a
 `GROUP_UNREADABLE` row changes nothing (it keeps `GROUP_UNREADABLE`, because
-the broker still refuses). Once the fix is made (the re-save, or Studio's
-Deactivate), and whenever a row is activated again, the product's active rows
-are opened again as the broker opens them; when they all open, their
-`UNREADABLE` / `GROUP_UNREADABLE` statuses are cleared at once to "never
-tested" (not OK: no probe has run; `lastValidatedAt` and the probe history
-are kept), so the siblings stop reading refused and leave the
-unhealthy-connections incident without waiting for the next nightly probe.
+the broker still refuses). After every Studio save, Deactivate and Activate
+the product's active rows are opened again as the broker opens them
+(`settleConnectionGroup` in `src/lib/ops/connection-probe-sweep.ts`). When
+they all open, their `UNREADABLE` / `GROUP_UNREADABLE` statuses are cleared
+at once to "never tested" (not OK: no probe has run; `lastValidatedAt` and
+the probe history are kept), so the siblings stop reading refused and leave
+the unhealthy-connections incident without waiting for the next nightly
+probe. Every screen reads such a row as "never tested", the topology lens
+included (it draws it "not observed", never green, however recent the kept
+success time); SAP systems shows "Awaiting a probe" with the last success
+under it. When they do not all open, the group is marked exactly as the
+probe sweep marks it, at once: activating a row whose secret will not open
+marks it `UNREADABLE` and its siblings `GROUP_UNREADABLE`, and a re-saved
+row reads `GROUP_UNREADABLE` while another row still will not open, whatever
+it held before (an `UNAUTHORIZED` row re-saved does not turn "never
+tested" while the broker still refuses). This runs after the change's audit
+row is written and never fails the request: if the database errors at that
+point, the save or toggle still stands, is audited and answered as made, the
+error is logged (`[probe-sweep] settling a connection group's statuses
+failed`), and the next probe puts the statuses right.
 The probe sweep, "Probe now" and "Test connectivity" run the same check right
 after they record either status, so a fix that lands while they are working
 does not leave a sibling marked. If another row still will not open, they
@@ -202,8 +215,9 @@ governance property test pins every answer), now through the shared functions.
   of status.
 - **Re-saving a connection** clears its lanes' checks, its service health and
   its probe status; they read Unknown, unproven and "never tested" until the
-  next check and probe. A `GROUP_UNREADABLE` status is the exception: it is
-  about another row, so it stays until that row is fixed. If the first probe after a re-save fails, and the
+  next check and probe. While another row of the product still will not
+  open, the re-saved row reads `GROUP_UNREADABLE` instead: it is about
+  another row, so it stays until that row is fixed. If the first probe after a re-save fails, and the
   connection's last probe before it was OK, the admins get the
   healthy-to-failing drift email, as they did before P0.2. "Probe now" right
   after a save is how to see the new settings' health at once.
