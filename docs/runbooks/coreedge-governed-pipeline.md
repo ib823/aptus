@@ -14,8 +14,8 @@ and the Workbench preview now lives once, in `src/lib/governed/pipeline.ts`:
 | `authenticate` | The bearer key, and on a write the write key; the signed-in person on a console read | `UNAUTHENTICATED` (401), `WRITE_CREDENTIAL_INVALID` (403) |
 | `rateLimit` | The credential's own bucket | `RATE_LIMITED` (429), `LIMITER_UNAVAILABLE` (503) |
 | `resolveInterface` | The interface the call names, the write's Idempotency-Key and body, the dataset | `INTERFACE_NOT_FOUND`, `NOT_THIS_SOLUTION` (404); `IDEMPOTENCY_KEY_INVALID`, `BODY_INVALID`, `NO_ENTITY_SET`, `SERVICE_PATH_INVALID`, `SERVICE_UNRESOLVED`, `ENTITY_NOT_YOURS_TO_CHOOSE`, `CUSTOM_SERVICE_UNVERIFIED` (400); `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_FLIGHT` (409) |
-| `authorise` | The grant binding (`access.ts`, `grant-binding.ts`), or the console's ceiling | grant reasons (403), `OPERATION_NOT_SUPPORTED` (400), `SANDBOX_ONLY`, `UNDECLARED_ENVIRONMENT` (403) |
-| `bindConnection` | The customer's own connection for the credential's environment and SAP client, and its transport | every binding reason (403), `WRITES_DISABLED` (403), `TRANSPORT_UNAVAILABLE` (503) |
+| `authorise` | The grant binding: P0.2's `authorisesHere` (`authorisation.ts`, through `access.ts`), the predicate the lane board asks; or the console's ceiling | grant reasons (403), `OPERATION_NOT_SUPPORTED` (400), `SANDBOX_ONLY`, `UNDECLARED_ENVIRONMENT` (403) |
+| `bindConnection` | The customer's own connection for the credential's environment and SAP client (P0.2's `bindingFor`, on prefetched or freshly read rows), and its transport | every binding reason (403), `WRITES_DISABLED` (403), `TRANSPORT_UNAVAILABLE` (503) |
 | `contain` | The circuit breaker for that SAP system | `CIRCUIT_OPEN` (503, only when enforced) |
 | `callSap` | The read or write, through the connection's transport | none: SAP's answer is reported as it was |
 | `audit` | One `NorthboundAuditEvent` per call that passed authentication | none |
