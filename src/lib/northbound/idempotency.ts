@@ -102,78 +102,13 @@ export async function reserveIdempotencyKey(
   // reservation that could already represent a committed SAP write.
   const requestHash = hashRequest({ version: 2, destination: input.destination, payload: input.payload });
 
-  const existing = await prisma.northboundIdempotencyKey.findUnique({
-    where: {
-      organizationId_solutionId_key: {
-        organizationId,
-        solutionId: input.solutionId,
-        key: input.key,
-      },
-    },
-    select: { id: true, interfaceId: true, requestHash: true, status: true, responseBody: true, expiresAt: true },
-  });
-
-  if (existing) {
-    // An expired record is not a retry of anything — the client has come back
-    // long after any reasonable retry window, so treat the key as fresh.
-    if (existing.expiresAt.getTime() <= now.getTime()) {
-      const recordId = randomUUID();
-      const renewed = await prisma.northboundIdempotencyKey.updateMany({
-        // organizationId alongside the id: the model is tenant-anchored and the
-        // scope guard requires every mutation's where to carry the tenant.
-        where: { id: existing.id, organizationId, expiresAt: existing.expiresAt },
-        data: {
-          // A new ownership token also fences off a late completion/release
-          // from the old reservation. Only one conditional update can win.
-          id: recordId,
-          requestHash,
-          // The interface too — the reset re-opens the key for THIS request,
-          // and leaving the old interfaceId stranded the row's attribution on
-          // whatever interface used the key last time.
-          interfaceId: input.interfaceId,
-          status: null,
-          // Prisma.DbNull, not `undefined` — `undefined` means "leave the column
-          // alone", which would strand the OLD response on a key we have just
-          // reopened, and a later retry would replay a result from a different
-          // request entirely.
-          responseBody: Prisma.DbNull,
-          createdAt: now,
-          expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
-        },
-      });
-      return renewed.count === 1
-        ? { outcome: "proceed", recordId }
-        : { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
-
-    /*
-     * THE INTERFACE IS PART OF THE IDENTITY. The key is unique per
-     * (organization, solution, key) and this comparison used to check only the
-     * payload hash — so an IDENTICAL {entity, record} posted with one key to
-     * interface A and then to interface B replayed A's stored response and
-     * NEVER WROTE B. Same bytes, different destination, silently swallowed:
-     * exactly the "second write disappears without a trace" failure the
-     * PAYLOAD_MISMATCH arm below exists to prevent, arriving through the field
-     * the comparison forgot. A different interface is a different request,
-     * whatever the payload says.
-     */
-    if (existing.interfaceId !== input.interfaceId) {
-      return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
-    }
-
-    if (existing.requestHash !== requestHash) {
-      // Replaying the stored response here would make the caller's SECOND,
-      // different write disappear without a trace.
-      return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
-    }
-
-    if (existing.status === null) {
-      return { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
-
-    return { outcome: "replay", status: existing.status, body: existing.responseBody };
-  }
-
+  /*
+   * CLAIM FIRST, LOOK SECOND (P0.19). A fresh key — every first attempt of a
+   * write — is one INSERT, where it was a lookup and then the INSERT. Only when
+   * the unique constraint refuses it is the existing row read, and judged
+   * exactly as before. The constraint was always the guarantee: two
+   * concurrent requests carrying one key still cannot both insert.
+   */
   try {
     const created = await prisma.northboundIdempotencyKey.create({
       data: {
@@ -188,13 +123,82 @@ export async function reserveIdempotencyKey(
     });
     return { outcome: "proceed", recordId: created.id };
   } catch (err) {
-    // Lost the race against a concurrent request carrying the same key. The
-    // unique constraint is the real guarantee; this is where it pays off.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
-    throw err;
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
   }
+
+  const existing = await prisma.northboundIdempotencyKey.findUnique({
+    where: {
+      organizationId_solutionId_key: {
+        organizationId,
+        solutionId: input.solutionId,
+        key: input.key,
+      },
+    },
+    select: { id: true, interfaceId: true, requestHash: true, status: true, responseBody: true, expiresAt: true },
+  });
+
+  // Gone between the refused insert and this read: released or renewed by
+  // the attempt that holds it. Still in flight, as a lost insert race was.
+  if (!existing) return { outcome: "conflict", reason: "IN_FLIGHT" };
+
+  // An expired record is not a retry of anything — the client has come back
+  // long after any reasonable retry window, so treat the key as fresh.
+  if (existing.expiresAt.getTime() <= now.getTime()) {
+    const recordId = randomUUID();
+    const renewed = await prisma.northboundIdempotencyKey.updateMany({
+      // organizationId alongside the id: the model is tenant-anchored and the
+      // scope guard requires every mutation's where to carry the tenant.
+      where: { id: existing.id, organizationId, expiresAt: existing.expiresAt },
+      data: {
+        // A new ownership token also fences off a late completion/release
+        // from the old reservation. Only one conditional update can win.
+        id: recordId,
+        requestHash,
+        // The interface too — the reset re-opens the key for THIS request,
+        // and leaving the old interfaceId stranded the row's attribution on
+        // whatever interface used the key last time.
+        interfaceId: input.interfaceId,
+        status: null,
+        // Prisma.DbNull, not `undefined` — `undefined` means "leave the column
+        // alone", which would strand the OLD response on a key we have just
+        // reopened, and a later retry would replay a result from a different
+        // request entirely.
+        responseBody: Prisma.DbNull,
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
+      },
+    });
+    return renewed.count === 1
+      ? { outcome: "proceed", recordId }
+      : { outcome: "conflict", reason: "IN_FLIGHT" };
+  }
+
+  /*
+   * THE INTERFACE IS PART OF THE IDENTITY. The key is unique per
+   * (organization, solution, key) and this comparison used to check only the
+   * payload hash — so an IDENTICAL {entity, record} posted with one key to
+   * interface A and then to interface B replayed A's stored response and
+   * NEVER WROTE B. Same bytes, different destination, silently swallowed:
+   * exactly the "second write disappears without a trace" failure the
+   * PAYLOAD_MISMATCH arm below exists to prevent, arriving through the field
+   * the comparison forgot. A different interface is a different request,
+   * whatever the payload says.
+   */
+  if (existing.interfaceId !== input.interfaceId) {
+    return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
+  }
+
+  if (existing.requestHash !== requestHash) {
+    // Replaying the stored response here would make the caller's SECOND,
+    // different write disappear without a trace.
+    return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
+  }
+
+  if (existing.status === null) {
+    return { outcome: "conflict", reason: "IN_FLIGHT" };
+  }
+
+  return { outcome: "replay", status: existing.status, body: existing.responseBody };
 }
 
 /**

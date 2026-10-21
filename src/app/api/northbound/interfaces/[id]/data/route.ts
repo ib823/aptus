@@ -33,6 +33,7 @@
 import type { NextRequest } from "next/server";
 
 import { noteFirstCall } from "@/lib/coreedge/journey";
+import { afterResponse } from "@/lib/governed/after-response";
 import {
   authenticate,
   authorise,
@@ -41,6 +42,7 @@ import {
   contain,
   GovernedAudit,
   northboundRefusalResponse,
+  prefetchedConnectionsFor,
   rateLimit,
   resolveReadTarget,
   type Refusal,
@@ -95,7 +97,14 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // picking by creation order is how a sandbox credential reached production.
   // The binding refusal's reason goes on the row, so the incident engine can
   // tell it apart from a grant-gate 403.
-  const bound = await bindConnection(client.organizationId, iface.sapProduct, client.environment, "READ", client.sapClient);
+  const bound = await bindConnection(
+    client.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "READ",
+    client.sapClient,
+    prefetchedConnectionsFor(iface),
+  );
   if (!bound.ok) return refuse(bound.refusal);
   const { connection } = bound.value;
 
@@ -157,15 +166,17 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     failureReason: result.failureReason,
   });
   // The app's first successful call in this environment (P2.12). A set
-  // lookup in memory on every call after this instance's first: no database
-  // round trip is added to the broker's hot path.
-  await noteFirstCall({
-    organizationId: client.organizationId,
-    solutionId: client.solutionId,
-    environment: connection.environment ?? client.environment,
-    channel: "broker",
-    status,
-  });
+  // lookup in memory on every call after this instance's first; the one
+  // insert it makes runs after the response is sent (P0.19).
+  await afterResponse(() =>
+    noteFirstCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      environment: connection.environment ?? client.environment,
+      channel: "broker",
+      status,
+    }),
+  );
 
   // The one place the cause and the correlation id meet. The client keeps the
   // generic sentence; whoever is quoted that id can now find out what happened.

@@ -385,6 +385,14 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     code: { file: "src/lib/coreedge/correlation-lookup.ts", exports: ["lookupCorrelationId"] },
     terms: [/\bcorrelation[- ]id (?:search|lookup)\b/i],
   },
+  {
+    id: "db-budget",
+    name: "A database budget per governed call, asserted in CI",
+    roadmap: "P0.19",
+    cells: [READ, CREATE],
+    code: { file: "src/lib/governed/db-budget.ts", exports: ["DB_BUDGET"] },
+    terms: [/\bdatabase budget\b/i, /\bDB_BUDGET\b/, /\bcoreedge:load-test\b/],
+  },
 ];
 
 /* ── status, from the registry ────────────────────────────────────────── */

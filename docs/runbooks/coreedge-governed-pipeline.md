@@ -36,7 +36,15 @@ refusal it can reach and checks the table.
 **No transaction is held open across a call to SAP.** No step opens one; the
 write's idempotency key is reserved and completed in separate statements around
 the call. A static test (`tests/unit/governed/pipeline.test.ts`) fails if
-`$transaction` appears in the pipeline or a ported route.
+`$transaction` appears in the pipeline or a ported route, and since P0.19
+`tests/integration/governed-db-budget.test.ts` checks PostgreSQL itself at
+every SAP call.
+
+**A database budget per call (P0.19).** A read sends at most 4 statements
+(today 3) and a write 5: `authenticate` reads the key in one statement and
+`authorise` reads the interface, its grants and the connections
+`bindConnection` binds from in another (`src/lib/governed/call-loads.ts`).
+See [`coreedge-db-budget.md`](coreedge-db-budget.md).
 
 **A transport per connection.** `SapConnection.transport` (migration
 `20261025020000_sap_connection_transport`, backout beside it) is `DIRECT` or

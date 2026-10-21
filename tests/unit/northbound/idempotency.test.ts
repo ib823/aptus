@@ -18,17 +18,35 @@ const mocks = vi.hoisted(() => ({
   del: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    northboundIdempotencyKey: {
-      findUnique: mocks.findUnique,
-      create: mocks.create,
-      update: mocks.update,
-      updateMany: mocks.updateMany,
-      delete: mocks.del,
+vi.mock("@/lib/db/prisma", async () => {
+  const { Prisma: P } = await import("@prisma/client");
+  return {
+    prisma: {
+      northboundIdempotencyKey: {
+        findUnique: mocks.findUnique,
+        // The table's unique constraint: since P0.19 the key is claimed with an
+        // INSERT first, and a key that is already there refuses it, so
+        // `mocks.create` sees only inserts the table would accept.
+        create: async (args: { data: Record<string, unknown> }) => {
+          const where = {
+            organizationId_solutionId_key: {
+              organizationId: args.data.organizationId,
+              solutionId: args.data.solutionId,
+              key: args.data.key,
+            },
+          };
+          if (await mocks.findUnique({ where })) {
+            throw new P.PrismaClientKnownRequestError("unique constraint violation", { code: "P2002", clientVersion: "6.19.2" });
+          }
+          return mocks.create(args);
+        },
+        update: mocks.update,
+        updateMany: mocks.updateMany,
+        delete: mocks.del,
+      },
     },
-  },
-}));
+  };
+});
 
 import {
   completeIdempotencyKey,

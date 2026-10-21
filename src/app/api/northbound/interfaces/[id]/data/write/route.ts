@@ -26,6 +26,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { noteFirstCall } from "@/lib/coreedge/journey";
+import { afterResponse } from "@/lib/governed/after-response";
 import {
   authenticate,
   authenticateWriteKey,
@@ -35,6 +36,7 @@ import {
   contain,
   GovernedAudit,
   northboundRefusalResponse,
+  prefetchedConnectionsFor,
   rateLimit,
   refusal,
   requireWritesEnabled,
@@ -83,7 +85,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const correlationId = newCorrelationId();
 
   // 1 — authenticate the read identity.
-  const auth = await authenticate(request.headers, correlationId, "northbound-write");
+  // The write key's row fields come back in the same statement (P0.19).
+  const auth = await authenticate(request.headers, correlationId, "northbound-write", { withWriteKey: true });
   if (!auth.ok) return northboundRefusalResponse(auth.refusal, correlationId);
   const client = auth.value;
 
@@ -179,7 +182,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // connections the organization has. `writeEnabled` is not a substitute — it is
   // a per-connection yes/no that says nothing about WHICH landscape it enables
   // writes on, so it cannot stand in for knowing you are not in production.
-  const bound = await bindConnection(client.organizationId, iface.sapProduct, client.environment, "WRITE", client.sapClient);
+  const bound = await bindConnection(
+    client.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "WRITE",
+    client.sapClient,
+    prefetchedConnectionsFor(iface),
+  );
   if (!bound.ok) return refuse(bound.refusal);
   const { connection, product } = bound.value;
 
@@ -389,14 +399,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     await sap.reportOutcome();
   }
   // The app's first successful call in this environment (P2.12); in memory
-  // after this instance's first, as on the read route.
-  await noteFirstCall({
-    organizationId: client.organizationId,
-    solutionId: client.solutionId,
-    environment: connection.environment ?? client.environment,
-    channel: "broker",
-    status,
-  });
+  // after this instance's first, and after the response, as on the read route.
+  await afterResponse(() =>
+    noteFirstCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      environment: connection.environment ?? client.environment,
+      channel: "broker",
+      status,
+    }),
+  );
   // Same as the read route: the cause meets the correlation id here and only here.
   if (result.failureReason) {
     console.warn("[northbound] upstream write failed", {

@@ -15,13 +15,17 @@ const mocks = vi.hoisted(() => ({
   findRetired: vi.fn(),
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+// The credential lookup is one statement since P0.19; it is answered here
+// through the queries it replaced (tests/helpers/governed-loads.ts).
+vi.mock("@/lib/db/prisma", async () => {
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
     solutionClient: { findUnique: mocks.findUnique, update: mocks.update },
     retiredClientToken: { findUnique: mocks.findRetired },
     solution: { findFirst: mocks.findSolution },
-  },
-}));
+  };
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
+});
 
 import {
   authenticateClientToken,
@@ -97,8 +101,9 @@ describe("the owning solution", () => {
     mocks.findUnique.mockResolvedValue({ ...LIVE_ROW, revokedAt: PAST });
     mocks.findSolution.mockResolvedValue({ status: "RETIRED" });
     const r = await authenticateClientToken("ce_x", NOW);
+    // The solution's status is read in the same statement (P0.19); what
+    // matters is that the token's own state is judged first.
     expect(r).toEqual({ ok: false, reason: "REVOKED" });
-    expect(mocks.findSolution).not.toHaveBeenCalled();
   });
 });
 
@@ -234,6 +239,28 @@ describe("lastUsedAt", () => {
     expect(mocks.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "client_1", organizationId: "org_a" } }),
     );
+  });
+
+  // P0.19: it was a write on every call. Authentication reads the stamp with
+  // the key, and a stamp under a minute old is left alone.
+  it("writes at most once a minute per key", async () => {
+    await touchClientLastUsed("client_1", "org_a", new Date(NOW.getTime() - 59_000), NOW);
+    expect(mocks.update).not.toHaveBeenCalled();
+    await touchClientLastUsed("client_1", "org_a", new Date(NOW.getTime() - 60_000), NOW);
+    await touchClientLastUsed("client_1", "org_a", null, NOW);
+    expect(mocks.update).toHaveBeenCalledTimes(2);
+    expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: { lastUsedAt: NOW } }));
+  });
+
+  it("hands the stamp it read to the caller, so the throttle needs no second read", async () => {
+    mocks.findUnique.mockResolvedValue({ ...LIVE_ROW, lastUsedAt: PAST });
+    const r = await authenticateClientToken("ce_x", NOW);
+    expect(r.ok && r.lastUsedAt).toEqual(PAST);
+    // The sealed write key only when asked for.
+    expect(r.ok && r.writeKey).toBeUndefined();
+    mocks.findUnique.mockResolvedValue({ ...LIVE_ROW, secretsCiphertext: "sealed" });
+    const w = await authenticateClientToken("ce_x", NOW, { withWriteKey: true });
+    expect(w.ok && w.writeKey).toEqual({ secretsCiphertext: "sealed", isActive: true, revokedAt: null, expiresAt: null });
   });
 
   it("never throws — a bookkeeping failure must not fail a read", async () => {

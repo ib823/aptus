@@ -163,7 +163,26 @@ export async function resolveSapConnections(
   return Promise.all(rows.map(openConnectionRow));
 }
 
-type SapConnectionRow = Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number];
+/**
+ * The stored columns a connection is opened from: a Prisma row, or the same
+ * columns read by the governed access load (governed/call-loads.ts, P0.19).
+ */
+type SapConnectionRow = Pick<
+  Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number],
+  | "id"
+  | "organizationId"
+  | "product"
+  | "key"
+  | "label"
+  | "baseUrl"
+  | "authType"
+  | "oauthTokenUrl"
+  | "secretsCiphertext"
+  | "client"
+  | "writeEnabled"
+  | "apiPath"
+  | "timeoutMs"
+> & { readonly environment: string | null; readonly transport: string };
 
 /**
  * One stored row, decrypted and normalized. Rejects when the row cannot be opened.
@@ -194,9 +213,10 @@ async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnec
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
     timeoutMs: r.timeoutMs,
-    environment: r.environment,
+    // The column's own enums: Prisma types them, the access load reads them as text.
+    environment: r.environment as SapEnvironment | null,
     client: r.client,
-    transport: r.transport,
+    transport: r.transport as "DIRECT" | "TWIN",
   };
 }
 
@@ -498,6 +518,27 @@ export async function resolveSapConnectionForEnvironment(
   let all: ResolvedSapConnection[];
   try {
     all = await resolveSapConnections(organizationId, product);
+  } catch {
+    return { ok: false, reason: "CONNECTION_UNREADABLE" };
+  }
+  return selectConnectionForEnvironment(all, environment, operation, sapClient);
+}
+
+/**
+ * `resolveSapConnectionForEnvironment` on rows already read: the active
+ * connections of one organisation for one product, oldest first, as the
+ * governed access load reads them in the interface's statement (P0.19). The
+ * same opening, the same fail-closed CONNECTION_UNREADABLE, the same choice.
+ */
+export async function bindStoredConnections(
+  rows: readonly SapConnectionRow[],
+  environment: string,
+  operation: "READ" | "WRITE",
+  sapClient?: string | null,
+): Promise<ConnectionBinding> {
+  let all: ResolvedSapConnection[];
+  try {
+    all = await Promise.all(rows.map(openConnectionRow));
   } catch {
     return { ok: false, reason: "CONNECTION_UNREADABLE" };
   }

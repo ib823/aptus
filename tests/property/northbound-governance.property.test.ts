@@ -93,10 +93,17 @@ function matches(row: Row, where: Row | undefined): boolean {
   });
 }
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
   const w = () => h.world;
-  return {
-    prisma: {
+  /*
+   * The credential lookup and the access load are one SQL statement each
+   * since P0.19 (src/lib/governed/call-loads.ts). They are answered through
+   * the queries they replaced, evaluated by this fake as before
+   * (tests/helpers/governed-loads.ts); governed-call-loads.test.ts proves the
+   * SQL returns the same rows on PostgreSQL, another organisation's included.
+   */
+  const { governedQueryRaw } = await import("../helpers/governed-loads");
+  const models = {
       solutionClient: {
         findUnique: async ({ where }: { where: Row }) => w().clients.find((c) => matches(c, where)) ?? null,
         update: async () => ({}),
@@ -114,8 +121,8 @@ vi.mock("@/lib/db/prisma", () => {
         updateMany: async () => ({ count: 0 }),
       },
       sapConnection: { findMany: async ({ where }: { where: Row }) => w().connections.filter((c) => matches(c, where)) },
-    },
   };
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
 });
 
 vi.mock("@/lib/sap-public/secret-envelope", () => ({
@@ -195,6 +202,13 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
     resolveSapConnectionForEnvironment: async (...args: Parameters<typeof real.resolveSapConnectionForEnvironment>) => {
       h.observed.bindingCalled = true;
       const result = await real.resolveSapConnectionForEnvironment(...args);
+      if (!result.ok) h.observed.bindingReason = result.reason;
+      return result;
+    },
+    // The same binding on the rows the access load read with the interface (P0.19).
+    bindStoredConnections: async (...args: Parameters<typeof real.bindStoredConnections>) => {
+      h.observed.bindingCalled = true;
+      const result = await real.bindStoredConnections(...args);
       if (!result.ok) h.observed.bindingReason = result.reason;
       return result;
     },

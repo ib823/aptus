@@ -153,6 +153,12 @@ function whereHasOrganization(args: unknown): boolean {
  * review) is the third lookup of the same kind, by its `@id` hash, on a miss
  * of both: it finds only the record of the key presented, and that record
  * only ever refuses.
+ *
+ * Since P0.19 the governed call makes these three lookups as ONE raw
+ * statement (lib/governed/call-loads.ts lookupCredential), which this guard
+ * does not see. Its predicates are exactly these three equalities, pinned by
+ * tests/unit/governed/call-loads-sql.test.ts; these entries still sanction
+ * the Prisma form, for any other caller.
  */
 const UNSCOPED_BY_DESIGN: readonly {
   readonly model: string;

@@ -51,8 +51,20 @@
 
 import type { NextResponse } from "next/server";
 
-import { resolveReadableInterface, resolveWritableInterface, type AccessibleInterface, type AccessRefusal } from "@/lib/northbound/access";
-import { authenticateClientToken, extractBearer, touchClientLastUsed, type AuthenticatedClient } from "@/lib/northbound/auth";
+import {
+  resolveReadableInterface,
+  resolveWritableInterface,
+  type AccessibleInterface,
+  type AccessRefusal,
+  type PrefetchedConnections,
+} from "@/lib/northbound/access";
+import {
+  authenticateClientToken,
+  extractBearer,
+  touchClientLastUsed,
+  type AuthenticatedClient,
+  type PrefetchedWriteKey,
+} from "@/lib/northbound/auth";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall, type NorthboundAuditInput } from "@/lib/northbound/audit";
 import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
@@ -64,6 +76,7 @@ import { verifyWriteCredential } from "@/lib/northbound/write-credential";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE, retryAfterSeconds } from "@/lib/security/rate-limit-response";
 import {
+  bindStoredConnections,
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
   type ConnectionBindingFailure,
@@ -79,6 +92,7 @@ import {
   FAILURE_REASON_CIRCUIT_OPEN,
   governedCircuitBreaker,
 } from "./containment";
+import { afterResponse } from "./after-response";
 import { transportFor, type Transport } from "./transport";
 
 /* ── the steps and the refusal table ──────────────────────────────────── */
@@ -334,21 +348,41 @@ export async function authenticate(
   headers: Headers,
   correlationId: string,
   logTag: string,
+  options: { readonly withWriteKey?: boolean } = {},
 ): Promise<StepResult<AuthenticatedClient>> {
   const bearer = extractBearer(headers.get("authorization"));
-  const auth = await authenticateClientToken(bearer);
+  const auth = options.withWriteKey === true
+    ? await authenticateClientToken(bearer, new Date(), { withWriteKey: true })
+    : await authenticateClientToken(bearer);
   if (!auth.ok) {
     console.warn(`[${logTag}] auth rejected`, { reason: auth.reason, correlationId });
     await noteFailedCredential(headers, bearer, auth.reason);
     return refused(refusal("authenticate", "UNAUTHENTICATED", "Missing or invalid client token."));
   }
-  void touchClientLastUsed(auth.client.clientId, auth.client.organizationId);
+  // At most once a minute per key (auth.ts LAST_USED_STAMP_INTERVAL_MS), and
+  // after the response is sent (P0.19). Never awaited: it decides nothing.
+  const { clientId, organizationId } = auth.client;
+  void afterResponse(() => touchClientLastUsed(clientId, organizationId, auth.lastUsedAt));
+  if (auth.writeKey) prefetchedWriteKeys.set(auth.client, auth.writeKey);
   return passed(auth.client);
 }
 
+/**
+ * The write-key fields authentication read with the key (P0.19), held beside
+ * the client object rather than on it, so nothing that logs or spreads the
+ * client carries the sealed value. Weak: gone with the request.
+ */
+const prefetchedWriteKeys = new WeakMap<AuthenticatedClient, PrefetchedWriteKey>();
+
 /** The write key: a second secret, verified against THIS credential's row. */
 export async function authenticateWriteKey(client: AuthenticatedClient, writeSecret: string | null): Promise<StepResult<void>> {
-  const ok = await verifyWriteCredential(client.scope, client.clientId, writeSecret);
+  const prefetched = prefetchedWriteKeys.get(client);
+  const ok = prefetched
+    ? await verifyWriteCredential(client.scope, client.clientId, writeSecret, new Date(), {
+        solutionId: client.solutionId,
+        ...prefetched,
+      })
+    : await verifyWriteCredential(client.scope, client.clientId, writeSecret);
   return ok
     ? passed(undefined)
     : refused(refusal("authenticate", "WRITE_CREDENTIAL_INVALID", "A valid write credential is required for this operation."));
@@ -396,14 +430,29 @@ export async function authorise(
   environment: string,
   now?: Date,
 ): Promise<StepResult<AccessibleInterface>> {
+  // The connections that may serve the call come back in the interface's
+  // statement (P0.19), for bindConnection.
+  const options = { withConnections: true } as const;
   const access =
     operation === "READ"
-      ? await (now === undefined
-          ? resolveReadableInterface(scope, solutionId, interfaceId, environment)
-          : resolveReadableInterface(scope, solutionId, interfaceId, environment, now))
-      : await resolveWritableInterface(scope, solutionId, interfaceId, environment);
-  if (access.ok) return passed(access.iface);
-  return refused(refusal(accessStep(access.reason), access.reason, access.message));
+      ? await resolveReadableInterface(scope, solutionId, interfaceId, environment, now ?? new Date(), options)
+      : await resolveWritableInterface(scope, solutionId, interfaceId, environment, new Date(), options);
+  if (!access.ok) return refused(refusal(accessStep(access.reason), access.reason, access.message));
+  if (access.connections) prefetched.set(access.iface, { organizationId: scope.organizationId, ...access.connections });
+  return passed(access.iface);
+}
+
+/**
+ * The connections authorise read with the interface, held beside it (not on
+ * it: the rows carry sealed secrets) until bindConnection takes them.
+ */
+const prefetched = new WeakMap<AccessibleInterface, PrefetchedConnections & { readonly organizationId: string }>();
+
+/** What authorise read for bindConnection, for the interface it returned; undefined otherwise. */
+export function prefetchedConnectionsFor(
+  iface: AccessibleInterface,
+): (PrefetchedConnections & { readonly organizationId: string }) | undefined {
+  return prefetched.get(iface);
 }
 
 /* ── bindConnection ───────────────────────────────────────────────────── */
@@ -431,11 +480,20 @@ export async function bindConnection(
   environment: string,
   operation: "READ" | "WRITE",
   sapClient: string | null,
+  /**
+   * The rows authorise already read (prefetchedConnectionsFor, P0.19). Used
+   * only when they are this organisation's rows for this product; otherwise,
+   * or without them, the connections are read here as before.
+   */
+  rows?: PrefetchedConnections & { readonly organizationId: string },
 ): Promise<StepResult<Bound>> {
   const product = getSapProduct(sapProduct);
-  const binding = product
-    ? await resolveSapConnectionForEnvironment(organizationId, sapProduct, environment, operation, sapClient)
-    : ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
+  const usable = rows !== undefined && rows.organizationId === organizationId && rows.product === sapProduct;
+  const binding = !product
+    ? ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const)
+    : usable && organizationId
+      ? await bindStoredConnections(rows.rows, environment, operation, sapClient)
+      : await resolveSapConnectionForEnvironment(organizationId, sapProduct, environment, operation, sapClient);
   if (!binding.ok) {
     return refused(
       refusal("bindConnection", binding.reason, connectionRefusalMessage(binding.reason, environment), {

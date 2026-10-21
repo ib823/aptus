@@ -87,7 +87,15 @@ describe("one refusal table", () => {
 
 describe("no transaction is held open across a call to SAP", () => {
   it("neither the pipeline nor a ported route opens one", () => {
-    for (const file of ["src/lib/governed/pipeline.ts", "src/lib/governed/transport.ts", "src/lib/governed/containment.ts", ...PORTED]) {
+    for (const file of [
+      "src/lib/governed/pipeline.ts",
+      "src/lib/governed/transport.ts",
+      "src/lib/governed/containment.ts",
+      // P0.19's two statements and the after-response bookkeeping.
+      "src/lib/governed/call-loads.ts",
+      "src/lib/governed/after-response.ts",
+      ...PORTED,
+    ]) {
       expect(code(read(file)), file).not.toMatch(/\$transaction|\btx\./);
     }
   });

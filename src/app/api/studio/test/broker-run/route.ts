@@ -32,6 +32,7 @@ import {
   callSapRead,
   contain,
   GovernedAudit,
+  prefetchedConnectionsFor,
   rateLimit,
   refusal,
   resolveReadTarget,
@@ -239,7 +240,14 @@ export async function POST(request: NextRequest) {
   const granted = access.value;
 
   // 2 — the connection binding, environment + SAP client, same as the broker.
-  const bound = await bindConnection(scope.organizationId, iface.sapProduct, client.environment, "READ", client.sapClient);
+  const bound = await bindConnection(
+    scope.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "READ",
+    client.sapClient,
+    prefetchedConnectionsFor(granted),
+  );
   if (!bound.ok) {
     await audit.refused(bound.refusal);
     return refusalOk(

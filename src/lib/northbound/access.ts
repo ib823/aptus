@@ -28,9 +28,9 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { loadInterfaceAccess, type AccessLoad, type StoredConnectionRow } from "@/lib/governed/call-loads";
 import {
   grantBindingMode,
-  grantsForInterfaceWhere,
   grantsUsableUnder,
   isBoundTo,
   isUsableUnder,
@@ -44,7 +44,7 @@ import {
   type GrantDecision,
   type GrantEnvironment,
 } from "@/lib/studio/grants";
-import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
+import type { TenantScope } from "@/lib/studio/tenant-scope";
 
 export interface AccessibleInterface {
   id: string;
@@ -112,8 +112,23 @@ export type AccessRefusal =
    */
   | "GRANT_NEEDS_REAPPROVAL";
 
+/**
+ * The organisation's active connections for the interface's product, read in
+ * the same statement as the interface (P0.19), for the pipeline's
+ * bindConnection step. Present only when asked for.
+ */
+export interface PrefetchedConnections {
+  readonly product: string;
+  readonly rows: readonly StoredConnectionRow[];
+}
+
+export interface AccessLoadOptions {
+  /** Also read the connections that may serve the call (the pipeline does). */
+  readonly withConnections?: boolean;
+}
+
 export type AccessResult =
-  | { ok: true; iface: AccessibleInterface }
+  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections }
   | { ok: false; reason: AccessRefusal; message: string };
 
 /** What the grant lookup selects: the decision, its end, and its binding. */
@@ -205,29 +220,11 @@ export async function resolveWritableInterface(
   interfaceId: string,
   environment: string,
   now: Date = new Date(),
+  options: AccessLoadOptions = {},
 ): Promise<AccessResult> {
-  const iface = await prisma.interface.findFirst({
-    where: scopedById(scope, interfaceId),
-    select: {
-      id: true,
-      name: true,
-      externalId: true,
-      sapProduct: true,
-      entitySet: true,
-      operation: true,
-      mode: true,
-      version: true,
-      solutionId: true,
-      status: true,
-      servicePath: true,
-      odataVersion: true,
-      serviceVerifiedAt: true,
-      serviceVerifications: true,
-      // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
-      createdAt: true,
-      grantMatchChangedAt: true,
-    },
-  });
+  // The interface, its grants and (when asked) its connections: one statement (P0.19).
+  const loaded = await loadInterfaceAccess(scope.organizationId, solutionId, interfaceId, environment, options);
+  const iface = loaded.iface;
 
   if (!iface) {
     return { ok: false, reason: "INTERFACE_NOT_FOUND", message: "No such interface." };
@@ -271,11 +268,9 @@ export async function resolveWritableInterface(
     };
   }
 
-  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
-    // Bound to THIS interface on its product, or (legacy) unbound — see check 5.
-    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
-    select: GRANT_SELECT,
-  });
+  // Bound to THIS interface on its product, or (legacy) unbound — see check 5:
+  // grantsForInterfaceWhere, in the load's SQL.
+  const grants: readonly FetchedGrant[] = loaded.grants;
 
   const bindingMode = grantBindingMode();
   // A READ grant never authorises a write.
@@ -340,6 +335,7 @@ export async function resolveWritableInterface(
       serviceVerifiedAt: iface.serviceVerifiedAt ?? null,
       serviceVerifications: iface.serviceVerifications ?? null,
     },
+    ...connectionsOf(loaded),
   };
 }
 
@@ -349,12 +345,14 @@ export async function resolveReadableInterface(
   interfaceId: string,
   environment: string,
   now: Date = new Date(),
+  options: AccessLoadOptions = {},
 ): Promise<AccessResult> {
   // Scoped by construction: the id cannot escape the token's organization.
-  const iface = await prisma.interface.findFirst({
-    where: scopedById(scope, interfaceId),
-    select: READABLE_INTERFACE_SELECT,
-  });
+  // The interface, its grants and (when asked) its connections: one statement
+  // (P0.19). The grants were a second query, asked only when the row alone did
+  // not refuse; they now cost nothing extra, and are judged only then.
+  const loaded = await loadInterfaceAccess(scope.organizationId, solutionId, interfaceId, environment, options);
+  const iface = loaded.iface;
 
   if (!iface) {
     return {
@@ -364,23 +362,24 @@ export async function resolveReadableInterface(
     };
   }
 
-  // Checked again by the decision; asked here first so an interface the row
-  // alone refuses (a sibling's, a write, a deprecated one) never costs a grant
-  // query.
   const refused = interfaceReadRefusal(iface, solutionId);
   if (refused) return refused;
 
-  const grants: FetchedGrant[] = await prisma.apiAccessGrant.findMany({
-    // scopedWhere injects the organization; the rest narrows within it, to
-    // grants bound to THIS interface on its product or (legacy) unbound.
-    where: scopedWhere(scope, { solutionId, environment, ...grantsForInterfaceWhere(iface) }),
-    select: GRANT_SELECT,
-  });
+  // scopedWhere's organization, the credential's solution and environment,
+  // and grantsForInterfaceWhere: in the load's SQL.
+  const grants: readonly FetchedGrant[] = loaded.grants;
 
   const decision = decideReadAccess(iface, solutionId, environment, grants, now);
   if (!decision.ok) return decision;
   await noteLegacyAuthority(scope, decision.authorising, iface, now);
-  return { ok: true, iface: decision.iface };
+  return { ok: true, iface: decision.iface, ...connectionsOf(loaded) };
+}
+
+/** The prefetched connections, on a result asked for them. */
+function connectionsOf(loaded: AccessLoad): { connections?: PrefetchedConnections } {
+  return loaded.connections === null || loaded.iface === null
+    ? {}
+    : { connections: { product: loaded.iface.sapProduct, rows: loaded.connections } };
 }
 
 /** The interface fields the read decision judges. */

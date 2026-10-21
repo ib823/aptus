@@ -19,6 +19,7 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { lookupCredential } from "@/lib/governed/call-loads";
 import { LEGACY_TOKEN_PREFIX, overlapIsOpen, overlapStillBound } from "@/lib/northbound/key-policy";
 import { tenantScopeOf, type TenantScope } from "@/lib/studio/tenant-scope";
 
@@ -91,8 +92,28 @@ export type ClientAuthFailure =
   /** The solution row is gone. An orphaned credential is refused, not served. */
   | "SOLUTION_MISSING";
 
+/**
+ * The row's write-key fields, read in the same statement as the key when the
+ * caller asks for them (the write route, P0.19). Kept OUT of
+ * AuthenticatedClient, which travels through every step: only the write-key
+ * check (write-credential.ts) reads the sealed value.
+ */
+export interface PrefetchedWriteKey {
+  readonly secretsCiphertext: string | null;
+  readonly isActive: boolean;
+  readonly revokedAt: Date | null;
+  readonly expiresAt: Date | null;
+}
+
 export type ClientAuthResult =
-  | { ok: true; client: AuthenticatedClient }
+  | {
+      ok: true;
+      client: AuthenticatedClient;
+      /** When the key was last stamped as used: touchClientLastUsed's throttle (P0.19). */
+      lastUsedAt?: Date | null;
+      /** Present only when asked for with `withWriteKey`. */
+      writeKey?: PrefetchedWriteKey;
+    }
   | { ok: false; reason: ClientAuthFailure };
 
 /** The two solution-level refusals, separated so a caller can reuse the check. */
@@ -120,30 +141,17 @@ export async function checkSolutionRuntime(
     where: { id: solutionId, organizationId },
     select: { status: true },
   });
-  if (!solution) return { ok: false, reason: "SOLUTION_MISSING" };
-  if (solution.status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
-  return { ok: true };
+  return solutionRuntimeVerdict(solution?.status ?? null);
 }
 
-/** What authentication reads from the row. Never the hashes, never the sealed write key. */
-const AUTH_SELECT = {
-  id: true,
-  organizationId: true,
-  solutionId: true,
-  environment: true,
-  sapClient: true,
-  isActive: true,
-  revokedAt: true,
-  expiresAt: true,
-  previousValidUntil: true,
-} as const;
-
-/**
- * What the lookup by the PREVIOUS hash reads: the same, plus the two hashes
- * that say whether the overlap still belongs to the row's current key
- * (`overlapStillBound`). They are compared here and never leave this module.
- */
-const PREVIOUS_KEY_SELECT = { ...AUTH_SELECT, tokenHash: true, overlapForTokenHash: true } as const;
+/** The solution gate on a status already read; null is a missing row. One rule for both readers. */
+export function solutionRuntimeVerdict(
+  status: string | null,
+): { ok: true } | { ok: false; reason: SolutionRuntimeFailure } {
+  if (status === null) return { ok: false, reason: "SOLUTION_MISSING" };
+  if (status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
+  return { ok: true };
+}
 
 /**
  * Resolve a raw bearer token to the client it identifies.
@@ -154,64 +162,48 @@ const PREVIOUS_KEY_SELECT = { ...AUTH_SELECT, tokenHash: true, overlapForTokenHa
  * free oracle; telling ourselves is operationally necessary.
  *
  * THE ROTATION OVERLAP (P0.11). A token that is not any row's current key may
- * be the key a rotation replaced: it is looked up by `previousTokenHash`, the
- * same single indexed equality on a unique column, and accepted while
- * `previousValidUntil` is in the future. It resolves to the SAME row, so
- * everything else — revocation, deactivation, the row's own expiry, the
- * solution gate, and the write key sealed on the row — applies to it exactly
- * as to the current key. That is what makes "revoke ends both at once" a
- * property of one `revokedAt` rather than of a second check someone must
- * remember.
+ * be the key a rotation replaced: it matches the row's `previousTokenHash`,
+ * a unique column, and is accepted while `previousValidUntil` is in the
+ * future. It resolves to the SAME row, so everything else — revocation,
+ * deactivation, the row's own expiry, the solution gate, and the write key
+ * sealed on the row — applies to it exactly as to the current key. That is
+ * what makes "revoke ends both at once" a property of one `revokedAt` rather
+ * than of a second check someone must remember.
  *
  * The overlap is also honoured only while it is still bound to the row's
  * current key (key-policy.ts `overlapStillBound`): a `tokenHash` written by
  * anything that did not write the overlap with it — above all a build from
  * before P0.11, after a rollback — closes the window rather than inheriting it.
+ *
+ * A KEY THE ROW HAS DROPPED (wave 1a final review): replaced after a
+ * revocation, pushed out by a second rotation, or rotated with the overlap
+ * off. It resolves to its row (RetiredClientToken) only to be refused —
+ * REVOKED or INACTIVE if the row is, ROTATED_OUT otherwise, never
+ * authenticated — so it is a real key that refuses, bounded by its own edge
+ * bucket, and not an UNKNOWN_TOKEN spending its caller ADDRESS's
+ * failed-lookup bucket, where one tenant's dead key behind a shared egress
+ * locked out every other tenant's valid key (auth-failures.ts).
+ *
+ * ONE ROUND TRIP (P0.19). The three lookups and the owning solution's status
+ * are one statement (governed/call-loads.ts `lookupCredential`): the current
+ * key wins over a previous key, which wins over a retired one, exactly as
+ * when each was asked only on a miss of the one before. Every check below is
+ * the one it was, in the same order, on the same row.
  */
 export async function authenticateClientToken(
   rawToken: string | null,
   now: Date = new Date(),
+  options: { readonly withWriteKey?: boolean } = {},
 ): Promise<ClientAuthResult> {
   if (!rawToken) return { ok: false, reason: "NO_TOKEN" };
 
-  const tokenHash = hashClientToken(rawToken);
-  let viaPreviousKey = false;
-  let previousKeyBound = false;
-  let row = await prisma.solutionClient.findUnique({ where: { tokenHash }, select: AUTH_SELECT });
-  if (!row) {
-    // Only on a miss, so a current key costs one lookup as it always did.
-    const previous = await prisma.solutionClient.findUnique({
-      where: { previousTokenHash: tokenHash },
-      select: PREVIOUS_KEY_SELECT,
-    });
-    viaPreviousKey = previous !== null;
-    previousKeyBound = previous !== null && overlapStillBound(previous);
-    row = previous;
-  }
-  if (!row) {
-    /*
-     * A KEY THE ROW HAS DROPPED (wave 1a final review): replaced after a
-     * revocation, pushed out by a second rotation, or rotated with the
-     * overlap off. It resolves to its row only to be refused — REVOKED or
-     * INACTIVE if the row is, ROTATED_OUT otherwise, never authenticated —
-     * so it is a real key that refuses, bounded by its own edge bucket, and
-     * not an UNKNOWN_TOKEN spending its caller ADDRESS's failed-lookup
-     * bucket, where one tenant's dead key behind a shared egress locked out
-     * every other tenant's valid key (auth-failures.ts). Only on a miss of
-     * both lookups above, so a live key costs what it did.
-     */
-    const retired = await prisma.retiredClientToken.findUnique({
-      where: { tokenHash },
-      select: { client: { select: AUTH_SELECT } },
-    });
-    if (retired) {
-      viaPreviousKey = true;
-      previousKeyBound = false;
-      row = retired.client;
-    }
-  }
+  const found = await lookupCredential(hashClientToken(rawToken), options);
+  if (!found) return { ok: false, reason: "UNKNOWN_TOKEN" };
+  const { row, match } = found;
+  const viaPreviousKey = match !== "current";
+  // A retired key is never bound: it only ever refuses.
+  const previousKeyBound = match === "previous" && overlapStillBound(row);
 
-  if (!row) return { ok: false, reason: "UNKNOWN_TOKEN" };
   // Revocation is checked before "inactive": a revoked token is a security
   // event worth seeing in the audit as exactly that. It is also checked
   // before the overlap, so a revoked row refuses its previous key as REVOKED.
@@ -226,7 +218,9 @@ export async function authenticateClientToken(
 
   // Checked LAST, after the token's own states: a revoked token on a retired
   // solution should audit as REVOKED, which is the more specific event.
-  const solution = await checkSolutionRuntime(row.organizationId, row.solutionId);
+  // Read in the same statement, scoped by the row's own organization
+  // (checkSolutionRuntime's rule).
+  const solution = solutionRuntimeVerdict(found.solutionStatus);
   if (!solution.ok) return { ok: false, reason: solution.reason };
 
   return {
@@ -239,8 +233,28 @@ export async function authenticateClientToken(
       sapClient: row.sapClient,
       scope: tenantScopeOf(row.organizationId),
     },
+    lastUsedAt: row.lastUsedAt,
+    ...(options.withWriteKey === true
+      ? {
+          writeKey: {
+            secretsCiphertext: found.secretsCiphertext,
+            isActive: row.isActive,
+            revokedAt: row.revokedAt,
+            expiresAt: row.expiresAt,
+          },
+        }
+      : {}),
   };
 }
+
+/**
+ * How often a key's `lastUsedAt` is written (P0.19): at most once a minute
+ * per key. It was written on EVERY call — a database write per read, the
+ * single largest item in the budget. A minute is finer than anything that
+ * reads it: the screens show a date or "n minutes ago", and the idle checks
+ * count in days.
+ */
+export const LAST_USED_STAMP_INTERVAL_MS = 60_000;
 
 /**
  * Record that a token was used.
@@ -252,13 +266,21 @@ export async function authenticateClientToken(
 export async function touchClientLastUsed(
   clientId: string,
   organizationId: string,
+  /**
+   * The value authentication read (P0.19). When it is under
+   * LAST_USED_STAMP_INTERVAL_MS old nothing is written; unknown (undefined)
+   * writes, as before.
+   */
+  lastUsedAt?: Date | null,
+  now: Date = new Date(),
 ): Promise<void> {
+  if (lastUsedAt instanceof Date && now.getTime() - lastUsedAt.getTime() < LAST_USED_STAMP_INTERVAL_MS) return;
   try {
     await prisma.solutionClient.update({
       // Both, not just the id: the update re-asserts the tenant rather than
       // trusting that whoever passed the id had already established it.
       where: { id: clientId, organizationId },
-      data: { lastUsedAt: new Date() },
+      data: { lastUsedAt: now },
     });
   } catch (err) {
     console.warn("[northbound] failed to update lastUsedAt", { clientId, err });
