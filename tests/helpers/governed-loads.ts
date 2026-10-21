@@ -148,7 +148,30 @@ export async function referenceAccessLoad(
 }
 
 /**
- * A `$queryRaw` for a Prisma fake: the two governed statements through the
+ * The console connection load (P0.14b review round 5): the named active row,
+ * then the organization's grants for its environment, as
+ * resolveSapConnection and decideConsoleRead asked them.
+ */
+export async function referenceConsoleConnection(db: ReferenceFake, organizationId: string, product: string, key: string): Promise<Row[]> {
+  const rows = ((await db.sapConnection?.findMany?.({
+    where: { organizationId, product, key, isActive: true },
+    orderBy: { createdAt: "asc" },
+  })) ?? []) as Row[];
+  const connection = rows.find((r) => r.key === key) ?? null;
+  if (!connection) return [{ connection: null, grants: null }];
+  const environment = connection.environment ?? null;
+  const grants =
+    environment === null
+      ? []
+      : (((await db.apiAccessGrant?.findMany?.({
+          where: { organizationId, environment },
+          select: { decision: true, expiresAt: true, revokedAt: true },
+        })) ?? []) as Row[]);
+  return [{ connection, grants: grants.length === 0 ? null : grants }];
+}
+
+/**
+ * A `$queryRaw` for a Prisma fake: the governed statements through the
  * reference queries, anything else to `otherwise`.
  */
 export function governedQueryRaw(
@@ -167,6 +190,10 @@ export function governedQueryRaw(
     if (text.includes("governed:access-load")) {
       // interfaceId, organizationId, organizationId, solutionId, environment, withConnections, organizationId
       return referenceAccessLoad(db(), String(values[0]), String(values[1]), String(values[3]), String(values[4]), values[5] === true);
+    }
+    if (text.includes("governed:console-connection")) {
+      // organizationId, product, key, organizationId
+      return referenceConsoleConnection(db(), String(values[0]), String(values[1]), String(values[2]));
     }
     if (otherwise) return otherwise(first, ...rest);
     throw new Error(`governedQueryRaw: unexpected raw statement: ${text.slice(0, 120)}`);

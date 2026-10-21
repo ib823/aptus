@@ -29,10 +29,10 @@ vi.mock("@/lib/db/prisma", async () => {
 });
 
 import { prisma } from "@/lib/db/prisma";
-import { loadInterfaceAccess, lookupCredential } from "@/lib/governed/call-loads";
+import { loadConsoleConnection, loadInterfaceAccess, lookupCredential } from "@/lib/governed/call-loads";
 import { hashClientToken } from "@/lib/northbound/auth";
 
-import { referenceAccessLoad, referenceCredentialLookup, type ReferenceFake } from "../helpers/governed-loads";
+import { referenceAccessLoad, referenceConsoleConnection, referenceCredentialLookup, type ReferenceFake } from "../helpers/governed-loads";
 
 const RUN = `p019c-${randomUUID().slice(0, 8)}`;
 const A = `${RUN}-a`;
@@ -273,5 +273,69 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
     const { sql, reference, counts } = await both(A, ids.ifaceA, "TEST", true);
     expect(sql).toEqual(reference);
     expect(counts.grants).toBe(1);
+  });
+
+  /*
+   * P0.14b review round 5: a console read's connection and its environment
+   * ceiling's grants, in one statement, against the two queries it replaced
+   * (resolveSapConnection's named row, decideConsoleRead's grant lookup).
+   */
+  describe("the console connection load", () => {
+    async function console_(organizationId: string, product: string, key: string) {
+      const sql = await loadConsoleConnection(organizationId, product, `${RUN}-${key}`);
+      const [reference] = (await referenceConsoleConnection(ref(), organizationId, product, `${RUN}-${key}`)) as {
+        connection: Record<string, unknown> | null;
+        grants: Record<string, unknown>[] | null;
+      }[];
+      const connectionKeys = sql.connection ? Object.keys(sql.connection) : undefined;
+      const grantKeys = ["decision", "expiresAt", "revokedAt"];
+      const order = (a: Record<string, unknown> | null, b: Record<string, unknown> | null) => JSON.stringify(a).localeCompare(JSON.stringify(b));
+      return {
+        sql: {
+          connection: plain(sql.connection as unknown as Record<string, unknown> | null, connectionKeys),
+          grants: sql.grants.map((g) => plain(g as unknown as Record<string, unknown>, grantKeys)).sort(order),
+        },
+        reference: {
+          connection: plain(reference!.connection, connectionKeys),
+          grants: (reference!.grants ?? []).map((g) => plain(g, grantKeys)).sort(order),
+        },
+      };
+    }
+
+    it("returns the named connection and every grant of the organization for its environment", async () => {
+      const { sql, reference } = await console_(A, "s4hana", "dev");
+      expect(sql).toEqual(reference);
+      // Not vacuous: all eight of this organisation's DEV grants, whatever their
+      // solution, interface or state (the ceiling judges them); not its TEST
+      // grant, and not the other organisation's.
+      expect(sql.connection).toEqual(expect.objectContaining({ key: `${RUN}-dev`, environment: "DEV", client: "100", timeoutMs: 9000 }));
+      expect(sql.grants).toHaveLength(8);
+      expect(sql.grants.filter((g) => g!.revokedAt !== null)).toHaveLength(1);
+    });
+
+    it("reads no grant for a connection that declares no environment", async () => {
+      const { sql, reference } = await console_(A, "s4hana", "undeclared");
+      expect(sql).toEqual(reference);
+      expect(sql.connection?.environment).toBeNull();
+      expect(sql.grants).toEqual([]);
+    });
+
+    it.each([
+      ["an inactive connection", A, "s4hana", "inactive"],
+      ["a connection of another product", A, "s4hana", "onprem"],
+      ["another organisation's connection key", A, "s4hana", "foreign"],
+      ["a key no one has", A, "s4hana", "nowhere"],
+    ])("finds nothing, and reads no grant, for %s", async (_name, org, product, key) => {
+      const { sql, reference } = await console_(org, product, key);
+      expect(sql).toEqual(reference);
+      expect(sql).toEqual({ connection: null, grants: [] });
+    });
+
+    it("reads the other organisation's own connection with its own grants only", async () => {
+      const { sql, reference } = await console_(B, "s4hana", "foreign");
+      expect(sql).toEqual(reference);
+      expect(sql.connection?.organizationId).toBe(B);
+      expect(sql.grants).toHaveLength(2);
+    });
   });
 });

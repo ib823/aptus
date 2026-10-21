@@ -31,7 +31,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { loadInterfaceAccess, lookupCredential } from "@/lib/governed/call-loads";
+import { loadConsoleConnection, loadInterfaceAccess, lookupCredential } from "@/lib/governed/call-loads";
 import { isUnscopedByDesign } from "@/lib/db/tenant-guard";
 
 const flat = (sql: string) => sql.replace(/\s+/g, " ");
@@ -97,5 +97,26 @@ describe("the access load", () => {
     expect(flat(seen.calls[0]!.sql)).toContain(
       'AND g."externalId" = i."externalId" AND g."operation" = i."operation" AND ((g."interfaceId" = i."id" AND g."sapProduct" = i."sapProduct") OR g."interfaceId" IS NULL)',
     );
+  });
+});
+
+/* P0.14b review round 5: a console read's connection with its ceiling's grants. */
+describe("the console connection load", () => {
+  it("filters the connection and its grants by the caller's organization, as a parameter", async () => {
+    await loadConsoleConnection("org_a", "s4hana", "conn-key");
+    const { sql, values } = seen.calls[0]!;
+    const text = flat(sql);
+    expect(text).not.toContain("org_a");
+    expect(text).not.toContain("conn-key");
+    expect(values).toEqual(["org_a", "s4hana", "conn-key", "org_a"]);
+    expect(text).toContain('FROM "SapConnection" WHERE "organizationId" = $1 AND "product" = $2 AND "key" = $3 AND "isActive" = true');
+    // The grants: the caller's organization, the connection's own environment, read only beside it.
+    expect(text).toContain('FROM "ApiAccessGrant" g, c WHERE g."organizationId" = $4 AND g."environment" = c."environment"::text');
+  });
+
+  it("is what the tenant guard demands of the queries it replaced", async () => {
+    // Each replaced query is scoped by organizationId, so the guard passes it without a by-design exception.
+    expect(isUnscopedByDesign("SapConnection", "findMany", { where: { product: "s4hana", key: "k" } })).toBe(false);
+    expect(isUnscopedByDesign("ApiAccessGrant", "findMany", { where: { environment: "PROD" } })).toBe(false);
   });
 });

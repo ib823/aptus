@@ -39,6 +39,16 @@
  * before the step is entered) are the handler's own code, and a console call
  * whose methods could have been replaced is no console call.
  *
+ * A route module's top level runs on import (review round 5): a `const`
+ * initialised by a call, `export const dynamic = (sideEffect(), …)`, a
+ * class's static initializer, `export default <value>` — on every cold start,
+ * before any handler's gate. That code is walked as a handler's
+ * (`importTimeCode`), except the functions it only stores, which are followed
+ * where a handler calls them. And a route that re-exports ANOTHER ROUTE's
+ * handler (P1.10's /api/northbound/v1/* aliases) is that route, judged by
+ * its verdict (`routeAliases`); only a handler from a module that is not a
+ * route stays unwalked, and a finding.
+ *
  * A mention inside a governed callback is governed only while it runs there:
  * a SAP-reaching function value the callback returns, assigns out or pushes
  * onto something outside it would run after `callSap` recorded its outcome,
@@ -375,12 +385,162 @@ export function buildSapGraph(inputs: readonly SourceInput[], options: GraphOpti
 /** The HTTP handlers a Next.js route module may export. */
 export const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
 
-/** Whether any exported handler of this route (or its module-level code) reaches SAP. */
-export function routeReaches(graph: SapGraph, file: string): boolean {
+/**
+ * A Next.js route handler module: `route.ts` ANYWHERE under src/app. A route
+ * group — src/app/(external)/c/sign/route.ts — is as much a route as
+ * src/app/api/ is.
+ */
+export const isRouteModule = (file: string): boolean => file.startsWith("src/app/") && /\/route\.tsx?$/.test(file);
+
+const fileOfKey = (key: string): string => key.slice(0, key.indexOf("#"));
+
+/** A handler this route serves by re-exporting ANOTHER ROUTE's handler. */
+export interface RouteAlias {
+  /** The method this route exports it as. */
+  readonly method: string;
+  /** The route module that defines it. */
+  readonly source: string;
+  /** The method that route exports it as. */
+  readonly sourceMethod: string;
+}
+
+/**
+ * THE HANDLERS A ROUTE RE-EXPORTS FROM ANOTHER ROUTE (P0.14b review round 5):
+ * `export { GET } from "@/app/api/northbound/interfaces/[id]/data/route"`,
+ * P1.10's /api/northbound/v1/* aliases. The alias IS that route — the same
+ * function, so the two paths cannot drift — and is judged by that route's
+ * verdict. A handler re-exported from a module that is not a route, or a
+ * binding of a route that is not one of its HTTP handlers, is not an alias.
+ */
+export function routeAliases(graph: SapGraph, file: string): RouteAlias[] {
+  const out: RouteAlias[] = [];
+  for (const method of HTTP_METHODS) {
+    for (const key of graph.resolveExport(file, method)) {
+      const source = fileOfKey(key);
+      if (source === file || !isRouteModule(source)) continue;
+      const sourceMethod = HTTP_METHODS.find((m) => graph.resolveExport(source, m).includes(key));
+      if (sourceMethod) out.push({ method, source, sourceMethod });
+    }
+  }
+  return out;
+}
+
+/** A piece of a module's top level that runs when the module is imported. */
+interface ImportTimeCode {
+  /** The binding it belongs to, for the fetch census. */
+  readonly key: string;
+  readonly node: ts.Node;
+}
+
+/** Through what passes a value on unchanged, or stores it in the value being built. */
+function storesValue(parent: ts.Node, child: ts.Node): boolean {
+  return (
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isNonNullExpression(parent) ||
+    ts.isTypeAssertionExpression(parent) ||
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isObjectLiteralExpression(parent) ||
+    (ts.isPropertyAssignment(parent) && parent.initializer === child) ||
+    (ts.isConditionalExpression(parent) && parent.condition !== child) ||
+    (ts.isBinaryExpression(parent) &&
+      [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.QuestionQuestionToken].includes(parent.operatorToken.kind))
+  );
+}
+
+/**
+ * Whether `n`, inside the import-time code rooted at `root`, does NOT run when
+ * the module is imported: a function only STORED in the value being built (a
+ * property of an object literal, an element of an array literal, through `?:`
+ * and `||`), or a class's method, constructor, accessor or instance field. It
+ * runs when something calls it, and a handler that mentions the binding is
+ * followed into all of it. A function handed to a call (`setTimeout(fn)`,
+ * `.then(fn)`, `forEach(fn)`) or invoked in place is taken to run.
+ */
+function notRunOnImport(root: ts.Node): (n: ts.Node) => boolean {
+  return (n) => {
+    if (n === root) return false;
+    const p = n.parent;
+    if (
+      p &&
+      ts.isClassLike(p) &&
+      (ts.isMethodDeclaration(n) ||
+        ts.isConstructorDeclaration(n) ||
+        ts.isGetAccessorDeclaration(n) ||
+        ts.isSetAccessorDeclaration(n) ||
+        (ts.isPropertyDeclaration(n) && !hasModifier(n, ts.SyntaxKind.StaticKeyword)))
+    ) {
+      return true;
+    }
+    if (!isFunctionLike(n)) return false;
+    for (let cur: ts.Node = n; cur !== root; cur = cur.parent) {
+      if (!cur.parent || !storesValue(cur.parent, cur)) return false;
+    }
+    return true;
+  };
+}
+
+/**
+ * WHAT A MODULE RUNS WHEN IT IS IMPORTED, besides its bare statements (P0.14b
+ * review round 5). A route module is imported on every cold start of every
+ * instance, before any handler's gate: a `const` initialised by a call to SAP
+ * (`const _warmed = previewSapEntitySet(…)`), a value beside
+ * `export const dynamic`, a class's static initializer, an `export default`
+ * value or an enum member all run there, with no role gate, no ceiling, no
+ * circuit and no row. A binding whose value is a function is not here: it runs
+ * where it is called, and is followed there.
+ */
+function importTimeCode(mod: ModuleInfo): ImportTimeCode[] {
+  const out: ImportTimeCode[] = [];
+  const isFunctionValue = (e: ts.Expression) => {
+    const v = unwrap(e);
+    return ts.isArrowFunction(v) || ts.isFunctionExpression(v);
+  };
+  for (const stmt of mod.sf.statements) {
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        const name = bindingNames(decl.name)[0];
+        if (decl.initializer && name !== undefined && !isFunctionValue(decl.initializer)) {
+          out.push({ key: keyOf(mod.file, name), node: decl.initializer });
+        }
+      }
+    } else if (ts.isClassDeclaration(stmt) || ts.isEnumDeclaration(stmt)) {
+      out.push({ key: keyOf(mod.file, stmt.name?.text ?? "default"), node: stmt });
+    } else if (ts.isExportAssignment(stmt) && !isFunctionValue(stmt.expression)) {
+      out.push({ key: keyOf(mod.file, "default"), node: stmt.expression });
+    }
+  }
+  return out;
+}
+
+/** Whether a piece of import-time code reaches SAP. */
+function importTimeReaches(graph: SapGraph, mod: ModuleInfo, code: ImportTimeCode): boolean {
+  const skip = notRunOnImport(code.node);
+  return refsOf(code.node, mod, (n) => !skip(n)).some(({ ref }) =>
+    ref.kind === "fetch" ? graph.reaching.has(code.key) : graph.targets(mod.file, ref).some((t) => graph.reaching.has(t)),
+  );
+}
+
+/**
+ * Whether this route reaches SAP through code it defines itself: a handler
+ * declared in the file, or what the module runs on import. A handler it
+ * re-exports from elsewhere is not counted.
+ */
+export function routeReachesOwn(graph: SapGraph, file: string): boolean {
   const mod = graph.modules.get(file);
   if (!mod) return false;
-  const entry = [...HTTP_METHODS.flatMap((m) => graph.resolveExport(file, m)), ...[...mod.bindings.keys()].filter((n) => n.startsWith("<module:")).map((n) => keyOf(file, n))];
-  return entry.some((k) => graph.reaching.has(k));
+  const own = [
+    ...HTTP_METHODS.flatMap((m) => graph.resolveExport(file, m)).filter((k) => fileOfKey(k) === file),
+    ...[...mod.bindings.keys()].filter((n) => n.startsWith("<module:")).map((n) => keyOf(file, n)),
+  ];
+  return own.some((k) => graph.reaching.has(k)) || importTimeCode(mod).some((c) => importTimeReaches(graph, mod, c));
+}
+
+/** Whether any exported handler of this route (or what its module runs on import) reaches SAP. */
+export function routeReaches(graph: SapGraph, file: string): boolean {
+  if (!graph.modules.has(file)) return false;
+  return routeReachesOwn(graph, file) || HTTP_METHODS.flatMap((m) => graph.resolveExport(file, m)).some((k) => graph.reaching.has(k));
 }
 
 /** A function a governed callback can create or be. */
@@ -607,11 +767,21 @@ export interface RouteFinding {
  * Every mention, on the path a handler runs, of a reaching binding outside the
  * governed pipeline. Empty when the route reaches SAP only through it.
  */
-export function routeFindings(graph: SapGraph, file: string, pipelineModules: ReadonlySet<string>): RouteFinding[] {
+export function routeFindings(
+  graph: SapGraph,
+  file: string,
+  pipelineModules: ReadonlySet<string>,
+  /** The routes already being judged, so an alias cycle ends. */
+  seenRoutes: ReadonlySet<string> = new Set(),
+): RouteFinding[] {
   const mod = graph.modules.get(file);
-  if (!mod) return [];
+  if (!mod || seenRoutes.has(file)) return [];
+  const judging: ReadonlySet<string> = new Set([...seenRoutes, file]);
+  const aliases = routeAliases(graph, file);
   const findings: RouteFinding[] = [];
   const followed = new Set<ts.Node>();
+  /** Import-time code is walked apart: a handler that mentions the same binding walks all of it. */
+  const followedOnImport = new Set<ts.Node>();
   const consoleCalls = consoleCallNames(graph, file, pipelineModules);
 
   /** The SAP-reaching binding a reference names, outside the pipeline's own modules; null when none. */
@@ -791,9 +961,14 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
       !!n.initializer &&
       (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer)));
 
-  const follow = (node: ts.Node, handler: string): void => {
-    if (followed.has(node)) return;
-    followed.add(node);
+  /**
+   * Walk `node` as code that runs on `handler`'s path. `skip` prunes what does
+   * not run there (import-time code: a function only stored, a class method).
+   */
+  const follow = (node: ts.Node, handler: string, skip?: (n: ts.Node) => boolean): void => {
+    const seen = skip ? followedOnImport : followed;
+    if (seen.has(node)) return;
+    seen.add(node);
     // Inner functions are followed where they are mentioned, not where they are declared.
     const inner = new Map<string, ts.Node>();
     const collectInner = (n: ts.Node): void => {
@@ -851,6 +1026,7 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
       return null;
     };
     const visitor = (n: ts.Node): boolean => {
+      if (skip?.(n)) return false;
       if (n !== node && innerNodes.has(n)) return false;
       const callback = governedCallback(n);
       if (callback !== null) {
@@ -871,6 +1047,7 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
     const mentionedNames = new Set<string>();
     const collectMentions = (n: ts.Node): void => {
       if (ts.isTypeNode(n)) return;
+      if (skip?.(n)) return;
       if (n !== node && innerNodes.has(n)) return;
       if (governedCallback(n) !== null) return;
       if (ts.isIdentifier(n) && isValueReference(n)) mentionedNames.add(n.text);
@@ -910,12 +1087,27 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
         continue;
       }
       /*
-       * A HANDLER THIS FILE RE-EXPORTS FROM ANOTHER MODULE (review round 3):
-       * `export { GET } from "@/lib/…"`, or an import exported as GET. Its
-       * body is not this route's to walk, and src/lib is no side entrance, so
-       * it was never checked at all. One that reaches SAP outside a pipeline
-       * module is a finding: define the handler in the route file, where it
-       * is checked, or exempt the route.
+       * ANOTHER ROUTE'S HANDLER, RE-EXPORTED (review round 5): P1.10's
+       * /api/northbound/v1/* aliases. It is that route's handler — the same
+       * function — so it carries that route's findings for it, and that
+       * route's import-time findings (importing the alias runs them).
+       */
+      const alias = aliases.find((a) => a.method === method && graph.resolveExport(a.source, a.sourceMethod).includes(key));
+      if (alias) {
+        for (const f of routeFindings(graph, alias.source, pipelineModules, judging)) {
+          if (f.handler === alias.sourceMethod || f.handler === "<module>") {
+            findings.push({ ...f, handler: method, target: `${f.target} (in ${alias.source}, whose ${alias.sourceMethod} this route re-exports)` });
+          }
+        }
+        continue;
+      }
+      /*
+       * A HANDLER THIS FILE RE-EXPORTS FROM A MODULE THAT IS NOT A ROUTE
+       * (review round 3): `export { GET } from "@/lib/…"`, or an import
+       * exported as GET. Its body is not this route's to walk, and src/lib is
+       * no side entrance, so it was never checked at all. One that reaches
+       * SAP outside a pipeline module is a finding: define the handler in the
+       * route file, where it is checked, or exempt the route.
        */
       if (!key.startsWith(`${file}#`) && graph.reaching.has(key) && !pipelineModules.has(key.slice(0, key.indexOf("#")))) {
         findings.push({ handler: method, via: `export ${method}`, target: `${key} (a handler re-exported from another module)`, line: 1 });
@@ -925,6 +1117,8 @@ export function routeFindings(graph: SapGraph, file: string, pipelineModules: Re
   for (const name of mod.bindings.keys()) {
     if (name.startsWith("<module:")) follow(mod.bindings.get(name)!.node, "<module>");
   }
+  // What the module runs on import, besides its bare statements (review round 5).
+  for (const code of importTimeCode(mod)) follow(code.node, "<module>", notRunOnImport(code.node));
   return findings;
 }
 

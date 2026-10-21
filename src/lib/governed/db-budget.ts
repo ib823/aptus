@@ -32,24 +32,27 @@
  *              so no error is raised or logged) and the stored outcome is
  *              read.
  *
- *   console 5 — today 4 or 5 (P0.14b review rounds 3 and 4): a Workbench
- *              console read that makes one call to SAP — the preview, the
- *              operations dashboard, a capability or catalogue probe, Probe
- *              all's run — on a stored connection: the person's session
+ *   console 4 — today 4 (P0.14b review rounds 3 to 5): a Workbench
+ *              console read is a read through the pipeline, held to the
+ *              read's budget. One that makes one call to SAP — the preview,
+ *              the operations dashboard, a capability or catalogue probe,
+ *              Probe all's run — on a stored connection: the person's session
  *              (the `authenticate` step, as the read counts its key; one
  *              joined statement, auth/session.ts `sessionLookup`, validated
- *              once per request), the connection, the organization's console
- *              row, and the platform-scope row with its outcome in one
- *              statement (audit/platform-audit.ts `consoleReadInsert`). That
- *              is 4 on a SANDBOX or DEV connection. A TEST, PROD or
- *              undeclared connection adds the environment ceiling's grant
- *              lookup (sap-public/console-read-guard.ts decideConsoleRead):
- *              5, served or refused. WHY 5 AND NOT 4: the two rows are two
- *              trails (the organization's and the platform's), each written
- *              so that its failure never loses the other or the read, and
- *              the grant lookup is an authorisation that a cache would let
- *              outlive a revoked grant. A deployment tenant has no
- *              connection and no grant to read: 3. An Ariba call has no
+ *              once per request), the connection WITH the grants its
+ *              environment ceiling judges (governed/call-loads.ts
+ *              `loadConsoleConnection`, one statement), the organization's
+ *              console row, and the platform-scope row with its outcome in
+ *              one statement (audit/platform-audit.ts `consoleReadInsert`):
+ *              4, on any environment, served or refused. Round 4 had raised
+ *              this budget to 5 for a TEST, PROD or undeclared connection,
+ *              whose ceiling looked its grants up apart; review round 5 put
+ *              that lookup in the connection's statement instead. It is
+ *              still read with every call, never cached (an authorisation a
+ *              cache would let outlive a revoked grant), and the two rows
+ *              stay two statements (two trails, each written so that its
+ *              failure never loses the other or the read). A deployment
+ *              tenant has no connection and no grant to read: 3. An Ariba call has no
  *              connection and no organization row: 3, the session, the
  *              platform row and the assessment trail's decision-log entry
  *              the route has always written beside it (best effort).
@@ -110,10 +113,10 @@ export const DB_BUDGET = {
    * A Workbench console read that makes one call to SAP (P0.14b): the
    * preview, the operations dashboard, a capability or catalogue probe, an
    * Ariba call, served or refused by a console step, its session included.
-   * 4 on a SANDBOX or DEV connection; a TEST or PROD one adds the ceiling's
-   * grant lookup (see above for why it is not cut).
+   * A read through the pipeline, so the read's budget: the ceiling's grants
+   * ride in the connection's statement (review round 5).
    */
-  consoleRead: 5,
+  consoleRead: 4,
 } as const;
 
 export type BudgetedOperation = keyof typeof DB_BUDGET;

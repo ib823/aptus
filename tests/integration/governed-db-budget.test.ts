@@ -515,6 +515,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
    * statements (Prisma's nested select), sent twice (the probe guard and the
    * route each validated it), six before the call's own. Only the cookie is
    * stood in now. The session is one statement and validated once.
+   *
+   * REVIEW ROUND 5. A TEST, PROD or undeclared connection sent its
+   * environment ceiling's grant lookup apart from the connection: 5, and the
+   * console budget had been raised to 5 to fit it. The grants are read in the
+   * connection's own statement now: 4, the read's budget.
    */
   describe("the Workbench console (P0.14b)", () => {
     const S4 = "product=s4hana";
@@ -522,6 +527,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     const consoleGet = (route: (r: NextRequest) => Promise<Response>, url: string) => () => route(new NextRequest(`http://localhost${url}`));
     /** The session is validated once, in one statement. */
     const sessionLookups = (c: Counted) => c.response.filter((s) => s.includes("auth:session-lookup") || s.includes('"Session"'));
+    /** A grant lookup sent on its own: the ceiling's grants ride in the connection's statement. */
+    const ceilingLookups = (c: Counted) =>
+      c.response.filter((s) => s.includes('"ApiAccessGrant"') && !s.includes("governed:console-connection"));
 
     it("a served preview stays within the console budget, its platform row in one statement", async () => {
       const c = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-dev&${PO}&limit=2`));
@@ -546,8 +554,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.status, report("console preview refused", c)).toBe(403);
       expect(c.total, report("console preview refused", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
       expect(sessionLookups(c), report("console preview refused", c)).toHaveLength(1);
-      // The session, the connection, the ceiling's grant lookup, two rows.
-      expect(c.total, report("console preview refused", c)).toBe(5);
+      // The session, the connection WITH the ceiling's grants (review round
+      // 5: one statement, governed:console-connection), two rows.
+      expect(c.total, report("console preview refused", c)).toBe(4);
+      expect(ceilingLookups(c), report("console preview refused", c)).toEqual([]);
     });
 
     it("a preview of a PROD connection its grant opens stays within the console budget", async () => {
@@ -571,7 +581,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
         expect(c.status, report("console preview PROD", c)).toBe(200);
         expect(c.total, report("console preview PROD", c)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
         expect(sessionLookups(c), report("console preview PROD", c)).toHaveLength(1);
-        expect(c.total, report("console preview PROD", c)).toBe(5);
+        expect(c.total, report("console preview PROD", c)).toBe(4);
+        expect(ceilingLookups(c), report("console preview PROD", c)).toEqual([]);
+        // The grants are read with every call, never cached: revoked, the next preview is refused.
+        await prisma.apiAccessGrant.update({ where: { id: grant.id, organizationId: ORG }, data: { revokedAt: new Date() } });
+        const after = await count(consoleGet(consolePreviewRoute, `/api/sap/tdd/preview?${S4}&tenant=${RUN}-prod&${PO}&limit=2`));
+        expect(after.status, report("console preview PROD, revoked", after)).toBe(403);
+        expect(after.total, report("console preview PROD, revoked", after)).toBeLessThanOrEqual(DB_BUDGET.consoleRead);
       } finally {
         await prisma.apiAccessGrant.delete({ where: { id: grant.id, organizationId: ORG } });
       }

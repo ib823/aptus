@@ -139,6 +139,22 @@ describe("what opens TEST and PROD", () => {
     expect(prod.allowed).toBe(false);
   });
 
+  /*
+   * P0.14b review round 5: the grants read in the connection's own statement
+   * are judged exactly as the rows this function would have read, and no
+   * second lookup is sent.
+   */
+  it("judges grants read with the connection by the same rules, and reads none itself", async () => {
+    const judge = (grants: { decision: string; expiresAt: Date | null; revokedAt: Date | null }[]) =>
+      decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, grants });
+    expect((await judge([{ decision: "APPROVED", expiresAt: FUTURE, revokedAt: null }])).allowed).toBe(true);
+    expect((await judge([{ decision: "APPROVED", expiresAt: FUTURE, revokedAt: PAST }])).allowed).toBe(false);
+    expect((await judge([{ decision: "APPROVED", expiresAt: PAST, revokedAt: null }])).allowed).toBe(false);
+    expect((await judge([{ decision: "SANDBOX_ONLY", expiresAt: FUTURE, revokedAt: null }])).allowed).toBe(false);
+    expect((await judge([])).refusal).toBe("NO_APPROVED_GRANT");
+    expect(mocks.findManyGrants).not.toHaveBeenCalled();
+  });
+
   it("a null expiry is open-ended, not expired", async () => {
     mocks.findManyGrants.mockResolvedValue([
       { decision: "READ_ONLY", expiresAt: null, revokedAt: null },

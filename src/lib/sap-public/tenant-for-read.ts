@@ -60,6 +60,7 @@
 
 import { NextResponse } from "next/server";
 
+import type { CeilingGrantRow } from "@/lib/governed/call-loads";
 import { ERROR_CODES } from "@/types/api";
 
 import type { SapEnvironment } from "./environment";
@@ -88,7 +89,18 @@ export interface ResolvedReadTenant {
    * a value that has already been parsed once — so the row's own typed value is
    * carried here instead.
    */
-  connection: { id: string; environment: SapEnvironment | null } | null;
+  connection: {
+    id: string;
+    environment: SapEnvironment | null;
+    /**
+     * The grants the console's environment ceiling judges, read in the
+     * connection's own statement for the organization named here (P0.14b
+     * review round 5, governed/call-loads.ts loadConsoleConnection), so the
+     * console's authorise step sends no second statement. Absent when they
+     * were not read with it; the ceiling then reads them itself.
+     */
+    ceiling?: { readonly organizationId: string; readonly grants: readonly CeilingGrantRow[] };
+  } | null;
 }
 
 /**
@@ -143,7 +155,7 @@ export async function resolveReadTenant(
 
   let connection;
   try {
-    connection = await resolveSapConnection(organizationId, product, key);
+    connection = await resolveSapConnection(organizationId, product, key, { withCeilingGrants: true });
   } catch (err) {
     // The response says only what the user must fix. The log keeps enough to
     // find the row, and never the error text, which can describe the secret.
@@ -160,7 +172,11 @@ export async function resolveReadTenant(
   return {
     tenant: toSapTenant(connection),
     source: "connection",
-    connection: { id: connection.id, environment: connection.environment },
+    connection: {
+      id: connection.id,
+      environment: connection.environment,
+      ...(connection.ceilingGrants ? { ceiling: { organizationId, grants: connection.ceilingGrants } } : {}),
+    },
   };
 }
 

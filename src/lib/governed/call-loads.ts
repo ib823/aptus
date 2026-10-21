@@ -1,5 +1,7 @@
 /**
- * The governed call's two reads, one SQL statement each (P0.19).
+ * The governed call's two reads, one SQL statement each (P0.19), and the
+ * Workbench console's connection read with its ceiling's grants (P0.14b
+ * review round 5, `loadConsoleConnection`).
  *
  * WHY. The database budget for a governed read is four round trips
  * (src/lib/governed/db-budget.ts), and the checks had grown to seven: the
@@ -25,12 +27,14 @@
  * Prisma model operations; a raw statement passes it by. So the scoping the
  * guard would demand is written into the SQL and pinned by
  * tests/unit/governed/call-loads-sql.test.ts: every tenant table the access
- * load reads is filtered by the caller's organizationId, and the credential
+ * load and the console connection load read is filtered by the caller's
+ * organizationId, and the credential
  * lookup's only unscoped predicates are equalities on a token hash — the
  * three lookups `UNSCOPED_BY_DESIGN` already sanctions.
  *
  * Each statement starts with a marker comment (`governed:credential-lookup`,
- * `governed:access-load`) so a test double can tell them apart.
+ * `governed:access-load`, `governed:console-connection`) so a test double can
+ * tell them apart.
  */
 
 import { prisma } from "@/lib/db/prisma";
@@ -299,4 +303,90 @@ export async function loadInterfaceAccess(
     grants: iface ? (found?.grants ?? []).map(grantRow) : [],
     connections: withConnections ? (iface ? (found?.connections ?? []).map(connectionRow) : []) : null,
   };
+}
+
+/* ── a console read's connection, and its environment ceiling's grants ── */
+
+/** The grant columns the console's environment ceiling judges (console-read-guard.ts decideConsoleRead). */
+export interface CeilingGrantRow {
+  readonly decision: string;
+  readonly expiresAt: Date | null;
+  readonly revokedAt: Date | null;
+}
+
+export interface ConsoleConnectionLoad {
+  /** The organization's ACTIVE connection under this product and key, or null. */
+  readonly connection: StoredConnectionRow | null;
+  /**
+   * Every grant of the organization for the connection's declared
+   * environment (none when it declares none): what the ceiling asks "is this
+   * organization cleared for this landscape at all?" of. Read in the same
+   * statement, never cached (P0.14b review round 5).
+   */
+  readonly grants: readonly CeilingGrantRow[];
+}
+
+/**
+ * The Prisma queries the console connection load replaces: the named row
+ * (connection-resolver.ts resolveSapConnection), then the environment
+ * ceiling's grant lookup (console-read-guard.ts decideConsoleRead).
+ */
+export const CONSOLE_CONNECTION_REFERENCE = [
+  "sapConnection.findMany({ where: { organizationId, product, key, isActive: true }, orderBy: { createdAt: 'asc' } })",
+  "apiAccessGrant.findMany({ where: { organizationId, environment: connection.environment }, select: { decision, expiresAt, revokedAt } })",
+] as const;
+
+interface ConsoleConnectionSqlRow {
+  readonly connection: Record<string, unknown> | null;
+  readonly grants: Record<string, unknown>[] | null;
+}
+
+const ceilingGrantRow = (raw: Record<string, unknown>) => withTimestamps<CeilingGrantRow>(raw, ["expiresAt", "revokedAt"]);
+
+/**
+ * A Workbench console read's stored connection AND the grants its
+ * environment ceiling judges, in ONE statement (P0.14b review round 5).
+ *
+ * WHY. A console read of a TEST, PROD or undeclared connection sent the
+ * connection lookup and, a step later, the ceiling's grant lookup: five
+ * statements against P0.19's four. Both are keyed by the organization, and
+ * the grants by the connection's own environment, so they are one statement.
+ * The grants are read fresh with every call — an authorisation a cache would
+ * let outlive a revoked grant — and judged, unchanged, by decideConsoleRead.
+ *
+ * Both tables are filtered by the caller's organizationId, bound as a
+ * parameter (tests/unit/governed/call-loads-sql.test.ts), since the tenant
+ * guard does not see a raw statement; the grants are read only beside the
+ * caller's own connection.
+ */
+export async function loadConsoleConnection(organizationId: string, product: string, key: string): Promise<ConsoleConnectionLoad> {
+  const rows = await prisma.$queryRaw<ConsoleConnectionSqlRow[]>`/* governed:console-connection */
+    WITH c AS (
+      SELECT "id", "organizationId", "product", "key", "label", "baseUrl", "authType", "environment",
+             "oauthTokenUrl", "secretsCiphertext", "client", "writeEnabled", "apiPath", "timeoutMs",
+             "transport", "createdAt"
+      FROM "SapConnection"
+      WHERE "organizationId" = ${organizationId} AND "product" = ${product} AND "key" = ${key} AND "isActive" = true
+      ORDER BY "createdAt", "id"
+      LIMIT 1
+    )
+    SELECT
+      (SELECT json_build_object(
+                'id', c."id", 'organizationId', c."organizationId", 'product', c."product", 'key', c."key",
+                'label', c."label", 'baseUrl', c."baseUrl", 'authType', c."authType",
+                'environment', c."environment"::text, 'oauthTokenUrl', c."oauthTokenUrl",
+                'secretsCiphertext', c."secretsCiphertext", 'client', c."client", 'writeEnabled', c."writeEnabled",
+                'apiPath', c."apiPath", 'timeoutMs', c."timeoutMs", 'transport', c."transport"::text,
+                'createdAt', c."createdAt")
+         FROM c) AS "connection",
+      (SELECT json_agg(json_build_object(
+                'decision', g."decision"::text, 'expiresAt', g."expiresAt", 'revokedAt', g."revokedAt")
+                ORDER BY g."createdAt", g."id")
+         FROM "ApiAccessGrant" g, c
+        WHERE g."organizationId" = ${organizationId}
+          AND g."environment" = c."environment"::text
+      ) AS "grants"`;
+  const found = rows[0];
+  const connection = found?.connection ? connectionRow(found.connection) : null;
+  return { connection, grants: connection ? (found?.grants ?? []).map(ceilingGrantRow) : [] };
 }

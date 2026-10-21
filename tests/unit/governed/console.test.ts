@@ -19,11 +19,13 @@ const h = vi.hoisted(() => ({
   orgRows: [] as Record<string, unknown>[],
   platformRows: [] as Record<string, unknown>[],
   ceiling: null as null | "NO_APPROVED_GRANT" | "UNDECLARED_ENVIRONMENT",
+  ceilingAsked: [] as Record<string, unknown>[],
 }));
 
 vi.mock("@/lib/sap-public/console-read-guard", async (importOriginal) => ({
   ...(await importOriginal<typeof ConsoleReadGuard>()),
-  decideConsoleRead: async () =>
+  decideConsoleRead: async (input: Record<string, unknown>) =>
+    h.ceilingAsked.push(input) &&
     h.ceiling === null ? { allowed: true, refusal: null, message: null } : { allowed: false, refusal: h.ceiling, message: `refused: ${h.ceiling}` },
   recordConsoleRead: async (row: Record<string, unknown>) => {
     h.orgRows.push(row);
@@ -101,6 +103,7 @@ beforeEach(() => {
   h.orgRows = [];
   h.platformRows = [];
   h.ceiling = null;
+  h.ceilingAsked = [];
   vi.unstubAllEnvs();
   forgetEnvTenantHostWarnings();
   __setGovernedCircuitStore(new MemoryCircuitStore());
@@ -169,6 +172,27 @@ describe("authorise: the console's ceilings, each refusal audited", () => {
     const r = await open({ target: connection("PROD") }).authorise();
     expect(!r.ok && r.refusal.reason).toBe("NO_APPROVED_GRANT");
     expect(h.orgRows[0]).toMatchObject({ status: 403, environment: "PROD" });
+  });
+
+  /*
+   * P0.14b review round 5: the connection's statement carries the ceiling's
+   * grants, so the ceiling judges those and sends no lookup of its own - but
+   * only grants read for the viewer's own organization.
+   */
+  it("judges the grants read with the connection, for the viewer's organization only", async () => {
+    const grant = { decision: "APPROVED", expiresAt: null, revokedAt: null };
+    const withCeiling = (organizationId: string) => {
+      const t = connection("PROD");
+      return { ...t, resolved: { ...t.resolved, connection: { ...t.resolved.connection, ceiling: { organizationId, grants: [grant] } } } };
+    };
+    expect((await open({ target: withCeiling("org_a") }).authorise()).ok).toBe(true);
+    expect(h.ceilingAsked[0]).toEqual({ organizationId: "org_a", environment: "PROD", grants: [grant] });
+    // Read for another organization: not this viewer's answer, so the ceiling asks for itself.
+    expect((await open({ target: withCeiling("org_b") }).authorise()).ok).toBe(true);
+    expect(h.ceilingAsked[1]).toEqual({ organizationId: "org_a", environment: "PROD" });
+    // Not read with the connection: the same.
+    expect((await open({ target: connection("PROD") }).authorise()).ok).toBe(true);
+    expect(h.ceilingAsked[2]).toEqual({ organizationId: "org_a", environment: "PROD" });
   });
 
   it("does not ask the grant question of a deployment tenant, which no organization owns", async () => {

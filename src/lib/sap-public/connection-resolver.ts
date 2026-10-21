@@ -20,6 +20,7 @@
 import { createHash } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import { loadConsoleConnection, type CeilingGrantRow } from "@/lib/governed/call-loads";
 import {
   DEFAULT_API_KEY_HEADER,
   isAllowedApiKeyHeader,
@@ -228,7 +229,21 @@ export async function resolveSapConnection(
   organizationId: string,
   product: string,
   key?: string | null,
-): Promise<ResolvedSapConnection | null> {
+  options: { readonly withCeilingGrants?: boolean } = {},
+): Promise<(ResolvedSapConnection & { readonly ceilingGrants?: readonly CeilingGrantRow[] }) | null> {
+  if (key && options.withCeilingGrants === true) {
+    /*
+     * A CONSOLE READ (P0.14b review round 5): the same named row, and the
+     * grants its environment ceiling judges, in ONE statement
+     * (governed/call-loads.ts loadConsoleConnection), so the console's
+     * authorise step needs no second round trip. The same row is chosen and
+     * opened exactly as below.
+     */
+    if (!organizationId) return null;
+    const load = await loadConsoleConnection(organizationId, product, key);
+    if (!load.connection || load.connection.key !== key) return null;
+    return { ...(await openConnectionRow(load.connection)), ceilingGrants: load.grants };
+  }
   if (key) {
     /*
      * A NAMED KEY OPENS ONLY THAT ROW. This used to open every active row for

@@ -11,10 +11,9 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Read (served, or refused by grant, interface or binding) | **4** | 3 | the key, the interface with its grants and connections, the audit row |
 | Read refused by its key (revoked, expired, rotated out, dropped, unknown) | 4 | 1 | the key; no audit row, as before |
 | Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the claim that finds the key held, and the stored outcome) |
-| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run) on a stored SANDBOX or DEV connection | **5** | 4 | the person's session, the connection, the organization's console row, the platform-scope row with its outcome in one statement |
-| The same on a TEST, PROD or undeclared connection, served under a grant or refused by the environment ceiling | 5 | 5 | the session, the connection, the ceiling's grant lookup, the two rows |
-| The same on a deployment tenant | 5 | 3 (by construction) | the session and the two rows; no connection or grant to read |
-| An Ariba call (`/api/sap/ariba/call`) | 5 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
+| Workbench console read making one SAP call (P0.14b: preview, operations, a capability or catalogue probe, Probe all's run) on a stored connection of any environment, served or refused | **4** | 4 | the person's session, the connection with the grants its environment ceiling judges (one statement), the organization's console row, the platform-scope row with its outcome in one statement |
+| The same on a deployment tenant | 4 | 3 (by construction) | the session and the two rows; no connection or grant to read |
+| An Ariba call (`/api/sap/ariba/call`) | 4 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
@@ -35,13 +34,20 @@ probe guard (`refuseUnlessMayProbeTenant({ viewer })`). The test stubs only
 the cookie. The session's `lastActiveAt` stamp is occasional: at most once
 every five minutes per session, +1.
 
-**Why the console's budget is 5, not the read's 4.** A TEST or PROD console
-read must consult the organization's grants (the environment ceiling), and
-every console read is recorded on two trails, the organization's and the
-platform's. The two rows stay two statements so that either can fail without
-losing the other or the read; the grant lookup is not cached, since a cached
-answer would outlive a revoked grant. A SANDBOX or DEV read, the Workbench's
-common case, is 4.
+**The console is held to the read's budget, 4** (P0.14b review round 5). A
+console read is a read through the pipeline, and P0.19 states a separate
+budget for writes only. A TEST, PROD or undeclared connection must consult the
+organization's grants (the environment ceiling); round 4 looked them up in a
+statement of their own and raised the console's budget to 5 to fit it. They
+are now read in the connection's own statement
+(`loadConsoleConnection`, `src/lib/governed/call-loads.ts`: the named row and
+the organization's grants for its environment, both filtered by the caller's
+organization, held to the two Prisma queries it replaced by
+`tests/integration/governed-call-loads.test.ts`) and judged, unchanged, by
+`decideConsoleRead`. They are still read with every call, never cached, since
+a cached answer would outlive a revoked grant (the budget test revokes one and
+the next preview is refused). The two rows stay two statements, so that
+either trail can fail without losing the other or the read.
 
 **The console's platform row is one statement** (P0.14b review round 3).
 `recordPlatformConsoleRead` wrote the `PlatformAuditEvent` and its

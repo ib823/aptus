@@ -231,7 +231,14 @@ export class ConsoleCall {
     // A connection implies an organization (resolveReadTenant looks one up
     // only within it); naming both keeps the grant query on a real id.
     if (conn && viewer.organizationId) {
-      const decision = await decideConsoleRead({ organizationId: viewer.organizationId, environment: conn.environment });
+      // The grants read with the connection, for this organization: no
+      // second statement (P0.14b review round 5, the console budget is 4).
+      const ceiling = conn.ceiling?.organizationId === viewer.organizationId ? conn.ceiling : undefined;
+      const decision = await decideConsoleRead({
+        organizationId: viewer.organizationId,
+        environment: conn.environment,
+        ...(ceiling ? { grants: ceiling.grants } : {}),
+      });
       if (!decision.allowed) {
         return this.refuse(refusal("authorise", decision.refusal ?? "NO_APPROVED_GRANT", decision.message ?? ""));
       }

@@ -50,10 +50,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSapGraph,
+  isRouteModule,
   keyOf,
   mentionedTargets,
+  routeAliases,
   routeFindings,
   routeReaches,
+  routeReachesOwn,
   untracedGovernedCalls,
   type SapGraph,
   type SourceInput,
@@ -179,7 +182,7 @@ const SOURCES: SourceInput[] = walk(path.join(ROOT, "src")).map((f) => ({
  * src/app/(external)/c/sign/route.ts — is as much a route as src/app/api/ is,
  * and this test scanned only the latter (P0.14b review).
  */
-const isRouteFile = (file: string) => file.startsWith("src/app/") && /\/route\.tsx?$/.test(file);
+const isRouteFile = isRouteModule;
 
 const fileOf = (key: string) => key.slice(0, key.indexOf("#"));
 
@@ -222,10 +225,23 @@ const ROUTES = SOURCES.map((s) => s.file).filter(isRouteFile);
 
 const graph = buildSapGraph(SOURCES, { sapFetchers: new Set(Object.keys(SAP_FETCHERS)), cuts: new Set(Object.keys(CUTS)) });
 
-/** What a compliant route writes, or why it does not. Empty when it is audited. */
-function auditFindings(g: SapGraph, file: string, src = SOURCES.find((s) => s.file === file)?.src ?? ""): string[] {
-  const used = mentionedTargets(g, file);
+/**
+ * What a compliant route writes, or why it does not. Empty when it is audited.
+ *
+ * A route that re-exports another route's handler (P1.10's v1 aliases) writes
+ * what that route writes: it is judged by that route's findings, and by its
+ * own only where it reaches SAP through code of its own (review round 5).
+ */
+function auditFindings(g: SapGraph, file: string, judging: ReadonlySet<string> = new Set()): string[] {
+  if (judging.has(file)) return [];
   const findings: string[] = [];
+  const aliases = routeAliases(g, file);
+  for (const source of new Set(aliases.map((a) => a.source))) {
+    for (const f of auditFindings(g, source, new Set([...judging, file]))) findings.push(`${f} (in ${source}, whose handler this route re-exports)`);
+  }
+  if (aliases.length > 0 && !routeReachesOwn(g, file)) return findings;
+  const src = g.modules.get(file)?.sf.text ?? "";
+  const used = mentionedTargets(g, file);
   if (/\.callSap\s*\(/.test(src) && !used.has(AUDIT.console)) findings.push("calls callSap( without opening the call with openConsoleCall");
   // Each call, not the file: a mention of openConsoleCall elsewhere does not
   // make `{ callSap: (fn) => fn() }.callSap(...)` a console call (review round 3).
@@ -384,7 +400,7 @@ describe("the check itself", () => {
       sapFetchers: new Set(["src/lib/sap-public/tdd-connector.ts#sapFetch"]),
       cuts: new Set(),
     });
-    return { reaches: routeReaches(g, ROUTE), findings: routeFindings(g, ROUTE, PIPE).map((f) => f.via), audit: auditFindings(g, ROUTE, routeSrc) };
+    return { reaches: routeReaches(g, ROUTE), findings: routeFindings(g, ROUTE, PIPE).map((f) => f.via), audit: auditFindings(g, ROUTE) };
   }
 
   it("fails a route that calls the connector directly", () => {
@@ -669,6 +685,118 @@ describe("the check itself", () => {
         "src/app/(studio)/x/page.tsx#Page",
         "src/lib/sap-public/tdd-connector.ts#sapFetch",
       ]);
+    });
+  });
+
+  /*
+   * P0.14b review round 5: a route module's top-level code runs when the
+   * route is imported — on every cold start — with no role gate, no ceiling,
+   * no circuit and no row. Only HTTP exports and bare statements were walked,
+   * so an initializer that called SAP passed every check.
+   */
+  describe("a route's module-scope code runs on import, and is checked as the handler's", () => {
+    const head = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+      import { openConsoleCall } from "@/lib/governed/console";`;
+    const quietGet = `export async function GET() { return Response.json({ ok: true }); }`;
+
+    it.each([
+      ["an unused const initialised with a SAP call", `const _warmed = previewSapEntitySet("x").catch(() => null);`],
+      ["export const dynamic with a SAP call beside its value", `export const dynamic = (void previewSapEntitySet("x"), "force-dynamic");`],
+      ["an immediately invoked function", `const _warm = (async () => previewSapEntitySet("x"))();`],
+      ["a closure handed to a call made on import", `const _timer = setTimeout(() => previewSapEntitySet("x"), 0);`],
+      ["an object handed to a call made on import", `const _reg = new Map([["warm", { run: () => previewSapEntitySet("x") }]]).forEach((v) => v.run());`],
+      ["a class's static initializer", `class Warm { static ready = previewSapEntitySet("x"); }`],
+      ["a class's static block", `class Warm { static { void previewSapEntitySet("x"); } }`],
+      ["an export default value", `export default previewSapEntitySet("x");`],
+    ])("fails %s", (_name, moduleCode) => {
+      const r = check(`${head}\n${moduleCode}\n${quietGet}`);
+      expect(r.reaches).toBe(true);
+      expect(r.findings).toContain("previewSapEntitySet");
+    });
+
+    it("a module-scope helper that only holds a function is followed where a handler mentions it, not on import", () => {
+      const helpers = `const ops = { read: (k: string) => previewSapEntitySet(k), other() { return previewSapEntitySet("o"); } };
+        const load = (k: string) => previewSapEntitySet(k);
+        class Reader { read(k: string) { return previewSapEntitySet(k); } }`;
+      // Not mentioned by any handler: nothing runs, the route does not reach SAP.
+      const unused = check(`${head}\n${helpers}\n${quietGet}`);
+      expect(unused.reaches).toBe(false);
+      expect(unused.findings).toEqual([]);
+      // Called inside callSap: governed.
+      expect(
+        check(`${head}\n${helpers}
+          export async function GET() {
+            const call = openConsoleCall();
+            await call.callSap(() => ops.read("x"), { answered: () => null as never, failed: () => null as never });
+            await call.callSap(() => new Reader().read("r"), { answered: () => null as never, failed: () => null as never });
+            return call.callSap(() => load("y"), { answered: () => null as never, failed: () => null as never });
+          }`),
+      ).toEqual({ reaches: true, findings: [], audit: [] });
+      // Called by the handler outside callSap: a finding, as before.
+      expect(check(`${head}\n${helpers}\nexport async function GET() { return ops.read("x"); }`).findings).toContain("previewSapEntitySet");
+      expect(check(`${head}\n${helpers}\nexport async function GET() { return new Reader().read("x"); }`).findings).toContain("previewSapEntitySet");
+    });
+  });
+
+  /*
+   * P0.14b review round 5: a route that re-exports ANOTHER ROUTE's handler —
+   * P1.10's /api/northbound/v1/* aliases, `export { GET } from
+   * "@/app/api/northbound/interfaces/[id]/data/route"` — is that route, and is
+   * judged by its verdict. Only a handler re-exported from a module that is
+   * not a route (src/lib) goes unwalked and stays a finding.
+   */
+  describe("a route that re-exports another route's handler is judged by that route", () => {
+    const head = `import { previewSapEntitySet } from "@/lib/sap-public/tdd-connector";
+      import { openConsoleCall } from "@/lib/governed/console";`;
+    const GOVERNED: SourceInput = {
+      file: "src/app/api/sap/tdd/governed/route.ts",
+      src: `${head}\nexport async function GET() { const call = openConsoleCall(); return call.callSap(() => previewSapEntitySet("x")); }`,
+    };
+    const SIDE_DOOR: SourceInput = {
+      file: "src/app/api/sap/tdd/side/route.ts",
+      src: `${head}\nexport async function GET() { return previewSapEntitySet("x"); }`,
+    };
+    const WARMING: SourceInput = {
+      file: "src/app/api/sap/tdd/warming/route.ts",
+      src: `${head}\nconst _warm = previewSapEntitySet("w");\nexport async function GET() { const call = openConsoleCall(); return call.callSap(() => previewSapEntitySet("x")); }`,
+    };
+
+    it.each([
+      ["export { GET } from", `export { GET } from "@/app/api/sap/tdd/governed/route";`],
+      ["imported, then exported", `import { GET } from "@/app/api/sap/tdd/governed/route";\nexport { GET };`],
+      ["a relative path", `export { GET } from "../governed/route";`],
+    ])("passes a governed route's handler re-exported with %s", (_name, exportLine) => {
+      expect(check(exportLine, [GOVERNED])).toEqual({ reaches: true, findings: [], audit: [] });
+    });
+
+    it("fails a route that re-exports a route's ungoverned handler, with that route's findings", () => {
+      const r = check(`export { GET } from "@/app/api/sap/tdd/side/route";`, [SIDE_DOOR]);
+      expect(r.reaches).toBe(true);
+      expect(r.findings).toEqual(["previewSapEntitySet"]);
+    });
+
+    it("carries the source route's import-time findings: importing it runs them", () => {
+      expect(check(`export { GET } from "@/app/api/sap/tdd/warming/route";`, [WARMING]).findings).toEqual(["previewSapEntitySet"]);
+    });
+
+    it("judges its own handlers beside the alias on their own", () => {
+      const r = check(`${head}\nexport { GET } from "@/app/api/sap/tdd/governed/route";\nexport async function POST() { return previewSapEntitySet("p"); }`, [GOVERNED]);
+      expect(r.findings).toEqual(["previewSapEntitySet"]);
+      expect(r.audit).toContain("writes no audit row: no GovernedAudit, no console call, no platform audit");
+    });
+
+    it("the broker's own read and write routes may be aliased (P1.10's /api/northbound/v1/*)", () => {
+      const aliases: SourceInput[] = [
+        { file: "src/app/api/northbound/v1/interfaces/[id]/data/route.ts", src: `export { GET } from "@/app/api/northbound/interfaces/[id]/data/route";\nexport const dynamic = "force-dynamic";` },
+        { file: "src/app/api/northbound/v1/interfaces/[id]/data/write/route.ts", src: `export { POST } from "@/app/api/northbound/interfaces/[id]/data/write/route";\nexport const dynamic = "force-dynamic";` },
+      ];
+      // As the aliases land with P1.10, the tree carries them already: each is added once.
+      const g = buildSapGraph([...SOURCES.filter((s) => !aliases.some((a) => a.file === s.file)), ...aliases], { sapFetchers: new Set(Object.keys(SAP_FETCHERS)), cuts: new Set(Object.keys(CUTS)) });
+      for (const { file } of aliases) {
+        expect(routeReaches(g, file), file).toBe(true);
+        expect(routeFindings(g, file, PIPELINE_MODULES), file).toEqual([]);
+        expect(auditFindings(g, file), file).toEqual([]);
+      }
     });
   });
 
