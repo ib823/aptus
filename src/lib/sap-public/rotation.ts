@@ -38,7 +38,26 @@ export type ProbeStep = "sign-in" | "metadata" | "data-read";
 
 export type ProbeStepResult =
   | { readonly step: ProbeStep; readonly ok: true }
-  | { readonly step: ProbeStep; readonly ok: false; readonly detail: string };
+  | {
+      readonly step: ProbeStep;
+      readonly ok: false;
+      readonly detail: string;
+      /**
+       * SAP did not answer the step (a timeout, a network failure or a 5xx),
+       * so the step says nothing about the credential either way (wave 2
+       * review round 1). Still refused, because the new secret is unproven,
+       * but not worded as the credential's fault.
+       */
+      readonly unavailable?: boolean;
+    };
+
+/** The refusal for a step SAP did not answer: the new credential is unproven, not wrong. */
+function unansweredReason(request: string, detail: string): string {
+  return (
+    `SAP did not answer the ${request}, so the new credential could not be proven either way. ` +
+    `Nothing was changed and the current secret is still serving. Save again once SAP answers. ${detail}`
+  );
+}
 
 export interface RotationProbe {
   readonly signIn: ProbeStepResult;
@@ -118,9 +137,10 @@ export function decideRotation(
       swap: false,
       probe,
       failedAt: "metadata",
-      reason:
-        "The new credential signed in but could not read the service metadata. Nothing was " +
-        `changed and the current secret is still serving. ${probe.metadata.detail}`,
+      reason: probe.metadata.unavailable
+        ? unansweredReason("metadata request", probe.metadata.detail)
+        : "The new credential signed in but could not read the service metadata. Nothing was " +
+          `changed and the current secret is still serving. ${probe.metadata.detail}`,
     };
   }
 
@@ -143,8 +163,9 @@ export function decideRotation(
       swap: false,
       probe,
       failedAt: "data-read",
-      reason:
-        "The new credential signed in and read metadata, but SAP refused a data read — so " +
+      reason: probe.dataRead.unavailable
+        ? unansweredReason("data read", probe.dataRead.detail)
+        : "The new credential signed in, but SAP refused a data read — so " +
         "swapping it would leave every lane on this system unable to read. Nothing was changed. " +
         probe.dataRead.detail,
     };

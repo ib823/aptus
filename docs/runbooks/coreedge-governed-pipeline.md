@@ -85,31 +85,55 @@ client's Basis team.
 
 Re-saving a connection (POST `/api/studio/connections` with the same product
 and key) is how its secret is rotated. When the row being replaced is active and
-its secret is working, meaning its last Test was OK or a lane has proven a read
-through it (`LaneCheck`), the route now, after step-up and before writing
-anything:
+its secret is working, meaning its last Test was OK, a lane has proven a read
+through it (`LaneCheck`), or the save that stored the secret proved one of
+those (below), and the save changes the sign-in credentials on the same system,
+the route now, after step-up and before writing anything:
 
 1. signs in with the new credentials (a token is issued, or a header built, and
    SAP does not answer 401);
 2. reads the service metadata from the connection's probe path (the request the
-   Test button sends). Required only when the last Test was OK: a probe path
-   whose `$metadata` the arrangement does not release (last Test `NOT_FOUND`),
-   or a sweep that met a timeout (`TIMEOUT`), is not held against the new
-   secret, which is then judged by step 3;
-3. reads one row from the newest dataset a lane has proven readable through this
-   connection (`LaneCheck`), as the broker reads it. With no proven read there
-   is nothing to compare against and this step is not run.
+   Test button sends). Required only when the working secret read it (last Test
+   OK, or proven by the save that stored it): a probe path whose `$metadata`
+   the arrangement does not release (last Test `NOT_FOUND`), a sweep that met a
+   timeout (`TIMEOUT`), or a connection with no probe path at all (ECC, whose
+   product has no default service, without an API path) is not held against
+   the new secret, which is then judged by step 3 (with no probe path, step 3
+   also decides the sign-in);
+3. reads one row from the dataset proven readable through this connection, as
+   the broker reads it. With no proven read there is nothing to compare against
+   and this step is not run.
 
 If a step fails the save is refused (`400 VALIDATION_ERROR`, the message says
 which step and that nothing changed), a `TEST_CONNECT` config-audit row records
 `connection_rotation_refused` and the failed step (never the secret), and the
-working secret keeps serving. If all pass the secret is stored and the save's
-audit row says `rotationProbed: true`.
+working secret keeps serving. When SAP did not answer a step (a timeout or a
+5xx), the message says so ("SAP did not answer ..."), not that the credential
+was wrong. If all pass the secret is stored and the save's audit row says
+`rotationProbed: true`.
 
-Not probed, and saved exactly as before: a new connection, a deactivated one,
-one SAP last refused (last Test `UNAUTHORIZED`: the secret is broken, which is
-when it gets rotated), and one whose last Test was not OK with no lane having
-read through it (nothing working to protect).
+**The proof outlives the save.** Every re-save clears the probe status and drops
+the connection's lane checks (P0.2: they were made with the settings the save
+replaced). So the save's audit row records what the stored credentials are
+proven to do, `rotationProof: { revision, metadata, readInterfaceId }`, keyed by
+the connection revision that save wrote, and the next save reads it back. A
+typo in the save right after a probed rotation is therefore still probed and
+refused. A Test or the nightly probe writes a newer status, which then decides.
+
+Not probed, and saved exactly as before:
+
+- a new connection, a deactivated one, one SAP last refused (last Test
+  `UNAUTHORIZED`: the secret is broken, which is when it gets rotated), and one
+  with no evidence of working (nothing working to protect);
+- a re-save that keeps the sign-in credentials (the auth type, the token
+  endpoint and every secret except the write secret): a label fix, or ticking
+  Allow writes and adding the write secret. Nothing is sent to SAP, so a SAP
+  outage does not refuse it; the audit row says
+  `rotationProbeSkipped: "credentials_unchanged"` and carries the proof forward;
+- a re-point: a save that changes the host or base path, the environment or the
+  SAP client. The old system's proof says nothing about the new one; the audit
+  row says `rotationProbeSkipped: "repointed"`, carries no proof, and the new
+  system is proven by its first Test, lane check or nightly probe.
 
 **If SAP is down while a secret must be changed** (for example the old password
 was revoked at SAP and the host is also unreachable): deactivate the connection,
@@ -123,10 +147,15 @@ and redeploy; only the exact word `off` turns the probe off.
 - The four routes answer and audit exactly as before (the golden test).
 - `COREEDGE_CIRCUIT_BREAKER` defaults to `observe`: counted and logged, never
   refused.
-- `COREEDGE_ROTATION_PROBE` defaults to on. It refuses only a save that would
-  replace a proven-working secret with one SAP does not accept; no call path is
-  affected. A save that worked today and is refused tomorrow is exactly a
-  mistyped or unauthorised rotated secret.
+- `COREEDGE_ROTATION_PROBE` defaults to on. No call path is affected. It can
+  refuse only a save that changes the sign-in credentials of an active,
+  proven-working connection on the same system, and does so when the new
+  credentials fail to prove what the old ones proved: a mistyped or
+  unauthorised rotated secret, or a rotation made while SAP does not answer
+  (the message then says SAP did not answer; save again once it does, or use
+  the deactivate, save, reactivate path above). A save that keeps the
+  credentials, or re-points the connection to another system, is not probed
+  and saves as before.
 - Operations and the SAP system screen each gain a section; nothing is removed.
 
 ## Rolling back

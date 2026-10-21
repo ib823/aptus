@@ -77,17 +77,22 @@ import { settleConnectionGroup } from "@/lib/ops/connection-probe-sweep";
 import {
   isAllowedApiKeyHeader,
   normalizeEnvironment,
+  resolveSapConnection,
   SapConnectionChangedError,
   upsertSapConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { decideRotation } from "@/lib/sap-public/rotation";
 import {
+  carriedProof,
+  loadRotationEvidence,
   probeRotation,
-  provenReadTarget,
+  proofFromProbe,
   rotationProbeApplies,
   rotationProbeMayApply,
   rotationRequirements,
+  sameSignInCredentials,
+  type RotationProof,
 } from "@/lib/sap-public/rotation-probe";
 import {
   ENVIRONMENT_VALUES,
@@ -768,6 +773,10 @@ export async function POST(request: NextRequest) {
   let missing: StepUpMissing | null = null;
   /** The new secret was proven against SAP before it replaced a working one (P0.14). */
   let rotationProbed = false;
+  /** What the stored credentials are proven to do, for the next save's probe (review round 1). */
+  let rotationProof: RotationProof | null = null;
+  /** Why a save that would have been probed was not: nothing to prove, or another system. */
+  let rotationSkipped: "credentials_unchanged" | "repointed" | null = null;
   const secrets = {
     ...(input.username ? { username: input.username } : {}),
     ...(input.password ? { password: input.password } : {}),
@@ -820,12 +829,26 @@ export async function POST(request: NextRequest) {
      * is. A new, deactivated or never-proven connection, and one SAP last
      * refused (UNAUTHORIZED), saves exactly as before;
      * COREEDGE_ROTATION_PROBE=off turns the probe off.
+     *
+     * WHAT IS PROBED, AND WHAT IS CARRIED (wave 2 integration review round 1).
+     * Working includes what the save that stored the secret proved: every
+     * re-save clears the probe status and the lane checks (P0.2), so without
+     * it the save after any re-save went unprobed and a typo there replaced
+     * a secret just proven. Only a save that changes the sign-in credentials
+     * on the same system is probed: one that keeps them (a label fix, the
+     * write secret added to switch writes on) has nothing to prove and is
+     * not refused because SAP is down, and carries the proof to the revision
+     * it writes; one that points the connection at another system (host,
+     * environment or SAP client) is a re-point, saved as before with no proof
+     * carried, because the old system's proof says nothing about the new one.
      */
     const current = judged.existing;
     rotationProbed = false;
-    const readTarget =
-      current && rotationProbeMayApply(current) ? await provenReadTarget(organizationId, current.id) : null;
-    if (current && rotationProbeApplies(current, readTarget)) {
+    rotationProof = null;
+    rotationSkipped = null;
+    const evidence =
+      current && rotationProbeMayApply(current) ? await loadRotationEvidence(organizationId, current) : null;
+    if (current && evidence && rotationProbeApplies(current, evidence)) {
       const candidate: ResolvedSapConnection = {
         source: "db",
         id: current.id,
@@ -843,22 +866,45 @@ export async function POST(request: NextRequest) {
         environment,
         client: input.client ?? null,
       };
-      const required = rotationRequirements(current, readTarget);
-      const probe = await probeRotation(candidate, readTarget, undefined, { metadataRequired: required.metadataRequired });
-      const decision = decideRotation(probe, new Date(), required);
-      if (!decision.swap) {
-        // The attempt is on the record — which step stopped it, never what was typed.
-        await writeConfigAudit({
-          organizationId,
-          actorId: userId,
-          entityType: "Connection",
-          entityId: current.id,
-          action: "TEST_CONNECT",
-          after: { event: "connection_rotation_refused", product: input.product, key, failedAt: decision.failedAt },
+      // Every save bumps the revision under the row lock the upsert checks, so
+      // the row this save writes carries the next one.
+      const savedRevision = current.revision + 1;
+      const repoints =
+        writeTargetChanges(current, { environment, baseUrl: input.baseUrl, client: input.client ?? null }).length > 0;
+      // The stored row as it was judged, opened to compare its credentials in
+      // memory. One that will not open, or that changed since, is "changed".
+      const stored = repoints
+        ? null
+        : await resolveSapConnection(organizationId, input.product, key).then(
+            (row) => (row && row.id === current.id && row.revision === current.revision ? row : null),
+            () => null,
+          );
+      if (repoints) {
+        rotationSkipped = "repointed";
+      } else if (stored && sameSignInCredentials(stored, candidate)) {
+        rotationSkipped = "credentials_unchanged";
+        rotationProof = carriedProof(savedRevision, evidence, {
+          probePathUnchanged: (stored.apiPath?.trim() || null) === (input.apiPath?.trim() || null),
         });
-        return withStepUpRecorded(missing, studioError("VALIDATION_ERROR", decision.reason));
+      } else {
+        const required = rotationRequirements(evidence);
+        const probe = await probeRotation(candidate, evidence.read, undefined, { metadataRequired: required.metadataRequired });
+        const decision = decideRotation(probe, new Date(), required);
+        if (!decision.swap) {
+          // The attempt is on the record — which step stopped it, never what was typed.
+          await writeConfigAudit({
+            organizationId,
+            actorId: userId,
+            entityType: "Connection",
+            entityId: current.id,
+            action: "TEST_CONNECT",
+            after: { event: "connection_rotation_refused", product: input.product, key, failedAt: decision.failedAt },
+          });
+          return withStepUpRecorded(missing, studioError("VALIDATION_ERROR", decision.reason));
+        }
+        rotationProbed = true;
+        rotationProof = proofFromProbe(savedRevision, probe, evidence.read);
       }
-      rotationProbed = true;
     }
 
     /*
@@ -1009,6 +1055,11 @@ export async function POST(request: NextRequest) {
       secretsRotated: true,
       // The new secret was proven against SAP before it replaced a working one.
       ...(rotationProbed ? { rotationProbed: true } : {}),
+      ...(rotationSkipped ? { rotationProbeSkipped: rotationSkipped } : {}),
+      // What the credentials just stored are proven to do, keyed by the
+      // revision this save wrote: the next save's probe reads it back
+      // (rotation-probe.ts `carriedRotationProof`). Facts only, never a secret.
+      ...(rotationProof ? { rotationProof: { ...rotationProof } } : {}),
       ...(warning ? { sfBasicAuthSunsetWarned: true } : {}),
     },
   });
