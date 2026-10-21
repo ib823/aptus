@@ -25,7 +25,7 @@ import { toTypeName } from "@/lib/contracts/names";
 import type { ODataVersion } from "@/lib/contracts/ir";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
-import { currentContractSnapshot, recordContractSnapshot } from "@/lib/contracts/snapshot";
+import { currentContractSnapshot, MAX_CONTRACT_BYTES, recordContractSnapshot } from "@/lib/contracts/snapshot";
 import type { CapturedSchema } from "@/lib/studio/schema-capture";
 import { prisma } from "@/lib/db/prisma";
 import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
@@ -75,7 +75,11 @@ export async function recordVerifiedContract(input: {
     return { status: "NO_DATASET", detail: "The interface names no dataset, so there is no contract to record yet." };
   }
   const slice = sliceForEntitySet(compiled.ir, iface.entitySet);
-  if (!slice.ok) return { status: "NO_DATASET", detail: slice.detail };
+  if (!slice.ok) {
+    return slice.reason === "TOO_LARGE"
+      ? { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${slice.detail}` }
+      : { status: "NO_DATASET", detail: slice.detail };
+  }
 
   try {
     const outcome = await recordContractSnapshot({
@@ -86,6 +90,12 @@ export async function recordVerifiedContract(input: {
       connectionId: input.connectionId,
       createdById: input.actorId,
     });
+    if (outcome.status === "TOO_LARGE") {
+      return {
+        status: "NOT_COMPILED",
+        detail: `The compiled contract is larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB, so it was not recorded.`,
+      };
+    }
 
     let requestSchemaWritten = false;
     if (iface.mode === "WRITE") {
@@ -224,6 +234,9 @@ export async function recordSampledContract(input: {
       contract: contractFromSample(input.schema, iface.entitySet, version),
       createdById: input.actorId,
     });
+    if (outcome.status === "TOO_LARGE") {
+      return { status: "NOT_RECORDED", detail: "The sampled contract is too large to record." };
+    }
     return { status: outcome.status, snapshotId: outcome.snapshot.id, semver: outcome.snapshot.semver };
   } catch (err) {
     console.error("[contracts] sampled snapshot not recorded", {

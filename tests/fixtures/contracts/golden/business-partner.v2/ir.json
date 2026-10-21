@@ -1,5 +1,19 @@
 {
-  "complexTypes": [],
+  "complexTypes": [
+    {
+      "name": "DummyFunctionImportResult",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "TRUE",
+          "name": "IsInvalid",
+          "nullable": true,
+          "type": "Edm.Boolean"
+        }
+      ],
+      "qualifiedName": "API_PARTNER_DEMO.DummyFunctionImportResult"
+    }
+  ],
   "container": "API_PARTNER_DEMO.API_PARTNER_DEMO_Entities",
   "dataServiceVersion": "2.0",
   "edmxVersion": "1.0",
@@ -325,6 +339,24 @@
       ],
       "returnType": {
         "type": "API_PARTNER_DEMO.A_PartnerType"
+      }
+    },
+    {
+      "actionFor": "API_PARTNER_DEMO.A_PartnerType",
+      "httpMethod": "POST",
+      "kind": "action",
+      "label": "Release Business Partner",
+      "name": "ReleasePartner",
+      "parameters": [
+        {
+          "mode": "In",
+          "name": "Partner",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "returnType": {
+        "type": "API_PARTNER_DEMO.DummyFunctionImportResult"
       }
     }
   ]

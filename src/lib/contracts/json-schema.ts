@@ -64,6 +64,13 @@ export interface ContractSchemas {
   names: ContractSchemaNames;
 }
 
+/**
+ * The `${stem}_<suffix>` names given to something other than a type: the
+ * bodies here, and the results and request the northbound document adds
+ * (openapi.ts). A complex or enum type never takes one.
+ */
+export const RESERVED_SUFFIXES = ["Create", "Update", "Key", "ReadResult", "CreateResult", "CreateRequest"] as const;
+
 export interface SchemaOptions {
   dialect: SchemaDialect;
   /** The prefix every component name of this contract starts with. */
@@ -202,8 +209,27 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
   const sampled = contract.source === "SAMPLED";
   const schemas: Record<string, JsonSchema> = {};
 
-  const complexName = (ct: { name: string }) => `${stem}_${toTypeName(ct.name)}`;
-  const enumName = (en: { name: string }) => `${stem}_${toTypeName(en.name)}`;
+  /**
+   * One component name per type, by qualified name. toTypeName folds distinct
+   * names together (Price_Info and PriceInfo; the same name in two schemas),
+   * and a type called Create or Key would land on a body's name; either way
+   * one schema overwrote another and properties pointed at the wrong, closed
+   * one. The names this module and the northbound document give the record,
+   * its bodies and results are taken first; a type that still collides gets a
+   * numeric suffix, in the contract's own order.
+   */
+  const used = new Set<string>([stem, ...RESERVED_SUFFIXES.map((s) => `${stem}_${s}`)]);
+  const componentOf = new Map<string, string>();
+  for (const t of [...contract.complexTypes, ...contract.enumTypes]) {
+    if (componentOf.has(t.qualifiedName)) continue;
+    const base = `${stem}_${toTypeName(t.name)}`;
+    let name = base;
+    for (let i = 2; used.has(name); i++) name = `${base}${i}`;
+    used.add(name);
+    componentOf.set(t.qualifiedName, name);
+  }
+  const complexName = (ct: { qualifiedName: string }) => componentOf.get(ct.qualifiedName)!;
+  const enumName = (en: { qualifiedName: string }) => componentOf.get(en.qualifiedName)!;
   const complexByName = new Map(contract.complexTypes.map((t) => [t.qualifiedName, t]));
   const enumByName = new Map(contract.enumTypes.map((t) => [t.qualifiedName, t]));
 

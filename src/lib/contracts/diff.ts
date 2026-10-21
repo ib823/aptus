@@ -14,10 +14,11 @@
  *     length, precision or scale got smaller; a capability withdrawn (no
  *     longer creatable, updatable, deletable, filterable, sortable,
  *     addressable, pageable, …) or a filter newly required; a property became
- *     computed or immutable.
+ *     computed or immutable; an open entity type closed.
  *   MINOR — something was added or loosened: an optional property,
  *     navigation, operation, enum member or optional parameter added; a
- *     length, precision or scale grew; a capability granted.
+ *     length, precision or scale grew; a capability granted; a closed entity
+ *     type opened.
  *   PATCH — only what the contract SAYS about itself changed: labels, quick
  *     info, semantics, display formats, PersonalData annotations, default
  *     values, partners, bindings, an entity type's own name.
@@ -25,7 +26,11 @@
  * A change of SOURCE (sampled rows ↔ $metadata) compares what both can say —
  * property names — and is major when a property disappears, minor otherwise:
  * the two descriptions are not comparable field by field, and pretending they
- * were would turn every first $metadata compile into a "type change".
+ * were would turn every first $metadata compile into a "type change". Two
+ * SAMPLED contracts are compared the same way: what a sample observed (a type
+ * only where a value was seen, null only where one happened to be) is not a
+ * declaration, and a capture whose rows held a value where the last one's held
+ * null has not changed the service.
  */
 
 import { canonicalJson } from "@/lib/contracts/canonical";
@@ -73,10 +78,17 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
     add("major", "odataVersion", `The service changed from OData ${prev.odataVersion} to ${next.odataVersion}.`);
   }
 
-  if (prev.source !== next.source) {
+  if (prev.source !== next.source || next.source === "SAMPLED") {
     const nextNames = new Set(next.entityType.properties.map((p) => p.name));
     for (const p of prev.entityType.properties) {
       if (!nextNames.has(p.name)) add("major", `property:${p.name}`, `${p.name} is no longer described.`);
+    }
+    if (prev.source === next.source) {
+      const prevNames = new Set(prev.entityType.properties.map((p) => p.name));
+      for (const p of next.entityType.properties) {
+        if (!prevNames.has(p.name)) add("minor", `property:${p.name}`, `${p.name} was added.`);
+      }
+      return finish(changes);
     }
     add(
       "minor",
@@ -104,7 +116,12 @@ export function diffContracts(prev: InterfaceContract, next: InterfaceContract):
   if (prev.entityType.key.join(",") !== next.entityType.key.join(",")) {
     add("major", "key", `The key changed from (${prev.entityType.key.join(", ")}) to (${next.entityType.key.join(", ")}).`);
   }
-  if (prev.entityType.openType !== next.entityType.openType) add("minor", "entityType", "The entity type's openness changed.");
+  // Closing an open type withdraws the dynamic properties clients sent and read.
+  if (prev.entityType.openType === true && next.entityType.openType !== true) {
+    add("major", "entityType", "The entity type no longer accepts dynamic properties.");
+  } else if (prev.entityType.openType !== true && next.entityType.openType === true) {
+    add("minor", "entityType", "The entity type now accepts dynamic properties.");
+  }
 
   diffProperties("property", prev.entityType.properties, next.entityType.properties, add);
   diffNavigations(prev.entityType.navigations, next.entityType.navigations, add);

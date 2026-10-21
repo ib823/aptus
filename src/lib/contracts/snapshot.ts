@@ -3,11 +3,31 @@
  * that describes an interface now (P1.3).
  *
  * ONE ROW PER CONTRACT, NOT PER COMPILE. Verifying the same service twice
- * compiles twice and records once: a row is written only when the content
- * hash (or the service it describes) differs from the interface's latest.
- * The new row's version is the latest's, bumped by the structural diff
- * (diff.ts) — the first is 1.0.0. Rows are immutable; nothing here updates
+ * compiles twice and records once. Rows are immutable; nothing here updates
  * one.
+ *
+ * ENVIRONMENTS ARE NOT IN STEP. DEV runs ahead of PROD by transports, so the
+ * same interface verified in each describes two contracts at once, and
+ * connections that log on in different languages describe the same structure
+ * with different labels. Compared only with the interface's latest row, every
+ * verify that alternated environments was a new version — and every return to
+ * PROD a field "removed", a major one. So each environment is followed along
+ * its own rows (the rows its verifies wrote; SAMPLED rows have none and are a
+ * line of their own):
+ *
+ *   - the compile matches the environment's own newest row: UNCHANGED, that row;
+ *   - it matches a row NEWER than that (or the environment has none): the
+ *     environment is catching up to a contract another one already recorded —
+ *     UNCHANGED, that row;
+ *   - otherwise a new row. Its diff is against the environment's own newest
+ *     row — for an environment's first verify, against whichever
+ *     environment's newest row it is nearest to — and its version is the
+ *     interface's latest bumped by that diff, so versions stay one ordered
+ *     line. An environment going BACK to an older contract of its
+ *     own is a new version — a field that disappeared is still a change.
+ *
+ * A contract larger than MAX_CONTRACT_BYTES is never stored (TOO_LARGE): it
+ * would be read back on every /schema call.
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. A version bump for another reason — the
@@ -23,7 +43,7 @@
 
 import { Prisma } from "@prisma/client";
 
-import { contractHash } from "@/lib/contracts/canonical";
+import { contractDigest } from "@/lib/contracts/canonical";
 import { diffContracts, nextSemver, semverParts, type ContractDiff } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { prisma } from "@/lib/db/prisma";
@@ -47,7 +67,14 @@ export interface CurrentSnapshot extends SnapshotSummary {
 
 export type RecordOutcome =
   | { status: "RECORDED"; snapshot: SnapshotSummary; diff: ContractDiff | null }
-  | { status: "UNCHANGED"; snapshot: SnapshotSummary };
+  | { status: "UNCHANGED"; snapshot: SnapshotSummary }
+  | { status: "TOO_LARGE"; bytes: number };
+
+/**
+ * The largest contract stored, as canonical JSON. A slice of a real dataset is
+ * tens of kilobytes; one this size is a description built to be expensive.
+ */
+export const MAX_CONTRACT_BYTES = 4 * 1024 * 1024;
 
 const SUMMARY_SELECT = {
   id: true,
@@ -87,6 +114,15 @@ function summary(row: {
   };
 }
 
+const bumpRank = (b: ContractDiff["bump"]): number => (b === null ? 0 : b === "patch" ? 1 : b === "minor" ? 2 : 3);
+
+/** Is version a later than version b? */
+function laterThan(a: string, b: string): boolean {
+  const [x, y] = [semverParts(a), semverParts(b)];
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! > y[i]!;
+  return false;
+}
+
 export async function recordContractSnapshot(input: {
   scope: TenantScope;
   iface: { id: string; version: number; externalId: string; entitySet: string };
@@ -96,28 +132,55 @@ export async function recordContractSnapshot(input: {
   createdById?: string | null;
 }): Promise<RecordOutcome> {
   const { scope, iface, contract } = input;
-  const hash = contractHash(contract);
+  const environment = input.environment ?? null;
+  const { hash, bytes } = contractDigest(contract);
+  if (bytes > MAX_CONTRACT_BYTES) return { status: "TOO_LARGE", bytes };
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const latest = await prisma.contractSnapshot.findFirst({
+    // Summaries only: an interface has a handful of versions, and the IRs
+    // the diff needs are read below.
+    const rows = await prisma.contractSnapshot.findMany({
       where: scopedWhere(scope, { interfaceId: iface.id }),
       orderBy: [...NEWEST_FIRST],
-      select: { ...SUMMARY_SELECT, ir: true },
+      select: { ...SUMMARY_SELECT, environment: true },
     });
-    if (latest && latest.contentHash === hash && latest.externalId === iface.externalId) {
-      return { status: "UNCHANGED", snapshot: summary(latest) };
-    }
+    const latest = rows[0];
+    const own = rows.find((r) => r.environment === environment);
+    const same = (r: (typeof rows)[number]) => r.contentHash === hash && r.externalId === iface.externalId;
+    if (own && same(own)) return { status: "UNCHANGED", snapshot: summary(own) };
+    // Newest first, so the first match is the newest; it counts only if it is past this environment's own.
+    const match = rows.find(same);
+    if (match && (!own || laterThan(match.semver, own.semver))) return { status: "UNCHANGED", snapshot: summary(match) };
 
     let diff: ContractDiff | null = null;
     let semver = "1.0.0";
     if (latest) {
-      diff = diffContracts(latest.ir as unknown as InterfaceContract, contract);
+      // What this contract is a change OF: the environment's own newest row;
+      // for its first verify, whichever environment's newest row it is
+      // nearest to (the smallest bump, the newer on a tie).
+      const heads = new Map<string | null, (typeof rows)[number]>();
+      for (const r of rows) if (!heads.has(r.environment)) heads.set(r.environment, r);
+      const candidates = own ? [own] : [...heads.values()];
+      const irs = await prisma.contractSnapshot.findMany({
+        where: scopedWhere(scope, { id: { in: candidates.map((c) => c.id) } }),
+        select: { id: true, ir: true },
+      });
+      const irById = new Map(irs.map((r) => [r.id, r.ir]));
+      let best: { row: (typeof rows)[number]; diff: ContractDiff } | null = null;
+      for (const row of candidates) {
+        const ir = irById.get(row.id);
+        if (!ir) continue;
+        const d = diffContracts(ir as unknown as InterfaceContract, contract);
+        if (!best || bumpRank(d.bump) < bumpRank(best.diff.bump)) best = { row, diff: d };
+      }
+      if (!best) continue; // removed meanwhile: read again
+      diff = best.diff;
       if (diff.bump === null) {
         // Same structure, different hash or service: say so, as a patch.
         diff = {
           bump: "patch",
           changes: [
-            latest.externalId !== iface.externalId
+            best.row.externalId !== iface.externalId
               ? { bump: "patch", at: "service", change: "The same contract is now served by another service of this interface." }
               : { bump: "patch", at: "contract", change: "The description was restated without a structural change." },
           ],
@@ -145,7 +208,7 @@ export async function recordContractSnapshot(input: {
           ir: contract as unknown as Prisma.InputJsonObject,
           irVersion: contract.irVersion,
           diff: diff === null ? Prisma.DbNull : (diff as unknown as Prisma.InputJsonObject),
-          environment: input.environment ?? null,
+          environment,
           connectionId: input.connectionId ?? null,
           createdById: input.createdById ?? null,
         },

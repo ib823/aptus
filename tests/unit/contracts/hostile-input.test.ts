@@ -175,6 +175,74 @@ describe("descriptions that make a lookup quadratic", () => {
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 
+  // Every import carries its operation's parameters, so P parameters imported
+  // M times were P×M objects: 9,000,000 from 300 KB, and a heap exhausted on
+  // the verify request from under 1 MB.
+  const P = 3000;
+  const M = 3000;
+
+  it("one action with many parameters, imported many times, is refused (CSDL XML)", () => {
+    const doc =
+      EDMX_HEAD +
+      `<Action Name="a">${Array.from({ length: P }, (_, i) => `<Parameter Name="p${i}" Type="Edm.String"/>`).join("")}</Action>` +
+      `<EntityContainer Name="C">${Array.from({ length: M }, (_, i) => `<ActionImport Name="i${i}" Action="ns.a"/>`).join("")}</EntityContainer>` +
+      EDMX_TAIL;
+    expect(doc.length).toBeLessThan(DEFAULT_XML_LIMITS.maxBytes);
+    const { value, ms } = timed(() => compileContract(doc));
+    expect(value).toMatchObject({ ok: false, reason: "TOO_MANY_MEMBERS" });
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it("the same in CSDL JSON", () => {
+    const container: Record<string, unknown> = { $Kind: "EntityContainer" };
+    for (let i = 0; i < M; i++) container[`i${i}`] = { $Action: "ns.a" };
+    const doc = JSON.stringify({
+      $Version: "4.0",
+      ns: {
+        a: [{ $Kind: "Action", $Parameter: Array.from({ length: P }, (_, i) => ({ $Name: `p${i}` })) }],
+        C: container,
+      },
+    });
+    const { value, ms } = timed(() => compileContract(doc));
+    expect(value).toMatchObject({ ok: false, reason: "TOO_MANY_MEMBERS" });
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it("an action imported a few times still carries its parameters in each import", () => {
+    const doc =
+      EDMX_HEAD +
+      '<Action Name="a"><Parameter Name="x" Type="Edm.String"/><Parameter Name="y" Type="Edm.Int32"/></Action>' +
+      '<EntityContainer Name="C"><ActionImport Name="one" Action="ns.a"/><ActionImport Name="two" Action="ns.a"/></EntityContainer>' +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ir.operations.map((o) => [o.name, o.parameters.map((p) => p.name)])).toEqual([
+      ["one", ["x", "y"]],
+      ["two", ["x", "y"]],
+    ]);
+  });
+
+  it("many complex types over one large base type: the slice is refused, not multiplied", () => {
+    // Each derived type folded its own copy of the base: N×B properties from
+    // N+B declarations — 4,000,000 here, a 210 MB contract from 250 KB.
+    const n = 2000;
+    const doc =
+      EDMX_HEAD +
+      `<ComplexType Name="Base">${Array.from({ length: n }, (_, i) => `<Property Name="b${i}" Type="Edm.String"/>`).join("")}</ComplexType>` +
+      Array.from({ length: n }, (_, i) => `<ComplexType Name="c${i}" BaseType="ns.Base"/>`).join("") +
+      '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+      Array.from({ length: n }, (_, i) => `<Property Name="p${i}" Type="ns.c${i}"/>`).join("") +
+      '</EntityType><EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>' +
+      EDMX_TAIL;
+    const r = compileContract(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const { value, ms } = timed(() => sliceForEntitySet(r.ir, "S"));
+    expect(value).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
   it("an import still names the first unbound overload, after bound ones of the same name", () => {
     const doc =
       EDMX_HEAD +

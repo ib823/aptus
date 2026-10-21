@@ -94,8 +94,21 @@ mandatory one added; nullability changed either way; a length, precision or
 scale smaller; a capability withdrawn; a filter newly required; a field newly
 computed or immutable. Minor: an optional addition, a larger facet, a capability
 granted. Patch: labels, quick info, semantics, display formats, PersonalData
-annotations, partners, bindings. A change of source (sampled ↔ compiled)
-compares field names only. The full list is in `src/lib/contracts/diff.ts`.
+annotations, partners, bindings. Closing an open entity type is major; opening
+one is minor. A change of source (sampled ↔ compiled), and two sampled
+contracts, compare field names only: what a sample happened to observe (a type
+only where a value was seen, null only where one was) is not a declaration.
+The full list is in `src/lib/contracts/diff.ts`.
+
+Environments are not in step: DEV runs ahead of PROD by transports, and
+connections that log on in different languages label the same structure
+differently. Each environment is followed along its own snapshots
+(`snapshot.ts`): a verify that matches the environment's own newest snapshot,
+or a newer one another environment already recorded, records nothing; anything
+else is a new version, diffed against the environment's own newest snapshot (or,
+for its first verify, the nearest other environment's). Verifying DEV and PROD
+in turn therefore records each contract once; an environment going back to an
+older contract of its own is still a new version.
 
 ## Hostile input
 
@@ -104,7 +117,17 @@ The description comes from a customer's system. `xml.ts` refuses a DOCTYPE
 over 8 MB, nesting past 64 levels, more than 400,000 elements or 128 attributes
 on one element, and keeps at most 64 KB of text per element. The parser is a
 single linear pass (saxes); nothing pattern-matches markup.
-`tests/unit/contracts/hostile-input.test.ts` has a case for each.
+
+What the compiler emits is bounded too, because one declaration can be emitted
+many times: every import of an action carries its parameters, so one action
+with 3,000 parameters imported 3,000 times was 9,000,000 objects from 300 KB.
+Every property, navigation, parameter, enum member, entity set and operation
+spends from a budget equal to the element bound, and a description past it is
+refused as `TOO_MANY_MEMBERS` (CSDL XML and JSON alike). The slice is refused
+(`TOO_LARGE`, reported as `NOT_COMPILED`) once folding base types would give it
+more than twice the description's own members plus 10,000, and a contract over
+4 MB of canonical JSON is never stored: it would be read back on every
+`/schema` call. `tests/unit/contracts/hostile-input.test.ts` has a case for each.
 
 ## Golden tests
 
@@ -174,9 +197,21 @@ list, set `CONTRACT_CORPUS_APIS` (comma-separated API ids) on a manual run.
   close the item: pin that commit in a CI job, feed it every golden
   `openapi-3.0.json`, and assert it generates and that `abaplint` passes on
   the output.
-- **Which environment's description is the contract of record.** A snapshot
-  records the environment and connection whose verify produced it, and the
-  newest wins: a DEV service ahead of PROD makes the latest contract DEV's.
-  Whether the published contract should follow PROD only is a product decision.
+- **Which environment's description is the contract of record (open decision).**
+  Versions no longer flip between environments (see Semantic versions), but
+  the documents, the kit and `/schema` serve the newest version describing the
+  interface's service and dataset, whichever environment recorded it: with DEV
+  ahead of PROD that is DEV's, so a PROD caller can be shown a field PROD does
+  not have yet (harmless in a record, which stays open; a create body is
+  closed, and PROD refuses the field). Options: serve PROD's contract and fall
+  back to the highest-ranked verified environment; or serve one per
+  environment. A product decision; nothing is chosen here.
+- **SuccessFactors' `sap:` namespace URI is not confirmed on a live tenant.**
+  SuccessFactors is understood to bind `sap:` to
+  `http://www.successfactors.com/edm/sap` rather than SAP Gateway's
+  `http://www.sap.com/Protocols/SAPData`; the compiler accepts both (the
+  golden SuccessFactors file uses the former). Confirm against the roadmap's SF
+  test tenant's `$metadata`; if SF uses yet another URI, add it to
+  `SAP_ATTRIBUTE_NAMESPACES` in `csdl-xml.ts`.
 - **One snapshot chain per interface.** Two interfaces on the same dataset each
   get their own contract when each is verified.

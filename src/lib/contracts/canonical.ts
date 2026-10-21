@@ -80,5 +80,11 @@ export function normalizeContract(c: InterfaceContract): InterfaceContract {
 
 /** sha256 over the canonical JSON of the normalized contract, hex. */
 export function contractHash(c: InterfaceContract): string {
-  return createHash("sha256").update(canonicalJson(normalizeContract(c))).digest("hex");
+  return contractDigest(c).hash;
+}
+
+/** The content hash, and the size in bytes of the canonical JSON it was taken over. */
+export function contractDigest(c: InterfaceContract): { hash: string; bytes: number } {
+  const json = canonicalJson(normalizeContract(c));
+  return { hash: createHash("sha256").update(json).digest("hex"), bytes: Buffer.byteLength(json, "utf8") };
 }

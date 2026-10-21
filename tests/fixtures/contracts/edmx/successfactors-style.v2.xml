@@ -3,11 +3,12 @@
   Written for this repository (P1.3 golden set). Modelled on the SHAPE of a
   SuccessFactors OData V2 description of one dataset (the entity-scoped
   `{root}/{EntitySet}/$metadata` answer): a single SFOData schema, sap:
-  attributes including the SF-specific ones the compiler ignores, an upsert
+  attributes bound to SuccessFactors' own namespace URI (not SAP Gateway's),
+  including the SF-specific ones the compiler ignores, an upsert
   function import, a custom MDF-style entity. Every name and value is invented;
   it is not, and is not copied from, any SAP $metadata document.
 -->
-<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.successfactors.com/edm/sap" xmlns:sf="http://www.successfactors.com/edm/sf">
   <edmx:DataServices m:DataServiceVersion="2.0">
     <Schema Namespace="SFOData" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
       <EntityType Name="cust_TravelRequest" sap:label="Travel Request" sap:upsertable="true">

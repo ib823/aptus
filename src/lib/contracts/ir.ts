@@ -204,6 +204,12 @@ export interface IrOperation {
   httpMethod?: string;
   /** The entity set the result belongs to (V2 EntitySet, V4 import EntitySet). */
   entitySet?: string;
+  /**
+   * V2 `sap:action-for`: the qualified entity type a function import acts on.
+   * Still invoked as an import (not bound in the V4 sense: no binding
+   * parameter), but part of that type's contract.
+   */
+  actionFor?: string;
   parameters: IrParameter[];
   returnType?: { type: string; collection?: true; nullable?: boolean };
   label?: string;
@@ -231,7 +237,8 @@ export interface ContractIR {
  * The slice of a service ONE INTERFACE is a contract for: its entity set, that
  * set's entity type (with inherited properties folded in), the complex and
  * enum types it reaches, the navigations it declares (targets by name only),
- * and the operations bound to it or returning into it.
+ * and the operations bound to it, acting on it (V2 sap:action-for) or
+ * returning into it.
  *
  * WHY A SLICE. API_BUSINESS_PARTNER declares some forty entity sets. An
  * interface on A_BusinessPartner must not change version when SAP adds a field

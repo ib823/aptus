@@ -17,6 +17,7 @@ import { diffContracts, nextSemver, semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { inferResponseSchema } from "@/lib/studio/schema-capture";
 
 function base(): InterfaceContract {
   const r = compileContract(readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8"));
@@ -206,6 +207,38 @@ describe("a change of source", () => {
   it("a sampled field the description does not declare is major", () => {
     const more = contractFromSample({ properties: { ...sampled.entityType.properties.reduce((o, p) => ({ ...o, [p.name]: {} }), {}), Extra: {} } }, "SalesOrder", "V4");
     expect(diffContracts(more, base()).bump).toBe("major");
+  });
+});
+
+describe("two sampled contracts", () => {
+  const capture = (rows: Record<string, unknown>[]) => {
+    const schema = inferResponseSchema(rows);
+    if (!schema) throw new Error("no schema");
+    return contractFromSample(schema, "SalesOrder", "V4");
+  };
+
+  it("a value seen where the last sample saw only null is not a change of type or nullability", () => {
+    const before = capture([{ ID: "1", Note: null }, { ID: "2", Note: null }]);
+    const after = capture([{ ID: "1", Note: "x" }, { ID: "2", Note: "y" }]);
+    expect(diffContracts(before, after)).toEqual({ bump: null, changes: [] });
+    expect(diffContracts(after, before)).toEqual({ bump: null, changes: [] });
+  });
+
+  it("a field the sample no longer shows is major; a new one is minor", () => {
+    const before = capture([{ ID: "1", Note: "x" }]);
+    expect(diffContracts(before, capture([{ ID: "1" }])).bump).toBe("major");
+    expect(diffContracts(before, capture([{ ID: "1", Note: "x", Extra: 1 }]))).toEqual({
+      bump: "minor",
+      changes: [{ bump: "minor", at: "property:Extra", change: "Extra was added." }],
+    });
+  });
+});
+
+describe("an entity type's openness", () => {
+  it("closing an open type is major; opening a closed one is minor", () => {
+    const open = changed((c) => (c.entityType.openType = true));
+    expect(diffContracts(open, base()).bump).toBe("major");
+    expect(diffContracts(base(), open).bump).toBe("minor");
   });
 });
 

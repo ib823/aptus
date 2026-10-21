@@ -28,7 +28,8 @@ import {
   type IrProperty,
 } from "@/lib/contracts/ir";
 import { AliasTable, mergeAnnotations, type AnnotationSet, type AnnotationValue } from "@/lib/contracts/vocabulary";
-import type { CsdlResult } from "@/lib/contracts/csdl-xml";
+import { MemberBudget, MemberBudgetExceeded, tooManyMembers, type CsdlResult } from "@/lib/contracts/csdl-xml";
+import { DEFAULT_XML_LIMITS } from "@/lib/contracts/xml";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 type JsonObject = { [k: string]: Json };
@@ -87,7 +88,17 @@ function facets(obj: JsonObject): Partial<IrProperty> {
   return out;
 }
 
-export function compileCsdlJson(doc: unknown): CsdlResult {
+/** `maxMembers` bounds what is emitted, as in CSDL XML (MemberBudget, csdl-xml.ts). */
+export function compileCsdlJson(doc: unknown, maxMembers: number = DEFAULT_XML_LIMITS.maxElements): CsdlResult {
+  try {
+    return compileBounded(doc, new MemberBudget(maxMembers));
+  } catch (err) {
+    if (err instanceof MemberBudgetExceeded) return tooManyMembers(err);
+    throw err;
+  }
+}
+
+function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
   if (!isObject(doc as Json) || typeof (doc as JsonObject).$Version !== "string") {
     return { ok: false, reason: "NOT_EDMX", detail: "The document is JSON but not a CSDL JSON service description." };
   }
@@ -152,6 +163,7 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
     for (const [name, m] of Object.entries(obj)) {
       if (name.startsWith("$") || name.startsWith("@") || !isObject(m)) continue;
       if (m.$Kind === "NavigationProperty") {
+        budget.spend();
         const nav: IrNavigation = {
           name,
           target: aliases.qualify(str(m.$Type) ?? ""),
@@ -169,6 +181,7 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
         }
         navigations.push(nav);
       } else if (m.$Kind === undefined || m.$Kind === "Property") {
+        budget.spend();
         const t = resolve(str(m.$Type));
         const prop: IrProperty = { name, type: t.type, nullable: m.$Nullable === true, ...t.facets, ...facets(m) };
         if (m.$Collection === true) prop.collection = true;
@@ -210,6 +223,7 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
         const members = Object.entries(member)
           .filter(([k]) => !k.startsWith("$") && !k.includes("@"))
           .map(([k, v]) => ({ name: k, value: String(v) }));
+        budget.spend(members.length);
         enumTypes.push({
           name,
           qualifiedName: qn,
@@ -224,10 +238,11 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
           if (typeof c.$Action === "string" || typeof c.$Function === "string") {
             const target = aliases.qualify((c.$Action ?? c.$Function) as string);
             const overload = unbound.get(target);
-            if (overload) operations.push(readOperation(cName, overload.kind, overload.overload, resolve, str(c.$EntitySet)));
+            if (overload) operations.push(readOperation(cName, overload.kind, overload.overload, resolve, budget, str(c.$EntitySet)));
             continue;
           }
           if (typeof c.$Type !== "string") continue;
+          budget.spend();
           const set: IrEntitySet = { name: cName, entityType: aliases.qualify(c.$Type), capabilities: {} };
           if (c.$Collection !== true) set.singleton = true;
           if (isObject(c.$NavigationPropertyBinding)) {
@@ -246,7 +261,7 @@ export function compileCsdlJson(doc: unknown): CsdlResult {
       if (!Array.isArray(member)) continue;
       for (const o of member) {
         if (!isObject(o) || o.$IsBound !== true || (o.$Kind !== "Action" && o.$Kind !== "Function")) continue;
-        operations.push(readOperation(name, o.$Kind === "Action" ? "action" : "function", o, resolve));
+        operations.push(readOperation(name, o.$Kind === "Action" ? "action" : "function", o, resolve, budget));
       }
     }
     if (isObject(schema.$Annotations)) {
@@ -277,8 +292,11 @@ function readOperation(
   kind: "action" | "function",
   o: JsonObject,
   resolve: (raw: string | undefined) => { type: string },
+  budget: MemberBudget,
   entitySet?: string,
 ): IrOperation {
+  // Spent before anything is built: every import copies the parameters (csdl-xml.ts).
+  budget.spend(1 + (Array.isArray(o.$Parameter) ? o.$Parameter.length : 0));
   const parameters: IrParameter[] = Array.isArray(o.$Parameter)
     ? o.$Parameter.flatMap((p): IrParameter[] => {
         if (!isObject(p) || typeof p.$Name !== "string") return [];

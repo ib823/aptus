@@ -46,12 +46,12 @@ export function compileContract(input: string, limits: XmlLimits = DEFAULT_XML_L
       // way not a description this compiler will read.
       return { ok: false, reason: "NOT_WELL_FORMED", detail: "The document is not well-formed JSON." };
     }
-    const r = compileCsdlJson(doc);
+    const r = compileCsdlJson(doc, limits.maxElements);
     return r.ok ? { ok: true, ir: r.ir, format: "json" } : r;
   }
 
   const xml = parseXml(input, limits);
   if (!xml.ok) return xml;
-  const r = compileCsdlXml(xml.root);
+  const r = compileCsdlXml(xml.root, limits.maxElements);
   return r.ok ? { ok: true, ir: r.ir, format: "xml" } : r;
 }

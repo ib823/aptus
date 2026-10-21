@@ -2,7 +2,8 @@
 <!--
   Written for this repository (P1.3 golden set). Modelled on the SHAPE of a
   public S/4HANA V2 API (entity types, sap: attributes, associations, a V4
-  annotation block inside a V2 document); the names and values are invented.
+  annotation block inside a V2 document, an entity-bound sap:action-for import
+  returning DummyFunctionImportResult); the names and values are invented.
   It is not, and is not copied from, any SAP $metadata document.
 -->
 <edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
@@ -56,6 +57,9 @@
         <Property Name="CustomerName" Type="Edm.String" MaxLength="80" sap:label="Name of Customer"/>
         <Property Name="DeletionIndicator" Type="Edm.Boolean" sap:label="Deletion Flag"/>
       </EntityType>
+      <ComplexType Name="DummyFunctionImportResult">
+        <Property Name="IsInvalid" Type="Edm.Boolean" sap:label="TRUE"/>
+      </ComplexType>
       <Association Name="assoc_Partner_Address" sap:content-version="1">
         <End Type="API_PARTNER_DEMO.A_PartnerType" Multiplicity="1" Role="FromRole_assoc_Partner_Address"/>
         <End Type="API_PARTNER_DEMO.A_PartnerAddressType" Multiplicity="*" Role="ToRole_assoc_Partner_Address"/>
@@ -79,6 +83,9 @@
         <FunctionImport Name="BlockPartner" ReturnType="API_PARTNER_DEMO.A_PartnerType" EntitySet="A_Partner" m:HttpMethod="POST" sap:label="Block Business Partner">
           <Parameter Name="Partner" Type="Edm.String" Mode="In" MaxLength="10"/>
           <Parameter Name="Reason" Type="Edm.String" Mode="In" MaxLength="2" Nullable="true"/>
+        </FunctionImport>
+        <FunctionImport Name="ReleasePartner" ReturnType="API_PARTNER_DEMO.DummyFunctionImportResult" m:HttpMethod="POST" sap:action-for="API_PARTNER_DEMO.A_PartnerType" sap:label="Release Business Partner">
+          <Parameter Name="Partner" Type="Edm.String" Mode="In" MaxLength="10"/>
         </FunctionImport>
       </EntityContainer>
       <Annotations Target="API_PARTNER_DEMO.A_PartnerType" xmlns="http://docs.oasis-open.org/odata/ns/edm">

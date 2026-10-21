@@ -440,6 +440,116 @@ describe("slicing", () => {
     expect(loop.ok && loop.contract.entityType.properties.map((p) => p.name)).toEqual(["X"]);
     expect(r.ir.entitySets.find((e) => e.name === "Me")?.singleton).toBe(true);
   });
+
+  it("keeps a V2 import that acts on the dataset's type (sap:action-for), and none that acts on another", () => {
+    const partner = slice("business-partner.v2.xml", "A_Partner");
+    expect(partner.operations.map((o) => o.name).sort()).toEqual(["BlockPartner", "ReleasePartner"]);
+    expect(partner.operations.find((o) => o.name === "ReleasePartner")).toMatchObject({
+      actionFor: "API_PARTNER_DEMO.A_PartnerType",
+      kind: "action",
+      parameters: [{ name: "Partner" }],
+    });
+    expect(slice("business-partner.v2.xml", "A_Customer").operations).toEqual([]);
+  });
+
+  it("still folds an ordinary complex base type into each type that derives from it", () => {
+    const doc =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+      '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+      '<ComplexType Name="Address"><Property Name="City" Type="Edm.String"/></ComplexType>' +
+      '<ComplexType Name="Home" BaseType="ns.Address"><Property Name="Floor" Type="Edm.Int32"/></ComplexType>' +
+      '<ComplexType Name="Work" BaseType="ns.Address"><Property Name="Desk" Type="Edm.String"/></ComplexType>' +
+      '<EntityType Name="T"><Key><PropertyRef Name="K"/></Key><Property Name="K" Type="Edm.String" Nullable="false"/>' +
+      '<Property Name="H" Type="ns.Home"/><Property Name="W" Type="ns.Work"/></EntityType>' +
+      '<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+    const r = compileContract(doc);
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "S");
+    if (!s.ok) throw new Error(s.detail);
+    expect(Object.fromEntries(s.contract.complexTypes.map((t) => [t.name, t.properties.map((p) => p.name)]))).toEqual({
+      Home: ["City", "Floor"],
+      Work: ["City", "Desk"],
+    });
+  });
+});
+
+describe("SuccessFactors' sap: namespace", () => {
+  // SuccessFactors binds the sap: prefix to its own URI. Attributes are matched
+  // by URI, so the same description under either URI must compile the same.
+  it("reads sap: attributes under SuccessFactors' URI exactly as under SAP Gateway's", () => {
+    const sf = read("successfactors-style.v2.xml");
+    expect(sf).toContain('xmlns:sap="http://www.successfactors.com/edm/sap"');
+    const gateway = sf.replace('xmlns:sap="http://www.successfactors.com/edm/sap"', 'xmlns:sap="http://www.sap.com/Protocols/SAPData"');
+    const a = compileContract(sf);
+    const b = compileContract(gateway);
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.ir).toEqual(b.ir);
+
+    const contract = slice("successfactors-style.v2.xml", "cust_TravelRequest");
+    const lm = contract.entityType.properties.find((p) => p.name === "lastModifiedDateTime");
+    expect(lm).toMatchObject({ label: "Last Modified Date", capabilities: { creatable: false, updatable: false } });
+    const create = standaloneSchemas(contract, "CustTravelRequest").create!;
+    expect(create.required).toEqual(["externalCode", "effectiveStartDate"]);
+    expect(Object.keys(create.properties as object)).not.toContain("lastModifiedDateTime");
+  });
+});
+
+describe("component names", () => {
+  // Price_Info and PriceInfo both normalise to PriceInfo, and a type called
+  // Create lands on the create body's name: one schema overwrote the other.
+  const COLLIDING =
+    '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
+    '<Schema Namespace="ns" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+    '<ComplexType Name="Price_Info"><Property Name="Amount" Type="Edm.Int32"/></ComplexType>' +
+    '<ComplexType Name="PriceInfo"><Property Name="Currency" Type="Edm.String"/></ComplexType>' +
+    '<ComplexType Name="Create"><Property Name="Foo" Type="Edm.String"/></ComplexType>' +
+    '<EnumType Name="Key"><Member Name="One"/></EnumType>' +
+    '<EntityType Name="T"><Key><PropertyRef Name="K"/></Key><Property Name="K" Type="Edm.String" Nullable="false"/>' +
+    '<Property Name="A" Type="ns.Price_Info"/><Property Name="B" Type="ns.PriceInfo"/>' +
+    '<Property Name="C" Type="ns.Create"/><Property Name="E" Type="ns.Key"/></EntityType>' +
+    '<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+  const contract = (() => {
+    const r = compileContract(COLLIDING);
+    if (!r.ok) throw new Error(r.detail);
+    const s = sliceForEntitySet(r.ir, "S");
+    if (!s.ok) throw new Error(s.detail);
+    return s.contract;
+  })();
+  const record = { K: "1", A: { Amount: 1 }, B: { Currency: "EUR" }, C: { Foo: "x" }, E: "One" };
+
+  it("give each type its own schema, so a valid record and a valid create body validate", () => {
+    const schemas = standaloneSchemas(contract, "S");
+    const ajv = validator();
+    const rec = ajv.compile(schemas.record);
+    expect(rec(record), JSON.stringify(rec.errors)).toBe(true);
+    const create = validator().compile(schemas.create!);
+    expect(create(record), JSON.stringify(create.errors)).toBe(true);
+    expect(create({ ...record, A: { Currency: "EUR" } })).toBe(false);
+  });
+
+  it("hold in both documents, and a dataset called Error does not replace the error envelope", () => {
+    for (const version of ["3.1.0", "3.0.3"] as const) {
+      const doc = buildNorthboundOpenApi({
+        ...BASE_DOC,
+        version,
+        interfaces: [
+          iface({ id: "if_r", entitySet: "S", contract: { source: "metadata", contract, semver: "1.0.0" } }),
+          iface({ id: "if_c", entitySet: "S", operation: "CREATE", mode: "WRITE", contract: { source: "metadata", contract, semver: "1.0.0" } }),
+          iface({ id: "if_e", entitySet: "Error", contract: { source: "none" } }),
+        ],
+      }) as Doc;
+      expect((version === "3.1.0" ? validateOpenApi31 : validateOpenApi30)(doc).errors).toEqual([]);
+      expect(doc.components.schemas.Error["x-coreedge-codes"]).toBeDefined();
+      expect(doc.paths["/interfaces/if_e/data"].get.responses["200"].content["application/json"].schema.$ref).toBe(
+        "#/components/schemas/Error2_ReadResult",
+      );
+      if (version === "3.0.3") {
+        const ok = oas30Validator(doc, "S_Create");
+        expect(ok(record), JSON.stringify(ok.errors)).toBe(true);
+      }
+    }
+  });
 });
 
 describe("personal-data coverage (the measure P1.5 decides on)", () => {

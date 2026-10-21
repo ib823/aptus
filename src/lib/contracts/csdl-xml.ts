@@ -41,7 +41,7 @@ import {
   type AnnotationValue,
 } from "@/lib/contracts/vocabulary";
 import { applyAnnotations } from "@/lib/contracts/annotate";
-import { attr, type XmlElement } from "@/lib/contracts/xml";
+import { attr, DEFAULT_XML_LIMITS, type XmlElement } from "@/lib/contracts/xml";
 
 export const EDMX_V2_NS = "http://schemas.microsoft.com/ado/2007/06/edmx";
 export const EDMX_V4_NS = "http://docs.oasis-open.org/odata/ns/edmx";
@@ -55,10 +55,48 @@ const EDM_NAMESPACES: ReadonlySet<string> = new Set([
 const EDMX_NAMESPACES: ReadonlySet<string> = new Set([EDMX_V2_NS, EDMX_V4_NS]);
 /** SAP's V2 annotation attributes (`sap:label`, `sap:creatable`, …). */
 export const SAP_NS = "http://www.sap.com/Protocols/SAPData";
+/**
+ * SuccessFactors binds the same `sap:` prefix to its own URI. Attributes are
+ * matched by namespace URI, never by prefix, so without it every `sap:label`,
+ * `sap:creatable`, `sap:required` … of a SuccessFactors service would be
+ * dropped, and a create body would offer server-set fields and require
+ * nothing. The attribute names and meanings are the same; only the URI differs.
+ */
+export const SF_SAP_NS = "http://www.successfactors.com/edm/sap";
+const SAP_ATTRIBUTE_NAMESPACES: readonly string[] = [SAP_NS, SF_SAP_NS];
 /** V2 metadata attributes (`m:DataServiceVersion`, `m:HttpMethod`, …). */
 export const METADATA_NS = "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata";
 
-export type CsdlRefusal = "NOT_EDMX" | "UNSUPPORTED_VERSION" | "INVALID_CSDL";
+export type CsdlRefusal = "NOT_EDMX" | "UNSUPPORTED_VERSION" | "INVALID_CSDL" | "TOO_MANY_MEMBERS";
+
+/**
+ * A bound on what the compiler EMITS, not only on what it reads. xml.ts bounds
+ * the document; but one declaration can be emitted many times — every import
+ * of an action carries that action's whole parameter list — so a document
+ * well inside every xml.ts bound could still make the IR quadratic in its size
+ * (one action with 3,000 parameters imported 3,000 times is 9,000,000
+ * parameters from 300 KB). Every property, navigation, parameter, enum member,
+ * entity set and operation spends one unit; the budget is the element bound,
+ * which a description whose every declaration is emitted once never reaches.
+ */
+export class MemberBudget {
+  private spent = 0;
+  constructor(readonly limit: number) {}
+  spend(n = 1): void {
+    this.spent += n;
+    if (this.spent > this.limit) throw new MemberBudgetExceeded(this.limit);
+  }
+}
+
+export class MemberBudgetExceeded extends Error {
+  constructor(readonly limit: number) {
+    super(`The service description declares more than ${limit} members once its imports are resolved.`);
+  }
+}
+
+export function tooManyMembers(err: MemberBudgetExceeded): { ok: false; reason: "TOO_MANY_MEMBERS"; detail: string } {
+  return { ok: false, reason: "TOO_MANY_MEMBERS", detail: err.message };
+}
 
 export type CsdlResult = { ok: true; ir: ContractIR } | { ok: false; reason: CsdlRefusal; detail: string };
 
@@ -71,7 +109,11 @@ function edmx(el: XmlElement, local: string): XmlElement[] {
 }
 
 function sap(el: XmlElement, local: string): string | undefined {
-  return attr(el, local, SAP_NS);
+  for (const uri of SAP_ATTRIBUTE_NAMESPACES) {
+    const v = attr(el, local, uri);
+    if (v !== undefined) return v;
+  }
+  return undefined;
 }
 
 /** A V2 `sap:` boolean flag: only "true"/"false" count; anything else is "not stated". */
@@ -191,7 +233,16 @@ interface V2Association {
   ends: Map<string, { type: string; multiplicity: string }>;
 }
 
-export function compileCsdlXml(root: XmlElement): CsdlResult {
+export function compileCsdlXml(root: XmlElement, maxMembers: number = DEFAULT_XML_LIMITS.maxElements): CsdlResult {
+  try {
+    return compileBounded(root, new MemberBudget(maxMembers));
+  } catch (err) {
+    if (err instanceof MemberBudgetExceeded) return tooManyMembers(err);
+    throw err;
+  }
+}
+
+function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
   if (root.local !== "Edmx" || !EDMX_NAMESPACES.has(root.uri)) {
     return { ok: false, reason: "NOT_EDMX", detail: "The document is XML but not a service description (EDMX)." };
   }
@@ -289,6 +340,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
     const name = attr(p, "Name");
     const rawType = attr(p, "Type");
     if (!name || !rawType) return null;
+    budget.spend();
     const t = resolveType(rawType);
     const prop: IrProperty = {
       name,
@@ -328,6 +380,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
   const readNavigation = (n: XmlElement): IrNavigation | null => {
     const name = attr(n, "Name");
     if (!name) return null;
+    budget.spend();
     const relationship = attr(n, "Relationship");
     if (relationship !== undefined) {
       // V2: the association's ToRole end names the target and its multiplicity.
@@ -407,6 +460,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
       const members = edm(en, "Member").flatMap((m) => {
         const mName = attr(m, "Name");
         if (!mName) return [];
+        budget.spend();
         const declared = attr(m, "Value");
         const value = declared ?? String(next);
         const n = Number(value);
@@ -434,6 +488,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         const name = attr(es, "Name");
         const entityType = attr(es, "EntityType");
         if (!name || !entityType) continue;
+        budget.spend();
         entitySets.push(readEntitySet(es, name, aliases.qualify(entityType)));
         containerOf.set(name, cqn);
         collectInline(es, `${cqn}/${name}`, aliases, annotations);
@@ -442,6 +497,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         const name = attr(sg, "Name");
         const type = attr(sg, "Type");
         if (!name || !type) continue;
+        budget.spend();
         const set = readEntitySet(sg, name, aliases.qualify(type));
         set.singleton = true;
         entitySets.push(set);
@@ -453,11 +509,11 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         const name = attr(fi, "Name");
         if (!name) continue;
         if (odataVersion === "V2") {
-          operations.push(readV2FunctionImport(fi, name, aliases));
+          operations.push(readV2FunctionImport(fi, name, aliases, budget));
         } else {
           const fn = attr(fi, "Function");
           const op = fn ? v4Unbound.get(aliases.qualify(fn)) : undefined;
-          if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, attr(fi, "EntitySet")));
+          if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, budget, attr(fi, "EntitySet")));
         }
       }
       for (const ai of edm(c, "ActionImport")) {
@@ -465,7 +521,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         const action = attr(ai, "Action");
         if (!name || !action) continue;
         const op = v4Unbound.get(aliases.qualify(action));
-        if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, attr(ai, "EntitySet")));
+        if (op) operations.push(readV4Operation(op.el, op.kind, name, resolveType, budget, attr(ai, "EntitySet")));
       }
     }
 
@@ -475,7 +531,7 @@ export function compileCsdlXml(root: XmlElement): CsdlResult {
         if (attr(op, "IsBound") !== "true") continue;
         const name = attr(op, "Name");
         if (!name) continue;
-        operations.push(readV4Operation(op, kind === "Action" ? "action" : "function", name, resolveType));
+        operations.push(readV4Operation(op, kind === "Action" ? "action" : "function", name, resolveType, budget));
       }
     }
 
@@ -586,13 +642,15 @@ function readEntitySet(es: XmlElement, name: string, entityType: string): IrEnti
   return set;
 }
 
-function readV2FunctionImport(fi: XmlElement, name: string, aliases: AliasTable): IrOperation {
+function readV2FunctionImport(fi: XmlElement, name: string, aliases: AliasTable, budget: MemberBudget): IrOperation {
   const httpMethod = (attr(fi, "HttpMethod", METADATA_NS) ?? "GET").toUpperCase();
+  const declared = edm(fi, "Parameter");
+  budget.spend(1 + declared.length);
   const op: IrOperation = {
     name,
     kind: httpMethod === "GET" ? "function" : "action",
     httpMethod,
-    parameters: edm(fi, "Parameter").flatMap((p): IrParameter[] => {
+    parameters: declared.flatMap((p): IrParameter[] => {
       const pName = attr(p, "Name");
       const pType = attr(p, "Type");
       if (!pName || !pType) return [];
@@ -611,6 +669,11 @@ function readV2FunctionImport(fi: XmlElement, name: string, aliases: AliasTable)
   }
   const entitySet = nonEmpty(attr(fi, "EntitySet"));
   if (entitySet) op.entitySet = entitySet;
+  // SAP Gateway's entity-bound action: an import whose sap:action-for names
+  // the entity type it acts on, usually with no EntitySet (its result is a
+  // complex type such as DummyFunctionImportResult).
+  const actionFor = nonEmpty(sap(fi, "action-for"));
+  if (actionFor) op.actionFor = aliases.qualify(actionFor);
   const label = nonEmpty(sap(fi, "label"));
   if (label) op.label = label;
   return op;
@@ -621,9 +684,14 @@ function readV4Operation(
   kind: "action" | "function",
   name: string,
   resolveType: (raw: string) => { type: string; collection: boolean },
+  budget: MemberBudget,
   importEntitySet?: string,
 ): IrOperation {
-  const params = edm(el, "Parameter").flatMap((p): IrParameter[] => {
+  // Spent before anything is built: every import of this declaration copies
+  // its parameters, and the budget is what stops that multiplying.
+  const declared = edm(el, "Parameter");
+  budget.spend(1 + declared.length);
+  const params = declared.flatMap((p): IrParameter[] => {
     const pName = attr(p, "Name");
     const pType = attr(p, "Type");
     if (!pName || !pType) return [];

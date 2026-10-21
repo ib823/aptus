@@ -109,6 +109,9 @@ const H = {
   cache: "CacheControl",
 } as const;
 
+/** Component schemas every document defines beside its interfaces' own. */
+const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery"] as const;
+
 export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   const dialect: SchemaDialect = input.version === "3.1.0" ? "2020-12" : "oas30";
   const safe = input.safe ?? ((s: string) => s);
@@ -124,7 +127,9 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
 
   const schemas: Record<string, JsonSchema> = {};
   const paths: Record<string, Obj> = {};
-  const usedStems = new Set<string>();
+  // The document's own schemas are named first: a dataset called Error must
+  // not overwrite the error envelope.
+  const usedStems = new Set<string>(DOCUMENT_SCHEMA_NAMES);
   const docInterfaces: Obj[] = [];
 
   const header = (name: string) => ({ [name]: ref("headers", headerComponent(name)) });

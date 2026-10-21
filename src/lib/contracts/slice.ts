@@ -7,6 +7,15 @@
  * SortRestrictions) are folded into the properties they name, and every
  * complex and enum type a property reaches is carried along. A consumer of the
  * slice never needs the service's other types.
+ *
+ * BOUNDED BY WHAT IT WAS CUT FROM. Folding copies: each complex type that
+ * derives from a base carries its own copy of the base's properties, so N
+ * types over one base of B properties are N×B properties from N+B
+ * declarations — a 250 KB description became a 210 MB contract, stored and
+ * re-read on every /schema call. The slice is refused (TOO_LARGE) once it
+ * would hold more than twice the members of the whole description plus a
+ * fixed allowance, which no description whose inheritance is ordinary comes
+ * near: real base chains are short and shared by few types.
  */
 
 import {
@@ -22,11 +31,50 @@ import {
 /** A base-type chain longer than this is treated as a cycle. */
 const MAX_INHERITANCE_DEPTH = 16;
 
+/** The allowance on top of twice the description's own members (see above). */
+const SLICE_MEMBER_ALLOWANCE = 10_000;
+
 export type SliceResult =
   | { ok: true; contract: InterfaceContract }
-  | { ok: false; reason: "NO_SUCH_ENTITY_SET" | "NO_SUCH_ENTITY_TYPE"; detail: string };
+  | { ok: false; reason: "NO_SUCH_ENTITY_SET" | "NO_SUCH_ENTITY_TYPE" | "TOO_LARGE"; detail: string };
+
+/** Properties, navigations and parameters the description itself declares. */
+function membersOf(ir: ContractIR): number {
+  let n = 0;
+  for (const t of ir.entityTypes) n += t.properties.length + t.navigations.length;
+  for (const t of ir.complexTypes) n += t.properties.length + t.navigations.length;
+  for (const op of ir.operations) n += op.parameters.length;
+  return n;
+}
+
+class SliceTooLarge extends Error {}
 
 export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceResult {
+  const limit = 2 * membersOf(ir) + SLICE_MEMBER_ALLOWANCE;
+  try {
+    return slice(ir, entitySetName, limit);
+  } catch (err) {
+    if (!(err instanceof SliceTooLarge)) throw err;
+    return {
+      ok: false,
+      reason: "TOO_LARGE",
+      detail: `The dataset "${entitySetName}" reaches more than ${limit} members once its types' base types are folded in.`,
+    };
+  }
+}
+
+function slice(ir: ContractIR, entitySetName: string, limit: number): SliceResult {
+  let spent = 0;
+  const spend = (n: number) => {
+    spent += n;
+    if (spent > limit) throw new SliceTooLarge();
+  };
+  /** Copies of each list, in order, with the budget spent before each is made; never a spread of a long array. */
+  const copyInto = <T extends object>(into: T[], from: readonly T[]) => {
+    spend(from.length);
+    for (const x of from) into.push({ ...x });
+  };
+
   const set = ir.entitySets.find((s) => s.name === entitySetName);
   if (!set) {
     return { ok: false, reason: "NO_SUCH_ENTITY_SET", detail: `The service declares no dataset called "${entitySetName}".` };
@@ -49,12 +97,11 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceR
     t = t.baseType ? types.get(t.baseType) : undefined;
   }
   const lineage = [...chain].reverse();
-  const entityType: IrEntityType = {
-    ...root,
-    key: chain.find((t) => t.key.length > 0)?.key ?? [],
-    properties: lineage.flatMap((t) => t.properties.map((p) => ({ ...p }))),
-    navigations: lineage.flatMap((t) => t.navigations.map((n) => ({ ...n }))),
-  };
+  const entityType: IrEntityType = { ...root, key: chain.find((t) => t.key.length > 0)?.key ?? [], properties: [], navigations: [] };
+  for (const t of lineage) {
+    copyInto(entityType.properties, t.properties);
+    copyInto(entityType.navigations, t.navigations);
+  }
   delete entityType.baseType;
 
   // Set-level restrictions name properties of this set's type: fold them in.
@@ -79,7 +126,7 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceR
   const complexTypes: IrComplexType[] = [];
   const enumTypes: IrEnumType[] = [];
   const seen = new Set<string>();
-  const queue: IrProperty[] = [...entityType.properties];
+  const queue: IrProperty[] = entityType.properties.slice();
   // A cursor, not shift(): shifting a long array is linear each time.
   for (let next = 0; next < queue.length; next++) {
     const p = queue[next]!;
@@ -95,21 +142,25 @@ export function sliceForEntitySet(ir: ContractIR, entitySetName: string): SliceR
         ctChain.push(t);
         t = t.baseType ? complexByName.get(t.baseType) : undefined;
       }
-      for (const t of ctChain.reverse()) props.push(...t.properties.map((x) => ({ ...x })));
+      for (const t of ctChain.reverse()) copyInto(props, t.properties);
       const folded: IrComplexType = { ...ct, properties: props, navigations: [] };
       delete folded.baseType;
       complexTypes.push(folded);
-      queue.push(...props);
+      for (const x of props) queue.push(x);
       continue;
     }
     const en = enumByName.get(p.type);
     if (en) enumTypes.push(en);
   }
 
+  // Bound to the type (V4), acting on it (V2 sap:action-for), or returning into the set.
   const typeNames = new Set(chain.map((t) => t.qualifiedName));
   const operations = ir.operations.filter((op) =>
-    op.bound ? op.bindingType !== undefined && typeNames.has(op.bindingType) : op.entitySet === set.name,
+    op.bound
+      ? op.bindingType !== undefined && typeNames.has(op.bindingType)
+      : op.entitySet === set.name || (op.actionFor !== undefined && typeNames.has(op.actionFor)),
   );
+  for (const op of operations) spend(1 + op.parameters.length);
 
   const entitySet = { ...set, capabilities: { ...set.capabilities } };
   return {
