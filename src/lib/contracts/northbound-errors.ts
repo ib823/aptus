@@ -90,6 +90,12 @@ export const NORTHBOUND_ERROR_CODES = {
     meaning: "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.",
     action: "Retry or escalate with the correlation id.",
   },
+  UNSUPPORTED_VERSION: {
+    statuses: [400],
+    meaning:
+      "The request's CoreEdge-Version header names a version this deployment does not serve: unknown, or retired at its Sunset date. Refused before the route does anything else (no credential check, no idempotency reservation, nothing sent to SAP); `error.supportedVersions` lists what may be sent (P1.10).",
+    action: "Send one of error.supportedVersions, or omit the header to be served the default. Do not retry unchanged.",
+  },
   INTERNAL: {
     statuses: [500],
     meaning: "CoreEdge itself failed.",

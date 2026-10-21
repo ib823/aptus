@@ -43,7 +43,7 @@ We built every combination of eight dimensions: SAP system, technology, integrat
 | Valid scenarios fully supported | 133,875 (26.9%) | 0 (0.0%) | 30,360 (6.1%) |
 | Valid scenarios at least partly supported | 466,725 (93.8%) | 1,512 (0.3%) | 265,599 (53.4%) |
 | AI-agent consumers, fully supported | 14.3% | 0.0% | 7.3%, only if P6.1 clears SAP API Policy §2.2.2 (D2) |
-| Lifecycle stages rated "full", out of 18 | 5 | 0 | 15 |
+| Lifecycle stages rated "full", out of 18 | 5 | 1 | 15 |
 <!-- figures:end headline -->
 
 Integration Suite is scored full for AI agents on the MCP Gateway path that SAP endorses (section 3.7). The 18 lifecycle stages include five that P0.15 added (section 3.8); three of them no roadmap item takes to full (D14).
@@ -105,8 +105,8 @@ Durations are **[estimate]** and assume 3-4 engineers; P0 and P1 were re-estimat
 <!-- figures:begin phases-glance -->
 | Phase | Goal | Duration | Full / partial after | Lifecycle stages full | Headline outcome |
 |---|---|---|---|---|---|
-| Today |  |  | 0.0% / 0.3% | 0 |  |
-| P0 Harden | Land `custom-service-path` first (P1.1, landed in #307); make what exists trustworthy: close the 33 open audit findings, add KMS, MFA step-up, onboarding, a release protocol and job leases, extract the pipeline, drive the simulator from the code | 9-12 weeks, as P0a (credential gate, 3-4 weeks) then P0b | 0.0% / 0.3% | 1 | Safe to hold real client credentials after P0a |
+| Today |  |  | 0.0% / 0.3% | 1 |  |
+| P0 Harden | Land `custom-service-path` first (P1.1, landed in #307); make what exists trustworthy: close the 33 open audit findings, add KMS, MFA step-up, onboarding, a release protocol and job leases, extract the pipeline, drive the simulator from the code | 9-12 weeks, as P0a (credential gate, 3-4 weeks) then P0b | 0.0% / 0.3% | 2 | Safe to hold real client credentials after P0a |
 | P1 Any OData API | Customer-built APIs, contracts compiled from SAP's service description, filter/key/paging, Tenant Twin | 12-14 weeks | 0.0% / 0.3% | 3 | `Z*` APIs callable; build before SAP is configured |
 | P2 Every developer | API Lab ("Postman for SAP"), full OData writes, SDKs (TS, Python, Java, .NET, ABAP), low-code connector, Studio MCP | 10-12 weeks | 0.1% / 1.3% | 4 | 30-minute first call |
 | P3 Govern as code | App manifest, CLI, CI identity, promotion gates, policy engine, stop switches, monitors, upgrade radar, outbound routes, tamper-evident audit | 10-12 weeks | 0.1% / 1.6% | 12 | The connected program is governed before and after it ships |
@@ -212,7 +212,7 @@ The 18 **lifecycle stages** (Discover through Retire, section 3.8) are scored se
 | Valid scenarios | 497,340 | 497,340 | 497,340 |
 | Fully supported | 133,875 (26.9%) | 0 (0.0%) | 30,360 (6.1%) |
 | At least partly supported | 466,725 (93.8%) | 1,512 (0.3%) | 265,599 (53.4%) |
-| Lifecycle stages full (of 18) | 5 | 0 | 15 |
+| Lifecycle stages full (of 18) | 5 | 1 | 15 |
 <!-- figures:end totals -->
 
 ### 2.5 Caveats
@@ -422,7 +422,7 @@ Scores: 0 = none, 1 = partial, 2 = full. The IS column is the matrix's `lifecycl
 | AI_ASSIST | AI help that is checked against real runs | 1 | 0 | P6 |
 | ONBOARDING_TIME_TO_FIRST_CALL | From sign-up to first call | 1 | 1 | P3 |
 | PROVIDER_BUILD_TRANSPORT | Build a Z*/YY1_* service, verify it per environment, transport it | 1 | 1 | P3 |
-| API_VERSIONING | CoreEdge's own contract with consumers: versions, deprecation, changelog | 2 | 0 | P1 |
+| API_VERSIONING | CoreEdge's own contract with consumers: versions, deprecation, changelog | 2 | 2 | Today |
 | PERFORMANCE_TEST | Load-test before promotion | 0 | 0 | Never; partial at most (no item delivers the rest) |
 | SUPPORT_INCIDENT | Who is paged, the status page, consumer tickets | 1 | 1 | Never; partial at most (no item delivers the rest) |
 | RETIRE | Revoke keys, archive evidence, delete fixtures and twin data | 1 | 1 | Never; partial at most (no item delivers the rest) |
@@ -436,7 +436,7 @@ Scores: 0 = none, 1 = partial, 2 = full. The IS column is the matrix's `lifecycl
 
 **The five stages P0.15 added.**
 - **PROVIDER_BUILD_TRANSPORT:** partial on both. CoreEdge registers a `Z*`/`YY1_*` service by path and verifies it from `$metadata` per environment (P1.1), but nothing re-verifies or gates it on promotion until P3.4. Integration Suite does not build the provider's service either; it transports its own content [E1, E7]. Full in P3 (P1.2, P3.4, P3.8).
-- **API_VERSIONING:** Integration Suite full: API Management publishes versioned API products to the Developer Hub [E66, E8]. CoreEdge none: the northbound routes are unversioned, with no deprecation headers or changelog. Full in P1 (P1.10).
+- **API_VERSIONING:** Integration Suite full: API Management publishes versioned API products to the Developer Hub [E66, E8]. CoreEdge full since P1.10 shipped: dated versions named by `CoreEdge-Version`, `/api/northbound/v1/*` beside the original path, `Deprecation` and `Sunset` headers under a 6-month overlap checked in CI, and a changelog; the starter kit and the ABAP lab-guide samples are replayed against every supported version in CI. Before P1.10 it was none (the routes were unversioned).
 - **PERFORMANCE_TEST:** none on both. Integration Suite's simulation is functional, not load [E4]; CoreEdge has no broker load test. The P1.6a twin gives a load test something to run against, so it becomes partial in P1. **No roadmap item delivers the load test that A.3 #14 asks for**, so it never reaches full (open decision D14).
 - **SUPPORT_INCIDENT:** partial on both. Integration Suite has monitoring, external logging, Cloud ALM alerting and an SLA [E5, E14, E19, E67]; CoreEdge has stored incidents and a daily probe email. P3.7 adds owner paging, but **no item delivers a public status page or consumer ticket intake**, so it stays partial (D14).
 - **RETIRE:** partial on both. CoreEdge revokes both keys at once, keeps dropped keys, and refuses a RETIRED app at runtime; Integration Suite withdraws API products and revokes keys [E66]. P6.4's evidence packs archive what a retired app did, but **no item deletes fixtures and twin data at retirement**, so it stays partial (D14).
@@ -1015,9 +1015,9 @@ SAP's 2018 Digital Access paper [E18] says middleware does not count as an SAP a
 <!-- figures:begin phases -->
 | After | Full | Partial | Lifecycle stages full (of 18) | Biggest movers [computed] |
 |---|---|---|---|---|
-| Today | 0 (0.0%) | 1,512 (0.3%) | 0 |  |
-| P0 | 0 (0.0%) | 1,512 (0.3%) | 1 | Stages now full: SECRETS_KEYS |
-| P1 | 36 (0.0%) | 1,512 (0.3%) | 3 | Full: JS_TS 0.0% to 0.1%. Stages now full: DISCOVER, API_VERSIONING |
+| Today | 0 (0.0%) | 1,512 (0.3%) | 1 |  |
+| P0 | 0 (0.0%) | 1,512 (0.3%) | 2 | Stages now full: SECRETS_KEYS |
+| P1 | 36 (0.0%) | 1,512 (0.3%) | 3 | Full: JS_TS 0.0% to 0.1%. Stages now full: DISCOVER |
 | P2 | 432 (0.1%) | 6,384 (1.3%) | 4 | Partial: ODATA_V2 1.2% to 5.0%, ODATA_V4 1.2% to 5.0%, SYNC_UPDATE_DELETE_ACTION 0.0% to 3.0%, PUBLIC_INTERNET 0.8% to 3.5%. Full: S4_PUBLIC 0.0% to 0.6%, SUCCESSFACTORS 0.0% to 0.5%, ODATA_V2 0.0% to 0.4%. Stages now full: MOCK_TEST_BEFORE_CODE |
 | P3 | 648 (0.1%) | 7,980 (1.6%) | 12 | Partial: SAP_CALLS_OUT 0.0% to 1.9%, ODATA_V2 5.0% to 6.2%, ODATA_V4 5.0% to 6.2%, PUBLIC_INTERNET 3.5% to 4.3%. Full: S4_PUBLIC 0.6% to 0.9%, ODATA_V2 0.4% to 0.7%, DOTNET 0.0% to 0.2%. Stages now full: DEVELOP_SDK_CODEGEN, CI_PRECOMMIT_GOVERNANCE, DEPLOY_PROMOTE_ENVIRONMENTS, RUN_MONITOR_ALERT, GOVERN_AUDIT_COMPLY, SAP_UPGRADE_IMPACT, ONBOARDING_TIME_TO_FIRST_CALL, PROVIDER_BUILD_TRANSPORT |
 | P4 | 7,560 (1.5%) | 28,500 (5.7%) | 13 | Partial: ODATA_V2 6.2% to 22.2%, ODATA_V4 6.2% to 22.2%, SYNC_CREATE 3.0% to 10.8%, SYNC_READ 3.0% to 10.8%. Full: ODATA_V2 0.7% to 6.2%, ODATA_V4 0.3% to 5.6%, SYNC_CREATE 0.4% to 4.8%. Stages now full: SELF_HOST_SETUP |
@@ -1336,7 +1336,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 **P0 exit:** every P0 acceptance criterion is green in CI or recorded; Appendix D has no open finding; A.3 test 9 passes for the Workbench write-back; the product owner signs off.
 
 <!-- figures:begin after-P0 -->
-**After P0:** full 0.0% (0 scenarios), partial 0.3% (1,512); lifecycle stages full: 1 of 18 (SECRETS_KEYS added) [simulated].
+**After P0:** full 0.0% (0 scenarios), partial 0.3% (1,512); lifecycle stages full: 2 of 18 (SECRETS_KEYS added) [simulated].
 <!-- figures:end after-P0 -->
 
 ### 8.3 Phase 1: Any SAP OData API, contract-first, with a Tenant Twin
@@ -1477,7 +1477,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
 **P1 exit:** every P1 acceptance criterion is green in CI or recorded; A.3 tests 3 and 10 pass; every open "untested" badge is listed; the product owner signs off.
 
 <!-- figures:begin after-P1 -->
-**After P1:** full 0.0% (36 scenarios), partial 0.3% (1,512); lifecycle stages full: 3 of 18 (DISCOVER, API_VERSIONING added) [simulated].
+**After P1:** full 0.0% (36 scenarios), partial 0.3% (1,512); lifecycle stages full: 3 of 18 (DISCOVER added) [simulated].
 <!-- figures:end after-P1 -->
 
 ### 8.4 Phase 2: Postman before code, full OData writes, every language

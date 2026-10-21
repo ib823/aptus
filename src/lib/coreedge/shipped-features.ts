@@ -353,6 +353,31 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
       /\b(?:TTFC|TTFRC) (?:tiles?|funnel|metrics?)\b/,
     ],
   },
+  {
+    id: "contract-compiler",
+    name: "The Contract Compiler: $metadata compiled into versioned contract snapshots and OpenAPI",
+    roadmap: "P1.3",
+    cells: ["lifecycle:DEVELOP_SDK_CODEGEN", "lifecycle:SAP_UPGRADE_IMPACT"],
+    code: { file: "src/lib/contracts/compile.ts", exports: ["compileContract"] },
+    terms: [/\bContract Compiler\b/i, /\bContractSnapshot\b/, /\bcontract snapshots?\b/i, /\bopenapi-3\.0\.json\b/],
+  },
+  {
+    id: "api-versioning",
+    name: "Northbound API versions, deprecation headers and the changelog",
+    roadmap: "P1.10",
+    cells: ["lifecycle:API_VERSIONING"],
+    code: {
+      file: "src/lib/northbound/version-policy.ts",
+      exports: ["resolveRequestedVersion", "versionResponseHeaders", "checkRegistry"],
+    },
+    terms: [
+      /\bCoreEdge-Version\b/,
+      /\bUNSUPPORTED_VERSION\b/,
+      /\/api\/northbound\/v1\b/,
+      /\bAPI versioning\b/i,
+      /\bversioned (?:northbound )?(?:routes?|paths?)\b/i,
+    ],
+  },
 ];
 
 /* ── status, from the registry ────────────────────────────────────────── */
