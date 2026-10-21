@@ -9,15 +9,14 @@
 -- compresses them.
 --
 -- schemaTextsVersion: the renderer version that wrote them
--- (lib/contracts/render-version.ts). /schema serves the texts only while it
--- is the running code's version, so a renderer change never leaves /schema
--- serving one render while the kit and the document serve another under the
--- same contentHash; an older version answers NOT_RENDERED until the
--- interface is verified again.
+-- (lib/contracts/render-version.ts). /schema serves the texts whatever it
+-- is; the build re-renders the rows of an older version from their own IR
+-- (lib/contracts/rerender.ts).
 --
 -- ContractTime: each organisation's compiler wall time per UTC day, the one
--- allowance that remains (lib/contracts/contract-time.ts). No foreign key:
--- a row is a counter, deleted after a week by the charge itself.
+-- allowance that remains (lib/contracts/contract-time.ts): ms, the settled
+-- jobs' wall time, and reservedMs, the deadlines of the jobs in flight. No
+-- foreign key: a row is a counter, deleted after a week by the charge itself.
 --
 -- NOTHING STOPS ON DEPLOY: nullable columns with no default (a catalogue
 -- change, no table rewrite) and a new table. No backfill: a snapshot without
@@ -37,6 +36,7 @@ CREATE TABLE "ContractTime" (
     "organizationId" TEXT NOT NULL,
     "day" DATE NOT NULL,
     "ms" INTEGER NOT NULL DEFAULT 0,
+    "reservedMs" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "ContractTime_pkey" PRIMARY KEY ("organizationId","day")
 );

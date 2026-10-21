@@ -261,8 +261,10 @@ bytewise, and the kit and the document render `ir::text`, so the texts are
 rendered from the contract in that order (`inJsonbKeyOrder`), and a contract
 whose hash is the interface's current row's is rendered from that row's own
 `ir::text` (which a new row of it then stores too). They are stored with
-`SCHEMA_TEXTS_VERSION` (`src/lib/contracts/render-version.ts`) and served
-only while it is the running code's. Each record or capture write is **one
+`SCHEMA_TEXTS_VERSION` (`src/lib/contracts/render-version.ts`), and served
+whatever version wrote them (consolidated review round 3): each is a
+self-consistent render of the row's own IR, and the version only picks the
+rows the build renders again (below). Each record or capture write is **one
 transaction**: the snapshot (or nothing, when UNCHANGED), its IR and diff,
 the texts on the row they were rendered from when it is the row `/schema`
 will serve (a new row, or — UNCHANGED — the current row, re-rendered from its
@@ -278,19 +280,25 @@ test fails until it does). The texts are a pure function of the row's own
 `ir::text`, dataset and size, so `vercel-build` runs
 `scripts/rerender-schema-texts.ts` after the migrations
 (`src/lib/contracts/rerender.ts`): each interface's current row whose texts
-are of another version — and no other row of the interface holds texts — is
-rendered again in a worker job with no tenant (its heap and deadline as any
-job's, no organisation's allowance) and written only while still so, so a
-verify that recorded meanwhile is never overwritten. The bytes are the ones
-a record would write for that row. The run never fails the build: it stops
-after 5 minutes, logs `[rerender-schema-texts] version N: … rendered, …
-refused, … left` and exits 0. A row it refuses (its texts past 1 MiB, or a
-job limit) or leaves stays `NOT_RENDERED` until its interface is verified
-again (`metadata`) or captured again (`sampled`), or the next run.
-**After an Instant Rollback across a bump** the rolled-back code serves only
-its own version: run that deployment's script once from its checkout against
-the production database (`pnpm exec tsx scripts/rerender-schema-texts.ts`),
-and again after rolling forward if the build does not. The kit and the
+are absent or of an **older** version — and no other row of the interface
+holds texts — is rendered again in a worker job with no tenant (its heap and
+deadline as any job's, no organisation's allowance) and written only while
+still so, so a verify that recorded meanwhile is never overwritten, and an
+old deployment's run never downgrades a newer render. The bytes are the ones
+a record would write for that row. The rows are taken **in turn across
+organisations** (each organisation's first row, then each one's second, …),
+so an organisation with many interfaces delays only its own rows. The run
+never fails the build: it stops after 5 minutes, logs
+`[rerender-schema-texts] version N: … rendered, … refused, … left` and exits
+0; `left > 0` is logged as a WARNING: those rows serve their previous render
+until the next deploy's run or a run by hand (`pnpm exec tsx
+scripts/rerender-schema-texts.ts`, a checkout against the production
+database). A row it refuses (its texts past 1 MiB, or a job limit) keeps
+what it holds. **It runs while the previous deployment still serves**, and
+that is safe: the old deployment serves the new render early, the new one
+serves the old render of a row not yet reached, neither answers
+`NOT_RENDERED` because of a version, and a failed or unpromoted build leaves
+every row servable. An Instant Rollback needs nothing run. The kit and the
 document are unaffected either way.
 
 **The gate (`src/lib/contracts/envelope.ts`), per function instance.** Vercel
@@ -353,15 +361,22 @@ every job is charged its wall time from spawn to exit — verify, capture,
 fixture, kit and document alike, a job killed at its deadline or heap
 included. **Reserved, then settled** (consolidated review round 2): the gate
 is per instance, so a check that only read the row let every instance admit
-its own queue for an organisation already at its cap. The check is one
-`INSERT … ON CONFLICT DO UPDATE SET ms = ms + 10000 WHERE ms < cap
-RETURNING`: no row back is the refusal, a row back has reserved the job's
-10 s deadline; when the worker has gone the row is settled by
-`ms − 10000 + wall time` (a job that never ran gives the 10 s back). So the
-day's total is at most the allowance plus one deadline, however many
-instances run; a process that dies between the two leaves the 10 s charged,
-which fails safe. The verify's own pre-SAP check (`contractJobAdmission`) is
-a plain read, so nothing is reserved twice. The refusal says "your organisation has used its N s of contract
+its own queue for an organisation already at its cap. The row keeps the
+settled time (`ms`) and the deadlines of the jobs in flight (`reservedMs`)
+apart (consolidated review round 3). The check is one `INSERT … ON CONFLICT
+DO UPDATE SET reservedMs = reservedMs + 10000 WHERE ms + reservedMs < cap
+RETURNING`: a row back has reserved the job's 10 s deadline; when the worker
+has gone the row is settled by `ms + wall time, reservedMs − 10000` (a job
+that never ran only gives the 10 s back). No row back, the row is read
+again: the day is spent (the refusal) only when the **settled** `ms` has
+reached the allowance; otherwise the organisation's own jobs in flight hold
+the rest, and the job is `BUSY` (retry in seconds, like any busy gate). So
+the day's total is at most the allowance plus one deadline, however many
+instances run; a process that dies between the two leaves the 10 s
+reserved for the day, which fails safe. The verify's own pre-SAP check
+(`contractJobAdmission`) is a plain read of the settled time, so nothing is
+reserved twice and a verify is never refused for another builder's job in
+flight. The refusal says "your organisation has used its N s of contract
 compile time for today" and retries at the next 00:00 UTC (downloads and
 captures: 429 with `Retry-After`). Rows older than 7 days are deleted by a
 charge (at most once an hour per process). There is no deployment-wide sum,
@@ -372,10 +387,10 @@ never touches it.
 
 | Route | Busy | Time spent | Compiler off | Too large |
 |---|---|---|---|---|
-| verify-service | `contract: NOT_COMPILED`, retry in 5 s; a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `status: COMPILER_UNAVAILABLE` before SAP is asked, the stored datasets, `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `status: COMPILER_UNAVAILABLE` before SAP is asked, `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
+| verify-service | `contract: NOT_COMPILED`, retry in 5 s (also while the organisation's jobs in flight hold the rest of its day); a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `status: COMPILER_UNAVAILABLE` before SAP is asked, the stored datasets, `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `status: COMPILER_UNAVAILABLE` before SAP is asked, `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
 | capture-schema, capture-fixture | 503, `Retry-After: 5`, nothing stored | 429 until 00:00 UTC, nothing stored | 503, nothing stored | 422 `TOO_LARGE`; a body past 4.5 MiB has its own message |
 | scaffold, solutions/[id]/openapi (deadline 25 s) | 503, `Retry-After: 5` | 429 until 00:00 UTC | 503, no `Retry-After` | 422 with the input's or the output's message |
-| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, or with texts of another `SCHEMA_TEXTS_VERSION` (its `schemasNote` says verify again for `metadata`, capture again for `sampled`) |
+| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, whatever `SCHEMA_TEXTS_VERSION` wrote the texts it has (its `schemasNote` says verify again for `metadata`, capture again for `sampled`) |
 
 The Studio screens say a refused download: the Test Console's Generate and
 the Solutions screen's OpenAPI buttons (fetched, no longer a plain link that
@@ -590,24 +605,30 @@ it prevents.
   admitted its own 4 × 10 s). Beyond that, a job in flight at the crossing
   can pass its own 10 s by the time its worker takes to exit after the
   deadline (milliseconds; at most the 5 s grace), and a process that dies
-  between reserving and settling leaves 10 s charged (fails safe).
+  between reserving and settling leaves 10 s reserved for the day (fails
+  safe). Reservations are kept apart from settled time (round 3), so jobs
+  in flight make the next job `BUSY` for seconds, never the day's refusal.
 - **R7. `NOT_RENDERED` after an interface is pointed back to an earlier
   dataset without a re-verify.** The earlier row lost its texts to the newer
   one, and the build's re-render leaves it alone (the newer row still holds
   texts). Fix: verify again for a `metadata` contract, capture again in the
   Test Console for a `sampled` one; the `schemasNote` says which.
-- **R11. `NOT_RENDERED` after a renderer change, for the rows the build's
-  re-render does not render.** `scripts/rerender-schema-texts.ts` re-renders
-  every current row from its stored IR in `vercel-build`; a row whose texts
-  under the new renderer pass 1 MiB (or that hits a job limit) is refused and
-  logged, and rows past the run's 5-minute budget are left for the next run.
-  Those interfaces answer `NOT_RENDERED` until verified (or captured) again
-  or the script runs again. After an Instant Rollback across a bump the
-  rolled-back code serves only its own version until an operator runs that
-  deployment's script by hand (contract jobs, above): until then every
-  interface re-verified under the newer version answers `NOT_RENDERED`. The
-  bound is the run itself: about 0.15-0.5 s per row on one vCPU, so the
-  5 minutes cover about 600-2,000 interfaces per run.
+- **R11. The previous render, after a renderer change, for the rows the
+  build's re-render does not render.** `scripts/rerender-schema-texts.ts`
+  re-renders every current row of an older version from its stored IR in
+  `vercel-build`; a row whose texts under the new renderer pass 1 MiB (or
+  that hits a job limit) is refused and logged, and rows past the run's
+  5-minute budget are left (a WARNING in the build log). Those interfaces
+  keep serving their previous, self-consistent render — never
+  `NOT_RENDERED` for a version (consolidated review round 3) — while the kit
+  and the document render the new one under the same `contentHash`; during
+  a deploy the live deployment likewise serves rows the build has already
+  re-rendered. The bound: the deploy window (about 6-11 minutes measured)
+  for every row, and for a row the run leaves, until the next deploy's run
+  or a run by hand. The run covers about 0.15-0.5 s per row on one vCPU, so
+  the 5 minutes reach about 600-2,000 interfaces per run, taken in turn
+  across organisations, so one organisation's many interfaces delay only its
+  own.
 - **R8. Storage.** Texts ≤ 1 MiB per interface; IR history as before. There is
   no organisation storage quota; that gap predates this change.
 - **R9. Vercel's runtime heap flags are unverified.** The jobs fail closed

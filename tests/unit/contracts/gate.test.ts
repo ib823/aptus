@@ -229,6 +229,23 @@ describe("the compiler turned off, and the allowance, are answered before the ga
     expect(r && !r.ok && r.detail).toContain("40 s of contract compile time");
     expect(load).not.toHaveBeenCalled();
   });
+
+  /*
+   * Consolidated review round 3: the deadlines reserved by jobs in flight
+   * were indistinguishable from time spent, so an organisation with time
+   * left was told to retry at 00:00 UTC. Refused only for its jobs in
+   * flight, a job is BUSY (retry in seconds), with no day's retry time.
+   */
+  it("an organisation whose rest of the day is held by its jobs in flight is BUSY, not ALLOWANCE", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    time.reserve.mockResolvedValueOnce({ ok: false, inFlight: true } as never);
+    const load = vi.fn(async () => null);
+    const r = await runContractJob("render", load, { tenant: "org_in_flight" });
+    expect(r).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(r).not.toHaveProperty("retryAfterMs");
+    expect(load).not.toHaveBeenCalled();
+    expect(time.charge).not.toHaveBeenCalledWith("org_in_flight", expect.anything(), expect.anything(), expect.anything());
+  });
 });
 
 describe("the instance's memory", () => {

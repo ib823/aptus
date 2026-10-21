@@ -41,10 +41,11 @@
  * hands the job the current row) — and nulls them on every other row of the
  * interface, in the same transaction as the row, its diff and the write
  * interface's stamp. An interface therefore holds at most 1 MiB of texts. A
- * row without them, or with texts of another renderer version
- * (SCHEMA_TEXTS_VERSION, render-version.ts), is served as NOT_RENDERED until
- * the interface is verified (or captured) again, or the build's re-render
- * (contracts/rerender.ts) renders the current row from its own IR.
+ * row without them is served as NOT_RENDERED until the interface is verified
+ * (or captured) again. Texts of another renderer version
+ * (SCHEMA_TEXTS_VERSION, render-version.ts) are served as they are — a
+ * self-consistent render of the row's own IR — until the build's re-render
+ * (contracts/rerender.ts) renders the row again (consolidated review round 3).
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. Pointing the interface at another dataset
@@ -452,7 +453,7 @@ export function describesInterfaceNow(
 export interface CurrentSnapshotSummary extends SnapshotSummary {
   /** Canonical bytes of its contract; null on a row recorded before they were kept (measured on read). */
   irBytes: number | null;
-  /** octet_length of its /schema texts; null when it holds none, or holds them from another renderer version (NOT_RENDERED). */
+  /** octet_length of its /schema texts, whatever renderer version wrote them; null when it holds none (NOT_RENDERED). */
   schemasBytes: number | null;
   createBodyBytes: number | null;
   updateBodyBytes: number | null;
@@ -478,14 +479,13 @@ export async function currentSnapshotSummaries(
     schemasBytes: number | null;
     createBodyBytes: number | null;
     updateBodyBytes: number | null;
-    textsVersion: number | null;
   };
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT DISTINCT ON (s."interfaceId")
       s."interfaceId", s."id", s."semver", s."contentHash", s."source", s."odataVersion", s."entitySet", s."externalId",
       s."interfaceVersion", s."createdAt", s."irBytes",
       octet_length(s."schemasText") AS "schemasBytes", octet_length(s."createBodyText") AS "createBodyBytes",
-      octet_length(s."updateBodyText") AS "updateBodyBytes", s."schemaTextsVersion" AS "textsVersion"
+      octet_length(s."updateBodyText") AS "updateBodyBytes"
     FROM "ContractSnapshot" s
     JOIN unnest(${wanted.map((i) => i.id)}::text[], ${wanted.map((i) => i.externalId)}::text[], ${wanted.map((i) => i.entitySet)}::text[])
       AS w("interfaceId", "externalId", "entitySet")
@@ -495,14 +495,13 @@ export async function currentSnapshotSummaries(
   `);
   const n = (v: number | bigint | null) => (v === null ? null : Number(v));
   for (const hit of rows) {
-    // Texts another renderer version wrote are not this code's render: none, as far as a reader is concerned.
-    const servable = hit.textsVersion === SCHEMA_TEXTS_VERSION;
+    // Texts of any renderer version are served (see the header): the version only picks the re-render's rows.
     out.set(hit.interfaceId, {
       ...summary(hit),
       irBytes: n(hit.irBytes),
-      schemasBytes: servable ? n(hit.schemasBytes) : null,
-      createBodyBytes: servable ? n(hit.createBodyBytes) : null,
-      updateBodyBytes: servable ? n(hit.updateBodyBytes) : null,
+      schemasBytes: n(hit.schemasBytes),
+      createBodyBytes: n(hit.createBodyBytes),
+      updateBodyBytes: n(hit.updateBodyBytes),
     });
   }
   return out;
@@ -511,22 +510,22 @@ export async function currentSnapshotSummaries(
 /**
  * GET /schema's texts of one snapshot, as stored: its schemas, and the write
  * body `operation` sends (UPDATE's or CREATE's) when `body` is asked for. One
- * statement; null when the row is gone, or its texts are of another renderer
- * version (SCHEMA_TEXTS_VERSION): /schema then answers NOT_RENDERED.
+ * statement; null when the row is gone. Texts of any renderer version are
+ * served (see the header).
  */
 export async function snapshotSchemaTexts(
   scope: TenantScope,
   snapshotId: string,
   body: "CREATE" | "UPDATE" | null,
 ): Promise<{ schemas: string | null; body: string | null } | null> {
-  const rows = await prisma.$queryRaw<{ schemas: string | null; body: string | null; version: number | null }[]>(Prisma.sql`
-    SELECT "schemasText" AS "schemas", "schemaTextsVersion" AS "version",
+  const rows = await prisma.$queryRaw<{ schemas: string | null; body: string | null }[]>(Prisma.sql`
+    SELECT "schemasText" AS "schemas",
       ${body === "UPDATE" ? Prisma.sql`"updateBodyText"` : body === "CREATE" ? Prisma.sql`"createBodyText"` : Prisma.sql`NULL::text`} AS "body"
     FROM "ContractSnapshot"
     WHERE "organizationId" = ${scope.organizationId} AND "id" = ${snapshotId}
   `);
   const row = rows[0];
-  return row && row.version === SCHEMA_TEXTS_VERSION ? { schemas: row.schemas, body: row.body } : null;
+  return row ? { schemas: row.schemas, body: row.body } : null;
 }
 
 /** The chosen snapshots' IRs, read in one query; each with its size, measured when it was not kept. */

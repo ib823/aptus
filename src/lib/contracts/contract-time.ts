@@ -19,7 +19,16 @@
  * its worker has gone (chargeContractTime with what it reserved). The day's
  * total is then at most the allowance plus one job's deadline, however many
  * instances run. A process that dies between the two leaves the reservation
- * charged: at most one deadline too much, which fails safe.
+ * held for the day: at most one deadline too much, which fails safe.
+ *
+ * SPENT IS NOT IN FLIGHT (consolidated review round 3). The reservations are
+ * their own column (reservedMs), apart from the settled time (ms): a job is
+ * admitted while ms + reservedMs is under the allowance, and refused
+ * ALLOWANCE (until 00:00 UTC) only when the SETTLED time has reached it.
+ * Refused only because jobs in flight hold the rest, it is BUSY, which
+ * clears in seconds. The verify's pre-SAP check (checkContractTime) reads
+ * the settled time alone, so two builders of one organisation never see a
+ * day's refusal for each other's jobs in flight.
  *
  * Only the organisation's own time: there is no deployment-wide sum, so no
  * tenant can spend another's. Read paths (/schema) never touch it.
@@ -47,6 +56,8 @@ export function nextUtcMidnight(now: Date): Date {
 
 export type ContractTimeCheck = { ok: true } | { ok: false; detail: string; retryAfterMs: number };
 type ContractTimeSpent = Extract<ContractTimeCheck, { ok: false }>;
+/** Refused only because jobs in flight hold the rest of the allowance: BUSY, not the day's refusal. */
+type ContractTimeInFlight = { ok: false; inFlight: true };
 
 function spent(seconds: number, now: Date): ContractTimeSpent {
   return {
@@ -59,9 +70,10 @@ function spent(seconds: number, now: Date): ContractTimeSpent {
 const clampMs = (ms: number) => Math.max(0, Math.min(2_000_000_000, Math.round(ms)));
 
 /**
- * Whether the organisation may start a job now: refused once it has used
- * today's allowance. A read that reserves nothing: the verify asks it before
- * it fetches a description, and the job itself then reserves (below).
+ * Whether the organisation may start a job now: refused once its settled
+ * time has reached today's allowance (jobs in flight do not count). A read
+ * that reserves nothing: the verify asks it before it fetches a description,
+ * and the job itself then reserves (below).
  */
 export async function checkContractTime(organizationId: string, now: Date = new Date()): Promise<ContractTimeCheck> {
   const seconds = contractSecondsPerOrgDay();
@@ -80,27 +92,33 @@ export interface ContractTimeReservation {
 
 /**
  * Check and reserve in one statement (see the header): `reserveMs` is added
- * to the organisation's day only while the day is under its allowance, so
- * concurrent jobs on any number of instances are admitted one reservation at
- * a time, and none once the reservations reach the allowance. With the
- * allowance unlimited nothing is reserved (0 ms), and the job's wall time is
- * still charged when it settles.
+ * to the organisation's reservations only while its settled time and
+ * reservations together are under the allowance, so concurrent jobs on any
+ * number of instances are admitted one reservation at a time, and none once
+ * they reach the allowance. Not admitted, the row is read again: the day is
+ * spent only when the settled time has reached the allowance, and otherwise
+ * the job is refused as in flight (BUSY). With the allowance unlimited
+ * nothing is reserved (0 ms), and the job's wall time is still charged when
+ * it settles.
  */
 export async function reserveContractTime(
   organizationId: string,
   reserveMs: number,
   now: Date = new Date(),
-): Promise<{ ok: true; reservation: ContractTimeReservation } | ContractTimeSpent> {
+): Promise<{ ok: true; reservation: ContractTimeReservation } | ContractTimeSpent | ContractTimeInFlight> {
   const seconds = contractSecondsPerOrgDay();
   if (seconds === 0) return { ok: true, reservation: { at: now, ms: 0 } };
   const ms = clampMs(reserveMs);
   const rows = await prisma.$queryRaw<{ ms: number }[]>(Prisma.sql`
-    INSERT INTO "ContractTime" ("organizationId", "day", "ms") VALUES (${organizationId}, ${utcDay(now)}::date, ${ms})
-    ON CONFLICT ("organizationId", "day") DO UPDATE SET "ms" = LEAST("ContractTime"."ms"::bigint + EXCLUDED."ms", 2000000000)::int
-      WHERE "ContractTime"."ms" < ${seconds * 1000}
+    INSERT INTO "ContractTime" ("organizationId", "day", "ms", "reservedMs") VALUES (${organizationId}, ${utcDay(now)}::date, 0, ${ms})
+    ON CONFLICT ("organizationId", "day") DO UPDATE
+      SET "reservedMs" = LEAST("ContractTime"."reservedMs"::bigint + EXCLUDED."reservedMs", 2000000000)::int
+      WHERE "ContractTime"."ms"::bigint + "ContractTime"."reservedMs" < ${seconds * 1000}
     RETURNING "ms"
   `);
-  return rows.length > 0 ? { ok: true, reservation: { at: now, ms } } : spent(seconds, now);
+  if (rows.length > 0) return { ok: true, reservation: { at: now, ms } };
+  const settled = await checkContractTime(organizationId, now);
+  return settled.ok ? { ok: false, inFlight: true } : settled;
 }
 
 /** Rows older than this many days are deleted by a charge. */
@@ -109,10 +127,11 @@ let prunedAt = 0;
 
 /**
  * Add a job's wall time to the organisation's day (the day of `now`: a
- * reservation's own day when one is settled), less `reservedMs`, what the job
- * reserved before it ran (0 for a plain charge). A job that never ran settles
- * with 0 and so gives its reservation back. Never throws: a charge that fails
- * is logged, and a reservation it failed to settle stays charged.
+ * reservation's own day when one is settled), and give back `reservedMs`,
+ * what the job reserved before it ran (0 for a plain charge). A job that
+ * never ran settles with 0 and so only gives its reservation back. Never
+ * throws: a charge that fails is logged, and a reservation it failed to
+ * settle stays held for the day.
  */
 export async function chargeContractTime(organizationId: string, wallMs: number, now: Date = new Date(), reservedMs = 0): Promise<void> {
   const ms = clampMs(wallMs);
@@ -121,7 +140,8 @@ export async function chargeContractTime(organizationId: string, wallMs: number,
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO "ContractTime" ("organizationId", "day", "ms") VALUES (${organizationId}, ${utcDay(now)}::date, ${ms})
       ON CONFLICT ("organizationId", "day") DO UPDATE
-        SET "ms" = GREATEST(0, LEAST("ContractTime"."ms"::bigint - ${reserved}::int + EXCLUDED."ms", 2000000000))::int
+        SET "ms" = LEAST("ContractTime"."ms"::bigint + EXCLUDED."ms", 2000000000)::int,
+          "reservedMs" = GREATEST(0, "ContractTime"."reservedMs" - ${reserved}::int)
     `);
     // At most once an hour per process.
     if (now.getTime() - prunedAt >= 3_600_000) {

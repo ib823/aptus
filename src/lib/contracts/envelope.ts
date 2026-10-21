@@ -26,7 +26,8 @@
  *     the job's deadline reserved in one statement before the job is queued
  *     (the gate is per process; the reservation holds across instances), and
  *     settled to the job's wall time from spawn to exit once the worker has
- *     gone.
+ *     gone. A job refused only because the organisation's jobs in flight
+ *     hold the rest of the day is BUSY, not ALLOWANCE.
  *
  * Whatever runs past a limit ends as a typed refusal (EnvelopeRefusal), never
  * an out-of-memory, a crash or a blocked event loop. A job's slot is free only
@@ -274,7 +275,11 @@ export async function runContractJob<K extends Job["kind"]>(
   // The allowance, checked and this job's deadline reserved in one statement
   // (contract-time.ts): the per-process gate below cannot see other instances.
   const reserved = tenant === null ? null : await reserveContractTime(tenant, limits.deadlineMs);
-  if (reserved !== null && !reserved.ok) return refuse("ALLOWANCE", kind, queuedAt, "allowance", reserved.detail, reserved.retryAfterMs);
+  if (reserved !== null && !reserved.ok) {
+    // The rest of the day held by the organisation's jobs in flight: BUSY, which clears in seconds.
+    if ("inFlight" in reserved) return refuse("BUSY", kind, queuedAt, "allowance-in-flight");
+    return refuse("ALLOWANCE", kind, queuedAt, "allowance", reserved.detail, reserved.retryAfterMs);
+  }
   let wallMs = 0;
   try {
     const wait = left(GATE.maxWaitMs);

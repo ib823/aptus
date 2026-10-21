@@ -14,8 +14,6 @@
  *                             a capture's schema, a charge of compiler time
  */
 
-import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
-
 type Row = Record<string, unknown>;
 interface RawQuery {
   sql?: string;
@@ -64,7 +62,6 @@ export function snapshotSummaryRows(snapshots: readonly Row[], q: unknown): Row[
         schemasBytes: octets(hit.schemasText),
         createBodyBytes: octets(hit.createBodyText),
         updateBodyBytes: octets(hit.updateBodyText),
-        textsVersion: textsVersionOf(hit),
       });
     }
   });
@@ -72,9 +69,6 @@ export function snapshotSummaryRows(snapshots: readonly Row[], q: unknown): Row[
 }
 
 const octets = (t: unknown) => (typeof t === "string" ? Buffer.byteLength(t, "utf8") : null);
-/** The renderer version of a row's texts; a test row given texts without one is taken as this code's. */
-const textsVersionOf = (r: Row): number | null =>
-  typeof r.schemaTextsVersion === "number" ? r.schemaTextsVersion : typeof r.schemasText === "string" && r.schemaTextsVersion === undefined ? SCHEMA_TEXTS_VERSION : null;
 
 /** snapshotSchemaTexts's statement (snapshot.ts). */
 export function isSchemaTextsQuery(q: unknown): boolean {
@@ -88,7 +82,7 @@ export function schemaTextsRows(snapshots: readonly Row[], q: unknown): Row[] {
   const row = snapshots.find((r) => (r.organizationId ?? org) === org && r.id === id);
   if (!row) return [];
   const body = sql.includes('"updateBodyText" AS') ? row.updateBodyText : sql.includes('"createBodyText" AS') ? row.createBodyText : null;
-  return [{ schemas: row.schemasText ?? null, body: body ?? null, version: textsVersionOf(row) }];
+  return [{ schemas: row.schemasText ?? null, body: body ?? null }];
 }
 
 /** snapshotBodies's statement (snapshot.ts). */

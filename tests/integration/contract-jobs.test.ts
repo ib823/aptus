@@ -34,7 +34,7 @@ import { longestStall } from "../helpers/stall";
 vi.setConfig({ testTimeout: 180_000 });
 
 /** Every statement the app's client sends, counted (the base client's query events). */
-const counter = vi.hoisted(() => ({ queries: 0 }));
+const counter = vi.hoisted(() => ({ queries: 0, onQuery: null as ((query: string, params: string) => void) | null }));
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -43,8 +43,9 @@ vi.mock("@/lib/db/prisma", async () => {
     datasourceUrl: process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused",
     log: [{ emit: "event", level: "query" }],
   });
-  base.$on("query", () => {
+  base.$on("query", (e) => {
     counter.queries += 1;
+    counter.onQuery?.(e.query, e.params);
   });
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
@@ -60,7 +61,7 @@ import { LIMITS } from "@/lib/contracts/budget";
 import { compileContract } from "@/lib/contracts/compile";
 import { chargeContractTime, checkContractTime, nextUtcMidnight, reserveContractTime } from "@/lib/contracts/contract-time";
 import { planDocInputs } from "@/lib/contracts/doc-inputs";
-import { CONTRACT_JOB_LIMITS, runJobInEnvelope } from "@/lib/contracts/envelope";
+import { CONTRACT_JOB_LIMITS, contractJobAdmission, runJobInEnvelope } from "@/lib/contracts/envelope";
 import { recordJob, type CompiledService, type Job } from "@/lib/contracts/jobs";
 import { recordVerifiedContract, snapshotBodies } from "@/lib/contracts/record";
 import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
@@ -121,6 +122,12 @@ async function msToday(organizationId: string): Promise<number> {
   return rows[0]?.ms ?? 0;
 }
 
+/** The deadlines its jobs in flight hold today, in ms (0 when no row). */
+async function reservedToday(organizationId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<{ ms: number }[]>`SELECT "reservedMs" AS "ms" FROM "ContractTime" WHERE "organizationId" = ${organizationId} AND "day" = ${new Date().toISOString().slice(0, 10)}::date`;
+  return rows[0]?.ms ?? 0;
+}
+
 const post = (url: string, body: string) =>
   new NextRequest(url, { method: "POST", headers: { "content-type": "application/json" }, body });
 
@@ -147,8 +154,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     await prisma.apiAccessGrant.deleteMany({ where: { organizationId: ORG } });
     await prisma.mockFixture.deleteMany({ where: { organizationId: ORG } });
     await prisma.contractSnapshot.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
-    await prisma.interface.deleteMany({ where: { organizationId: ORG } });
-    await prisma.solution.deleteMany({ where: { organizationId: ORG } });
+    await prisma.interface.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
+    await prisma.solution.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
     for (const id of [ORG, OTHER]) await prisma.organization.delete({ where: { id } });
     await prisma.$disconnect();
   });
@@ -466,28 +473,68 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     await chargeContractTime(OTHER, 39_999);
     const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
-    // Six at once: before, four ran here (one running, three waiting) and two were BUSY.
+    // Six at once: before, four ran here (one running, three waiting) and two were BUSY. Now one
+    // runs, and the other five, refused while it holds the rest of the day, are BUSY (round 3).
     const results = await Promise.all(Array.from({ length: 6 }, () => runJobInEnvelope(job, { tenant: OTHER })));
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason)).toEqual(Array(5).fill("ALLOWANCE"));
+    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason)).toEqual(Array(5).fill("BUSY"));
     // Settled to the one job's wall time: the day's total is under the allowance plus one deadline.
     const after = await msToday(OTHER);
     expect(after).toBeGreaterThan(39_999);
     expect(after).toBeLessThan(39_999 + CONTRACT_JOB_LIMITS.deadlineMs);
-    // Another instance asks the same row, and is refused the same way.
+    expect(await reservedToday(OTHER)).toBe(0);
+    // The day now spent: another instance asks the same row, and is refused until 00:00 UTC.
     expect(await Promise.all([reserveContractTime(OTHER, 10_000), reserveContractTime(OTHER, 10_000)])).toEqual([
-      expect.objectContaining({ ok: false }),
-      expect.objectContaining({ ok: false }),
+      expect.objectContaining({ ok: false, retryAfterMs: expect.any(Number) }),
+      expect.objectContaining({ ok: false, retryAfterMs: expect.any(Number) }),
     ]);
     // Concurrent reservations under the allowance: admitted one at a time, none past it.
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     const reserved = await Promise.all(Array.from({ length: 8 }, () => reserveContractTime(OTHER, 10_000)));
     expect(reserved.filter((r) => r.ok)).toHaveLength(4);
-    expect(await msToday(OTHER)).toBe(40_000);
+    expect(await reservedToday(OTHER)).toBe(40_000);
+    expect(await msToday(OTHER)).toBe(0);
     // A job that never ran (BUSY: its caller's deadline already passed) gives its reservation back.
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     expect(await runJobInEnvelope(job, { tenant: OTHER, deadlineAt: Date.now() - 1 })).toMatchObject({ ok: false, reason: "BUSY" });
     expect(await msToday(OTHER)).toBe(0);
+    expect(await reservedToday(OTHER)).toBe(0);
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated review round 3: reservations went into the same column as
+   * the settled time, so an organisation with time left was refused
+   * ALLOWANCE (retry at 00:00 UTC, and "SAP was not asked" on a verify) while
+   * its own jobs were in flight. In flight is BUSY; only settled time spends
+   * the day.
+   */
+  it("jobs in flight are not time spent: BUSY for seconds, never the day's refusal, and the verify's check reads settled time only", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    // Settled 30.5 s and one job in flight: the next is BUSY, and the verify's pre-SAP check still admits.
+    await chargeContractTime(OTHER, 30_500);
+    const inFlight = await reserveContractTime(OTHER, 10_000);
+    expect(inFlight).toMatchObject({ ok: true });
+    expect(await reserveContractTime(OTHER, 10_000)).toEqual({ ok: false, inFlight: true });
+    expect(await checkContractTime(OTHER)).toEqual({ ok: true });
+    expect(await contractJobAdmission("record", OTHER)).toBeNull();
+    const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+    const busy = await runJobInEnvelope(job, { tenant: OTHER });
+    expect(busy).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(busy).not.toHaveProperty("retryAfterMs");
+    // The job in flight settles (it ran 1 s): its reservation is given back, and the next job runs.
+    if (inFlight.ok) await chargeContractTime(OTHER, 1_000, inFlight.reservation.at, inFlight.reservation.ms);
+    expect(await reservedToday(OTHER)).toBe(0);
+    expect(await msToday(OTHER)).toBe(31_500);
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: true });
+    // Four jobs in flight at 0 s: a fifth is BUSY, not ALLOWANCE.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    for (let i = 0; i < 4; i++) expect(await reserveContractTime(OTHER, 10_000)).toMatchObject({ ok: true });
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(await checkContractTime(OTHER)).toEqual({ ok: true });
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     vi.unstubAllEnvs();
   });
 
@@ -552,13 +599,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     expect(current!.schemasText).not.toBeNull();
     const rendered = { ...current! };
 
-    // Texts of another renderer version (a bump, or a rollback across one): rendered again, the same bytes.
-    for (const other of [SCHEMA_TEXTS_VERSION - 1, SCHEMA_TEXTS_VERSION + 1]) {
-      await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${other} WHERE "id" = ${current!.id}`;
-      const outcome = await rerenderSchemaTexts({ organizationId: ORG });
-      expect(outcome.rendered).toBeGreaterThanOrEqual(1);
-      expect((await rows())[1]).toEqual(rendered);
-    }
+    // Texts of an older renderer version (a bump): rendered again, the same bytes.
+    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION - 1} WHERE "id" = ${current!.id}`;
+    const outcome = await rerenderSchemaTexts({ organizationId: ORG });
+    expect(outcome.rendered).toBeGreaterThanOrEqual(1);
+    expect((await rows())[1]).toEqual(rendered);
+    // A newer version's (an old deployment's run, after a rollback): never downgraded (round 3).
+    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION + 1} WHERE "id" = ${current!.id}`;
+    await rerenderSchemaTexts({ organizationId: ORG });
+    expect((await rows())[1]).toEqual({ ...rendered, schemaTextsVersion: SCHEMA_TEXTS_VERSION + 1 });
+    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION} WHERE "id" = ${current!.id}`;
     // Nothing to do: nothing written.
     const again = await rerenderSchemaTexts({ organizationId: ORG });
     expect((await rows())[1]).toEqual(rendered);
@@ -581,5 +631,86 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     await rerenderSchemaTexts({ organizationId: ORG });
     expect((await rows())[1]).toEqual(rendered);
     expect(await msToday(ORG)).toBe(before);
+  });
+  /*
+   * Consolidated review round 3: the build's re-render took the rows in
+   * organisation order and stopped at its budget, and /schema served texts
+   * only at the running version, so one organisation with a few hundred
+   * interfaces left every organisation sorted after it NOT_RENDERED after a
+   * deploy. The rows are now taken in turn across organisations, and a row
+   * the run does not reach keeps serving its previous render.
+   */
+  it("the re-render takes organisations in turn, and a row it does not reach still serves its previous texts", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // A recorded contract and its texts, copied to 30 interfaces of ORG (A) and one of OTHER (B), all an older render.
+    const model = await newInterface("rr-model");
+    const heads = await snapshots.loadRecordHeads(scope, model, "DEV");
+    const job = await runJobInEnvelope({ kind: "record", input: { description: wideDescription(10), entitySet: model.entitySet!, ...heads } }, { tenant: null });
+    const compiled: CompiledService = job.ok ? job.value : { ok: false, reason: job.reason, detail: job.detail };
+    expect(await recordVerifiedContract({ scope, iface: { ...model, entitySet: model.entitySet! }, compiled, heads, environment: "DEV", connectionId: "conn_dev", actorId: "u_r5" })).toMatchObject({ status: "RECORDED" });
+    const otherSolution = await prisma.solution.create({
+      data: { organizationId: OTHER, name: "Round 3", slug: `${RUN}-other-app`, classification: "CLIENT_APP", businessProblem: "Round 3.", dataClass: "INTERNAL", status: "ACTIVE" },
+      select: { id: true },
+    });
+    const ifaceOf = (organizationId: string, id: string, sol: string) => ({
+      id,
+      organizationId,
+      solutionId: sol,
+      name: id,
+      sapProduct: "s4hana",
+      externalId: model.externalId,
+      operation: "READ",
+      mode: "READ",
+      entitySet: model.entitySet,
+    });
+    const aIds = Array.from({ length: 30 }, (_, i) => `${RUN}-rr-a-${String(i).padStart(2, "0")}`);
+    const bId = `${RUN}-rr-b-00`;
+    await prisma.interface.createMany({ data: [...aIds.map((id) => ifaceOf(ORG, id, solutionId)), ifaceOf(OTHER, bId, otherSolution.id)] });
+    const [src] = await prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "ContractSnapshot" WHERE "organizationId" = ${ORG} AND "interfaceId" = ${model.id} AND "schemasText" IS NOT NULL`;
+    for (const [organizationId, interfaceId] of [...aIds.map((id) => [ORG, id] as const), [OTHER, bId] as const]) {
+      await prisma.$executeRaw`
+        INSERT INTO "ContractSnapshot" ("id", "organizationId", "interfaceId", "interfaceVersion", "externalId", "entitySet", "source", "odataVersion",
+          "semver", "semverMajor", "semverMinor", "semverPatch", "contentHash", "ir", "irVersion", "irBytes", "diff",
+          "schemasText", "createBodyText", "updateBodyText", "schemaTextsVersion", "createdAt")
+        SELECT ${`${interfaceId}-snap`}, ${organizationId}, ${interfaceId}, 1, "externalId", "entitySet", "source", "odataVersion",
+          "semver", "semverMajor", "semverMinor", "semverPatch", "contentHash", "ir", "irVersion", "irBytes", NULL,
+          "schemasText", "createBodyText", "updateBodyText", ${SCHEMA_TEXTS_VERSION - 1}, now()
+        FROM "ContractSnapshot" WHERE "id" = ${src!.id}`;
+    }
+    // The run's clock jumps past its deadline once B's row has been rendered (or after three of A's, which
+    // organisation order would reach first): whatever the machine's speed, the run renders a known prefix.
+    const realNow = Date.now.bind(Date);
+    let jump = 0;
+    const read: string[] = [];
+    vi.spyOn(Date, "now").mockImplementation(() => realNow() + jump);
+    counter.onQuery = (query, params) => {
+      if (!query.includes('"ir"::text')) return;
+      const org = params.includes(`"${OTHER}"`) ? "B" : params.includes(`"${ORG}"`) ? "A" : "?";
+      if (read.includes("B") || read.filter((o) => o === "A").length >= 3) jump = 3_600_000;
+      read.push(org);
+    };
+    let outcome;
+    try {
+      outcome = await rerenderSchemaTexts({ deadlineAt: realNow() + 600_000 });
+    } finally {
+      counter.onQuery = null;
+      vi.mocked(Date.now).mockRestore();
+    }
+    // B's one row came before A's second: in turn, not in organisation order.
+    const secondA = read.indexOf("A", read.indexOf("A") + 1);
+    expect(read.indexOf("B"), read.join(",")).toBeGreaterThanOrEqual(0);
+    expect(secondA === -1 || read.indexOf("B") < secondA, read.join(",")).toBe(true);
+    expect(outcome.left).toBeGreaterThanOrEqual(25);
+    const version = async (organizationId: string, id: string) =>
+      (await prisma.contractSnapshot.findFirst({ where: { organizationId, interfaceId: id }, select: { schemaTextsVersion: true } }))?.schemaTextsVersion;
+    expect(await version(OTHER, bId)).toBe(SCHEMA_TEXTS_VERSION);
+    // A's rows the run did not reach still serve their previous texts: never NOT_RENDERED for a version.
+    const left = aIds.at(-1)!;
+    expect(await version(ORG, left)).toBe(SCHEMA_TEXTS_VERSION - 1);
+    const summaries = await snapshots.currentSnapshotSummaries(scope, [{ id: left, externalId: model.externalId, entitySet: model.entitySet }]);
+    expect(summaries.get(left)?.schemasBytes).toBeGreaterThan(0);
+    const texts = await snapshots.snapshotSchemaTexts(scope, `${left}-snap`, null);
+    expect(texts?.schemas).toBeTruthy();
+    await prisma.contractSnapshot.deleteMany({ where: { organizationId: { in: [ORG, OTHER] }, interfaceId: { in: [...aIds, bId] } } });
   });
 });

@@ -1,28 +1,34 @@
 /**
  * THE /SCHEMA TEXTS RE-RENDERED FROM STORED DATA AFTER A RENDERER CHANGE
- * (P1.3, consolidated review round 2).
+ * (P1.3, consolidated review rounds 2 and 3).
  *
- * GET /schema serves texts only at the running SCHEMA_TEXTS_VERSION
- * (render-version.ts), so a deploy that bumps it — or an Instant Rollback
- * across one — used to leave every interface of every tenant NOT_RENDERED
- * until someone re-verified each against its live SAP system. The texts are
- * a pure function of what the row already stores (its IR as `ir::text`, its
- * dataset and its canonical size), so they are rendered again from that,
- * here, run by scripts/rerender-schema-texts.ts from `vercel-build` after the
- * migrations (and by hand after an Instant Rollback across a bump).
+ * GET /schema serves a row's stored texts whatever renderer version wrote
+ * them (snapshot.ts): they are a self-consistent render of the row's own IR,
+ * so a deploy that bumps SCHEMA_TEXTS_VERSION (render-version.ts), or a run
+ * that stops before a row, leaves that row serving its previous render,
+ * never NOT_RENDERED. The version only picks the rows to render again: the
+ * texts are a pure function of what the row already stores (its IR as
+ * `ir::text`, its dataset and its canonical size), so they are rendered again
+ * from that, here, run by scripts/rerender-schema-texts.ts from
+ * `vercel-build` after the migrations.
  *
  * WHICH ROWS. Each interface's CURRENT row (the one /schema serves: the
- * newest of its service and dataset) whose texts are not of the running
- * version, when no other row of the interface holds texts (an interface
+ * newest of its service and dataset) whose texts are of an OLDER version, or
+ * absent, when no other row of the interface holds texts (an interface
  * pointed back at an earlier dataset keeps its texts on the later row, R7)
  * and its contract is within the documents' budget (past it /schema answers
- * TOO_LARGE whatever the texts). The write repeats both conditions, so a
- * verify that recorded meanwhile is never overwritten.
+ * TOO_LARGE whatever the texts). Older, not merely other: an old
+ * deployment's run never downgrades a newer render. The write repeats the
+ * conditions, so a verify that recorded meanwhile is never overwritten.
+ *
+ * IN TURN ACROSS ORGANISATIONS. The rows are taken each organisation's first,
+ * then each one's second, and so on, so an organisation with many interfaces
+ * delays only its own rows past the run's deadline, never another's.
  *
  * HOW. Each row's render is a `texts` job in the worker envelope with no
  * tenant: the worker's heap and deadline hold as for any job, and no
  * organisation's allowance is spent. A row refused (its texts past their
- * 1 MiB cap, or a limit) stays NOT_RENDERED, and is said; the run stops at
+ * 1 MiB cap, or a limit) keeps what it holds, and is said; the run stops at
  * its own deadline and never throws for one row.
  */
 
@@ -37,11 +43,11 @@ import { prisma } from "@/lib/db/prisma";
 export interface RerenderOutcome {
   /** Rows given texts at the running version. */
   rendered: number;
-  /** Rows whose render was refused (its texts past their cap, or a job limit): still NOT_RENDERED. */
+  /** Rows whose render was refused (its texts past their cap, or a job limit): they keep what they hold. */
   refused: number;
   /** Rows written meanwhile by a verify or a capture, or no longer current: left as they are. */
   skipped: number;
-  /** Rows not reached before the deadline (or with the compiler off): run again. */
+  /** Rows not reached before the deadline (or with the compiler off): they serve their previous render until a run reaches them. */
   left: number;
 }
 
@@ -53,8 +59,14 @@ interface Candidate {
   irBytes: number;
 }
 
-/** The rows to re-render (see the header): one statement over every organisation, or the one named. */
-async function candidates(organizationId: string | null): Promise<Candidate[]> {
+/** Texts a run renders again: none yet, or an older renderer version's (see the header). */
+const stale = (version: Prisma.Sql) => Prisma.sql`(${version} IS NULL OR ${version} < ${SCHEMA_TEXTS_VERSION})`;
+
+/**
+ * The rows to re-render (see the header), in turn across organisations: one
+ * statement over every organisation, or the one named.
+ */
+async function rerenderCandidates(organizationId: string | null): Promise<Candidate[]> {
   return prisma.$queryRaw<Candidate[]>(Prisma.sql`
     SELECT c."id", c."organizationId", c."interfaceId", c."entitySet", c."irBytes"
     FROM (
@@ -65,13 +77,13 @@ async function candidates(organizationId: string | null): Promise<Candidate[]> {
       ${organizationId === null ? Prisma.empty : Prisma.sql`WHERE s."organizationId" = ${organizationId}`}
       ORDER BY s."interfaceId", s."semverMajor" DESC, s."semverMinor" DESC, s."semverPatch" DESC
     ) c
-    WHERE c."schemaTextsVersion" IS DISTINCT FROM ${SCHEMA_TEXTS_VERSION}
+    WHERE ${stale(Prisma.sql`c."schemaTextsVersion"`)}
       AND c."irBytes" IS NOT NULL AND c."irBytes" <= ${LIMITS.document.contractsCap}
       AND NOT EXISTS (
         SELECT 1 FROM "ContractSnapshot" o
         WHERE o."organizationId" = c."organizationId" AND o."interfaceId" = c."interfaceId" AND o."id" <> c."id" AND o."schemasText" IS NOT NULL
       )
-    ORDER BY c."organizationId", c."interfaceId"
+    ORDER BY ROW_NUMBER() OVER (PARTITION BY c."organizationId" ORDER BY c."interfaceId"), c."organizationId"
   `);
 }
 
@@ -82,7 +94,7 @@ async function candidates(organizationId: string | null): Promise<Candidate[]> {
 export async function rerenderSchemaTexts(opts: { deadlineAt?: number | null; organizationId?: string | null } = {}): Promise<RerenderOutcome> {
   const deadlineAt = opts.deadlineAt ?? null;
   const out: RerenderOutcome = { rendered: 0, refused: 0, skipped: 0, left: 0 };
-  const rows = await candidates(opts.organizationId ?? null);
+  const rows = await rerenderCandidates(opts.organizationId ?? null);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
     if (deadlineAt !== null && Date.now() >= deadlineAt) {
@@ -119,7 +131,7 @@ export async function rerenderSchemaTexts(opts: { deadlineAt?: number | null; or
       SET "schemasText" = ${textOf(t.schemas)}, "createBodyText" = ${text(t.create)}, "updateBodyText" = ${text(t.update)},
         "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION}
       WHERE s."id" = ${row.id} AND s."organizationId" = ${row.organizationId}
-        AND s."schemaTextsVersion" IS DISTINCT FROM ${SCHEMA_TEXTS_VERSION}
+        AND ${stale(Prisma.sql`s."schemaTextsVersion"`)}
         AND NOT EXISTS (
           SELECT 1 FROM "ContractSnapshot" o
           WHERE o."organizationId" = ${row.organizationId} AND o."interfaceId" = ${row.interfaceId} AND o."id" <> ${row.id} AND o."schemasText" IS NOT NULL

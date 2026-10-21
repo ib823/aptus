@@ -1969,8 +1969,8 @@ model ContractSnapshot {
   createBodyText     String?
   updateBodyText     String?
   /// The renderer version that wrote the three texts (SCHEMA_TEXTS_VERSION,
-  /// contracts/render-version.ts). /schema serves them only while it is the
-  /// running code's version, and otherwise answers NOT_RENDERED: verify again.
+  /// contracts/render-version.ts). /schema serves the texts whatever it is;
+  /// the build re-renders the rows of an older version (contracts/rerender.ts).
   schemaTextsVersion Int?
 
   /// Where a METADATA contract was read: the environment and connection whose
@@ -1992,7 +1992,10 @@ model ContractSnapshot {
 model ContractTime {
   organizationId String
   day            DateTime @db.Date
+  /// Wall time of the day's settled jobs.
   ms             Int      @default(0)
+  /// Deadlines reserved by the jobs in flight, given back as each settles.
+  reservedMs     Int      @default(0)
 
   @@id([organizationId, day])
 }
