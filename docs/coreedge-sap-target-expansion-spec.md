@@ -1,6 +1,23 @@
 # CoreEdge — SAP target expansion specification
 
-**Status:** specification only. Nothing in this document has been applied.
+**Status:** largely applied. Written as a specification against commit `2724211`,
+when nothing in it had been built. Parts 1 to 3 below are kept as written, as the
+reasoning; where the code has since moved, a bracketed note says so. Reviewed
+against the code at `f65730f1` in roadmap item P0.16 (October 2026).
+
+## What has been applied, and what has not
+
+| Item | Status | Where |
+|---|---|---|
+| Change 1, client addressing | **Applied.** Connections carry an optional SAP client, and all four calling surfaces in §1.4 build their URL through one builder that appends `sap-client` after the path | `src/lib/sap-public/sap-url.ts` (`buildSapUrl`); `SapConnection.client` |
+| Change 2, environment binding | **Applied.** A landscape stage is environment plus client: at most one active connection per organisation, product, environment and client (`SapConnection_active_binding_tuple`), and a credential binds to the client it was issued for | `prisma/schema.prisma` (`SapConnection`); `src/lib/sap-public/connection-resolver.ts` |
+| Change 3, catalogue source | **Partly.** Private-cloud, on-premise and ECC products exist and share S/4HANA's service paths, and a customer's own service (`Z*`, `YY1_*`) is registered by its path and verified from `$metadata` (P1.1). Discovery from the tenant's own Gateway catalogue (§3.1) is not built: roadmap item P1.2. Whether the seed now carries private or on-premise rows was not re-checked | `src/lib/sap-public/tdd-connector.ts` (`cloud-erp-private`, `s4hana-onprem`, `ecc`); `src/lib/sap-public/service-path.ts` |
+| Change 4, CSRF for writes | **Applied.** The northbound write fetches a CSRF token and sends it with the create | `src/lib/northbound/write.ts` |
+| Change 5, network reachability | **Not code, and open.** The hosted instance refuses private hosts and has no tunnel or fixed egress address, so a RISE or on-premise system is reachable only from a copy inside its network (roadmap P4.1, P4.2, P4.4) | `src/lib/studio/connection-url-guard.ts`; capability registry, network cells |
+| §2.2 ECC | **Applied as recommended.** An `ecc` product with no service list: only services registered by path work | `src/lib/sap-public/tdd-connector.ts` |
+| §2.3 "Activated" for a REST product | **Open.** Roadmap item P0.6 (Ariba) | — |
+| §3.3 SuccessFactors authentication | **Applied, not yet proven live.** The OAuth SAML bearer flow is built (`oauth-saml-bearer`, in-app assertion signing), the SuccessFactors API hosts are admitted, and saving a new SuccessFactors connection with Basic shows the dated warning. A live SAML bearer run against a tenant is still owed (P0.9) | `src/lib/sap-public/saml-assertion.ts`; `docs/runbooks/successfactors-saml-signing.md` |
+| §3.4 Cloud Connector | **Open.** The roadmap's answer is a CoreEdge connector and relay (P4.2); where the relay runs is open decision D12 | `docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md` |
 
 ## How to read this
 
@@ -70,6 +87,7 @@ interface SapTenant { key; label; baseUrl; environment? }
 ```
 
 `sap-client` appears **nowhere in the repository**. Verified by exhaustive grep.
+[Since applied: `src/lib/sap-public/sap-url.ts`; see the table at the top.]
 
 Every tenant is addressed as a distinct `baseUrl`, and `serviceUrl()` is a flat
 concatenation:
@@ -227,6 +245,8 @@ X.509 mutual TLS, or OpenID Connect via SAP IAS.
 CoreEdge's `SapAuthType` is `basic | bearer | oauth-client-credentials`. **None of
 these is the SAML bearer assertion flow**, which requires an X.509 keypair, a
 registered API key, and an assertion-for-token exchange.
+[Since applied: `SapAuthType` now includes `oauth-saml-bearer` and `api-key`
+(`src/lib/sap-public/connection-resolver.ts`); the live proof is P0.9.]
 
 So SuccessFactors is not merely unconfigured — it is configured for an auth
 method with a published removal date roughly four months out. That makes it the
@@ -248,6 +268,9 @@ and should be settled before any RISE commitment.
 ---
 
 # Part 4 — Sequencing
+
+[As written at `2724211`. Items 1 and 3 have since shipped their code-side
+changes; see the table at the top for what is left.]
 
 Ordered by time-sensitivity and by what the evidence actually supports, not by
 commercial appeal.

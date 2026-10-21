@@ -118,6 +118,23 @@ interface RunState {
     | undefined;
   /** The interface is still DRAFT; served, and said. */
   draft?: boolean;
+  /**
+   * The broker's own outcome for the run. Capture fixture sends it, so the
+   * fixture's scenario, status and code are the broker's (P0.4, A57).
+   */
+  readStatus?: BrokerReadStatus | undefined;
+  /**
+   * The contract the run was against. Both captures send it back, and the
+   * route refuses one from a run of an earlier contract (P0.4, A38).
+   */
+  contract?: { version: number; entitySet: string | null } | undefined;
+}
+
+type BrokerReadStatus = "OK" | "EMPTY" | "NEEDS_SETUP" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+
+/** The contract a run was against, as the capture routes take it — or nothing, for an older broker. */
+function contractOf(run: RunState): { interfaceVersion?: number; entitySet?: string | null } {
+  return run.contract ? { interfaceVersion: run.contract.version, entitySet: run.contract.entitySet } : {};
 }
 
 export function TestConsoleClient({
@@ -296,8 +313,9 @@ export function TestConsoleClient({
           | { outcome: "refused"; refusal: { kind: string; message: string } }
           | {
               outcome: "ran";
-              status: "OK" | "EMPTY" | "NEEDS_SETUP" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+              status: BrokerReadStatus;
               httpStatus: number;
+              contract?: { version: number; entitySet: string | null };
               records: Record<string, unknown>[];
               note: string;
               draft: boolean;
@@ -348,6 +366,8 @@ export function TestConsoleClient({
         detail: d.note,
         draft: d.draft,
         boundTo: d.boundTo,
+        readStatus: d.status,
+        contract: d.contract,
       });
     } catch {
       setRun({ phase: "done", detail: "The run could not be completed." });
@@ -404,7 +424,7 @@ export function TestConsoleClient({
       const res = await fetch(`/api/studio/interfaces/${selected.id}/capture-schema`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: run.rows.slice(0, 100) }),
+        body: JSON.stringify({ rows: run.rows.slice(0, 100), ...contractOf(run) }),
       });
       const json = (await res.json()) as {
         data?: { fields: number; required: number; sampleSize: number };
@@ -441,9 +461,14 @@ export function TestConsoleClient({
         // cannot say where it came from, and a genuine empty read is
         // indistinguishable from one recorded while this console was wrong.
         body: JSON.stringify({
+          // The broker's outcome decides the scenario; the honest status stays
+          // for a route from before readStatus existed.
+          ...(run.readStatus ? { readStatus: run.readStatus } : {}),
           honestStatus: run.status,
           sourceStatus: run.httpStatus,
+          ...(run.detail ? { detail: run.detail } : {}),
           rows: run.rows ?? [],
+          ...contractOf(run),
         }),
       });
       const json = (await res.json()) as {

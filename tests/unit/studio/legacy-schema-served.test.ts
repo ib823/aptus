@@ -247,10 +247,24 @@ describe("GET /api/northbound/interfaces/{id}/schema", () => {
   }
 
   it("serves a legacy schema as the rows can satisfy it", async () => {
-    const data = await servedSchema(LEGACY);
+    // As the P0.4 backfill leaves it: stamped with the contract it belongs to
+    // (a v1 interface has never changed contract), the envelope marker still
+    // absent, so it is reconciled on the way out.
+    const stamped: CapturedSchema = {
+      ...LEGACY,
+      "x-captured": { ...LEGACY["x-captured"], interfaceVersion: 1, entitySet: "A_BusinessPartner" },
+    };
+    const data = await servedSchema(stamped);
     expect(missingRequired(data.responseSchema!.required, SERVED_ROW)).toEqual([]);
     expect(data.responseSchema!.properties).toHaveProperty("to_BusinessPartnerAddress");
     expect(data.schemaCaptured).toBe(true);
+  });
+
+  it("withholds a legacy schema whose contract nobody could establish (P0.4, A38)", async () => {
+    const data = (await servedSchema(LEGACY)) as { responseSchema: unknown; schemaCaptured: boolean; schemaState?: string };
+    expect(data.responseSchema).toBeNull();
+    expect(data.schemaCaptured).toBe(false);
+    expect(data.schemaState).toBe("unverified");
   });
 
   it("still answers null when nothing has been captured", async () => {

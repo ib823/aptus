@@ -37,9 +37,20 @@ vi.mock("@/lib/db/prisma", async () => {
     prisma: {
       interface: { findMany: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findManyInterfaces(...a)), findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
       apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+      // The organization's connection, which discovery's binding step reads
+      // (P0.4, A42): one that has not declared its landscape, so it binds a
+      // read in every environment, as the data route's selection does.
+      sapConnection: {
+        findMany: async () => [{ key: "c1", label: "Tenant", product: "s4hana", environment: null, client: null }],
+      },
     },
   };
 });
+
+// The catalogue resolves the service, as the data route's definition step asks.
+vi.mock("@/lib/sap-public/resolve-hub-service", () => ({
+  resolveHubService: async () => ({ path: "/sap/opu/odata/sap/API_BUSINESS_PARTNER" }),
+}));
 
 vi.mock("@/lib/northbound/auth", () => ({
   authenticateClientToken: mocks.authenticate,

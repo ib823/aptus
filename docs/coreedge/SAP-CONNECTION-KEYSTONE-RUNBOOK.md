@@ -2,6 +2,15 @@
 
 Branch: `feat/sap-connection-keystone`
 
+> **Status (P0.16 review, October 2026).** Slice 1 merged as PR-0 (#142). "Why",
+> "What slice 1 delivers", "Next slice" and "Deferred beyond wiring" below are the
+> as-delivered record of that slice, not today's state: connections are managed
+> in Studio → Connections (`POST /api/studio/connections`), the northbound broker
+> resolves the stored connection per call, and key versioning, rotation, reseal
+> and verify shipped in P0.10 ("Keys", below). Which Workbench console routes
+> still read the `S4_TDD_*` environment tenant is roadmap item P0.14b. The
+> sections from "Security notes" on are current.
+
 ## Why
 
 Today every SAP call uses ONE shared tenant baked into `S4_TDD_*` env vars. That

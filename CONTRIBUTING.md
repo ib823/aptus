@@ -47,6 +47,16 @@ gh pr merge --squash --delete-branch
 
 Squash-merge keeps `main`'s history at one commit per feature.
 
+### Every production deploy follows the release protocol
+
+[`docs/runbooks/coreedge-release.md`](docs/runbooks/coreedge-release.md):
+green `ci.yml` and `migration-integrity.yml`, additive migrations with backout
+SQL (`pnpm migrations:check`), the preview on its own database, then, after
+the merge, `pnpm release:post-deploy-check --markdown` posted on the merged
+pull request. A migration that has been pushed is never edited: a preview may
+already have applied it, and Prisma never re-runs an applied migration. Change
+it with a new migration.
+
 ### Direct push to main — only for
 
 - 1-line typo fixes

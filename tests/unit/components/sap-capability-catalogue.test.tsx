@@ -52,11 +52,53 @@ describe("SapCapabilityCatalogue — DEPRECATED rows (2608 WS3)", () => {
     // The row badge (not the legend swatch) carries the successor tooltip.
     const badges = screen.getAllByLabelText("Deprecated");
     expect(badges.some((b) => b.getAttribute("title") === "Deprecated by SAP — successor: API_BILLING_DOCUMENT_SRV")).toBe(true);
-    expect(screen.getByText(/deprecated by SAP — build on the successor/i)).toBeInTheDocument();
+    // P0.8: the successor is named IN the row, not only in the badge's tooltip.
+    expect(screen.getByText(/deprecated by SAP — successor: API_BILLING_DOCUMENT_SRV/i)).toBeInTheDocument();
     // Tiles carry "of which N deprecated" from byTypeDeprecated.
     expect(screen.getByRole("tab", { name: /APIs: .*56 deprecated/i })).toBeInTheDocument();
     // Scorecard still sums every bucket (DEPRECATED defaulted to 0 from the old payload).
     expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("SapCapabilityCatalogue — successors and V4 addresses on the row (P0.8)", () => {
+  const row = (over: Record<string, unknown>) => ({
+    ...PAYLOAD.data.items[0],
+    status: "NOT_CHECKED",
+    ...over,
+  });
+
+  it("a deprecated row with no SAP-named successor says so in the row", async () => {
+    const payload = {
+      data: {
+        ...PAYLOAD.data,
+        items: [row({ id: "9", externalId: "API_GONE", title: "Gone", status: "DEPRECATED", hubState: "DEPRECATED", successorExternalId: null })],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => payload }));
+    render(<SapCapabilityCatalogue product="s4hana" />);
+    expect(await screen.findByText(/deprecated by SAP — no successor is recorded/i)).toBeInTheDocument();
+  });
+
+  it("a V4 address reads 'unverified' until a 200 is recorded, then 'verified'; a V2 row has no chip", async () => {
+    const DERIVED = "/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003";
+    const payload = {
+      data: {
+        ...PAYLOAD.data,
+        items: [
+          row({ id: "a", externalId: "CE_BANK_0003", title: "Bank", apiType: "ODATAV4", address: { path: DERIVED, protocol: "ODATAV4", basis: "derived", verifiedAt: null } }),
+          row({ id: "b", externalId: "CE_OTHER_0001", title: "Other", apiType: "ODATAV4", address: { path: "/x", protocol: "ODATAV4", basis: "derived", verifiedAt: "2026-10-20T10:00:00.000Z" } }),
+          row({ id: "c", externalId: "API_PO", title: "PO", address: { path: "/sap/opu/odata/sap/API_PO", protocol: "ODATAV2", basis: "convention", verifiedAt: null } }),
+        ],
+        total: 3,
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => payload }));
+    render(<SapCapabilityCatalogue product="s4hana" />);
+    await screen.findByText("Bank");
+    const chips = screen.getAllByTestId("address-chip");
+    expect(chips.map((c) => c.textContent)).toEqual(["address unverified", "address verified"]);
+    expect(chips[0]!.getAttribute("title")).toContain(DERIVED);
   });
 });
 

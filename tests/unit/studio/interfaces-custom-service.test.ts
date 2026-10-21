@@ -36,21 +36,24 @@ vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 // Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
 vi.mock("@/lib/db/prisma", async () => {
   const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
-  return {
-    prisma: {
-      solution: { findFirst: mocks.findFirstSolution },
-      interface: {
-        create: mocks.createInterface,
-        findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
-        update: mocks.updateInterface,
-        findMany: vi.fn().mockResolvedValue([]),
-      },
-      solutionClient: { findMany: mocks.findManyClients },
-      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
-      sapConnection: { findMany: mocks.findManyConnections },
-      configAudit: { create: mocks.createAudit },
+  const prisma: Record<string, unknown> = {
+    solution: { findFirst: mocks.findFirstSolution },
+    interface: {
+      create: mocks.createInterface,
+      findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)),
+      update: mocks.updateInterface,
+      // P0.4: a contract change clears the schema and fixtures in the update's transaction.
+      updateMany: vi.fn(async () => ({ count: 0 })),
+      findMany: vi.fn().mockResolvedValue([]),
     },
+    solutionClient: { findMany: mocks.findManyClients },
+    apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
+    sapConnection: { findMany: mocks.findManyConnections },
+    configAudit: { create: mocks.createAudit },
+    mockFixture: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   };
+  prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
+  return { prisma };
 });
 
 import { PATCH, POST } from "@/app/api/studio/interfaces/route";

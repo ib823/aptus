@@ -78,6 +78,12 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       appliesToPrivate: true,
       appliesToOnPrem: true,
       productTags: true,
+      hubState: true,
+      hubVersion: true,
+      hubModifiedAt: true,
+      hubSubType: true,
+      catalogueRelease: true,
+      successorExternalId: true,
     },
   });
 
@@ -134,6 +140,24 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       // Projected from real SapApiReference rows — SAP-published, not seed.
       illustrative: false,
       hubUrl: a.apiHubUrl,
+      /*
+       * P0.8 — SAP'S LIFECYCLE TRAVELS WITH THE ROW. The projection never
+       * copied it, so a Rebuild left every API row's hubState null and the
+       * deprecated ones read as live services. Copied only when the reference
+       * HAS a state: a reference imported before the lifecycle columns must not
+       * erase what the deploy-time stamp (scripts/apply-hub-lifecycle.ts) put
+       * on the catalogue row; a recorded successor is never cleared either.
+       */
+      ...(a.hubState
+        ? {
+            hubState: a.hubState,
+            hubVersion: a.hubVersion,
+            hubModifiedAt: a.hubModifiedAt,
+            hubSubType: a.hubSubType,
+            catalogueRelease: a.catalogueRelease,
+            ...(a.successorExternalId ? { successorExternalId: a.successorExternalId } : {}),
+          }
+        : {}),
     };
     // A NEW row has no stored probe to preserve, so it is created with freshRaw.
     // An EXISTING row's rawMetadataJson is left alone here: probes (and any

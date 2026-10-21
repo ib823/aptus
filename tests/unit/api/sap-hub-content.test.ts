@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   resolveSapConnection: vi.fn(),
   grantFindMany: vi.fn(),
   auditCreate: vi.fn(),
+  verificationFindMany: vi.fn(),
+  verificationUpsert: vi.fn(),
+  verificationDeleteMany: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -25,6 +28,12 @@ vi.mock("@/lib/db/prisma", () => ({
     sapHubContent: { count: mocks.count, findMany: mocks.findMany, groupBy: mocks.groupBy },
     apiAccessGrant: { findMany: mocks.grantFindMany },
     northboundAuditEvent: { create: mocks.auditCreate },
+    // P0.8: the per-tenant V4 address proofs the list reads (and the overlay writes).
+    catalogueAddressVerification: {
+      findMany: mocks.verificationFindMany,
+      upsert: mocks.verificationUpsert,
+      deleteMany: mocks.verificationDeleteMany,
+    },
   },
 }));
 // A stored connection, resolved without decrypting anything.
@@ -122,6 +131,9 @@ beforeEach(() => {
   mocks.resolveSapConnection.mockResolvedValue(null);
   mocks.grantFindMany.mockResolvedValue([]);
   mocks.auditCreate.mockResolvedValue({});
+  mocks.verificationFindMany.mockResolvedValue([]);
+  mocks.verificationUpsert.mockResolvedValue({});
+  mocks.verificationDeleteMany.mockResolvedValue({ count: 0 });
 });
 
 describe("GET /api/sap/tdd/hub-content", () => {
@@ -428,5 +440,127 @@ describe("the dataProbe overlay takes the console ceiling and leaves a row (A24)
     expect(auditRows()).toEqual([
       expect.objectContaining({ environment: "deployment:default", connectionId: null, status: 200, rowCount: 1 }),
     ]);
+  });
+});
+
+/*
+ * P0.8 — wrappers are not callable, the "callable" count is what Probe all
+ * would probe, the Deprecated facet filters, and a V4 address says whether it
+ * has answered 200 on this tenant.
+ */
+describe("catalogue addresses and lifecycle on the list (P0.8)", () => {
+  const DERIVED = "/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003";
+  const rows = [
+    { externalId: "API_PO", contentType: "API", apiType: "ODATAV2", hubState: "ACTIVE", rawMetadataJson: null },
+    { externalId: "CE_BANK_0003", contentType: "API", apiType: "ODATAV4", hubState: "ACTIVE", rawMetadataJson: null },
+    // A wrapper row an earlier Probe all reached (a stored 404 from its malformed address).
+    {
+      externalId: "sap-s4-CE_RETAILSEASON_0001-v1",
+      contentType: "API",
+      apiType: "ODATAV4",
+      hubState: "ACTIVE",
+      rawMetadataJson: { probes: { default: { http: 404, at: FRESH_AT } } },
+    },
+    { externalId: "sap-s4-API_CLOUD_PRINT_PULL_SRV-v1", contentType: "API", apiType: "ODATAV2", hubState: null, rawMetadataJson: null },
+    // SAP-deprecated: not callable, and Probe all skips it.
+    { externalId: "API_OLD_SRV", contentType: "API", apiType: "ODATAV2", hubState: "DEPRECATED", rawMetadataJson: null },
+  ];
+  const page = rows.map((r, i) => ({
+    id: String(i),
+    title: r.externalId,
+    description: "",
+    packageId: "Proc",
+    communicationScenarios: [],
+    itemCount: null,
+    hubUrl: "u",
+    hubVersion: null,
+    successorExternalId: null,
+    ...r,
+  }));
+  type Where = { where?: { apiType?: string; AND?: unknown[]; NOT?: unknown } };
+  const item = (body: { data: { items: Array<{ externalId: string }> } }, id: string) =>
+    body.data.items.find((i) => i.externalId === id) as unknown as Record<string, unknown> & {
+      address: Record<string, unknown> | null;
+    };
+
+  beforeEach(() => {
+    mocks.findMany.mockImplementation((args: Where) => Promise.resolve(args.where?.AND ? page : rows));
+  });
+
+  it("counts only non-wrapper, non-deprecated OData rows as probeable, and badges wrappers NOT_PROBEABLE", async () => {
+    const body = await (await GET(makeRequest())).json();
+    expect(body.data.counts.probeableRuntime).toBe(2); // API_PO + CE_BANK_0003
+    expect(body.data.counts.probeableV4).toBe(1);
+    expect(body.data.counts.probeableV4Verified).toBe(0);
+    expect(item(body, "sap-s4-CE_RETAILSEASON_0001-v1").status).toBe("NOT_PROBEABLE"); // its stored 404 is ignored
+    expect(item(body, "sap-s4-API_CLOUD_PRINT_PULL_SRV-v1").status).toBe("NOT_PROBEABLE");
+    expect(item(body, "API_OLD_SRV").status).toBe("DEPRECATED");
+    expect(body.data.counts.byStatus.NOT_PROBEABLE).toBe(2);
+  });
+
+  it("each row carries its address; a V4 address is unverified until this tenant has a recorded 200", async () => {
+    let body = await (await GET(makeRequest())).json();
+    expect(item(body, "API_PO").address).toEqual({
+      path: "/sap/opu/odata/sap/API_PO",
+      protocol: "ODATAV2",
+      basis: "convention",
+      verifiedAt: null,
+    });
+    expect(item(body, "CE_BANK_0003").address).toEqual({ path: DERIVED, protocol: "ODATAV4", basis: "derived", verifiedAt: null });
+    expect(item(body, "sap-s4-CE_RETAILSEASON_0001-v1").address).toBeNull();
+
+    // The deployment tenant's proof, filed under "-deployment-".
+    const at = new Date("2026-10-20T09:00:00.000Z");
+    mocks.verificationFindMany.mockResolvedValue([
+      { externalId: "CE_BANK_0003", servicePath: DERIVED, verifiedAt: at, connectionId: null, baseUrl: "https://x.example" },
+    ]);
+    body = await (await GET(makeRequest())).json();
+    expect(mocks.verificationFindMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { organizationId: "-deployment-", product: "s4hana", tenantKey: "default" } }),
+    );
+    expect(item(body, "CE_BANK_0003").address?.verifiedAt).toBe(at.toISOString());
+    expect(body.data.counts.probeableV4Verified).toBe(1);
+  });
+
+  it("an anonymous caller reads no proofs: every V4 address is unverified to them", async () => {
+    mocks.getCurrentUser.mockResolvedValue(null);
+    const body = await (await GET(makeRequest())).json();
+    expect(mocks.verificationFindMany).not.toHaveBeenCalled();
+    expect(item(body, "CE_BANK_0003").address?.verifiedAt).toBeNull();
+  });
+
+  it("the overlay files a V4 200 as this tenant's proof, and never samples a wrapper", async () => {
+    mocks.findMany.mockImplementation((args: Where) => {
+      if (args.where?.AND) return Promise.resolve(page);
+      if (args.where?.apiType === "ODATAV4") {
+        return Promise.resolve([
+          { contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003", title: "Bank", packageId: null, communicationScenarios: [] },
+        ]);
+      }
+      if (args.where?.apiType === "ODATAV2") return Promise.resolve([]);
+      return Promise.resolve(rows);
+    });
+    mocks.getCurrentUser.mockResolvedValue({ id: "u-admin", email: "a@b.co", role: "platform_admin" });
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "CE_BANK_0003", exposed: true, status: 200 }]);
+    await GET(makeRequest("product=s4hana&dataProbe=1"));
+    expect(mocks.verificationUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          externalId: "CE_BANK_0003",
+          servicePath: DERIVED,
+          method: "catalogue-overlay",
+          verifiedByUserId: "u-admin",
+        }),
+      }),
+    );
+    for (const [args] of mocks.findMany.mock.calls as Array<[Where]>) {
+      if (args.where?.apiType) expect(args.where.NOT).toEqual({ externalId: { startsWith: "sap-s4-", mode: "insensitive" } });
+    }
+  });
+
+  it("the Deprecated facet filters to the deprecated rows (it fell back to ALL)", async () => {
+    await GET(makeRequest("product=s4hana&status=DEPRECATED"));
+    const paged = (mocks.findMany.mock.calls as Array<[Where]>).map((c) => c[0]).find((a) => a.where?.AND);
+    expect(paged?.where?.AND).toContainEqual({ externalId: { in: ["API_OLD_SRV"] } });
   });
 });

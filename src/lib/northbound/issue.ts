@@ -38,6 +38,7 @@
 
 import { randomBytes } from "crypto";
 
+import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { hashClientToken } from "@/lib/northbound/auth";
 import {
@@ -422,6 +423,17 @@ export async function issueClientToken(
     // And after, in the same transaction. See `closePendingClaimLinks`.
     await closePendingClaimLinks(lane, reason, new Date(), tx);
     return written;
+  });
+
+  // The lane's first key is a journey milestone (P2.12); a re-issue is a
+  // no-op. After the commit, and unable to undo it.
+  await recordJourneyEvent({
+    organizationId: scope.organizationId,
+    kind: "KEY_ISSUED",
+    solutionId: input.solutionId,
+    environment: input.environment,
+    subjectId: row.id,
+    actorUserId: input.createdById,
   });
 
   return { ...row, rawToken };

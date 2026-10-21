@@ -31,7 +31,7 @@ const BASE: StudioInterface = {
   status: "DRAFT",
   mappingVersion: null,
   hasRequestSchema: false,
-  hasResponseSchema: false,
+  responseSchemaState: "none",
   solutionId: "sol_1",
   solutionName: "Acme Portal",
 };

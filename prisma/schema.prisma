@@ -663,6 +663,42 @@ model SapHubContent {
   @@index([catalogueRelease])
 }
 
+/// P0.8 — a catalogue OData V4 address proven on ONE system: a probe of exactly
+/// `servicePath` answered 200 there. Until a row exists (and still describes
+/// the system: same connection, same host, same path), the address is shown
+/// "unverified" — every non-curated V4 address is derived from the Hub id, and
+/// the one this repo checked against a real system was wrong.
+///
+/// Per connection, not on the shared SapHubContent row: that row is global, and
+/// what answers on one organization's system is that organization's
+/// information (see probeStorageKey). A DEPLOYMENT tenant has no organization
+/// and is filed under organizationId "-deployment-", as its console-read audit
+/// rows are. A later 404 for the same path removes the row.
+model CatalogueAddressVerification {
+  id               String   @id @default(cuid())
+  /// The tenant's owner, or "-deployment-" for a deployment ({PREFIX}_*) tenant.
+  organizationId   String
+  /// "s4hana" | "cloud-erp-private" | … — the product the tenant was read as.
+  product          String
+  /// SapConnection.key, or the deployment tenant's key.
+  tenantKey        String
+  /// The SapConnection that answered; null for a deployment tenant.
+  connectionId     String?
+  /// The host that answered, normalized (no trailing slash).
+  baseUrl          String
+  /// SapHubContent.externalId (the Hub apiId).
+  externalId       String
+  servicePath      String
+  verifiedAt       DateTime
+  /// The user whose probe answered 200; never rendered to other viewers.
+  verifiedByUserId String?
+  /// "probe-all" | "detail-probe" | "catalogue-overlay".
+  method           String
+
+  /// Also serves the per-tenant read (its leading columns).
+  @@unique([organizationId, product, tenantKey, externalId])
+}
+
 /// SAP Operations middleware — the multi-tenant keystone.
 ///
 /// One SAP tenant connection OWNED BY an Organization, so the middleware can be
@@ -957,6 +993,60 @@ model SapConnectionProbeEvent {
 
   @@index([organizationId, connectionId, at])
   @@index([connectionId, at])
+}
+
+/// P2.12 — one milestone on a developer's way to a first call, FIRST
+/// OCCURRENCE ONLY.
+///
+/// The time-to-first-call tiles (TTFC: workspace created -> first successful
+/// sandbox or broker call; TTFRC: first real-environment grant request ->
+/// first successful broker call on a real tenant) are computed from these rows
+/// and nothing else (src/lib/coreedge/journey.ts). Each milestone is written
+/// once per `scopeKey`: the unique key below makes a repeat an
+/// `ON CONFLICT DO NOTHING`, so the first time is the one kept, and a retry, a
+/// second instance or another run of the probe sweep cannot move it.
+///
+/// `scopeKey` names what the milestone is the first OF:
+///   workspace                          WORKSPACE_CREATED
+///   solution:<solutionId>              INTERFACE_REGISTERED
+///   grant:<grantId>                    GRANT_REQUESTED, GRANT_DECIDED
+///   key:<solutionId>:<environment>     KEY_ISSUED
+///   connection:<connectionId>          CONNECTION_SAVED, CONNECTION_PROBE_OK
+///   call:<solutionId|console>:<env>    FIRST_CALL
+///
+/// Tenant-anchored (TENANT_ANCHORED_MODELS). Never looked up by a credential,
+/// so it needs no isUnscopedByDesign entry. No backfill: rows start at the
+/// deploy that added the table (docs/runbooks/coreedge-time-to-first-call.md).
+model DeveloperJourneyEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// WORKSPACE_CREATED | INTERFACE_REGISTERED | GRANT_REQUESTED |
+  /// GRANT_DECIDED | KEY_ISSUED | CONNECTION_SAVED | CONNECTION_PROBE_OK |
+  /// FIRST_CALL
+  kind           String
+  /// What this is the first occurrence of; see the table above.
+  scopeKey       String
+  /// The app (Solution) the milestone belongs to, when one does.
+  solutionId     String?
+  /// SANDBOX | DEV | TEST | PROD, when the milestone has one.
+  environment    String?
+  /// The grant, connection, interface or credential row it is about.
+  subjectId      String?
+  /// Who caused it, when a person did. Not a relation: it must outlive the user.
+  actorUserId    String?
+  /// A bounded qualifier: the decision for GRANT_DECIDED, the channel
+  /// ("broker" | "test-console" | "console") for FIRST_CALL.
+  detail         String?
+  /// When it happened: the domain fact's own time (a grant's createdAt, a
+  /// decision's decidedAt), not when this row was written.
+  at             DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, scopeKey])
+  @@index([organizationId, at])
+  @@index([at])
 }
 
 /// One scheduled-job run — the record that a sweep happened at all. Cron
@@ -1799,6 +1889,15 @@ model MockFixture {
   sourceStatus Int?
 
   capturedAt DateTime @default(now())
+
+  /// The interface's contract version and entity set when this was recorded
+  /// (P0.4, A38). A changed entity set bumps the version; a fixture whose
+  /// stamp no longer matches recorded another contract and is not shipped in
+  /// the starter kit (src/lib/studio/contract-provenance.ts). NULL predates
+  /// the stamp: the P0.4 migration stamped every row whose contract the audit
+  /// trail establishes, so a NULL left is one whose contract cannot be.
+  interfaceVersion Int?
+  entitySet        String?
 
   @@index([organizationId, interfaceId, scenario])
 }
@@ -3234,6 +3333,9 @@ model Organization {
 
   // CoreEdge Developer Studio — governed solutions (tenant anchor)
   solutions Solution[]
+
+  // P2.12 — the developer journey (time to first call), first occurrences only
+  developerJourneyEvents DeveloperJourneyEvent[]
 
   // CoreEdge runtime — per-solution client identities
   solutionClients SolutionClient[]

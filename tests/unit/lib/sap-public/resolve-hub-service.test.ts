@@ -55,13 +55,63 @@ describe("resolveHubService (Entity Explorer — spot-read any activated service
     );
   });
 
-  it("a non-edition product resolves curated services ONLY — no manufactured S/4 paths", async () => {
-    // SuccessFactors rows have no derivable OData path; falling back to the
-    // catalogue would build /sap/opu/odata/sap/<id> against an SF host, a URL
-    // that is wrong by construction (dynamic-catalog.ts's own warning).
-    const SF = { ...(PRODUCT as object), key: "successfactors", edition: null } as typeof PRODUCT;
-    expect(await resolveHubService(SF, "API_ANYTHING")).toBeNull();
+  /*
+   * P0.8 — SuccessFactors resolved only its three curated keys, so an
+   * interface named by the Hub id Discover shows was refused. Every SF OData
+   * V2 API lives under the one /odata/v2 root, so the Hub id now resolves
+   * there — and never to an S/4 path on an SF host.
+   */
+  const SF = { ...(PRODUCT as object), key: "successfactors", edition: null } as typeof PRODUCT;
+
+  it("SuccessFactors resolves an OData V2 Hub id, in its own product-tag scope, to the /odata/v2 root", async () => {
+    mocks.findFirst.mockResolvedValue({
+      contentType: "API",
+      apiType: "ODATAV2",
+      externalId: "PLTUserManagement",
+      title: "User Management",
+      packageId: "SuccessFactorsFoundationPlatform",
+      communicationScenarios: [],
+    });
+    const svc = await resolveHubService(SF, "PLTUserManagement");
+    expect(mocks.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { externalId: "PLTUserManagement", productTags: { contains: "successfactors", mode: "insensitive" } },
+      }),
+    );
+    expect(svc).toMatchObject({ key: "PLTUserManagement", path: "/odata/v2", protocol: "ODATAV2", addressBasis: "product-root" });
+    expect(svc?.path).not.toContain("/sap/opu/");
+  });
+
+  it("SuccessFactors V4 / REST Hub rows still resolve to nothing (no guessed root)", async () => {
+    for (const apiType of ["ODATAV4", "REST"]) {
+      mocks.findFirst.mockResolvedValue({
+        contentType: "API",
+        apiType,
+        externalId: "ClockInClockOutIntegration",
+        title: "x",
+        packageId: null,
+        communicationScenarios: [],
+      });
+      expect(await resolveHubService(SF, "ClockInClockOutIntegration")).toBeNull();
+    }
+  });
+
+  it("Ariba resolves curated services ONLY — no catalogue lookup at all", async () => {
+    const ARIBA = { ...(PRODUCT as object), key: "ariba", edition: null } as typeof PRODUCT;
+    expect(await resolveHubService(ARIBA, "API_ANYTHING")).toBeNull();
     expect(mocks.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("an S/4 `sap-s4-*` wrapper row resolves to nothing (its address is malformed)", async () => {
+    mocks.findFirst.mockResolvedValue({
+      contentType: "API",
+      apiType: "ODATAV4",
+      externalId: "sap-s4-CE_RETAILSEASON_0001-v1",
+      title: "x",
+      packageId: null,
+      communicationScenarios: [],
+    });
+    expect(await resolveHubService(PRODUCT, "sap-s4-CE_RETAILSEASON_0001-v1")).toBeNull();
   });
 
   it("returns null for a non-probeable row (apiType null → no valid OData path)", async () => {

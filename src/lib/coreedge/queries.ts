@@ -11,6 +11,7 @@ import {
   type KeyState,
 } from "@/lib/northbound/key-policy";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import { responseSchemaState } from "@/lib/studio/contract-provenance";
 import { unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { productName } from "@/lib/studio/product-marks";
 import type { GrantOperation } from "@/lib/studio/grants";
@@ -847,6 +848,8 @@ export async function listCatalogue(organizationId: string): Promise<CatalogueEn
         operation: true,
         name: true,
         responseSchema: true,
+        // "Captured" means captured for the current contract (P0.4, A38).
+        version: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -872,6 +875,7 @@ export async function listCatalogue(organizationId: string): Promise<CatalogueEn
 
   for (const feed of feeds) {
     const key = `${feed.externalId}::${feed.entitySet ?? ""}`;
+    const captured = responseSchemaState(feed.responseSchema, feed) === "current";
     const existing = byService.get(key);
     if (existing) {
       byService.set(key, {
@@ -879,7 +883,7 @@ export async function listCatalogue(organizationId: string): Promise<CatalogueEn
         names: existing.names.includes(feed.name)
           ? existing.names
           : [...existing.names, feed.name],
-        contractCaptured: existing.contractCaptured || feed.responseSchema !== null,
+        contractCaptured: existing.contractCaptured || captured,
       });
       continue;
     }
@@ -889,7 +893,7 @@ export async function listCatalogue(organizationId: string): Promise<CatalogueEn
       operation: feed.operation,
       names: [feed.name],
       provenIn: [],
-      contractCaptured: feed.responseSchema !== null,
+      contractCaptured: captured,
     });
   }
 
@@ -1326,10 +1330,14 @@ export async function getFeedDraft(
   const entry = entries.find((e) => e.externalId === externalId);
   if (!entry) return null;
 
-  const withSchema = await prisma.interface.findFirst({
-    where: { organizationId, externalId, responseSchema: { not: Prisma.DbNull } },
-    select: { responseSchema: true },
-  });
+  // A schema of its interface's CURRENT contract only (P0.4, A38): one
+  // captured from an earlier entity set lists fields that set no longer has.
+  const withSchema = (
+    await prisma.interface.findMany({
+      where: { organizationId, externalId, responseSchema: { not: Prisma.DbNull } },
+      select: { responseSchema: true, version: true, entitySet: true },
+    })
+  ).find((i) => responseSchemaState(i.responseSchema, i) === "current");
 
   return { entry, availableFields: fieldNamesOf(withSchema?.responseSchema) };
 }

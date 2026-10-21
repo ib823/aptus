@@ -1,5 +1,11 @@
 # CCC BUILD BIBLE — Phase D v2 · Developer Runtime & Enablement (self-sustaining)
 
+<!-- doc-claims: historical -->
+> **Historical build specification.** Kept for provenance (`docs/coreedge/README.md`): it
+> says what was to be built, as the team understood it then, not what CoreEdge does today.
+> For today, see `docs/coreedge/capability-registry.json` (scored from the code), the roadmap
+> (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`) and `docs/coreedge-developer-guide.md`.
+
 Supersedes Phase D v1. Same north star; five refinements folded in so nothing is left to assumption, plus an
 explicit strategic-decision gate. **What changed in v2:** (1) the prerequisite is stated correctly — Phase D
 needs enough of v2 Studio that a developer can *register and issue*, not just PR-1; (2) **AAD sealing is
@@ -309,6 +315,16 @@ never misled:
   existing catalogue/probe (honest-status) and can be defined as an `Interface` and consumed via the broker like any
   service. Document the "register the OData my ABAP exposes" path — it is the normal Discover→Interface flow once
   probeable. No new build; a docs/UX affordance.
+
+  > **Correction (P0.16, October 2026): this was wrong.** A customer's own service (`Z*` RAP,
+  > `YY1_*` key-user, ECC Gateway, SuccessFactors MDF) is in neither the curated list nor SAP's
+  > catalogue, so it never surfaced in Discover and every route refused it. It needed new
+  > build, delivered as roadmap item P1.1 (#307): `Interface.servicePath` and `odataVersion`,
+  > a path guard on the connection's own host (`src/lib/sap-public/service-path.ts`), a
+  > `$metadata` verification per environment and SAP client (`POST
+  > /api/studio/interfaces/[id]/verify-service`), grants scoped to `custom:<path>`, and the
+  > "Register your own API" screen. How to use it: `docs/coreedge-developer-guide.md`, "Your
+  > own services".
 - **Own DB / own stack:** untouched by CoreEdge. The starter-kit README says so explicitly.
 
 ═══════════════════════════════════════════════════════════════════════════════

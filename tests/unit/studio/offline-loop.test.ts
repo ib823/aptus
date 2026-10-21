@@ -63,6 +63,8 @@ const ALL_FIXTURES: ScaffoldFixture[] = [
   { scenario: "data", status: 200, body: { records: [{ a: 1 }], count: 1, empty: false } },
   { scenario: "empty", status: 200, body: { records: [], count: 0, empty: true } },
   { scenario: "needs_setup", status: 403, body: { error: { code: "FORBIDDEN", message: "x", correlationId: "y" } } },
+  { scenario: "not_found", status: 404, body: { error: { code: "NOT_FOUND", message: "x", correlationId: "y" } } },
+  { scenario: "timeout", status: 504, body: { error: { code: "UPSTREAM_TIMEOUT", message: "x", correlationId: "y" } } },
   { scenario: "error", status: 502, body: { error: { code: "UPSTREAM_ERROR", message: "x", correlationId: "y" } } },
 ];
 
@@ -75,7 +77,10 @@ describe("scenario mapping", () => {
   it("maps needs-setup and the failures to their own scenarios", () => {
     expect(scenarioForOutcome("NEEDS_SETUP", 0)).toBe("needs_setup");
     expect(scenarioForOutcome("NOT_PROBEABLE", 0)).toBe("error");
-    expect(scenarioForOutcome("NOT_FOUND", 0)).toBe("error");
+    // A 404 run is the broker's 404, not an upstream failure (P0.4, A57).
+    expect(scenarioForOutcome("NOT_FOUND", 0)).toBe("not_found");
+    expect(scenarioForOutcome("PROBE_FAILED", 0, 504)).toBe("timeout");
+    expect(scenarioForOutcome("PROBE_FAILED", 0, 502)).toBe("error");
   });
 
   it("declines to record an outcome that teaches nothing", () => {
@@ -189,8 +194,8 @@ describe("the demo teaches the honest-status distinction", () => {
 describe("the kit is honest about what it can reproduce", () => {
   it("names the captured scenarios", () => {
     const readme = buildReadme(IFACE, ALL_FIXTURES);
-    expect(readme).toContain("data, empty, needs_setup, error");
-    expect(readme).toContain("All four honest states are recorded");
+    expect(readme).toContain("data, empty, needs_setup, not_found, timeout, error");
+    expect(readme).toContain("Every honest state is recorded");
   });
 
   it("names the MISSING ones instead of implying the mock is complete", () => {
@@ -253,7 +258,7 @@ describe("the bundle", () => {
   it("embeds the captured fixtures as valid JSON", () => {
     const raw = files.find((f) => f.path === "fixtures.json")!.contents;
     const parsed = JSON.parse(raw) as { fixtures: ScaffoldFixture[] };
-    expect(parsed.fixtures).toHaveLength(4);
+    expect(parsed.fixtures).toHaveLength(6);
   });
 
   it("makes COREEDGE_BASE_URL the single switch between mock and live", () => {

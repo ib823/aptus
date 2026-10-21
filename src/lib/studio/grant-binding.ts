@@ -111,6 +111,23 @@ export function grantsForInterfaceWhere(iface: GrantedInterface): Prisma.ApiAcce
 }
 
 /**
+ * `grantsForInterfaceWhere` as a predicate, for a caller that fetched the
+ * solution's grants once and judges several interfaces against them
+ * (discovery, P0.4). Kept beside the `where` it mirrors, and pinned to it by
+ * tests/unit/northbound/read-verdict.test.ts, so the two cannot drift.
+ */
+export function grantFetchedFor(
+  grant: { externalId: string; operation: string; interfaceId?: string | null; sapProduct?: string | null },
+  iface: GrantedInterface,
+): boolean {
+  return (
+    grant.externalId === iface.externalId &&
+    grant.operation === iface.operation &&
+    (grant.interfaceId == null || (grant.interfaceId === iface.id && grant.sapProduct === iface.sapProduct))
+  );
+}
+
+/**
  * Is this fetched grant bound to the interface? False for a legacy unbound
  * grant. A row read without `interfaceId` selected is treated as unbound,
  * never as bound: the safe reading under strict.

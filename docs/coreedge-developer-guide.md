@@ -69,10 +69,29 @@ npm run mock                              # serves recorded responses, no networ
 COREEDGE_SCENARIO=empty npm run mock      # or pick a scenario per request: ?scenario=…
 ```
 
-Capture fixtures for **all four** states — data, empty, needs-setup, error — not
-just the happy one. A suite that only proves your code works when everything is
-fine is proving the easy half; the states that break integrations are the other
-three.
+Capture fixtures for **every** state — data, empty, needs_setup, not_found,
+timeout, error — not just the happy one. A suite that only proves your code
+works when everything is fine is proving the easy half; the states that break
+integrations are the others.
+
+Each fixture answers with exactly the status and error code the broker sends
+for that outcome: a run the broker answers `404 NOT_FOUND` (the dataset does
+not exist on the tenant) is served by the mock as `404 NOT_FOUND`, a timeout as
+`504 UPSTREAM_TIMEOUT`, any other upstream failure as `502 UPSTREAM_ERROR`.
+A `404` is a configuration fault to fix, not a failure to retry.
+
+**Captures belong to one contract.** The schema and fixtures record the
+interface version and entity set they were captured under. Changing the
+interface's entity set (or its operation, or your own API's service) is a new
+contract version: Studio clears the old captures, `GET /interfaces/{id}/schema`
+answers `schemaCaptured: false`, and the kit ships no mock for the old dataset
+until you run the interface again and capture. A capture made before CoreEdge
+recorded versions, whose version cannot be established from the audit trail,
+is withheld the same way (`schemaState: "unverified"`); capture it again.
+
+The kit's `client.ts` compiles under `tsc --strict` (and `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `erasableSyntaxOnly` and the other strict flags),
+with the DOM lib or with Node's types.
 
 ---
 
@@ -210,7 +229,9 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 - **No in-browser editing.** The scaffold produces downloads; there is no
   workspace, no terminal, no deploy button.
 - **No updates to existing records.** Writes create; see *Writing to SAP*.
-- **No services outside SAP's published catalogue.** See *If you write ABAP*.
+- **No discovery of the tenant's own services.** A service outside SAP's published
+  catalogue (your `Z*` or `YY1_*`) is registered by its path, not found for you:
+  see *Your own services* (P1.2 adds discovery from the tenant's own catalogue).
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -280,6 +301,17 @@ Reads check the interface's status too, asymmetrically and on purpose:
   builder's statement that new traffic should stop; an interface kept for the
   record must not quietly keep serving it. Discovery agrees: a deprecated
   interface is never advertised as callable.
+
+**`callable` in discovery means the broker would make the call.** `GET
+/api/northbound/interfaces` runs the data route's own checks for each
+interface — the grant (bound to that interface, in your credential's
+environment), the connection your credential binds to, and the interface's
+definition — and says `callable: true` only when all pass. When it is false,
+`refusal` names why, with the reason the data route would give: for example
+`NO_APPROVED_GRANT`, `GRANT_REVOKED`, `NO_MATCH_FOR_ENVIRONMENT`, `NO_ENTITY_SET`
+or `SERVICE_UNRESOLVED`. `callable` cannot promise what the tenant will
+answer, and it cannot see a stored connection whose secrets no longer open
+(the call then answers `403 CONNECTION_NOT_CONFIGURED`).
 
 ---
 
@@ -359,9 +391,18 @@ So: **reuse the same key when you retry.** The rules are:
 | Same key, still in flight | `409` with `Retry-After` — one intent, one write. Retry with the same key after `Retry-After` to get the outcome |
 | Key older than 24h | Treated as a fresh request |
 
-Failures are recorded too. If a write was refused with a `403`, retrying the same
-key returns that same `403` rather than re-attempting something the tenant has
-already declined.
+Failures SAP answered are recorded too. If SAP itself refused a write (a `401`
+or `403` from SAP), retrying the same key returns that same answer for 24 hours
+rather than re-sending something the tenant has already declined: fix the SAP
+side, then write again under a **new** key (SAP refused, so nothing was created).
+Two kinds of failure are never recorded, so the same key works on the retry:
+
+- **CoreEdge's own refusals** (the write key, the grant, the connection binding,
+  writes disabled on the connection, your own service not verified in this
+  environment). They happen before the key is reserved.
+- **A write that was never sent**: the connection's credential could not be
+  used, the CSRF handshake failed, or SAP answered `408` or `429`. The key is
+  released.
 
 The destination includes the environment, SAP client, connection, service,
 entity set, and interface version. Rotating a token for the same destination

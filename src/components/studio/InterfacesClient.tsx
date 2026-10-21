@@ -49,6 +49,7 @@ import {
   validateServicePath,
   type ODataVersion,
 } from "@/lib/sap-public/service-path";
+import type { SchemaState } from "@/lib/studio/contract-provenance";
 import {
   describeWriteReadiness,
   readyEnvironments,
@@ -83,7 +84,8 @@ export interface StudioInterface {
   status: "DRAFT" | "ACTIVE" | "DEPRECATED";
   mappingVersion: number | null;
   hasRequestSchema: boolean;
-  hasResponseSchema: boolean;
+  /** Where the stored response schema stands against this contract (contract-provenance.ts). */
+  responseSchemaState: SchemaState;
   solutionId: string;
   solutionName: string;
   /**
@@ -370,7 +372,15 @@ export function InterfacesClient({
               {selected.hasRequestSchema ? "captured" : "not captured yet"}
             </Row>
             <Row label="Response schema">
-              {selected.hasResponseSchema ? "captured" : "not captured yet — run it in the Test Console"}
+              {/* Of THIS contract (P0.4, A38): a schema of an earlier version, or
+                  of one that cannot be established, is not served, and says so. */}
+              {selected.responseSchemaState === "current"
+                ? "captured"
+                : selected.responseSchemaState === "stale"
+                  ? "captured under an earlier version — not served; capture it again in the Test Console"
+                  : selected.responseSchemaState === "unverified"
+                    ? "captured before versions were recorded — not served; capture it again in the Test Console"
+                    : "not captured yet — run it in the Test Console"}
             </Row>
             <Row label="Errors">
               <code style={code}>{"{ code, message, correlationId }"}</code>
@@ -508,6 +518,11 @@ function Td({ children }: { children: React.ReactNode }) {
  * route bumps `version`. A DRAFT created without one therefore reaches v2 the
  * moment it is set. That is correct — an interface that 400s and one that returns
  * rows are not the same contract — and it is not a bug to be tidied away.
+ *
+ * AND EXPECT THE CAPTURES TO GO (P0.4, A38). The response schema and the mock
+ * fixtures were recorded from the old dataset; the route clears them with the
+ * bump, so the contract and the mock stop describing rows the new one never
+ * returns. Said before the save.
  */
 function EntitySetEditor({
   value,
@@ -581,6 +596,12 @@ function EntitySetEditor({
       </button>
       {trimmed.length === 0 && value !== null && (
         <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>Saving empty clears it.</span>
+      )}
+      {value !== null && (
+        <span style={{ flexBasis: "100%", fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)", maxWidth: 420 }}>
+          A new dataset is a new contract version: the captured response schema and recorded fixtures are cleared, so
+          capture them again from a Test Console run.
+        </span>
       )}
       {liveWrite && (
         <span
