@@ -65,7 +65,8 @@ const rel = (f: string) => repoPath(f, ROOT);
  */
 const SECRET_REFERENCE_ALLOWANCES: ReadonlyArray<{ file: string; symbol: string; why: string }> = [
   {
-    file: "src/app/api/ops/tokens/route.ts",
+    // Operations > Tokens and Control Tower's register both count through it (P0.3 review round 4).
+    file: "src/lib/ops/write-keys.ts",
     symbol: "secretsCiphertext",
     why: "Counts how many credentials HAVE a write secret, via `{ secretsCiphertext: { not: null } }`. A filter, never a select — the value is not read.",
   },

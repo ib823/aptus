@@ -30,7 +30,12 @@
  * The judgement and the write are one step (P0.3 review round 3): the upsert
  * writes only while the row is still the one the save was judged on, so a
  * Deactivate landing while the passkey is asked is never overwritten
- * unannounced — the save is judged again on the row as it now is.
+ * unannounced — the save is judged again on the row as it now is. PATCH is
+ * held to the same rule (review round 4): its update writes only while the
+ * row still holds the state its gates were judged on, so a builder's stale
+ * "Activate" cannot undo a Deactivate, or a writes-off, past the passkey and
+ * the write-secret refusal. Either door records a warn-mode passkey
+ * admission once per request, for the judgement it acted on.
  *
  * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
  * bundle on every write, so a "just rename the label" call that omitted secrets
@@ -60,7 +65,12 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { requireStepUp, STEP_UP_MAX_AGE_SECONDS } from "@/lib/auth/step-up";
+import {
+  checkStepUp,
+  recordStepUpMissing,
+  STEP_UP_MAX_AGE_SECONDS,
+  type StepUpMissing,
+} from "@/lib/auth/step-up";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { settleConnectionGroup } from "@/lib/ops/connection-probe-sweep";
@@ -377,6 +387,19 @@ type Actor = { userId: string; organizationId: string; user: SessionUser };
  * is being fought over; the builder is told to reload rather than win.
  */
 const MAX_SAVE_ATTEMPTS = 3;
+
+/**
+ * A save or toggle that ends without writing, after its latest judgement was
+ * admitted in warn mode without a passkey: that admission is still recorded,
+ * once (review round 4). Enforce would have refused the request, which is
+ * the number the switch to enforce is judged on (step-up.ts
+ * `recordStepUpMissing`: one row per admission, including one whose write
+ * then loses a race).
+ */
+async function withStepUpRecorded(missing: StepUpMissing | null, response: Response): Promise<Response> {
+  if (missing) await recordStepUpMissing(missing);
+  return response;
+}
 
 /**
  * The keys of the tenants this deployment configures for a product in env.
@@ -720,9 +743,17 @@ export async function POST(request: NextRequest) {
    */
   let judged: SaveJudgement;
   let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
+  /*
+   * The warn-mode admission of the latest judgement, recorded ONCE when the
+   * save ends (review round 4). Recorded per attempt, a save judged again
+   * after the row changed left two un-stepped-up governance actions in the
+   * trail for one save — one of them, a secret save over the row as it had
+   * been, never performed.
+   */
+  let missing: StepUpMissing | null = null;
   for (let attempt = 1; ; attempt += 1) {
     const verdict = await judgeSave(organizationId, key, input, environment, writeEnabled);
-    if ("refusal" in verdict) return verdict.refusal;
+    if ("refusal" in verdict) return withStepUpRecorded(missing, verdict.refusal);
     judged = verdict;
 
     /*
@@ -731,12 +762,13 @@ export async function POST(request: NextRequest) {
      * Asked after every validation above, so a form with a mistake in it is
      * refused for the mistake, not for the passkey.
      */
-    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+    const stepUp = checkStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
       // Turning writes on is recorded as what it is, not as a secret save.
       action: judged.enablesWrites ? "connection.enable_writes" : "connection.save_secrets",
       targetId: judged.existing?.id ?? null,
     });
     if (!stepUp.ok) return stepUp.response;
+    missing = stepUp.outcome === "warned" ? stepUp.missing : null;
 
     /*
      * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.
@@ -804,21 +836,28 @@ export async function POST(request: NextRequest) {
        */
       if (error instanceof SapConnectionChangedError) {
         if (attempt < MAX_SAVE_ATTEMPTS) continue;
-        return studioError(
-          "CONFLICT",
-          `The connection "${key}" kept changing while this save was being made, so nothing was saved. ` +
-            "Reload the page to see it as it is, then save again.",
+        return withStepUpRecorded(
+          missing,
+          studioError(
+            "CONFLICT",
+            `The connection "${key}" kept changing while this save was being made, so nothing was saved. ` +
+              "Reload the page to see it as it is, then save again.",
+          ),
         );
       }
       console.error("[studio/connections] seal or persist failed:", error);
-      return studioError(
-        "INTERNAL",
-        "The connection could not be sealed and was not saved. This is a deployment " +
-          "configuration problem, not a problem with what you entered — quote the " +
-          "correlation ID to whoever operates this environment.",
+      return withStepUpRecorded(
+        missing,
+        studioError(
+          "INTERNAL",
+          "The connection could not be sealed and was not saved. This is a deployment " +
+            "configuration problem, not a problem with what you entered — quote the " +
+            "correlation ID to whoever operates this environment.",
+        ),
       );
     }
   }
+  if (missing) await recordStepUpMissing(missing);
   const { existing, writableAfter, targetChanges, movesLiveWrites, enablesWrites, disablesWrites, reactivates } =
     judged;
 
@@ -983,86 +1022,131 @@ export async function PATCH(request: NextRequest) {
     return studioError("VALIDATION_ERROR", "Nothing to change.");
   }
 
-  // Scoped find before update: a bare update by id would let one organization
-  // toggle another's connection.
-  const existing = await prisma.sapConnection.findFirst({
-    where: { id, organizationId },
-    select: {
-      id: true,
-      writeEnabled: true,
-      isActive: true,
-      product: true,
-      environment: true,
-      client: true,
-    },
-  });
-  if (!existing) return studioError("NOT_FOUND", "Connection not found.");
-
   /*
-   * ACTIVATING A TWIN IS A TYPED 409, NOT AN EMPTY 500 (P0.1, A52). POST
-   * refuses a second active connection the binding could not tell apart; this
-   * toggle — what Studio's "Activate" sends — did not, so reactivating B
-   * after A had replaced it hit the partial unique index and Next answered a
-   * bare 500 with no body. Same lookup and words as POST; CONFLICT, because
-   * the request is well-formed and the other row's state is what stands in
-   * the way.
+   * JUDGED ON THE ROW IT OVERWRITES (P0.3 review round 4), as POST is. The
+   * twin check, the "enabling writes needs the write secret" refusal and the
+   * passkey decision are made on a read, and the update used to write
+   * whatever had happened since. An operator's Deactivate (or writes-off)
+   * landing between the two was undone: a builder with no passkey, whose
+   * PATCH {isActive: true} had read the row while it was still active and
+   * writing, switched it back on past both gates. The update now writes only
+   * while the row still holds the state that was judged; otherwise nothing
+   * is written and the toggle is judged again on the row as it now is.
    */
-  const activating = isActive === true && !existing.isActive;
-  if (activating && existing.environment) {
-    const target = { product: existing.product, environment: existing.environment, client: existing.client ?? null };
-    const twin = await findActiveTwin({ organizationId, ...target, excluding: { id: existing.id } });
-    if (twin) return studioError("CONFLICT", twinRefusal(twin, target, "this connection"));
-  }
-
-  // Enabling writes needs a write secret, which lives sealed and unreadable from
-  // here. Flipping the switch on a connection that never had one would produce a
-  // connection that claims to allow writes and fails at the first attempt, so the
-  // caller is sent to POST — where the secret can actually be supplied, and
-  // which the Connections form now offers (P0.3).
-  if (writeEnabled === true && !existing.writeEnabled) {
-    return studioError(
-      "VALIDATION_ERROR",
-      "Enabling writes requires the write secret. Save the connection again from the Connections form with Allow writes ticked and its write secret entered.",
-    );
-  }
-
-  /*
-   * A FRESH PASSKEY WHEN THIS TURNS WRITES ON. The check above refuses to
-   * enable writes outright, but reactivating a deactivated connection that
-   * still carries writeEnabled turns a write path back on all the same.
-   * Turning things OFF stays one press: it is the direction an incident needs.
-   */
-  const writableBefore = existing.isActive && existing.writeEnabled;
-  const writableAfter = (isActive ?? existing.isActive) && (writeEnabled ?? existing.writeEnabled);
-  if (writableAfter && !writableBefore) {
-    const stepUp = await requireStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
-      action: "connection.enable_writes",
-      targetId: existing.id,
-    });
-    if (!stepUp.ok) return stepUp.response;
-  }
-
+  /** The row as judged by the attempt that wrote: the state the update replaced. */
+  let existing: { id: string; product: string; isActive: boolean };
   let updated: { id: string; isActive: boolean; writeEnabled: boolean };
-  try {
-    updated = await prisma.sapConnection.update({
-      where: { id: existing.id, organizationId },
-      data: {
-        ...(isActive === undefined ? {} : { isActive }),
-        ...(writeEnabled === undefined ? {} : { writeEnabled }),
+  /** The warn-mode admission of the judgement acted on, recorded once (review round 4). */
+  let missing: StepUpMissing | null = null;
+  for (let attempt = 1; ; attempt += 1) {
+    // Scoped find before update: a bare update by id would let one organization
+    // toggle another's connection.
+    const row = await prisma.sapConnection.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        writeEnabled: true,
+        isActive: true,
+        product: true,
+        environment: true,
+        client: true,
       },
-      select: { id: true, isActive: true, writeEnabled: true },
     });
-  } catch (error) {
-    // A twin activated between the check above and this write: the index
-    // decides the race, and the loser gets the same typed refusal.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return studioError(
-        "CONFLICT",
-        "Another connection for the same product, environment and SAP client was activated a moment ago. Reload to see it; deactivate it first if this one should serve.",
+    if (!row) return withStepUpRecorded(missing, studioError("NOT_FOUND", "Connection not found."));
+    existing = row;
+
+    /*
+     * ACTIVATING A TWIN IS A TYPED 409, NOT AN EMPTY 500 (P0.1, A52). POST
+     * refuses a second active connection the binding could not tell apart; this
+     * toggle — what Studio's "Activate" sends — did not, so reactivating B
+     * after A had replaced it hit the partial unique index and Next answered a
+     * bare 500 with no body. Same lookup and words as POST; CONFLICT, because
+     * the request is well-formed and the other row's state is what stands in
+     * the way.
+     */
+    const activating = isActive === true && !row.isActive;
+    if (activating && row.environment) {
+      const target = { product: row.product, environment: row.environment, client: row.client ?? null };
+      const twin = await findActiveTwin({ organizationId, ...target, excluding: { id: row.id } });
+      if (twin) return withStepUpRecorded(missing, studioError("CONFLICT", twinRefusal(twin, target, "this connection")));
+    }
+
+    // Enabling writes needs a write secret, which lives sealed and unreadable from
+    // here. Flipping the switch on a connection that never had one would produce a
+    // connection that claims to allow writes and fails at the first attempt, so the
+    // caller is sent to POST — where the secret can actually be supplied, and
+    // which the Connections form now offers (P0.3).
+    if (writeEnabled === true && !row.writeEnabled) {
+      return withStepUpRecorded(
+        missing,
+        studioError(
+          "VALIDATION_ERROR",
+          "Enabling writes requires the write secret. Save the connection again from the Connections form with Allow writes ticked and its write secret entered.",
+        ),
       );
     }
-    throw error;
+
+    /*
+     * A FRESH PASSKEY WHEN THIS TURNS WRITES ON. The check above refuses to
+     * enable writes outright, but reactivating a deactivated connection that
+     * still carries writeEnabled turns a write path back on all the same.
+     * Turning things OFF stays one press: it is the direction an incident needs.
+     * Checked without I/O, so a warn-mode admission is recorded once, for the
+     * judgement the update acted on (review round 4).
+     */
+    const writableBefore = row.isActive && row.writeEnabled;
+    const after = { isActive: isActive ?? row.isActive, writeEnabled: writeEnabled ?? row.writeEnabled };
+    missing = null;
+    if (after.isActive && after.writeEnabled && !writableBefore) {
+      const stepUp = checkStepUp(user, STEP_UP_MAX_AGE_SECONDS, {
+        action: "connection.enable_writes",
+        targetId: row.id,
+      });
+      if (!stepUp.ok) return stepUp.response;
+      if (stepUp.outcome === "warned") missing = stepUp.missing;
+    }
+
+    let written: number;
+    try {
+      // Only while the row still holds the state judged above: a toggle or
+      // save landing meanwhile makes this match nothing.
+      ({ count: written } = await prisma.sapConnection.updateMany({
+        where: { id: row.id, organizationId, isActive: row.isActive, writeEnabled: row.writeEnabled },
+        data: {
+          ...(isActive === undefined ? {} : { isActive }),
+          ...(writeEnabled === undefined ? {} : { writeEnabled }),
+        },
+      }));
+    } catch (error) {
+      // A twin activated between the check above and this write: the index
+      // decides the race, and the loser gets the same typed refusal.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        return withStepUpRecorded(
+          missing,
+          studioError(
+            "CONFLICT",
+            "Another connection for the same product, environment and SAP client was activated a moment ago. Reload to see it; deactivate it first if this one should serve.",
+          ),
+        );
+      }
+      throw error;
+    }
+    if (written === 1) {
+      updated = { id: row.id, ...after };
+      break;
+    }
+    if (attempt >= MAX_SAVE_ATTEMPTS) {
+      return withStepUpRecorded(
+        missing,
+        studioError(
+          "CONFLICT",
+          "The connection kept changing while this change was being made, so nothing was changed. " +
+            "Reload the page to see it as it is, then try again.",
+        ),
+      );
+    }
   }
+  if (missing) await recordStepUpMissing(missing);
 
   await writeConfigAudit({
     organizationId,

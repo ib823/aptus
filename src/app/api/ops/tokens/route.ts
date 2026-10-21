@@ -27,8 +27,9 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
-import { keyState, liveKeyWhere, overlapIsOpen, storedTokenPrefix } from "@/lib/northbound/key-policy";
+import { keyState, overlapIsOpen, storedTokenPrefix } from "@/lib/northbound/key-policy";
 import { opsWhere, requireOperations } from "@/lib/ops/guard";
+import { countPresentableWriteKeys } from "@/lib/ops/write-keys";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -74,16 +75,15 @@ export async function GET(request: NextRequest) {
     //
     // OVER LIVE CREDENTIALS ONLY (P0.3, A62), by the predicate authentication
     // applies: a write key sealed on an expired, revoked or deactivated
-    // credential can never be presented, because the bearer token it travels
-    // with is refused first. Counting it said a write path existed that does
-    // not. (A revocation clears the sealed key anyway; an expiry does not.)
+    // credential, or on a retired app's (review round 4), can never be
+    // presented, because the bearer token it travels with is refused first.
+    // Counting it said a write path existed that does not. (A revocation
+    // clears the sealed key anyway; an expiry or a retirement does not.)
     //
     // In `Promise.all` rather than started early and awaited later: the previous
     // shape kicked this off and attached its handler two `await`s further down,
     // so a rejection in the gap was an unhandled rejection rather than a 500.
-    prisma.solutionClient.count({
-      where: opsWhere(guard.actor, { ...liveKeyWhere(now), secretsCiphertext: { not: null } }),
-    }),
+    countPresentableWriteKeys(guard.actor, now),
 
     // REVOKED IS COUNTED SEPARATELY, AND THAT IS THE WHOLE POINT.
     //
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
       oneCredentialPerSolution:
         "Issuance upserts on (solutionId, environment) — re-issuing for the same environment replaces the previous token rather than adding one; another environment adds a credential beside it.",
       writeCredentials:
-        "Write keys are counted over live credentials only, from their stored presence, never by reading one. A write key is issued in Developer Studio (API Access, Runtime credentials, Issue write key) by someone who does not own the app, after a second person has approved a CREATE or UPDATE grant for that environment. A zero means none has been issued onto a live credential.",
+        "Write keys are counted over live credentials of apps that are not retired only (the credentials authentication accepts), from their stored presence, never by reading one. A write key is issued in Developer Studio (API Access, Runtime credentials, Issue write key) by someone who does not own the app, after a second person has approved a CREATE or UPDATE grant for that environment. A zero means none has been issued onto a live credential.",
     },
     credentials: rows.map((r) => ({
       id: r.id,

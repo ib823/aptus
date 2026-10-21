@@ -28,14 +28,18 @@
  * every row, an expired credential's write key read as a usable write path —
  * one that can never be presented, because its bearer token is refused
  * first — and this register disagreed with Operations > Tokens, which counts
- * with the same predicate authentication uses (`liveKeyWhere`).
+ * with the same predicate authentication uses (`liveKeyWhere`). A retired
+ * app's credentials are left out too (review round 4): retiring does not
+ * revoke them, and authentication refuses them SOLUTION_RETIRED
+ * (ops/write-keys.ts `countPresentableWriteKeys`).
  */
 
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
-import { keyState, lacksRequiredExpiry, liveKeyWhere, requiresExpiry } from "@/lib/northbound/key-policy";
+import { keyState, lacksRequiredExpiry, requiresExpiry } from "@/lib/northbound/key-policy";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
+import { countPresentableWriteKeys } from "@/lib/ops/write-keys";
 import { studioOk } from "@/lib/studio/api";
 import { missingOwners } from "@/lib/studio/solutions";
 
@@ -77,9 +81,7 @@ export async function GET(_request: NextRequest) {
         supportOwnerId: true,
       },
     }),
-    prisma.solutionClient.count({
-      where: opsWhere(guard.actor, { ...liveKeyWhere(now), secretsCiphertext: { not: null } }),
-    }),
+    countPresentableWriteKeys(guard.actor, now),
   ]);
 
   const solutionBy = new Map(solutions.map((s) => [s.id, s]));
@@ -163,7 +165,7 @@ export async function GET(_request: NextRequest) {
       secretsAreCountedNeverRead:
         "Neither the token hash nor the sealed write secret is selected by this query.",
       writeSecrets:
-        "withWriteSecret counts write keys on live credentials only (active, not revoked, not expired), the predicate authentication uses and the count Operations > Tokens shows. An expired credential keeps its sealed write key, but its bearer token is refused first, so that key is not a usable write path.",
+        "withWriteSecret counts write keys on live credentials only (active, not revoked, not expired, and of an app that is not retired), the predicates authentication uses and the count Operations > Tokens shows. An expired credential, or a retired app's, keeps its sealed write key, but its bearer token is refused first, so that key is not a usable write path.",
       countsAreComplete: "Every credential in scope is listed. There is no sampling and no page.",
     },
     credentials,

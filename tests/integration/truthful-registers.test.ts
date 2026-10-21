@@ -12,7 +12,8 @@
  *        view (fixed by P0.11; pinned here with the rest);
  *   A62  Operations > Tokens counts write keys on live credentials only, and
  *        no longer says no code path issues one; Control Tower's credential
- *        register counts them the same way (review round 3).
+ *        register counts them the same way (review round 3), leaving out a
+ *        retired app's, which authentication refuses (review round 4).
  *
  * WHAT IS REAL: the routes, the queries, the key policy, the tenant guard in
  * throw mode and PostgreSQL. WHAT IS STOOD IN: the session. Opt-in like the
@@ -300,6 +301,42 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("truthful registers against real
         await throttle(new NextRequest("http://localhost/api/ops/throttle")),
       );
       expect(budgets.credentials.some((c) => c.clientId === issued.id)).toBe(false);
+    });
+
+    it("a retired app's write key is not counted on either register: authentication refuses it (review round 4)", async () => {
+      const solutionId = await app("Retired write app");
+      const issued = await issue(solutionId, "TEST", inDays(30));
+      await grant(solutionId, { environment: "TEST", operation: "CREATE" });
+      session.user = ISSUER;
+      await data(
+        await issueWriteKey(req({ solutionId, environment: "TEST" }, "POST", "http://localhost/api/studio/clients/write-credential")),
+      );
+
+      session.user = ADMIN;
+      type Counts = { counts: { withWriteCredential?: number; withWriteSecret?: number } };
+      const opsBefore = await data<Counts>(await opsTokens(new NextRequest("http://localhost/api/ops/tokens")));
+      const ctBefore = await data<Counts>(await ctTokens(new NextRequest("http://localhost/api/control-tower/tokens")));
+
+      // Retiring the app does not revoke the credential: its row is still live
+      // and still holds the sealed write key.
+      await prisma.solution.updateMany({ where: { id: solutionId, organizationId: ORG }, data: { status: "RETIRED" } });
+      const row = await prisma.solutionClient.findFirst({
+        where: { id: issued.id, organizationId: ORG },
+        select: { isActive: true, revokedAt: true, secretsCiphertext: true },
+      });
+      expect(row).toMatchObject({ isActive: true, revokedAt: null });
+      expect(row?.secretsCiphertext).not.toBeNull();
+
+      const opsAfter = await data<Counts & { provenance: { writeCredentials: string } }>(
+        await opsTokens(new NextRequest("http://localhost/api/ops/tokens")),
+      );
+      const ctAfter = await data<Counts & { provenance: { writeSecrets: string } }>(
+        await ctTokens(new NextRequest("http://localhost/api/control-tower/tokens")),
+      );
+      expect(opsAfter.counts.withWriteCredential).toBe((opsBefore.counts.withWriteCredential ?? 0) - 1);
+      expect(ctAfter.counts.withWriteSecret).toBe((ctBefore.counts.withWriteSecret ?? 0) - 1);
+      expect(opsAfter.provenance.writeCredentials).toMatch(/not retired/);
+      expect(ctAfter.provenance.writeSecrets).toMatch(/not retired/);
     });
   });
 });

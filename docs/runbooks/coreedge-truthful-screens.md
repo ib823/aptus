@@ -94,7 +94,12 @@ and says where they are issued. Control Tower's credential register
 every row too, so the two registers disagreed once a credential holding a
 write key expired (an expiry, unlike a revocation, leaves the sealed key in
 the row); it now counts with the same predicate and says so in its
-provenance (review round 3).
+provenance (review round 3). Both counts also leave out the credentials of a
+RETIRED app (review round 4): retiring an app does not revoke its
+credentials, so an unexpired one keeps its sealed write key, but
+authentication refuses every call with it (`SOLUTION_RETIRED`). One shared
+count, `countPresentableWriteKeys` in `src/lib/ops/write-keys.ts`, serves both
+registers.
 
 **An app with no feeds has a board (A63).** The lane board called notFound()
 when an app had no lanes, and an app with no feeds has none, so a new app's
@@ -166,6 +171,23 @@ its first 201 without calling the API by hand:
   row (`reactivated`, `writesEnabled`) and its passkey is asked for that
   action. A row that changes three times during one save answers 409 "kept
   changing", and nothing is saved.
+- **The toggle is held to the same rule (review round 4).** PATCH (Activate,
+  Deactivate, writes off) judged its gates (the twin check, "enabling writes
+  requires the write secret" and the passkey for a toggle that turns writes
+  back on) on a read, then updated the row whatever had happened since. A
+  builder without a passkey whose Activate had read the row while it was
+  still active undid a Deactivate that landed after that read, and writes came
+  back on with no passkey asked. The update now writes only while the row
+  still has the `isActive` and `writeEnabled` it was judged on; otherwise
+  nothing is written and the toggle is judged again, so a stale Activate then
+  needs the passkey (403 under enforce) and a stale "writes on" is refused for
+  the missing secret.
+- **One warn-mode record per request (review round 4).** Under
+  `COREEDGE_STEP_UP=warn`, a save or toggle judged again after the row changed
+  used to write a `STEP_UP_MISSING` row for each judgement, one of them for an
+  action that never happened (a secret save over the row as it had been). The
+  passkey is now checked without I/O on each judgement, and the admission is
+  recorded once, for the latest judgement, whether or not it was written.
 
 An API caller that sends no `expected` is not checked, so nothing that saves
 connections today is refused. A save that reactivates a deactivated row says
@@ -198,8 +220,9 @@ writes off and see the broker refuse.
 3. Keys minted before the deploy read "ending not recorded" until their next
    rotation. Nothing else about them changes.
 4. The Operations > Tokens write-key count, and Control Tower's
-   `withWriteSecret`, can drop: write keys on expired credentials are no
-   longer counted. Nothing was callable through them.
+   `withWriteSecret`, can drop: write keys on expired credentials, and on
+   retired apps' credentials, are no longer counted. Nothing was callable
+   through them.
 5. The SAP systems "Metadata" column fills with each service's own answer at
    the next lane sweep (04:30 UTC) or Re-check. Until then it shows the
    previous values. A lane whose own service refuses `$metadata` with 403 is

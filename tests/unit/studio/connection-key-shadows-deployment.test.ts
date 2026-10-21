@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { sapConnection: { findFirst: mocks.findFirstConnection, update: mocks.updateConnection } },
+  prisma: { sapConnection: { findFirst: mocks.findFirstConnection, updateMany: mocks.updateConnection } },
 }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionResolverModule>();
@@ -174,10 +174,11 @@ describe("the TENANT_KEY_SHADOWED remedy, followed in the order it is given", ()
     mocks.findFirstConnection.mockImplementation(
       async ({ where }: { where: Row }) => rows.find((r) => matches(r, where)) ?? null,
     );
+    // Conditional on the state the toggle judged (review round 4), so it counts the rows it changed.
     mocks.updateConnection.mockImplementation(async ({ where, data }: { where: Row; data: Row }) => {
-      const row = rows.find((r) => matches(r, where));
-      if (!row) throw new Error("update matched no SapConnection");
-      return Object.assign(row, data);
+      const matched = rows.filter((r) => matches(r, where));
+      for (const row of matched) Object.assign(row, data);
+      return { count: matched.length };
     });
     mocks.upsert.mockImplementation(async (input: Row) => {
       const row = { ...input, id: "conn_new", isActive: true };

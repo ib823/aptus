@@ -48,27 +48,17 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type * as StepUpModule from "@/lib/auth/step-up";
-
 const session = vi.hoisted(() => ({ user: null as null | Record<string, unknown> }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => session.user }));
 /*
- * The gap between judging a save and writing it, made deterministic: a hook
- * that runs once, while the route asks for the passkey (review round 3).
+ * The gap between judging a save (or a toggle) and writing it, made
+ * deterministic: a hook that runs once, right after the route has read the
+ * row it judges (review rounds 3 and 4). Everything the route decides — the
+ * stale-form check, the twin check, the passkey, PATCH's write-secret
+ * refusal — is decided on that read, so whatever the hook does lands inside
+ * the gap.
  */
-const gap = vi.hoisted(() => ({ duringStepUp: null as null | (() => Promise<void>) }));
-vi.mock("@/lib/auth/step-up", async (importOriginal) => {
-  const real = await importOriginal<typeof StepUpModule>();
-  return {
-    ...real,
-    requireStepUp: async (...args: Parameters<typeof real.requireStepUp>) => {
-      const hook = gap.duringStepUp;
-      gap.duringStepUp = null;
-      if (hook) await hook();
-      return real.requireStepUp(...args);
-    },
-  };
-});
+const gap = vi.hoisted(() => ({ afterRowRead: null as null | (() => Promise<void>) }));
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -76,7 +66,20 @@ vi.mock("@/lib/db/prisma", async () => {
   const base = new PrismaClient({
     datasourceUrl: process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused",
   });
-  return { prisma: base.$extends(tenantScopeGuard()) };
+  const hooked = base.$extends({
+    query: {
+      sapConnection: {
+        async findFirst({ args, query }) {
+          const read = await query(args);
+          const hook = gap.afterRowRead;
+          gap.afterRowRead = null;
+          if (hook) await hook();
+          return read;
+        },
+      },
+    },
+  });
+  return { prisma: hooked.$extends(tenantScopeGuard()) };
 });
 
 import { prisma } from "@/lib/db/prisma";
@@ -182,7 +185,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
 
   afterAll(async () => {
     vi.unstubAllEnvs();
-    gap.duringStepUp = null;
+    gap.afterRowRead = null;
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
     await prisma.organization.delete({ where: { id: ORG } });
     await prisma.user.deleteMany({ where: { id: { in: [BUILDER.id, OPERATOR.id] } } });
@@ -283,7 +286,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
   describe("a deactivation landing while a save is in flight (review round 3)", () => {
     /** The operator's Deactivate, run in the gap between the save's judgement and its write. */
     function deactivateDuringStepUp(id: string) {
-      gap.duringStepUp = async () => {
+      gap.afterRowRead = async () => {
         session.user = OPERATOR;
         const off = await patchConnection(req({ id, isActive: false }, "PATCH"));
         expect(off.status, await off.clone().text()).toBe(200);
@@ -297,7 +300,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
       deactivateDuringStepUp(id);
 
       const res = await saveConnection(req(connectionSaveBody(form(`${RUN}-j`, { password: "rotated" }), LIVE_WRITING)));
-      expect(gap.duringStepUp).toBeNull();
+      expect(gap.afterRowRead).toBeNull();
       expect(res.status, await res.clone().text()).toBe(409);
       const message = ((await res.json()) as { error: { message: string } }).error.message;
       expect(message).toMatch(/deactivated/i);
@@ -326,9 +329,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
         reactivated: true,
         writesEnabled: true,
       });
-      expect((await lastAudit(id, "STEP_UP_MISSING"))?.after).toMatchObject({
-        governanceAction: "connection.enable_writes",
+      /*
+       * ONE warn-mode record, for what the save did (review round 4). The
+       * first judgement — a secret save over the row as it had been — was
+       * never written, and recording it left a governance action in the
+       * trail that did not happen.
+       */
+      const missing = await prisma.configAudit.findMany({
+        where: { organizationId: ORG, entityType: "Connection", entityId: id, action: "STEP_UP_MISSING" },
+        select: { after: true },
       });
+      expect(missing.map((m) => (m.after as { governanceAction: string }).governanceAction)).toEqual([
+        "connection.enable_writes",
+      ]);
     });
 
     it("a real concurrent Deactivate and form save always leave the connection deactivated", async () => {
@@ -345,6 +358,88 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
         // The save either landed first (and the Deactivate after it), or was refused.
         expect([200, 409]).toContain(save.status);
         expect(await row(id)).toMatchObject({ isActive: false });
+      }
+    });
+  });
+
+  /*
+   * DEFECT 5: PATCH JUDGED ITS GATES ON A ROW IT DID NOT WRITE (review round
+   * 4). It read the row, decided whether the toggle turned writes on (the
+   * passkey) and whether it enabled writes without the secret (refused), and
+   * then updated by id whatever had happened since. A builder with no passkey
+   * whose PATCH {isActive: true} read the row while it was still active and
+   * writing undid an operator's Deactivate landing after that read — no
+   * passkey asked, writes live again.
+   */
+  describe("a toggle landing while another toggle is in flight (review round 4)", () => {
+    /** The operator's change, run in the gap between the builder's read and its update. */
+    function operatorAfterRead(id: string, change: Record<string, boolean>) {
+      gap.afterRowRead = async () => {
+        session.user = OPERATOR;
+        const res = await patchConnection(req({ id, ...change }, "PATCH"));
+        expect(res.status, await res.clone().text()).toBe(200);
+        session.user = BUILDER;
+      };
+    }
+
+    it("a stale Activate does not undo a Deactivate: judged again, it needs the passkey", async () => {
+      const id = await writingDevConnection(`${RUN}-pa`);
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      operatorAfterRead(id, { isActive: false });
+
+      // The builder has no passkey. Its read saw the row active and writing.
+      session.user = BUILDER;
+      const res = await patchConnection(req({ id, isActive: true }, "PATCH"));
+      expect(gap.afterRowRead).toBeNull();
+      expect(await stepUpAction(res)).toBe("connection.enable_writes");
+      expect(await row(id)).toMatchObject({ isActive: false, writeEnabled: true });
+      expect((await lastAudit(id, "UPDATE"))?.after).toMatchObject({ event: "connection_toggled", isActive: false });
+    });
+
+    it("a stale request cannot switch writes back on without the write secret", async () => {
+      const id = await writingDevConnection(`${RUN}-pw`);
+      vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+      operatorAfterRead(id, { writeEnabled: false });
+
+      session.user = BUILDER;
+      const res = await patchConnection(req({ id, isActive: true, writeEnabled: true }, "PATCH"));
+      expect(res.status, await res.clone().text()).toBe(400);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/write secret/);
+      expect(await row(id)).toMatchObject({ isActive: true, writeEnabled: false });
+    });
+
+    it("records one warn-mode admission, for the toggle it made", async () => {
+      const id = await writingDevConnection(`${RUN}-pk`);
+      vi.stubEnv("COREEDGE_STEP_UP", "warn");
+      operatorAfterRead(id, { isActive: false });
+
+      session.user = BUILDER;
+      const res = await patchConnection(req({ id, isActive: true }, "PATCH"));
+      expect(res.status, await res.clone().text()).toBe(200);
+      expect(await row(id)).toMatchObject({ isActive: true, writeEnabled: true });
+      const missing = await prisma.configAudit.findMany({
+        where: { organizationId: ORG, entityType: "Connection", entityId: id, action: "STEP_UP_MISSING" },
+        select: { after: true },
+      });
+      expect(missing.map((m) => (m.after as { governanceAction: string }).governanceAction)).toEqual([
+        "connection.enable_writes",
+      ]);
+    });
+
+    it("a builder without a passkey hammering Activate never undoes a concurrent Deactivate", async () => {
+      for (let i = 0; i < 8; i += 1) {
+        const id = await writingDevConnection(`${RUN}-prace${i}`);
+        vi.stubEnv("COREEDGE_STEP_UP", "enforce");
+        // The session is read when each request starts.
+        session.user = BUILDER;
+        const activations = Array.from({ length: 10 }, () => patchConnection(req({ id, isActive: true }, "PATCH")));
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        session.user = OPERATOR;
+        const off = patchConnection(req({ id, isActive: false }, "PATCH"));
+        const settled = await Promise.all([...activations, off]);
+        expect(settled.at(-1)?.status).toBe(200);
+        for (const res of settled.slice(0, -1)) expect([200, 403]).toContain(res.status);
+        expect(await row(id)).toMatchObject({ isActive: false, writeEnabled: true });
       }
     });
   });

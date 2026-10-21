@@ -87,7 +87,8 @@ describe("a partial write cannot empty the credential bundle", () => {
   it("refuses to enable writes without the secret it cannot see", () => {
     // Flipping the switch on a connection that never had a write secret would
     // claim a capability that fails at the first attempt.
-    expect(flat(route)).toMatch(/writeEnabled === true && !existing\.writeEnabled/);
+    // `row`: the row as read by the attempt that writes (review round 4).
+    expect(flat(route)).toMatch(/writeEnabled === true && !row\.writeEnabled/);
   });
 
   it("the form says saving replaces the credentials", () => {
