@@ -3,7 +3,7 @@
     "create": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
       "properties": {
         "Currency": {
           "maxLength": 5,
@@ -54,6 +54,18 @@
             "null"
           ],
           "x-odata-type": "Edm.Date"
+        },
+        "_Targets": {
+          "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array",
+          "x-odata-navigation": {
+            "collection": true,
+            "containsTarget": true,
+            "target": "com.example.zbonusplan.BonusTargetType"
+          }
         }
       },
       "title": "Bonus Plan (create)",
@@ -309,7 +321,7 @@
       },
       "BonusPlan_Create": {
         "additionalProperties": false,
-        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "Currency": {
             "maxLength": 5,
@@ -356,6 +368,18 @@
             "nullable": true,
             "type": "string",
             "x-odata-type": "Edm.Date"
+          },
+          "_Targets": {
+            "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "x-odata-navigation": {
+              "collection": true,
+              "containsTarget": true,
+              "target": "com.example.zbonusplan.BonusTargetType"
+            }
           }
         },
         "title": "Bonus Plan (create)",

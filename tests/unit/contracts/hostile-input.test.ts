@@ -10,11 +10,21 @@ import { describe, expect, it } from "vitest";
 
 import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
+import { MAX_IDENTIFIER_LENGTH, MAX_REFERENCE_LENGTH } from "@/lib/contracts/csdl-xml";
+import {
+  diffContracts,
+  MAX_CHANGE_TEXT,
+  MAX_STORED_CHANGES,
+  MAX_STORED_DIFF_BYTES,
+  storedDiff,
+} from "@/lib/contracts/diff";
+import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, standaloneSchemas } from "@/lib/contracts/json-schema";
+import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { DEFAULT_XML_LIMITS, parseXml } from "@/lib/contracts/xml";
-import { buildTypeScriptClient } from "@/lib/studio/scaffold";
+import { buildScaffold, buildTypeScriptClient, safeName } from "@/lib/studio/scaffold";
 
 const EDMX_HEAD =
   '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices>' +
@@ -450,5 +460,291 @@ describe("CSDL JSON values that are not scalars", () => {
       { name: "B", value: "2" },
     ]);
     expect(r.ir.entityTypes[0]!.properties.map((p) => p.defaultValue)).toEqual(["false", "7"]);
+  });
+});
+
+/*
+ * Hostile-input review round 1. THE BOUNDS, for any description inside the
+ * parser's (8 MB, 400,000 elements):
+ *
+ *   compile  refuses or succeeds in under BUDGET_MS, emitting at most
+ *            maxElements members and capability paths (MemberBudget), no
+ *            name over MAX_IDENTIFIER_LENGTH characters;
+ *   diff     what a snapshot stores of it is under MAX_STORED_DIFF_BYTES;
+ *   render   a document carries at most MAX_DOCUMENT_CONTRACT_BYTES of
+ *            contract (refused before any IR is read past it, see
+ *            routes.test.ts), and is linear in it: a kit response under 32
+ *            bytes per contract byte, a solution document under 16, /schema's
+ *            four schemas under 8, each in under BUDGET_MS; client.ts under 2.
+ */
+describe("hostile-input review round 1", () => {
+  const BUDGET_MS = 5000;
+  const timed = <T>(fn: () => T): { value: T; ms: number } => {
+    const started = performance.now();
+    const value = fn();
+    return { value, ms: performance.now() - started };
+  };
+  const CAPS_HEAD =
+    '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">' +
+    '<edmx:Reference Uri="x"><edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="Capabilities"/></edmx:Reference>' +
+    '<edmx:DataServices><Schema Namespace="n" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
+    '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>';
+
+  describe("one annotation target's paths are never copied onto many entity sets", () => {
+    it("N same-named entity sets beside one target of P paths (CSDL XML, N = P = 20,000) are refused", () => {
+      // Each set copied the target's P paths: N×P, and the heap was exhausted at this size (1.4 MB).
+      const n = 20_000;
+      const doc =
+        CAPS_HEAD +
+        `<EntityContainer Name="C">${'<EntitySet Name="S" EntityType="n.T"/>'.repeat(n)}</EntityContainer>` +
+        '<Annotations Target="n.C/S"><Annotation Term="Capabilities.FilterRestrictions"><Record>' +
+        '<PropertyValue Property="NonFilterableProperties"><Collection>' +
+        Array.from({ length: n }, (_, i) => `<PropertyPath>q${i}</PropertyPath>`).join("") +
+        "</Collection></PropertyValue></Record></Annotation></Annotations>" +
+        EDMX_TAIL;
+      const { value, ms } = timed(() => compileContract(doc));
+      expect(value).toMatchObject({ ok: false, reason: "INVALID_CSDL" });
+      expect(!value.ok && value.detail).toMatch(/entity set or singleton "S" more than once/);
+      expect(ms).toBeLessThan(BUDGET_MS);
+    });
+
+    it("the same spread over N containers in CSDL JSON (N = 30,000, P = 100,000) is refused", () => {
+      const ns: Record<string, unknown> = { T: { $Kind: "EntityType", $Key: ["k"], k: {} } };
+      for (let i = 0; i < 30_000; i++) ns[`C${i}`] = { $Kind: "EntityContainer", S: { $Collection: true, $Type: "n.T" } };
+      ns.$Annotations = {
+        "n.C0/S": {
+          "@Org.OData.Capabilities.V1.FilterRestrictions": { NonFilterableProperties: Array.from({ length: 100_000 }, (_, i) => `q${i}`) },
+        },
+      };
+      const doc = JSON.stringify({ $Version: "4.0", $EntityContainer: "n.C0", n: ns });
+      expect(doc.length).toBeLessThan(DEFAULT_XML_LIMITS.maxBytes);
+      const { value, ms } = timed(() => compileContract(doc));
+      expect(value).toMatchObject({ ok: false, reason: "INVALID_CSDL" });
+      expect(ms).toBeLessThan(BUDGET_MS);
+    });
+
+    it("a singleton named like an entity set is the same ambiguity", () => {
+      const doc =
+        CAPS_HEAD +
+        '<EntityContainer Name="C"><EntitySet Name="S" EntityType="n.T"/><Singleton Name="S" Type="n.T"/></EntityContainer>' +
+        EDMX_TAIL;
+      expect(reason(doc)).toBe("INVALID_CSDL");
+    });
+
+    it("capability paths spend the member budget, so what is emitted stays bounded by the element bound", () => {
+      const doc = JSON.stringify({
+        $Version: "4.0",
+        n: {
+          T: { $Kind: "EntityType", $Key: ["k"], k: {} },
+          C: { $Kind: "EntityContainer", S: { $Collection: true, $Type: "n.T" } },
+          $Annotations: {
+            "n.C/S": {
+              "@Org.OData.Capabilities.V1.FilterRestrictions": { NonFilterableProperties: Array.from({ length: 5000 }, (_, i) => `q${i}`) },
+            },
+          },
+        },
+      });
+      expect(reason(doc, { ...DEFAULT_XML_LIMITS, maxElements: 1000 })).toBe("TOO_MANY_MEMBERS");
+      const r = compileContract(doc);
+      expect(r.ok && r.ir.entitySets[0]!.capabilities.nonFilterableProperties).toHaveLength(5000);
+    });
+
+    it("a CSDL JSON entity set's annotations are read from its own container's target", () => {
+      const r = compileContract(
+        JSON.stringify({
+          $Version: "4.0",
+          $EntityContainer: "n.C1",
+          n: {
+            T: { $Kind: "EntityType", $Key: ["k"], k: {} },
+            C1: { $Kind: "EntityContainer", S1: { $Collection: true, $Type: "n.T" } },
+            C2: { $Kind: "EntityContainer", S2: { $Collection: true, $Type: "n.T" } },
+            $Annotations: { "n.C2/S2": { "@Org.OData.Capabilities.V1.InsertRestrictions": { Insertable: false } } },
+          },
+        }),
+      );
+      if (!r.ok) throw new Error(r.detail);
+      expect(r.ir.entitySets.map((s) => [s.name, s.capabilities.creatable])).toEqual([
+        ["S1", undefined],
+        ["S2", false],
+      ]);
+    });
+  });
+
+  describe("names have a length", () => {
+    const action = (name: string) =>
+      `${EDMX_HEAD}<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>` +
+      `<Action Name="${name}" IsBound="true"><Parameter Name="it" Type="ns.T"/></Action>` +
+      `<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>${EDMX_TAIL}`;
+
+    it("a name past MAX_IDENTIFIER_LENGTH is not a service description; one at it is", () => {
+      expect(reason(action("A".repeat(65_000)))).toBe("INVALID_CSDL");
+      expect(reason(action("A".repeat(MAX_IDENTIFIER_LENGTH + 1)))).toBe("INVALID_CSDL");
+      expect(reason(action("A".repeat(MAX_IDENTIFIER_LENGTH)))).toBe("OK");
+    });
+
+    it("so is a type reference past MAX_REFERENCE_LENGTH, and the same in CSDL JSON", () => {
+      const longType = `Collection(${"n".repeat(MAX_IDENTIFIER_LENGTH)}.${"T".repeat(MAX_IDENTIFIER_LENGTH + 1)})`;
+      expect(reason(`${EDMX_HEAD}<ComplexType Name="X"><Property Name="p" Type="${longType}"/></ComplexType>${EDMX_TAIL}`)).toBe("INVALID_CSDL");
+      expect(
+        reason(`${EDMX_HEAD}<ComplexType Name="X"><Property Name="p" Type="Collection(ns.${"T".repeat(MAX_IDENTIFIER_LENGTH)})"/></ComplexType>${EDMX_TAIL}`),
+      ).toBe("OK");
+      const json = (member: Record<string, unknown>) =>
+        JSON.stringify({ $Version: "4.0", ns: { T: { $Kind: "EntityType", $Key: ["k"], k: {}, ...member } } });
+      expect(reason(json({ ["p".repeat(MAX_IDENTIFIER_LENGTH + 1)]: {} }))).toBe("INVALID_CSDL");
+      expect(reason(json({ p: { $Type: `ns.${"T".repeat(MAX_REFERENCE_LENGTH)}` } }))).toBe("INVALID_CSDL");
+      expect(
+        reason(
+          JSON.stringify({
+            $Version: "4.0",
+            ns: { [`a${"x".repeat(70_000)}`]: [{ $Kind: "Action", $IsBound: true, $Parameter: [{ $Name: "it", $Type: "ns.T" }] }] },
+          }),
+        ),
+      ).toBe("INVALID_CSDL");
+      expect(reason(json({ p: { $Type: "Edm.String" } }))).toBe("OK");
+    });
+  });
+
+  describe("a stored diff is bounded whatever the contract", () => {
+    function withAction(name: string, params: string[]): InterfaceContract {
+      const r = compileContract(
+        `${EDMX_HEAD}<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/></EntityType>` +
+          `<EntityContainer Name="C"><EntitySet Name="S" EntityType="ns.T"/></EntityContainer>${EDMX_TAIL}`,
+      );
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S");
+      if (!s.ok) throw new Error(s.detail);
+      // Built in code, past the compiler's name bound: the diff's own bound must hold without it.
+      s.contract.operations.push({
+        name,
+        kind: "action",
+        bound: true,
+        bindingType: "ns.T",
+        parameters: [
+          { name: "it", type: "ns.T", nullable: false },
+          ...params.map((p) => ({ name: p, type: "Edm.String", nullable: false })),
+        ],
+      });
+      return s.contract;
+    }
+
+    it("2,000 renamed parameters of an action named with 65,000 characters store under MAX_STORED_DIFF_BYTES", () => {
+      // It stored 260 MB — past PostgreSQL's jsonb limit — from a 170 KB contract.
+      const name = "A".repeat(65_000);
+      const k = 2000;
+      const before = withAction(name, Array.from({ length: k }, (_, i) => `a${i}`));
+      const after = withAction(name, Array.from({ length: k }, (_, i) => `b${i}`));
+      const { value: diff, ms } = timed(() => diffContracts(before, after));
+      expect(diff.changes).toHaveLength(2 * k);
+      const { value: stored, ms: storeMs } = timed(() => storedDiff(diff));
+      expect(ms + storeMs).toBeLessThan(BUDGET_MS);
+      expect(Buffer.byteLength(JSON.stringify(stored))).toBeLessThan(MAX_STORED_DIFF_BYTES);
+      expect(stored).toMatchObject({ bump: "major", omitted: 2 * k - MAX_STORED_CHANGES });
+      expect(stored.changes).toHaveLength(MAX_STORED_CHANGES);
+      for (const c of stored.changes) {
+        expect(c.at.length).toBeLessThanOrEqual(MAX_CHANGE_TEXT);
+        expect(c.change.length).toBeLessThanOrEqual(MAX_CHANGE_TEXT);
+      }
+    });
+
+    it("keeps the most severe changes when it must leave some out, and cuts no surrogate pair in half", () => {
+      const changes = [
+        ...Array.from({ length: MAX_STORED_CHANGES }, (_, i) => ({ bump: "patch" as const, at: `p${i}`, change: "label" })),
+        { bump: "major" as const, at: `${"x".repeat(MAX_CHANGE_TEXT - 2)}😀😀`, change: "removed" },
+      ];
+      const stored = storedDiff({ bump: "major", changes });
+      expect(stored.changes[0]).toMatchObject({ bump: "major", change: "removed" });
+      expect(stored.omitted).toBe(1);
+      expect(stored.changes[0]!.at.endsWith("…")).toBe(true);
+      expect(stored.changes[0]!.at.length).toBeLessThanOrEqual(MAX_CHANGE_TEXT);
+      expect(() => encodeURIComponent(stored.changes[0]!.at)).not.toThrow(); // no lone surrogate
+      // Under the bound nothing is cut or left out.
+      const small = { bump: "minor" as const, changes: [{ bump: "minor" as const, at: "property:X", change: "X was added." }] };
+      expect(storedDiff(small)).toEqual(small);
+    });
+  });
+
+  describe("rendered documents stay inside a stated bound", () => {
+    const HEAD =
+      '<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx"><edmx:DataServices><Schema Namespace="n" xmlns="http://docs.oasis-open.org/odata/ns/edm">';
+    const TAIL = '<EntityContainer Name="C"><EntitySet Name="S" EntityType="n.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
+    const sliced = (doc: string) => {
+      const r = compileContract(doc);
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "S");
+      if (!s.ok) throw new Error(s.detail);
+      return s.contract;
+    };
+    const kitInterface = (contract: InterfaceContract) => ({
+      id: "if_1",
+      name: "x",
+      externalId: "custom:/x",
+      sapProduct: "s4hana",
+      operation: "CREATE",
+      mode: "WRITE",
+      entitySet: "S",
+      version: 1,
+      solutionName: "s",
+      compiled: { semver: "1.0.0", snapshotId: "snap", contentHash: "0", compiledAt: "2026-10-20T00:00:00.000Z", contract },
+    });
+
+    it("an enum of M members on P properties is declared once: client.ts is linear (M = P = 8,000)", () => {
+      // The union was written out per property: M×P, a RangeError at this size after 10 s.
+      const m = 8000;
+      const contract = sliced(
+        HEAD +
+          `<EnumType Name="E">${Array.from({ length: m }, (_, i) => `<Member Name="m${i}"/>`).join("")}</EnumType>` +
+          '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+          Array.from({ length: m }, (_, i) => `<Property Name="p${i}" Type="n.E"/>`).join("") +
+          '<Property Name="all" Type="Collection(n.E)"/></EntityType>' +
+          TAIL,
+      );
+      const { value: client, ms } = timed(() => buildTypeScriptClient(kitInterface(contract)));
+      expect(ms).toBeLessThan(BUDGET_MS);
+      expect(client.length).toBeLessThan(2 * contractDigest(contract).bytes);
+      expect(client.split("export type EEnum = ").length).toBe(2);
+      expect(client).toContain(`p${m - 1}?: EEnum | null;`);
+      expect(client).toContain("all?: EEnum[];");
+    });
+
+    it("a kit, a solution document and /schema for a contract at the document budget", () => {
+      const p = 30_000;
+      const contract = sliced(
+        HEAD +
+          '<EntityType Name="T"><Key><PropertyRef Name="k"/></Key><Property Name="k" Type="Edm.String" Nullable="false"/>' +
+          Array.from({ length: p }, (_, i) => `<Property Name="p${i}" Type="Edm.DateTimeOffset"/>`).join("") +
+          "</EntityType>" +
+          TAIL,
+      );
+      const bytes = contractDigest(contract).bytes;
+      expect(bytes).toBeGreaterThan(MAX_DOCUMENT_CONTRACT_BYTES * 0.8);
+      expect(bytes).toBeLessThanOrEqual(MAX_DOCUMENT_CONTRACT_BYTES);
+
+      const kit = timed(() => JSON.stringify({ data: { files: buildScaffold(kitInterface(contract), "https://x") } }));
+      expect(kit.ms).toBeLessThan(BUDGET_MS);
+      expect(kit.value.length).toBeLessThan(32 * bytes);
+
+      const solution = timed(() =>
+        JSON.stringify(
+          buildNorthboundOpenApi({
+            version: "3.1.0",
+            baseUrl: "https://x",
+            title: "t",
+            infoVersion: "1.0.0",
+            description: "d",
+            interfaces: [{ ...kitInterface(contract), contract: { source: "metadata", contract, semver: "1.0.0" } }],
+            discovery: true,
+            safe: safeName,
+          }),
+          null,
+          2,
+        ),
+      );
+      expect(solution.ms).toBeLessThan(BUDGET_MS);
+      expect(solution.value.length).toBeLessThan(16 * bytes);
+
+      const schema = timed(() => JSON.stringify(standaloneSchemas(contract, "S")));
+      expect(schema.ms).toBeLessThan(BUDGET_MS);
+      expect(schema.value.length).toBeLessThan(8 * bytes);
+    }, 60_000);
   });
 });

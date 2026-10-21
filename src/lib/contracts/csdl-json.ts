@@ -28,7 +28,16 @@ import {
   type IrProperty,
 } from "@/lib/contracts/ir";
 import { AliasTable, mergeAnnotations, type AnnotationSet, type AnnotationValue } from "@/lib/contracts/vocabulary";
-import { MemberBudget, MemberBudgetExceeded, tooManyMembers, type CsdlResult } from "@/lib/contracts/csdl-xml";
+import {
+  duplicateEntitySet,
+  MAX_IDENTIFIER_LENGTH,
+  MAX_REFERENCE_LENGTH,
+  MemberBudget,
+  MemberBudgetExceeded,
+  overlongIdentifier,
+  tooManyMembers,
+  type CsdlResult,
+} from "@/lib/contracts/csdl-xml";
 import { DEFAULT_XML_LIMITS } from "@/lib/contracts/xml";
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -98,6 +107,46 @@ function facets(obj: JsonObject): Partial<IrProperty> {
   return out;
 }
 
+/**
+ * Does the description use a name, or a type reference, past the bound
+ * CSDL XML applies (MAX_IDENTIFIER_LENGTH, csdl-xml.ts)? Walked to the
+ * format's own fixed depth: schemas, their members, a member's own members
+ * (properties, container children, enum members) and an operation's
+ * parameters. Annotations ("@…") are values, not names.
+ */
+function hasOverlongIdentifier(root: JsonObject, schemas: readonly [string, JsonObject][]): boolean {
+  const longName = (v: Json | undefined) => typeof v === "string" && v.length > MAX_IDENTIFIER_LENGTH;
+  const longRef = (v: Json | undefined) => typeof v === "string" && v.length > MAX_REFERENCE_LENGTH;
+  const isName = (k: string) => !k.startsWith("$") && !k.includes("@");
+  const typedLong = (o: JsonObject) =>
+    longRef(o.$Type) || longRef(o.$BaseType) || longRef(o.$UnderlyingType) || longName(o.$Partner) ||
+    longRef(o.$Action) || longRef(o.$Function) || longRef(o.$EntitySet);
+  if (longRef(root.$EntityContainer)) return true;
+  for (const [ns, schema] of schemas) {
+    if (ns.length > MAX_IDENTIFIER_LENGTH || longName(schema.$Alias)) return true;
+    for (const [name, member] of Object.entries(schema)) {
+      if (!isName(name)) continue;
+      if (name.length > MAX_IDENTIFIER_LENGTH) return true;
+      const overloads = Array.isArray(member) ? member : [member];
+      for (const m of overloads) {
+        if (!isObject(m)) continue;
+        if (typedLong(m)) return true;
+        if (Array.isArray(m.$Key) && m.$Key.some((k) => longName(k))) return true;
+        if (Array.isArray(m.$Parameter)) {
+          for (const p of m.$Parameter) if (isObject(p) && (longName(p.$Name) || typedLong(p))) return true;
+        }
+        if (isObject(m.$ReturnType) && typedLong(m.$ReturnType)) return true;
+        for (const [inner, v] of Object.entries(m)) {
+          if (!isName(inner)) continue;
+          if (inner.length > MAX_IDENTIFIER_LENGTH) return true;
+          if (isObject(v) && typedLong(v)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** `maxMembers` bounds what is emitted, as in CSDL XML (MemberBudget, csdl-xml.ts). */
 export function compileCsdlJson(doc: unknown, maxMembers: number = DEFAULT_XML_LIMITS.maxElements): CsdlResult {
   try {
@@ -133,6 +182,7 @@ function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
   if (schemaEntries.length === 0) {
     return { ok: false, reason: "INVALID_CSDL", detail: "The service description declares no schema." };
   }
+  if (hasOverlongIdentifier(root, schemaEntries)) return overlongIdentifier();
   for (const [ns, schema] of schemaEntries) aliases.add(ns, str(schema.$Alias));
 
   const typeDefinitions = new Map<string, { underlying: string; facets: Partial<IrProperty> }>();
@@ -204,6 +254,8 @@ function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
 
   let container: string | undefined;
   const declaredContainer = str(root.$EntityContainer);
+  /** Entity set or singleton name → the container that declared it, for its annotation target. */
+  const containerOf = new Map<string, string>();
 
   for (const [ns, schema] of schemaEntries) {
     for (const [name, member] of Object.entries(schema)) {
@@ -254,6 +306,10 @@ function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
             continue;
           }
           if (typeof c.$Type !== "string") continue;
+          // Names are unique within one container already (they are its keys); across containers they share
+          // the one name space every reader downstream addresses sets by (duplicateEntitySet, csdl-xml.ts).
+          if (containerOf.has(cName)) return duplicateEntitySet(cName);
+          containerOf.set(cName, qn);
           budget.spend();
           const set: IrEntitySet = { name: cName, entityType: aliases.qualify(c.$Type), capabilities: {} };
           if (c.$Collection !== true) set.singleton = true;
@@ -295,7 +351,7 @@ function compileBounded(doc: unknown, budget: MemberBudget): CsdlResult {
     operations,
   };
   if (container) ir.container = container;
-  applyAnnotations(ir, annotations);
+  applyAnnotations(ir, annotations, budget, containerOf);
   return { ok: true, ir };
 }
 

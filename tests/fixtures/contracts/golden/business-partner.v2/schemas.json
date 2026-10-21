@@ -3,7 +3,7 @@
     "create": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
       "properties": {
         "BirthDate": {
           "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
@@ -109,6 +109,43 @@
             "null"
           ],
           "x-odata-type": "Edm.String"
+        },
+        "to_Address": {
+          "anyOf": [
+            {
+              "properties": {
+                "results": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "results"
+              ],
+              "type": "object"
+            },
+            {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            }
+          ],
+          "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+          "x-odata-navigation": {
+            "collection": true,
+            "target": "API_PARTNER_DEMO.A_PartnerAddressType"
+          }
+        },
+        "to_Customer": {
+          "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+          "type": "object",
+          "x-odata-navigation": {
+            "collection": false,
+            "target": "API_PARTNER_DEMO.A_CustomerType"
+          }
         }
       },
       "title": "Business Partner (create)",
@@ -571,7 +608,7 @@
       },
       "APartner_Create": {
         "additionalProperties": false,
-        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "BirthDate": {
             "nullable": true,
@@ -661,6 +698,43 @@
             "title": "BP Category",
             "type": "string",
             "x-odata-type": "Edm.String"
+          },
+          "to_Address": {
+            "anyOf": [
+              {
+                "properties": {
+                  "results": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "results"
+                ],
+                "type": "object"
+              },
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+            "x-odata-navigation": {
+              "collection": true,
+              "target": "API_PARTNER_DEMO.A_PartnerAddressType"
+            }
+          },
+          "to_Customer": {
+            "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+            "type": "object",
+            "x-odata-navigation": {
+              "collection": false,
+              "target": "API_PARTNER_DEMO.A_CustomerType"
+            }
           }
         },
         "title": "Business Partner (create)",

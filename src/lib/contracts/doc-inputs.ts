@@ -12,7 +12,7 @@
  */
 
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { currentContractSnapshots } from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, MAX_CONTRACT_BYTES, snapshotContracts } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -27,16 +27,61 @@ export interface CompiledForDoc {
 }
 
 export interface DocInputs {
+  ok: true;
   compiled: Map<string, CompiledForDoc>;
   grants: Map<string, { operation: string; environment: string }[]>;
+}
+
+export interface DocInputsTooLarge {
+  ok: false;
+  reason: "TOO_LARGE";
+  /** The contracts' canonical bytes, added up as far as the budget was passed. */
+  bytes: number;
+  limit: number;
+}
+
+/**
+ * THE RENDER BUDGET OF ONE DOCUMENT: the canonical bytes of all the compiled
+ * contracts it carries, added up. MAX_CONTRACT_BYTES bounds ONE snapshot;
+ * nothing bounded a solution's sixteen of them, and its document — 1.2 GB of
+ * RSS to build — then threw RangeError: Invalid string length on a read path,
+ * an uncaught 500 (hostile-input review round 1). Past this budget the reader
+ * refuses (TOO_LARGE) before any IR is read, from the sizes kept at record
+ * time. Every document is linear in the contracts it carries, so the budget
+ * bounds the render; what it buys, measured and asserted in
+ * tests/unit/contracts/hostile-input.test.ts ("rendered documents stay inside
+ * a stated bound"): a kit response under 32 bytes per contract byte, a
+ * solution document under 16, each in well under the 5 s read budget. Half a
+ * stored contract's bound (MAX_CONTRACT_BYTES): a real dataset's slice is tens
+ * of kilobytes, so a solution of dozens of them renders; a kit at 4 MB would
+ * have been 90 MB and seconds of CPU per download.
+ */
+export const MAX_DOCUMENT_CONTRACT_BYTES = MAX_CONTRACT_BYTES / 2;
+
+/** The refusal of a document past its budget: what to do about it, never the contract itself. */
+export function documentTooLargeMessage(what: "starter kit" | "solution document", limit: number): string {
+  return `The compiled contracts this ${what} would carry are larger than the ${Math.floor(limit / (1024 * 1024))} MB a generated document may carry, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
 }
 
 export async function loadDocInputs(
   scope: TenantScope,
   interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
-  now: Date = new Date(),
-): Promise<DocInputs> {
-  const snapshots = await currentContractSnapshots(scope, interfaces);
+  opts: { now?: Date; maxContractBytes?: number } = {},
+): Promise<DocInputs | DocInputsTooLarge> {
+  const now = opts.now ?? new Date();
+  const limit = opts.maxContractBytes ?? MAX_DOCUMENT_CONTRACT_BYTES;
+  const summaries = await currentSnapshotSummaries(scope, interfaces);
+  // Before any IR is read: the sizes kept at record time.
+  let known = 0;
+  for (const s of summaries.values()) {
+    known += s.irBytes ?? 0;
+    if (known > limit) return { ok: false, reason: "TOO_LARGE", bytes: known, limit };
+  }
+  const snapshots = await snapshotContracts(scope, summaries);
+  // And with the rows that predate the kept size, measured now.
+  let total = 0;
+  for (const s of snapshots.values()) total += s.irBytes;
+  if (total > limit) return { ok: false, reason: "TOO_LARGE", bytes: total, limit };
   const compiled = new Map<string, CompiledForDoc>();
   for (const [id, s] of snapshots) {
     compiled.set(id, {
@@ -49,7 +94,7 @@ export async function loadDocInputs(
   }
 
   const grants = new Map<string, { operation: string; environment: string }[]>();
-  if (interfaces.length === 0) return { compiled, grants };
+  if (interfaces.length === 0) return { ok: true, compiled, grants };
   const rows = await prisma.apiAccessGrant.findMany({
     where: scopedWhere(scope, { interfaceId: { in: interfaces.map((i) => i.id) }, revokedAt: null }),
     select: { interfaceId: true, operation: true, environment: true, decision: true, expiresAt: true },
@@ -63,5 +108,5 @@ export async function loadDocInputs(
     const live = g.operation === "READ" ? grantsRead(decision, env) : grantsWrite(decision, env);
     if (live) grants.get(g.interfaceId)?.push({ operation: g.operation, environment: g.environment });
   }
-  return { compiled, grants };
+  return { ok: true, compiled, grants };
 }

@@ -141,6 +141,7 @@ import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-
 import { GET as getScaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
 import { POST as verifyService } from "@/app/api/studio/interfaces/[id]/verify-service/route";
 import { GET as getSolutionOpenApi } from "@/app/api/studio/solutions/[id]/openapi/route";
+import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
 const RAP = readFileSync(path.resolve(__dirname, "../../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
@@ -330,6 +331,17 @@ describe("/schema serves the compiled contract, additively", () => {
     await verify();
     db.interfaces[0]!.version = 3; // a contract change the PATCH has not cleared
     const d = await data<{ requestSchema: unknown }>(await schemaRoute());
+    expect(d.requestSchema).toBeNull();
+  });
+
+  it("a request schema written from a snapshot that is no longer current is not served beside the newer one", async () => {
+    // Hostile-input review round 1: PROD verified UNCHANGED against its own
+    // 1.0.0 after DEV recorded 2.0.0, and /schema served 1.0.0's closed body
+    // beside 2.0.0's contract.
+    await verify();
+    db.snapshots.push({ ...db.snapshots[0]!, id: "snap_newer", semver: "2.0.0", semverMajor: 2, environment: "PROD" });
+    const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
+    expect(d.contract).toMatchObject({ source: "metadata", semver: "2.0.0", snapshotId: "snap_newer" });
     expect(d.requestSchema).toBeNull();
   });
 
@@ -527,6 +539,42 @@ describe("the starter kit and the solution document use the compiled contract", 
       expect(if1.contract).toMatchObject({ source: "metadata", semver: "1.0.0" });
       expect(if2.operations.list.grantedIn).toEqual(["TEST"]);
     }
+  });
+
+  /*
+   * Hostile-input review round 1: sixteen maximum-size contracts made the
+   * solution document throw RangeError (an uncaught 500) after 1.2 GB of
+   * RSS. A document past MAX_DOCUMENT_CONTRACT_BYTES is refused from the
+   * sizes kept at record time — before any IR is read, which a row whose
+   * IR throws when read proves.
+   */
+  it("refuses a kit and a solution document past the render budget, before reading any IR", async () => {
+    await verify();
+    expect(db.snapshots[0]!.irBytes).toBeGreaterThan(0); // kept at record time
+    db.interfaces.push({ ...db.interfaces[0]!, id: "if_2", name: "Orders read", operation: "READ", mode: "READ", requestSchema: null });
+    // Each under the budget alone, past it together.
+    const share = Math.ceil(MAX_DOCUMENT_CONTRACT_BYTES * 0.6);
+    db.snapshots.push({ ...db.snapshots[0]!, id: "snap_2", interfaceId: "if_2" });
+    for (const s of db.snapshots) {
+      s.irBytes = share;
+      Object.defineProperty(s, "ir", {
+        get() {
+          throw new Error("an IR was read");
+        },
+      });
+    }
+    const solution = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(solution.status).toBe(422);
+    expect(((await solution.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+
+    for (const s of db.snapshots) s.irBytes = MAX_DOCUMENT_CONTRACT_BYTES + 1;
+    const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), {
+      params: Promise.resolve({ id: "if_1" }),
+    });
+    expect(kit.status).toBe(422);
+    expect(((await kit.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
   });
 
   it("refuses an unknown version, another organization's solution and a signed-out caller", async () => {

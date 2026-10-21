@@ -1512,7 +1512,7 @@
       "BonusPlan_Create": {
         "type": "object",
         "title": "Bonus Plan (create)",
-        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "PlanName": {
             "type": "string",
@@ -1563,6 +1563,18 @@
               "null"
             ],
             "x-odata-type": "Edm.String"
+          },
+          "_Targets": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.zbonusplan.BonusTargetType",
+              "collection": true,
+              "containsTarget": true
+            }
           }
         },
         "additionalProperties": false
@@ -1769,7 +1781,7 @@
       "BonusPlan2_Create": {
         "type": "object",
         "title": "Bonus Plan (create)",
-        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "PlanName": {
             "type": "string",
@@ -1820,6 +1832,18 @@
               "null"
             ],
             "x-odata-type": "Edm.String"
+          },
+          "_Targets": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.zbonusplan.BonusTargetType",
+              "collection": true,
+              "containsTarget": true
+            }
           }
         },
         "additionalProperties": false

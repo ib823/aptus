@@ -191,7 +191,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       mode: iface.mode,
       version: iface.version,
       // The compiled write body, while it describes THIS contract (P1.3).
-      requestSchema: currentRequestSchema(iface.requestSchema, iface),
+      requestSchema: currentRequestSchema(iface.requestSchema, iface, current?.id ?? null),
       // Of THIS contract only, and as the served rows can satisfy it: a schema
       // captured before the broker stripped SAP's envelope still requires V2's
       // deferred navigations, which no served row carries (servedResponseSchema).

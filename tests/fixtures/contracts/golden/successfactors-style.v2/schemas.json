@@ -3,7 +3,7 @@
     "create": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
       "properties": {
         "cust_Amount": {
           "format": "decimal",
@@ -52,6 +52,14 @@
             "null"
           ],
           "x-odata-type": "Edm.String"
+        },
+        "cust_TravellerNav": {
+          "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+          "type": "object",
+          "x-odata-navigation": {
+            "collection": false,
+            "target": "SFOData.User"
+          }
         },
         "effectiveStartDate": {
           "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
@@ -371,7 +379,7 @@
       },
       "CustTravelRequest_Create": {
         "additionalProperties": false,
-        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "cust_Amount": {
             "format": "decimal",
@@ -410,6 +418,14 @@
             "title": "Traveller",
             "type": "string",
             "x-odata-type": "Edm.String"
+          },
+          "cust_TravellerNav": {
+            "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+            "type": "object",
+            "x-odata-navigation": {
+              "collection": false,
+              "target": "SFOData.User"
+            }
           },
           "effectiveStartDate": {
             "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",

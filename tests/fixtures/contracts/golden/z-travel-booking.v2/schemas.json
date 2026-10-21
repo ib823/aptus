@@ -3,7 +3,7 @@
     "create": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
       "properties": {
         "BookingStatus": {
           "maxLength": 1,
@@ -366,7 +366,7 @@
       },
       "BookingSet_Create": {
         "additionalProperties": false,
-        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "BookingStatus": {
             "maxLength": 1,

@@ -1605,7 +1605,7 @@
       "APartner_Create": {
         "type": "object",
         "title": "Business Partner (create)",
-        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "Partner": {
             "type": "string",
@@ -1711,6 +1711,43 @@
             "pattern": "^-?\\d+$",
             "title": "External Reference",
             "x-odata-type": "Edm.Int64"
+          },
+          "to_Address": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "required": [
+                  "results"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            ],
+            "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "API_PARTNER_DEMO.A_PartnerAddressType",
+              "collection": true
+            }
+          },
+          "to_Customer": {
+            "type": "object",
+            "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+            "x-odata-navigation": {
+              "target": "API_PARTNER_DEMO.A_CustomerType",
+              "collection": false
+            }
           }
         },
         "additionalProperties": false
@@ -2051,7 +2088,7 @@
       "APartner2_Create": {
         "type": "object",
         "title": "Business Partner (create)",
-        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "Partner": {
             "type": "string",
@@ -2157,6 +2194,43 @@
             "pattern": "^-?\\d+$",
             "title": "External Reference",
             "x-odata-type": "Edm.Int64"
+          },
+          "to_Address": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "required": [
+                  "results"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            ],
+            "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "API_PARTNER_DEMO.A_PartnerAddressType",
+              "collection": true
+            }
+          },
+          "to_Customer": {
+            "type": "object",
+            "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+            "x-odata-navigation": {
+              "target": "API_PARTNER_DEMO.A_CustomerType",
+              "collection": false
+            }
           }
         },
         "additionalProperties": false

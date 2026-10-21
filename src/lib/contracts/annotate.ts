@@ -24,9 +24,21 @@ import {
   type AnnotationSet,
 } from "@/lib/contracts/vocabulary";
 
+/**
+ * What the readers' MemberBudget offers (csdl-xml.ts). Every property path a
+ * capability term copies onto an entity set spends one unit, so what the IR
+ * carries stays bounded by the element bound however the targets are named
+ * (hostile-input review round 1: one target's P paths copied onto N sets
+ * spent nothing, and N×P exhausted the heap).
+ */
+export interface EmitBudget {
+  spend(n?: number): void;
+}
+
 export function applyAnnotations(
   ir: ContractIR,
   annotations: ReadonlyMap<string, AnnotationSet>,
+  budget: EmitBudget,
   /** The container each entity set was declared in; defaults to the IR's container. */
   containerOf?: ReadonlyMap<string, string>,
 ): void {
@@ -63,7 +75,7 @@ export function applyAnnotations(
       const label = stringTerm(set, "Common.Label");
       if (label) es.label = label;
     }
-    applyCapabilities(es.capabilities, set);
+    applyCapabilities(es.capabilities, set, budget);
   }
 }
 
@@ -97,7 +109,7 @@ function applyToProperty(p: IrProperty, set: AnnotationSet | undefined): void {
   if (Object.keys(pd).length > 0) p.personalData = pd;
 }
 
-function applyCapabilities(caps: IrEntitySetCapabilities, set: AnnotationSet): void {
+function applyCapabilities(caps: IrEntitySetCapabilities, set: AnnotationSet, budget: EmitBudget): void {
   // A V2 sap: flag already read wins; the term only fills what was not stated.
   const fill = <K extends keyof IrEntitySetCapabilities>(key: K, value: IrEntitySetCapabilities[K] | undefined) => {
     if (value !== undefined && caps[key] === undefined) caps[key] = value;
@@ -114,10 +126,14 @@ function applyCapabilities(caps: IrEntitySetCapabilities, set: AnnotationSet): v
   fill("sortable", recordBool(set, "Capabilities.SortRestrictions", "Sortable"));
   fill("selectSupported", recordBool(set, "Capabilities.SelectSupport", "Supported"));
   fill("expandable", recordBool(set, "Capabilities.ExpandRestrictions", "Expandable"));
-  const nonFilterable = recordPaths(set, "Capabilities.FilterRestrictions", "NonFilterableProperties");
-  if (nonFilterable && nonFilterable.length > 0) fill("nonFilterableProperties", nonFilterable);
-  const requiredFilter = recordPaths(set, "Capabilities.FilterRestrictions", "RequiredProperties");
-  if (requiredFilter && requiredFilter.length > 0) fill("requiredFilterProperties", requiredFilter);
-  const nonSortable = recordPaths(set, "Capabilities.SortRestrictions", "NonSortableProperties");
-  if (nonSortable && nonSortable.length > 0) fill("nonSortableProperties", nonSortable);
+  const paths = (key: "nonFilterableProperties" | "requiredFilterProperties" | "nonSortableProperties", term: string, property: string) => {
+    if (caps[key] !== undefined) return;
+    const list = recordPaths(set, term, property);
+    if (!list || list.length === 0) return;
+    budget.spend(list.length);
+    caps[key] = list;
+  };
+  paths("nonFilterableProperties", "Capabilities.FilterRestrictions", "NonFilterableProperties");
+  paths("requiredFilterProperties", "Capabilities.FilterRestrictions", "RequiredProperties");
+  paths("nonSortableProperties", "Capabilities.SortRestrictions", "NonSortableProperties");
 }

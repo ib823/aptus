@@ -15,13 +15,18 @@
  * call and no compile happens here (the contracts were compiled when each
  * service was verified). DEPRECATED interfaces are left out: the broker
  * refuses them, and a document that offered them would be wrong.
+ *
+ * BOUNDED (hostile-input review round 1). The contracts it carries may add up
+ * to MAX_DOCUMENT_CONTRACT_BYTES (doc-inputs.ts), checked from the sizes kept
+ * at record time before any IR is read; past it the answer is a clean
+ * TOO_LARGE, never the 500 that sixteen maximum-size contracts made of it.
  */
 
 import { createHash } from "crypto";
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
 import { buildNorthboundOpenApi, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
@@ -72,7 +77,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
 
+  // Refused before any IR is read when the contracts add up past the budget.
   const inputs = await loadDocInputs(tenantScopeOf(organizationId), interfaces);
+  if (!inputs.ok) return studioError("TOO_LARGE", documentTooLargeMessage("solution document", inputs.limit));
 
   const docInterfaces = interfaces.map((i) => {
     const compiled = inputs.compiled.get(i.id);

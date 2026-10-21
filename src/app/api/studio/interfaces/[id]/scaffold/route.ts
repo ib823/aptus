@@ -17,12 +17,14 @@
  * describes the interface now, the kit's openapi.json, openapi-3.0.json and
  * client.ts are built from it; the approved grants bound to the interface are
  * noted in the documents. Read from the snapshot — nothing is compiled here.
+ * What it carries is bounded like the solution document (doc-inputs.ts):
+ * past the budget the answer is TOO_LARGE, before any IR is read.
  */
 
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -67,6 +69,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
   const inputs = await loadDocInputs(tenantScopeOf(organizationId), [iface]);
+  if (!inputs.ok) return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", inputs.limit));
   const compiled = inputs.compiled.get(iface.id);
 
   // The base URL the generated client will call. Derived from the request so the

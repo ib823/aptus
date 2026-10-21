@@ -33,9 +33,13 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
+import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
+import { MAX_STORED_CHANGES, MAX_STORED_DIFF_BYTES } from "@/lib/contracts/diff";
+import { loadDocInputs } from "@/lib/contracts/doc-inputs";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { recordSampledContract, recordVerifiedContract } from "@/lib/contracts/record";
+import { standaloneSchemas } from "@/lib/contracts/json-schema";
+import { currentRequestSchema, recordSampledContract, recordVerifiedContract } from "@/lib/contracts/record";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { currentContractSnapshot, recordContractSnapshot } from "@/lib/contracts/snapshot";
 import { MissingTenantScopeError } from "@/lib/db/tenant-guard";
@@ -323,6 +327,103 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     await expect(prisma.contractSnapshot.findMany({ where: { interfaceId: iface.id } })).rejects.toBeInstanceOf(
       MissingTenantScopeError,
     );
+  });
+
+  /*
+   * Hostile-input review round 1. PROD behind DEV: PROD records 1.0.0, DEV
+   * 2.0.0 (Region added, mandatory), PROD verifies UNCHANGED against its own
+   * 1.0.0 — and wrote 1.0.0's closed create body as requestSchema, beside the
+   * 2.0.0 contract /schema serves as current.
+   */
+  it("a write interface's requestSchema is the current contract's body, whichever environment verified last", async () => {
+    const created = await prisma.interface.create({
+      data: {
+        organizationId: ORG,
+        solutionId,
+        name: "create",
+        sapProduct: "s4hana",
+        externalId: "CE_SALESORDER_0001",
+        operation: "CREATE",
+        mode: "WRITE",
+        entitySet: "SalesOrder",
+      },
+      select: { id: true, version: true, externalId: true, entitySet: true, operation: true, mode: true },
+    });
+    const iface = { ...created, entitySet: created.entitySet! };
+    const rap = readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
+    const a = () => compileContract(rap);
+    const b = () => {
+      const r = compileContract(rap);
+      if (!r.ok) throw new Error(r.detail);
+      const t = r.ir.entityTypes.find((e) => e.name === "SalesOrderType")!;
+      t.properties.push({ name: "Region", type: "Edm.String", nullable: true, capabilities: { mandatory: true } });
+      return r;
+    };
+    const verified = (environment: string, compiled: ReturnType<typeof compileContract>) =>
+      recordVerifiedContract({ scope, iface, compiled, environment, connectionId: `conn_${environment}`, actorId: "u1" });
+
+    expect(await verified("PROD", a())).toMatchObject({ status: "RECORDED", semver: "1.0.0", requestSchemaWritten: true });
+    expect(await verified("DEV", b())).toMatchObject({ status: "RECORDED", semver: "2.0.0", bump: "major" });
+    expect(await verified("PROD", a())).toMatchObject({ status: "UNCHANGED", semver: "1.0.0", requestSchemaWritten: true });
+
+    const current = await currentContractSnapshot(scope, iface);
+    expect(current?.semver).toBe("2.0.0");
+    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true, version: true, entitySet: true } });
+    const served = currentRequestSchema(row!.requestSchema, row!, current!.id) as { required: string[]; "x-contract": { semver: string } } | null;
+    expect(served).not.toBeNull();
+    expect(served!["x-contract"].semver).toBe("2.0.0");
+    // The two bodies /schema serves agree: both require Region.
+    expect(served!.required).toEqual(standaloneSchemas(current!.contract, "SalesOrder").create!.required);
+    expect(served!.required).toContain("Region");
+    // A body stamped with any other snapshot is never served.
+    expect(currentRequestSchema(row!.requestSchema, row!, "another-snapshot")).toBeNull();
+  });
+
+  it("stores a bounded diff and the contract's size, whatever the contract", async () => {
+    // 2,000 renamed parameters of an action named with 65,000 characters
+    // stored 260 MB of diff (past jsonb's limit) from a 170 KB contract.
+    const iface = await newInterface("diff-bound");
+    const withAction = (prefix: string) => {
+      const c = salesOrder();
+      c.operations.push({
+        name: "A".repeat(65_000),
+        kind: "action",
+        bound: true,
+        bindingType: c.entityType.qualifiedName,
+        parameters: [
+          { name: "it", type: c.entityType.qualifiedName, nullable: false },
+          ...Array.from({ length: 2000 }, (_, i) => ({ name: `${prefix}${i}`, type: "Edm.String", nullable: false })),
+        ],
+      });
+      return c;
+    };
+    const first = await recordContractSnapshot({ scope, iface, contract: withAction("a"), environment: "DEV" });
+    const second = await recordContractSnapshot({ scope, iface, contract: withAction("b"), environment: "DEV" });
+    expect(second).toMatchObject({ status: "RECORDED", snapshot: { semver: "2.0.0" }, diff: { bump: "major", omitted: 4000 - MAX_STORED_CHANGES } });
+    const rows = await prisma.contractSnapshot.findMany({
+      where: { organizationId: ORG, interfaceId: iface.id },
+      orderBy: { semverMajor: "asc" },
+      select: { diff: true, irBytes: true },
+    });
+    expect(Buffer.byteLength(JSON.stringify(rows[1]!.diff))).toBeLessThan(MAX_STORED_DIFF_BYTES);
+    expect((rows[1]!.diff as { changes: unknown[] }).changes).toHaveLength(MAX_STORED_CHANGES);
+    // The size the documents' budget is checked against, kept at record time.
+    if (first.status !== "RECORDED") throw new Error(first.status);
+    expect(rows[0]!.irBytes).toBe(contractDigest(withAction("a")).bytes);
+  });
+
+  it("a document's contracts are added up and refused past the budget, a row without a kept size measured", async () => {
+    const one = await newInterface("budget-1");
+    const two = await newInterface("budget-2");
+    await recordContractSnapshot({ scope, iface: one, contract: salesOrder() });
+    await recordContractSnapshot({ scope, iface: two, contract: salesOrder() });
+    const bytes = contractDigest(salesOrder()).bytes;
+    expect((await loadDocInputs(scope, [one, two])).ok).toBe(true);
+    expect(await loadDocInputs(scope, [one, two], { maxContractBytes: 2 * bytes - 1 })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+    expect((await loadDocInputs(scope, [one], { maxContractBytes: 2 * bytes - 1 })).ok).toBe(true);
+    // A row recorded before the size was kept is measured when read.
+    await prisma.contractSnapshot.updateMany({ where: { organizationId: ORG, interfaceId: { in: [one.id, two.id] } }, data: { irBytes: null } });
+    expect(await loadDocInputs(scope, [one, two], { maxContractBytes: bytes })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
   });
 
   it("goes with its interface", async () => {

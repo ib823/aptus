@@ -1588,7 +1588,7 @@
       "SalesOrder_Create": {
         "type": "object",
         "title": "Sales Order (create)",
-        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "SalesOrderType": {
             "type": "string",
@@ -1675,6 +1675,30 @@
             "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
             "nullable": true,
             "x-odata-type": "Edm.TimeOfDay"
+          },
+          "_Item": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Related com.example.salesorder.SalesOrderItemType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.salesorder.SalesOrderItemType",
+              "collection": true,
+              "containsTarget": true
+            }
+          },
+          "_SoldToParty": {
+            "type": "object",
+            "description": "A related com.example.salesorder.CustomerType record to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.salesorder.CustomerType",
+              "collection": false
+            }
+          },
+          "_SoldToParty@odata.bind": {
+            "type": "string",
+            "description": "An existing com.example.salesorder.CustomerType record to link, by its address."
           }
         },
         "required": [
@@ -1992,7 +2016,7 @@
       "SalesOrder2_Create": {
         "type": "object",
         "title": "Sales Order (create)",
-        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "SalesOrderType": {
             "type": "string",
@@ -2079,6 +2103,30 @@
             "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
             "nullable": true,
             "x-odata-type": "Edm.TimeOfDay"
+          },
+          "_Item": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Related com.example.salesorder.SalesOrderItemType records to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.salesorder.SalesOrderItemType",
+              "collection": true,
+              "containsTarget": true
+            }
+          },
+          "_SoldToParty": {
+            "type": "object",
+            "description": "A related com.example.salesorder.CustomerType record to create with this one.",
+            "x-odata-navigation": {
+              "target": "com.example.salesorder.CustomerType",
+              "collection": false
+            }
+          },
+          "_SoldToParty@odata.bind": {
+            "type": "string",
+            "description": "An existing com.example.salesorder.CustomerType record to link, by its address."
           }
         },
         "required": [

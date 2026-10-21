@@ -40,7 +40,7 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
       "properties": {
         "ContactEmail": {
           "maxLength": 241,
@@ -125,6 +125,30 @@
           "x-odata-precision": 16,
           "x-odata-scale": 3,
           "x-odata-type": "Edm.Decimal"
+        },
+        "_Item": {
+          "description": "Related com.example.salesorder.SalesOrderItemType records to create with this one.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array",
+          "x-odata-navigation": {
+            "collection": true,
+            "containsTarget": true,
+            "target": "com.example.salesorder.SalesOrderItemType"
+          }
+        },
+        "_SoldToParty": {
+          "description": "A related com.example.salesorder.CustomerType record to create with this one.",
+          "type": "object",
+          "x-odata-navigation": {
+            "collection": false,
+            "target": "com.example.salesorder.CustomerType"
+          }
+        },
+        "_SoldToParty@odata.bind": {
+          "description": "An existing com.example.salesorder.CustomerType record to link, by its address.",
+          "type": "string"
         }
       },
       "required": [
@@ -622,7 +646,7 @@
       },
       "SalesOrder_Create": {
         "additionalProperties": false,
-        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
         "properties": {
           "ContactEmail": {
             "maxLength": 241,
@@ -709,6 +733,30 @@
             "x-odata-precision": 16,
             "x-odata-scale": 3,
             "x-odata-type": "Edm.Decimal"
+          },
+          "_Item": {
+            "description": "Related com.example.salesorder.SalesOrderItemType records to create with this one.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "x-odata-navigation": {
+              "collection": true,
+              "containsTarget": true,
+              "target": "com.example.salesorder.SalesOrderItemType"
+            }
+          },
+          "_SoldToParty": {
+            "description": "A related com.example.salesorder.CustomerType record to create with this one.",
+            "type": "object",
+            "x-odata-navigation": {
+              "collection": false,
+              "target": "com.example.salesorder.CustomerType"
+            }
+          },
+          "_SoldToParty@odata.bind": {
+            "description": "An existing com.example.salesorder.CustomerType record to link, by its address.",
+            "type": "string"
           }
         },
         "required": [

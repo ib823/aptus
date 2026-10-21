@@ -1516,7 +1516,7 @@
       },
       "BookingSet_Create": {
         "type": "object",
-        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "TravelId": {
             "type": "string",
@@ -1793,7 +1793,7 @@
       },
       "BookingSet2_Create": {
         "type": "object",
-        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "TravelId": {
             "type": "string",

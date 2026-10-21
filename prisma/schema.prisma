@@ -1952,7 +1952,12 @@ model ContractSnapshot {
   /// The InterfaceContract (src/lib/contracts/ir.ts).
   ir           Json
   irVersion    Int
-  /// What changed against the previous snapshot: { bump, changes[] }; null on the first.
+  /// Bytes of the canonical JSON `contentHash` was taken over (≤ MAX_CONTRACT_BYTES),
+  /// so a document built from several snapshots is refused before their IRs
+  /// are read (doc-inputs.ts). Null on rows recorded before it was kept.
+  irBytes      Int?
+  /// What changed against the previous snapshot: { bump, changes[], omitted? },
+  /// bounded (storedDiff, diff.ts); null on the first.
   diff         Json?
 
   /// Where a METADATA contract was read: the environment and connection whose

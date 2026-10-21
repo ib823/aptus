@@ -88,12 +88,14 @@ const COMPILED_V4 =
   '<Schema Namespace="chk" xmlns="http://docs.oasis-open.org/odata/ns/edm">' +
   '<EnumType Name="Status"><Member Name="Open"/><Member Name="Closed"/></EnumType>' +
   '<EnumType Name="Flags" IsFlags="true"><Member Name="A" Value="1"/></EnumType>' +
+  // Named like a global type the client uses: its alias must not shadow Record<string, unknown>.
+  '<EnumType Name="Record"><Member Name="x"/></EnumType><EnumType Name="ABusinessPartnerEnum"><Member Name="y"/></EnumType>' +
   '<ComplexType Name="Money"><Property Name="Amount" Type="Edm.Decimal"/></ComplexType>' +
   '<EntityType Name="T"><Key><PropertyRef Name="BusinessPartner"/></Key>' +
   '<Property Name="BusinessPartner" Type="Edm.String" Nullable="false"/><Property Name="Status" Type="chk.Status"/>' +
   '<Property Name="Flags" Type="chk.Flags"/><Property Name="Net" Type="chk.Money"/><Property Name="Tags" Type="Collection(Edm.String)"/>' +
   '<Property Name="States" Type="Collection(chk.Status)"/><Property Name="Big" Type="Edm.Int64"/><Property Name="On" Type="Edm.Date"/>' +
-  '<Property Name="Any" Type="Edm.Untyped"/><Property Name="1stField" Type="Edm.String"/></EntityType>' +
+  '<Property Name="Any" Type="Edm.Untyped"/><Property Name="Kind" Type="chk.Record"/><Property Name="Same" Type="chk.ABusinessPartnerEnum"/><Property Name="1stField" Type="Edm.String"/></EntityType>' +
   '<EntityContainer Name="C"><EntitySet Name="A_BusinessPartner" EntityType="chk.T"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>';
 
 function compiled(xml: string): NonNullable<ScaffoldInterface["compiled"]> {

@@ -64,6 +64,59 @@ export interface ContractDiff {
 const RANK: Record<Bump, number> = { patch: 1, minor: 2, major: 3 };
 
 /**
+ * WHAT A SNAPSHOT STORES OF ITS DIFF, BOUNDED. A diff is cheap to compute but
+ * repeats a name in every change made against it: 2,000 renamed parameters of
+ * one bound action whose name ran to 65,000 characters were a 260 MB diff
+ * from a 170 KB contract, past PostgreSQL's jsonb limit, and at 200,000 a
+ * RangeError while it was serialised — so the interface could never record
+ * again (hostile-input review round 1). The bump is always kept whole; of
+ * the changes, at most MAX_STORED_CHANGES (the most severe first when there
+ * are more, with the count left out in `omitted`), each `at` and `change` cut
+ * to MAX_CHANGE_TEXT characters. So a stored diff is under
+ * MAX_STORED_DIFF_BYTES whatever the contract, which storedDiff asserts.
+ */
+export const MAX_STORED_CHANGES = 200;
+export const MAX_CHANGE_TEXT = 300;
+/** 200 changes of two 300-character strings (up to 3 UTF-8 bytes each, 6 once escaped) and their keys. */
+export const MAX_STORED_DIFF_BYTES = 1024 * 1024;
+
+export interface StoredContractDiff extends ContractDiff {
+  /** How many changes were left out of `changes`; absent when none were. */
+  omitted?: number;
+}
+
+/** A string cut to `max` UTF-16 units, never between the halves of a surrogate pair. */
+function cut(s: string, max: number): string {
+  if (s.length <= max) return s;
+  let end = max - 1;
+  const code = s.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${s.slice(0, end)}…`;
+}
+
+export function storedDiff(diff: ContractDiff): StoredContractDiff {
+  let kept = diff.changes;
+  if (kept.length > MAX_STORED_CHANGES) {
+    // Stable: the most severe first, each severity in the diff's own order.
+    kept = kept
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => RANK[b.c.bump] - RANK[a.c.bump] || a.i - b.i)
+      .slice(0, MAX_STORED_CHANGES)
+      .map((e) => e.c);
+  }
+  const out: StoredContractDiff = {
+    bump: diff.bump,
+    changes: kept.map((c) => ({ bump: c.bump, at: cut(c.at, MAX_CHANGE_TEXT), change: cut(c.change, MAX_CHANGE_TEXT) })),
+  };
+  if (kept.length < diff.changes.length) out.omitted = diff.changes.length - kept.length;
+  if (Buffer.byteLength(JSON.stringify(out), "utf8") > MAX_STORED_DIFF_BYTES) {
+    // Unreachable with the caps above; a guard, so the bound holds if they change.
+    return { bump: diff.bump, changes: [], omitted: diff.changes.length };
+  }
+  return out;
+}
+
+/**
  * Canonical, so key order never reads as a change: a snapshot read back from
  * the database is JSONB, which does not keep the order its keys were written in.
  */

@@ -53,7 +53,14 @@
 import { Prisma } from "@prisma/client";
 
 import { contractDigest, MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
-import { diffContracts, nextSemver, semverParts, type ContractDiff } from "@/lib/contracts/diff";
+import {
+  diffContracts,
+  nextSemver,
+  semverParts,
+  storedDiff,
+  type ContractDiff,
+  type StoredContractDiff,
+} from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -75,7 +82,7 @@ export interface CurrentSnapshot extends SnapshotSummary {
 }
 
 export type RecordOutcome =
-  | { status: "RECORDED"; snapshot: SnapshotSummary; diff: ContractDiff | null }
+  | { status: "RECORDED"; snapshot: SnapshotSummary; diff: StoredContractDiff | null }
   | { status: "UNCHANGED"; snapshot: SnapshotSummary }
   | { status: "TOO_LARGE"; bytes: number };
 
@@ -202,6 +209,8 @@ export async function recordContractSnapshot(input: {
       semver = nextSemver(latest.semver, diff.bump ?? "patch");
     }
     const [semverMajor, semverMinor, semverPatch] = semverParts(semver);
+    // What is stored is bounded whatever the contract (storedDiff, diff.ts).
+    const stored = diff === null ? null : storedDiff(diff);
 
     try {
       const row = await prisma.contractSnapshot.create({
@@ -220,14 +229,15 @@ export async function recordContractSnapshot(input: {
           contentHash: hash,
           ir: contract as unknown as Prisma.InputJsonObject,
           irVersion: contract.irVersion,
-          diff: diff === null ? Prisma.DbNull : (diff as unknown as Prisma.InputJsonObject),
+          diff: stored === null ? Prisma.DbNull : (stored as unknown as Prisma.InputJsonObject),
+          irBytes: bytes,
           environment,
           connectionId: input.connectionId ?? null,
           createdById: input.createdById ?? null,
         },
         select: SUMMARY_SELECT,
       });
-      return { status: "RECORDED", snapshot: summary(row), diff };
+      return { status: "RECORDED", snapshot: summary(row), diff: stored };
     } catch (err) {
       // Another compile took this version first: read again and decide again.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
@@ -245,6 +255,65 @@ export function describesInterfaceNow(
   return iface.entitySet !== null && snap.externalId === iface.externalId && snap.entitySet === iface.entitySet;
 }
 
+/** A current snapshot before its IR is read: what it is, and how large. */
+export interface CurrentSnapshotSummary extends SnapshotSummary {
+  /** Canonical bytes of its contract; null on a row recorded before they were kept (measured on read). */
+  irBytes: number | null;
+}
+
+/**
+ * The current snapshot of each interface, by interface id, WITHOUT its IR —
+ * so a reader can add up what it would render before reading any of it
+ * (doc-inputs.ts). One query whatever the count.
+ */
+export async function currentSnapshotSummaries(
+  scope: TenantScope,
+  interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
+): Promise<Map<string, CurrentSnapshotSummary>> {
+  const out = new Map<string, CurrentSnapshotSummary>();
+  const wanted = interfaces.filter((i) => i.entitySet !== null);
+  if (wanted.length === 0) return out;
+
+  const candidates = await prisma.contractSnapshot.findMany({
+    where: scopedWhere(scope, { interfaceId: { in: wanted.map((i) => i.id) } }),
+    orderBy: [{ interfaceId: "asc" }, ...NEWEST_FIRST],
+    select: { ...SUMMARY_SELECT, interfaceId: true, irBytes: true },
+  });
+  // Grouped once: a scan of every candidate per interface was I×C.
+  const byInterface = new Map<string, (typeof candidates)[number][]>();
+  for (const c of candidates) {
+    const list = byInterface.get(c.interfaceId);
+    if (list) list.push(c);
+    else byInterface.set(c.interfaceId, [c]);
+  }
+  for (const iface of wanted) {
+    const hit = byInterface.get(iface.id)?.find((c) => describesInterfaceNow(c, iface));
+    if (hit) out.set(iface.id, { ...summary(hit), irBytes: typeof hit.irBytes === "number" ? hit.irBytes : null });
+  }
+  return out;
+}
+
+/** The chosen snapshots' IRs, read in one query; each with its size, measured when it was not kept. */
+export async function snapshotContracts(
+  scope: TenantScope,
+  chosen: ReadonlyMap<string, CurrentSnapshotSummary>,
+): Promise<Map<string, CurrentSnapshot & { irBytes: number }>> {
+  const out = new Map<string, CurrentSnapshot & { irBytes: number }>();
+  if (chosen.size === 0) return out;
+  const irs = await prisma.contractSnapshot.findMany({
+    where: scopedWhere(scope, { id: { in: [...chosen.values()].map((c) => c.id) } }),
+    select: { id: true, ir: true },
+  });
+  const irById = new Map(irs.map((r) => [r.id, r.ir]));
+  for (const [interfaceId, c] of chosen) {
+    const ir = irById.get(c.id);
+    if (!ir) continue;
+    const contract = ir as unknown as InterfaceContract;
+    out.set(interfaceId, { ...c, contract, irBytes: c.irBytes ?? Buffer.byteLength(JSON.stringify(contract), "utf8") });
+  }
+  return out;
+}
+
 /**
  * The current snapshot of each interface, by interface id; one entry per
  * interface that has one. Two queries whatever the count: the candidates
@@ -254,33 +323,7 @@ export async function currentContractSnapshots(
   scope: TenantScope,
   interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
 ): Promise<Map<string, CurrentSnapshot>> {
-  const out = new Map<string, CurrentSnapshot>();
-  const wanted = interfaces.filter((i) => i.entitySet !== null);
-  if (wanted.length === 0) return out;
-
-  const candidates = await prisma.contractSnapshot.findMany({
-    where: scopedWhere(scope, { interfaceId: { in: wanted.map((i) => i.id) } }),
-    orderBy: [{ interfaceId: "asc" }, ...NEWEST_FIRST],
-    select: { ...SUMMARY_SELECT, interfaceId: true },
-  });
-  const chosen = new Map<string, (typeof candidates)[number]>();
-  for (const iface of wanted) {
-    const hit = candidates.find((c) => c.interfaceId === iface.id && describesInterfaceNow(c, iface));
-    if (hit) chosen.set(iface.id, hit);
-  }
-  if (chosen.size === 0) return out;
-
-  const irs = await prisma.contractSnapshot.findMany({
-    where: scopedWhere(scope, { id: { in: [...chosen.values()].map((c) => c.id) } }),
-    select: { id: true, ir: true },
-  });
-  const irById = new Map(irs.map((r) => [r.id, r.ir]));
-  for (const [interfaceId, c] of chosen) {
-    const ir = irById.get(c.id);
-    if (!ir) continue;
-    out.set(interfaceId, { ...summary(c), contract: ir as unknown as InterfaceContract });
-  }
-  return out;
+  return snapshotContracts(scope, await currentSnapshotSummaries(scope, interfaces));
 }
 
 export async function currentContractSnapshot(

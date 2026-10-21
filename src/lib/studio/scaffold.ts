@@ -20,7 +20,7 @@
  */
 
 import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
-import { toTypeName } from "@/lib/contracts/names";
+import { nameAllocator, toTypeName } from "@/lib/contracts/names";
 import {
   buildNorthboundOpenApi,
   type ContractForDoc,
@@ -122,6 +122,20 @@ function contractForDoc(iface: ScaffoldInterface): ContractForDoc {
 }
 
 /**
+ * The kit document's info.version. A compiled contract's own semantic version,
+ * with the interface's version as build metadata ("2.0.0+iface.3"): the
+ * document follows the contract, so a contract that lost a field by a major
+ * version is a new major document, as the solution document's digest already
+ * says. It read "1.<interface version>.0" whatever the contract did, so a
+ * client cache or a diff gate keyed on it saw no change (hostile-input
+ * review round 1). Without a compiled contract there is no contract version
+ * to follow, and the interface's version is all there is.
+ */
+function kitInfoVersion(iface: ScaffoldInterface, contract: ContractForDoc): string {
+  return contract.source === "metadata" ? `${contract.semver}+iface.${iface.version}` : `1.${iface.version}.0`;
+}
+
+/**
  * OpenAPI for this interface as the NORTHBOUND API exposes it — 3.1.0 by
  * default (openapi.json), 3.0.3 on request (openapi-3.0.json, for generators
  * that do not read 3.1 yet).
@@ -151,7 +165,7 @@ export function buildOpenApi(
     version,
     baseUrl,
     title: `${safeName(iface.name)} — CoreEdge northbound`,
-    infoVersion: `1.${iface.version}.0`,
+    infoVersion: kitInfoVersion(iface, contract),
     description: [
       `Contract for the CoreEdge interface "${safeName(iface.name)}" (${iface.externalId}) of solution "${safeName(iface.solutionName)}".`,
       "",
@@ -190,12 +204,51 @@ export function buildOpenApi(
 interface CompiledTypeIndex {
   complex: ReadonlySet<string>;
   enums: ReadonlyMap<string, InterfaceContract["enumTypes"][number]>;
+  /**
+   * The type alias each enum is declared once as, by qualified name, in the
+   * order the record first uses it. A property names its enum's alias: the
+   * member union written out per property made client.ts M×P — 156 MB from a
+   * 313 KB contract, and past V8's string limit a 500 on every kit download
+   * (hostile-input review round 1).
+   */
+  aliases: Map<string, string>;
+  /** Gives an alias a name of its own: the enum's, suffixed Enum, never the record's. */
+  allocate: (base: string) => string;
 }
 
-function compiledTypeIndex(contract: InterfaceContract): CompiledTypeIndex {
+function compiledTypeIndex(contract: InterfaceContract, recordTypeName: string): CompiledTypeIndex {
   const enums = new Map<string, InterfaceContract["enumTypes"][number]>();
   for (const t of contract.enumTypes) if (!enums.has(t.qualifiedName)) enums.set(t.qualifiedName, t);
-  return { complex: new Set(contract.complexTypes.map((t) => t.qualifiedName)), enums };
+  return {
+    complex: new Set(contract.complexTypes.map((t) => t.qualifiedName)),
+    enums,
+    aliases: new Map(),
+    allocate: nameAllocator([recordTypeName]),
+  };
+}
+
+/** The alias of a (non-flags, non-empty) enum, named the first time a property uses it. */
+function enumAlias(en: InterfaceContract["enumTypes"][number], types: CompiledTypeIndex): string {
+  const known = types.aliases.get(en.qualifiedName);
+  if (known) return known;
+  // Every alias ends in "Enum": no identifier the client declares, and no
+  // global type it uses (Record, Promise, Error, …), does.
+  const base = toTypeName(en.name);
+  const alias = types.allocate(base.endsWith("Enum") ? base : `${base}Enum`);
+  types.aliases.set(en.qualifiedName, alias);
+  return alias;
+}
+
+/** `export type XEnum = "A" | "B";` once per enum a property used. */
+function enumAliasDeclarations(types: CompiledTypeIndex): string {
+  const out: string[] = [];
+  for (const [qualifiedName, alias] of types.aliases) {
+    const en = types.enums.get(qualifiedName)!;
+    out.push(`/** ${safeComment(qualifiedName)} */`);
+    out.push(`export type ${alias} = ${en.members.map((m) => JSON.stringify(m.name)).join(" | ")};`);
+    out.push("");
+  }
+  return out.join("\n");
 }
 
 /**
@@ -208,7 +261,7 @@ function tsTypeOfCompiled(p: IrProperty, contract: InterfaceContract, types: Com
   const en = types.enums.get(p.type);
   if (types.complex.has(p.type)) base = "Record<string, unknown>";
   else if (en) {
-    base = en.isFlags ? "string" : en.members.map((m) => JSON.stringify(m.name)).join(" | ") || "string";
+    base = en.isFlags || en.members.length === 0 ? "string" : enumAlias(en, types);
   } else {
     switch (p.type) {
       case "Edm.Boolean":
@@ -266,14 +319,13 @@ function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
  * field should get a value, not a type error. Optional markers follow the
  * schema as served, as openapi.json does (see servedResponseSchema).
  */
-function buildRecordBody(stored: unknown, compiled?: InterfaceContract): string {
-  if (compiled && compiled.source === "METADATA") {
+function buildRecordBody(stored: unknown, compiled?: InterfaceContract, types?: CompiledTypeIndex): string {
+  if (compiled && compiled.source === "METADATA" && types) {
     // Compiled: every property the service declares. The key is always sent;
     // anything else may be left out by a $select, so it is optional. The
     // index signature stays for a customer's extension fields, which arrive
     // before the next compile does.
     const key = new Set(compiled.entityType.key);
-    const types = compiledTypeIndex(compiled);
     const lines = compiled.entityType.properties.map((p) => {
       const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.name) ? p.name : JSON.stringify(p.name);
       const doc = p.label ? `  /** ${safeComment(p.label.replace(/\s+/g, " "))} */\n` : "";
@@ -325,6 +377,9 @@ export function buildTypeScriptClient(
    * was written and the capture feature did not update it.
    */
   const compiled = iface.compiled?.contract.source === "METADATA" ? iface.compiled : undefined;
+  const types = compiled ? compiledTypeIndex(compiled.contract, typeName) : undefined;
+  const recordBody = buildRecordBody(iface.responseSchema, compiled?.contract, types);
+  const aliases = types ? enumAliasDeclarations(types) : "";
   const shapeNote = compiled
     ? ` * The record type below was COMPILED from the service's own description
  * ($metadata), contract version ${safeComment(compiled.semver)} (${safeComment(compiled.compiledAt)}). Its
@@ -360,9 +415,9 @@ ${shapeNote}
 
 /** A record as this tenant exposes it. */
 export interface ${typeName} {
-${buildRecordBody(iface.responseSchema, compiled?.contract)}
+${recordBody}
 }
-
+${aliases ? `\n${aliases}` : ""}
 /** The error envelope every CoreEdge endpoint returns. */
 export interface CoreEdgeErrorBody {
   error: { code: string; message: string; correlationId: string };

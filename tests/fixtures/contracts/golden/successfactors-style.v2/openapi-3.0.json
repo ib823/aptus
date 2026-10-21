@@ -1521,7 +1521,7 @@
       "CustTravelRequest_Create": {
         "type": "object",
         "title": "Travel Request (create)",
-        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "externalCode": {
             "type": "string",
@@ -1573,6 +1573,14 @@
             "nullable": true,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
+          },
+          "cust_TravellerNav": {
+            "type": "object",
+            "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+            "x-odata-navigation": {
+              "target": "SFOData.User",
+              "collection": false
+            }
           }
         },
         "required": [
@@ -1789,7 +1797,7 @@
       "CustTravelRequest2_Create": {
         "type": "object",
         "title": "Travel Request (create)",
-        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
         "properties": {
           "externalCode": {
             "type": "string",
@@ -1841,6 +1849,14 @@
             "nullable": true,
             "title": "Traveller",
             "x-odata-type": "Edm.String"
+          },
+          "cust_TravellerNav": {
+            "type": "object",
+            "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+            "x-odata-navigation": {
+              "target": "SFOData.User",
+              "collection": false
+            }
           }
         },
         "required": [

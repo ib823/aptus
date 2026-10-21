@@ -22,10 +22,16 @@ import type { CompileResult } from "@/lib/contracts/compile";
 import type { Bump } from "@/lib/contracts/diff";
 import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
-import type { ODataVersion } from "@/lib/contracts/ir";
+import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
-import { currentContractSnapshot, MAX_CONTRACT_BYTES, recordContractSnapshot } from "@/lib/contracts/snapshot";
+import {
+  currentContractSnapshot,
+  currentSnapshotSummaries,
+  MAX_CONTRACT_BYTES,
+  recordContractSnapshot,
+  snapshotContracts,
+} from "@/lib/contracts/snapshot";
 import type { CapturedSchema } from "@/lib/studio/schema-capture";
 import { prisma } from "@/lib/db/prisma";
 import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
@@ -99,13 +105,29 @@ export async function recordVerifiedContract(input: {
 
     let requestSchemaWritten = false;
     if (iface.mode === "WRITE") {
-      const schemas = standaloneSchemas(slice.contract, toTypeName(iface.entitySet));
-      const body = iface.operation === "UPDATE" ? schemas.update : schemas.create;
-      if (body) {
+      /*
+       * THE BODY OF THE CURRENT CONTRACT, NOT OF THIS VERIFY'S. An environment
+       * behind the others (PROD, after DEV recorded 2.0.0) verifies UNCHANGED
+       * against its own older row; writing that row's body put 1.0.0's closed
+       * create body beside the 2.0.0 contract /schema serves as current, one
+       * refusing what the other requires (hostile-input review round 1). So
+       * the body written is the current snapshot's, stamped with its id, and
+       * /schema serves it only while that snapshot is still current.
+       */
+      const current = (await currentSnapshotSummaries(input.scope, [iface])).get(iface.id);
+      let described: { snapshot: { id: string; semver: string; contentHash: string }; contract: InterfaceContract } | null =
+        current && current.id !== outcome.snapshot.id ? null : { snapshot: outcome.snapshot, contract: slice.contract };
+      if (current && !described) {
+        const read = (await snapshotContracts(input.scope, new Map([[iface.id, current]]))).get(iface.id);
+        if (read && read.source === "METADATA") described = { snapshot: read, contract: read.contract };
+      }
+      const schemas = described ? standaloneSchemas(described.contract, toTypeName(iface.entitySet)) : null;
+      const body = schemas ? (iface.operation === "UPDATE" ? schemas.update : schemas.create) : null;
+      if (body && described) {
         const stamp: RequestSchemaStamp = {
-          snapshotId: outcome.snapshot.id,
-          semver: outcome.snapshot.semver,
-          contentHash: outcome.snapshot.contentHash,
+          snapshotId: described.snapshot.id,
+          semver: described.snapshot.semver,
+          contentHash: described.snapshot.contentHash,
           interfaceVersion: iface.version,
           entitySet: iface.entitySet,
           operation: iface.operation,
@@ -146,13 +168,25 @@ export function requestSchemaStamp(schema: unknown): RequestSchemaStamp | null {
     : null;
 }
 
-/** The stored requestSchema when it describes the interface's current contract, else null. */
+/**
+ * The stored requestSchema when it describes the interface's current
+ * contract, else null: written for this interface version and dataset, from
+ * the snapshot that is current now (`currentSnapshotId`). A body written from
+ * an older snapshot is never served beside a newer contract.
+ */
 export function currentRequestSchema(
   schema: unknown,
   iface: { version: number; entitySet: string | null },
+  currentSnapshotId: string | null,
 ): unknown {
   const stamp = requestSchemaStamp(schema);
-  return stamp && stamp.interfaceVersion === iface.version && stamp.entitySet === iface.entitySet ? schema : null;
+  return stamp &&
+    currentSnapshotId !== null &&
+    stamp.snapshotId === currentSnapshotId &&
+    stamp.interfaceVersion === iface.version &&
+    stamp.entitySet === iface.entitySet
+    ? schema
+    : null;
 }
 
 export type SampledOutcome =

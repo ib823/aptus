@@ -100,6 +100,92 @@ export function tooManyMembers(err: MemberBudgetExceeded): { ok: false; reason: 
 
 export type CsdlResult = { ok: true; ir: ContractIR } | { ok: false; reason: CsdlRefusal; detail: string };
 
+/**
+ * THE LONGEST NAME A DESCRIPTION MAY USE. CSDL limits a simple identifier to
+ * 128 characters and a namespace to 511; nothing bounded an attribute's
+ * length here, and a name is repeated wherever the contract mentions it: in
+ * every change the diff records against it, in the paths, schemas and types
+ * of the generated documents. One bound action whose name ran to 200,000
+ * characters, with 2,000 renamed parameters, made a diff of hundreds of MB
+ * from a 300 KB contract, or threw while it was serialised for storage
+ * (hostile-input review round 1). So a name (Name, Namespace, Alias, a role,
+ * a partner, a constrained property) longer than MAX_IDENTIFIER_LENGTH, or a
+ * reference (a qualified type, `Collection(…)` included, a base type, an
+ * association, an imported operation, an entity set) longer than
+ * MAX_REFERENCE_LENGTH, is not a service description: INVALID_CSDL. Labels
+ * and annotation values are not names and are not bounded here.
+ */
+export const MAX_IDENTIFIER_LENGTH = 511;
+export const MAX_REFERENCE_LENGTH = 2 * MAX_IDENTIFIER_LENGTH + "Collection(.)".length;
+
+const NAME_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "Name",
+  "Namespace",
+  "Alias",
+  "Role",
+  "FromRole",
+  "ToRole",
+  "Partner",
+  "Property",
+  "ReferencedProperty",
+]);
+const REFERENCE_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "Type",
+  "BaseType",
+  "EntityType",
+  "UnderlyingType",
+  "Relationship",
+  "Association",
+  "Action",
+  "Function",
+  "EntitySet",
+]);
+
+type InvalidCsdl = { ok: false; reason: "INVALID_CSDL"; detail: string };
+
+export function overlongIdentifier(): InvalidCsdl {
+  return {
+    ok: false,
+    reason: "INVALID_CSDL",
+    detail: `The service description uses a name longer than ${MAX_IDENTIFIER_LENGTH} characters, or a type reference longer than ${MAX_REFERENCE_LENGTH}.`,
+  };
+}
+
+/** Does an EDM element carry a name or reference past the bound? One linear walk, no recursion. */
+function hasOverlongIdentifier(root: XmlElement): boolean {
+  const stack: XmlElement[] = [root];
+  while (stack.length > 0) {
+    const el = stack.pop()!;
+    if (EDM_NAMESPACES.has(el.uri) || EDMX_NAMESPACES.has(el.uri)) {
+      for (const a of el.attributes) {
+        if (a.uri !== "") continue;
+        if (NAME_ATTRIBUTES.has(a.local) && a.value.length > MAX_IDENTIFIER_LENGTH) return true;
+        if (REFERENCE_ATTRIBUTES.has(a.local) && a.value.length > MAX_REFERENCE_LENGTH) return true;
+      }
+    }
+    for (const c of el.children) stack.push(c);
+  }
+  return false;
+}
+
+/**
+ * Entity sets and singletons are addressed BY NAME everywhere downstream —
+ * the slice, the annotation targets, the interface's own entitySet — so a
+ * name declared twice is ambiguous. It was also expensive: each of N
+ * same-named sets looked up the same annotation target and copied its P
+ * property paths, N×P from N+P declarations, and the verify died of an
+ * exhausted heap (hostile-input review round 1). CSDL requires a
+ * container's children to have unique names; one service's sets share a
+ * name space here.
+ */
+export function duplicateEntitySet(name: string): InvalidCsdl {
+  return {
+    ok: false,
+    reason: "INVALID_CSDL",
+    detail: `The service description declares the entity set or singleton ${JSON.stringify(name.slice(0, 64))} more than once.`,
+  };
+}
+
 function edm(el: XmlElement, local: string): XmlElement[] {
   return el.children.filter((c) => c.local === local && EDM_NAMESPACES.has(c.uri));
 }
@@ -246,6 +332,7 @@ function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
   if (root.local !== "Edmx" || !EDMX_NAMESPACES.has(root.uri)) {
     return { ok: false, reason: "NOT_EDMX", detail: "The document is XML but not a service description (EDMX)." };
   }
+  if (hasOverlongIdentifier(root)) return overlongIdentifier();
   const edmxVersion = attr(root, "Version") ?? "";
   let odataVersion: ODataVersion;
   if (edmxVersion === "1.0") odataVersion = "V2";
@@ -298,6 +385,7 @@ function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
   const v4Unbound = new Map<string, { kind: "action" | "function"; el: XmlElement }>();
   let container: string | undefined;
   const containerOf = new Map<string, string>();
+  const setNames = new Set<string>();
 
   // Pass 1: names that later declarations refer to.
   for (const s of schemas) {
@@ -488,6 +576,8 @@ function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
         const name = attr(es, "Name");
         const entityType = attr(es, "EntityType");
         if (!name || !entityType) continue;
+        if (setNames.has(name)) return duplicateEntitySet(name);
+        setNames.add(name);
         budget.spend();
         entitySets.push(readEntitySet(es, name, aliases.qualify(entityType)));
         containerOf.set(name, cqn);
@@ -497,6 +587,8 @@ function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
         const name = attr(sg, "Name");
         const type = attr(sg, "Type");
         if (!name || !type) continue;
+        if (setNames.has(name)) return duplicateEntitySet(name);
+        setNames.add(name);
         budget.spend();
         const set = readEntitySet(sg, name, aliases.qualify(type));
         set.singleton = true;
@@ -571,7 +663,7 @@ function compileBounded(root: XmlElement, budget: MemberBudget): CsdlResult {
   const dsv = nonEmpty(attr(dataServices, "DataServiceVersion", METADATA_NS));
   if (dsv) ir.dataServiceVersion = dsv;
   if (container) ir.container = container;
-  applyAnnotations(ir, annotations, containerOf);
+  applyAnnotations(ir, annotations, budget, containerOf);
   return { ok: true, ir };
 }
 

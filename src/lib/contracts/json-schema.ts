@@ -26,7 +26,8 @@
  * (Common.FieldControl, SuccessFactors' sap:required) — never what is merely
  * non-nullable, because SAP fills an omitted non-nullable field with its
  * initial value. Request bodies are closed (additionalProperties: false: SAP
- * refuses a property it does not declare); a record stays open, because a
+ * refuses a property it does not declare) — a navigation IS declared, so a
+ * create body names each one, for a deep insert (deepInsertProperties); a record stays open, because a
  * customer's own extension fields arrive before the next compile does.
  *
  * TWO DIALECTS. "2020-12" is JSON Schema 2020-12, which OpenAPI 3.1 uses as is
@@ -42,6 +43,7 @@ import {
   type InterfaceContract,
   type IrComplexType,
   type IrEnumType,
+  type IrNavigation,
   type IrProperty,
   type ODataVersion,
 } from "@/lib/contracts/ir";
@@ -203,6 +205,58 @@ function annotate(s: JsonSchema, p: IrProperty, readOnly: boolean): JsonSchema {
   return out;
 }
 
+/**
+ * A create body's navigations: DEEP INSERT, and in V4 binding. The broker
+ * forwards a create's record to SAP as it is, and SAP creates the contained
+ * items of a sales order or a purchase order only through them — but the
+ * body was closed over its structural properties alone, so every validator,
+ * and every client generated from the document, refused the one payload that
+ * creates an order with its items (hostile-input review round 1). The
+ * target's own shape is not part of this contract (navigations name their
+ * target only, slice.ts), so a related record is an open object:
+ *
+ *   V4  collection:  [ {…}, … ]              single: {…}
+ *       binding:     "nav@odata.bind": [ "Set(key)", … ] or "Set(key)" (not for a contained target)
+ *   V2  collection:  { "results": [ {…}, … ] } (SAP Gateway's form) or [ {…}, … ]
+ *       single:      {…}, or a link { "__metadata": { "uri": … } }
+ *
+ * Optional, all of them: a body without its navigations is what it was.
+ */
+function deepInsertProperties(
+  navigations: readonly IrNavigation[],
+  taken: ReadonlySet<string>,
+  v: ODataVersion,
+): Record<string, JsonSchema> {
+  const record: JsonSchema = { type: "object" };
+  const out: Record<string, JsonSchema> = {};
+  for (const n of navigations) {
+    if (taken.has(n.name)) continue;
+    const about = { "x-odata-navigation": { target: n.target, collection: n.collection, ...(n.containsTarget ? { containsTarget: true } : {}) } };
+    if (v === "V4") {
+      out[n.name] = n.collection
+        ? { type: "array", items: record, description: `Related ${n.target} records to create with this one.`, ...about }
+        : { ...record, description: `A related ${n.target} record to create with this one.`, ...about };
+      // A contained record exists only inside its parent: it is created with it, never linked.
+      const bind = `${n.name}@odata.bind`;
+      if (n.containsTarget !== true && !taken.has(bind)) {
+        out[bind] = n.collection
+          ? { type: "array", items: { type: "string" }, description: `Existing ${n.target} records to link, by their address.` }
+          : { type: "string", description: `An existing ${n.target} record to link, by its address.` };
+      }
+    } else {
+      const many: JsonSchema = { type: "array", items: record };
+      out[n.name] = n.collection
+        ? {
+            anyOf: [{ type: "object", properties: { results: many }, required: ["results"] }, many],
+            description: `Related ${n.target} records to create with this one.`,
+            ...about,
+          }
+        : { ...record, description: `A related ${n.target} record to create with this one, or a link to an existing one.`, ...about };
+    }
+  }
+  return out;
+}
+
 export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOptions): ContractSchemas {
   const { dialect, stem, ref } = opts;
   const v = contract.odataVersion;
@@ -313,8 +367,8 @@ export function buildContractSchemas(contract: InterfaceContract, opts: SchemaOp
     schemas[names.create] = {
       type: "object",
       ...(title ? { title: `${title} (create)` } : {}),
-      description: `The record a create sends to ${set.name}. Computed and non-creatable properties are left out; required lists what the service marks mandatory.`,
-      properties: objectOf(props, () => true, () => false),
+      description: `The record a create sends to ${set.name}. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert)${v === "V4" ? " or, as <navigation>@odata.bind, the records to link" : ""}.`,
+      properties: { ...objectOf(props, () => true, () => false), ...deepInsertProperties(et.navigations, new Set(et.properties.map((p) => p.name)), v) },
       ...(required.length > 0 ? { required } : {}),
       additionalProperties: false,
     };

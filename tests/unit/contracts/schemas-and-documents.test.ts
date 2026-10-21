@@ -29,6 +29,7 @@ import { buildNorthboundOpenApi, northboundServers, type InterfaceForDoc } from 
 import { personalDataCoverage } from "@/lib/contracts/personal-data";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
+import { buildOpenApi } from "@/lib/studio/scaffold";
 
 import { validateOpenApi30, validateOpenApi31 } from "../../helpers/openapi-validate";
 import { evaluateDescription } from "../../../scripts/lib/contract-corpus";
@@ -606,6 +607,89 @@ describe("component names", () => {
         expect(ok(record), JSON.stringify(ok.errors)).toBe(true);
       }
     }
+  });
+});
+
+/*
+ * Hostile-input review round 1: the create body was closed over structural
+ * properties only, so the documented contract refused the deep insert the
+ * broker forwards and SAP needs to create an order with its items.
+ */
+describe("a create body carries the navigations a deep insert sends", () => {
+  const createDoc30 = (c: InterfaceContract, entitySet: string) =>
+    buildNorthboundOpenApi({
+      ...BASE_DOC,
+      version: "3.0.3",
+      interfaces: [iface({ entitySet, operation: "CREATE", mode: "WRITE", contract: { source: "metadata", contract: c, semver: "1.0.0" } })],
+    }) as Doc;
+
+  it("V4: a contained collection as an array, a single navigation as a record or a binding — in 3.1 and in 3.0", () => {
+    const so = slice("sales-order-rap.v4.xml", "SalesOrder");
+    const deep = { SoldToParty: "1", PurchaseOrderByCustomer: "P", _Item: [{ Material: "M1" }, { Material: "M2" }] };
+    const bound = { SoldToParty: "1", PurchaseOrderByCustomer: "P", "_SoldToParty@odata.bind": "Customer('1')" };
+    const create31 = validator().compile(standaloneSchemas(so, "SalesOrder").create!);
+    const doc = createDoc30(so, "SalesOrder");
+    expect(validateOpenApi30(doc).errors).toEqual([]);
+    const create30 = oas30Validator(doc, "SalesOrder_Create");
+    for (const ok of [create31, create30]) {
+      expect(ok(deep), JSON.stringify(ok.errors)).toBe(true);
+      expect(ok(bound), JSON.stringify(ok.errors)).toBe(true);
+      expect(ok({ ...deep, _Item: { Material: "M1" } })).toBe(false); // a collection is an array
+      expect(ok({ ...deep, "_Item@odata.bind": ["SalesOrderItem('1')"] })).toBe(false); // contained: created, never linked
+      expect(ok({ ...deep, NotDeclared: 1 })).toBe(false); // still closed
+    }
+  });
+
+  it("V2: a collection in SAP Gateway's { results: […] } form or as an array, a single navigation as a record or a link", () => {
+    const bp = slice("business-partner.v2.xml", "A_Partner");
+    const create = validator().compile(standaloneSchemas(bp, "APartner").create!);
+    expect(create({ to_Address: { results: [{ CityName: "Walldorf" }] } }), JSON.stringify(create.errors)).toBe(true);
+    expect(create({ to_Address: [{ CityName: "Walldorf" }] })).toBe(true);
+    expect(create({ to_Customer: { __metadata: { uri: "A_Customer('1')" } } })).toBe(true);
+    expect(create({ to_Address: "x" })).toBe(false);
+    const doc = createDoc30(bp, "A_Partner");
+    expect(validateOpenApi30(doc).errors).toEqual([]);
+    const create30 = oas30Validator(doc, "APartner_Create");
+    expect(create30({ to_Address: { results: [{}] } }), JSON.stringify(create30.errors)).toBe(true);
+  });
+
+  it("an update body is left as it was: no navigations", () => {
+    const so = standaloneSchemas(slice("sales-order-rap.v4.xml", "SalesOrder"), "SalesOrder");
+    expect(Object.keys(so.update!.properties as Record<string, unknown>)).not.toContain("_Item");
+  });
+});
+
+describe("the kit's info.version follows the compiled contract", () => {
+  const kit = (semver: string | null) =>
+    JSON.parse(
+      buildOpenApi({
+        id: "if_1",
+        name: "Sales orders",
+        externalId: "X",
+        sapProduct: "s4hana",
+        operation: "READ",
+        entitySet: "SalesOrder",
+        version: 3,
+        solutionName: "S",
+        ...(semver
+          ? {
+              compiled: {
+                semver,
+                snapshotId: "snap",
+                contentHash: "0",
+                compiledAt: "2026-10-20T00:00:00.000Z",
+                contract: slice("sales-order-rap.v4.xml", "SalesOrder"),
+              },
+            }
+          : {}),
+      }),
+    ).info.version as string;
+
+  it("a major contract change is a major document change; the interface version is build metadata", () => {
+    // It read "1.<interface version>.0" whatever the contract did.
+    expect(kit("1.0.0")).toBe("1.0.0+iface.3");
+    expect(kit("2.0.0")).toBe("2.0.0+iface.3");
+    expect(kit(null)).toBe("1.3.0");
   });
 });
 

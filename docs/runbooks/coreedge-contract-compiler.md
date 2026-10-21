@@ -85,6 +85,17 @@ parses a description; `/schema` and the documents read the stored snapshot.
   fields; write bodies are closed and require only what SAP marks mandatory
   (`Common.FieldControl` Mandatory, SuccessFactors `sap:required`) — never
   what is merely non-nullable, because SAP fills those with initial values.
+  A create body also names the entity type's navigations, optional, for a
+  deep insert (V4: an array or a record, and `<nav>@odata.bind` for a target
+  that is not contained; V2: `{ "results": [...] }` or an array, a record or a
+  `__metadata` link); the related record itself is an open object, because
+  the slice names a navigation's target only.
+- **Versions in the documents.** The kit's `info.version` is the compiled
+  contract's semantic version with the interface version as build metadata
+  (`2.0.0+iface.3`); without a compiled contract it is `1.<interface version>.0`.
+  A write interface's `requestSchema` is written from the snapshot that is
+  current after the verify, and `/schema` serves it only while that snapshot
+  is still the current one.
 
 ## Semantic versions
 
@@ -128,6 +139,27 @@ refused as `TOO_MANY_MEMBERS` (CSDL XML and JSON alike). The slice is refused
 more than twice the description's own members plus 10,000, and a contract over
 4 MB of canonical JSON is never stored: it would be read back on every
 `/schema` call. `tests/unit/contracts/hostile-input.test.ts` has a case for each.
+
+The bounds that hold for any description inside the parser's (hostile-input
+review round 1; each asserted in that file, the stored ones in
+`tests/integration/contract-snapshots.test.ts`):
+
+- **Compile.** An entity set or singleton name declared twice in one service is
+  `INVALID_CSDL` (sets are addressed by name everywhere downstream; N
+  same-named sets each copied one annotation target's P paths, N×P, and
+  exhausted the heap). The capability property paths an annotation puts on a
+  set spend from the member budget. A name (Name, Namespace, Alias, a role,
+  partner or constrained property) over 511 characters, or a type reference
+  over 1,035, is `INVALID_CSDL`. A refusal or a success in under 5 s.
+- **Diff.** A snapshot stores at most 200 changes (the most severe first, the
+  rest counted in `omitted`), each `at` and `change` cut to 300 characters:
+  under 1 MB whatever the contract.
+- **Render.** A starter kit or a solution document carries at most 2 MB of
+  compiled contract, added up from `ContractSnapshot.irBytes` (kept at record
+  time) before any IR is read; past it the answer is `422 TOO_LARGE`. Every
+  document is linear in what it carries: a kit response under 32 bytes per
+  contract byte, a solution document under 16, `/schema`'s schemas under 8,
+  each in under 5 s; client.ts declares each enum once.
 
 ## Golden tests
 
@@ -203,7 +235,9 @@ list, set `CONTRACT_CORPUS_APIS` (comma-separated API ids) on a manual run.
   interface's service and dataset, whichever environment recorded it: with DEV
   ahead of PROD that is DEV's, so a PROD caller can be shown a field PROD does
   not have yet (harmless in a record, which stays open; a create body is
-  closed, and PROD refuses the field). Options: serve PROD's contract and fall
+  closed, and PROD refuses the field). `/schema` at least never serves one
+  environment's request body beside another's contract: `requestSchema`
+  follows the current snapshot. Options: serve PROD's contract and fall
   back to the highest-ranked verified environment; or serve one per
   environment. A product decision; nothing is chosen here.
 - **SuccessFactors' `sap:` namespace URI is not confirmed on a live tenant.**

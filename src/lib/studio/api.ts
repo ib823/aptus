@@ -17,6 +17,8 @@ export type StudioErrorCode =
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
   | "CONFLICT"
+  /** A generated document that would be larger than its stated budget (doc-inputs.ts). */
+  | "TOO_LARGE"
   | "INTERNAL";
 
 const STATUS: Record<StudioErrorCode, number> = {
@@ -25,6 +27,7 @@ const STATUS: Record<StudioErrorCode, number> = {
   NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
   CONFLICT: 409,
+  TOO_LARGE: 422,
   INTERNAL: 500,
 };
 
