@@ -204,6 +204,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       httpStatus: null,
       durationMs: 0,
       entitySets: [] as string[],
+      entitySetCount: 0,
       entitySet: iface.entitySet,
       suggestedEntitySet: null,
       detectedODataVersion: null,
@@ -354,7 +355,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       durationMs: result.durationMs,
       verified,
       interfaceVersion: iface.version,
-      entitySetCount: result.entitySets.length,
+      entitySetCount: result.entitySetCount,
       ...(contract
         ? {
             contract:
@@ -378,6 +379,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     httpStatus: result.httpStatus,
     durationMs: result.durationMs,
     entitySets: result.entitySets,
+    // Additive (structural hardening round 3): how many there are in all; `entitySets` lists the first MAX_STORED_ENTITY_SETS.
+    entitySetCount: result.entitySetCount,
     entitySet: iface.entitySet,
     suggestedEntitySet: result.suggestedEntitySet,
     detectedODataVersion: result.detectedODataVersion,

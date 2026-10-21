@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 
 // This runs inside Vercel's filtered checkout as well as local/CI builds.
 // A tracing include cannot rescue a file removed by .vercelignore.
@@ -36,6 +38,54 @@ function traces(traceFile, file) {
   );
 }
 
+/**
+ * THE WORKER STARTS FROM WHAT THE TRACE SHIPS (structural hardening round 3).
+ * Tracing the worker chunk is not enough: a chunk can load companion chunks
+ * (webpack's `require("./96351.js")`), and a deployed function has only the
+ * files its trace lists — capture-schema's lacked the companion, so its
+ * worker died MODULE_NOT_FOUND on Vercel while `next start`, serving the
+ * whole .next directory, worked. So each spawning route's trace is copied,
+ * file for file and at the same relative paths, into a directory of its own,
+ * and the worker is started there with a real job (a diff of nothing, which
+ * answers at once). A trace from which it cannot start fails the build.
+ */
+const WORKER_START_TIMEOUT_MS = 30_000;
+
+async function workerStartsFromTrace(traceFile) {
+  const root = process.cwd();
+  const mirror = mkdtempSync(path.join(os.tmpdir(), "aptus-worker-trace-"));
+  try {
+    const manifest = JSON.parse(readFileSync(traceFile, "utf8"));
+    for (const f of manifest.files) {
+      const from = path.resolve(path.dirname(traceFile), f);
+      const rel = path.relative(root, from);
+      if (rel.startsWith("..") || path.isAbsolute(rel) || !existsSync(from) || !statSync(from).isFile()) continue;
+      const to = path.join(mirror, rel);
+      mkdirSync(path.dirname(to), { recursive: true });
+      copyFileSync(from, to);
+    }
+    const chunk = path.join(mirror, path.relative(root, WORKER_CHUNK));
+    return await new Promise((resolve) => {
+      const worker = new Worker(chunk, {
+        workerData: { job: { kind: "diff", input: { previous: [], next: {} } }, heapLimitBytes: Number.MAX_SAFE_INTEGER },
+        stdout: true,
+        stderr: true,
+      });
+      const done = (r) => {
+        clearTimeout(timer);
+        void worker.terminate();
+        resolve(r);
+      };
+      const timer = setTimeout(() => done({ ok: false, why: `no answer in ${WORKER_START_TIMEOUT_MS} ms` }), WORKER_START_TIMEOUT_MS);
+      worker.once("message", (m) => done(m && m.ok === true ? { ok: true } : { ok: false, why: `answered ${JSON.stringify(m)}` }));
+      worker.once("error", (err) => done({ ok: false, why: `${err.code ?? err.name}: ${err.message}` }));
+      worker.once("exit", (code) => done({ ok: false, why: `exited ${code} without answering` }));
+    });
+  } finally {
+    rmSync(mirror, { recursive: true, force: true });
+  }
+}
+
 try {
   if (!readFileSync(asset, "utf8").trim()) {
     throw new Error("Developer guide is empty");
@@ -50,6 +100,12 @@ try {
     for (const route of WORKER_ROUTES) {
       if (!traces(path.resolve(route), WORKER_CHUNK)) {
         throw new Error(`The contract compiler's worker is missing from the function trace of ${route}`);
+      }
+    }
+    for (const route of WORKER_ROUTES) {
+      const started = await workerStartsFromTrace(path.resolve(route));
+      if (!started.ok) {
+        throw new Error(`The contract compiler's worker cannot start from the function trace of ${route} (${started.why})`);
       }
     }
   }

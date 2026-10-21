@@ -52,7 +52,7 @@ import {
 } from "@/lib/contracts/envelope";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { prepareContract, renderAndMeasure, renderForRead, type RenderJobInput } from "@/lib/contracts/pipeline";
-import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
+import { RawJson, renderReadPath, renderReadPathLazy, requestThreadShare } from "@/lib/contracts/read-render";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import { buildNorthboundOpenApi } from "@/lib/contracts/openapi";
 import { buildScaffold } from "@/lib/studio/scaffold";
@@ -303,7 +303,8 @@ describe("the envelope", () => {
     const r = await runInEnvelope({ kind: "compile", input: { body: fixture("business-partner.v2.xml"), entitySet: "A_Partner", subject: null } });
     expect(r.ok).toBe(true);
     if (!r.ok || !r.value.ok) throw new Error("not compiled");
-    expect(r.value.entitySets.map((e) => e.name)).toContain("A_Partner");
+    expect(r.value.datasets).toMatchObject({ hasEntitySet: true, suggestion: null });
+    expect(r.value.datasets.names).toContain("A_Partner");
     expect(r.value.dataset).toMatchObject({ ok: true, hash: contractDigest(sliced("business-partner.v2.xml", "A_Partner")).hash });
     expect(Object.keys(r.value)).not.toContain("ir");
   }, 30_000);
@@ -532,22 +533,29 @@ describe("structural hardening, round 2", () => {
     iface: { version: 1, entitySet: "A_Partner" },
     limit,
   });
+  const asText = (t: string | Uint8Array) => (typeof t === "string" ? t : new TextDecoder().decode(t));
+  /** Lets the request thread's share of render time refill. */
+  const refilled = () => new Promise((resolve) => setTimeout(resolve, 500));
 
-  it("a read path's budget past what the request thread renders renders in the envelope, the same bytes as here", async () => {
-    const here = renderForRead(schemaInput(LIMITS.inlineRender.bytes));
+  it("a read whose stored input is past what the request thread renders renders in the envelope, the same bytes as here", async () => {
+    await refilled();
+    const here = renderForRead(schemaInput(LIMITS.schema.cap));
     expect(here.ok).toBe(true);
-    const small = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes), { tenant: null });
+    const load = () => Promise.resolve({ ok: true as const, input: schemaInput(LIMITS.schema.cap) });
+    const small = await renderReadPathLazy({ inputBytes: LIMITS.inlineRender.inputBytes }, load, { tenant: null });
     expect(small).toMatchObject({ ok: true, where: "request" });
-    const large = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes + 1), { tenant: null });
+    const large = await renderReadPathLazy({ inputBytes: LIMITS.inlineRender.inputBytes + 1 }, load, { tenant: null });
     expect(large).toMatchObject({ ok: true, where: "envelope" });
     if (!here.ok || !large.ok || !small.ok) throw new Error("not rendered");
-    expect(large.texts).toEqual(here.texts);
+    // From the envelope: the same text, as transferred bytes.
+    expect(large.texts.every((t) => t instanceof Uint8Array)).toBe(true);
+    expect(large.texts.map(asText)).toEqual(here.texts);
     expect(small.texts).toEqual(here.texts);
     // Its budget still stops it, wherever it renders.
     expect(await renderReadPath(schemaInput(1000), { tenant: null })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
   }, 60_000);
 
-  it("a render that meets the request thread's clock is handed to the envelope, not refused", async () => {
+  it("a render that meets the request thread's clock, or finds its share spent, is handed to the envelope, not refused", async () => {
     // A contract with enough in it for the writer to look at the clock while it writes.
     const compiled = compileContract(largeDescription(1, 1500));
     if (!compiled.ok) throw new Error("not compiled");
@@ -560,35 +568,31 @@ describe("structural hardening, round 2", () => {
       snapshotId: "snap_1",
       requestSchema: null,
       iface: { version: 1, entitySet: "T0" },
-      limit: LIMITS.inlineRender.bytes,
+      limit: LIMITS.schema.cap,
     };
     expect(renderForRead(input).ok).toBe(true);
-    const inline = LIMITS.inlineRender as { ms: number };
-    const ms = inline.ms;
-    inline.ms = -60_000;
-    try {
-      // On this thread the clock has already run out…
-      expect(renderForRead(input, Date.now() + inline.ms)).toMatchObject({ ok: false, reason: "TIME" });
-      // …so the envelope renders it.
-      expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: true, where: "envelope" });
-    } finally {
-      inline.ms = ms;
-    }
+    // On this thread a clock that has run out stops it…
+    expect(renderForRead(input, Date.now() - 60_000)).toMatchObject({ ok: false, reason: "TIME" });
+    // …and with the thread's share of render time spent, the envelope renders it.
+    await refilled();
+    requestThreadShare(10_000);
+    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: true, where: "envelope" });
   }, 60_000);
 
-  it("what a render is handed is measured before it is copied: past the bound it never reaches a worker", async () => {
+  it("what a render is handed is measured before it is copied: past the bound it never reaches a worker, and says so", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const input: RenderJobInput = {
       path: "kit",
       iface: { id: "if_1", name: "x", externalId: "custom:/x", sapProduct: "s4hana", operation: "READ", entitySet: "X", version: 1, solutionName: "S" },
       baseUrl: "https://x",
-      fixtures: [{ scenario: "success", status: 200, body: { value: "x".repeat(LIMITS.inlineRender.inputBytes) }, sourceStatus: 200, capturedAt: "2026-10-01T00:00:00.000Z" }],
+      fixtures: [{ scenario: "success", status: 200, body: { value: "x".repeat(LIMITS.renderInput.bytes) }, sourceStatus: 200, capturedAt: "2026-10-01T00:00:00.000Z" }],
       withheld: [],
       limit: LIMITS.kit.cap,
     };
     const before = envelopeIsolates().live;
     const started = Date.now();
-    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: false, reason: "TOO_LARGE" });
+    // Its own reason — what it was handed — never the output's budget.
+    expect(await renderReadPath(input, { tenant: null })).toMatchObject({ ok: false, reason: "INPUT_TOO_LARGE" });
     expect(Date.now() - started).toBeLessThan(2000);
     expect(envelopeIsolates().peak).toBe(before);
   });
@@ -597,7 +601,9 @@ describe("structural hardening, round 2", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const slow = { kind: "compile" as const, input: { body: largeDescription(300, 110), entitySet: "T1", subject: null } };
     const compiles = Array.from({ length: ENVELOPE_CONCURRENCY }, () => runInEnvelope(slow, { ...ENVELOPE_LIMITS.compile, deadlineMs: 600_000 }));
-    const r = await renderReadPath(schemaInput(LIMITS.inlineRender.bytes + 1), { tenant: "org_a" });
+    const r = await renderReadPathLazy({ inputBytes: null }, () => Promise.resolve({ ok: true as const, input: schemaInput(LIMITS.schema.cap) }), {
+      tenant: "org_a",
+    });
     expect(r).toMatchObject({ ok: true, where: "envelope" });
     // Both compile slots were taken all along.
     expect(envelopeQueueState("compile").running).toBe(ENVELOPE_CONCURRENCY);
@@ -611,5 +617,9 @@ describe("structural hardening, round 2", () => {
     const out = raw.stringify({ data: { x: raw.slot(JSON.stringify(value)), y: raw.slot("null"), name: "\u0000raw:guess:1\u0000" } });
     expect(out).toBe(JSON.stringify({ data: { x: value, y: null, name: "\u0000raw:guess:1\u0000" } }));
     expect(JSON.parse(out)).toEqual({ data: { x: value, y: null, name: "\u0000raw:guess:1\u0000" } });
+    // A slot of bytes (a worker's, transferred) is written as it is: the same answer, as UTF-8.
+    const bytes = new RawJson();
+    const answer = bytes.bytes({ data: { x: bytes.slot(new TextEncoder().encode(JSON.stringify(value))), é: "ü" } });
+    expect(new TextDecoder().decode(answer)).toBe(JSON.stringify({ data: { x: value, é: "ü" } }));
   });
 });

@@ -55,13 +55,14 @@
  * `responseSchemaOmitted` says why, as `schemasOmitted` does for a contract.
  *
  * AND NEVER MORE THAN A FIXED SHARE OF THE REQUEST THREAD (structural
- * hardening round 2). A contract inside every cap rendered 13 MB here, half a
- * second to a second of blocked event loop, on every call. The schemas are
- * now rendered by renderReadPath (read-render.ts): here only while the budget
- * is small enough to be cheap by construction and the render keeps to the
- * inline clock, in the compiler's envelope otherwise — and the text that
- * comes back is spliced into the answer as it is. An envelope that cannot
- * start the render (no free slot) leaves `schemas` null with
+ * hardening rounds 2 and 3). A contract inside every cap rendered 13 MB here,
+ * half a second to a second of blocked event loop, on every call. The
+ * schemas are now rendered by renderReadPathLazy (read-render.ts): here while
+ * the stored contract is small and the thread's share of render time allows,
+ * in the compiler's envelope otherwise — where the IR is read only once the
+ * read holds a render slot, and the bytes that come back are spliced into
+ * the answer as they are. A read waits its turn for a slot; one that gets
+ * none before its deadline leaves `schemas` null with
  * `schemasOmitted: "UNAVAILABLE"`, to retry.
  */
 
@@ -77,7 +78,7 @@ import {
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
-import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
+import { RawJson, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -192,63 +193,73 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   // THE DOCUMENTS' BUDGET (doc-inputs.ts), from the size kept at record time
   // and before the IR is read: a snapshot past it is named, not rendered.
   const inBudget = (bytes: number | null) => bytes === null || bytes <= MAX_DOCUMENT_CONTRACT_BYTES;
-  const read =
-    servable && inBudget(servable.irBytes)
-      ? ((await snapshotContracts(client.scope, new Map([[iface.id, servable]]))).get(iface.id) ?? null)
-      : null;
-  let tooLarge = servable !== null && (!inBudget(servable.irBytes) || (read !== null && !inBudget(read.irBytes)));
-  let snapshot = read && !tooLarge ? read : null;
-  /*
-   * RENDERED UNDER THE READ PATH'S BUDGET (budget.ts, schemaLimit): the
-   * schemas and the write body beside them are counted by the one writer,
-   * which stops at the budget, before any of it is serialised for the
-   * response. The record rendered this same contract under this same budget
-   * in the envelope before storing it (pipeline.ts), so a contract recorded
-   * since is always inside it; a row from before is refused here, not
-   * rendered without bound.
-   */
-  const budget = new OutputBudget("schema", schemaLimit(snapshot?.irBytes ?? 0) + LIMITS.capturedSchema.served);
-  // The captured schema, within its own share of the budget.
+  let tooLarge = servable !== null && !inBudget(servable.irBytes);
+  // The captured schema, within its own share (LIMITS.capturedSchema.served):
+  // what is served beside the contract's schemas, and charged as such.
   let responseSchema: unknown = null;
   let responseSchemaTooLarge = captured !== null && !captured.ok;
   if (captured?.ok) {
     try {
-      budget.charge(chargeJson(captured.schema, new OutputBudget("capturedSchema", LIMITS.capturedSchema.served)));
+      chargeJson(captured.schema, new OutputBudget("capturedSchema", LIMITS.capturedSchema.served));
       responseSchema = captured.schema;
     } catch (err) {
       if (!(err instanceof BudgetExceeded)) throw err;
       responseSchemaTooLarge = true;
     }
   }
-  // The schemas and the write body, in what is left of the budget: on this
-  // thread only while that is cheap by construction (read-render.ts).
+  /*
+   * RENDERED UNDER THE READ PATH'S BUDGET (budget.ts, schemaLimit of the
+   * contract's kept size — the captured schema has its own share, above, and
+   * is not added to it: structural hardening round 3): the schemas and the
+   * write body beside them are counted by the one writer, which stops at the
+   * budget. The record rendered this same contract under this same budget in
+   * the envelope before storing it (pipeline.ts), so a contract recorded
+   * since is always inside it; a row from before is refused here, not
+   * rendered without bound.
+   *
+   * ROUTED BY COST, LOADED IN TURN (read-render.ts, round 3): a real contract
+   * renders on this thread in milliseconds, within the thread's share of
+   * render time; a large one renders in the envelope, and its IR is read from
+   * the database only once it holds a render slot — a read refused for want
+   * of one has read nothing.
+   */
   const raw = new RawJson();
   let schemas: string | null = null;
   let requestSchema: string | null = null;
   let unavailable = false;
-  if (snapshot) {
-    const rendered = await renderReadPath(
-      {
-        path: "schema",
-        contract: snapshot.contract,
-        entitySet: snapshot.entitySet,
-        snapshotId: snapshot.id,
-        requestSchema: iface.requestSchema,
-        iface: { version: iface.version, entitySet: iface.entitySet },
-        limit: budget.remaining,
+  let rendered = false;
+  if (servable && !tooLarge) {
+    const r = await renderReadPathLazy(
+      { inputBytes: servable.irBytes },
+      async (): Promise<ReadLoad<"GONE" | "TOO_LARGE">> => {
+        const read = (await snapshotContracts(client.scope, new Map([[iface.id, servable]]))).get(iface.id) ?? null;
+        if (!read) return { ok: false, refusal: "GONE" };
+        // A row that predates the kept size, measured now.
+        if (!inBudget(read.irBytes)) return { ok: false, refusal: "TOO_LARGE" };
+        return {
+          ok: true,
+          input: {
+            path: "schema",
+            contract: read.contract,
+            entitySet: read.entitySet,
+            snapshotId: read.id,
+            requestSchema: iface.requestSchema,
+            iface: { version: iface.version, entitySet: iface.entitySet },
+            limit: schemaLimit(read.irBytes),
+          },
+        };
       },
       { tenant: client.organizationId },
     );
-    if (rendered.ok) {
-      schemas = raw.slot(rendered.texts[0]!);
-      requestSchema = raw.slot(rendered.texts[1]!);
-    } else {
-      if (rendered.reason === "TOO_LARGE") tooLarge = true;
-      else unavailable = true;
-      snapshot = null;
-    }
+    if (r.ok) {
+      schemas = raw.slot(r.texts[0]!);
+      requestSchema = raw.slot(r.texts[1]!);
+      rendered = true;
+    } else if (r.reason === "UNAVAILABLE") unavailable = true;
+    // GONE: the snapshot went while this read was waiting — served as if there were none.
+    else if (r.reason !== "REFUSED" || r.refusal === "TOO_LARGE") tooLarge = true;
   }
-  const shown = tooLarge || unavailable ? servable : snapshot;
+  const shown = rendered || tooLarge || unavailable ? servable : null;
   const contract = shown
     ? {
         source: shown.source === "METADATA" ? ("metadata" as const) : ("sampled" as const),
@@ -297,8 +308,8 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   });
 
   // The rendered schemas are spliced in as they were written (RawJson): the
-  // same text NextResponse.json would send, never parsed back on this thread.
-  const body = raw.stringify({
+  // same bytes NextResponse.json would send, never parsed back on this thread.
+  const body = raw.bytes({
     data: {
       id: iface.id,
       name: iface.name,

@@ -19,11 +19,27 @@
 import v8 from "node:v8";
 import { parentPort, workerData } from "node:worker_threads";
 
-import { runJob } from "@/lib/contracts/pipeline";
+import { runJob, type Job, type RenderedForRead } from "@/lib/contracts/pipeline";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 
-function reply(message: WorkerReply): void {
-  parentPort?.postMessage(message);
+function reply(message: WorkerReply, transfer: ArrayBuffer[] = []): void {
+  parentPort?.postMessage(message, transfer);
+}
+
+/**
+ * A read path's rendered texts go back as UTF-8 bytes, encoded here and
+ * TRANSFERRED (structural hardening round 3): the request thread receives
+ * the buffers without copying them, and writes them into the answer as they
+ * are (read-render.ts, RawJson), never decoding or re-encoding the text.
+ */
+function withTransfer(job: Job, value: unknown): { value: unknown; transfer: ArrayBuffer[] } {
+  const rendered = value as RenderedForRead;
+  if (job.kind !== "render" || !rendered.ok) return { value, transfer: [] };
+  const encoder = new TextEncoder();
+  // Each text owns its whole buffer, so transferring one never takes another's bytes with it.
+  const own = (u: Uint8Array): Uint8Array => (u.byteOffset === 0 && u.byteLength === u.buffer.byteLength ? u : u.slice());
+  const texts = rendered.texts.map((t) => own(typeof t === "string" ? encoder.encode(t) : t));
+  return { value: { ok: true, texts }, transfer: [...new Set(texts.map((t) => t.buffer as ArrayBuffer))] };
 }
 
 const input = workerData as WorkerInput;
@@ -31,7 +47,8 @@ if (v8.getHeapStatistics().heap_size_limit > input.heapLimitBytes) {
   reply({ ok: false, error: HEAP_NOT_CAPPED });
 } else {
   try {
-    reply({ ok: true, value: runJob(input.job) });
+    const out = withTransfer(input.job, runJob(input.job));
+    reply({ ok: true, value: out.value }, out.transfer);
   } catch (err) {
     reply({ ok: false, error: err instanceof Error ? err.name : "unknown" });
   }

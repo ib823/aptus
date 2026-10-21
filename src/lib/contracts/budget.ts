@@ -33,9 +33,14 @@
  *                  ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB,
  *                  and served (by /schema, the kit and the document alike)
  *                  only while its served JSON is ≤ 520 KiB
- *   request thread ≤ 2 MiB of any read path's budget, rendered within 100 ms;
- *                  a budget past it, or a render past the clock, runs in the
- *                  envelope instead (read-render.ts), on ≤ 4 MiB of input
+ *   request thread a read path renders here only from ≤ 512 KiB of stored
+ *                  input, within 100 ms, and only while the thread's share of
+ *                  render time (250 ms a second) has time left; anything
+ *                  else runs in the envelope (read-render.ts), on ≤ 12 MiB
+ *                  of input — every stored input fits it by construction
+ *   fixture        ≤ 4.5 MiB of compact JSON, from a request body as large;
+ *                  a kit reads fixtures only while their stored text adds up
+ *                  to ≤ 8 MiB, and names the others as too large
  *   snapshot history ≤ 100 rows per interface, plus each environment's newest
  *   envelope input  ≤ the description cap (compile) or the contract cap per
  *                  contract (prepare, diff), measured before it is copied in
@@ -51,16 +56,19 @@
  * envelope (pipeline.ts), so what a read renders was rendered once already,
  * within the same bytes, before the contract was ever stored.
  *
- * AND WHERE A READ RENDERS IT (structural hardening round 2). Bounding a
- * read's bytes did not bound the request thread: a contract under every cap
- * still rendered 13-25 MB, 0.5-1.4 s of blocked event loop, on every call of
- * /schema, the kit and the solution document. So the request thread renders
- * only what LIMITS.inlineRender allows — a budget (a function of what was
- * stored, known before anything is rendered) of at most `bytes`, under a
- * deadline of `ms` — and everything else renders in the envelope, on a
- * thread of its own, under the same budget (read-render.ts). What a read
- * costs the request thread is then bounded by that constant, whatever shape
- * of contract makes the render expensive, found or not.
+ * AND WHERE A READ RENDERS IT (structural hardening rounds 2 and 3).
+ * Bounding a read's bytes did not bound the request thread: a contract under
+ * every cap still rendered 13-25 MB, 0.5-1.4 s of blocked event loop, on
+ * every call of /schema, the kit and the solution document. So the request
+ * thread renders only what LIMITS.inlineRender allows — from stored input
+ * of at most `inputBytes` (known before anything is read), under a deadline
+ * of `ms`, and only while its share of render time (`sharePerSecondMs`, a
+ * token bucket) lasts — and everything else renders in the envelope, on a
+ * thread of its own, under the same budget (read-render.ts), with its slot
+ * taken BEFORE anything is loaded, measured or copied for it. What reads
+ * cost the request thread is then bounded by that share, whatever shape of
+ * contract makes the render expensive, found or not, and however many reads
+ * arrive at once.
  *
  * PURE. No I/O; usable in the worker and on a read path alike.
  */
@@ -106,14 +114,37 @@ export const LIMITS = {
    */
   snapshotHistory: 100,
   /**
-   * WHAT A READ PATH MAY RENDER ON THE REQUEST THREAD (read-render.ts): a
-   * render whose budget is at most `bytes` runs there under a deadline of
-   * `ms` — about 50 ns a byte measured, so a full budget is ~100 ms at worst;
-   * a larger budget, or a render that meets the deadline, runs in the
-   * envelope instead, on a thread of its own, from at most `inputBytes` of
-   * contract, schema and fixtures copied into it.
+   * WHAT A READ PATH MAY RENDER ON THE REQUEST THREAD (read-render.ts).
+   * ROUTED BY COST, NOT BY BUDGET (structural hardening round 3): a render
+   * whose stored input (contract, captured schema, fixtures — sizes known
+   * before any of it is read) is at most `inputBytes` is tried here, under a
+   * deadline of `ms`, and handed to the envelope only when it meets that
+   * clock. Real contracts are 1-100 KB: they all render here, in
+   * milliseconds, however large their worst-case budget. And the thread
+   * gives renders at most `sharePerSecondMs` of every second (a token bucket
+   * holding at most `ms`): past it, a read renders in the envelope however
+   * cheap it would have been, so no burst of reads — expensive or not, found
+   * or not — holds the thread for longer than one clock.
    */
-  inlineRender: { bytes: 2 * MiB, ms: 100, inputBytes: 4 * MiB },
+  inlineRender: { inputBytes: 512 * KiB, ms: 100, sharePerSecondMs: 250 },
+  /**
+   * What a render job in the envelope may be handed: every input a read path
+   * stores fits it by construction — a contract (2 MiB), a captured schema as
+   * served (520 KiB), fixtures as a kit reads them (8 MiB of stored text,
+   * LIMITS.fixture) and the interfaces' names and grants (1.5 MiB more than
+   * the 1,016 a document carries need) — so it refuses only what was stored
+   * before those bounds, and says so (INPUT_TOO_LARGE), never as the
+   * output's budget.
+   */
+  renderInput: { bytes: 12 * MiB },
+  /**
+   * A recorded fixture (capture-fixture): its body is at most `bytes` of
+   * compact JSON, from a request body of at most `requestBytes`; a kit reads
+   * the fixtures of an interface only while their stored text (Postgres's
+   * jsonb text, what octet_length measures before a body is read) adds up to
+   * at most `storedTextBytes`, and names the rest as too large.
+   */
+  fixture: { bytes: 4.5 * MiB, requestBytes: 4.5 * MiB, storedTextBytes: 8 * MiB },
   /** Documents up to this size are indented for the person reading them; larger ones are compact. */
   prettyDocument: 512 * KiB,
   /** Nesting a writer follows before it refuses: no contract, schema or fixture comes near it. */

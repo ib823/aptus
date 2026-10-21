@@ -24,9 +24,13 @@
  * same deterministic renderers within the same bytes. So no read path ever
  * meets a contract nobody has rendered.
  *
- * What crosses back to the request thread is bounded: the dataset names and
- * version the verify reports, and the one sliced contract with its digest and
- * sizes (the contract budget caps it) — never the service's whole IR.
+ * What crosses back to the request thread is bounded: the version the verify
+ * reports, the description's datasets as a bounded summary (datasets.ts: at
+ * most MAX_LISTED_DATASETS names, a count, and whether the interface's
+ * dataset is there) — taken here whether the compiler read the description
+ * or refused it and the older reader did (structural hardening round 3) —
+ * and the one sliced contract with its digest and sizes (the contract budget
+ * caps it). Never the service's whole IR, nor one entry per declared set.
  */
 
 import {
@@ -43,6 +47,7 @@ import {
 } from "@/lib/contracts/budget";
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract, type CompileRefusal, type CompileResult } from "@/lib/contracts/compile";
+import { readDatasets, summarizeDatasets, type DatasetSummary } from "@/lib/contracts/datasets";
 import { diffContracts, storedDiff, type Bump, type StoredContractDiff } from "@/lib/contracts/diff";
 import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import { standaloneSchemas } from "@/lib/contracts/json-schema";
@@ -102,14 +107,24 @@ export type CompiledService =
       ok: true;
       format: "xml" | "json";
       odataVersion: ODataVersion;
-      /** Entity sets and singletons the description declares, in document order. */
-      entitySets: { name: string; singleton: boolean }[];
+      /** The entity sets it declares (not its singletons: one record is not a dataset), summarised. */
+      datasets: DatasetSummary;
       /** The description's length in UTF-16 units. */
       sourceLength: number;
       /** The interface's dataset, sliced, digested and measured; null when none was asked for. */
       dataset: PreparedContract | null;
     }
-  | { ok: false; reason: CompileRefusal | EnvelopeRefusal; detail: string };
+  | {
+      ok: false;
+      reason: CompileRefusal | EnvelopeRefusal;
+      detail: string;
+      /**
+       * A description the compiler refused is still read by the older reader,
+       * in the same job (compileJob), so the verify answers as it did before
+       * the compiler existed; absent when the envelope never ran the job.
+       */
+      datasets?: DatasetSummary;
+    };
 
 export interface CompileJobInput {
   body: string;
@@ -176,7 +191,14 @@ export type RenderJobInput =
  * (TOO_LARGE) or its clock (TIME, which the request thread answers by
  * handing the render to the envelope).
  */
-export type RenderedForRead = { ok: true; texts: string[] } | { ok: false; reason: "TOO_LARGE" | "TIME"; limit: number };
+export type RenderedForRead = { ok: true; texts: RenderedText[] } | { ok: false; reason: "TOO_LARGE" | "TIME"; limit: number };
+
+/**
+ * A rendered text: a string on the request thread; from the envelope, its
+ * UTF-8 bytes, encoded in the worker and transferred, not copied
+ * (compile.worker.ts), so the request thread never re-reads them.
+ */
+export type RenderedText = string | Uint8Array<ArrayBuffer>;
 
 export type Job =
   | { kind: "compile"; input: CompileJobInput }
@@ -346,13 +368,19 @@ export function prepareContract(input: PrepareJobInput): PreparedContract {
 }
 
 export function compileJob(input: CompileJobInput): CompiledService {
-  return compiledServiceOf(compileContract(input.body), input.entitySet, input.subject);
+  const r = compileContract(input.body);
+  // Refused by the compiler: the older reader lists the datasets, here in the envelope, never on the request thread.
+  if (!r.ok) return { ...r, datasets: readDatasets(input.body, input.entitySet || null) };
+  return compiledServiceOf(r, input.entitySet, input.subject);
 }
 
 /** What a compile result becomes for the verify: the summary, and the dataset sliced, digested and measured. */
 export function compiledServiceOf(r: CompileResult, entitySet: string | null, subject: RenderSubject | null): CompiledService {
   if (!r.ok) return r;
-  const entitySets = r.ir.entitySets.map((e) => ({ name: e.name, singleton: e.singleton === true }));
+  const datasets = summarizeDatasets(
+    r.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name),
+    entitySet || null,
+  );
   let dataset: PreparedContract | null = null;
   if (entitySet) {
     const slice = sliceForEntitySet(r.ir, entitySet, r.sourceLength);
@@ -360,7 +388,7 @@ export function compiledServiceOf(r: CompileResult, entitySet: string | null, su
       ? prepareContract({ contract: slice.contract, sourceLength: r.sourceLength, subject })
       : { ok: false, reason: slice.reason, detail: slice.detail };
   }
-  return { ok: true, format: r.format, odataVersion: r.ir.odataVersion, entitySets, sourceLength: r.sourceLength, dataset };
+  return { ok: true, format: r.format, odataVersion: r.ir.odataVersion, datasets, sourceLength: r.sourceLength, dataset };
 }
 
 export function diffJob(input: DiffJobInput): DiffJobOutput {

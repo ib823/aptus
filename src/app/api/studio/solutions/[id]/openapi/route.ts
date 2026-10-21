@@ -50,15 +50,17 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { documentLimit, jsonBytesUpTo, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
 import {
+  documentInputTooLargeMessage,
   documentOutputTooLargeMessage,
   documentTooLargeMessage,
   documentTooManyInterfacesMessage,
   documentUnavailableMessage,
-  loadDocInputs,
+  loadDocContracts,
   MAX_DOCUMENT_CONTRACT_BYTES,
+  planDocInputs,
 } from "@/lib/contracts/doc-inputs";
 import { multiInterfaceInfoVersion, type ContractForDoc, type SampledSchema } from "@/lib/contracts/openapi";
-import { renderReadPath } from "@/lib/contracts/read-render";
+import { renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError } from "@/lib/studio/api";
@@ -119,119 +121,149 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   // 2. Refused before any IR is read when the contracts add up past the budget.
-  const inputs = await loadDocInputs(tenantScopeOf(organizationId), interfaces);
-  if (!inputs.ok) return studioError("TOO_LARGE", documentTooLargeMessage("solution document", inputs.limit));
+  const scope = tenantScopeOf(organizationId);
+  const plan = await planDocInputs(scope, interfaces);
+  if (!plan.ok) return studioError("TOO_LARGE", documentTooLargeMessage("solution document", plan.limit));
 
   // …and with the captured schemas it would carry, from their stored sizes, before any is read.
-  const sampledOnly = interfaces.filter((i) => inputs.compiled.get(i.id)?.contract.source !== "METADATA");
+  const sampledOnly = interfaces.filter((i) => plan.summaries.get(i.id)?.source !== "METADATA");
   const facts = await capturedSchemaFacts(organizationId, sampledOnly);
-  let carried = 0;
-  for (const c of inputs.compiled.values()) if (c.contract.source === "METADATA") carried += c.irBytes;
-  for (const f of facts.values()) if (f.state === "current" && capturedSchemaReadable(f.storedBytes)) carried += f.storedBytes ?? 0;
+  let capturedBytes = 0;
+  for (const f of facts.values()) if (f.state === "current" && capturedSchemaReadable(f.storedBytes)) capturedBytes += f.storedBytes ?? 0;
+  let carried = capturedBytes;
+  for (const s of plan.summaries.values()) if (s.source === "METADATA") carried += s.irBytes ?? 0;
   if (carried > MAX_DOCUMENT_CONTRACT_BYTES) {
     return studioError("TOO_LARGE", documentTooLargeMessage("solution document", MAX_DOCUMENT_CONTRACT_BYTES));
   }
-  // 3. Only those, each inside the captured-schema bound.
-  const captures = await readCurrentCapturedSchemas(organizationId, sampledOnly, facts);
-
-  const docInterfaces = interfaces.map((i) => {
-    const compiled = inputs.compiled.get(i.id);
-    let contract: ContractForDoc;
-    if (compiled && compiled.contract.source === "METADATA") {
-      contract = {
-        source: "metadata",
-        contract: compiled.contract,
-        semver: compiled.semver,
-        snapshotId: compiled.snapshotId,
-        contentHash: compiled.contentHash,
-        compiledAt: compiled.compiledAt,
-      };
-    } else {
-      // Only this contract's capture, as served (contract-provenance.ts, A38).
-      const captured = captures.get(i.id);
-      const state = facts.get(i.id)?.state ?? "none";
-      contract =
-        captured?.ok && isCapturedSchema(captured.schema)
-          ? { source: "sampled", schema: captured.schema as unknown as SampledSchema }
-          : captured && !captured.ok
-            ? { source: "none", note: CAPTURE_TOO_LARGE_NOTE }
-            : state === "stale" || state === "unverified"
-              ? { source: "none", note: withheldArtifactNote(state, i) }
-              : { source: "none" };
-    }
-    return {
-      id: i.id,
-      name: i.name,
-      externalId: i.externalId,
-      sapProduct: i.sapProduct,
-      operation: i.operation,
-      mode: i.mode,
-      entitySet: i.entitySet,
-      version: i.version,
-      status: i.status,
-      contract,
-      grants: inputs.grants.get(i.id) ?? [],
-    };
-  });
-
-  // The build metadata of the document's version: changes whenever any interface's contract does.
-  const digest = createHash("sha256")
-    .update(
-      docInterfaces
-        .map((i) => `${i.id}:${i.version}:${i.contract.source === "metadata" ? i.contract.semver : i.contract.source}`)
-        .join("|"),
-    )
-    .digest("hex")
-    .slice(0, 12);
 
   /*
-   * UNDER THE DOCUMENT'S BUDGET (budget.ts, documentLimit): a function of
-   * what was stored — each interface's compiled contract's kept size, or its
-   * captured schema's. 4. The build charges each interface's part to it as
-   * the part is made, and stops at the interface that passes it; 5. the
-   * writer charges every byte written, and stops the same way. Each contract
-   * was rendered under its share of this budget in the compiler's envelope
-   * (pipeline.ts) before it was stored.
+   * 3-6. LOADED ONLY WHEN IT IS ITS TURN (read-render.ts, structural
+   * hardening round 3): the contracts' IRs and the captured schemas are read
+   * by the loader below — on this thread for a small document, and for a
+   * large one only once it holds a render slot, so a download refused for
+   * want of one has read none of them.
    */
-  const limit = documentLimit(
-    docInterfaces.map((i) =>
-      i.contract.source === "metadata"
-        ? (inputs.compiled.get(i.id)?.irBytes ?? 0)
-        : i.contract.source === "sampled"
-          ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
-          : 0,
-    ),
-  );
-  // 4-6. Built and written under that budget, here or in the envelope (read-render.ts).
-  const rendered = await renderReadPath(
-    {
-      path: "document",
-      doc: {
-        version,
-        // The original path first, the versioned second (northboundServers).
-        baseUrl: `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`,
-        title: `${safeName(solution.name)} — CoreEdge northbound`,
-        // Moves with its interfaces' contracts; the digest is build metadata.
-        infoVersion: multiInterfaceInfoVersion(docInterfaces, digest),
-        description: [
-          `Every interface of the CoreEdge solution "${safeName(solution.name)}", as the northbound API serves it.`,
-          "",
-          "Generated by CoreEdge Developer Studio. This describes the CoreEdge endpoints your application calls with this solution's credential — not SAP's own API.",
-          "Each interface's record shape is compiled from its service's own description when one has been verified, inferred from captured rows when only those exist, and stated as unknown otherwise (x-coreedge-interfaces[].contract.source).",
-          "",
-          "Honest status: an empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
-        ].join("\n"),
-        interfaces: docInterfaces,
-        discovery: true,
-      },
-      limit,
+  let limit = 0;
+  const rendered = await renderReadPathLazy(
+    { inputBytes: plan.contractBytes === null ? null : plan.contractBytes + capturedBytes },
+    async (): Promise<ReadLoad<number>> => {
+      const contracts = await loadDocContracts(scope, plan);
+      if (!contracts.ok) return { ok: false, refusal: contracts.limit };
+      const compiledById = contracts.compiled;
+      // Rows that predate the kept size were measured as they were read: the same bound, again.
+      let carriedNow = capturedBytes;
+      for (const c of compiledById.values()) if (c.contract.source === "METADATA") carriedNow += c.irBytes;
+      if (carriedNow > MAX_DOCUMENT_CONTRACT_BYTES) return { ok: false, refusal: MAX_DOCUMENT_CONTRACT_BYTES };
+      // 3. Only those, each inside the captured-schema bound.
+      const captures = await readCurrentCapturedSchemas(organizationId, sampledOnly, facts);
+
+      const docInterfaces = interfaces.map((i) => {
+        const compiled = compiledById.get(i.id);
+        let contract: ContractForDoc;
+        if (compiled && compiled.contract.source === "METADATA") {
+          contract = {
+            source: "metadata",
+            contract: compiled.contract,
+            semver: compiled.semver,
+            snapshotId: compiled.snapshotId,
+            contentHash: compiled.contentHash,
+            compiledAt: compiled.compiledAt,
+          };
+        } else {
+          // Only this contract's capture, as served (contract-provenance.ts, A38).
+          const captured = captures.get(i.id);
+          const state = facts.get(i.id)?.state ?? "none";
+          contract =
+            captured?.ok && isCapturedSchema(captured.schema)
+              ? { source: "sampled", schema: captured.schema as unknown as SampledSchema }
+              : captured && !captured.ok
+                ? { source: "none", note: CAPTURE_TOO_LARGE_NOTE }
+                : state === "stale" || state === "unverified"
+                  ? { source: "none", note: withheldArtifactNote(state, i) }
+                  : { source: "none" };
+        }
+        return {
+          id: i.id,
+          name: i.name,
+          externalId: i.externalId,
+          sapProduct: i.sapProduct,
+          operation: i.operation,
+          mode: i.mode,
+          entitySet: i.entitySet,
+          version: i.version,
+          status: i.status,
+          contract,
+          grants: plan.grants.get(i.id) ?? [],
+        };
+      });
+
+      // The build metadata of the document's version: changes whenever any interface's contract does.
+      const digest = createHash("sha256")
+        .update(
+          docInterfaces
+            .map((i) => `${i.id}:${i.version}:${i.contract.source === "metadata" ? i.contract.semver : i.contract.source}`)
+            .join("|"),
+        )
+        .digest("hex")
+        .slice(0, 12);
+
+      /*
+       * UNDER THE DOCUMENT'S BUDGET (budget.ts, documentLimit): a function of
+       * what was stored — each interface's compiled contract's kept size, or
+       * its captured schema's. 4. The build charges each interface's part to
+       * it as the part is made, and stops at the interface that passes it; 5.
+       * the writer charges every byte written, and stops the same way. Each
+       * contract was rendered under its share of this budget in the
+       * compiler's envelope (pipeline.ts) before it was stored.
+       */
+      limit = documentLimit(
+        docInterfaces.map((i) =>
+          i.contract.source === "metadata"
+            ? (compiledById.get(i.id)?.irBytes ?? 0)
+            : i.contract.source === "sampled"
+              ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
+              : 0,
+        ),
+      );
+      return {
+        ok: true,
+        input: {
+          path: "document",
+          doc: {
+            version,
+            // The original path first, the versioned second (northboundServers).
+            baseUrl: `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`,
+            title: `${safeName(solution.name)} — CoreEdge northbound`,
+            // Moves with its interfaces' contracts; the digest is build metadata.
+            infoVersion: multiInterfaceInfoVersion(docInterfaces, digest),
+            description: [
+              `Every interface of the CoreEdge solution "${safeName(solution.name)}", as the northbound API serves it.`,
+              "",
+              "Generated by CoreEdge Developer Studio. This describes the CoreEdge endpoints your application calls with this solution's credential — not SAP's own API.",
+              "Each interface's record shape is compiled from its service's own description when one has been verified, inferred from captured rows when only those exist, and stated as unknown otherwise (x-coreedge-interfaces[].contract.source).",
+              "",
+              "Honest status: an empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
+            ].join("\n"),
+            interfaces: docInterfaces,
+            discovery: true,
+          },
+          limit,
+        },
+      };
     },
     { tenant: organizationId },
   );
   if (!rendered.ok) {
-    return rendered.reason === "TOO_LARGE"
-      ? studioError("TOO_LARGE", documentOutputTooLargeMessage("solution document", limit))
-      : studioError("UNAVAILABLE", documentUnavailableMessage("solution document"));
+    switch (rendered.reason) {
+      case "REFUSED":
+        return studioError("TOO_LARGE", documentTooLargeMessage("solution document", rendered.refusal));
+      case "TOO_LARGE":
+        return studioError("TOO_LARGE", documentOutputTooLargeMessage("solution document", limit));
+      case "INPUT_TOO_LARGE":
+        return studioError("TOO_LARGE", documentInputTooLargeMessage("solution document", LIMITS.renderInput.bytes));
+      case "UNAVAILABLE":
+        return studioError("UNAVAILABLE", documentUnavailableMessage("solution document"));
+    }
   }
   const body = rendered.texts[0]!;
 

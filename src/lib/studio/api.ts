@@ -54,6 +54,6 @@ export function studioOk<T>(data: T, status = 200): NextResponse {
  * rendered text spliced in (contracts/read-render.ts, RawJson): the same
  * status and content type, and the body as given.
  */
-export function studioOkJson(text: string, status = 200): NextResponse {
+export function studioOkJson(text: string | Uint8Array<ArrayBuffer>, status = 200): NextResponse {
   return new NextResponse(text, { status, headers: { "content-type": "application/json" } });
 }

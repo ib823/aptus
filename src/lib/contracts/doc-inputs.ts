@@ -13,7 +13,7 @@
 
 import { LIMITS } from "@/lib/contracts/budget";
 import type { InterfaceContract } from "@/lib/contracts/ir";
-import { currentSnapshotSummaries, snapshotContracts } from "@/lib/contracts/snapshot";
+import { currentSnapshotSummaries, snapshotContracts, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
 import { grantsRead, grantsWrite, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -80,30 +80,88 @@ export function documentOutputTooLargeMessage(what: "starter kit" | "solution do
   return `This ${what} would be larger than the ${Math.max(1, Math.floor(limit / (1024 * 1024)))} MB its contracts allow it to be, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
 }
 
+/**
+ * A document whose stored inputs are past what a render may be handed
+ * (LIMITS.renderInput): said as the inputs, never as the output's budget —
+ * for the kit, its recorded fixtures are what can be made smaller.
+ */
+export function documentInputTooLargeMessage(what: "starter kit" | "solution document", bytes: number): string {
+  return what === "starter kit"
+    ? `This starter kit's stored inputs (its contract, captured schema and recorded fixtures) are larger than the ${Math.floor(bytes / (1024 * 1024))} MB a kit is built from, so it was not built. Record its fixtures again from a run with fewer or narrower rows.`
+    : `This solution document's stored inputs are larger than the ${Math.floor(bytes / (1024 * 1024))} MB a document is built from, so it was not built. Split the solution, or download each interface's starter kit.`;
+}
+
+/** A recorded fixture a kit does not read because its stored body is past the fixtures' bound (LIMITS.fixture). */
+export function fixtureTooLargeNote(maxBytes: number): string {
+  return `This recording is larger than the ${Math.floor(maxBytes / (1024 * 1024))} MB of recorded fixtures a starter kit carries, so it is not included. Record it again from a run with fewer or narrower rows.`;
+}
+
 /** A document that could not be rendered just now (read-render.ts: no free render slot, or no worker). */
 export function documentUnavailableMessage(what: "starter kit" | "solution document"): string {
   return `This ${what} could not be generated just now: too many large documents are being generated at once. Try again in a moment.`;
 }
 
-export async function loadDocInputs(
+/**
+ * What a document's read knows BEFORE reading any contract (structural
+ * hardening round 3): each interface's current snapshot without its IR, the
+ * sizes kept at record time — refused past the budget here — and the grants.
+ * A read path decides from this where it renders, and takes its render slot
+ * before any IR is read (read-render.ts); loadDocContracts reads them.
+ */
+export interface DocPlan {
+  ok: true;
+  summaries: Map<string, CurrentSnapshotSummary>;
+  grants: Map<string, { operation: string; environment: string }[]>;
+  /** The contracts' kept canonical bytes, added up; null when a row predates the kept size. */
+  contractBytes: number | null;
+  limit: number;
+}
+
+export async function planDocInputs(
   scope: TenantScope,
   interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
   opts: { now?: Date; maxContractBytes?: number } = {},
-): Promise<DocInputs | DocInputsTooLarge> {
+): Promise<DocPlan | DocInputsTooLarge> {
   const now = opts.now ?? new Date();
   const limit = opts.maxContractBytes ?? MAX_DOCUMENT_CONTRACT_BYTES;
   const summaries = await currentSnapshotSummaries(scope, interfaces);
   // Before any IR is read: the sizes kept at record time.
   let known = 0;
+  let unknown = false;
   for (const s of summaries.values()) {
+    if (s.irBytes === null) unknown = true;
     known += s.irBytes ?? 0;
     if (known > limit) return { ok: false, reason: "TOO_LARGE", bytes: known, limit };
   }
-  const snapshots = await snapshotContracts(scope, summaries);
-  // And with the rows that predate the kept size, measured now.
+
+  const grants = new Map<string, { operation: string; environment: string }[]>();
+  if (interfaces.length > 0) {
+    const rows = await prisma.apiAccessGrant.findMany({
+      where: scopedWhere(scope, { interfaceId: { in: interfaces.map((i) => i.id) }, revokedAt: null }),
+      select: { interfaceId: true, operation: true, environment: true, decision: true, expiresAt: true },
+    });
+    for (const i of interfaces) grants.set(i.id, []);
+    for (const g of rows) {
+      if (!g.interfaceId) continue;
+      if (g.expiresAt !== null && g.expiresAt.getTime() <= now.getTime()) continue;
+      const env = g.environment as GrantEnvironment;
+      const decision = g.decision as GrantDecision;
+      const live = g.operation === "READ" ? grantsRead(decision, env) : grantsWrite(decision, env);
+      if (live) grants.get(g.interfaceId)?.push({ operation: g.operation, environment: g.environment });
+    }
+  }
+  return { ok: true, summaries, grants, contractBytes: unknown ? null : known, limit };
+}
+
+/** The planned contracts' IRs, read; a row that predates the kept size is measured now, against the same budget. */
+export async function loadDocContracts(
+  scope: TenantScope,
+  plan: DocPlan,
+): Promise<{ ok: true; compiled: Map<string, CompiledForDoc> } | DocInputsTooLarge> {
+  const snapshots = await snapshotContracts(scope, plan.summaries);
   let total = 0;
   for (const s of snapshots.values()) total += s.irBytes;
-  if (total > limit) return { ok: false, reason: "TOO_LARGE", bytes: total, limit };
+  if (total > plan.limit) return { ok: false, reason: "TOO_LARGE", bytes: total, limit: plan.limit };
   const compiled = new Map<string, CompiledForDoc>();
   for (const [id, s] of snapshots) {
     compiled.set(id, {
@@ -115,21 +173,17 @@ export async function loadDocInputs(
       irBytes: s.irBytes,
     });
   }
+  return { ok: true, compiled };
+}
 
-  const grants = new Map<string, { operation: string; environment: string }[]>();
-  if (interfaces.length === 0) return { ok: true, compiled, grants };
-  const rows = await prisma.apiAccessGrant.findMany({
-    where: scopedWhere(scope, { interfaceId: { in: interfaces.map((i) => i.id) }, revokedAt: null }),
-    select: { interfaceId: true, operation: true, environment: true, decision: true, expiresAt: true },
-  });
-  for (const i of interfaces) grants.set(i.id, []);
-  for (const g of rows) {
-    if (!g.interfaceId) continue;
-    if (g.expiresAt !== null && g.expiresAt.getTime() <= now.getTime()) continue;
-    const env = g.environment as GrantEnvironment;
-    const decision = g.decision as GrantDecision;
-    const live = g.operation === "READ" ? grantsRead(decision, env) : grantsWrite(decision, env);
-    if (live) grants.get(g.interfaceId)?.push({ operation: g.operation, environment: g.environment });
-  }
-  return { ok: true, compiled, grants };
+export async function loadDocInputs(
+  scope: TenantScope,
+  interfaces: readonly { id: string; externalId: string; entitySet: string | null }[],
+  opts: { now?: Date; maxContractBytes?: number } = {},
+): Promise<DocInputs | DocInputsTooLarge> {
+  const plan = await planDocInputs(scope, interfaces, opts);
+  if (!plan.ok) return plan;
+  const contracts = await loadDocContracts(scope, plan);
+  if (!contracts.ok) return contracts;
+  return { ok: true, compiled: contracts.compiled, grants: plan.grants };
 }

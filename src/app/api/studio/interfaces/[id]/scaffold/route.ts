@@ -25,11 +25,17 @@
  * round 1); past it the kit says it was set aside, and why.
  *
  * RENDERED OFF THE REQUEST THREAD WHEN IT IS LARGE (structural hardening
- * round 2). A kit inside its 32 MiB budget took a second or more to build,
- * on this thread, on every download. It is built by renderReadPath
- * (read-render.ts): here only while its budget is small enough to be cheap by
- * construction, in the compiler's envelope otherwise, and its files' JSON is
- * sent as the envelope wrote it.
+ * rounds 2 and 3). A kit inside its 32 MiB budget took a second or more to
+ * build, on this thread, on every download. It is built by
+ * renderReadPathLazy (read-render.ts): here while its stored input is small
+ * and the thread's share of render time allows, in the compiler's envelope
+ * otherwise — and there its contract, captured schema and fixture bodies are
+ * read only once it holds a render slot. Its files' JSON is sent as the
+ * envelope wrote it, as bytes.
+ *
+ * FIXTURES BY SIZE FIRST (round 3): their stored sizes are read before their
+ * bodies, and a kit carries at most LIMITS.fixture.storedTextBytes of them;
+ * the rest are named in the kit as withheld, too large (fixture-store.ts).
  */
 
 import type { NextRequest } from "next/server";
@@ -37,19 +43,23 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { jsonBytesUpTo, kitLimit, LIMITS } from "@/lib/contracts/budget";
 import {
+  documentInputTooLargeMessage,
   documentOutputTooLargeMessage,
   documentTooLargeMessage,
   documentUnavailableMessage,
-  loadDocInputs,
+  fixtureTooLargeNote,
+  loadDocContracts,
+  planDocInputs,
 } from "@/lib/contracts/doc-inputs";
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError, studioOkJson } from "@/lib/studio/api";
 import { partitionFixtures, withheldArtifactNote } from "@/lib/studio/contract-provenance";
+import { fixtureBodies, fixtureFacts, fixturesWithinBound } from "@/lib/studio/fixture-store";
 import { servedFixtures } from "@/lib/studio/fixtures";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
-import { RawJson, renderReadPath } from "@/lib/contracts/read-render";
+import { capturedSchemaFacts, capturedSchemaReadable, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
+import { RawJson, renderReadPathLazy, type ReadLoad } from "@/lib/contracts/read-render";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -84,9 +94,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
-  const inputs = await loadDocInputs(tenantScopeOf(organizationId), [iface]);
-  if (!inputs.ok) return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", inputs.limit));
-  const compiled = inputs.compiled.get(iface.id);
+  const scope = tenantScopeOf(organizationId);
+  // What is known before anything large is read: the contract's kept size (and the grants).
+  const plan = await planDocInputs(scope, [iface]);
+  if (!plan.ok) return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", plan.limit));
 
   // The base URL the generated client will call. Derived from the request so the
   // artifact works against whatever host the developer is actually using, on
@@ -95,39 +106,30 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // DEFAULT_KIT_BASE_URL). The kit's OpenAPI lists v1 as the second server.
   const baseUrl = `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`;
 
-  // Recorded responses, so the kit runs offline. Absent → it still ships, and
-  // the README says which scenarios are missing rather than pretending the mock
-  // is complete.
-  const fixtureRows = await prisma.mockFixture.findMany({
-    where: { organizationId, interfaceId: iface.id },
-    select: {
-      scenario: true,
-      status: true,
-      body: true,
-      sourceStatus: true,
-      capturedAt: true,
-      interfaceVersion: true,
-      entitySet: true,
-    },
-    orderBy: { scenario: "asc" },
-  });
+  /*
+   * Recorded responses, so the kit runs offline. Absent → it still ships, and
+   * the README says which scenarios are missing rather than pretending the
+   * mock is complete. Their stamps and stored sizes first, with no body
+   * (fixture-store.ts, structural hardening round 3): only this contract's
+   * recordings (A38), and of those only what fits the fixtures a kit carries
+   * (LIMITS.fixture) — the rest are named as withheld, too large, and their
+   * bodies are never read.
+   */
+  const partitioned = partitionFixtures(
+    (await fixtureFacts(organizationId, iface.id)).map((f) => ({ ...f, capturedAt: f.capturedAt.toISOString() })),
+    iface,
+  );
+  const sized = fixturesWithinBound(partitioned.current);
+  const withheld = [
+    ...partitioned.withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
+    ...sized.tooLarge.map((f) => ({ scenario: f.scenario, reason: fixtureTooLargeNote(LIMITS.fixture.storedTextBytes), tooLarge: true })),
+  ];
+  const fixtureBytes = sized.kept.reduce((n, f) => n + f.bytes, 0);
 
   const facts = (await capturedSchemaFacts(organizationId, [iface])).get(iface.id) ?? { state: "none" as const, storedBytes: null };
   const schemaState = facts.state;
-  const captured =
-    schemaState === "current"
-      ? ((await readCurrentCapturedSchemas(organizationId, [iface], new Map([[iface.id, facts]]))).get(iface.id) ?? null)
-      : null;
-  // As stored, as the kit has always been given it: scaffold.ts serves it as the broker serves rows.
-  const responseSchema = captured?.ok ? captured.stored : undefined;
-  // This contract's recordings only; then each as the broker would answer it,
-  // one per scenario (fixtures.ts, A57).
-  const partitioned = partitionFixtures(
-    fixtureRows.map((f) => ({ ...f, capturedAt: f.capturedAt.toISOString() })),
-    iface,
-  );
-  const fixtures = servedFixtures(partitioned.current);
-  const { withheld } = partitioned;
+  const contractBytes = plan.contractBytes;
+  const capturedBytes = schemaState === "current" && capturedSchemaReadable(facts.storedBytes) ? (facts.storedBytes ?? 0) : 0;
 
   /*
    * UNDER THE KIT'S BUDGET (budget.ts, kitLimit): a function of what was
@@ -136,64 +138,96 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    * cost. Every file is charged as it is written and the kit stops at the
    * budget (TOO_LARGE). The record rendered the same contract under the same
    * budget in the compiler's envelope (pipeline.ts) before storing it.
+   *
+   * WHAT IS LOADED, IS LOADED ONLY WHEN IT IS ITS TURN (read-render.ts,
+   * structural hardening round 3): the contract's IR, the captured schema and
+   * the fixtures' bodies are read by the loader below, which runs on this
+   * thread for a small kit and, for a large one, only once it holds a render
+   * slot — a download refused for want of one has read none of them.
    */
-  const contractBytes =
-    compiled?.irBytes ?? (responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0);
-  // Measured no further than a render may be handed (LIMITS.inlineRender.inputBytes): past it the kit is refused anyway.
-  let fixtureBytes = 0;
-  for (const f of fixtures) {
-    if (fixtureBytes > LIMITS.inlineRender.inputBytes) break;
-    fixtureBytes += jsonBytesUpTo(f.body, LIMITS.inlineRender.inputBytes);
-  }
-  const limit = kitLimit(contractBytes, fixtureBytes);
-
-  const rendered = await renderReadPath(
-    {
-      path: "kit",
-      iface: {
-        id: iface.id,
-        name: iface.name,
-        externalId: iface.externalId,
-        sapProduct: iface.sapProduct,
-        operation: iface.operation,
-        entitySet: iface.entitySet,
-        version: iface.version,
-        mode: iface.mode,
-        status: iface.status,
-        solutionName: iface.solution.name,
-        ...(compiled ? { compiled } : {}),
-        grants: inputs.grants.get(iface.id) ?? [],
-        // Present → the contract describes real fields. Absent → it says so,
-        // and says why when a stored schema of another contract was set aside.
-        ...(responseSchema !== undefined ? { responseSchema } : {}),
-        ...(schemaState === "stale" || schemaState === "unverified"
-          ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
-          : captured && !captured.ok
-            ? {
-                withheldSchemaNote: `The captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not included. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`,
-              }
-            : {}),
-      },
-      baseUrl,
-      fixtures: fixtures.map((f) => ({
-        scenario: f.scenario,
-        status: f.status,
-        body: f.body,
-        sourceStatus: f.sourceStatus,
-        capturedAt: f.capturedAt,
-      })),
-      withheld: withheld.map((w) => ({ scenario: w.scenario, reason: withheldArtifactNote(w.state, iface) })),
-      limit,
+  let limit = 0;
+  const rendered = await renderReadPathLazy(
+    { inputBytes: contractBytes === null ? null : contractBytes + capturedBytes + fixtureBytes },
+    async (): Promise<ReadLoad<number>> => {
+      const contracts = await loadDocContracts(scope, plan);
+      if (!contracts.ok) return { ok: false, refusal: contracts.limit };
+      const compiled = contracts.compiled.get(iface.id);
+      const captured =
+        schemaState === "current"
+          ? ((await readCurrentCapturedSchemas(organizationId, [iface], new Map([[iface.id, facts]]))).get(iface.id) ?? null)
+          : null;
+      // As stored, as the kit has always been given it: scaffold.ts serves it as the broker serves rows.
+      const responseSchema = captured?.ok ? captured.stored : undefined;
+      const bodies = await fixtureBodies(
+        organizationId,
+        iface.id,
+        sized.kept.map((f) => f.id),
+      );
+      // Each as the broker would answer it, one per scenario (fixtures.ts, A57).
+      const fixtures = servedFixtures(
+        sized.kept.filter((f) => bodies.has(f.id)).map((f) => ({ ...f, body: bodies.get(f.id) })),
+      );
+      limit = kitLimit(
+        compiled?.irBytes ?? (responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0),
+        fixtureBytes,
+      );
+      return {
+        ok: true,
+        input: {
+          path: "kit",
+          iface: {
+            id: iface.id,
+            name: iface.name,
+            externalId: iface.externalId,
+            sapProduct: iface.sapProduct,
+            operation: iface.operation,
+            entitySet: iface.entitySet,
+            version: iface.version,
+            mode: iface.mode,
+            status: iface.status,
+            solutionName: iface.solution.name,
+            ...(compiled ? { compiled } : {}),
+            grants: plan.grants.get(iface.id) ?? [],
+            // Present → the contract describes real fields. Absent → it says so,
+            // and says why when a stored schema of another contract was set aside.
+            ...(responseSchema !== undefined ? { responseSchema } : {}),
+            ...(schemaState === "stale" || schemaState === "unverified"
+              ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
+              : captured && !captured.ok
+                ? {
+                    withheldSchemaNote: `The captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not included. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`,
+                  }
+                : {}),
+          },
+          baseUrl,
+          fixtures: fixtures.map((f) => ({
+            scenario: f.scenario,
+            status: f.status,
+            body: f.body,
+            sourceStatus: f.sourceStatus,
+            capturedAt: f.capturedAt,
+          })),
+          withheld,
+          limit,
+        },
+      };
     },
     { tenant: organizationId },
   );
   if (!rendered.ok) {
-    return rendered.reason === "TOO_LARGE"
-      ? studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", limit))
-      : studioError("UNAVAILABLE", documentUnavailableMessage("starter kit"));
+    switch (rendered.reason) {
+      case "REFUSED":
+        return studioError("TOO_LARGE", documentTooLargeMessage("starter kit", rendered.refusal));
+      case "TOO_LARGE":
+        return studioError("TOO_LARGE", documentOutputTooLargeMessage("starter kit", limit));
+      case "INPUT_TOO_LARGE":
+        return studioError("TOO_LARGE", documentInputTooLargeMessage("starter kit", LIMITS.renderInput.bytes));
+      case "UNAVAILABLE":
+        return studioError("UNAVAILABLE", documentUnavailableMessage("starter kit"));
+    }
   }
 
   // As studioOk sends it, with the files' JSON spliced in as it was written (RawJson).
   const raw = new RawJson();
-  return studioOkJson(raw.stringify({ data: { files: raw.slot(rendered.texts[0]!) } }));
+  return studioOkJson(raw.bytes({ data: { files: raw.slot(rendered.texts[0]!) } }));
 }

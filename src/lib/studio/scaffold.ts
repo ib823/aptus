@@ -578,13 +578,20 @@ export function buildReadme(
 ): string {
   const captured = fixtures.map((f) => f.scenario);
   const missing = FIXTURE_SCENARIOS.filter((s) => !captured.includes(s));
+  const ofAnotherContract = withheld.filter((w) => !w.tooLarge);
+  const tooLarge = withheld.filter((w) => w.tooLarge);
   const withheldSection =
-    withheld.length === 0
+    (ofAnotherContract.length === 0
       ? ""
-      : `\n\nWithheld: **${withheld.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
+      : `\n\nWithheld: **${ofAnotherContract.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
 this interface, or with no record of which contract it belongs to.
 A mock of another contract would test code against rows the live route will
-never return, so they are not shipped. Capture them again from the Test Console.`;
+never return, so they are not shipped. Capture them again from the Test Console.`) +
+    (tooLarge.length === 0
+      ? ""
+      : `\n\nWithheld: **${tooLarge.map((w) => w.scenario).join(", ")}** — larger than the recorded fixtures a
+starter kit carries, so not shipped. Capture them again from the Test Console,
+from a run with fewer or narrower rows.`);
   const fixtureSection =
     captured.length === 0
       ? `## Offline mock — nothing captured yet
@@ -883,6 +890,8 @@ function inlineCode(value: string): string {
 export interface WithheldFixture {
   scenario: string;
   reason: string;
+  /** Withheld for its size (LIMITS.fixture), not for the contract it was recorded under. */
+  tooLarge?: boolean;
 }
 
 /** A recorded response, as captured from a real run. */

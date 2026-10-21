@@ -56,7 +56,13 @@ parses a description; `/schema` and the documents read the stored snapshot.
   and to its TEST_CONNECT audit row. A description the compiler refuses still
   verifies exactly as before (the older reader lists the datasets), with
   `contract.status: NOT_COMPILED`; a snapshot that cannot be written answers
-  `NOT_RECORDED`. Neither changes `verified`.
+  `NOT_RECORDED`. Neither changes `verified`. `entitySets` lists the first 500
+  dataset names (as many as the interface stores) and `entitySetCount` says
+  how many there are; a verify sent while its organisation already has one in
+  flight and two waiting answers `status: BUSY`, having asked SAP nothing.
+- `POST /api/studio/interfaces/{id}/capture-fixture` refuses a body past
+  4.5 MiB with 422 `TOO_LARGE`; the starter kit names a recorded fixture past
+  what a kit carries as withheld, too large, instead of loading it.
 - `POST /api/studio/interfaces/{id}/capture-schema` adds `contract`.
 - The starter kit has one more file, `openapi-3.0.json`. `openapi.json` now
   draws the operation the interface actually serves: a CREATE interface's
@@ -207,14 +213,19 @@ every render and measurement taken at record time (`pipeline.ts`) — runs in a
 | Wall clock | 15 s (compile), 10 s (prepare, diff) | `COREEDGE_CONTRACT_DEADLINE_MS` (100–60,000) |
 | Concurrency | 2 jobs, 16 waiting; beyond that `BUSY` | — |
 | One organisation's share | 1 job running, 2 waiting; beyond that `BUSY` at once | — |
-| Input | a contract handed in (prepare, diff) ≤ 2 MiB each, measured before it is copied in | — |
+| Read-path renders | 2 slots of their own, 64 waiting; one organisation 1 running, 16 waiting, each until its deadline | — |
+| Verifies | 1 in flight per organisation, 2 waiting (≤ 20 s); beyond that the verify answers `BUSY` before SAP is asked | — |
+| Input | a contract handed in (prepare, diff) ≤ 2 MiB each, a render's input ≤ 12 MiB, measured — once the job holds its slot — before it is copied in | — |
 
 Past any of them the worker is terminated and the verify reports the contract
 `NOT_COMPILED` with `RESOURCE_LIMIT` (or `BUSY`, `UNAVAILABLE`), while the
 verify's own verdict comes from the older readers exactly as before the
-compiler existed. The request thread only copies the description in and a
-bounded summary out (the dataset names, the version, the one sliced contract
-with its digest and rendered sizes — never the whole IR). The log line is
+compiler existed — inside the envelope when the compiler refused the
+description, and in bounded slices on the request thread only when the
+envelope never ran the job. The request thread only copies the description in
+and a bounded summary out (at most 500 dataset names with their count, the
+version, the one sliced contract with its digest and rendered sizes — never
+the whole IR). The log line is
 `[contracts] envelope refused { job, reason, ms, cause }`; `cause` is a code
 or an error name (`deadline`, `ERR_WORKER_OUT_OF_MEMORY`, `HeapNotCapped`),
 never text from the description.
@@ -243,7 +254,8 @@ Two things it takes to hold in production:
   that spawns it (verify-service and capture-schema, which compile; `/schema`
   on both base paths, the kit and the solution document, which render a large
   contract there), and `scripts/check-runtime-assets.mjs --built` fails the
-  build if it is missing or untraced.
+  build if it is missing or untraced, or cannot start from what a route's
+  trace ships (round 3, below).
 
 **The output budget (`src/lib/contracts/budget.ts`).** One writer counts every
 byte of contract-derived output as it writes it and stops at a stated limit
@@ -262,7 +274,9 @@ unchanged). The limits, each proportional to what it is made from and capped:
 | Starter kit (all files) | ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB |
 | Solution document | ≤ 256 KiB + Σ (32 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts and captured schemas adding up to ≤ 2 MiB, for ≤ 1,016 interfaces |
 | Captured schema | ≤ 2,000 fields and 512 KiB, from a request body ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB, and served (by all three readers alike) only while its served JSON is ≤ 520 KiB |
-| Request thread | a read path renders there only under a budget ≤ 2 MiB and within 100 ms; anything else renders in the envelope, from ≤ 4 MiB of input |
+| Request thread | a read path renders there only from ≤ 512 KiB of stored input, within 100 ms, while the thread's share of render time (250 ms a second) lasts; anything else renders in the envelope, from ≤ 12 MiB of input |
+| Recorded fixture | ≤ 4.5 MiB of compact JSON, from a request body ≤ 4.5 MiB; a kit reads fixtures only while their stored text adds up to ≤ 8 MiB, and names the rest as too large |
+| Verify's datasets | ≤ 500 names cross back from the envelope, with their count and whether the interface's dataset is among them |
 | Snapshot history | ≤ 100 rows per interface, plus each environment's newest |
 
 **Rendered at record time.** Before a contract is stored, every read path's
@@ -359,6 +373,65 @@ smaller edges:
 - **capture-schema names its refusals apart.** A body past 4.5 MiB is "the
   sampled rows are larger than 4.5 MB together … capture from fewer rows",
   not the field bound's "more than 2,000 fields".
+
+**Structural hardening, round 3.** Each round so far closed the paths a
+review found; this one bounds what the paths share, so one nobody has found
+is bounded too:
+
+- **A verify takes a turn before it reads anything.** Twenty concurrent
+  verifies of an 8 MiB description of 185,000 `<EntitySet>` tags, from one
+  organisation, got seventeen compiles refused `BUSY` — and each of those then
+  read the whole description with the older reader on the request thread:
+  8.7 s of blocked event loop. Now a verify holds a slot of the envelope's
+  `verify` pool from before SAP is asked until it has answered: one in flight
+  per organisation, two waiting, and the next answers `BUSY` (audited 429)
+  with nothing fetched. The datasets cross back from the envelope as a
+  bounded summary (`src/lib/contracts/datasets.ts`: the first 500 names, how
+  many there are, and whether the interface's dataset — or a name differing
+  only in case — is among them), taken in the worker whether the compiler
+  read the description or refused it and the older reader did. Only when the
+  envelope never ran the job does the request thread read the datasets, in
+  64 K-character slices with a turn of the event loop between them. The
+  verify answer lists the first 500 dataset names (as the interface always
+  stored) and adds `entitySetCount`.
+- **A read takes its slot before it loads anything.** A read of a contract
+  at the cap walked and copied it on the request thread before the envelope
+  was asked — also for the reads then refused — and every accepted one came
+  back as a string that was split, joined and re-encoded. Now the routes hand
+  `renderReadPathLazy` a loader: the IR, the captured schema and the fixture
+  bodies are read only once the read holds its render slot, so a refused
+  read has read nothing, and a waiting one costs nothing — reads wait their
+  turn (16 per organisation, until their deadline) instead of being refused.
+  The worker encodes what it rendered and transfers the bytes; the route
+  writes them into the answer as they are.
+- **Routed by cost, within one share of the thread.** Routing by worst-case
+  budget sent a 57 KB contract's kit, and a 91 KB contract's `/schema`, to the
+  envelope on every call, and a fourth concurrent read of one organisation was
+  answered `UNAVAILABLE`. Now a read whose stored input is ≤ 512 KiB renders
+  on the request thread under the 100 ms clock — every real contract, in
+  milliseconds — and all such renders draw on one token bucket of the
+  thread's time (250 ms a second, holding at most one clock); a read that
+  meets the clock or finds the share spent renders in the envelope. The 520
+  KiB captured-schema allowance is no longer added to `/schema`'s render
+  budget: the captured schema has its own share.
+- **Fixtures are bounded where they are written and read by size.**
+  `capture-fixture` reads its body up to 4.5 MiB and stores at most 4.5 MiB;
+  the kit reads each fixture's stored size first (`octet_length`, no body),
+  reads only the bodies that fit 8 MiB together, and names the rest withheld,
+  too large (`src/lib/studio/fixture-store.ts`). What a render may be handed
+  (12 MiB) fits every stored input by construction, so a kit with 4.2 MB of
+  fixtures builds; a render refused for its input says so (`INPUT_TOO_LARGE`:
+  "record its fixtures again from a run with fewer or narrower rows"), never
+  "larger than the 32 MB its contracts allow".
+- **The worker is one chunk.** webpack split a module the worker shares with
+  the routes into a chunk of its own, and the worker began with
+  `require("./96351.js")`; the routes that import that module themselves
+  traced it, capture-schema did not, and its deployed worker died
+  `MODULE_NOT_FOUND` — every sampled contract `NOT_RECORDED` on Vercel —
+  while `pnpm build` and `next start` passed. `next.config.ts` now keeps the
+  worker out of the server build's chunk splitting, so it loads nothing but
+  Node's built-ins, and `scripts/check-runtime-assets.mjs --built` starts the
+  worker, with a real job, from a copy of each spawning route's trace.
 
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with

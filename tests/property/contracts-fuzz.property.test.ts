@@ -712,7 +712,7 @@ function expectSameAnswer(where: string, inEnvelope: CompiledService, inProcess:
     expect(inEnvelope.ok ? null : inEnvelope.reason, `${where}: refusal`).toBe(inProcess.ok ? null : inProcess.reason);
     return;
   }
-  expect(inEnvelope.entitySets, `${where}: entity sets`).toEqual(inProcess.entitySets);
+  expect(inEnvelope.datasets, `${where}: datasets`).toEqual(inProcess.datasets);
   expect(inEnvelope.odataVersion, `${where}: OData version`).toBe(inProcess.odataVersion);
   expect(inEnvelope.sourceLength, `${where}: source length`).toBe(inProcess.sourceLength);
   const a = inEnvelope.dataset;

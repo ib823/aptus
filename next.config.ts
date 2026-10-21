@@ -1,6 +1,35 @@
 import type { NextConfig } from "next";
 import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 
+/** The Contract Compiler's worker chunk (lib/contracts/envelope.ts: its webpackChunkName). */
+const CONTRACT_WORKER_CHUNK = "contract-compiler-worker";
+
+/**
+ * THE CONTRACT COMPILER'S WORKER IS ONE SELF-CONTAINED CHUNK (structural
+ * hardening round 3). Next splits every module two server chunks share into
+ * a chunk of its own (splitChunks: chunks "all", minChunks 2), and the
+ * worker's chunk then began with `require("./96351.js")` — the northbound
+ * error catalogue openapi.ts uses. A deployed function carries only the
+ * files its trace lists: the routes that import that catalogue themselves
+ * had the companion chunk, capture-schema did not, and every sampled
+ * contract there ended UNAVAILABLE (MODULE_NOT_FOUND) on Vercel, while
+ * `next start` (the whole .next directory) worked. Keeping the worker out of
+ * the split leaves nothing for it to load but itself and Node's built-ins, so
+ * tracing the one chunk (outputFileTracingIncludes, below) is tracing all of
+ * it — whatever it comes to import. scripts/check-runtime-assets.mjs --built
+ * starts the worker from a copy of each spawning route's trace and fails the
+ * build when it cannot.
+ */
+function keepContractWorkerWhole(config: { optimization?: { splitChunks?: unknown } }): void {
+  const split = config.optimization?.splitChunks;
+  if (!split || typeof split !== "object") return;
+  const s = split as { chunks?: unknown };
+  const chunks = s.chunks ?? "async";
+  const included = (chunk: { name?: string | null; canBeInitial(): boolean }): boolean =>
+    chunks === "all" ? true : chunks === "initial" ? chunk.canBeInitial() : chunks === "async" ? !chunk.canBeInitial() : typeof chunks === "function" ? Boolean((chunks as (c: unknown) => unknown)(chunk)) : true;
+  s.chunks = (chunk: { name?: string | null; canBeInitial(): boolean }) => chunk.name !== CONTRACT_WORKER_CHUNK && included(chunk);
+}
+
 const nextConfig: NextConfig = {
   transpilePackages: [],
   /*
@@ -54,7 +83,8 @@ const nextConfig: NextConfig = {
     "/api/studio/interfaces/[id]/scaffold": ["./.next/server/chunks/contract-compiler-worker.js"],
     "/api/studio/solutions/[id]/openapi": ["./.next/server/chunks/contract-compiler-worker.js"],
   },
-  webpack(config, { isServer }) {
+  webpack(config, { isServer, dev }) {
+    if (isServer && !dev) keepContractWorkerWhole(config);
     if (!isServer) {
       // The tenant-scope guard (lib/db/tenant-guard) uses AsyncLocalStorage to
       // carry declared cross-tenant contexts. Several client components import

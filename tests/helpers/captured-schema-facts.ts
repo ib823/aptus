@@ -9,7 +9,37 @@
 
 type Row = Record<string, unknown>;
 
+/** Whether a raw query is fixtureFacts's (fixture-store.ts), not capturedSchemaFacts's. */
+export function isFixtureFactsQuery(query: unknown): boolean {
+  const q = query as { sql?: string; strings?: readonly string[] } | null;
+  return (q?.sql ?? q?.strings?.join("") ?? "").includes('"MockFixture"');
+}
+
+/**
+ * What the database answers fixtureFacts's query with (fixture-store.ts):
+ * each fixture of the organisation's interface, its stamp, and its stored
+ * body's size (compact JSON here; jsonb text in PostgreSQL). The query's
+ * values are the organisation, then the interface.
+ */
+export function fixtureFactRows(rows: readonly Row[], query: unknown): Row[] {
+  const [org, interfaceId] = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
+  return rows
+    .filter((r) => r.organizationId === org && r.interfaceId === interfaceId)
+    .map((r) => ({
+      id: r.id,
+      scenario: r.scenario,
+      status: r.status,
+      sourceStatus: r.sourceStatus ?? null,
+      capturedAt: r.capturedAt ?? new Date(0),
+      interfaceVersion: r.interfaceVersion ?? null,
+      entitySet: r.entitySet ?? null,
+      bytes: Buffer.byteLength(JSON.stringify(r.body), "utf8"),
+    }))
+    .sort((a, b) => String(a.scenario).localeCompare(String(b.scenario)));
+}
+
 export function capturedSchemaFactRows(rows: readonly Row[], query: unknown): Row[] {
+  if (isFixtureFactsQuery(query)) return [];
   const values = ((query as { values?: unknown[] } | null)?.values ?? []) as unknown[];
   const [org, ...ids] = values;
   return rows

@@ -156,7 +156,7 @@ export function northboundOk<T>(data: T, correlationId: string, status = 200): N
  * rendered text spliced in (contracts/read-render.ts, RawJson): the same
  * status, headers and content type, and the body as given.
  */
-export function northboundOkJson(text: string, correlationId: string, status = 200): NextResponse {
+export function northboundOkJson(text: string | Uint8Array<ArrayBuffer>, correlationId: string, status = 200): NextResponse {
   return new NextResponse(text, { status, headers: { "content-type": "application/json", ...okHeaders(correlationId) } });
 }
 

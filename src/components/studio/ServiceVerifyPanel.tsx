@@ -91,6 +91,7 @@ const CHIP: Record<string, { status: HonestStatus; label: string }> = {
   TIMEOUT: { status: "PROBE_FAILED", label: "no answer" },
   ERROR: { status: "PROBE_FAILED", label: "failed" },
   METADATA_TOO_LARGE: { status: "PROBE_FAILED", label: "too large" },
+  BUSY: { status: "PROBE_FAILED", label: "busy, retry" },
   CHANGED_DURING_VERIFY: { status: "PROBE_FAILED", label: "changed meanwhile" },
   NOT_RECORDED: { status: "PROBE_FAILED", label: "not recorded" },
   BINDING_REFUSED: { status: "NOT_CHECKED", label: "no connection" },

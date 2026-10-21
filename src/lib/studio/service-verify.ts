@@ -32,10 +32,9 @@
  */
 
 import { LIMITS } from "@/lib/contracts/budget";
-import { compileInEnvelope } from "@/lib/contracts/envelope";
+import { MAX_LISTED_DATASETS, readDatasetsSliced, type DatasetSummary } from "@/lib/contracts/datasets";
+import { compileInEnvelope, VERIFY_WAIT_MS, withEnvelopeSlot } from "@/lib/contracts/envelope";
 import type { CompiledService, RenderSubject } from "@/lib/contracts/pipeline";
-import { unstorableText } from "@/lib/contracts/storable";
-import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
 import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
@@ -102,8 +101,8 @@ export const DATASET_NEEDED_DETAIL =
 
 /** A service description larger than this is refused rather than half-read. */
 export const VERIFY_MAX_METADATA_BYTES = LIMITS.sourceBytes;
-/** How many entity-set names are stored on the interface after a verify. */
-export const MAX_STORED_ENTITY_SETS = 500;
+/** How many entity-set names a verify lists, and stores on the interface (datasets.ts). */
+export const MAX_STORED_ENTITY_SETS = MAX_LISTED_DATASETS;
 
 export type ServiceVerifyStatus =
   | "OK"
@@ -113,6 +112,8 @@ export type ServiceVerifyStatus =
   | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "TIMEOUT"
+  /** The organisation already has verifies in flight, past its share (envelope.ts): nothing was read. */
+  | "BUSY"
   | "ERROR";
 
 export interface ServiceVerifyResult {
@@ -123,8 +124,13 @@ export interface ServiceVerifyResult {
   detail: string;
   httpStatus: number | null;
   durationMs: number;
-  /** Entity-set names the description declares, de-duplicated, in document order. */
+  /**
+   * Entity-set names the description declares, de-duplicated, in document
+   * order: the first MAX_STORED_ENTITY_SETS of them (datasets.ts).
+   */
   entitySets: string[];
+  /** How many distinct entity sets the description declares in all. */
+  entitySetCount: number;
   detectedODataVersion: ODataVersion | null;
   /** On ENTITY_SET_MISSING, a set whose name differs only in case. */
   suggestedEntitySet: string | null;
@@ -169,8 +175,9 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
  * ends its own worker and never this request's thread or the process. What
  * comes back is a refusal or the bounded summary the verify needs
  * (pipeline.ts), with the interface's dataset already sliced, digested and
- * measured for every read path. Refuses, never rejects: a refused compile
- * gives its verdict to the older readers below, as before the compiler.
+ * measured for every read path. Refuses, never rejects: a description the
+ * compiler refuses is read by the older reader in the same job, inside the
+ * envelope, as before the compiler (pipeline.ts, compileJob).
  */
 function compileOrRefuse(
   body: string,
@@ -196,25 +203,58 @@ function auditStatusFor(status: string, httpStatus: number | null): number {
   return 502;
 }
 
-export async function verifyServiceMetadata(
-  input: {
-    connection: ResolvedSapConnection;
-    servicePath: string;
-    declaredVersion: ODataVersion | null;
-    entitySet: string | null;
-    /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
-    sapProduct?: string | null;
-    /**
-     * The interface the dataset's contract would be recorded for, so the
-     * compile renders and measures every read path's output for it inside
-     * the envelope (pipeline.ts). Omitted, a stand-in of the same shape.
-     */
-    subject?: RenderSubject | null;
-    /** The organisation verifying: its share of the compiler's envelope (envelope.ts). */
-    organizationId?: string | null;
-  },
-  fetchImpl: typeof fetch = fetch,
-): Promise<ServiceVerifyResult> {
+export interface VerifyServiceInput {
+  connection: ResolvedSapConnection;
+  servicePath: string;
+  declaredVersion: ODataVersion | null;
+  entitySet: string | null;
+  /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
+  sapProduct?: string | null;
+  /**
+   * The interface the dataset's contract would be recorded for, so the
+   * compile renders and measures every read path's output for it inside
+   * the envelope (pipeline.ts). Omitted, a stand-in of the same shape.
+   */
+  subject?: RenderSubject | null;
+  /** The organisation verifying: its share of verifies and of the compiler's envelope (envelope.ts). */
+  organizationId?: string | null;
+}
+
+export const VERIFY_BUSY_DETAIL =
+  "This organisation is already verifying other services. Verify again when those have answered.";
+
+/**
+ * ONE ORGANISATION'S VERIFIES TAKE TURNS, BEFORE ANYTHING IS READ
+ * (structural hardening round 3). A verify reads up to 8 MiB of description
+ * and works on it; with no gate, one builder sent twenty at once, seventeen
+ * were refused a compile slot and each then read the whole description on
+ * this thread. Now a verify holds a turn (envelope.ts, the `verify` pool)
+ * from before SAP is asked for the description until it has answered: one at
+ * a time per organisation, a few more waiting, and past that BUSY at once —
+ * nothing fetched, nothing read. Across organisations it is the compile
+ * slots behind it that bound the work.
+ */
+export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl: typeof fetch = fetch): Promise<ServiceVerifyResult> {
+  const started = Date.now();
+  const turn = await withEnvelopeSlot("verify", input.organizationId ?? null, VERIFY_WAIT_MS, () => verifyOnce(input, fetchImpl));
+  if (turn.ok) return turn.value;
+  return {
+    status: "BUSY",
+    verified: false,
+    detail: VERIFY_BUSY_DETAIL,
+    httpStatus: null,
+    durationMs: Date.now() - started,
+    entitySets: [],
+    entitySetCount: 0,
+    detectedODataVersion: null,
+    suggestedEntitySet: null,
+    // Refused here, before SAP was asked: what a throttle answers.
+    auditStatus: 429,
+    failureReason: "VERIFY_BUSY",
+  };
+}
+
+async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch): Promise<ServiceVerifyResult> {
   const target = metadataTarget(input);
   const datasetNeeded = isTenantWideRootAskedWhole(input, target.scope);
   const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {
@@ -248,6 +288,7 @@ export async function verifyServiceMetadata(
               `${r.detail} ${DATASET_NEEDED_DETAIL}`
             : r.detail,
       entitySets: [],
+      entitySetCount: 0,
       detectedODataVersion: null,
       suggestedEntitySet: null,
       auditStatus: auditStatusFor(status, r.httpStatus),
@@ -263,6 +304,7 @@ export async function verifyServiceMetadata(
         ? DATASET_NEEDED_DETAIL
         : `The service description is larger than ${VERIFY_MAX_METADATA_BYTES / (1024 * 1024)} MB, so it was not read in full and the datasets cannot be listed. Ask for a smaller service (one service binding per business object).`,
       entitySets: [],
+      entitySetCount: 0,
       detectedODataVersion: edmxODataVersion(r.body),
       suggestedEntitySet: null,
       auditStatus: 200,
@@ -281,18 +323,20 @@ export async function verifyServiceMetadata(
    * verified yesterday stops verifying today.
    */
   const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null, input.organizationId ?? null);
-  const entitySets = (
-    compiled.ok
-      ? // A singleton is one record, not a dataset the broker can page through.
-        [...new Set(compiled.entitySets.filter((e) => !e.singleton).map((e) => e.name))]
-      : [...new Set(parseEntitySets(r.body).map((e) => e.name))]
-  ).filter(
-    // Stored on the interface: a name PostgreSQL cannot hold (U+0000, an
-    // unpaired surrogate) is no dataset anyone can address. The compiler
-    // refuses such a document; the older readers are not the compiler
-    // (hostile-input review round 3).
-    (name) => !unstorableText(name),
-  );
+  /*
+   * THE DATASETS, AS A BOUNDED SUMMARY (datasets.ts, structural hardening
+   * round 3): the first MAX_STORED_ENTITY_SETS names, how many there are,
+   * and whether the interface's dataset is one — taken in the envelope
+   * whether the compiler read the description or refused it (a singleton is
+   * one record, not a dataset the broker can page through; a name
+   * PostgreSQL cannot hold is no dataset anyone can address). Only when the
+   * envelope never ran the job (no free slot, no worker) does this thread
+   * read them, in slices that give the event loop back between them.
+   */
+  const datasets: DatasetSummary =
+    compiled.ok ? compiled.datasets : (compiled.datasets ?? (await readDatasetsSliced(r.body, input.entitySet || null)));
+  const entitySets = datasets.names;
+  const entitySetCount = datasets.count;
   const detected = compiled.ok ? compiled.odataVersion : edmxODataVersion(r.body);
 
   if (input.declaredVersion !== null && detected !== null && detected !== input.declaredVersion) {
@@ -302,6 +346,7 @@ export async function verifyServiceMetadata(
       verified: false,
       detail: `This service describes itself as ${versionLabel(detected)}, but the interface says ${input.declaredVersion}. Change the version, then verify again.`,
       entitySets,
+      entitySetCount,
       detectedODataVersion: detected,
       suggestedEntitySet: null,
       auditStatus: 200,
@@ -309,10 +354,9 @@ export async function verifyServiceMetadata(
     };
   }
 
-  if (input.entitySet !== null && input.entitySet !== "" && !entitySets.includes(input.entitySet)) {
+  if (input.entitySet !== null && input.entitySet !== "" && !datasets.hasEntitySet) {
     // OData names are case-sensitive, so a near miss is a suggestion, never a match.
-    const wanted = input.entitySet.toLowerCase();
-    const suggestion = entitySets.find((n) => n.toLowerCase() === wanted) ?? null;
+    const suggestion = datasets.suggestion;
     return {
       ...base,
       status: "ENTITY_SET_MISSING",
@@ -321,6 +365,7 @@ export async function verifyServiceMetadata(
         `The service answered, but it has no dataset called "${input.entitySet}".` +
         (suggestion ? ` Did you mean "${suggestion}"? Dataset names are case-sensitive.` : " Pick one of the datasets it lists."),
       entitySets,
+      entitySetCount,
       detectedODataVersion: detected,
       suggestedEntitySet: suggestion,
       auditStatus: 200,
@@ -333,12 +378,13 @@ export async function verifyServiceMetadata(
     status: "OK",
     verified: true,
     detail:
-      entitySets.length === 0
+      entitySetCount === 0
         ? "The service answered with its description, but it declares no datasets."
         : input.entitySet
-          ? `The service answered with its description and offers the dataset "${input.entitySet}" (${entitySets.length} dataset${entitySets.length === 1 ? "" : "s"} in all).`
-          : `The service answered with its description and offers ${entitySets.length} dataset${entitySets.length === 1 ? "" : "s"}. Pick one for this interface.`,
+          ? `The service answered with its description and offers the dataset "${input.entitySet}" (${entitySetCount} dataset${entitySetCount === 1 ? "" : "s"} in all).`
+          : `The service answered with its description and offers ${entitySetCount} dataset${entitySetCount === 1 ? "" : "s"}. Pick one for this interface.`,
     entitySets,
+    entitySetCount,
     detectedODataVersion: detected,
     suggestedEntitySet: null,
     auditStatus: 200,

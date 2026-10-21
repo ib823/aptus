@@ -30,7 +30,9 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { prisma } from "@/lib/db/prisma";
+import { readJsonCapped } from "@/lib/security/bounded-body";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { captureContractMismatch } from "@/lib/studio/contract-provenance";
@@ -46,6 +48,18 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * A FIXTURE IS BOUNDED IN BYTES, NOT ONLY IN ROWS (structural hardening
+ * round 3). Twenty-five rows can be any width — base64 photos, long texts —
+ * and this route read its body with no bound and stored whatever it was
+ * given, so one recording of tens of MB was loaded whole by every kit
+ * download that followed. The request body is read up to
+ * LIMITS.fixture.requestBytes and no further, and the body stored is at most
+ * LIMITS.fixture.bytes of compact JSON; the kit reads fixtures by size first
+ * (fixture-store.ts).
+ */
+const FIXTURE_TOO_LARGE_MESSAGE = `This recording is larger than a fixture may be (${LIMITS.fixture.bytes / (1024 * 1024)} MB), so it was not stored. Run the interface with fewer or narrower rows (a $select of the fields your tests need), and capture again.`;
 
 const bodySchema = z.object({
   /** The broker's read outcome for the run (NorthboundReadStatus). Preferred. */
@@ -86,7 +100,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!scoped.ok) return studioError("FORBIDDEN", "No organization scope.");
   const scope = scoped.scope;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  // Bounded before it is parsed (bounded-body.ts): a self-hosted deployment has no platform limit.
+  const raw = await readJsonCapped(request, LIMITS.fixture.requestBytes);
+  if (!raw.ok && raw.reason === "TOO_LARGE") return studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
+  const parsed = bodySchema.safeParse(raw.ok ? raw.value : null);
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid fixture payload.");
 
   const { readStatus, honestStatus } = parsed.data;
@@ -116,6 +133,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const stamp = { interfaceVersion: iface.version, entitySet: iface.entitySet };
 
   const body = buildFixtureBody(scenario, parsed.data.rows, parsed.data.detail);
+  // What is stored is bounded too (LIMITS.fixture): measured no further than the bound.
+  if (jsonBytesUpTo(body, LIMITS.fixture.bytes) > LIMITS.fixture.bytes) return studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
   const status = SCENARIO_STATUS[scenario];
 
   // Replace any existing recording of this scenario — see the header.

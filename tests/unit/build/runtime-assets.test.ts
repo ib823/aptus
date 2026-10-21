@@ -124,10 +124,23 @@ const workerRoutes = [
   ".next/server/app/api/studio/solutions/[id]/openapi/route.js.nft.json",
 ];
 
-/** A build's worker chunk, traced by every route that spawns it (or by those given). */
-function builtWorker(dir: string, routes = workerRoutes, chunk = 'reply({ ok: false, error: "HeapNotCapped" })') {
+/** A worker chunk that starts and answers its job, as the real one does (its marker included). */
+const RUNNABLE_WORKER = '/* "HeapNotCapped" */ require("node:worker_threads").parentPort.postMessage({ ok: true, value: [] });';
+
+/** A build's worker chunk, traced by every route that spawns it (or by those given), with companion chunks traced as `companions` says. */
+function builtWorker(
+  dir: string,
+  routes = workerRoutes,
+  chunk = RUNNABLE_WORKER,
+  companions: { file: string; tracedBy: readonly string[] }[] = [],
+) {
   write(dir, worker, chunk);
-  for (const r of workerRoutes) write(dir, r, JSON.stringify({ files: routes.includes(r) ? [path.relative(path.dirname(r), worker)] : [] }));
+  for (const c of companions) write(dir, c.file, "module.exports = {};");
+  for (const r of workerRoutes) {
+    const files = routes.includes(r) ? [path.relative(path.dirname(r), worker)] : [];
+    for (const c of companions) if (c.tracedBy.includes(r)) files.push(path.relative(path.dirname(r), c.file));
+    write(dir, r, JSON.stringify({ files }));
+  }
 }
 
 describe("the contract compiler's worker in a build", () => {
@@ -158,6 +171,58 @@ describe("the contract compiler's worker in a build", () => {
     const result = check(dir, true);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(`missing from the function trace of ${route}`);
+  });
+
+  /*
+   * Structural hardening round 3: webpack split a module the worker shares
+   * with the routes into a chunk of its own, and the worker began with
+   * require("./96351.js"). The routes that import that module themselves
+   * traced the companion; capture-schema did not, and its deployed worker
+   * died MODULE_NOT_FOUND while every check here passed. The check now
+   * starts the worker from a copy of each route's trace.
+   */
+  const companion = ".next/server/chunks/96351.js";
+  const needsCompanion = `require("./96351.js"); ${RUNNABLE_WORKER}`;
+  const captureSchema = workerRoutes[1]!;
+
+  it("rejects a build whose worker cannot start from a route's trace: a companion chunk it loads is not traced", () => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir, workerRoutes, needsCompanion, [{ file: companion, tracedBy: workerRoutes.filter((r) => r !== captureSchema) }]);
+    const result = check(dir, true);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`cannot start from the function trace of ${captureSchema}`);
+    expect(result.stderr).toContain("Cannot find module './96351.js'");
+  });
+
+  it("accepts it once every spawning route traces what the worker loads", () => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir, workerRoutes, needsCompanion, [{ file: companion, tracedBy: workerRoutes }]);
+    const result = check(dir, true);
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it("rejects a worker that starts but does not answer its job", () => {
+    const dir = fixture();
+    built(dir);
+    builtWorker(dir, workerRoutes, '/* "HeapNotCapped" */ require("node:worker_threads").parentPort.postMessage({ ok: false, error: "TypeError" });');
+    const result = check(dir, true);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cannot start from the function trace");
+  });
+
+  it("the server build keeps the worker one chunk: no module of it is split out for it to load", async () => {
+    const { default: nextConfig } = await import("../../../next.config");
+    const split = { chunks: "all", minChunks: 2 };
+    const config = { optimization: { splitChunks: split }, resolve: {} };
+    (nextConfig.webpack as (c: unknown, o: unknown) => unknown)(config, { isServer: true, dev: false });
+    const chunks = (split as unknown as { chunks: (c: { name: string | null; canBeInitial(): boolean }) => boolean }).chunks;
+    expect(typeof chunks).toBe("function");
+    expect(chunks({ name: "contract-compiler-worker", canBeInitial: () => true })).toBe(false);
+    // Every other chunk is split exactly as Next configured it ("all").
+    expect(chunks({ name: "app/api/studio/interfaces/[id]/capture-schema/route", canBeInitial: () => true })).toBe(true);
+    expect(chunks({ name: null, canBeInitial: () => false })).toBe(true);
   });
 
   it("accepts a build whose spawning routes all trace it", () => {

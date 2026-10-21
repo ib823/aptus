@@ -1,5 +1,5 @@
 /**
- * WHERE A READ PATH RENDERS (P1.3, structural hardening round 2).
+ * WHERE A READ PATH RENDERS (P1.3, structural hardening rounds 2 and 3).
  *
  * /schema (and its /v1 alias), the starter kit and the per-solution OpenAPI
  * document render a stored contract on every read. Their budgets (budget.ts:
@@ -11,84 +11,221 @@
  * and no deadline — and every other tenant's broker reads, writes and
  * verifies waited behind it.
  *
- * So the request thread renders a read path only when it is cheap BY
- * CONSTRUCTION, and the envelope renders everything else:
+ * So the request thread renders a read path only when it is cheap, and the
+ * envelope renders everything else:
  *
- *   - a budget of at most LIMITS.inlineRender.bytes (known before anything is
- *     rendered: a function of the sizes stored) renders here, under a
- *     deadline of LIMITS.inlineRender.ms — a full budget is ~100 ms at the
- *     ~50 ns a byte measured, and every real contract is a small fraction of
- *     it;
- *   - a larger budget, or a render that meets that deadline, renders in the
- *     envelope (envelope.ts: a worker with its own heap cap and deadline, in
- *     slots of its own, shared fairly between organisations), from at most
- *     LIMITS.inlineRender.inputBytes of input measured before it is copied;
- *   - what comes back is text, spliced verbatim into the answer (RawJson), so
- *     the request thread copies the bytes once and never parses or
- *     re-serialises them.
+ *   - ROUTED BY COST (round 3). A read whose stored input — contract,
+ *     captured schema, fixtures, their sizes known from the database before
+ *     any of it is read — is at most LIMITS.inlineRender.inputBytes is
+ *     rendered here under a deadline of LIMITS.inlineRender.ms, whatever its
+ *     worst-case budget; one that meets the deadline is handed to the
+ *     envelope. Every real contract (1-100 KB) renders here in milliseconds.
+ *     (Round 2 routed by budget: a 57 KB contract's kit went to the envelope,
+ *     and a fourth concurrent read of one organisation was refused.)
+ *   - THE THREAD'S SHARE IS BOUNDED, NOT EACH READ'S (round 3). Inline
+ *     renders draw on one token bucket of render time
+ *     (LIMITS.inlineRender.sharePerSecondMs, holding at most one clock): a
+ *     render starts here only while the bucket has time, and its deadline is
+ *     what the bucket holds. A burst of reads — cheap or expensive, of any
+ *     shape, found or not — holds the thread for at most one clock at a time
+ *     and a fixed share of every second; the rest render in the envelope.
+ *   - SLOT FIRST (round 3). A read that renders in the envelope takes its
+ *     render slot before anything is loaded, measured or copied for it: the
+ *     route hands in a loader (renderReadPathLazy), and the loader runs only
+ *     once the slot is held. A read refused for want of a slot has cost the
+ *     request thread nothing; one waiting for a slot costs nothing either,
+ *     so reads wait their turn (envelope.ts) instead of being refused.
+ *   - WHAT COMES BACK FROM THE ENVELOPE IS BYTES, transferred, never copied
+ *     (compile.worker.ts), and written into the answer as they are (RawJson):
+ *     the request thread never decodes, splits, joins or re-encodes the text.
  *
- * The bound does not depend on which shape of contract makes a render
- * expensive — enum unions, copies, $ref stems, or one nobody has found: the
- * request thread's share is the inline budget and the inline clock, and the
- * rest is the envelope's. A render the envelope cannot finish (its deadline
- * or heap) is TOO_LARGE; one it cannot start (no free slot, no worker) is
- * UNAVAILABLE, and the caller says so and that a retry may succeed.
+ * A render the envelope cannot finish (its deadline or heap) is TOO_LARGE;
+ * one whose stored input is past what a render may be handed is
+ * INPUT_TOO_LARGE, said as such (never as the output's budget); one it
+ * cannot start (no free slot within its deadline, no worker) is UNAVAILABLE,
+ * and the caller says so and that a retry may succeed.
  */
 
 import { randomUUID } from "node:crypto";
 
-import { LIMITS } from "@/lib/contracts/budget";
-import { runInEnvelope } from "@/lib/contracts/envelope";
-import { renderForRead, type RenderJobInput } from "@/lib/contracts/pipeline";
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
+import { INPUT_CAUSE, runLoadedInEnvelope } from "@/lib/contracts/envelope";
+import { renderForRead, type RenderedText, type RenderJobInput } from "@/lib/contracts/pipeline";
 
 export type ReadRender =
-  | { ok: true; texts: string[]; where: "request" | "envelope" }
-  | { ok: false; reason: "TOO_LARGE" | "UNAVAILABLE"; limit: number };
+  | { ok: true; texts: RenderedText[]; where: "request" | "envelope" }
+  | { ok: false; reason: "TOO_LARGE" | "INPUT_TOO_LARGE" | "UNAVAILABLE"; limit: number };
 
-/** Whether a render under this budget may run on the request thread at all. */
-export function rendersOnRequestThread(limit: number): boolean {
-  return limit <= LIMITS.inlineRender.bytes;
+/** What a route knows of a read before reading any of it. */
+export interface ReadPlan {
+  /** The stored input's bytes (contract, captured schema, fixtures); null when a size was not kept. */
+  inputBytes: number | null;
+}
+
+/** What a route's loader gives: the render's input, or the route's own refusal (found while loading). */
+export type ReadLoad<R> = { ok: true; input: RenderJobInput } | { ok: false; refusal: R };
+
+/** The least render time an inline render starts with; with less in the bucket, the read renders in the envelope. */
+const MIN_INLINE_MS = 10;
+
+/** THE REQUEST THREAD'S SHARE of render time (see the header): milliseconds, refilled at sharePerSecondMs. */
+const share = { ms: LIMITS.inlineRender.ms as number, at: Date.now() };
+
+function refill(): void {
+  const now = Date.now();
+  share.ms = Math.min(LIMITS.inlineRender.ms, share.ms + ((now - share.at) * LIMITS.inlineRender.sharePerSecondMs) / 1000);
+  share.at = now;
+}
+
+/** The deadline an inline render may have now, in ms: 0 when the thread's share is spent. */
+function inlineGrant(): number {
+  refill();
+  return share.ms >= MIN_INLINE_MS ? Math.min(share.ms, LIMITS.inlineRender.ms) : 0;
+}
+
+/** For a test: the request thread's share of render time left now (ms), and a way to spend it. */
+export function requestThreadShare(spend = 0): number {
+  refill();
+  share.ms -= spend;
+  return share.ms;
+}
+
+/** Whether a read of this much stored input is tried on the request thread at all (before the share is asked). */
+export function rendersOnRequestThread(inputBytes: number | null): boolean {
+  return inputBytes !== null && inputBytes <= LIMITS.inlineRender.inputBytes;
 }
 
 /**
  * Render one read path's output under its budget: on the request thread when
- * the budget allows it and the render keeps to the inline clock, in the
- * envelope otherwise. `tenant` is the organisation whose share of the
- * envelope's render slots it takes.
+ * its stored input is small and the thread's share has time, in the envelope
+ * otherwise — and there, `load` runs only once a render slot is held.
+ * `tenant` is the organisation whose share of the envelope's render slots it
+ * takes. A loader's own refusal comes back as REFUSED, with the slot (if one
+ * was taken) already handed on.
  */
-export async function renderReadPath(input: RenderJobInput, opts: { tenant: string | null }): Promise<ReadRender> {
-  if (rendersOnRequestThread(input.limit)) {
-    const r = renderForRead(input, Date.now() + LIMITS.inlineRender.ms);
-    if (r.ok) return { ok: true, texts: r.texts, where: "request" };
-    if (r.reason === "TOO_LARGE") return { ok: false, reason: "TOO_LARGE", limit: r.limit };
-    // TIME: slower on this thread than its bytes justify — the envelope renders it instead.
+export async function renderReadPathLazy<R>(
+  plan: ReadPlan,
+  load: () => Promise<ReadLoad<R>>,
+  opts: { tenant: string | null },
+): Promise<ReadRender | { ok: false; reason: "REFUSED"; refusal: R }> {
+  let input: RenderJobInput | null = null;
+  if (rendersOnRequestThread(plan.inputBytes) && inlineGrant() > 0) {
+    const l = await load();
+    if (!l.ok) return { ok: false, reason: "REFUSED", refusal: l.refusal };
+    input = l.input;
+    // Asked again: other reads may have spent the share while this one loaded.
+    const ms = inlineGrant();
+    if (ms > 0) {
+      const started = Date.now();
+      let r: ReturnType<typeof renderForRead>;
+      try {
+        r = renderForRead(input, started + ms);
+      } finally {
+        share.ms -= Date.now() - started;
+      }
+      if (r.ok) return { ok: true, texts: r.texts, where: "request" };
+      if (r.reason === "TOO_LARGE") return { ok: false, reason: "TOO_LARGE", limit: r.limit };
+      // TIME: slower on this thread than its share allows — the envelope renders it instead.
+    }
   }
-  const e = await runInEnvelope({ kind: "render", input }, undefined, { tenant: opts.tenant });
-  if (!e.ok) return { ok: false, reason: e.reason === "RESOURCE_LIMIT" ? "TOO_LARGE" : "UNAVAILABLE", limit: input.limit };
+  let refusal: { value: R } | null = null;
+  const e = await runLoadedInEnvelope(
+    "render",
+    async () => {
+      if (input === null) {
+        const l = await load();
+        if (!l.ok) {
+          refusal = { value: l.refusal };
+          return null;
+        }
+        input = l.input;
+      }
+      return { kind: "render", input };
+    },
+    undefined,
+    { tenant: opts.tenant },
+  );
+  if (e === null) return { ok: false, reason: "REFUSED", refusal: (refusal as { value: R } | null)!.value };
+  const limit = (input as RenderJobInput | null)?.limit ?? 0;
+  if (!e.ok) {
+    return {
+      ok: false,
+      reason: e.cause === INPUT_CAUSE ? "INPUT_TOO_LARGE" : e.reason === "RESOURCE_LIMIT" ? "TOO_LARGE" : "UNAVAILABLE",
+      limit,
+    };
+  }
   if (e.value.ok) return { ok: true, texts: e.value.texts, where: "envelope" };
   return { ok: false, reason: "TOO_LARGE", limit: e.value.limit };
 }
 
+/** renderReadPathLazy for an input already in hand (a test, a small value): its size measured up to the inline bound. */
+export async function renderReadPath(input: RenderJobInput, opts: { tenant: string | null }): Promise<ReadRender> {
+  const r = await renderReadPathLazy<never>(
+    { inputBytes: jsonBytesUpTo(input, LIMITS.inlineRender.inputBytes) },
+    () => Promise.resolve({ ok: true, input }),
+    opts,
+  );
+  return r as ReadRender;
+}
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
 /**
  * JSON with rendered texts spliced in verbatim: `slot(text)` stands for the
- * value `text` is the compact JSON of, and `stringify` writes exactly what
+ * value `text` is the compact JSON of, and the answer is exactly what
  * JSON.stringify would have written for that value — without the request
- * thread parsing the text back into a value only to serialise it again. A
- * slot is a token with a per-answer random nonce, so nothing else in the
- * answer (a name a builder chose, a field from SAP) can be mistaken for one.
+ * thread parsing the text back into a value, nor splitting, joining or
+ * re-encoding it: `bytes` writes the small JSON around the slots and the
+ * slots' bytes as they came (a worker's, transferred). A slot is a token with
+ * a per-answer random nonce, so nothing else in the answer (a name a builder
+ * chose, a field from SAP) can be mistaken for one.
  */
 export class RawJson {
   private readonly nonce = randomUUID();
-  private readonly texts: string[] = [];
+  private readonly texts: RenderedText[] = [];
 
-  slot(text: string): string {
+  slot(text: RenderedText): string {
     this.texts.push(text);
     return this.token(this.texts.length - 1);
   }
 
+  /** The answer as UTF-8 bytes: what a route sends. */
+  bytes(value: unknown): Uint8Array<ArrayBuffer> {
+    const pieces = this.pieces(value).map((p) => (typeof p === "string" ? encoder.encode(p) : p));
+    const out = new Uint8Array(pieces.reduce((n, p) => n + p.byteLength, 0));
+    let at = 0;
+    for (const p of pieces) {
+      out.set(p, at);
+      at += p.byteLength;
+    }
+    return out;
+  }
+
+  /** The answer as text (for a test). */
   stringify(value: unknown): string {
-    let out = JSON.stringify(value);
-    for (let i = 0; i < this.texts.length; i++) out = out.split(JSON.stringify(this.token(i))).join(this.texts[i]!);
+    return this.pieces(value)
+      .map((p) => (typeof p === "string" ? p : decoder.decode(p)))
+      .join("");
+  }
+
+  /** The JSON around the slots, cut where each slot's token stands, with the slots' texts between. */
+  private pieces(value: unknown): RenderedText[] {
+    const skeleton = JSON.stringify(value);
+    const found: { at: number; end: number; i: number }[] = [];
+    for (let i = 0; i < this.texts.length; i++) {
+      const quoted = JSON.stringify(this.token(i));
+      const at = skeleton.indexOf(quoted);
+      if (at >= 0) found.push({ at, end: at + quoted.length, i });
+    }
+    found.sort((a, b) => a.at - b.at);
+    const out: RenderedText[] = [];
+    let from = 0;
+    for (const f of found) {
+      out.push(skeleton.slice(from, f.at), this.texts[f.i]!);
+      from = f.end;
+    }
+    out.push(skeleton.slice(from));
     return out;
   }
 
