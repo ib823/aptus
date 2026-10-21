@@ -28,6 +28,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { afterResponse } from "@/lib/governed/after-response";
 import { loadInterfaceAccess, type AccessLoad, type StoredConnectionRow } from "@/lib/governed/call-loads";
 import {
   grantBindingMode,
@@ -188,6 +189,11 @@ const NEEDS_REAPPROVAL_MESSAGE =
  * After a call is authorised: if no BOUND grant was among the live ones, the
  * call rode on legacy matching alone, and that is recorded (at most hourly per
  * grant) as the signal strict binding would refuse it.
+ *
+ * After the response (P0.19 review round 1): the stamp decides nothing about
+ * this call, so it does not hold the caller up. It still counts in the
+ * database budget (src/lib/governed/db-budget.ts). Outside a request it runs
+ * at once and is awaited, as before.
  */
 async function noteLegacyAuthority(
   scope: TenantScope,
@@ -196,7 +202,7 @@ async function noteLegacyAuthority(
   now: Date,
 ): Promise<void> {
   if (live.some((g) => isBoundTo(g, iface))) return;
-  await recordUnboundGrantUse(prisma, scope.organizationId, live, now);
+  await afterResponse(() => recordUnboundGrantUse(prisma, scope.organizationId, live, now));
 }
 
 /**

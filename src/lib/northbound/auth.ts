@@ -257,6 +257,14 @@ export async function authenticateClientToken(
 export const LAST_USED_STAMP_INTERVAL_MS = 60_000;
 
 /**
+ * Is the stamp due? Not when authentication read a stamp under
+ * LAST_USED_STAMP_INTERVAL_MS old; unknown (undefined) is due, as before.
+ */
+export function lastUsedStampDue(lastUsedAt: Date | null | undefined, now: Date): boolean {
+  return !(lastUsedAt instanceof Date && now.getTime() - lastUsedAt.getTime() < LAST_USED_STAMP_INTERVAL_MS);
+}
+
+/**
  * Record that a token was used.
  *
  * Best-effort and fire-and-forget: a failure to update a timestamp must never
@@ -274,7 +282,7 @@ export async function touchClientLastUsed(
   lastUsedAt?: Date | null,
   now: Date = new Date(),
 ): Promise<void> {
-  if (lastUsedAt instanceof Date && now.getTime() - lastUsedAt.getTime() < LAST_USED_STAMP_INTERVAL_MS) return;
+  if (!lastUsedStampDue(lastUsedAt, now)) return;
   try {
     await prisma.solutionClient.update({
       // Both, not just the id: the update re-asserts the tenant rather than

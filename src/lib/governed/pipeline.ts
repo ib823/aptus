@@ -61,10 +61,13 @@ import {
 import {
   authenticateClientToken,
   extractBearer,
+  LAST_USED_STAMP_INTERVAL_MS,
+  lastUsedStampDue,
   touchClientLastUsed,
   type AuthenticatedClient,
   type PrefetchedWriteKey,
 } from "@/lib/northbound/auth";
+import type { ClaimStamp } from "@/lib/northbound/idempotency";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { recordNorthboundCall, type NorthboundAuditInput } from "@/lib/northbound/audit";
 import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
@@ -361,10 +364,42 @@ export async function authenticate(
   }
   // At most once a minute per key (auth.ts LAST_USED_STAMP_INTERVAL_MS), and
   // after the response is sent (P0.19). Never awaited: it decides nothing.
+  // Unless a statement the call sends anyway carried it first
+  // (carryLastUsedStamp): whichever comes first takes it, the other does not.
   const { clientId, organizationId } = auth.client;
-  void afterResponse(() => touchClientLastUsed(clientId, organizationId, auth.lastUsedAt));
+  const stamp: PendingStamp = { lastUsedAt: auth.lastUsedAt, taken: false };
+  pendingStamps.set(auth.client, stamp);
+  void afterResponse(async () => {
+    if (stamp.taken) return;
+    stamp.taken = true;
+    await touchClientLastUsed(clientId, organizationId, auth.lastUsedAt);
+  });
   if (auth.writeKey) prefetchedWriteKeys.set(auth.client, auth.writeKey);
   return passed(auth.client);
+}
+
+interface PendingStamp {
+  readonly lastUsedAt: Date | null | undefined;
+  taken: boolean;
+}
+
+/** The key's `lastUsedAt` stamp, until it is written. Weak: gone with the request. */
+const pendingStamps = new WeakMap<AuthenticatedClient, PendingStamp>();
+
+/**
+ * Hand the key's `lastUsedAt` stamp, when it is due, to a statement the call
+ * sends anyway (P0.19 review round 1). The write route's Idempotency-Key
+ * claim carries it (idempotency.ts claimStatement), so the minute's first
+ * write, replay or conflict of a key costs no statement of its own; the
+ * stamp after the response then writes nothing. Null when it is not due,
+ * already written, or authentication did not run. The SQL repeats the
+ * once-a-minute condition, so a stamp racing another call's is a no-op.
+ */
+export function carryLastUsedStamp(client: AuthenticatedClient, now: Date = new Date()): ClaimStamp | null {
+  const stamp = pendingStamps.get(client);
+  if (!stamp || stamp.taken || !lastUsedStampDue(stamp.lastUsedAt, now)) return null;
+  stamp.taken = true;
+  return { clientId: client.clientId, at: now, staleBefore: new Date(now.getTime() - LAST_USED_STAMP_INTERVAL_MS) };
 }
 
 /**

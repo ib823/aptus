@@ -40,8 +40,9 @@ the call. A static test (`tests/unit/governed/pipeline.test.ts`) fails if
 `tests/integration/governed-db-budget.test.ts` checks PostgreSQL itself at
 every SAP call.
 
-**A database budget per call (P0.19).** A read sends at most 4 statements
-(today 3) and a write 5: `authenticate` reads the key in one statement and
+**A database budget per call (P0.19).** In the steady state a read sends at
+most 4 statements (today 3) and a write 5, with the occasional statements
+that runbook lists on top: `authenticate` reads the key in one statement and
 `authorise` reads the interface, its grants and the connections
 `bindConnection` binds from in another (`src/lib/governed/call-loads.ts`).
 See [`coreedge-db-budget.md`](coreedge-db-budget.md).

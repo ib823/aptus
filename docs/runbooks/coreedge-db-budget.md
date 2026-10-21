@@ -10,7 +10,7 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 |---|---|---|---|
 | Read (served, or refused by grant, interface or binding) | **4** | 3 | the key, the interface with its grants and connections, the audit row |
 | Read refused by its key (revoked, expired, rotated out, dropped, unknown) | 4 | 1 | the key; no audit row, as before |
-| Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the refused claim and the stored outcome) |
+| Write (created, refused, or replayed) | **5** | 5 | the read's 3, plus the Idempotency-Key claimed before SAP and its outcome stored after (a replay: the claim that finds the key held, and the stored outcome) |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
@@ -26,15 +26,24 @@ included, before the response or after it. Work moved after the response
 (Next.js `after()`, `src/lib/governed/after-response.ts`) shortens the call
 but still holds a pooled connection, so it still counts.
 
-**Occasional statements**, outside the steady state and each bounded:
+**Occasional statements**, outside the steady state and each bounded.
+Counted as Prisma sends them: `createMany` and `updateMany` go as BEGIN, the
+statement and COMMIT, three round trips, so only the milestone still uses
+one (review round 1).
 
 | What | How often | Statements |
 |---|---|---|
-| The key's `lastUsedAt` stamp | at most once a minute per key, after the response | +1 |
-| The first-call milestone (P2.12) | once per app and environment per instance, after the response | +3 |
+| The key's `lastUsedAt` stamp, on a write that claims its Idempotency-Key (created, replayed, in conflict) | at most once a minute per key, so most writes of a low-volume app | +0: carried by the claim's own statement (5) |
+| The key's `lastUsedAt` stamp, on a read or a write refused before its claim | at most once a minute per key, after the response | +1 (4, within budget) |
+| A write whose Idempotency-Key had expired | per such write | +0: renewed by the claim's own `ON CONFLICT` arm (5) |
+| An unbound legacy grant's use stamp (P0.1) | at most hourly per grant, only while `COREEDGE_GRANT_BINDING` is legacy, after the response | +1, one UPDATE (a read 4; a write that hour 6) |
+| The first-call milestone (P2.12) | once per app and environment per instance, after the response | +3 (`createMany`) |
 | An organisation's data key (P0.10) | once per organisation per instance per 10 minutes | +1 |
-| An unbound legacy grant's use stamp (P0.1) | at most hourly per grant, only while `COREEDGE_GRANT_BINDING` is legacy | +1 |
-| A write whose Idempotency-Key had expired | per such write | +1 |
+
+The last three can take a call over its steady-state budget, once per
+period each, and two can coincide (a cold instance's first call of the hour
+on a legacy grant). `tests/integration/governed-db-budget.test.ts` asserts
+every row but the data key.
 
 ## What changed
 
@@ -55,18 +64,32 @@ but still holds a pooled connection, so it still counts.
   `CONNECTION_UNREADABLE` and the same choice.
 - **`lastUsedAt` at most once a minute per key** (it was a write on every
   call), after the response.
-- **The Idempotency-Key is claimed with the INSERT first**; the existing row
-  is read only when the unique constraint refuses it. A fresh key was a read
-  and then the insert.
+- **The Idempotency-Key is claimed by one statement**: `INSERT ... ON
+  CONFLICT DO UPDATE ... WHERE` the held row has expired, `RETURNING` the
+  claim's id (`claimStatement`, `src/lib/northbound/idempotency.ts`). A
+  fresh key is inserted and an expired one renewed in that round trip (the
+  renewal was a further BEGIN, UPDATE, COMMIT); a held key returns no row,
+  raises no error, and only then is the row read and judged as before. A
+  fresh key was a read and then the insert. When the key's `lastUsedAt`
+  stamp is due, the claim carries it as a CTE (`carryLastUsedStamp`,
+  `src/lib/governed/pipeline.ts`), with the same once-a-minute condition in
+  its WHERE.
+- **An unbound legacy grant's use stamp is one UPDATE, after the response**
+  (`recordUnboundGrantUse`); it was an `updateMany` on the response path.
 - **The first-call milestone runs after the response.**
 
-**The tenant guard does not see the two statements.** It is a Prisma
+**The tenant guard does not see the raw statements.** It is a Prisma
 extension, and a raw statement passes it by. The scoping it would demand is
 written into the SQL and pinned by `tests/unit/governed/call-loads-sql.test.ts`
 (the key lookup's only unscoped predicates are equalities on the presented
 hash, on the three columns `UNSCOPED_BY_DESIGN` already sanctions; every table
 the access load reads is filtered by the caller's organization, as a
-parameter). `tests/integration/governed-call-loads.test.ts` runs both
+parameter), `tests/unit/northbound/idempotency.test.ts` (the claim inserts
+for the caller's organisation and stamps only the credential's row in it)
+and `tests/unit/studio/unbound-grant-stamp-sql.test.ts` (the grant stamp is
+scoped to the caller's organisation and the due grants). Each writes
+timestamps as UTC (`::timestamptz AT TIME ZONE 'UTC'`), as Prisma stores
+them, whatever the session's time zone. `tests/integration/governed-call-loads.test.ts` runs both
 statements and the Prisma queries they replaced on PostgreSQL over rows built
 to tell them apart, another organisation's rows carrying this organisation's
 solution and interface ids included, and requires the same answer. The unit
@@ -96,10 +119,13 @@ provider's pooled endpoint), with migrations on a direct connection.
   every PgBouncer version, including those that support named statements.
 - `connection_limit=5` is the pool per instance. An instance may serve
   several calls at once, and each holds a connection only for the length of
-  one statement, so the budget above is what sets how many calls five
-  connections carry: at 3 statements a read, five connections are busy for
-  roughly 3 × 5 / (round-trip time) calls a second before calls queue on
-  `pool_timeout`.
+  one statement, so a call occupies a connection for about (statements per
+  call × round-trip time), and the budget above is what sets how many calls
+  five connections carry: about `connection_limit / (statements per call ×
+  round-trip time)` calls a second before calls queue on `pool_timeout`.
+  For a read, 5 / (3 × RTT): with a 5 ms round trip, 5 / (3 × 0.005 s) ≈
+  330 a second; with 20 ms, ≈ 80. That is the database's ceiling only; it
+  assumes the statements of concurrent calls interleave perfectly.
 - `schema.prisma` sets `directUrl = env("DIRECT_DATABASE_URL")`, so `prisma
   migrate deploy` (run by `vercel-build`) connects directly. It must:
   Prisma Migrate takes a session-level advisory lock, which a
@@ -180,9 +206,9 @@ differences:
 - `SolutionClient.lastUsedAt` moves at most once a minute per key, so a
   screen showing it to the second can be up to a minute behind; the idle
   checks count in days.
-- A replayed or conflicting write logs a unique-constraint error in the
-  database's own log (the refused claim); the application treats it as
-  before.
+- A replayed or conflicting write logs nothing: the claim's `ON CONFLICT`
+  raises no unique-constraint error, in the database's log or in the
+  application's (Prisma logs every refused query at `error`, caught or not).
 
 ## Rolling back
 

@@ -33,6 +33,7 @@ import {
   authorise,
   bindConnection,
   callSapWrite,
+  carryLastUsedStamp,
   contain,
   GovernedAudit,
   northboundRefusalResponse,
@@ -278,6 +279,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       entitySet,
       interfaceVersion: iface.version,
     },
+    // The key's lastUsedAt stamp, when due, rides in the claim's statement
+    // rather than costing one of its own after the response (P0.19).
+    stamp: carryLastUsedStamp(client),
   });
 
   if (reservation.outcome === "replay") {

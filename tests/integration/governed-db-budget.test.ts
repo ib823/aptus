@@ -42,6 +42,8 @@ const q = vi.hoisted(() => ({
   /** BEGINs without their COMMIT or ROLLBACK, as the query log shows them. */
   open: 0,
   deferred: [] as (() => unknown)[],
+  /** Errors Prisma logged (its `log: ['error']` output in production). */
+  errors: [] as string[],
 }));
 
 function withAppName(url: string): string {
@@ -53,7 +55,14 @@ vi.mock("@/lib/db/prisma", async () => {
   const { tenantScopeGuard } = await import("@/lib/db/tenant-guard");
   const base = new PrismaClient({
     datasourceUrl: withAppName(process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused"),
-    log: [{ emit: "event", level: "query" }],
+    log: [
+      { emit: "event", level: "query" },
+      { emit: "event", level: "error" },
+    ],
+  });
+  // What production's `log: ['error']` (src/lib/db/prisma.ts) would print.
+  base.$on("error", (e) => {
+    q.errors.push(e.message.replace(/\s+/g, " ").slice(0, 160));
   });
   base.$on("query", (e) => {
     const text = e.query.trim();
@@ -88,7 +97,7 @@ import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 const RUN = `p019-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
 const DAY = 86_400_000;
-const ids = { solution: "", read: "", write: "", noGrant: "", user: `${RUN}-dev`, client: "" };
+const ids = { solution: "", read: "", write: "", noGrant: "", legacy: "", legacyGrant: "", user: `${RUN}-dev`, client: "" };
 const tokens = { live: "", revoked: "", dropped: "", expired: "" };
 let writeKey = "";
 
@@ -121,6 +130,8 @@ interface Counted {
   /** Statements `after()` sent once it was. */
   after: string[];
   total: number;
+  /** Errors Prisma logged while the call ran, before or after the response. */
+  errors: string[];
 }
 
 async function settle(): Promise<void> {
@@ -131,6 +142,7 @@ async function count(call: () => Promise<Response>): Promise<Counted> {
   await settle();
   q.deferred = [];
   q.log = [];
+  q.errors = [];
   q.on = true;
   const res = await call();
   await settle();
@@ -140,7 +152,7 @@ async function count(call: () => Promise<Response>): Promise<Counted> {
   await settle();
   const after = q.log;
   q.on = false;
-  return { status: res.status, response, after, total: response.length + after.length };
+  return { status: res.status, response, after, total: response.length + after.length, errors: q.errors.splice(0) };
 }
 
 const read = (token: string, id: string) =>
@@ -148,7 +160,7 @@ const read = (token: string, id: string) =>
     params: Promise.resolve({ id }),
   });
 
-const write = (token: string, id: string, key: string) =>
+const write = (token: string, id: string, key: string, record: Record<string, unknown> = { SupplierInvoice: "1" }) =>
   writeRoute(
     new NextRequest(`http://localhost/api/northbound/interfaces/${id}/data/write`, {
       method: "POST",
@@ -158,13 +170,20 @@ const write = (token: string, id: string, key: string) =>
         "idempotency-key": key,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ record: { SupplierInvoice: "1" } }),
+      body: JSON.stringify({ record }),
     }),
     { params: Promise.resolve({ id }) },
   );
 
 /** The key's stamp as it is after a call in the last minute. */
 const stampNow = () => prisma.solutionClient.update({ where: { id: ids.client, organizationId: ORG }, data: { lastUsedAt: new Date() } });
+
+/** The key's stamp as it is when the key has not been used for two minutes. */
+const stampStale = () =>
+  prisma.solutionClient.update({ where: { id: ids.client, organizationId: ORG }, data: { lastUsedAt: new Date(Date.now() - 120_000) } });
+
+const lastUsedAt = async () =>
+  (await prisma.solutionClient.findFirst({ where: { id: ids.client, organizationId: ORG }, select: { lastUsedAt: true } }))?.lastUsedAt ?? null;
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governed call (P0.19)", () => {
   beforeAll(async () => {
@@ -196,6 +215,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     ids.read = await iface("purchase-orders", "READ", "READ", "A_PurchaseOrder");
     ids.write = await iface("supplier-invoices", "CREATE", "WRITE", "A_SupplierInvoice");
     ids.noGrant = await iface("purchase-contracts", "READ", "READ", "A_PurchaseContract");
+    ids.legacy = await iface("commercial-projects", "READ", "READ", "A_CommercialProject");
     for (const [interfaceId, externalId, operation] of [
       [ids.read, "purchase-orders", "READ"],
       [ids.write, "supplier-invoices", "CREATE"],
@@ -216,6 +236,29 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
         },
       });
     }
+
+    // An unbound legacy grant (P0.1) as the backfill and cut-off leave one
+    // they could not bind, approved after its interface was created, so
+    // COREEDGE_GRANT_BINDING=legacy (the default) honours it. Already marked,
+    // so the backfill another test file runs over every organisation's
+    // unmarked grants leaves this one alone.
+    ids.legacyGrant = (
+      await prisma.apiAccessGrant.create({
+        data: {
+          organizationId: ORG,
+          solutionId: ids.solution,
+          externalId: "commercial-projects",
+          operation: "READ",
+          environment: "DEV",
+          justification: "Budget, legacy.",
+          decision: "APPROVED",
+          decidedAt: new Date(),
+          expiresAt: new Date(Date.now() + DAY),
+          unboundReason: "AMBIGUOUS",
+          unboundCutoffAt: new Date(),
+        },
+      })
+    ).id;
 
     const client = async (environment: string, extra: Record<string, unknown> = {}) => {
       const raw = generateClientToken(environment);
@@ -338,6 +381,85 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     expect(c.response.length, report("first call on an instance", c)).toBeLessThanOrEqual(DB_BUDGET.read);
     expect(c.after.some((s) => s.includes("DeveloperJourneyEvent")), report("first call on an instance", c)).toBe(true);
     expect(c.after.length).toBeLessThanOrEqual(3);
+  });
+
+  /*
+   * REVIEW ROUND 1. The stamp is due on every call of a key idle for a minute
+   * — most writes of a low-volume app — so a write must carry it within the
+   * write budget, not only a read (it rides in the Idempotency-Key claim).
+   */
+  it("the minute's first write of a key stamps it within the write budget", async () => {
+    await stampStale();
+    const before = (await lastUsedAt())!.getTime();
+    const c = await count(() => write(tokens.live, ids.write, `${RUN}-stale-write`));
+    expect(c.status).toBe(201);
+    expect(c.total, report("stale stamp write", c)).toBeLessThanOrEqual(DB_BUDGET.write);
+    expect((await lastUsedAt())!.getTime()).toBeGreaterThan(before + 60_000);
+  });
+
+  it("the minute's first replay of a key stamps it within the write budget", async () => {
+    await stampNow();
+    await count(() => write(tokens.live, ids.write, `${RUN}-stale-replay`));
+    await stampStale();
+    const before = (await lastUsedAt())!.getTime();
+    const c = await count(() => write(tokens.live, ids.write, `${RUN}-stale-replay`));
+    expect(c.status).toBe(201);
+    expect(c.total, report("stale stamp replay", c)).toBeLessThanOrEqual(DB_BUDGET.write);
+    expect((await lastUsedAt())!.getTime()).toBeGreaterThan(before + 60_000);
+  });
+
+  it("a write refused before its key is claimed is stamped after the response, within the write budget", async () => {
+    await stampStale();
+    const c = await count(() => write(tokens.live, ids.noGrant, `${RUN}-stale-refused`));
+    expect(c.status).toBe(403);
+    expect(c.after.filter((s) => s.includes('"lastUsedAt"')), report("stale stamp refused write", c)).toHaveLength(1);
+    expect(c.total, report("stale stamp refused write", c)).toBeLessThanOrEqual(DB_BUDGET.write);
+  });
+
+  it("a write whose Idempotency-Key expired is renewed in the claim, within the write budget", async () => {
+    await stampNow();
+    const key = `${RUN}-expired`;
+    expect((await count(() => write(tokens.live, ids.write, key, { SupplierInvoice: "old" }))).status).toBe(201);
+    await prisma.northboundIdempotencyKey.updateMany({
+      where: { organizationId: ORG, key },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const c = await count(() => write(tokens.live, ids.write, key, { SupplierInvoice: "new" }));
+    expect(c.status).toBe(201);
+    expect(c.total, report("expired key write", c)).toBeLessThanOrEqual(DB_BUDGET.write);
+    expect(c.errors).toEqual([]);
+    // Renewed for THIS request: a fresh lifetime and this call's own outcome.
+    const row = await prisma.northboundIdempotencyKey.findFirst({ where: { organizationId: ORG, key } });
+    expect(row?.status).toBe(201);
+    expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now() + DAY - 60_000);
+  });
+
+  it("a read authorised by an unbound legacy grant stamps the grant after the response, in one statement", async () => {
+    await stampNow();
+    await prisma.apiAccessGrant.update({ where: { id: ids.legacyGrant, organizationId: ORG }, data: { unboundLastUsedAt: null } });
+    const c = await count(() => read(tokens.live, ids.legacy));
+    expect(c.status).toBe(200);
+    expect(c.response.filter((s) => s.includes("ApiAccessGrant") && s.startsWith("UPDATE")), report("legacy grant read", c)).toEqual([]);
+    expect(c.after, report("legacy grant read", c)).toHaveLength(1);
+    expect(c.after[0]).toContain('"unboundLastUsedAt"');
+    expect(c.total, report("legacy grant read", c)).toBeLessThanOrEqual(DB_BUDGET.read);
+    const stamped = await prisma.apiAccessGrant.findFirst({ where: { id: ids.legacyGrant, organizationId: ORG }, select: { unboundLastUsedAt: true } });
+    expect(stamped?.unboundLastUsedAt?.getTime()).toBeGreaterThan(Date.now() - 60_000);
+    // ...and within the hour nothing more is written.
+    const next = await count(() => read(tokens.live, ids.legacy));
+    expect(next.after, report("legacy grant read, stamped", next)).toEqual([]);
+  });
+
+  it("a replayed or conflicting write logs no database error", async () => {
+    await stampNow();
+    const key = `${RUN}-quiet`;
+    expect((await count(() => write(tokens.live, ids.write, key))).errors).toEqual([]);
+    const replay = await count(() => write(tokens.live, ids.write, key));
+    expect(replay.status).toBe(201);
+    expect(replay.errors).toEqual([]);
+    const conflict = await count(() => write(tokens.live, ids.write, key, { SupplierInvoice: "other" }));
+    expect(conflict.status).toBe(409);
+    expect(conflict.errors).toEqual([]);
   });
 
   it("holds no transaction open while SAP is called", () => {
