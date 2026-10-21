@@ -47,10 +47,29 @@ vi.mock("@/lib/security/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   RATE_LIMITS: { northbound: {} },
 }));
-vi.mock("@/lib/db/prisma", () => ({
-  // No compiled contract (P1.3): the captured schema is all there is.
-  prisma: { interface: { findFirst }, contractSnapshot: { findMany: async () => [] } },
-}));
+vi.mock("@/lib/db/prisma", async () => {
+  const { capturedSchemaFactRows } = await import("../../helpers/captured-schema-facts");
+  // The one interface row the test set up, as the database holds it.
+  const lastRow = async () => (findFirst.mock.results.at(-1)?.value as Promise<Record<string, unknown>> | undefined) ?? null;
+  return {
+    prisma: {
+      interface: {
+        findFirst,
+        // The captured schema, read by id once its stored size is known (response-schema-states.ts).
+        findMany: async () => {
+          const row = await lastRow();
+          return row ? [{ id: row.id, responseSchema: row.responseSchema }] : [];
+        },
+      },
+      // No compiled contract (P1.3): the captured schema is all there is.
+      contractSnapshot: { findMany: async () => [], findFirst: async () => null },
+      $queryRaw: async (q: unknown) => {
+        const row = await lastRow();
+        return row ? capturedSchemaFactRows([row], q) : [];
+      },
+    },
+  };
+});
 
 import { GET as getSchema } from "@/app/api/northbound/interfaces/[id]/schema/route";
 

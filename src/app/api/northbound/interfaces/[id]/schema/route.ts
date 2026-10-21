@@ -43,6 +43,16 @@
  * rendered and measured the same contract under the same budget inside the
  * compiler's envelope before storing it (pipeline.ts), so nothing served
  * here is computed for the first time on this thread.
+ *
+ * EVERYTHING IT RETURNS IS CHARGED TO THAT ONE BUDGET (structural hardening
+ * round 1). The captured `responseSchema` used to be served whole, outside
+ * it: an 11.5 MB schema stored from one hostile row went out on every call
+ * of a route whose budget, with no contract, was 64 KB. Now its stored size
+ * is read from the database first and a schema past the captured-schema
+ * bound (LIMITS.capturedSchema) is never read; one that is read is charged
+ * to the answer's budget, which allows it exactly that bound beside the
+ * contract's schemas. Past it `responseSchema` is null and
+ * `responseSchemaOmitted` says why, as `schemasOmitted` does for a contract.
  */
 
 import type { NextRequest } from "next/server";
@@ -60,13 +70,10 @@ import {
 import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import {
-  currentResponseSchema,
-  responseSchemaState,
-  withheldArtifactNote,
-} from "@/lib/studio/contract-provenance";
+import { withheldArtifactNote } from "@/lib/studio/contract-provenance";
+import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
 import { scopedById } from "@/lib/studio/tenant-scope";
-import { BudgetExceeded, measureJson, schemaLimit } from "@/lib/contracts/budget";
+import { BudgetExceeded, chargeJson, LIMITS, OutputBudget, schemaLimit } from "@/lib/contracts/budget";
 import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
@@ -134,7 +141,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       mode: true,
       version: true,
       requestSchema: true,
-      responseSchema: true,
+      // Not responseSchema: its size is read first, and it only when bounded (below).
       solutionId: true,
     },
   });
@@ -157,7 +164,14 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
     return northboundError("NOT_FOUND", "No such interface.", 404, correlationId);
   }
 
-  const schemaState = responseSchemaState(iface.responseSchema, iface);
+  // The captured schema's stamp and stored size, from the database; the schema
+  // itself only when it describes this contract and is inside its bound.
+  const facts = (await capturedSchemaFacts(client.organizationId, [iface])).get(iface.id) ?? { state: "none" as const, storedBytes: null };
+  const schemaState = facts.state;
+  const captured =
+    schemaState === "current"
+      ? ((await readCurrentCapturedSchemas(client.organizationId, [iface], new Map([[iface.id, facts]]))).get(iface.id) ?? null)
+      : null;
   // The summary first, without its IR: what it is and how large.
   const current = (await currentSnapshotSummaries(client.scope, [iface])).get(iface.id) ?? null;
   // A SAMPLED snapshot is the captured schema with a version, so it follows
@@ -183,13 +197,26 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
    * since is always inside it; a row from before is refused here, not
    * rendered without bound.
    */
+  const budget = new OutputBudget("schema", schemaLimit(snapshot?.irBytes ?? 0) + LIMITS.capturedSchema.served);
+  // The captured schema, within its own share of the budget.
+  let responseSchema: unknown = null;
+  let responseSchemaTooLarge = captured !== null && !captured.ok;
+  if (captured?.ok) {
+    try {
+      budget.charge(chargeJson(captured.schema, new OutputBudget("capturedSchema", LIMITS.capturedSchema.served)));
+      responseSchema = captured.schema;
+    } catch (err) {
+      if (!(err instanceof BudgetExceeded)) throw err;
+      responseSchemaTooLarge = true;
+    }
+  }
   let schemas: ReturnType<typeof standaloneSchemas> | null = null;
   let requestSchema: JsonSchema | null = null;
   if (snapshot) {
     try {
       schemas = standaloneSchemas(snapshot.contract, toTypeName(snapshot.entitySet));
       requestSchema = renderedRequestSchema(iface.requestSchema, iface, { id: snapshot.id, schemas });
-      measureJson({ schemas, requestSchema }, schemaLimit(snapshot.irBytes));
+      chargeJson({ schemas, requestSchema }, budget);
     } catch (err) {
       if (!(err instanceof BudgetExceeded)) throw err;
       tooLarge = true;
@@ -258,7 +285,14 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       // Of THIS contract only, and as the served rows can satisfy it: a schema
       // captured before the broker stripped SAP's envelope still requires V2's
       // deferred navigations, which no served row carries (servedResponseSchema).
-      responseSchema: currentResponseSchema(iface.responseSchema, iface),
+      responseSchema,
+      // Additive: why there is no responseSchema for a capture that is there.
+      ...(responseSchemaTooLarge
+        ? {
+            responseSchemaOmitted: "TOO_LARGE" as const,
+            responseSchemaNote: `This contract's captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not served. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`,
+          }
+        : {}),
       // Said out loud because a null schema is a real state, not a bug: nobody
       // has captured one for this contract yet.
       schemaCaptured: schemaState === "current",

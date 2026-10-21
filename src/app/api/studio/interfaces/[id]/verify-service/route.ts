@@ -228,6 +228,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // can be recorded: this interface, under the longest names a solution and
     // an interface may have, so a rename never takes a read past its budget.
     subject: iface.entitySet ? measuredSubject({ ...iface, entitySet: iface.entitySet }) : null,
+    // Its organisation's share of the compiler, so another's verifies cannot crowd it out.
+    organizationId: scope.organizationId,
   });
 
   await recordConsoleRead({

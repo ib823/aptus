@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import type { Prisma } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Each compile, diff and record-time render runs in a real worker thread
@@ -38,6 +39,7 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
+import { LIMITS } from "@/lib/contracts/budget";
 import { contractDigest } from "@/lib/contracts/canonical";
 import { compileContract } from "@/lib/contracts/compile";
 import { compiledServiceOf } from "@/lib/contracts/pipeline";
@@ -559,6 +561,64 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
       errors.mockRestore();
     }
     expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(1);
+  });
+
+  /*
+   * Structural hardening round 1: a description flipping between two
+   * contracts records a version per verify, by design — and every read
+   * loaded every one of them (20,030 rows: half a second a call). The
+   * history is now bounded when a row is recorded, each environment's
+   * newest kept, and each decision reads the one row it needs.
+   */
+  it("keeps a bounded history however long the flips went on, each environment's newest kept", async () => {
+    const iface = await newInterface("history");
+    const first = await recordContractSnapshot({ scope, iface, contract: salesOrder(), environment: "PROD" });
+    if (first.status !== "RECORDED") throw new Error(first.status);
+    const base = await prisma.contractSnapshot.findFirstOrThrow({ where: { organizationId: ORG, id: first.snapshot.id } });
+    // The history an attacker's flips leave behind: DEV rows, each a version, written directly.
+    const flips = LIMITS.snapshotHistory + 40;
+    await prisma.contractSnapshot.createMany({
+      data: Array.from({ length: flips }, (_, i) => ({
+        organizationId: ORG,
+        interfaceId: iface.id,
+        interfaceVersion: base.interfaceVersion,
+        externalId: base.externalId,
+        entitySet: base.entitySet,
+        source: base.source,
+        odataVersion: base.odataVersion,
+        semver: `1.${i + 1}.0`,
+        semverMajor: 1,
+        semverMinor: i + 1,
+        semverPatch: 0,
+        contentHash: `${RUN}-flip-${i}`,
+        ir: base.ir as Prisma.InputJsonObject,
+        irVersion: base.irVersion,
+        irBytes: base.irBytes,
+        environment: "DEV",
+      })),
+    });
+
+    // The next verify of DEV records one more version, and the history is cut back.
+    const added = salesOrder();
+    added.entityType.properties.push({ name: "Region", type: "Edm.String", nullable: true });
+    const next = await recordContractSnapshot({ scope, iface, contract: added, environment: "DEV" });
+    expect(next).toMatchObject({ status: "RECORDED", snapshot: { semver: `1.${flips + 1}.0` } });
+    const kept = await prisma.contractSnapshot.findMany({
+      where: { organizationId: ORG, interfaceId: iface.id },
+      select: { id: true, semverMinor: true, environment: true },
+    });
+    // The newest LIMITS.snapshotHistory, and PROD's own newest — the oldest row of all.
+    expect(kept).toHaveLength(LIMITS.snapshotHistory + 1);
+    expect(kept.some((r) => r.id === first.snapshot.id)).toBe(true);
+    expect(Math.min(...kept.filter((r) => r.environment === "DEV").map((r) => r.semverMinor))).toBe(flips + 1 - LIMITS.snapshotHistory + 1);
+
+    // Each decision still reads the right row: the line's newest is current…
+    expect((await currentContractSnapshot(scope, iface))?.semver).toBe(`1.${flips + 1}.0`);
+    // …and PROD, verifying its own contract again, is its own row, kept.
+    expect(await recordContractSnapshot({ scope, iface, contract: salesOrder(), environment: "PROD" })).toMatchObject({
+      status: "UNCHANGED",
+      snapshot: { id: first.snapshot.id },
+    });
   });
 
   it("goes with its interface", async () => {

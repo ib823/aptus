@@ -70,6 +70,11 @@ export function documentTooLargeMessage(what: "starter kit" | "solution document
   return `The compiled contracts this ${what} would carry are larger than the ${Math.floor(limit / (1024 * 1024))} MB a generated document may carry, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;
 }
 
+/** The refusal of a solution document with more interfaces than one document carries (maxDocumentInterfaces). */
+export function documentTooManyInterfacesMessage(max: number): string {
+  return `This solution has more than ${max} interfaces, the most one generated document carries, so it was not built. Split the solution, or download each interface's starter kit.`;
+}
+
 /** The refusal of a document whose output passed its budget while it was written (budget.ts). */
 export function documentOutputTooLargeMessage(what: "starter kit" | "solution document", limit: number): string {
   return `This ${what} would be larger than the ${Math.max(1, Math.floor(limit / (1024 * 1024)))} MB its contracts allow it to be, so it was not built. Narrow the interfaces' datasets, or split the solution, and verify again.`;

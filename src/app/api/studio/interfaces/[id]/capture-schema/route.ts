@@ -24,6 +24,16 @@
  * own description describes the interface, the captured shape is also
  * recorded as a SAMPLED ContractSnapshot, so the contract has a version and a
  * history either way. A compiled one is never pushed aside by a sample.
+ *
+ * BOUNDED BEFORE ANY WORK (budget.ts, LIMITS.capturedSchema; structural
+ * hardening round 1). The rows come from the tenant's SAP system, which an
+ * attacker may control: one row of 358,000 distinct keys cost seconds of
+ * inference, an 11.5 MB stored schema and a contract of the same size built
+ * on this thread before the envelope refused it. Now the body is read up to
+ * `requestBytes` and no further, the inference stops past `properties`
+ * distinct fields, and a schema past `bytes` is refused — TOO_LARGE, with
+ * nothing stored — so the sampled contract made from it, and every reader of
+ * the stored schema, starts from a bounded input.
  */
 
 import type { NextRequest } from "next/server";
@@ -32,11 +42,13 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { BudgetExceeded, LIMITS } from "@/lib/contracts/budget";
 import { recordSampledContract, serviceODataVersion } from "@/lib/contracts/record";
+import { readJsonCapped } from "@/lib/security/bounded-body";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { captureContractMismatch } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { inferResponseSchema } from "@/lib/studio/schema-capture";
+import { inferResponseSchema, rowsPastCaptureBound, type CapturedSchema } from "@/lib/studio/schema-capture";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +67,10 @@ const bodySchema = z.object({
   entitySet: z.string().max(200).nullable().optional(),
 });
 
+const TOO_LARGE_MESSAGE =
+  `These rows describe more than a captured schema may hold (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ` +
+  `${LIMITS.capturedSchema.bytes / 1024} KB), so nothing was captured. Narrow the interface's dataset, or verify the service to compile its contract from its own description.`;
+
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
@@ -68,7 +84,13 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!scoped.ok) return studioError("FORBIDDEN", "No organization scope.");
   const scope = scoped.scope;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const body = await readJsonCapped(request, LIMITS.capturedSchema.requestBytes);
+  if (!body.ok && body.reason === "TOO_LARGE") return studioError("TOO_LARGE", TOO_LARGE_MESSAGE);
+  // A row wider than a schema could describe is refused before it is validated (a pass over every key).
+  if (body.ok && rowsPastCaptureBound((body.value as { rows?: unknown } | null)?.rows)) {
+    return studioError("TOO_LARGE", TOO_LARGE_MESSAGE);
+  }
+  const parsed = bodySchema.safeParse(body.ok ? body.value : null);
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Expected a non-empty array of rows.");
 
   const { id } = await ctx.params;
@@ -90,10 +112,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const mismatch = captureContractMismatch(parsed.data, iface);
   if (mismatch) return studioError("CONFLICT", mismatch);
 
-  const schema = inferResponseSchema(parsed.data.rows, new Date(), {
-    version: iface.version,
-    entitySet: iface.entitySet,
-  });
+  let schema: CapturedSchema | null;
+  try {
+    schema = inferResponseSchema(parsed.data.rows, new Date(), {
+      version: iface.version,
+      entitySet: iface.entitySet,
+    });
+  } catch (err) {
+    if (err instanceof BudgetExceeded) return studioError("TOO_LARGE", TOO_LARGE_MESSAGE);
+    throw err;
+  }
   if (!schema) {
     // Rows that carried nothing describable. Better to say so than to write an
     // empty schema that looks captured.

@@ -205,6 +205,8 @@ every render and measurement taken at record time (`pipeline.ts`) — runs in a
 | Young generation, stack | 32 MB, 4 MB | — |
 | Wall clock | 15 s (compile), 10 s (prepare, diff) | `COREEDGE_CONTRACT_DEADLINE_MS` (100–60,000) |
 | Concurrency | 2 jobs, 16 waiting; beyond that `BUSY` | — |
+| One organisation's share | 1 job running, 2 waiting; beyond that `BUSY` at once | — |
+| Input | a contract handed in (prepare, diff) ≤ 2 MiB each, measured before it is copied in | — |
 
 Past any of them the worker is terminated and the verify reports the contract
 `NOT_COMPILED` with `RESOURCE_LIMIT` (or `BUSY`, `UNAVAILABLE`), while the
@@ -225,7 +227,11 @@ Two things it takes to hold in production:
   put back the moment it is online; the request thread's heap, sized at
   start, is untouched. The worker checks the heap it was given before it runs
   anything, and one past its cap refuses the job (`HeapNotCapped`, refused as
-  `UNAVAILABLE`), so a compile never runs uncapped.
+  `UNAVAILABLE`), so a compile never runs uncapped. `--max-semi-space-size`
+  overrides the worker's young generation the same way (a process started
+  with `NODE_OPTIONS=--max-semi-space-size=64` gave every worker 192 MB of it,
+  and every compile was `UNAVAILABLE`), so it is set to 0 ("not set") for the
+  same moment and put back to what the process started with.
 - **The worker chunk is found and deployed.** webpack bundles the worker as
   `.next/server/chunks/contract-compiler-worker.js`. It resolves the chunk's
   URL with the publicPath, which Next's server bundle sets to the client's
@@ -252,7 +258,9 @@ unchanged). The limits, each proportional to what it is made from and capped:
 | Stored diff | ≤ 1 MiB |
 | `/schema` answer | ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB |
 | Starter kit (all files) | ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB |
-| Solution document | ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts adding up to ≤ 2 MiB |
+| Solution document | ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB, over contracts and captured schemas adding up to ≤ 2 MiB, for ≤ 254 interfaces |
+| Captured schema | ≤ 2,000 fields and 512 KiB, from a request body ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB |
+| Snapshot history | ≤ 100 rows per interface, plus each environment's newest |
 
 **Rendered at record time.** Before a contract is stored, every read path's
 output is rendered from it under that read path's budget, inside the
@@ -271,6 +279,41 @@ each response schema stands is read from its stamp in the database
 (`src/lib/studio/response-schema-states.ts`), and the API answer no longer
 carries the `responseSchema` column (nothing read it; `responseSchemaState`
 is there, as before).
+
+**Structural hardening, round 1.** A review of the containment above found
+the paths that ran around it rather than through it; each is now bounded by a
+stated limit, at the edge where the input arrives:
+
+- **Captured schemas.** One hostile row of 358,000 distinct short keys (4.4 MB,
+  under Vercel's body limit) made an 11.5 MB stored `responseSchema`, seconds
+  of inference on the request thread, a sampled contract copied into the
+  envelope only to be refused, and an 11.5 MB `/schema` answer on every call
+  outside its 64 KB budget. Now `capture-schema` reads its body up to 4.5 MiB
+  and no further (`src/lib/security/bounded-body.ts`), refuses a row with more
+  keys than a schema could describe before validating it, stops the inference
+  past 2,000 distinct fields and refuses a schema past 512 KiB — `TOO_LARGE`,
+  nothing stored. On the way out, `/schema`, the kit and the solution document
+  learn each stored schema's size from the database first
+  (`capturedSchemaFacts`, `octet_length` of its text) and read only one that
+  describes the current contract and is inside 1 MiB; `/schema` charges what
+  it serves to the same budget as the contract's schemas, and past it answers
+  `responseSchema: null` with `responseSchemaOmitted: "TOO_LARGE"`.
+- **The solution document** is decided before it is loaded or built: more
+  than 254 interfaces, or compiled contracts and captured schemas adding up
+  past 2 MiB, is `TOO_LARGE` before any of them is read; then only the
+  schemas it renders are read, and the build charges each interface's part to
+  the document's budget as it is made, stopping at the interface that passes
+  it.
+- **Snapshot history.** Each decision reads the one row it needs (the newest,
+  an environment's newest, the newest with a hash, the newest describing the
+  interface now), each an indexed lookup, whatever the history; and when a row
+  is recorded, rows older than the newest 100 are removed, except each
+  environment's newest. A description flipping between two contracts no
+  longer makes every read slower.
+- **The envelope's queue** is shared fairly (above): one organisation's
+  hostile service holds at most one slot and two queue places, so another
+  organisation's verify still compiles; a wait that times out leaves the
+  queue at once.
 
 **Proved in a production build.** `pnpm build` (CI unset; the built check
 reports the worker emitted and traced), `pnpm start` with
@@ -295,7 +338,9 @@ before the envelope, the same 8 MB description held the request thread for
 **The fuzz property test.** `tests/property/contracts-fuzz.property.test.ts`
 generates CSDL XML (V2, V4) and CSDL JSON from a grammar with adversarial
 weights and asserts, for every case, that the compile never throws, that a
-sample compiles the same in the real envelope, and that every prepared
+sample — refused descriptions too — gives the same answer in the real
+envelope, field by field (compiled or refused alike, the same datasets,
+version, dataset hash and size), and that every prepared
 contract and every read path stays inside its bound in linear time. CI runs
 120 cases; `CONTRACTS_FUZZ_ITERATIONS=5000` (and `CONTRACTS_FUZZ_SEED`) for a
 long local run. Run when this landed: 5,000 cases from seed 13 and 3,000 from

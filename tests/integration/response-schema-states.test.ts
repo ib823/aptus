@@ -23,9 +23,15 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
+import { LIMITS } from "@/lib/contracts/budget";
 import { prisma } from "@/lib/db/prisma";
 import { responseSchemaState } from "@/lib/studio/contract-provenance";
-import { responseSchemaStates } from "@/lib/studio/response-schema-states";
+import {
+  capturedSchemaFacts,
+  readCurrentCapturedSchemas,
+  responseSchemaStates,
+} from "@/lib/studio/response-schema-states";
+import { servedResponseSchema } from "@/lib/studio/schema-capture";
 
 const RUN = `rss-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -127,5 +133,40 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("responseSchemaStates, against r
     expect(inSolution.get(one.id)).toBe("current");
     const inAnother = await responseSchemaStates(ORG, [{ id: one.id, version: 3, entitySet: "Orders" }], "no-such-solution");
     expect(inAnother.get(one.id)).toBe("none");
+  });
+
+  /*
+   * Structural hardening round 1: the readers that serve the schema learn its
+   * stored size from the database first, and read only a current one inside
+   * the captured-schema bound.
+   */
+  it("says how large each stored value is, with the same state, by id, without reading it", async () => {
+    const asked = ids.map((i) => ({ id: i.id, version: 3, entitySet: i.entitySet }));
+    const facts = await capturedSchemaFacts(ORG, asked);
+    for (const i of ids) {
+      const f = facts.get(i.id)!;
+      expect(f.state, i.label).toBe(responseSchemaState(i.stored, { version: 3, entitySet: i.entitySet }));
+      if (i.stored === null) expect(f.storedBytes).toBeNull();
+      else {
+        // Postgres's text of it: never less than the compact JSON, never more than twice it.
+        const compact = Buffer.byteLength(JSON.stringify(i.stored));
+        expect(f.storedBytes, i.label).toBeGreaterThanOrEqual(compact);
+        expect(f.storedBytes, i.label).toBeLessThanOrEqual(2 * compact);
+      }
+    }
+    expect((await capturedSchemaFacts(OTHER, asked)).get(ids[0]!.id)).toEqual({ state: "none", storedBytes: null });
+  });
+
+  it("reads a current schema inside its bound as served, and names one past it without reading it", async () => {
+    const one = ids.find((i) => i.label === "this contract's stamp" && i.entitySet === "Orders")!;
+    const iface = { id: one.id, version: 3, entitySet: "Orders" };
+    const facts = await capturedSchemaFacts(ORG, [iface]);
+    expect((await readCurrentCapturedSchemas(ORG, [iface], facts)).get(one.id)).toEqual({
+      ok: true,
+      schema: servedResponseSchema(one.stored),
+      stored: one.stored,
+    });
+    const past = new Map([[one.id, { state: "current" as const, storedBytes: LIMITS.capturedSchema.storedTextBytes + 1 }]]);
+    expect((await readCurrentCapturedSchemas(ORG, [iface], past)).get(one.id)).toMatchObject({ ok: false, reason: "TOO_LARGE" });
   });
 });

@@ -27,7 +27,13 @@
  *   /schema      ≤ 64 KiB + 16 × contract bytes, ≤ 16 MiB
  *   starter kit  ≤ 512 KiB + 32 × contract bytes + 8 × fixture bytes, ≤ 32 MiB
  *   solution doc ≤ 256 KiB + Σ (128 KiB + 16 × contract bytes), ≤ 32 MiB,
- *                  over contracts adding up to ≤ 2 MiB
+ *                  over contracts (and captured schemas) adding up to ≤ 2 MiB,
+ *                  for at most (32 MiB − 256 KiB) / 128 KiB = 254 interfaces
+ *   captured schema ≤ 2,000 properties and 512 KiB, from a request body of
+ *                  ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB
+ *   snapshot history ≤ 100 rows per interface, plus each environment's newest
+ *   envelope input  ≤ the description cap (compile) or the contract cap per
+ *                  contract (prepare, diff), measured before it is copied in
  *
  * The factors are the worst shapes measured (tests/unit/contracts and the
  * fuzz property test); a real slice renders at 2-16x, and its fixed text
@@ -59,6 +65,24 @@ export const LIMITS = {
   kit: { perContractByte: 32, perFixtureByte: 8, floor: 512 * KiB, cap: 32 * MiB },
   /** The per-solution OpenAPI document. */
   document: { perContractByte: 16, perInterface: 128 * KiB, floor: 256 * KiB, cap: 32 * MiB, contractsCap: 2 * MiB },
+  /**
+   * A schema captured from sampled rows (schema-capture.ts), as stored on the
+   * Interface row and served by /schema, the kit and the solution document.
+   * Refused at capture past `properties` distinct fields or `bytes` of compact
+   * JSON, from a request body of at most `requestBytes`; on a read path, a
+   * stored one whose text (Postgres's jsonb text, at most twice the compact
+   * JSON of one stored under the cap) is past `storedTextBytes` is named and
+   * never read (captured-schema-store.ts), and what is served is charged to
+   * the read path's budget as `served` more bytes than its contract allows.
+   */
+  capturedSchema: { properties: 2000, bytes: 512 * KiB, requestBytes: 4.5 * MiB, storedTextBytes: 1 * MiB, served: 520 * KiB },
+  /**
+   * Rows of contract history kept per interface beyond each environment's
+   * newest (snapshot.ts): older ones are pruned when a new one is recorded, so
+   * what a record reads and stores stays bounded however often a description
+   * flips.
+   */
+  snapshotHistory: 100,
   /** Documents up to this size are indented for the person reading them; larger ones are compact. */
   prettyDocument: 512 * KiB,
   /** Nesting a writer follows before it refuses: no contract, schema or fixture comes near it. */
@@ -73,7 +97,18 @@ export interface RenderLimits {
 }
 
 /** What a budget was for, as a refusal names it. */
-export type BudgetName = "contract" | "slice" | "storedDiff" | "schema" | "kit" | "document" | "measure" | "time" | "depth";
+export type BudgetName =
+  | "contract"
+  | "slice"
+  | "storedDiff"
+  | "schema"
+  | "kit"
+  | "document"
+  | "capturedSchema"
+  | "envelopeInput"
+  | "measure"
+  | "time"
+  | "depth";
 
 /** A budget spent: a refusal, typed, never an error the caller has to guess at. */
 export class BudgetExceeded extends Error {
@@ -494,6 +529,18 @@ export function jsonBytesUpTo(value: unknown, limit: number): number {
   }
 }
 
+/**
+ * Charge the size of JSON.stringify(value), compact, to `budget` without
+ * writing it: refused (BudgetExceeded, the budget's own name) as soon as the
+ * walk passes what remains, so charging costs at most the budget's remaining
+ * bytes of work however large the value is. Returns the bytes charged.
+ */
+export function chargeJson(value: unknown, budget: OutputBudget): number {
+  const n = compactSize(value, budget);
+  budget.charge(n);
+  return n;
+}
+
 const clamp = (n: number, cap: number) => Math.min(cap, Math.ceil(n));
 
 /** The most bytes of canonical JSON a slice of a `sourceLength`-character description may be. */
@@ -511,6 +558,15 @@ export function schemaLimit(contractBytes: number, s: RenderLimits["schema"] = L
 /** The starter kit's budget for a contract of `contractBytes` (0 when there is none) and fixtures of `fixtureBytes`. */
 export function kitLimit(contractBytes: number, fixtureBytes = 0, k: RenderLimits["kit"] = LIMITS.kit): number {
   return clamp(k.floor + k.perContractByte * contractBytes + k.perFixtureByte * fixtureBytes, k.cap);
+}
+
+/**
+ * The most interfaces one solution document carries: as many as its cap has
+ * room for at the per-interface floor. Past it the document is refused before
+ * anything is read (solutions/[id]/openapi).
+ */
+export function maxDocumentInterfaces(d: RenderLimits["document"] = LIMITS.document): number {
+  return Math.floor((d.cap - d.floor) / d.perInterface);
 }
 
 /** A solution document's budget, for its interfaces' contract sizes (0 for one with no compiled contract). */

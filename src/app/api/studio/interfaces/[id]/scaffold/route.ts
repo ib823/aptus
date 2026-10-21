@@ -19,6 +19,10 @@
  * noted in the documents. Read from the snapshot — nothing is compiled here.
  * What it carries is bounded like the solution document (doc-inputs.ts):
  * past the budget the answer is TOO_LARGE, before any IR is read.
+ *
+ * And the captured schema is read only when its stored size is inside the
+ * captured-schema bound (response-schema-states.ts, structural hardening
+ * round 1); past it the kit says it was set aside, and why.
  */
 
 import type { NextRequest } from "next/server";
@@ -29,13 +33,10 @@ import { documentOutputTooLargeMessage, documentTooLargeMessage, loadDocInputs }
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError, studioOk } from "@/lib/studio/api";
-import {
-  partitionFixtures,
-  responseSchemaState,
-  withheldArtifactNote,
-} from "@/lib/studio/contract-provenance";
+import { partitionFixtures, withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { servedFixtures } from "@/lib/studio/fixtures";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { capturedSchemaFacts, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
 import { buildScaffold } from "@/lib/studio/scaffold";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       version: true,
       mode: true,
       status: true,
-      responseSchema: true,
+      // Not responseSchema: read below only when it is inside its bound.
       solution: { select: { name: true } },
     },
   });
@@ -97,7 +98,14 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     orderBy: { scenario: "asc" },
   });
 
-  const schemaState = responseSchemaState(iface.responseSchema, iface);
+  const facts = (await capturedSchemaFacts(organizationId, [iface])).get(iface.id) ?? { state: "none" as const, storedBytes: null };
+  const schemaState = facts.state;
+  const captured =
+    schemaState === "current"
+      ? ((await readCurrentCapturedSchemas(organizationId, [iface], new Map([[iface.id, facts]]))).get(iface.id) ?? null)
+      : null;
+  // As stored, as the kit has always been given it: scaffold.ts serves it as the broker serves rows.
+  const responseSchema = captured?.ok ? captured.stored : undefined;
   // This contract's recordings only; then each as the broker would answer it,
   // one per scenario (fixtures.ts, A57).
   const partitioned = partitionFixtures(
@@ -116,7 +124,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    * budget in the compiler's envelope (pipeline.ts) before storing it.
    */
   const contractBytes =
-    compiled?.irBytes ?? (schemaState === "current" ? jsonBytesUpTo(iface.responseSchema, LIMITS.kit.cap) : 0);
+    compiled?.irBytes ?? (responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0);
   let fixtureBytes = 0;
   for (const f of fixtures) fixtureBytes += jsonBytesUpTo(f.body, LIMITS.kit.cap);
   const budget = new OutputBudget("kit", kitLimit(contractBytes, fixtureBytes));
@@ -139,10 +147,14 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         grants: inputs.grants.get(iface.id) ?? [],
         // Present → the contract describes real fields. Absent → it says so,
         // and says why when a stored schema of another contract was set aside.
-        ...(schemaState === "current" ? { responseSchema: iface.responseSchema } : {}),
+        ...(responseSchema !== undefined ? { responseSchema } : {}),
         ...(schemaState === "stale" || schemaState === "unverified"
           ? { withheldSchemaNote: withheldArtifactNote(schemaState, iface) }
-          : {}),
+          : captured && !captured.ok
+            ? {
+                withheldSchemaNote: `The captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not included. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`,
+              }
+            : {}),
       },
       baseUrl,
       fixtures.map((f) => ({

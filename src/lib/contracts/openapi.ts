@@ -39,7 +39,7 @@
  * Pure and deterministic: the same input renders the same document.
  */
 
-import { jsonBytesUpTo, jsonText, LIMITS, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
+import { chargeJson, jsonBytesUpTo, jsonText, LIMITS, UNLIMITED, type OutputBudget } from "@/lib/contracts/budget";
 import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
@@ -119,6 +119,12 @@ export interface NorthboundDocInput {
   discovery?: boolean;
   /** Text made safe for a document someone else renders (the scaffold's safeName). */
   safe?: (s: string) => string;
+  /**
+   * The document's budget, charged with each interface's part (compact) as it
+   * is built: past it the build stops (BudgetExceeded) at the interface that
+   * passed it, never building the rest (solutions/[id]/openapi).
+   */
+  budget?: OutputBudget;
 }
 
 type Obj = Record<string, unknown>;
@@ -335,6 +341,8 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   });
 
   for (const iface of input.interfaces) {
+    // What this interface adds, charged to the build budget before it joins the document.
+    const own = { schemas: {} as Record<string, JsonSchema>, paths: {} as Record<string, Obj> };
     const stem = stemFor(toTypeName(iface.entitySet ?? iface.name));
     const tag = stem;
     const recordSchemaName = stem;
@@ -346,16 +354,16 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
     const c = iface.contract;
     if (c.source === "metadata") {
       const built = buildContractSchemas(c.contract, { dialect, stem, ref: (n) => `#/components/schemas/${n}` });
-      Object.assign(schemas, built.schemas);
+      Object.assign(own.schemas, built.schemas);
       createSchemaName = built.names.create;
       const caps = c.contract.entitySet.capabilities;
       sapCreatable = caps.creatable !== false;
       sapUpdatable = caps.updatable !== false;
       sapDeletable = caps.deletable !== false;
     } else if (c.source === "sampled") {
-      schemas[recordSchemaName] = sampledRecord(c.schema, dialect);
+      own.schemas[recordSchemaName] = sampledRecord(c.schema, dialect);
     } else {
-      schemas[recordSchemaName] = {
+      own.schemas[recordSchemaName] = {
         type: "object",
         description: c.note
           ? `No captured response describes this contract, so its fields are not described. ${c.note}`
@@ -373,7 +381,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
 
     if (isRead) {
       const resultName = `${stem}_ReadResult`;
-      schemas[resultName] = {
+      own.schemas[resultName] = {
         type: "object",
         required: ["data"],
         properties: {
@@ -395,7 +403,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           },
         },
       };
-      paths[`/interfaces/${iface.id}/data`] = {
+      own.paths[`/interfaces/${iface.id}/data`] = {
         get: {
           operationId: `read${stem}`,
           tags: [tag],
@@ -427,7 +435,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       const recordBody: JsonSchema = createSchemaName
         ? ref("schemas", createSchemaName)
         : { type: "object", additionalProperties: true, description: "The record to create. Its fields are not described: the service's description has not been compiled." };
-      schemas[bodyName] = {
+      own.schemas[bodyName] = {
         type: "object",
         required: ["record"],
         properties: {
@@ -441,7 +449,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           },
         },
       };
-      schemas[resultName] = {
+      own.schemas[resultName] = {
         type: "object",
         required: ["data"],
         properties: {
@@ -461,7 +469,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           },
         },
       };
-      paths[`/interfaces/${iface.id}/data/write`] = {
+      own.paths[`/interfaces/${iface.id}/data/write`] = {
         post: {
           operationId: `create${stem}`,
           tags: [tag],
@@ -490,7 +498,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       };
     }
 
-    paths[`/interfaces/${iface.id}/schema`] = {
+    own.paths[`/interfaces/${iface.id}/schema`] = {
       get: {
         operationId: `get${stem}Contract`,
         tags: [tag],
@@ -558,6 +566,9 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         },
       },
     });
+    if (input.budget) chargeJson({ ...own, entry: docInterfaces[docInterfaces.length - 1] }, input.budget);
+    Object.assign(schemas, own.schemas);
+    Object.assign(paths, own.paths);
   }
 
   if (input.discovery) {
@@ -802,6 +813,12 @@ function contractDocumentSchema(dialect: SchemaDialect): Obj {
           version: { type: "integer" },
           requestSchema: anyObjectOrNull(dialect, "The JSON Schema of a write's `record`, compiled from the service's description; null for a read interface or when none is compiled."),
           responseSchema: anyObjectOrNull(dialect, "The schema captured from sampled rows of this contract, or null."),
+          responseSchemaOmitted: {
+            type: "string",
+            enum: ["TOO_LARGE"],
+            description: "Present when `responseSchema` is null for a capture of this contract that is stored: it is larger than a captured schema may be.",
+          },
+          responseSchemaNote: { type: "string" },
           schemaCaptured: { type: "boolean" },
           schemaState: { type: "string", enum: ["current", "stale", "unverified", "none"] },
           schemaNote: { type: "string" },

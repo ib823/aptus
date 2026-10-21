@@ -85,14 +85,22 @@ function ordered(rows: Row[], orderBy: unknown): Row[] {
   });
 }
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
+  const { capturedSchemaFactRows } = await import("../../helpers/captured-schema-facts");
   const table = (name: "interfaces" | "snapshots" | "solutions" | "grants") => ({
     findFirst: async ({ where, select, orderBy }: { where?: Row; select?: Row; orderBy?: unknown }) => {
       const hit = ordered(db[name].filter((r) => matches(r, where)), orderBy)[0];
       return hit ? pick(hit, select) : null;
     },
-    findMany: async ({ where, select, orderBy }: { where?: Row; select?: Row; orderBy?: unknown }) =>
-      ordered(db[name].filter((r) => matches(r, where)), orderBy).map((r) => pick(r, select)),
+    findMany: async ({ where, select, orderBy, skip, take }: { where?: Row; select?: Row; orderBy?: unknown; skip?: number; take?: number }) =>
+      ordered(db[name].filter((r) => matches(r, where)), orderBy)
+        .slice(skip ?? 0, take === undefined ? undefined : (skip ?? 0) + take)
+        .map((r) => pick(r, select)),
+    deleteMany: async ({ where }: { where?: Row }) => {
+      const before = db[name].length;
+      db[name] = db[name].filter((r) => !matches(r, where));
+      return { count: before - db[name].length };
+    },
     updateMany: async ({ where, data }: { where: Row; data: Row }) => {
       const hits = db[name].filter((r) => matches(r, where));
       for (const r of hits) Object.assign(r, data);
@@ -113,6 +121,8 @@ vi.mock("@/lib/db/prisma", () => {
       apiAccessGrant: table("grants"),
       mockFixture: { findMany: async () => [] },
       configAudit: { create: mocks.audit },
+      // capturedSchemaFacts (response-schema-states.ts): the stamp and size of each stored schema.
+      $queryRaw: async (q: unknown) => capturedSchemaFactRows(db.interfaces, q),
     },
   };
 });
@@ -146,6 +156,7 @@ import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-
 import { GET as getScaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
 import { POST as verifyService } from "@/app/api/studio/interfaces/[id]/verify-service/route";
 import { GET as getSolutionOpenApi } from "@/app/api/studio/solutions/[id]/openapi/route";
+import { kitLimit, LIMITS, maxDocumentInterfaces } from "@/lib/contracts/budget";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
@@ -691,5 +702,147 @@ describe("the Verify panel's sentence about the contract", () => {
     );
     expect(contractSentence({ status: "UNCHANGED", semver: "1.1.0", bump: null })).toMatch(/unchanged: version 1\.1\.0/);
     expect(contractSentence({ status: "NOT_COMPILED", detail: "Could not be compiled." })).toBe("Could not be compiled.");
+  });
+});
+
+/*
+ * STRUCTURAL HARDENING, ROUND 1. A hostile SAP returns one row of hundreds of
+ * thousands of distinct keys; the builder captures its schema. Before: an
+ * 11.5 MB schema was inferred and stored on this thread, the sampled contract
+ * made from it was copied into the envelope only to be refused, /schema served
+ * the 11.5 MB on every call outside its 64 KB budget, and the solution document
+ * loaded every interface's stored schema and built the whole document before
+ * its budget was asked. Each step is now bounded by a stated limit.
+ */
+describe("a captured schema is bounded where it is written and where it is read", () => {
+  /** A captured schema of `n` fields, stamped for interface version 2 on SalesOrder (the seeded interface). */
+  function storedCapture(n: number, nameLength = 8): Row {
+    const properties: Row = {};
+    for (let i = 0; i < n; i++) properties[`F${String(i).padStart(nameLength - 1, "0")}`] = { type: "string" };
+    return {
+      type: "object",
+      properties,
+      required: [],
+      additionalProperties: true,
+      "x-captured": { sampleSize: 1, capturedAt: "2026-10-01T00:00:00.000Z", note: "", envelope: "stripped", interfaceVersion: 2, entitySet: "SalesOrder" },
+    };
+  }
+
+  function capture(body: string) {
+    return captureSchema(
+      new NextRequest("http://localhost/api/studio/interfaces/if_1/capture-schema", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      }),
+      { params: Promise.resolve({ id: "if_1" }) },
+    );
+  }
+
+  it("capture-schema refuses rows past the field bound (TOO_LARGE) before inferring, storing or recording anything", async () => {
+    const row: Row = {};
+    for (let i = 0; i < LIMITS.capturedSchema.properties + 1; i++) row[`k${i}`] = 0;
+    const res = await capture(JSON.stringify({ rows: [row], interfaceVersion: 2 }));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+    expect(db.interfaces[0]!.responseSchema).toBeNull();
+    expect(db.snapshots).toHaveLength(0);
+  });
+
+  it("capture-schema refuses a body past its stated size before parsing it", async () => {
+    const big = JSON.stringify({ rows: [{ a: "x".repeat(LIMITS.capturedSchema.requestBytes) }], interfaceVersion: 2 });
+    const res = await capture(big);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+    expect(db.interfaces[0]!.responseSchema).toBeNull();
+  });
+
+  it("capture-schema still captures an ordinary wide row", async () => {
+    const row: Row = {};
+    for (let i = 0; i < 300; i++) row[`Field${i}`] = "v";
+    const res = await capture(JSON.stringify({ rows: [row], interfaceVersion: 2 }));
+    expect(res.status).toBe(200);
+    expect(await data<{ fields: number }>(res)).toMatchObject({ fields: 300 });
+  });
+
+  it("/schema does not return a stored 11 MB captured schema whole, nor read it", async () => {
+    const huge = storedCapture(358_000);
+    db.interfaces[0]!.responseSchema = huge;
+    const findMany = vi.spyOn((await import("@/lib/db/prisma")).prisma.interface, "findMany");
+    const res = await schemaRoute();
+    const text = await res.text();
+    expect(text.length).toBeLessThan(LIMITS.schema.floor + LIMITS.capturedSchema.served);
+    const d = (JSON.parse(text) as { data: Row }).data;
+    expect(d).toMatchObject({ responseSchema: null, responseSchemaOmitted: "TOO_LARGE", schemaCaptured: true, schemaState: "current" });
+    // Its stored size was enough to refuse it: the schema itself was never selected.
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("/schema charges a captured schema it does read to the answer's budget", async () => {
+    // Inside the stored-size bound, past what a served schema may be.
+    db.interfaces[0]!.responseSchema = storedCapture(20_000, 16);
+    const d = await data<Row>(await schemaRoute());
+    expect(d).toMatchObject({ responseSchema: null, responseSchemaOmitted: "TOO_LARGE" });
+    db.interfaces[0]!.responseSchema = storedCapture(50);
+    const ok = await data<Row>(await schemaRoute());
+    expect(ok.responseSchemaOmitted).toBeUndefined();
+    expect(Object.keys((ok.responseSchema as { properties: Row }).properties)).toHaveLength(50);
+  });
+
+  it("the starter kit leaves out a captured schema past its bound, and says so", async () => {
+    db.interfaces[0]!.responseSchema = storedCapture(358_000);
+    const kit = await getScaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), { params: Promise.resolve({ id: "if_1" }) });
+    expect(kit.status).toBe(200);
+    const files = (await data<{ files: { path: string; contents: string }[] }>(kit)).files;
+    expect(files.find((f) => f.path === "client.ts")!.contents).toMatch(/larger than a captured schema may be/);
+    expect(files.reduce((n, f) => n + f.contents.length, 0)).toBeLessThan(kitLimit(0));
+  });
+
+  it("the solution document is refused past the interfaces one document carries, before any schema is read", async () => {
+    const base = db.interfaces[0]!;
+    db.interfaces = Array.from({ length: maxDocumentInterfaces() + 1 }, (_, i) => ({
+      ...base,
+      id: `if_${i + 1}`,
+      operation: "READ",
+      mode: "READ",
+      responseSchema: storedCapture(5),
+    }));
+    const queryRaw = vi.spyOn((await import("@/lib/db/prisma")).prisma, "$queryRaw");
+    const res = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: { code: string; message: string } }).error).toMatchObject({
+      code: "TOO_LARGE",
+      message: expect.stringMatching(/more than 254 interfaces/),
+    });
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("the solution document is refused when its captured schemas add up past its budget, before any is read", async () => {
+    const base = db.interfaces[0]!;
+    // Each a quarter of the document's contract budget: five of them pass it.
+    const each = storedCapture(Math.ceil(MAX_DOCUMENT_CONTRACT_BYTES / 4 / 48), 32);
+    expect(JSON.stringify(each).length).toBeGreaterThan(MAX_DOCUMENT_CONTRACT_BYTES / 4);
+    db.interfaces = Array.from({ length: 5 }, (_, i) => ({ ...base, id: `if_${i + 1}`, operation: "READ", mode: "READ", responseSchema: each }));
+    const findMany = vi.spyOn((await import("@/lib/db/prisma")).prisma.interface, "findMany");
+    const res = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: Row }).error).toMatchObject({ code: "TOO_LARGE" });
+    // The interfaces were listed; no stored schema was selected.
+    for (const call of findMany.mock.calls) expect(Object.keys((call[0] as { select: Row }).select)).not.toContain("responseSchema");
+  });
+
+  it("and serves a solution document of captured schemas inside its budget", async () => {
+    const base = db.interfaces[0]!;
+    db.interfaces = Array.from({ length: 3 }, (_, i) => ({ ...base, id: `if_${i + 1}`, operation: "READ", mode: "READ", responseSchema: storedCapture(40) }));
+    const res = await getSolutionOpenApi(new NextRequest("http://localhost/api/studio/solutions/sol_1/openapi"), {
+      params: Promise.resolve({ id: "sol_1" }),
+    });
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as { "x-coreedge-interfaces": { contract: { source: string } }[] };
+    expect(doc["x-coreedge-interfaces"].map((i) => i.contract.source)).toEqual(["sampled", "sampled", "sampled"]);
   });
 });

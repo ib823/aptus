@@ -18,7 +18,12 @@
  *   - a wall-clock deadline, after which the worker is terminated — V8
  *     stops it wherever it is, in a loop with no await or not;
  *   - a concurrency cap, so a burst of verifies queues instead of
- *     multiplying the heaps.
+ *     multiplying the heaps — shared fairly between organisations, so one
+ *     builder's hostile SAP cannot hold every slot and queue place and have
+ *     every other tenant's compile refused (structural hardening round 1);
+ *   - an input bound: a contract handed in (prepare, diff) is measured, up to
+ *     its cap and no further, before it is copied into the worker, so the
+ *     request thread's copy is bounded by the cap and not by the input.
  *
  * Whatever runs past any of them ends as a typed refusal (RESOURCE_LIMIT,
  * BUSY, UNAVAILABLE), which the verify reports as a contract that was not
@@ -53,6 +58,7 @@ import { fileURLToPath } from "node:url";
 import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
 import type { CompiledService, EnvelopeRefusal, Job, JobOutput, RenderSubject } from "@/lib/contracts/pipeline";
 
@@ -121,6 +127,22 @@ export function envelopeLimitsFor(kind: Job["kind"]): EnvelopeLimits {
 export const ENVELOPE_CONCURRENCY = 2;
 export const ENVELOPE_QUEUE = 16;
 
+/**
+ * ONE ORGANISATION'S SHARE. The slots and the queue are the process's, and
+ * verify-service is a builder's to call: with no share, one builder whose
+ * SAP serves a description that takes seconds to compile kept eighteen
+ * verifies in flight, and every other organisation's compile on the
+ * instance was refused BUSY (NOT_COMPILED). So an organisation runs at most
+ * ENVELOPE_TENANT_RUNNING job at a time and keeps at most
+ * ENVELOPE_TENANT_WAITING waiting; past that its next job is refused BUSY at
+ * once, before it can take a shared place, and a free slot goes to the
+ * first waiting job whose organisation has none running. With fewer running
+ * per organisation than there are slots, a slot is always left for another.
+ * A job with no tenant (a test, a script) is outside the shares.
+ */
+export const ENVELOPE_TENANT_RUNNING = 1;
+export const ENVELOPE_TENANT_WAITING = 2;
+
 export type EnvelopeResult<T> = { ok: true; value: T; ms: number } | { ok: false; reason: EnvelopeRefusal; detail: string; ms: number };
 
 const DETAIL: Record<EnvelopeRefusal, string> = {
@@ -131,22 +153,77 @@ const DETAIL: Record<EnvelopeRefusal, string> = {
   INTERNAL: "The service description could not be read as a service description.",
 };
 
-let running = 0;
-const waiting: (() => void)[] = [];
+interface Waiter {
+  tenant: string | null;
+  turn: Promise<void>;
+  start: () => void;
+}
 
-function acquire(): boolean | Promise<void> {
-  if (running < ENVELOPE_CONCURRENCY) {
-    running += 1;
+let running = 0;
+const runningByTenant = new Map<string, number>();
+const waiting: Waiter[] = [];
+
+/** May a job of this tenant take a slot now (its organisation's share allowing)? */
+function withinShare(tenant: string | null): boolean {
+  return tenant === null || (runningByTenant.get(tenant) ?? 0) < ENVELOPE_TENANT_RUNNING;
+}
+
+function occupy(tenant: string | null): void {
+  running += 1;
+  if (tenant !== null) runningByTenant.set(tenant, (runningByTenant.get(tenant) ?? 0) + 1);
+}
+
+/** A slot now (true), a place in the queue (the waiter), or neither (false: BUSY). */
+function acquire(tenant: string | null): true | false | Waiter {
+  if (running < ENVELOPE_CONCURRENCY && withinShare(tenant)) {
+    occupy(tenant);
     return true;
   }
   if (waiting.length >= ENVELOPE_QUEUE) return false;
-  return new Promise<void>((resolve) => waiting.push(resolve));
+  if (tenant !== null) {
+    let mine = 0;
+    for (const w of waiting) if (w.tenant === tenant) mine += 1;
+    if (mine >= ENVELOPE_TENANT_WAITING) return false;
+  }
+  let start!: () => void;
+  const turn = new Promise<void>((resolve) => (start = resolve));
+  const waiter: Waiter = { tenant, turn, start };
+  waiting.push(waiter);
+  return waiter;
 }
 
-function release(): void {
-  const next = waiting.shift();
-  if (next) next(); // the slot passes straight to the next job
-  else running -= 1;
+/** Hand free slots to the first waiting jobs whose organisations' shares allow them. */
+function dispatch(): void {
+  while (running < ENVELOPE_CONCURRENCY) {
+    const i = waiting.findIndex((w) => withinShare(w.tenant));
+    if (i < 0) return;
+    const [next] = waiting.splice(i, 1);
+    occupy(next!.tenant);
+    next!.start();
+  }
+}
+
+function release(tenant: string | null): void {
+  running -= 1;
+  if (tenant !== null) {
+    const n = (runningByTenant.get(tenant) ?? 1) - 1;
+    if (n > 0) runningByTenant.set(tenant, n);
+    else runningByTenant.delete(tenant);
+  }
+  dispatch();
+}
+
+/** Leave the queue (a wait that timed out): false when the turn was already given. */
+function abandon(waiter: Waiter): boolean {
+  const i = waiting.indexOf(waiter);
+  if (i < 0) return false;
+  waiting.splice(i, 1);
+  return true;
+}
+
+/** The queue as it stands, for a test: running, by tenant, and waiting. */
+export function envelopeQueueState(): { running: number; waiting: number; runningByTenant: Record<string, number> } {
+  return { running, waiting: waiting.length, runningByTenant: Object.fromEntries(runningByTenant) };
 }
 
 /** Errors that mean the job hit a limit rather than a defect. */
@@ -173,19 +250,41 @@ function isLoadError(code: string | undefined): boolean {
  * (UNAVAILABLE), so a compile never runs uncapped.
  */
 const OLD_SPACE_FLAG = /^--max[-_]old[-_]space[-_]size=(\d+)$/;
+/**
+ * THE YOUNG GENERATION TOO. --max-semi-space-size (a common GC tuning,
+ * NODE_OPTIONS="--max-semi-space-size=64") overrides a worker's
+ * maxYoungGenerationSizeMb the same way: the worker got 3 × 64 MB of young
+ * generation, passed its cap check, and every compile was refused
+ * UNAVAILABLE (structural hardening round 1). So it is set to 0 — "not set",
+ * deferring to the worker's resourceLimits — for the same moment, and put
+ * back to what the process started with.
+ */
+const SEMI_SPACE_FLAG = /^--max[-_]semi[-_]space[-_]size=(\d+)$/;
 
-/** The --max-old-space-size the process was started with, in MB; 0 when none (V8's "not set"). */
-function startupOldSpaceMb(): number {
+/** A size flag the process was started with, in MB; 0 when none (V8's "not set"). */
+function startupFlagMb(flag: RegExp): number {
   const flags = [...(process.env.NODE_OPTIONS ?? "").split(/\s+/), ...process.execArgv];
   let mb = 0;
   for (const f of flags) {
-    const m = OLD_SPACE_FLAG.exec(f);
+    const m = flag.exec(f);
     if (m) mb = Number(m[1]);
   }
   return mb;
 }
 
-const STARTUP_OLD_SPACE_MB = startupOldSpaceMb();
+const STARTUP_OLD_SPACE_MB = startupFlagMb(OLD_SPACE_FLAG);
+const STARTUP_SEMI_SPACE_MB = startupFlagMb(SEMI_SPACE_FLAG);
+
+/** The process-wide heap flags while a worker's isolate is created, and back. */
+function capHeapFlags(limits: EnvelopeLimits): void {
+  v8.setFlagsFromString(`--max-old-space-size=${limits.maxOldGenerationSizeMb}`);
+  v8.setFlagsFromString("--max-semi-space-size=0");
+}
+
+function restoreHeapFlags(): void {
+  v8.setFlagsFromString(`--max-old-space-size=${STARTUP_OLD_SPACE_MB}`);
+  v8.setFlagsFromString(`--max-semi-space-size=${STARTUP_SEMI_SPACE_MB}`);
+}
 
 /** The heap a worker with these limits can at most be given: V8's limit is old generation plus young generation space. */
 export function heapLimitBytes(limits: EnvelopeLimits): number {
@@ -200,12 +299,12 @@ async function spawn(job: Job, limits: EnvelopeLimits): Promise<Worker> {
   let done!: () => void;
   spawning = new Promise((resolve) => (done = resolve));
   await previous;
-  v8.setFlagsFromString(`--max-old-space-size=${limits.maxOldGenerationSizeMb}`);
+  capHeapFlags(limits);
   let worker: Worker;
   try {
     worker = construct({ job, heapLimitBytes: heapLimitBytes(limits) }, limits);
   } catch (err) {
-    v8.setFlagsFromString(`--max-old-space-size=${STARTUP_OLD_SPACE_MB}`);
+    restoreHeapFlags();
     done();
     throw err;
   }
@@ -214,7 +313,7 @@ async function spawn(job: Job, limits: EnvelopeLimits): Promise<Worker> {
     // Once: a later exit must not reset the flag while the next spawn has it set.
     if (restored) return;
     restored = true;
-    v8.setFlagsFromString(`--max-old-space-size=${STARTUP_OLD_SPACE_MB}`);
+    restoreHeapFlags();
     done();
   };
   worker.once("online", restore);
@@ -259,34 +358,77 @@ function construct(input: WorkerInput, limits: EnvelopeLimits): Worker {
 }
 
 /**
+ * WHAT CROSSES INTO THE WORKER IS BOUNDED. A contract handed to a job is
+ * copied into workerData on this thread, in proportion to its size; a
+ * sampled capture of 358,000 fields blocked the event loop for 287 ms doing
+ * it, only for the worker to refuse the contract at once. So a contract is
+ * measured first, by the budgeted size walk, which stops at the cap — at
+ * most the cap's worth of work, whatever the input — and one past the cap
+ * never reaches the worker. A description (compile) is a string, copied
+ * whole in one step, and the reader already capped it (LIMITS.sourceBytes).
+ */
+function overInputBound(job: Job): boolean {
+  const cap = LIMITS.contract.cap;
+  if (job.kind === "prepare") return jsonBytesUpTo(job.input.contract, cap) > cap;
+  if (job.kind === "diff") {
+    const n = (Array.isArray(job.input.previous) ? job.input.previous.length : 0) + 1;
+    return jsonBytesUpTo(job.input, n * cap) > n * cap;
+  }
+  return false;
+}
+
+/** How a job past the input bound is answered: a prepared contract that is too large, or a refusal. */
+function inputRefusal<J extends Job>(job: J, since: number): EnvelopeResult<JobOutput<J["kind"]>> {
+  if (job.kind === "prepare") {
+    const value: JobOutput<"prepare"> = {
+      ok: false,
+      reason: "TOO_LARGE",
+      bytes: LIMITS.contract.cap + 1,
+      detail: `The compiled contract is larger than ${Math.floor(LIMITS.contract.cap / 1024)} KB, so it was not recorded.`,
+    };
+    return { ok: true, value: value as JobOutput<J["kind"]>, ms: Date.now() - since };
+  }
+  return refuse("RESOURCE_LIMIT", job, since, "input");
+}
+
+export interface EnvelopeOptions {
+  /** The organisation the job is for: its share of the slots and the queue (ENVELOPE_TENANT_*). */
+  tenant?: string | null;
+}
+
+/**
  * Run one job in a fresh worker under its limits. Resolves, never rejects:
  * the value, or the refusal that ended it.
  */
 export async function runInEnvelope<J extends Job>(
   job: J,
   limits: EnvelopeLimits = envelopeLimitsFor(job.kind),
+  opts: EnvelopeOptions = {},
 ): Promise<EnvelopeResult<JobOutput<J["kind"]>>> {
   const queuedAt = Date.now();
-  const turn = acquire();
+  if (overInputBound(job)) return inputRefusal(job, queuedAt);
+  const tenant = opts.tenant ?? null;
+  const turn = acquire(tenant);
   if (turn === false) return refuse("BUSY", job, queuedAt);
   if (turn !== true) {
     // Waiting counts against the deadline too: a verify never waits longer than a compile may run.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = await Promise.race([
-      turn.then(() => false),
+      turn.turn.then(() => false),
       new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(true), limits.deadlineMs))),
     ]);
     clearTimeout(timer);
+    // Out of the queue the moment the wait ends, so a stale waiter never holds a place;
+    // a turn given just as the wait ended is handed straight on.
     if (timedOut) {
-      // Our turn may still come: hand it straight on when it does.
-      void turn.then(release);
+      if (!abandon(turn)) release(tenant);
       return refuse("BUSY", job, queuedAt);
     }
   }
   try {
     return await runWorker(job, limits, queuedAt);
   } finally {
-    release();
+    release(tenant);
   }
 }
 
@@ -302,8 +444,9 @@ export async function compileInEnvelope(
   body: string,
   entitySet: string | null,
   subject: RenderSubject | null,
+  tenant: string | null = null,
 ): Promise<CompiledService> {
-  const r = await runInEnvelope({ kind: "compile", input: { body, entitySet, subject } });
+  const r = await runInEnvelope({ kind: "compile", input: { body, entitySet, subject } }, undefined, { tenant });
   if (r.ok) return r.value;
   if (r.reason === "INTERNAL") {
     console.error("[contracts] compile failed", { error: "INTERNAL" });

@@ -172,8 +172,13 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
  * measured for every read path. Refuses, never rejects: a refused compile
  * gives its verdict to the older readers below, as before the compiler.
  */
-function compileOrRefuse(body: string, entitySet: string | null, subject: RenderSubject | null): Promise<CompiledService> {
-  return compileInEnvelope(body, entitySet, subject);
+function compileOrRefuse(
+  body: string,
+  entitySet: string | null,
+  subject: RenderSubject | null,
+  tenant: string | null,
+): Promise<CompiledService> {
+  return compileInEnvelope(body, entitySet, subject, tenant);
 }
 
 function versionLabel(v: ODataVersion): string {
@@ -205,6 +210,8 @@ export async function verifyServiceMetadata(
      * the envelope (pipeline.ts). Omitted, a stand-in of the same shape.
      */
     subject?: RenderSubject | null;
+    /** The organisation verifying: its share of the compiler's envelope (envelope.ts). */
+    organizationId?: string | null;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<ServiceVerifyResult> {
@@ -273,7 +280,7 @@ export async function verifyServiceMetadata(
    * the older readers below still list the datasets — so no service that
    * verified yesterday stops verifying today.
    */
-  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null);
+  const compiled = await compileOrRefuse(r.body, input.entitySet || null, input.subject ?? null, input.organizationId ?? null);
   const entitySets = (
     compiled.ok
       ? // A singleton is one record, not a dataset the broker can page through.

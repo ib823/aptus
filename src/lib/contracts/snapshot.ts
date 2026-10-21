@@ -51,11 +51,26 @@
  * key (interfaceId, major, minor, patch) lets one win, and the other re-reads
  * the latest and either finds its own contract there (unchanged) or bumps
  * past it.
+ *
+ * WHAT A DECISION READS IS WHAT IT NEEDS, AND THE HISTORY IS BOUNDED
+ * (structural hardening round 1). A description that flips between two
+ * contracts records a version per verify, by design; every read used to load
+ * every one of an interface's rows and pick in JS, so each /schema, kit and
+ * document read grew with however many flips an attacker had made (20,030
+ * rows: half a second a call). Now each decision asks the database for the
+ * one row it needs — the newest row, the newest of an environment, the
+ * newest with a hash, the newest describing the interface now — each an
+ * indexed lookup of one row, whatever the history. And the history itself is
+ * bounded: when a row is recorded, rows older than the newest
+ * LIMITS.snapshotHistory are removed, except each environment's newest
+ * (which a later verify of that environment is compared with). No reader
+ * reads older rows; versions stay one ordered line, because the newest rows
+ * are never removed.
  */
 
 import { Prisma } from "@prisma/client";
 
-import { jsonBytesUpTo } from "@/lib/contracts/budget";
+import { jsonBytesUpTo, LIMITS } from "@/lib/contracts/budget";
 import { MAX_CONTRACT_BYTES } from "@/lib/contracts/canonical";
 import { nextSemver, semverParts, type ContractDiff, type StoredContractDiff } from "@/lib/contracts/diff";
 import { runInEnvelope } from "@/lib/contracts/envelope";
@@ -104,6 +119,13 @@ const SUMMARY_SELECT = {
 
 const NEWEST_FIRST = [{ semverMajor: "desc" }, { semverMinor: "desc" }, { semverPatch: "desc" }] as const;
 
+/**
+ * Every environment a snapshot is recorded under: the four a connection may
+ * declare (SapEnvironment) and none (a sampled capture). The newest row of
+ * each is read by name, one indexed lookup each, never by reading them all.
+ */
+const SNAPSHOT_ENVIRONMENTS: readonly (string | null)[] = [null, "SANDBOX", "DEV", "TEST", "PROD"];
+
 function summary(row: {
   id: string;
   semver: string;
@@ -145,10 +167,12 @@ function laterThan(a: string, b: string): boolean {
  * without its diff.
  */
 async function diffsInEnvelope(
+  scope: TenantScope,
   previous: InterfaceContract[],
   next: InterfaceContract,
 ): Promise<{ ok: true; value: DiffJobOutput } | { ok: false; reason: EnvelopeRefusal }> {
-  const r = await runInEnvelope({ kind: "diff", input: { previous, next } });
+  // Under the organisation's share of the envelope (envelope.ts).
+  const r = await runInEnvelope({ kind: "diff", input: { previous, next } }, undefined, { tenant: scope.organizationId });
   return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
 }
 
@@ -172,7 +196,7 @@ export async function recordContractSnapshot(input: {
   if (!prepared) {
     // Digested under the contract budget, then rendered under every read
     // path's (budget.ts), in the envelope: refused before anything is stored.
-    const r = await runInEnvelope({ kind: "prepare", input: { contract, subject: null } });
+    const r = await runInEnvelope({ kind: "prepare", input: { contract, subject: null } }, undefined, { tenant: scope.organizationId });
     if (!r.ok) return { status: "REFUSED", reason: r.reason, detail: r.detail };
     if (!r.value.ok) {
       return r.value.reason === "TOO_LARGE"
@@ -186,19 +210,23 @@ export async function recordContractSnapshot(input: {
   const { hash, bytes } = prepared;
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    // Summaries only: an interface has a handful of versions, and the IRs
-    // the diff needs are read below.
-    const rows = await prisma.contractSnapshot.findMany({
-      where: scopedWhere(scope, { interfaceId: iface.id }),
-      orderBy: [...NEWEST_FIRST],
-      select: { ...SUMMARY_SELECT, environment: true },
-    });
-    const latest = rows[0];
-    const own = rows.find((r) => r.environment === environment);
-    const same = (r: (typeof rows)[number]) => r.contentHash === hash && r.externalId === iface.externalId;
-    if (own && same(own)) return { status: "UNCHANGED", snapshot: summary(own) };
-    // Newest first, so the first match is the newest; it counts only if it is past this environment's own.
-    const match = rows.find(same);
+    // Summaries only, and only the rows the decision needs: each one indexed
+    // lookup, however long the history (see the header). The IRs the diff
+    // needs are read below.
+    const newest = (where: Prisma.ContractSnapshotWhereInput) =>
+      prisma.contractSnapshot.findFirst({
+        where: scopedWhere(scope, { interfaceId: iface.id, ...where }),
+        orderBy: [...NEWEST_FIRST],
+        select: { ...SUMMARY_SELECT, environment: true },
+      });
+    const [latest, own, match] = await Promise.all([
+      newest({}),
+      newest({ environment }),
+      // The newest row of this very contract, from this service.
+      newest({ contentHash: hash, externalId: iface.externalId }),
+    ]);
+    if (own && own.contentHash === hash && own.externalId === iface.externalId) return { status: "UNCHANGED", snapshot: summary(own) };
+    // It counts only if it is past this environment's own.
     if (match && (!own || laterThan(match.semver, own.semver))) return { status: "UNCHANGED", snapshot: summary(match) };
 
     let stored: StoredContractDiff | null = null;
@@ -207,9 +235,7 @@ export async function recordContractSnapshot(input: {
       // What this contract is a change OF: the environment's own newest row;
       // for its first verify, whichever environment's newest row it is
       // nearest to (the smallest bump, the newer on a tie).
-      const heads = new Map<string | null, (typeof rows)[number]>();
-      for (const r of rows) if (!heads.has(r.environment)) heads.set(r.environment, r);
-      const candidates = own ? [own] : [...heads.values()];
+      const candidates = own ? [own] : await environmentHeads(scope, iface.id);
       const irs = await prisma.contractSnapshot.findMany({
         where: scopedWhere(scope, { id: { in: [...new Set([...candidates, latest].map((c) => c.id))] } }),
         select: { id: true, ir: true },
@@ -221,6 +247,7 @@ export async function recordContractSnapshot(input: {
       // Every diff this decision needs, in one envelope job: the candidates', then the line's.
       const onLineToo = !present.some((row) => row.id === latest.id);
       const compared = await diffsInEnvelope(
+        scope,
         [...present, ...(onLineToo ? [latest] : [])].map((row) => irById.get(row.id) as unknown as InterfaceContract),
         contract,
       );
@@ -289,6 +316,7 @@ export async function recordContractSnapshot(input: {
         },
         select: SUMMARY_SELECT,
       });
+      await pruneHistory(scope, iface.id);
       return { status: "RECORDED", snapshot: summary(row), diff: stored };
     } catch (err) {
       // Another compile took this version first: read again and decide again.
@@ -297,6 +325,53 @@ export async function recordContractSnapshot(input: {
     }
   }
   throw new Error("Could not record the contract snapshot: the interface's version kept moving.");
+}
+
+type HeadRow = SnapshotSummary & { environment: string | null };
+
+/** Each environment's newest row of the interface, newest first: one indexed lookup per environment. */
+async function environmentHeads(scope: TenantScope, interfaceId: string): Promise<HeadRow[]> {
+  const heads = await Promise.all(
+    SNAPSHOT_ENVIRONMENTS.map((environment) =>
+      prisma.contractSnapshot.findFirst({
+        where: scopedWhere(scope, { interfaceId, environment }),
+        orderBy: [...NEWEST_FIRST],
+        select: { ...SUMMARY_SELECT, environment: true },
+      }),
+    ),
+  );
+  return heads
+    .filter((h): h is NonNullable<typeof h> => h !== null)
+    .map((h) => ({ ...summary(h), environment: h.environment }))
+    .sort((a, b) => (laterThan(a.semver, b.semver) ? -1 : laterThan(b.semver, a.semver) ? 1 : 0));
+}
+
+/** Rows removed in one pass past the bound: a record adds one row, so one pass keeps up. */
+const PRUNE_BATCH = 64;
+
+/**
+ * Keep the history bounded (see the header): rows older than the newest
+ * LIMITS.snapshotHistory go, except each environment's newest. Best effort —
+ * a failure here never fails the record, and the next record prunes again.
+ */
+async function pruneHistory(scope: TenantScope, interfaceId: string): Promise<void> {
+  try {
+    const older = await prisma.contractSnapshot.findMany({
+      where: scopedWhere(scope, { interfaceId }),
+      orderBy: [...NEWEST_FIRST],
+      skip: LIMITS.snapshotHistory,
+      take: PRUNE_BATCH,
+      select: { id: true },
+    });
+    if (older.length === 0) return;
+    const keep = new Set((await environmentHeads(scope, interfaceId)).map((h) => h.id));
+    const ids = older.map((r) => r.id).filter((id) => !keep.has(id));
+    if (ids.length > 0) {
+      await prisma.contractSnapshot.deleteMany({ where: { organizationId: scope.organizationId, interfaceId, id: { in: ids } } });
+    }
+  } catch (err) {
+    console.error("[contracts] snapshot history not pruned", { interfaceId, error: err instanceof Error ? err.name : "unknown" });
+  }
 }
 
 /** Does this snapshot describe the interface as it is configured now? */
@@ -316,7 +391,8 @@ export interface CurrentSnapshotSummary extends SnapshotSummary {
 /**
  * The current snapshot of each interface, by interface id, WITHOUT its IR —
  * so a reader can add up what it would render before reading any of it
- * (doc-inputs.ts). One query whatever the count.
+ * (doc-inputs.ts). One indexed lookup of one row per interface, however long
+ * its history (see the header).
  */
 export async function currentSnapshotSummaries(
   scope: TenantScope,
@@ -326,22 +402,20 @@ export async function currentSnapshotSummaries(
   const wanted = interfaces.filter((i) => i.entitySet !== null);
   if (wanted.length === 0) return out;
 
-  const candidates = await prisma.contractSnapshot.findMany({
-    where: scopedWhere(scope, { interfaceId: { in: wanted.map((i) => i.id) } }),
-    orderBy: [{ interfaceId: "asc" }, ...NEWEST_FIRST],
-    select: { ...SUMMARY_SELECT, interfaceId: true, irBytes: true },
-  });
-  // Grouped once: a scan of every candidate per interface was I×C.
-  const byInterface = new Map<string, (typeof candidates)[number][]>();
-  for (const c of candidates) {
-    const list = byInterface.get(c.interfaceId);
-    if (list) list.push(c);
-    else byInterface.set(c.interfaceId, [c]);
-  }
-  for (const iface of wanted) {
-    const hit = byInterface.get(iface.id)?.find((c) => describesInterfaceNow(c, iface));
+  // The newest row describing each interface now (describesInterfaceNow), asked of the database.
+  const hits = await Promise.all(
+    wanted.map((iface) =>
+      prisma.contractSnapshot.findFirst({
+        where: scopedWhere(scope, { interfaceId: iface.id, externalId: iface.externalId, entitySet: iface.entitySet as string }),
+        orderBy: [...NEWEST_FIRST],
+        select: { ...SUMMARY_SELECT, irBytes: true },
+      }),
+    ),
+  );
+  wanted.forEach((iface, n) => {
+    const hit = hits[n];
     if (hit) out.set(iface.id, { ...summary(hit), irBytes: typeof hit.irBytes === "number" ? hit.irBytes : null });
-  }
+  });
   return out;
 }
 

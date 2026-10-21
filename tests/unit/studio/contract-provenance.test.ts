@@ -49,7 +49,8 @@ function apply(row: Row, data: Row): void {
   }
 }
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
+  const { capturedSchemaFactRows } = await import("../../helpers/captured-schema-facts");
   const prisma: Row = {
     interface: {
       findFirst: async ({ where }: { where: Row }) =>
@@ -109,6 +110,10 @@ vi.mock("@/lib/db/prisma", () => {
     },
     apiAccessGrant: { findMany: async () => [] },
   };
+  // The readers learn a stored schema's stamp and size first (response-schema-states.ts), then read it by id.
+  (prisma.interface as Row).findMany = async ({ where }: { where: Row }) =>
+    store.iface && matches(store.iface, where) ? [{ id: store.iface.id, responseSchema: store.iface.responseSchema ?? null }] : [];
+  prisma.$queryRaw = async (q: unknown) => (store.iface ? capturedSchemaFactRows([store.iface], q) : []);
   prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
   return { prisma };
 });

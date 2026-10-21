@@ -20,14 +20,38 @@
  * to MAX_DOCUMENT_CONTRACT_BYTES (doc-inputs.ts), checked from the sizes kept
  * at record time before any IR is read; past it the answer is a clean
  * TOO_LARGE, never the 500 that sixteen maximum-size contracts made of it.
+ *
+ * DECIDED BEFORE IT IS LOADED OR BUILT (structural hardening round 1). The
+ * route used to select every interface's stored captured schema, build the
+ * whole document, and only then consult the budget while serialising it:
+ * 20,000 interfaces held 269 MB of heap, and fifty 11.5 MB captures 1.85 GB,
+ * before the answer was TOO_LARGE. Now, in order, each step bounded by the
+ * one before it:
+ *
+ *   1. at most maxDocumentInterfaces() interfaces (budget.ts: as many as the
+ *      document's cap has room for), counted before anything else is read;
+ *   2. the compiled contracts and the captured schemas the document will
+ *      carry add up to MAX_DOCUMENT_CONTRACT_BYTES at most, from the sizes
+ *      the database keeps or measures — before any of them is read;
+ *   3. only the captured schemas that will be rendered are read, each inside
+ *      the captured-schema bound (response-schema-states.ts);
+ *   4. the document is built under its budget, each interface's part charged
+ *      as it is built, so the build stops at the interface that passes it;
+ *   5. and written under the same budget.
  */
 
 import { createHash } from "crypto";
 import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { BudgetExceeded, documentLimit, jsonBytesUpTo, LIMITS, OutputBudget } from "@/lib/contracts/budget";
-import { documentOutputTooLargeMessage, documentTooLargeMessage, loadDocInputs } from "@/lib/contracts/doc-inputs";
+import { BudgetExceeded, documentLimit, jsonBytesUpTo, LIMITS, maxDocumentInterfaces, OutputBudget } from "@/lib/contracts/budget";
+import {
+  documentOutputTooLargeMessage,
+  documentTooLargeMessage,
+  documentTooManyInterfacesMessage,
+  loadDocInputs,
+  MAX_DOCUMENT_CONTRACT_BYTES,
+} from "@/lib/contracts/doc-inputs";
 import {
   buildNorthboundOpenApi,
   documentJson,
@@ -38,13 +62,16 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { UNVERSIONED_BASE_PATH } from "@/lib/northbound/version-policy";
 import { studioError } from "@/lib/studio/api";
-import { currentResponseSchema, responseSchemaState, withheldArtifactNote } from "@/lib/studio/contract-provenance";
+import { withheldArtifactNote } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { capturedSchemaFacts, capturedSchemaReadable, readCurrentCapturedSchemas } from "@/lib/studio/response-schema-states";
 import { safeName } from "@/lib/studio/scaffold";
 import { isCapturedSchema } from "@/lib/studio/schema-capture";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+const CAPTURE_TOO_LARGE_NOTE = `Its captured schema is larger than a captured schema may be (${LIMITS.capturedSchema.properties.toLocaleString("en")} fields, ${LIMITS.capturedSchema.bytes / 1024} KB), so it is not described. Run the interface in the Test Console and capture again, or verify the service to compile its contract.`;
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -79,14 +106,31 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       entitySet: true,
       version: true,
       status: true,
-      responseSchema: true,
+      // Not responseSchema: only the captured schemas the document renders are read (below).
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    // 1. One more than a document carries is enough to know it is too many.
+    take: maxDocumentInterfaces() + 1,
   });
+  if (interfaces.length > maxDocumentInterfaces()) {
+    return studioError("TOO_LARGE", documentTooManyInterfacesMessage(maxDocumentInterfaces()));
+  }
 
-  // Refused before any IR is read when the contracts add up past the budget.
+  // 2. Refused before any IR is read when the contracts add up past the budget.
   const inputs = await loadDocInputs(tenantScopeOf(organizationId), interfaces);
   if (!inputs.ok) return studioError("TOO_LARGE", documentTooLargeMessage("solution document", inputs.limit));
+
+  // …and with the captured schemas it would carry, from their stored sizes, before any is read.
+  const sampledOnly = interfaces.filter((i) => inputs.compiled.get(i.id)?.contract.source !== "METADATA");
+  const facts = await capturedSchemaFacts(organizationId, sampledOnly);
+  let carried = 0;
+  for (const c of inputs.compiled.values()) if (c.contract.source === "METADATA") carried += c.irBytes;
+  for (const f of facts.values()) if (f.state === "current" && capturedSchemaReadable(f.storedBytes)) carried += f.storedBytes ?? 0;
+  if (carried > MAX_DOCUMENT_CONTRACT_BYTES) {
+    return studioError("TOO_LARGE", documentTooLargeMessage("solution document", MAX_DOCUMENT_CONTRACT_BYTES));
+  }
+  // 3. Only those, each inside the captured-schema bound.
+  const captures = await readCurrentCapturedSchemas(organizationId, sampledOnly, facts);
 
   const docInterfaces = interfaces.map((i) => {
     const compiled = inputs.compiled.get(i.id);
@@ -102,13 +146,16 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       };
     } else {
       // Only this contract's capture, as served (contract-provenance.ts, A38).
-      const captured = currentResponseSchema(i.responseSchema, i);
-      const state = responseSchemaState(i.responseSchema, i);
-      contract = isCapturedSchema(captured)
-        ? { source: "sampled", schema: captured as unknown as SampledSchema }
-        : state === "stale" || state === "unverified"
-          ? { source: "none", note: withheldArtifactNote(state, i) }
-          : { source: "none" };
+      const captured = captures.get(i.id);
+      const state = facts.get(i.id)?.state ?? "none";
+      contract =
+        captured?.ok && isCapturedSchema(captured.schema)
+          ? { source: "sampled", schema: captured.schema as unknown as SampledSchema }
+          : captured && !captured.ok
+            ? { source: "none", note: CAPTURE_TOO_LARGE_NOTE }
+            : state === "stale" || state === "unverified"
+              ? { source: "none", note: withheldArtifactNote(state, i) }
+              : { source: "none" };
     }
     return {
       id: i.id,
@@ -135,46 +182,52 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     .digest("hex")
     .slice(0, 12);
 
-  const doc = buildNorthboundOpenApi({
-    version,
-    // The original path first, the versioned second (northboundServers).
-    baseUrl: `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`,
-    title: `${safeName(solution.name)} — CoreEdge northbound`,
-    // Moves with its interfaces' contracts; the digest is build metadata.
-    infoVersion: multiInterfaceInfoVersion(docInterfaces, digest),
-    description: [
-      `Every interface of the CoreEdge solution "${safeName(solution.name)}", as the northbound API serves it.`,
-      "",
-      "Generated by CoreEdge Developer Studio. This describes the CoreEdge endpoints your application calls with this solution's credential — not SAP's own API.",
-      "Each interface's record shape is compiled from its service's own description when one has been verified, inferred from captured rows when only those exist, and stated as unknown otherwise (x-coreedge-interfaces[].contract.source).",
-      "",
-      "Honest status: an empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
-    ].join("\n"),
-    interfaces: docInterfaces,
-    discovery: true,
-    safe: safeName,
-  });
-
   /*
    * UNDER THE DOCUMENT'S BUDGET (budget.ts, documentLimit): a function of
    * what was stored — each interface's compiled contract's kept size, or its
-   * captured schema's — written by the one writer, which stops at the budget
-   * (TOO_LARGE) before the document exists in full. Each contract was
-   * rendered under its share of this budget in the compiler's envelope
+   * captured schema's. 4. The build charges each interface's part to it as
+   * the part is made, and stops at the interface that passes it; 5. the
+   * writer charges every byte written, and stops the same way. Each contract
+   * was rendered under its share of this budget in the compiler's envelope
    * (pipeline.ts) before it was stored.
    */
-  const budget = new OutputBudget(
-    "document",
-    documentLimit(
-      docInterfaces.map((i) =>
-        i.contract.source === "metadata"
-          ? (inputs.compiled.get(i.id)?.irBytes ?? 0)
-          : i.contract.source === "sampled"
-            ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
-            : 0,
-      ),
+  const limit = documentLimit(
+    docInterfaces.map((i) =>
+      i.contract.source === "metadata"
+        ? (inputs.compiled.get(i.id)?.irBytes ?? 0)
+        : i.contract.source === "sampled"
+          ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
+          : 0,
     ),
   );
+  let doc: ReturnType<typeof buildNorthboundOpenApi>;
+  try {
+    doc = buildNorthboundOpenApi({
+      version,
+      // The original path first, the versioned second (northboundServers).
+      baseUrl: `${request.nextUrl.origin}${UNVERSIONED_BASE_PATH}`,
+      title: `${safeName(solution.name)} — CoreEdge northbound`,
+      // Moves with its interfaces' contracts; the digest is build metadata.
+      infoVersion: multiInterfaceInfoVersion(docInterfaces, digest),
+      description: [
+        `Every interface of the CoreEdge solution "${safeName(solution.name)}", as the northbound API serves it.`,
+        "",
+        "Generated by CoreEdge Developer Studio. This describes the CoreEdge endpoints your application calls with this solution's credential — not SAP's own API.",
+        "Each interface's record shape is compiled from its service's own description when one has been verified, inferred from captured rows when only those exist, and stated as unknown otherwise (x-coreedge-interfaces[].contract.source).",
+        "",
+        "Honest status: an empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
+      ].join("\n"),
+      interfaces: docInterfaces,
+      discovery: true,
+      safe: safeName,
+      budget: new OutputBudget("document", limit),
+    });
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    return studioError("TOO_LARGE", documentOutputTooLargeMessage("solution document", limit));
+  }
+
+  const budget = new OutputBudget("document", limit);
   let body: string;
   try {
     body = documentJson(doc, budget);

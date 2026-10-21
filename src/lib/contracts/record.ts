@@ -29,7 +29,6 @@ import type { InterfaceContract, ODataVersion } from "@/lib/contracts/ir";
 import type { CompiledService } from "@/lib/contracts/pipeline";
 import { contractFromSample } from "@/lib/contracts/sampled";
 import {
-  currentContractSnapshot,
   currentSnapshotSummaries,
   MAX_CONTRACT_BYTES,
   recordContractSnapshot,
@@ -312,7 +311,8 @@ export async function recordSampledContract(input: {
     };
   }
   try {
-    const current = await currentContractSnapshot(input.scope, iface);
+    // Its summary only: whether it is compiled is all this needs.
+    const current = (await currentSnapshotSummaries(input.scope, [iface])).get(iface.id);
     if (current?.source === "METADATA") {
       return { status: "METADATA_PREFERRED", snapshotId: current.id, semver: current.semver };
     }

@@ -21,7 +21,8 @@
  * FOR EVERY CASE:
  *   - the compile never throws: it compiles, or refuses with a typed reason;
  *   - it is within the envelope's own bounds: a sample of cases is compiled
- *     in the real envelope (envelope.ts) and gives the same answer, never
+ *     in the real envelope (envelope.ts) and gives the same answer —
+ *     compiled or refused alike, field by field (expectSameAnswer) — never
  *     RESOURCE_LIMIT or INTERNAL; every case compiles in time linear in its
  *     length;
  *   - every dataset's contract is prepared (sliced, digested, rendered and
@@ -46,7 +47,7 @@ import type { InterfaceContract } from "@/lib/contracts/ir";
 import { standaloneSchemas } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { buildNorthboundOpenApi, documentJson } from "@/lib/contracts/openapi";
-import { compiledServiceOf, diffJob, prepareContract, type PreparedContract } from "@/lib/contracts/pipeline";
+import { compiledServiceOf, diffJob, prepareContract, type CompiledService, type PreparedContract } from "@/lib/contracts/pipeline";
 import { buildScaffold, safeName } from "@/lib/studio/scaffold";
 
 const ITERATIONS = Number(process.env.CONTRACTS_FUZZ_ITERATIONS ?? 120);
@@ -688,6 +689,8 @@ interface Stats {
   prepared: number;
   datasetRefusals: Map<string, number>;
   envelopeRuns: number;
+  /** Envelope runs whose answer was checked against the in-process one, field by field. */
+  envelopeAgreements: number;
   maxInput: number;
   maxContractPerSource: number;
   maxSchemaPerContract: number;
@@ -697,6 +700,33 @@ interface Stats {
 }
 
 const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+
+/**
+ * The envelope's answer is the in-process one: compiled or refused alike, for
+ * the same reason; the same datasets and version; the first dataset prepared
+ * alike, to the same hash and size, or refused for the same reason.
+ */
+function expectSameAnswer(where: string, inEnvelope: CompiledService, inProcess: CompiledService): void {
+  expect(inEnvelope.ok, `${where}: compiled in one and not the other`).toBe(inProcess.ok);
+  if (!inEnvelope.ok || !inProcess.ok) {
+    expect(inEnvelope.ok ? null : inEnvelope.reason, `${where}: refusal`).toBe(inProcess.ok ? null : inProcess.reason);
+    return;
+  }
+  expect(inEnvelope.entitySets, `${where}: entity sets`).toEqual(inProcess.entitySets);
+  expect(inEnvelope.odataVersion, `${where}: OData version`).toBe(inProcess.odataVersion);
+  expect(inEnvelope.sourceLength, `${where}: source length`).toBe(inProcess.sourceLength);
+  const a = inEnvelope.dataset;
+  const b = inProcess.dataset;
+  expect(a === null, `${where}: a dataset in one only`).toBe(b === null);
+  if (!a || !b) return;
+  expect(a.ok, `${where}: dataset prepared in one only`).toBe(b.ok);
+  if (a.ok && b.ok) {
+    expect(a.hash, `${where}: dataset hash`).toBe(b.hash);
+    expect(a.bytes, `${where}: dataset bytes`).toBe(b.bytes);
+  } else if (!a.ok && !b.ok) {
+    expect(a.reason, `${where}: dataset refusal`).toBe(b.reason);
+  }
+}
 
 describe("the Contract Compiler against generated descriptions", () => {
   it(
@@ -711,6 +741,7 @@ describe("the Contract Compiler against generated descriptions", () => {
         prepared: 0,
         datasetRefusals: new Map(),
         envelopeRuns: 0,
+        envelopeAgreements: 0,
         maxInput: 0,
         maxContractPerSource: 0,
         maxSchemaPerContract: 0,
@@ -739,6 +770,19 @@ describe("the Contract Compiler against generated descriptions", () => {
         }
         expect(compiled.ms, `${where}: compile time`).toBeLessThan(compileBudgetMs(doc.length));
         stats.maxCompileMsPerMb = Math.max(stats.maxCompileMsPerMb, (compiled.ms * 1024 * 1024) / Math.max(doc.length, 64 * 1024));
+        // What the verify learns in process: the summary, with the first dataset prepared (or the refusal).
+        const firstSet = compiled.value.ok ? (compiled.value.ir.entitySets[0]?.name ?? null) : null;
+        const summary = compiledServiceOf(compiled.value, firstSet, null);
+
+        // 4. The real envelope, for a sample — refused descriptions too: the same answer, never stopped by its limits.
+        if (i % ENVELOPE_EVERY === 0) {
+          stats.envelopeRuns += 1;
+          const e = await runInEnvelope({ kind: "compile", input: { body: doc, entitySet: firstSet, subject: null } });
+          if (!e.ok) throw new Error(`${where}: the envelope refused it (${e.reason})`);
+          expectSameAnswer(where, e.value, summary);
+          stats.envelopeAgreements += 1;
+        }
+
         if (!compiled.value.ok) {
           expect(REFUSALS.has(compiled.value.reason), `${where}: refusal ${compiled.value.reason}`).toBe(true);
           bump(stats.refusals, compiled.value.reason);
@@ -750,7 +794,6 @@ describe("the Contract Compiler against generated descriptions", () => {
 
         // 2. Every dataset (a sample of a large service's): prepared without throwing, inside its budgets.
         const sets = ir.entitySets.length <= 6 ? ir.entitySets : [ir.entitySets[0]!, ...Array.from({ length: 5 }, () => r.pick(ir.entitySets))];
-        const summary = compiledServiceOf(compiled.value, sets[0]?.name ?? null, null);
         for (const set of sets) {
           stats.datasets += 1;
           const service = set === sets[0] ? summary : compiledServiceOf(compiled.value, set.name, null);
@@ -788,19 +831,6 @@ describe("the Contract Compiler against generated descriptions", () => {
           previous = p.contract;
         }
 
-        // 4. The real envelope, for a sample: the same answer, never stopped by its limits.
-        if (i % ENVELOPE_EVERY === 0) {
-          stats.envelopeRuns += 1;
-          const e = await runInEnvelope({ kind: "compile", input: { body: doc, entitySet: sets[0]?.name ?? null, subject: null } });
-          expect(e.ok, `${where}: envelope ${e.ok ? "" : e.reason}`).toBe(true);
-          if (e.ok && e.value.ok && summary.ok) {
-            expect(e.value.entitySets.length).toBe(ir.entitySets.length);
-            const inEnvelope = e.value.dataset;
-            const inProcess = summary.dataset;
-            expect(inEnvelope?.ok).toBe(inProcess?.ok);
-            if (inEnvelope?.ok && inProcess?.ok) expect(inEnvelope.hash).toBe(inProcess.hash);
-          }
-        }
       }
 
       const report = {
@@ -819,6 +849,9 @@ describe("the Contract Compiler against generated descriptions", () => {
       expect(stats.compiled).toBeGreaterThan(ITERATIONS / 4);
       expect(stats.prepared).toBeGreaterThan(ITERATIONS / 4);
       expect(stats.refusals.size).toBeGreaterThan(1);
+      // The envelope was compared, not merely run.
+      expect(stats.envelopeAgreements).toBe(stats.envelopeRuns);
+      expect(stats.envelopeAgreements).toBeGreaterThan(0);
     },
     Math.max(120_000, ITERATIONS * 4_000),
   );

@@ -1562,6 +1562,16 @@
                 ],
                 "description": "The schema captured from sampled rows of this contract, or null."
               },
+              "responseSchemaOmitted": {
+                "type": "string",
+                "enum": [
+                  "TOO_LARGE"
+                ],
+                "description": "Present when `responseSchema` is null for a capture of this contract that is stored: it is larger than a captured schema may be."
+              },
+              "responseSchemaNote": {
+                "type": "string"
+              },
               "schemaCaptured": {
                 "type": "boolean"
               },
