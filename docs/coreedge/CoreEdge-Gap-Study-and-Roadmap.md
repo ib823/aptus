@@ -1400,6 +1400,7 @@ With P0.15 no longer waiting on P0.14, the longest P0 chain is P0.1 -> P0.14 (6-
   - PersonalData annotation coverage is measured on that set (input to P1.5).
   - 3.0.3 generates with abap-openapi [E21] [to verify].
   - Write contracts describe the body.
+- Status: delivered, with no new setting. `src/lib/contracts/` compiles V2 EDMX, V4 CSDL XML and V4 CSDL JSON on saxes (no regexes; DOCTYPE, size, depth and floods refused) into the IR; a verify records a `ContractSnapshot` (content hash, semver from the structural diff) and writes a write interface's `requestSchema`; a schema capture records the sampled fallback. The kit ships `openapi.json` (3.1) and `openapi-3.0.json` (3.0.3), and `GET /api/studio/solutions/{id}/openapi` serves the solution's document; both validate against their specifications in the golden tests (six repository-written descriptions, three of them `Z*`/`YY1_*`). The OASIS converter is not used: it describes SAP's service, not the northbound API, and pulls `colors`. The corpus job (`.github/workflows/contract-corpus.yml`, secret `SAP_API_HUB_SANDBOX_API_KEY`) is unrun until the secret is set; abap-openapi is not on npm and stays an open item. Operator notes: `docs/runbooks/coreedge-contract-compiler.md`.
 
 **P1.4 Governed OData query surface.** Size L. Depends on: P1.3, P0.14, P0.10.
 - Problem: reads send only `$top` and `$format`, 100 rows or fewer (`src/lib/northbound/read.ts:56,149,177`).

@@ -247,6 +247,27 @@ export function SolutionsClient({
                     ? "None yet — add one from Discover."
                     : `${selected.interfaceCount} governed interface${selected.interfaceCount === 1 ? "" : "s"}`}
                 </Field>
+                {selected.interfaceCount > 0 && (
+                  <Field label="Northbound contract">
+                    {/* The whole solution's OpenAPI (P1.3): every interface's
+                        served operation, compiled from its verified service. */}
+                    <a
+                      href={`/api/studio/solutions/${encodeURIComponent(selected.id)}/openapi?version=3.1`}
+                      download
+                      style={contractLink}
+                    >
+                      OpenAPI 3.1
+                    </a>
+                    {" · "}
+                    <a
+                      href={`/api/studio/solutions/${encodeURIComponent(selected.id)}/openapi?version=3.0`}
+                      download
+                      style={contractLink}
+                    >
+                      OpenAPI 3.0.3
+                    </a>
+                  </Field>
+                )}
                 <Field label="Access grants">
                   {selected.grantCount === 0
                     ? "None yet — request access from the API Access screen."
@@ -410,6 +431,9 @@ function OwnershipEditor({
 }
 
 /* ── presentation ─────────────────────────────────────────────────────────── */
+
+/** The token the Studio's other in-text links use, so both themes keep their contrast. */
+const contractLink: React.CSSProperties = { color: "var(--brand-navy)", fontWeight: 600 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

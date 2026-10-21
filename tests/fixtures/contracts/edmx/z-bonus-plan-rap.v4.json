@@ -1,0 +1,90 @@
+{
+  "$Version": "4.0",
+  "$EntityContainer": "com.example.zbonusplan.Container",
+  "$Reference": {
+    "https://example.invalid/vocabularies/Org.OData.Core.V1.json": {
+      "$Include": [{ "$Namespace": "Org.OData.Core.V1", "$Alias": "SAP__core" }]
+    },
+    "https://example.invalid/vocabularies/Org.OData.Capabilities.V1.json": {
+      "$Include": [{ "$Namespace": "Org.OData.Capabilities.V1", "$Alias": "SAP__capabilities" }]
+    },
+    "https://example.invalid/vocabularies/com.sap.vocabularies.Common.v1.json": {
+      "$Include": [{ "$Namespace": "com.sap.vocabularies.Common.v1", "$Alias": "SAP__common" }]
+    },
+    "https://example.invalid/vocabularies/com.sap.vocabularies.PersonalData.v1.json": {
+      "$Include": [{ "$Namespace": "com.sap.vocabularies.PersonalData.v1", "$Alias": "SAP__PersonalData" }]
+    }
+  },
+  "com.example.zbonusplan": {
+    "$Alias": "SAP__self",
+    "BonusPlanType": {
+      "$Kind": "EntityType",
+      "$Key": ["PlanUUID"],
+      "PlanUUID": { "$Type": "Edm.Guid" },
+      "PlanName": { "$MaxLength": 40 },
+      "Employee": { "$MaxLength": 12 },
+      "TargetAmount": { "$Type": "Edm.Decimal", "$Precision": 15, "$Scale": 2 },
+      "Currency": { "$MaxLength": 5 },
+      "ValidFrom": { "$Type": "Edm.Date" },
+      "ValidTo": { "$Type": "Edm.Date", "$Nullable": true },
+      "Notes": { "$Nullable": true, "$MaxLength": "max" },
+      "LocalLastChangedAt": { "$Type": "Edm.DateTimeOffset", "$Nullable": true, "$Precision": 7 },
+      "_Targets": {
+        "$Kind": "NavigationProperty",
+        "$Type": "SAP__self.BonusTargetType",
+        "$Collection": true,
+        "$Partner": "_Plan",
+        "$ContainsTarget": true
+      }
+    },
+    "BonusTargetType": {
+      "$Kind": "EntityType",
+      "$Key": ["PlanUUID", "TargetNo"],
+      "PlanUUID": { "$Type": "Edm.Guid" },
+      "TargetNo": { "$Type": "Edm.Int32" },
+      "Description": { "$MaxLength": 80 },
+      "Weight": { "$Type": "Edm.Decimal", "$Precision": 5, "$Scale": 2 },
+      "_Plan": { "$Kind": "NavigationProperty", "$Type": "SAP__self.BonusPlanType", "$Partner": "_Targets" }
+    },
+    "Approve": [
+      {
+        "$Kind": "Action",
+        "$IsBound": true,
+        "$Parameter": [{ "$Name": "_it", "$Type": "SAP__self.BonusPlanType" }],
+        "$ReturnType": { "$Type": "SAP__self.BonusPlanType" }
+      }
+    ],
+    "Container": {
+      "$Kind": "EntityContainer",
+      "BonusPlan": {
+        "$Collection": true,
+        "$Type": "SAP__self.BonusPlanType",
+        "$NavigationPropertyBinding": { "_Targets": "BonusTarget" }
+      },
+      "BonusTarget": {
+        "$Collection": true,
+        "$Type": "SAP__self.BonusTargetType",
+        "$NavigationPropertyBinding": { "_Plan": "BonusPlan" }
+      }
+    },
+    "$Annotations": {
+      "SAP__self.Container/BonusPlan": {
+        "@SAP__capabilities.InsertRestrictions": { "Insertable": true },
+        "@SAP__capabilities.DeleteRestrictions": { "Deletable": true },
+        "@SAP__capabilities.UpdateRestrictions": { "Updatable": true }
+      },
+      "SAP__self.BonusPlanType": {
+        "@SAP__common.Label": "Bonus Plan",
+        "@SAP__PersonalData.EntitySemantics": "DataSubjectDetails"
+      },
+      "SAP__self.BonusPlanType/PlanUUID": { "@SAP__core.Computed": true },
+      "SAP__self.BonusPlanType/Employee": {
+        "@SAP__common.Label": "Employee",
+        "@SAP__PersonalData.FieldSemantics": "DataSubjectID",
+        "@SAP__PersonalData.IsPotentiallyPersonal": true
+      },
+      "SAP__self.BonusPlanType/TargetAmount": { "@SAP__PersonalData.IsPotentiallySensitive": true },
+      "SAP__self.BonusPlanType/LocalLastChangedAt": { "@SAP__core.Computed": true }
+    }
+  }
+}

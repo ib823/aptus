@@ -19,6 +19,11 @@
  * the version its run was against; a capture from a run of an earlier
  * contract is refused with 409, and so is one that loses a race with a
  * contract change — the write is conditional on the version it stamps.
+ *
+ * THE FALLBACK CONTRACT (P1.3). While no contract compiled from the service's
+ * own description describes the interface, the captured shape is also
+ * recorded as a SAMPLED ContractSnapshot, so the contract has a version and a
+ * history either way. A compiled one is never pushed aside by a sample.
  */
 
 import type { NextRequest } from "next/server";
@@ -27,6 +32,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { recordSampledContract, serviceODataVersion } from "@/lib/contracts/record";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { captureContractMismatch } from "@/lib/studio/contract-provenance";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -66,7 +72,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const { id } = await ctx.params;
   const iface = await prisma.interface.findFirst({
     where: scopedById(scope, id),
-    select: { id: true, name: true, version: true, entitySet: true },
+    select: {
+      id: true,
+      name: true,
+      version: true,
+      entitySet: true,
+      externalId: true,
+      odataVersion: true,
+      sapProduct: true,
+      servicePath: true,
+    },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
@@ -102,6 +117,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
+  const contract = await recordSampledContract({
+    scope,
+    // The rows reach here without SAP's envelope (the broker strips it), so
+    // they cannot say which OData version they are. A catalogue interface
+    // stores none either: the service the read went to says it.
+    iface: { ...iface, odataVersion: iface.odataVersion ?? (await serviceODataVersion(iface)) },
+    schema,
+    rows: parsed.data.rows,
+    actorId: user.id,
+  });
+
   await writeConfigAudit({
     organizationId: scope.organizationId,
     actorId: user.id,
@@ -114,6 +140,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       sampleSize: schema["x-captured"].sampleSize,
       interfaceVersion: iface.version,
       entitySet: iface.entitySet,
+      contract: "semver" in contract ? { status: contract.status, semver: contract.semver } : { status: contract.status },
     },
   });
 
@@ -122,5 +149,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     fields: Object.keys(schema.properties).length,
     required: schema.required.length,
     sampleSize: schema["x-captured"].sampleSize,
+    // Additive (P1.3): what became of the sampled fallback contract.
+    contract,
   });
 }

@@ -73,6 +73,10 @@ export const TENANT_ANCHORED_MODELS = [
   // Control Tower read across organizations runs in the ops guard's declared
   // cross-tenant context; nothing looks a row up by a credential.
   "DeveloperJourneyEvent",
+  // P1.3: an interface's compiled contracts. Every read and write names the
+  // organization (lib/contracts/snapshot.ts); no lookup is by credential, so
+  // nothing here is unscoped by design.
+  "ContractSnapshot",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];

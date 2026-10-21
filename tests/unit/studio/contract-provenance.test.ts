@@ -100,6 +100,14 @@ vi.mock("@/lib/db/prisma", () => {
         return { id: `a${store.audits.length}` };
       },
     },
+    // P1.3: no compiled contract in this sequence (the kit and /schema read
+    // snapshots; a capture records a sampled one, which is not asserted here).
+    contractSnapshot: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async ({ data }: { data: Row }) => ({ id: "snap_1", createdAt: new Date(), ...data }),
+    },
+    apiAccessGrant: { findMany: async () => [] },
   };
   prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
   return { prisma };

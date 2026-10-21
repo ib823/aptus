@@ -1,0 +1,1531 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Golden solution — CoreEdge northbound",
+    "version": "1.0.0",
+    "description": "Golden document."
+  },
+  "servers": [
+    {
+      "url": "https://coreedge.example/api/northbound"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "YY1SALESBONUS",
+      "description": "YY1_SALESBONUS read (GOLDEN)"
+    },
+    {
+      "name": "YY1SALESBONUS2",
+      "description": "YY1_SALESBONUS create (GOLDEN)"
+    }
+  ],
+  "paths": {
+    "/interfaces/if_read/data": {
+      "get": {
+        "operationId": "readYY1SALESBONUS",
+        "tags": [
+          "YY1SALESBONUS"
+        ],
+        "summary": "Read YY1_SALESBONUS",
+        "description": "Reads records through CoreEdge from the customer's SAP system, through the connection bound to this credential's environment. An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Records, or an empty array meaning 'no records' — not an error.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "x-coreedge-interface-status": {
+                "$ref": "#/components/headers/InterfaceStatus"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YY1SALESBONUS_ReadResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Codes: VALIDATION_ERROR.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "VALIDATION_ERROR",
+                "status": 400,
+                "action": "Fix the request or the interface. Do not retry unchanged."
+              }
+            ]
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "description": "Not set up: no approved access grant for this interface in this environment, a deprecated interface, or the customer's connection is not bound yet. Codes: FORBIDDEN, CONNECTION_NOT_CONFIGURED.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "FORBIDDEN",
+                "status": 403,
+                "action": "Fix access in Studio. Do not retry."
+              },
+              {
+                "code": "CONNECTION_NOT_CONFIGURED",
+                "status": 403,
+                "action": "Ask the customer to finish connecting their SAP system. Do not retry."
+              }
+            ]
+          },
+          "404": {
+            "description": "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry. Codes: NOT_FOUND.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "NOT_FOUND",
+                "status": 404,
+                "action": "Fix the interface id or its configuration. Do not retry."
+              }
+            ]
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "502": {
+            "description": "The tenant or the connection's token endpoint failed. Distinct from an empty result; retrying may help. Codes: UPSTREAM_ERROR.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "UPSTREAM_ERROR",
+                "status": 502,
+                "action": "Retry or escalate with the correlation id."
+              }
+            ]
+          },
+          "503": {
+            "$ref": "#/components/responses/LimiterUnavailable"
+          },
+          "504": {
+            "description": "The tenant or the connection's token endpoint did not answer in time; retrying may help. Codes: UPSTREAM_TIMEOUT.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "UPSTREAM_TIMEOUT",
+                "status": 504,
+                "action": "Retry; for a write, retry with the same Idempotency-Key."
+              }
+            ]
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/interfaces/if_read/schema": {
+      "get": {
+        "operationId": "getYY1SALESBONUSContract",
+        "tags": [
+          "YY1SALESBONUS"
+        ],
+        "summary": "Fetch this interface's contract",
+        "description": "The interface's request and response schemas, and where they came from (the service's own description, sampled rows, or none). Makes no SAP call.",
+        "responses": {
+          "200": {
+            "description": "The contract.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDocument"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "description": "No such interface for this solution. Codes: NOT_FOUND.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "NOT_FOUND",
+                "status": 404,
+                "action": "Fix the interface id or its configuration. Do not retry."
+              }
+            ]
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/LimiterUnavailable"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/interfaces/if_create/schema": {
+      "get": {
+        "operationId": "getYY1SALESBONUS2Contract",
+        "tags": [
+          "YY1SALESBONUS2"
+        ],
+        "summary": "Fetch this interface's contract",
+        "description": "The interface's request and response schemas, and where they came from (the service's own description, sampled rows, or none). Makes no SAP call.",
+        "responses": {
+          "200": {
+            "description": "The contract.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDocument"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "description": "No such interface for this solution. Codes: NOT_FOUND.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "NOT_FOUND",
+                "status": 404,
+                "action": "Fix the interface id or its configuration. Do not retry."
+              }
+            ]
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/LimiterUnavailable"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/interfaces": {
+      "get": {
+        "operationId": "listInterfaces",
+        "summary": "List the interfaces this credential's solution defines",
+        "description": "Metadata only; makes no SAP call. `callable` says whether a data call would be made, and `refusal` why not.",
+        "responses": {
+          "200": {
+            "description": "This solution's interfaces.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/LimiterUnavailable"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Per-solution client token issued in Developer Studio. During a rotation's overlap window the replaced key keeps working; after it, it answers 401 like any unknown key."
+      },
+      "writeKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CoreEdge-Write-Key",
+        "description": "The solution's write credential — a second secret, so a leaked read token cannot write."
+      }
+    },
+    "responses": {
+      "Unauthenticated": {
+        "description": "Missing, unknown, revoked, expired or rotated-out client token — one answer for all of them. Codes: UNAUTHENTICATED.",
+        "headers": {
+          "x-correlation-id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemaining"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "x-coreedge-error-codes": [
+          {
+            "code": "UNAUTHENTICATED",
+            "status": 401,
+            "action": "Use a current key from Developer Studio. Do not retry with the same key."
+          }
+        ]
+      },
+      "RateLimited": {
+        "description": "Rate limited: this credential's budget, or the caller's address. Codes: RATE_LIMITED, RATE_LIMITED_ADDRESS.",
+        "headers": {
+          "x-correlation-id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemaining"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "x-coreedge-error-codes": [
+          {
+            "code": "RATE_LIMITED",
+            "status": 429,
+            "action": "Back off for Retry-After seconds."
+          },
+          {
+            "code": "RATE_LIMITED_ADDRESS",
+            "status": 429,
+            "action": "Back off for Retry-After seconds; backing off one key may not help."
+          }
+        ]
+      },
+      "LimiterUnavailable": {
+        "description": "The rate limiter could not be asked; nothing reached SAP. Codes: LIMITER_UNAVAILABLE.",
+        "headers": {
+          "x-correlation-id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemaining"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "x-coreedge-error-codes": [
+          {
+            "code": "LIMITER_UNAVAILABLE",
+            "status": 503,
+            "action": "Retry after Retry-After seconds."
+          }
+        ]
+      },
+      "Internal": {
+        "description": "CoreEdge itself failed. Codes: INTERNAL.",
+        "headers": {
+          "x-correlation-id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemaining"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControl"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "x-coreedge-error-codes": [
+          {
+            "code": "INTERNAL",
+            "status": 500,
+            "action": "Escalate with the correlation id."
+          }
+        ]
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "How many records to return. The broker clamps it to 1–100.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Required on every write. Reuse the same key when retrying the same write; a new write takes a new key. Kept for 24 hours.",
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "description": "Quote this when raising a support request; it identifies the audit row for this call.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RequestId": {
+        "description": "The edge's own request id.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RateLimitRemaining": {
+        "description": "Calls left in this credential's current window (the smaller of its own budget and its address's backstop).",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds to wait before retrying.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "InterfaceStatus": {
+        "description": "Present, with the value DRAFT, when the interface is still a draft in Developer Studio. A draft is served — premature is not wrong — but its contract may still change. Absent once the interface is ACTIVE.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "DRAFT"
+          ]
+        }
+      },
+      "IdempotencyReplayed": {
+        "description": "\"true\" when this answer is the stored outcome of an earlier request under the same Idempotency-Key.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        }
+      },
+      "CacheControl": {
+        "description": "Always no-store: customer data never sits in a shared cache.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "YY1SALESBONUS": {
+        "type": "object",
+        "title": "Sales Bonus per Employee",
+        "description": "A YY1_SALESBONUS record as the service returns it, compiled from the service's own description.",
+        "x-odata-entity-set": "YY1_SALESBONUS",
+        "x-odata-entity-type": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType",
+        "x-odata-key": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "properties": {
+          "SalesEmployee": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          },
+          "FiscalYear": {
+            "type": "string",
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          },
+          "SalesEmployeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80,
+            "title": "Employee Name",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          },
+          "BonusAmount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "decimal",
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "x-odata-precision": 23,
+            "x-odata-scale": 3,
+            "title": "Bonus",
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 5,
+            "title": "Currency",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "BonusRate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "double",
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Rate",
+            "x-odata-type": "Edm.Double"
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "additionalProperties": true
+      },
+      "YY1SALESBONUS_Key": {
+        "type": "object",
+        "title": "Sales Bonus per Employee (key)",
+        "description": "The key that names one YY1_SALESBONUS record.",
+        "properties": {
+          "SalesEmployee": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          },
+          "FiscalYear": {
+            "type": "string",
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "additionalProperties": false
+      },
+      "YY1SALESBONUS_ReadResult": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "records",
+              "count",
+              "empty",
+              "note",
+              "interface"
+            ],
+            "properties": {
+              "records": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/YY1SALESBONUS"
+                }
+              },
+              "count": {
+                "type": "integer",
+                "description": "records.length."
+              },
+              "empty": {
+                "type": "boolean",
+                "description": "True when the service answered successfully and had nothing to return. This is data, not a failure."
+              },
+              "note": {
+                "type": "string",
+                "description": "A one-line, human-readable account of what came back."
+              },
+              "interface": {
+                "$ref": "#/components/schemas/InterfaceRef"
+              }
+            }
+          }
+        }
+      },
+      "YY1SALESBONUS2": {
+        "type": "object",
+        "title": "Sales Bonus per Employee",
+        "description": "A YY1_SALESBONUS record as the service returns it, compiled from the service's own description.",
+        "x-odata-entity-set": "YY1_SALESBONUS",
+        "x-odata-entity-type": "YY1_SALESBONUS_CDS.YY1_SALESBONUSType",
+        "x-odata-key": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "properties": {
+          "SalesEmployee": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          },
+          "FiscalYear": {
+            "type": "string",
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          },
+          "SalesEmployeeName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80,
+            "title": "Employee Name",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          },
+          "BonusAmount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "decimal",
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "x-odata-precision": 23,
+            "x-odata-scale": 3,
+            "title": "Bonus",
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 5,
+            "title": "Currency",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "BonusRate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "double",
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Rate",
+            "x-odata-type": "Edm.Double"
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "additionalProperties": true
+      },
+      "YY1SALESBONUS2_Key": {
+        "type": "object",
+        "title": "Sales Bonus per Employee (key)",
+        "description": "The key that names one YY1_SALESBONUS record.",
+        "properties": {
+          "SalesEmployee": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Sales Employee",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "UpperCase"
+          },
+          "FiscalYear": {
+            "type": "string",
+            "maxLength": 4,
+            "title": "Fiscal Year",
+            "x-odata-type": "Edm.String",
+            "x-sap-display-format": "NonNegative"
+          }
+        },
+        "required": [
+          "SalesEmployee",
+          "FiscalYear"
+        ],
+        "additionalProperties": false
+      },
+      "Discovery": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "environment",
+              "interfaces"
+            ],
+            "properties": {
+              "environment": {
+                "type": "string"
+              },
+              "interfaces": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "callable"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string"
+                    },
+                    "sapProduct": {
+                      "type": "string"
+                    },
+                    "operation": {
+                      "type": "string"
+                    },
+                    "entitySet": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "callable": {
+                      "type": "boolean"
+                    },
+                    "refusal": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "service": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "custom",
+                            "catalogue"
+                          ]
+                        },
+                        "odataVersion": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "InterfaceRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "description": "The governed contract version that served this call."
+          }
+        }
+      },
+      "ContractDocument": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "externalId",
+              "version",
+              "requestSchema",
+              "responseSchema",
+              "schemaCaptured",
+              "schemaState"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "externalId": {
+                "type": "string"
+              },
+              "sapProduct": {
+                "type": "string"
+              },
+              "operation": {
+                "type": "string"
+              },
+              "entitySet": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mode": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "requestSchema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "The JSON Schema of a write's `record`, compiled from the service's description; null for a read interface or when none is compiled."
+              },
+              "responseSchema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "The schema captured from sampled rows of this contract, or null."
+              },
+              "schemaCaptured": {
+                "type": "boolean"
+              },
+              "schemaState": {
+                "type": "string",
+                "enum": [
+                  "current",
+                  "stale",
+                  "unverified",
+                  "none"
+                ]
+              },
+              "schemaNote": {
+                "type": "string"
+              },
+              "contract": {
+                "type": "object",
+                "description": "The compiled contract and where it came from.",
+                "required": [
+                  "source"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "metadata",
+                      "sampled",
+                      "none"
+                    ]
+                  },
+                  "semver": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "snapshotId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "contentHash": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "odataVersion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "compiledAt": {
+                    "format": "date-time",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "schemas": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "JSON Schema 2020-12 documents: record, create, update, key."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "description": "The one error envelope every CoreEdge northbound answer uses. Branch on `code`; quote `correlationId`.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "correlationId"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "UNAUTHENTICATED",
+                  "FORBIDDEN",
+                  "CONNECTION_NOT_CONFIGURED",
+                  "NOT_FOUND",
+                  "VALIDATION_ERROR",
+                  "CONFLICT",
+                  "RATE_LIMITED",
+                  "RATE_LIMITED_ADDRESS",
+                  "LIMITER_UNAVAILABLE",
+                  "UPSTREAM_TIMEOUT",
+                  "UPSTREAM_ERROR",
+                  "INTERNAL"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "description": "A sentence for a person. Never a host, a URL or SAP's raw answer."
+              },
+              "correlationId": {
+                "type": "string",
+                "description": "Identifies the audit row for this call."
+              }
+            }
+          }
+        },
+        "x-coreedge-codes": {
+          "UNAUTHENTICATED": {
+            "statuses": [
+              401
+            ],
+            "meaning": "The client token is missing, unknown, inactive, revoked or expired, was replaced by a rotation whose overlap has closed, or belongs to a retired solution. One answer for all of them, deliberately.",
+            "action": "Use a current key from Developer Studio. Do not retry with the same key."
+          },
+          "FORBIDDEN": {
+            "statuses": [
+              403
+            ],
+            "meaning": "Not set up: no approved, unexpired, unrevoked grant for this interface in this environment (or one approved before grants were bound to an interface, which needs re-approval), a deprecated interface, a missing or invalid write key, writes disabled on the connection, or the SAP system refused the connection's credential.",
+            "action": "Fix access in Studio. Do not retry."
+          },
+          "CONNECTION_NOT_CONFIGURED": {
+            "statuses": [
+              403
+            ],
+            "meaning": "The customer's SAP connection cannot be bound for this credential's environment yet.",
+            "action": "Ask the customer to finish connecting their SAP system. Do not retry."
+          },
+          "NOT_FOUND": {
+            "statuses": [
+              404
+            ],
+            "meaning": "No interface with this id belongs to the solution this token was issued for, or the SAP system answered that the dataset does not exist.",
+            "action": "Fix the interface id or its configuration. Do not retry."
+          },
+          "VALIDATION_ERROR": {
+            "statuses": [
+              400,
+              422
+            ],
+            "meaning": "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service). 422: SAP rejected the record itself.",
+            "action": "Fix the request or the interface. Do not retry unchanged."
+          },
+          "CONFLICT": {
+            "statuses": [
+              409
+            ],
+            "meaning": "The Idempotency-Key was used before with a different payload or destination — or, with Retry-After, the first request under this key is still running.",
+            "action": "With Retry-After: retry with the SAME key after it. Without: use a new key for a different write."
+          },
+          "RATE_LIMITED": {
+            "statuses": [
+              429
+            ],
+            "meaning": "This credential used its own per-minute budget.",
+            "action": "Back off for Retry-After seconds."
+          },
+          "RATE_LIMITED_ADDRESS": {
+            "statuses": [
+              429
+            ],
+            "meaning": "The caller's address is over a limit (the edge's per-address backstop, or too many unrecognised keys from it). Another key on a shared egress may have spent it.",
+            "action": "Back off for Retry-After seconds; backing off one key may not help."
+          },
+          "LIMITER_UNAVAILABLE": {
+            "statuses": [
+              503
+            ],
+            "meaning": "The rate limiter could not be asked, so the call was refused for safety. Nothing reached SAP.",
+            "action": "Retry after Retry-After seconds."
+          },
+          "UPSTREAM_TIMEOUT": {
+            "statuses": [
+              504
+            ],
+            "meaning": "The SAP system, or the connection's token endpoint, did not answer in time.",
+            "action": "Retry; for a write, retry with the same Idempotency-Key."
+          },
+          "UPSTREAM_ERROR": {
+            "statuses": [
+              502
+            ],
+            "meaning": "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.",
+            "action": "Retry or escalate with the correlation id."
+          },
+          "INTERNAL": {
+            "statuses": [
+              500
+            ],
+            "meaning": "CoreEdge itself failed.",
+            "action": "Escalate with the correlation id."
+          }
+        },
+        "x-coreedge-refusal-reasons": [
+          {
+            "reason": "NO_TOKEN",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "UNKNOWN_TOKEN",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "INACTIVE",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "REVOKED",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "EXPIRED",
+            "code": "UNAUTHENTICATED",
+            "status": 401,
+            "origin": "P0.11"
+          },
+          {
+            "reason": "ROTATED_OUT",
+            "code": "UNAUTHENTICATED",
+            "status": 401,
+            "origin": "P0.11"
+          },
+          {
+            "reason": "SOLUTION_RETIRED",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "SOLUTION_MISSING",
+            "code": "UNAUTHENTICATED",
+            "status": 401
+          },
+          {
+            "reason": "INTERFACE_NOT_FOUND",
+            "code": "NOT_FOUND",
+            "status": 404
+          },
+          {
+            "reason": "NOT_THIS_SOLUTION",
+            "code": "NOT_FOUND",
+            "status": 404
+          },
+          {
+            "reason": "NO_APPROVED_GRANT",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "GRANT_EXPIRED",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "GRANT_REVOKED",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "GRANT_NEEDS_REAPPROVAL",
+            "code": "FORBIDDEN",
+            "status": 403,
+            "origin": "P0.1"
+          },
+          {
+            "reason": "INTERFACE_DEPRECATED",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "READ_ONLY_INTERFACE",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "INTERFACE_NOT_ACTIVE",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "OPERATION_NOT_SUPPORTED",
+            "code": "VALIDATION_ERROR",
+            "status": 400
+          },
+          {
+            "reason": "WRITE_NOT_SERVED",
+            "code": "FORBIDDEN",
+            "status": 403
+          },
+          {
+            "reason": "TOKEN_REJECTED",
+            "code": "FORBIDDEN",
+            "status": 403,
+            "origin": "P0.5"
+          },
+          {
+            "reason": "TOKEN_TIMEOUT",
+            "code": "UPSTREAM_TIMEOUT",
+            "status": 504,
+            "origin": "P0.5"
+          },
+          {
+            "reason": "TOKEN_HTTP_<status>",
+            "code": "UPSTREAM_ERROR",
+            "status": 502,
+            "origin": "P0.5"
+          },
+          {
+            "reason": "TOKEN_NO_TOKEN",
+            "code": "UPSTREAM_ERROR",
+            "status": 502,
+            "origin": "P0.5"
+          },
+          {
+            "reason": "TOKEN_<network code>",
+            "code": "UPSTREAM_ERROR",
+            "status": 502,
+            "origin": "P0.5"
+          },
+          {
+            "reason": "LIMITER_UNAVAILABLE",
+            "code": "LIMITER_UNAVAILABLE",
+            "status": 503,
+            "origin": "P0.5"
+          }
+        ]
+      }
+    }
+  },
+  "x-coreedge-interfaces": [
+    {
+      "id": "if_read",
+      "name": "YY1_SALESBONUS read",
+      "externalId": "GOLDEN",
+      "entitySet": "YY1_SALESBONUS",
+      "interfaceVersion": 3,
+      "status": "ACTIVE",
+      "tag": "YY1SALESBONUS",
+      "contract": {
+        "source": "metadata",
+        "semver": "1.0.0",
+        "snapshotId": "snap_golden",
+        "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "odataVersion": "V2"
+      },
+      "operations": {
+        "list": {
+          "served": true,
+          "query": [
+            "limit"
+          ],
+          "grantedIn": [
+            "DEV",
+            "TEST"
+          ]
+        },
+        "getByKey": {
+          "served": false,
+          "roadmap": "P1.4"
+        },
+        "create": {
+          "served": false,
+          "allowedBySap": false
+        },
+        "update": {
+          "served": false,
+          "roadmap": "P2.4",
+          "allowedBySap": false
+        },
+        "delete": {
+          "served": false,
+          "roadmap": "P2.4",
+          "allowedBySap": false
+        }
+      }
+    },
+    {
+      "id": "if_create",
+      "name": "YY1_SALESBONUS create",
+      "externalId": "GOLDEN",
+      "entitySet": "YY1_SALESBONUS",
+      "interfaceVersion": 1,
+      "status": "DRAFT",
+      "tag": "YY1SALESBONUS2",
+      "contract": {
+        "source": "metadata",
+        "semver": "1.0.0",
+        "snapshotId": "snap_golden",
+        "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "odataVersion": "V2"
+      },
+      "operations": {
+        "list": {
+          "served": false,
+          "query": [
+            "limit"
+          ],
+          "note": "A write interface is not read through the data route."
+        },
+        "getByKey": {
+          "served": false,
+          "roadmap": "P1.4"
+        },
+        "create": {
+          "served": false,
+          "allowedBySap": false,
+          "grantedIn": [
+            "DEV"
+          ]
+        },
+        "update": {
+          "served": false,
+          "roadmap": "P2.4",
+          "allowedBySap": false
+        },
+        "delete": {
+          "served": false,
+          "roadmap": "P2.4",
+          "allowedBySap": false
+        }
+      }
+    }
+  ]
+}

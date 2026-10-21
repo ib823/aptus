@@ -1,0 +1,859 @@
+{
+  "json-schema-2020-12": {
+    "create": {
+      "$defs": {
+        "SalesOrder_Money": {
+          "additionalProperties": false,
+          "properties": {
+            "Amount": {
+              "format": "decimal",
+              "title": "Amount",
+              "type": [
+                "number",
+                "null"
+              ],
+              "x-odata-precision": 15,
+              "x-odata-scale": 2,
+              "x-odata-type": "Edm.Decimal"
+            },
+            "Currency": {
+              "maxLength": 3,
+              "type": [
+                "string",
+                "null"
+              ],
+              "x-odata-type": "Edm.String"
+            }
+          },
+          "type": "object",
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "SalesOrder_OverallStatus": {
+          "enum": [
+            "Open",
+            "InProcess",
+            "Completed"
+          ],
+          "type": "string",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+      "properties": {
+        "ContactEmail": {
+          "maxLength": 241,
+          "title": "Contact E-Mail",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          }
+        },
+        "DeliveryTime": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.TimeOfDay"
+        },
+        "ItemCount": {
+          "format": "int64",
+          "type": "integer",
+          "x-odata-type": "Edm.Int64"
+        },
+        "NetValue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalesOrder_Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "PurchaseOrderByCustomer": {
+          "maxLength": 35,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "RequestedDeliveryDate": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        },
+        "SalesOrderType": {
+          "maxLength": 4,
+          "title": "Sales Document Type",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "SoldToParty": {
+          "description": "Customer who orders",
+          "maxLength": 10,
+          "title": "Sold-to Party",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          }
+        },
+        "Status": {
+          "$ref": "#/$defs/SalesOrder_OverallStatus",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        },
+        "Tags": {
+          "items": {
+            "maxLength": 20,
+            "type": "string"
+          },
+          "type": "array",
+          "x-odata-type": "Collection(Edm.String)"
+        },
+        "TotalNetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        }
+      },
+      "required": [
+        "SoldToParty",
+        "PurchaseOrderByCustomer"
+      ],
+      "title": "Sales Order (create)",
+      "type": "object"
+    },
+    "key": {
+      "$defs": {
+        "SalesOrder_Money": {
+          "additionalProperties": false,
+          "properties": {
+            "Amount": {
+              "format": "decimal",
+              "title": "Amount",
+              "type": [
+                "number",
+                "null"
+              ],
+              "x-odata-precision": 15,
+              "x-odata-scale": 2,
+              "x-odata-type": "Edm.Decimal"
+            },
+            "Currency": {
+              "maxLength": 3,
+              "type": [
+                "string",
+                "null"
+              ],
+              "x-odata-type": "Edm.String"
+            }
+          },
+          "type": "object",
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "SalesOrder_OverallStatus": {
+          "enum": [
+            "Open",
+            "InProcess",
+            "Completed"
+          ],
+          "type": "string",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one SalesOrder record.",
+      "properties": {
+        "SalesOrder": {
+          "maxLength": 10,
+          "title": "Sales Order",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "SalesOrder"
+      ],
+      "title": "Sales Order (key)",
+      "type": "object"
+    },
+    "record": {
+      "$defs": {
+        "SalesOrder_Money": {
+          "additionalProperties": false,
+          "properties": {
+            "Amount": {
+              "format": "decimal",
+              "title": "Amount",
+              "type": [
+                "number",
+                "null"
+              ],
+              "x-odata-precision": 15,
+              "x-odata-scale": 2,
+              "x-odata-type": "Edm.Decimal"
+            },
+            "Currency": {
+              "maxLength": 3,
+              "type": [
+                "string",
+                "null"
+              ],
+              "x-odata-type": "Edm.String"
+            }
+          },
+          "type": "object",
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "SalesOrder_OverallStatus": {
+          "enum": [
+            "Open",
+            "InProcess",
+            "Completed"
+          ],
+          "type": "string",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A SalesOrder record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "ContactEmail": {
+          "maxLength": 241,
+          "title": "Contact E-Mail",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          }
+        },
+        "CreatedAt": {
+          "format": "date-time",
+          "readOnly": true,
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "DeliveryTime": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.TimeOfDay"
+        },
+        "ItemCount": {
+          "format": "int64",
+          "type": "integer",
+          "x-odata-type": "Edm.Int64"
+        },
+        "LastChangedAt": {
+          "format": "date-time",
+          "readOnly": true,
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "NetValue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalesOrder_Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "PurchaseOrderByCustomer": {
+          "maxLength": 35,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "RequestedDeliveryDate": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        },
+        "SalesOrder": {
+          "maxLength": 10,
+          "readOnly": true,
+          "title": "Sales Order",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "SalesOrderType": {
+          "maxLength": 4,
+          "title": "Sales Document Type",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "SalesOrderUUID": {
+          "format": "uuid",
+          "readOnly": true,
+          "type": "string",
+          "x-odata-type": "Edm.Guid"
+        },
+        "SoldToParty": {
+          "description": "Customer who orders",
+          "maxLength": 10,
+          "title": "Sold-to Party",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          }
+        },
+        "Status": {
+          "$ref": "#/$defs/SalesOrder_OverallStatus",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        },
+        "Tags": {
+          "items": {
+            "maxLength": 20,
+            "type": "string"
+          },
+          "type": "array",
+          "x-odata-type": "Collection(Edm.String)"
+        },
+        "TotalNetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        }
+      },
+      "required": [
+        "SalesOrder"
+      ],
+      "title": "Sales Order",
+      "type": "object",
+      "x-odata-entity-set": "SalesOrder",
+      "x-odata-entity-type": "com.example.salesorder.SalesOrderType",
+      "x-odata-key": [
+        "SalesOrder"
+      ]
+    },
+    "update": {
+      "$defs": {
+        "SalesOrder_Money": {
+          "additionalProperties": false,
+          "properties": {
+            "Amount": {
+              "format": "decimal",
+              "title": "Amount",
+              "type": [
+                "number",
+                "null"
+              ],
+              "x-odata-precision": 15,
+              "x-odata-scale": 2,
+              "x-odata-type": "Edm.Decimal"
+            },
+            "Currency": {
+              "maxLength": 3,
+              "type": [
+                "string",
+                "null"
+              ],
+              "x-odata-type": "Edm.String"
+            }
+          },
+          "type": "object",
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "SalesOrder_OverallStatus": {
+          "enum": [
+            "Open",
+            "InProcess",
+            "Completed"
+          ],
+          "type": "string",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The changes an update sends to one SalesOrder record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+      "properties": {
+        "ContactEmail": {
+          "maxLength": 241,
+          "title": "Contact E-Mail",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          }
+        },
+        "DeliveryTime": {
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.TimeOfDay"
+        },
+        "ItemCount": {
+          "format": "int64",
+          "type": "integer",
+          "x-odata-type": "Edm.Int64"
+        },
+        "NetValue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalesOrder_Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-odata-type": "com.example.salesorder.Money"
+        },
+        "PurchaseOrderByCustomer": {
+          "maxLength": 35,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "RequestedDeliveryDate": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        },
+        "SoldToParty": {
+          "description": "Customer who orders",
+          "maxLength": 10,
+          "title": "Sold-to Party",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          }
+        },
+        "Status": {
+          "$ref": "#/$defs/SalesOrder_OverallStatus",
+          "x-odata-type": "com.example.salesorder.OverallStatus"
+        },
+        "Tags": {
+          "items": {
+            "maxLength": 20,
+            "type": "string"
+          },
+          "type": "array",
+          "x-odata-type": "Collection(Edm.String)"
+        },
+        "TotalNetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        }
+      },
+      "title": "Sales Order (update)",
+      "type": "object"
+    }
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": "SalesOrder_Create",
+      "key": "SalesOrder_Key",
+      "record": "SalesOrder",
+      "update": "SalesOrder_Update"
+    },
+    "schemas": {
+      "SalesOrder": {
+        "additionalProperties": true,
+        "description": "A SalesOrder record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "ContactEmail": {
+            "maxLength": 241,
+            "nullable": true,
+            "title": "Contact E-Mail",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          },
+          "CreatedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "DeliveryTime": {
+            "nullable": true,
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+            "type": "string",
+            "x-odata-type": "Edm.TimeOfDay"
+          },
+          "ItemCount": {
+            "format": "int64",
+            "type": "integer",
+            "x-odata-type": "Edm.Int64"
+          },
+          "LastChangedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "NetValue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.Money"
+          },
+          "PurchaseOrderByCustomer": {
+            "maxLength": 35,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "RequestedDeliveryDate": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "SalesOrder": {
+            "maxLength": 10,
+            "readOnly": true,
+            "title": "Sales Order",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "SalesOrderType": {
+            "maxLength": 4,
+            "title": "Sales Document Type",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "SalesOrderUUID": {
+            "format": "uuid",
+            "readOnly": true,
+            "type": "string",
+            "x-odata-type": "Edm.Guid"
+          },
+          "SoldToParty": {
+            "description": "Customer who orders",
+            "maxLength": 10,
+            "title": "Sold-to Party",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            }
+          },
+          "Status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_OverallStatus"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.OverallStatus"
+          },
+          "Tags": {
+            "items": {
+              "maxLength": 20,
+              "type": "string"
+            },
+            "type": "array",
+            "x-odata-type": "Collection(Edm.String)"
+          },
+          "TotalNetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          }
+        },
+        "required": [
+          "SalesOrder"
+        ],
+        "title": "Sales Order",
+        "type": "object",
+        "x-odata-entity-set": "SalesOrder",
+        "x-odata-entity-type": "com.example.salesorder.SalesOrderType",
+        "x-odata-key": [
+          "SalesOrder"
+        ]
+      },
+      "SalesOrder_Create": {
+        "additionalProperties": false,
+        "description": "The record a create sends to SalesOrder. Computed and non-creatable properties are left out; required lists what the service marks mandatory.",
+        "properties": {
+          "ContactEmail": {
+            "maxLength": 241,
+            "nullable": true,
+            "title": "Contact E-Mail",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          },
+          "DeliveryTime": {
+            "nullable": true,
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+            "type": "string",
+            "x-odata-type": "Edm.TimeOfDay"
+          },
+          "ItemCount": {
+            "format": "int64",
+            "type": "integer",
+            "x-odata-type": "Edm.Int64"
+          },
+          "NetValue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.Money"
+          },
+          "PurchaseOrderByCustomer": {
+            "maxLength": 35,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "RequestedDeliveryDate": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "SalesOrderType": {
+            "maxLength": 4,
+            "title": "Sales Document Type",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "SoldToParty": {
+            "description": "Customer who orders",
+            "maxLength": 10,
+            "title": "Sold-to Party",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            }
+          },
+          "Status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_OverallStatus"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.OverallStatus"
+          },
+          "Tags": {
+            "items": {
+              "maxLength": 20,
+              "type": "string"
+            },
+            "type": "array",
+            "x-odata-type": "Collection(Edm.String)"
+          },
+          "TotalNetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          }
+        },
+        "required": [
+          "SoldToParty",
+          "PurchaseOrderByCustomer"
+        ],
+        "title": "Sales Order (create)",
+        "type": "object"
+      },
+      "SalesOrder_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one SalesOrder record.",
+        "properties": {
+          "SalesOrder": {
+            "maxLength": 10,
+            "title": "Sales Order",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "SalesOrder"
+        ],
+        "title": "Sales Order (key)",
+        "type": "object"
+      },
+      "SalesOrder_Money": {
+        "additionalProperties": false,
+        "properties": {
+          "Amount": {
+            "format": "decimal",
+            "nullable": true,
+            "title": "Amount",
+            "type": "number",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "maxLength": 3,
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "type": "object",
+        "x-odata-type": "com.example.salesorder.Money"
+      },
+      "SalesOrder_OverallStatus": {
+        "enum": [
+          "Open",
+          "InProcess",
+          "Completed"
+        ],
+        "type": "string",
+        "x-odata-type": "com.example.salesorder.OverallStatus"
+      },
+      "SalesOrder_Update": {
+        "additionalProperties": false,
+        "description": "The changes an update sends to one SalesOrder record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+        "properties": {
+          "ContactEmail": {
+            "maxLength": 241,
+            "nullable": true,
+            "title": "Contact E-Mail",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            }
+          },
+          "DeliveryTime": {
+            "nullable": true,
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,12})?)?$",
+            "type": "string",
+            "x-odata-type": "Edm.TimeOfDay"
+          },
+          "ItemCount": {
+            "format": "int64",
+            "type": "integer",
+            "x-odata-type": "Edm.Int64"
+          },
+          "NetValue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_Money"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true,
+                "type": "object"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.Money"
+          },
+          "PurchaseOrderByCustomer": {
+            "maxLength": 35,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "RequestedDeliveryDate": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "SoldToParty": {
+            "description": "Customer who orders",
+            "maxLength": 10,
+            "title": "Sold-to Party",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            }
+          },
+          "Status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrder_OverallStatus"
+              }
+            ],
+            "x-odata-type": "com.example.salesorder.OverallStatus"
+          },
+          "Tags": {
+            "items": {
+              "maxLength": 20,
+              "type": "string"
+            },
+            "type": "array",
+            "x-odata-type": "Collection(Edm.String)"
+          },
+          "TotalNetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          }
+        },
+        "title": "Sales Order (update)",
+        "type": "object"
+      }
+    }
+  }
+}

@@ -63,6 +63,23 @@ interface VerifyOutcome {
   boundTo: { label: string; environment: string | null; sapClient: string | null } | null;
   /** The interface version the answer describes. */
   interfaceVersion?: number;
+  /** What became of the compiled contract (P1.3); null when nothing was compiled. */
+  contract?:
+    | { status: "RECORDED" | "UNCHANGED"; semver: string; bump: string | null }
+    | { status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED"; detail: string }
+    | null;
+}
+
+/** One plain sentence about the compiled contract, or null when there is nothing to say. */
+export function contractSentence(contract: VerifyOutcome["contract"]): string | null {
+  if (!contract) return null;
+  if ("semver" in contract) {
+    if (contract.status === "UNCHANGED") return `Contract unchanged: version ${contract.semver}, compiled from this description.`;
+    return contract.bump === "initial" || contract.bump === null
+      ? `Contract compiled from this description: version ${contract.semver}.`
+      : `Contract compiled from this description: version ${contract.semver} (a ${contract.bump} change).`;
+  }
+  return contract.detail;
 }
 
 const CHIP: Record<string, { status: HonestStatus; label: string }> = {
@@ -323,6 +340,7 @@ export function ServiceVerifyPanel({
               {current.boundTo && <span style={muted}>Answered by {current.boundTo.label}</span>}
             </span>
             <span style={{ color: "var(--ink-secondary)" }}>{current.detail}</span>
+            {contractSentence(current.contract) && <span style={muted}>{contractSentence(current.contract)}</span>}
             {canSwitchVersion && (
               <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
                 <span>

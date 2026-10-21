@@ -1,0 +1,248 @@
+/**
+ * After a successful verify: turn the compiled description into the
+ * interface's recorded contract (P1.3).
+ *
+ *   1. Slice the IR to the interface's dataset.
+ *   2. Record a ContractSnapshot if the contract is new (snapshot.ts).
+ *   3. For a write interface, WRITE `requestSchema` — the JSON Schema of the
+ *      body its write sends — stamped with the snapshot and the interface
+ *      version it describes, conditional on that version (a PATCH that landed
+ *      meanwhile wins, exactly as the verification itself does).
+ *
+ * NEVER FAILS THE VERIFY. The verification is already recorded when this
+ * runs. A description the compiler refused, a dataset the slice cannot find,
+ * or a database error here are reported in the answer's `contract` field and
+ * logged; the verify's own verdict, and the write gate that depends on it,
+ * are untouched.
+ */
+
+import type { Prisma } from "@prisma/client";
+
+import type { CompileResult } from "@/lib/contracts/compile";
+import type { Bump } from "@/lib/contracts/diff";
+import { standaloneSchemas, type JsonSchema } from "@/lib/contracts/json-schema";
+import { toTypeName } from "@/lib/contracts/names";
+import type { ODataVersion } from "@/lib/contracts/ir";
+import { contractFromSample } from "@/lib/contracts/sampled";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { currentContractSnapshot, MAX_CONTRACT_BYTES, recordContractSnapshot } from "@/lib/contracts/snapshot";
+import type { CapturedSchema } from "@/lib/studio/schema-capture";
+import { prisma } from "@/lib/db/prisma";
+import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
+import type { TenantScope } from "@/lib/studio/tenant-scope";
+
+export type ContractOutcome =
+  | {
+      status: "RECORDED" | "UNCHANGED";
+      snapshotId: string;
+      semver: string;
+      /** The bump against the previous snapshot; "initial" for the first. */
+      bump: Bump | "initial" | null;
+      /** Up to ten changes, as plain sentences. */
+      changes: string[];
+      requestSchemaWritten: boolean;
+    }
+  | {
+      status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED";
+      detail: string;
+    };
+
+/** The stamp a written requestSchema carries, read back by the /schema route. */
+export interface RequestSchemaStamp {
+  snapshotId: string;
+  semver: string;
+  contentHash: string;
+  interfaceVersion: number;
+  entitySet: string;
+  operation: string;
+}
+
+export async function recordVerifiedContract(input: {
+  scope: TenantScope;
+  iface: { id: string; version: number; externalId: string; entitySet: string | null; operation: string; mode: string };
+  compiled: CompileResult | undefined;
+  environment: string;
+  connectionId: string;
+  actorId: string;
+}): Promise<ContractOutcome> {
+  const { iface, compiled } = input;
+  if (!compiled) return { status: "NOT_COMPILED", detail: "The service's description was not read in full." };
+  if (!compiled.ok) {
+    return { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${compiled.detail}` };
+  }
+  if (!iface.entitySet) {
+    return { status: "NO_DATASET", detail: "The interface names no dataset, so there is no contract to record yet." };
+  }
+  const slice = sliceForEntitySet(compiled.ir, iface.entitySet);
+  if (!slice.ok) {
+    return slice.reason === "TOO_LARGE"
+      ? { status: "NOT_COMPILED", detail: `The service's description could not be compiled: ${slice.detail}` }
+      : { status: "NO_DATASET", detail: slice.detail };
+  }
+
+  try {
+    const outcome = await recordContractSnapshot({
+      scope: input.scope,
+      iface: { id: iface.id, version: iface.version, externalId: iface.externalId, entitySet: iface.entitySet },
+      contract: slice.contract,
+      environment: input.environment,
+      connectionId: input.connectionId,
+      createdById: input.actorId,
+    });
+    if (outcome.status === "TOO_LARGE") {
+      return {
+        status: "NOT_COMPILED",
+        detail: `The compiled contract is larger than ${MAX_CONTRACT_BYTES / (1024 * 1024)} MB, so it was not recorded.`,
+      };
+    }
+
+    let requestSchemaWritten = false;
+    if (iface.mode === "WRITE") {
+      const schemas = standaloneSchemas(slice.contract, toTypeName(iface.entitySet));
+      const body = iface.operation === "UPDATE" ? schemas.update : schemas.create;
+      if (body) {
+        const stamp: RequestSchemaStamp = {
+          snapshotId: outcome.snapshot.id,
+          semver: outcome.snapshot.semver,
+          contentHash: outcome.snapshot.contentHash,
+          interfaceVersion: iface.version,
+          entitySet: iface.entitySet,
+          operation: iface.operation,
+        };
+        const written = await prisma.interface.updateMany({
+          where: { id: iface.id, organizationId: input.scope.organizationId, version: iface.version },
+          data: { requestSchema: { ...body, "x-contract": stamp } as unknown as Prisma.InputJsonObject },
+        });
+        requestSchemaWritten = written.count > 0;
+      }
+    }
+
+    return {
+      status: outcome.status,
+      snapshotId: outcome.snapshot.id,
+      semver: outcome.snapshot.semver,
+      bump: outcome.status === "RECORDED" ? (outcome.diff?.bump ?? "initial") : null,
+      changes: outcome.status === "RECORDED" ? (outcome.diff?.changes ?? []).slice(0, 10).map((c) => c.change) : [],
+      requestSchemaWritten,
+    };
+  } catch (err) {
+    console.error("[contracts] snapshot not recorded", {
+      interfaceId: iface.id,
+      error: err instanceof Error ? err.name : "unknown",
+    });
+    return { status: "NOT_RECORDED", detail: "The contract was compiled but could not be recorded. Verify again." };
+  }
+}
+
+/** The stamp a stored requestSchema carries, or null when it carries none. */
+export function requestSchemaStamp(schema: unknown): RequestSchemaStamp | null {
+  if (!schema || typeof schema !== "object") return null;
+  const stamp = (schema as JsonSchema)["x-contract"];
+  if (!stamp || typeof stamp !== "object") return null;
+  const s = stamp as Partial<RequestSchemaStamp>;
+  return typeof s.interfaceVersion === "number" && typeof s.entitySet === "string" && typeof s.snapshotId === "string"
+    ? (s as RequestSchemaStamp)
+    : null;
+}
+
+/** The stored requestSchema when it describes the interface's current contract, else null. */
+export function currentRequestSchema(
+  schema: unknown,
+  iface: { version: number; entitySet: string | null },
+): unknown {
+  const stamp = requestSchemaStamp(schema);
+  return stamp && stamp.interfaceVersion === iface.version && stamp.entitySet === iface.entitySet ? schema : null;
+}
+
+export type SampledOutcome =
+  | { status: "RECORDED" | "UNCHANGED"; snapshotId: string; semver: string }
+  | { status: "METADATA_PREFERRED"; snapshotId: string; semver: string }
+  | { status: "NOT_RECORDED"; detail: string };
+
+/**
+ * Which OData version sampled rows came from: what the interface or the
+ * service it reads declares (serviceODataVersion), or what the rows' own
+ * envelope says (V2 carries `__metadata`, V4 `@odata.*` keys) — though rows
+ * the broker served have had that envelope stripped. Null when nothing tells
+ * — nothing is guessed.
+ */
+export function sampledODataVersion(
+  declared: string | null,
+  rows: readonly Record<string, unknown>[],
+): ODataVersion | null {
+  if (declared === "V2" || declared === "V4") return declared;
+  if (rows.some((r) => "__metadata" in r)) return "V2";
+  if (rows.some((r) => Object.keys(r).some((k) => k.startsWith("@odata.")))) return "V4";
+  return null;
+}
+
+/**
+ * The OData version of the service an interface reads, from the same resolver
+ * the broker's read used (interface-service.ts): its declared protocol, or —
+ * where a curated definition states none — SAP's path convention (V4 services
+ * are served under /sap/opu/odata4/; an unstated protocol is V2, as the
+ * definition's own contract says). Null when the service does not resolve;
+ * never throws, because a capture must not fail over a contract.
+ */
+export async function serviceODataVersion(iface: InterfaceServiceFields): Promise<ODataVersion | null> {
+  try {
+    const product = getSapProduct(iface.sapProduct);
+    if (!product) return null;
+    const resolved = await resolveInterfaceService(product, iface);
+    if (!resolved) return null;
+    const { protocol, path } = resolved.service;
+    if (protocol === "ODATAV4") return "V4";
+    if (protocol === "ODATAV2") return "V2";
+    return /\/odata4\//i.test(path) ? "V4" : "V2";
+  } catch (err) {
+    console.error("[contracts] service version not resolved", { error: err instanceof Error ? err.name : "unknown" });
+    return null;
+  }
+}
+
+/**
+ * After a schema capture: the sampled-row FALLBACK contract. Recorded only
+ * while no snapshot compiled from the service's own description describes the
+ * interface — a description beats a sample, and a capture must never push a
+ * compiled contract aside. Never fails the capture.
+ */
+export async function recordSampledContract(input: {
+  scope: TenantScope;
+  iface: { id: string; version: number; externalId: string; entitySet: string | null; odataVersion: string | null };
+  schema: Pick<CapturedSchema, "properties">;
+  rows: readonly Record<string, unknown>[];
+  actorId: string;
+}): Promise<SampledOutcome> {
+  const { iface } = input;
+  if (!iface.entitySet) return { status: "NOT_RECORDED", detail: "The interface names no dataset." };
+  const version = sampledODataVersion(iface.odataVersion, input.rows);
+  if (!version) {
+    return {
+      status: "NOT_RECORDED",
+      detail: "The OData version of these rows cannot be established, so no contract was recorded from them.",
+    };
+  }
+  try {
+    const current = await currentContractSnapshot(input.scope, iface);
+    if (current?.source === "METADATA") {
+      return { status: "METADATA_PREFERRED", snapshotId: current.id, semver: current.semver };
+    }
+    const outcome = await recordContractSnapshot({
+      scope: input.scope,
+      iface: { id: iface.id, version: iface.version, externalId: iface.externalId, entitySet: iface.entitySet },
+      contract: contractFromSample(input.schema, iface.entitySet, version),
+      createdById: input.actorId,
+    });
+    if (outcome.status === "TOO_LARGE") {
+      return { status: "NOT_RECORDED", detail: "The sampled contract is too large to record." };
+    }
+    return { status: outcome.status, snapshotId: outcome.snapshot.id, semver: outcome.snapshot.semver };
+  } catch (err) {
+    console.error("[contracts] sampled snapshot not recorded", {
+      interfaceId: iface.id,
+      error: err instanceof Error ? err.name : "unknown",
+    });
+    return { status: "NOT_RECORDED", detail: "The sampled contract could not be recorded." };
+  }
+}

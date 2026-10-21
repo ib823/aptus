@@ -31,6 +31,7 @@
  * No prisma here: the route owns persistence and audit; this owns the verdict.
  */
 
+import { compileContract, type CompileResult } from "@/lib/contracts/compile";
 import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
@@ -127,6 +128,13 @@ export interface ServiceVerifyResult {
   /** The status the console-read audit row records. */
   auditStatus: number;
   failureReason: string | null;
+  /**
+   * The description compiled into a Contract IR (P1.3), when one was read in
+   * full; absent when none was. A description the compiler refuses still
+   * verifies as it did before the compiler existed — the dataset list then
+   * comes from the older reader — and the refusal is said here.
+   */
+  compiled?: CompileResult;
 }
 
 /**
@@ -232,8 +240,22 @@ export async function verifyServiceMetadata(
     };
   }
 
-  const entitySets = [...new Set(parseEntitySets(r.body).map((e) => e.name))];
-  const detected = edmxODataVersion(r.body);
+  /*
+   * COMPILED, ONCE, HERE (P1.3). The verify has just read the whole
+   * description; compiling it now is what lets the contract be recorded at
+   * verification time and never on a broker call. The compiler is a bounded
+   * XML parser, not a regex scan: when it can read the document, the dataset
+   * list and the version come from it. When it cannot (a document it refuses
+   * as malformed or hostile), the verify answers exactly as it did before —
+   * the older readers below still list the datasets — so no service that
+   * verified yesterday stops verifying today.
+   */
+  const compiled = compileContract(r.body);
+  const entitySets = compiled.ok
+    ? // A singleton is one record, not a dataset the broker can page through.
+      [...new Set(compiled.ir.entitySets.filter((e) => e.singleton !== true).map((e) => e.name))]
+    : [...new Set(parseEntitySets(r.body).map((e) => e.name))];
+  const detected = compiled.ok ? compiled.ir.odataVersion : edmxODataVersion(r.body);
 
   if (input.declaredVersion !== null && detected !== null && detected !== input.declaredVersion) {
     return {
@@ -245,6 +267,7 @@ export async function verifyServiceMetadata(
       detectedODataVersion: detected,
       suggestedEntitySet: null,
       auditStatus: 200,
+      compiled,
     };
   }
 
@@ -263,6 +286,7 @@ export async function verifyServiceMetadata(
       detectedODataVersion: detected,
       suggestedEntitySet: suggestion,
       auditStatus: 200,
+      compiled,
     };
   }
 
@@ -280,5 +304,6 @@ export async function verifyServiceMetadata(
     detectedODataVersion: detected,
     suggestedEntitySet: null,
     auditStatus: 200,
+    compiled,
   };
 }

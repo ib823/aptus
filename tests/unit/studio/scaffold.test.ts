@@ -47,8 +47,9 @@ describe("OpenAPI document", () => {
   it("describes the NORTHBOUND path for this interface, not SAP's own", () => {
     // The whole value is that the developer codes against a stable contract we
     // own, rather than a tenant-specific SAP surface.
+    // The read (a READ interface's one operation) and its contract (P1.3).
     const paths = doc.paths as Record<string, unknown>;
-    expect(Object.keys(paths)).toEqual([`/interfaces/${IFACE.id}/data`]);
+    expect(Object.keys(paths)).toEqual([`/interfaces/${IFACE.id}/data`, `/interfaces/${IFACE.id}/schema`]);
   });
 
   it("declares bearer auth and applies it globally", () => {
@@ -189,6 +190,7 @@ describe("the bundle", () => {
       "demo.mjs",
       "fixtures.json",
       "mock.mjs",
+      "openapi-3.0.json",
       "openapi.json",
       "package.json",
     ]);

@@ -675,7 +675,10 @@ export async function PATCH(request: NextRequest) {
           // Mode follows the operation: a READ interface is read-mode, anything else
           // carries the stronger review. Derived, never client-supplied.
           mode: nextMode,
-          ...(contractChanged ? { version: { increment: 1 } } : {}),
+          // A new contract: the request schema compiled for the old one goes
+          // (P1.3), as the captured response schema does below. Verify writes
+          // it again for the new one.
+          ...(contractChanged ? { version: { increment: 1 }, requestSchema: Prisma.DbNull } : {}),
           ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
           ...(serviceChanged
             ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
