@@ -51,14 +51,21 @@ interface TestOutcome {
  *   OK            → ACTIVATED     (proven by a live 200)
  *   UNAUTHORIZED  → NEEDS_SETUP   (401/403 — arrangement/credentials)
  *   NOT_FOUND     → NOT_FOUND     (404 on this tenant)
- *   TIMEOUT/ERROR → NOT_PROBEABLE (unreachable right now)
+ *   TIMEOUT/ERROR → PROBE_FAILED  (unreachable right now)
+ *   UNREADABLE    → NEEDS_SETUP   (the stored secret will not open: re-enter it)
  *   never tested  → NOT_CHECKED
+ *
+ * UNREADABLE is named, not left to the default (P0.2, A50): the probe sweep
+ * records it for a connection it checked and could not open, so "Not
+ * checked" was false, and the broker refuses every call through it.
+ * Exported for its test.
  */
-function healthToStatus(status: string | null): HonestStatus {
+export function healthToStatus(status: string | null): HonestStatus {
   switch (status) {
     case "OK":
       return "ACTIVATED";
     case "UNAUTHORIZED":
+    case "UNREADABLE":
       return "NEEDS_SETUP";
     case "NOT_FOUND":
       return "NOT_FOUND";

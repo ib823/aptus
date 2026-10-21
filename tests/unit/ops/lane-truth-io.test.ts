@@ -7,12 +7,15 @@
  *   A50  The probe sweep wrote nothing when a connection's secret would not
  *        open, so its last "OK" stood forever; it now records UNREADABLE.
  *   A18  A connection re-saved in place kept its lanes' evidence; the re-save
- *        now drops the checks made through it, in the same transaction.
+ *        now drops the checks made through it, in the same transaction — and
+ *        (P0.2 review) its service health and probe status with them, and a
+ *        check already reading through the old settings records nothing.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ConnectionResolverModule from "@/lib/sap-public/connection-resolver";
+import type * as ConnectionHealthModule from "@/lib/studio/connection-health";
 
 const mocks = vi.hoisted(() => ({
   findInterface: vi.fn(),
@@ -24,16 +27,24 @@ const mocks = vi.hoisted(() => ({
   updateConnection: vi.fn(),
   upsertConnection: vi.fn(),
   deleteLaneChecks: vi.fn(),
+  deleteServiceHealth: vi.fn(),
+  upsertServiceHealth: vi.fn(),
+  queryRaw: vi.fn(),
   transaction: vi.fn(),
   upsertLaneCheck: vi.fn(),
   resolveSapConnections: vi.fn(),
   readEntitySet: vi.fn(),
+  probeConnection: vi.fn(),
+  findHubContent: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => {
+  // One transaction client for both writers: the re-save and the check.
   const tx = {
     sapConnection: { upsert: mocks.upsertConnection },
-    laneCheck: { deleteMany: mocks.deleteLaneChecks },
+    laneCheck: { deleteMany: mocks.deleteLaneChecks, upsert: mocks.upsertLaneCheck },
+    sapServiceHealth: { deleteMany: mocks.deleteServiceHealth, upsert: mocks.upsertServiceHealth },
+    $queryRaw: mocks.queryRaw,
   };
   return {
     prisma: {
@@ -47,6 +58,7 @@ vi.mock("@/lib/db/prisma", () => {
         update: mocks.updateConnection,
       },
       laneCheck: { upsert: mocks.upsertLaneCheck },
+      sapHubContent: { findFirst: mocks.findHubContent },
       $transaction: (fn: (t: typeof tx) => Promise<unknown>) => {
         mocks.transaction();
         return fn(tx);
@@ -64,6 +76,10 @@ vi.mock("@/lib/sap-public/secret-envelope", () => ({
   sealSecretsForOrg: async () => "sealed",
 }));
 vi.mock("@/lib/northbound/read", () => ({ readEntitySet: mocks.readEntitySet }));
+vi.mock("@/lib/studio/connection-health", async (importOriginal) => ({
+  ...(await importOriginal<typeof ConnectionHealthModule>()),
+  probeConnection: mocks.probeConnection,
+}));
 vi.mock("@/lib/coreedge/journey", () => ({ noteConnectionProbe: async () => undefined }));
 
 import { sweepConnectionProbes } from "@/lib/ops/connection-probe-sweep";
@@ -147,7 +163,130 @@ describe("A50: the probe sweep records a connection whose secret will not open",
   });
 });
 
-describe("A18: re-saving a connection drops the lane checks made through it", () => {
+const SAVED_ROW = {
+  id: "conn_1",
+  product: "s4hana",
+  key: "acme-prod",
+  label: "PROD",
+  authType: "basic",
+  writeEnabled: false,
+  isActive: true,
+  secretsCiphertext: "sealed",
+};
+
+const RESAVE = {
+  organizationId: "org_a",
+  product: "s4hana",
+  key: "acme-prod",
+  label: "PROD",
+  baseUrl: "https://new-tenant.example",
+  authType: "basic" as const,
+  secrets: { username: "u", password: "wrong" },
+  environment: "DEV" as const,
+};
+
+/** The connection a check loaded, at the revision the table held then. */
+const OLD_CONNECTION = {
+  source: "db" as const,
+  id: "conn_1",
+  organizationId: "org_a",
+  product: "s4hana",
+  key: "acme-prod",
+  label: "PROD",
+  baseUrl: "https://old-tenant.example",
+  authType: "basic" as const,
+  secrets: { username: "u", password: "p" },
+  oauthTokenUrl: null,
+  writeEnabled: false,
+  apiPath: null,
+  timeoutMs: null,
+  environment: "DEV" as const,
+  client: null,
+  revision: 1,
+};
+
+describe("A18: re-saving a connection drops what was proved through it", () => {
+  it("drops the lane checks AND the service health, clears the probe status and bumps the revision", async () => {
+    // P0.2 review: the A18 reasoning ("the id alone cannot tell the old proof
+    // from the new system") was applied to LaneCheck only, so the old tenant's
+    // OK and its "readable N of N" services stood beside the new settings.
+    mocks.upsertConnection.mockResolvedValue(SAVED_ROW);
+    mocks.deleteLaneChecks.mockResolvedValue({ count: 3 });
+    mocks.deleteServiceHealth.mockResolvedValue({ count: 2 });
+    await upsertSapConnection(RESAVE);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    const dropped = { where: { organizationId: "org_a", connectionId: "conn_1" } };
+    expect(mocks.deleteLaneChecks).toHaveBeenCalledWith(dropped);
+    expect(mocks.deleteServiceHealth).toHaveBeenCalledWith(dropped);
+    const { update, create } = mocks.upsertConnection.mock.calls[0]![0];
+    expect(update).toMatchObject({ revision: { increment: 1 }, lastValidationStatus: null, lastValidatedAt: null });
+    // A new row starts at the column's default revision and has no status yet.
+    expect(create).not.toHaveProperty("revision");
+    expect(create).not.toHaveProperty("lastValidationStatus");
+  });
+});
+
+describe("A18: a check reading when the connection is re-saved records nothing", () => {
+  /** The table, as far as the two writers see it. */
+  let table: { revision: number; order: string[] };
+
+  beforeEach(() => {
+    table = { revision: 1, order: [] };
+    mocks.findInterface.mockResolvedValue({ ...FEED, solution: { status: "ACTIVE" } });
+    mocks.resolveSapConnections.mockResolvedValue([OLD_CONNECTION]);
+    mocks.findHubContent.mockResolvedValue({
+      contentType: "API",
+      apiType: "ODATAV2",
+      externalId: "API_BUSINESS_PARTNER",
+      title: "Business Partner",
+      packageId: null,
+      communicationScenarios: ["SAP_COM_0008"],
+    });
+    mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "", durationMs: 9 });
+    mocks.upsertConnection.mockImplementation(async () => {
+      table.revision++;
+      table.order.push("resave:upsert");
+      return SAVED_ROW;
+    });
+    mocks.deleteLaneChecks.mockImplementation(async () => {
+      table.order.push("resave:deleteLaneChecks");
+      return { count: 0 };
+    });
+    mocks.deleteServiceHealth.mockResolvedValue({ count: 0 });
+    // recordLaneCheck's `SELECT "revision" ... FOR SHARE`.
+    mocks.queryRaw.mockImplementation(async () => [{ revision: table.revision }]);
+    mocks.upsertLaneCheck.mockImplementation(async () => {
+      table.order.push("sweep:upsertLaneCheck");
+      return {};
+    });
+    mocks.upsertServiceHealth.mockResolvedValue({});
+  });
+
+  it("a re-save during the read: the old system's answer is not written under the connection's id", async () => {
+    mocks.readEntitySet.mockImplementation(async ({ connection }: { connection: { baseUrl: string } }) => {
+      expect(connection.baseUrl).toBe("https://old-tenant.example");
+      await upsertSapConnection(RESAVE);
+      return { status: "OK", httpStatus: 200, records: [{ BusinessPartner: "1" }] };
+    });
+    const out = await recheckOneLane("org_a", "sol_1", "if_1", "DEV");
+    expect(out).toEqual({ ok: false, skipped: "connectionChanged" });
+    expect(table.order).toEqual(["resave:upsert", "resave:deleteLaneChecks"]);
+    expect(mocks.upsertLaneCheck).not.toHaveBeenCalled();
+    expect(mocks.upsertServiceHealth).not.toHaveBeenCalled();
+  });
+
+  it("no re-save: the check is recorded, under the connection's lock", async () => {
+    mocks.readEntitySet.mockResolvedValue({ status: "OK", httpStatus: 200, records: [{ BusinessPartner: "1" }] });
+    const out = await recheckOneLane("org_a", "sol_1", "if_1", "DEV");
+    expect(out).toMatchObject({ ok: true, readStatus: "OK" });
+    expect(mocks.upsertLaneCheck).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertServiceHealth).toHaveBeenCalledTimes(1);
+    const sql = (mocks.queryRaw.mock.calls[0]![0] as readonly string[]).join("?");
+    expect(sql).toMatch(/FOR SHARE/);
+  });
+});
+
+describe("A18: the original delete-on-re-save", () => {
   it("deletes the connection's LaneCheck rows in the same transaction as the save", async () => {
     mocks.upsertConnection.mockResolvedValue({
       id: "conn_1",

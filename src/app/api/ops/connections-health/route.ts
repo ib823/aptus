@@ -195,6 +195,13 @@ export async function GET() {
       environment: r.environment,
       writeEnabled: r.writeEnabled,
       status: r.lastValidationStatus ?? "NEVER_TESTED",
+      /*
+       * The row's reading, from the same `connectionHealthVerdict` as the
+       * counts (P0.2, A50): the screen draws its chip from this, so an OK
+       * older than the TTL is drawn stale rather than green, and a row always
+       * sits in exactly one count tile.
+       */
+      verdict: connectionHealthVerdict(r, now),
       // Moves only on a real 200. A stale value beside a failing status is the
       // truth about when it last worked, not a bug.
       lastValidatedAt: r.lastValidatedAt ? r.lastValidatedAt.toISOString() : null,

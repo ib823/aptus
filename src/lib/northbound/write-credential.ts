@@ -151,13 +151,7 @@ export async function verifyWriteCredential(
 
   let stored: string | undefined;
   try {
-    stored = (
-      await openSecretsForOrg(
-        scope.organizationId,
-        client.secretsCiphertext,
-        solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
-      )
-    ).writeSecret;
+    stored = await openWriteKey(scope.organizationId, { ...client, secretsCiphertext: client.secretsCiphertext });
   } catch {
     /*
      * A blob that will not open under this row's AAD is corrupt, was sealed for
@@ -187,6 +181,41 @@ export async function verifyWriteCredential(
   // Length is compared first because timingSafeEqual throws on a mismatch; the
   // length of a secret is not the part worth protecting.
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Open a credential row's sealed write key under the row's own binding. Throws when it will not open. */
+async function openWriteKey(
+  organizationId: string,
+  row: { readonly id: string; readonly solutionId: string; readonly secretsCiphertext: string },
+): Promise<string | undefined> {
+  return (
+    await openSecretsForOrg(
+      organizationId,
+      row.secretsCiphertext,
+      solutionClientRowAad(organizationId, row.solutionId, row.id),
+    )
+  ).writeSecret;
+}
+
+/**
+ * Would `verifyWriteCredential` find a key to compare against on this row?
+ * The same open, under the same binding: false when the blob will not open or
+ * holds no write key, which is when the write route refuses every write from
+ * this credential whatever key is presented.
+ *
+ * FOR THE LANE BOARD (P0.2), which used to ask only whether a blob exists and
+ * so drew Live a write lane whose every write is refused. The key is opened
+ * and dropped here; it never leaves this function.
+ */
+export async function writeKeyOpens(
+  organizationId: string,
+  row: { readonly id: string; readonly solutionId: string; readonly secretsCiphertext: string },
+): Promise<boolean> {
+  try {
+    return Boolean(await openWriteKey(organizationId, row));
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -54,6 +54,14 @@ vi.mock("@/lib/db/prisma", () => ({
     laneCheck: { upsert: mocks.upsertLaneCheck },
     sapServiceHealth: { upsert: mocks.upsertServiceHealth },
     cronRunLog: { create: mocks.createCronRunLog },
+    // A check is recorded only while its connection keeps the revision it read
+    // through (lane-check-sweep.ts recordLaneCheck); here it always has.
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        $queryRaw: async () => [{ revision: 1 }],
+        laneCheck: { upsert: mocks.upsertLaneCheck },
+        sapServiceHealth: { upsert: mocks.upsertServiceHealth },
+      }),
   },
 }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
@@ -124,6 +132,8 @@ const CONNECTION_ROW = { id: "conn_1", organizationId: "org_a", environment: "DE
 
 const RESOLVED = {
   id: "conn_1",
+  organizationId: "org_a",
+  revision: 1,
   key: "acme-dev",
   product: "s4hana",
   environment: "DEV",

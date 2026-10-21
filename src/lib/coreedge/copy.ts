@@ -360,6 +360,8 @@ export const RECHECK_COPY = {
     unreadable: "Could not check: the SAP system's secret would not open.",
     appNotLive: "Nothing to check: the app is not live, so CoreEdge does not read the client's SAP system for it.",
     accessRefused: "Nothing to check: northbound refuses this lane's access, so CoreEdge does not read the client's SAP system for it.",
+    connectionChanged:
+      "Not recorded: the SAP system's connection was saved again while this check ran, so its answer was about the previous settings. Re-check it now.",
   },
 } as const;
 
@@ -398,6 +400,8 @@ export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
   feedServiceUnresolved: "not checked · service cannot be resolved",
   secretWouldNotOpen: "not checked · the secret would not open",
   accessRefused: "not checked · the broker refuses this lane",
+  refusedBySetting: "a setting, not a check · writes refused here",
+  checkPredatesEvidenceKey: "not checked since CoreEdge was upgraded",
   changedSinceCheck: "not checked since it changed",
   notRunYet: "not checked yet",
 };
@@ -429,6 +433,10 @@ export const UNCHECKED_ANNOUNCED: Readonly<Record<UncheckedReason, string>> = {
     "and no read was attempted because the SAP system's secret would not open",
   accessRefused:
     "and no check is scheduled because northbound refuses this lane's access",
+  refusedBySetting:
+    "and that is a setting on the SAP system's connection, not the result of a check",
+  checkPredatesEvidenceKey:
+    "and its last check was recorded before CoreEdge noted what a check proves, so the next check will speak for it",
   changedSinceCheck:
     "and no check has run since its SAP system, dataset or definition changed",
   notRunYet: "and the nightly check has not reached this lane yet",
@@ -456,6 +464,10 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
     "The nightly check reached this SAP system and could not open its stored secret, so no read was attempted. That is ours to fix, not SAP's.",
   accessRefused:
     "Northbound refuses this lane's access, so the nightly check does not read the client's SAP system for it. Once access is approved here, the next nightly check covers it — or re-check it then.",
+  refusedBySetting:
+    "Northbound refuses this lane's writes because of a setting on the SAP system's connection: writes are switched off, or this feed's own service has not been verified through it. No check decides that, so no age is shown. The nightly check still reads through this connection, so the lane has current proof behind it the day the setting allows writes.",
+  checkPredatesEvidenceKey:
+    "The last check was recorded before CoreEdge began noting which SAP system, dataset and feed version a check proves, so it cannot speak for this lane today. Nothing about the lane is known to have changed. The next nightly check covers it, or re-check it now.",
   changedSinceCheck:
     "The last check ran against a different SAP system, dataset or version of this feed, so it proves nothing about the lane now. The next nightly check covers it, or re-check it now.",
   notRunYet:

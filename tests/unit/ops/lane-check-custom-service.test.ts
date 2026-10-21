@@ -39,6 +39,14 @@ vi.mock("@/lib/db/prisma", () => ({
     laneCheck: { upsert: mocks.upsertLaneCheck, findMany: mocks.findLaneChecks },
     sapServiceHealth: { upsert: mocks.upsertServiceHealth },
     sapHubContent: { findFirst: mocks.findHubContent },
+    // A check is recorded only while its connection keeps the revision it read
+    // through (lane-check-sweep.ts recordLaneCheck); here it always has.
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        $queryRaw: async () => [{ revision: 1 }],
+        laneCheck: { upsert: mocks.upsertLaneCheck },
+        sapServiceHealth: { upsert: mocks.upsertServiceHealth },
+      }),
   },
 }));
 vi.mock("@/lib/db/tenant-guard", () => ({ permitCrossTenantReads: vi.fn() }));
@@ -108,6 +116,8 @@ function approved(f: { id: string; solutionId: string; externalId: string }, env
 
 const RESOLVED = {
   id: "conn_1",
+  organizationId: "org_a",
+  revision: 1,
   key: "erp-dev",
   product: "s4hana-onprem",
   environment: "DEV",

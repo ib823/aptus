@@ -395,6 +395,33 @@ describe("connection health uses the real status vocabulary", () => {
     expect(body.data.counts.needsAttention).toBe(0);
   });
 
+  it("puts every connection in exactly one count, and gives each row the verdict its count used (P0.2, A50)", async () => {
+    // A stale OK and an UNREADABLE used to leave the tiles short of the
+    // total on the screen, and the row still sent a bare "OK" to be drawn green.
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    const days = (n: number) => new Date(Date.now() - n * 86_400_000);
+    mocks.connectionFindMany.mockResolvedValue([
+      conn({ id: "fresh", lastValidationStatus: "OK", lastValidatedAt: new Date() }),
+      conn({ id: "aged", lastValidationStatus: "OK", lastValidatedAt: days(3) }),
+      conn({ id: "sealed", lastValidationStatus: "UNREADABLE", lastValidatedAt: days(3) }),
+      conn({ id: "none", lastValidationStatus: null, lastValidatedAt: null }),
+      conn({ id: "path", lastValidationStatus: "NO_PROBE_PATH" }),
+    ]);
+    const body = await (await connectionsHealth()).json();
+    const { total, healthy, stale, needsAttention, unknown, neverTested } = body.data.counts;
+    expect(healthy + stale + needsAttention + unknown + neverTested).toBe(total);
+    const verdicts = Object.fromEntries(
+      (body.data.connections as { id: string; verdict: string }[]).map((c) => [c.id, c.verdict]),
+    );
+    expect(verdicts).toEqual({
+      fresh: "healthy",
+      aged: "stale",
+      sealed: "unreadable",
+      none: "neverTested",
+      path: "unknown",
+    });
+  });
+
   it("counts undeclared environments as a backlog with a remediation", async () => {
     mocks.getCurrentUser.mockResolvedValue(SUPPORT);
     mocks.connectionFindMany.mockResolvedValue([

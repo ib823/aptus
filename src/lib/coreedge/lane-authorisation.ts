@@ -20,7 +20,14 @@
  *
  * `laneEvidence` then decides which check row may speak for the lane: only
  * one made through the bound connection, against the feed's entity set and
- * its current version (A18).
+ * its current version (A18). The bound connection is `bound`, the one the
+ * sweep reads through, not `connection`: a write lane refused at its write
+ * gates still has a check made through it, and that check has not "changed".
+ *
+ * The key hop for a write lane also asks whether the sealed write key OPENS
+ * (`writeKeyUnopenable`): the write route opens it on every call and refuses
+ * the write when it will not, so a board that only asked whether one exists
+ * drew Live a lane whose every write is refused.
  *
  * PURE. The I/O is the caller's.
  */
@@ -65,6 +72,13 @@ export interface LaneCredentialRow {
   readonly expiresAt: Date | null;
   /** A write key is sealed on the row (`secretsCiphertext` is set). */
   readonly writeKeyIssued: boolean;
+  /**
+   * The sealed write key will not open (write-credential.ts `writeKeyOpens`):
+   * the write route refuses every write from this credential. Only the board
+   * opens it, and only for an app with a feed that writes; absent means it
+   * was not opened.
+   */
+  readonly writeKeyUnopenable?: boolean;
 }
 
 /** A connection as the board and the sweep hold it. */
@@ -149,6 +163,7 @@ export function laneAuthorisation<C extends LaneConnection>(
     revokedAt: credential?.revokedAt ?? null,
     expiresAt: credential?.expiresAt ?? null,
     writeKeyIssued: credential?.writeKeyIssued ?? false,
+    writeKeyUnopenable: credential?.writeKeyUnopenable ?? false,
   };
 
   const bound = bindingFor(estate, credentialEnvironment, route, credential?.sapClient ?? null);
@@ -210,6 +225,11 @@ export interface LaneEvidence {
   readonly read: ReadFacts;
   /** A row exists and was set aside: see LaneFacts.evidenceSuperseded. */
   readonly superseded: boolean;
+  /**
+   * The row set aside was written before checks recorded what they proved
+   * (no entity set or feed version on it): see LaneFacts.evidencePredatesKey.
+   */
+  readonly predatesKey: boolean;
 }
 
 const NO_EVIDENCE = {
@@ -219,27 +239,36 @@ const NO_EVIDENCE = {
 
 /**
  * Which check may speak for the lane (A18): one made through the connection
- * the broker binds today, against the feed's entity set, at the feed's
- * current version (bumped by every change to its operation, dataset or
- * service). Anything else is set aside — a replaced connection or an edited
- * feed no longer inherits a Live status.
+ * `bindingFor` chose (`LaneAuthorisation.bound`, the one the sweep reads
+ * through), against the feed's entity set, at the feed's current version
+ * (bumped by every change to its operation, dataset or service). Anything
+ * else is set aside — a replaced connection or an edited feed no longer
+ * inherits a Live status.
+ *
+ * A row with no entity set or feed version was written before checks recorded
+ * them: it is set aside too, as `predatesKey`, because nothing is known to
+ * have changed — we only do not know what it proved, and saying "it changed"
+ * would send an operator looking for a change nobody made.
  */
 export function laneEvidence(
   check: LaneCheckRow | undefined,
   connection: { readonly id: string } | null,
   feed: { readonly entitySet: string | null; readonly version: number },
 ): LaneEvidence {
-  if (check === undefined) return { ...NO_EVIDENCE, superseded: false };
+  if (check === undefined) return { ...NO_EVIDENCE, superseded: false, predatesKey: false };
+  if (check.entitySet === null || check.interfaceVersion === null) {
+    return { ...NO_EVIDENCE, superseded: true, predatesKey: true };
+  }
   const matches =
     connection !== null &&
     check.connectionId === connection.id &&
-    check.entitySet !== null &&
     check.entitySet === feed.entitySet &&
     check.interfaceVersion === feed.version;
-  if (!matches) return { ...NO_EVIDENCE, superseded: true };
+  if (!matches) return { ...NO_EVIDENCE, superseded: true, predatesKey: false };
   return {
     probe: { status: narrowProbeStatus(check.probeStatus), at: check.probeAt },
     read: { outcome: narrowReadOutcome(check.readStatus), at: check.readAt, rows: check.readRowCount },
     superseded: false,
+    predatesKey: false,
   };
 }

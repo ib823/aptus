@@ -14,3 +14,16 @@
 -- AlterTable
 ALTER TABLE "LaneCheck" ADD COLUMN     "entitySet" TEXT,
 ADD COLUMN     "interfaceVersion" INTEGER;
+
+-- P0.2 review (A18): a connection's settings carry a revision.
+--
+-- A lane check reads SAP for seconds to minutes through the connection it
+-- loaded. A re-save in place keeps the row's id, so a check that finished
+-- after the re-save wrote the previous system's proof under that id, after
+-- the re-save had dropped the checks. Every save now bumps `revision`, and
+-- a check records its evidence only while the row still carries the
+-- revision it read through (lane-check-sweep.ts). NOT NULL DEFAULT 1 is a
+-- metadata-only change on PostgreSQL 11+: no table rewrite, no backfill.
+
+-- AlterTable
+ALTER TABLE "SapConnection" ADD COLUMN     "revision" INTEGER NOT NULL DEFAULT 1;

@@ -17,7 +17,12 @@ write route's per-connection gates. The read route, the write route,
 discovery's `callable`, the Test Console's dry run, the lane board
 (`src/lib/coreedge/lane-authorisation.ts`) and the lane sweep all call them. The
 key hop is `keyRefusal` in `key-policy.ts`, the rule authentication applies. A
-write lane with no write key issued is drawn "No key".
+write lane with no write key issued is drawn "No key". A write lane whose
+sealed write key will not open (sealed under a data key that is gone, or
+corrupt) is drawn "Key not valid": the board opens it with `writeKeyOpens`
+(`write-credential.ts`), the same open the write route makes on every call,
+only for apps with a feed that writes, and the key never leaves that
+function.
 
 **Binding on product and SAP client (A15).** The board counted the
 organisation's connections by environment, so two products in one environment
@@ -48,6 +53,27 @@ Re-saving a connection deletes the checks made through it, in the same
 transaction, because a re-save can change the host, client or secret under the
 same id. Such a lane reads Unknown, "not checked since it changed", until the
 next check.
+
+The same re-save also drops the connection's per-service health
+(`SapServiceHealth`, the SAP system page's "readable N of N") and clears its
+probe status and last success, so it reads "never tested" rather than healthy
+on the old tenant's 200 until the next probe. And it bumps
+`SapConnection.revision`: a lane check records its evidence only while the
+connection row still carries the revision the check read through
+(`recordLaneCheck` in `lane-check-sweep.ts`, a `SELECT ... FOR SHARE` in the
+write's transaction). Without it, a sweep or Re-check already reading through
+the old settings wrote the old system's answer under the connection's id
+after the re-save had deleted the checks. Such an answer is discarded and
+counted (`discardedConnectionChanged` on the run log; Re-check says "Not
+recorded" and asks to re-check).
+
+Two refusals are not "changes". A check written before checks recorded their
+dataset and feed version reads "not checked since CoreEdge was upgraded",
+not "not checked since it changed": nothing changed, only what it proved is
+unknown. And a write lane refused by its connection's write gates (writes
+switched off, or the feed's own service not verified through it) reads "a
+setting, not a check": the sweep still reads through that connection, and
+its check is not set aside.
 
 **"Never checked" (A19).** The SAP systems screen decided "Never" from
 `lastValidatedAt`, which moves only on a 200, so a connection failing every
@@ -84,13 +110,14 @@ is added: the broker's routes ask the same questions in the same order (the
 governance property test pins every answer), now through the shared functions.
 
 - **Migration** `20261025000000_lane_check_evidence_key` adds two nullable
-  columns to `LaneCheck`. Additive; no backfill. Backout:
+  columns to `LaneCheck` and `SapConnection.revision` (`NOT NULL DEFAULT 1`,
+  a metadata-only change on PostgreSQL 11+). Additive; no backfill. Backout:
   `pnpm migrations:backout-sql 20261025000000_lane_check_evidence_key`.
 - **Lanes read Unknown until the next lane check.** A check written before
   P0.2 does not say which dataset or feed version it read, so it proves
   nothing and is not used. Lanes that were Live read Unknown, "not checked
-  since it changed", until the nightly sweep at 04:30 UTC rewrites them. To
-  restore them at once, run the sweep after the deploy:
+  since CoreEdge was upgraded", until the nightly sweep at 04:30 UTC rewrites
+  them. To restore them at once, run the sweep after the deploy:
   `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/lane-checks`.
   Nothing that gates a call reads a lane.
 - **Lanes the broker refuses now say so.** A lane that read Live on a grant
@@ -102,17 +129,25 @@ governance property test pins every answer), now through the shared functions.
   binds (by product and SAP client) rather than whichever declared the
   environment.
 - **Connection health.** Connections whose last OK is older than 48 hours move
-  from Healthy to `stale` on the Operations connections view, and draw "not
-  observed · STALE" on the topology lens, until the next nightly probe
-  (04:00 UTC) succeeds. Connections whose secret does not open read
+  from Healthy to the new Stale tile on the Operations connections view (the
+  row reads "OK · stale"), and draw "not observed · STALE" on the topology
+  lens, until the next nightly probe (04:00 UTC) succeeds. `UNREADABLE` reads
+  "the stored secret would not open — ours to fix" there, and "Needs setup"
+  in Studio. Connections whose secret does not open read
   `UNREADABLE` after the next probe sweep and count toward the
   unhealthy-connections incident. No email is sent for that change of status.
-- **Re-saving a connection** clears its lanes' checks; they read Unknown until
-  re-checked.
+- **Re-saving a connection** clears its lanes' checks, its service health and
+  its probe status; they read Unknown, unproven and "never tested" until the
+  next check and probe. The first probe after a re-save starts from "never
+  tested", so if it fails the connection counts as needing attention and in
+  the unhealthy-connections incident, but no healthy-to-failing drift email
+  is sent: the new settings were never healthy. "Probe now" right after a
+  save is how to see the new settings' health at once.
 
 ## Rolling back
 
-Roll back the code; the columns can stay (the code before P0.2 ignores them).
+Roll back the code; the columns can stay (the code before P0.2 ignores them,
+and `revision` has a default, so its inserts need not name it).
 `UNREADABLE` statuses written by the sweep are an unrecognised value to the code
 before P0.2 (counted "unknown" on the connections view, drawn failing on the
 topology lens) and are replaced by the next successful probe.
@@ -134,3 +169,7 @@ topology lens) and are replaced by the next successful probe.
   owner.
 - **An incident for stale connections.** A connection with no successful probe
   in 48 hours is counted `stale`, but no incident rule fires on it.
+- **A drift email after a re-save.** A re-save clears the probe status, so a
+  failing first probe of the new settings is not mailed as a healthy-to-failing
+  drift (it was never healthy). Whether a failure right after a re-save should
+  email the organisation's admins is a decision for the product owner.

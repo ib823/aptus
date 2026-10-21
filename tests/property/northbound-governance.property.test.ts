@@ -141,7 +141,13 @@ vi.mock("@/lib/db/prisma", () => {
 });
 
 vi.mock("@/lib/sap-public/secret-envelope", () => ({
-  openSecretsForOrg: async () => ({ username: "comm_user", password: "secret" }),
+  // A connection's blob opens to its sign-in; a credential's write-key blob
+  // opens to its key, or will not open at all (the lane board opens it, P0.2).
+  openSecretsForOrg: async (_org: string, blob: string) => {
+    if (blob === "unopenable-write-key") throw new Error("sealed under a data key that is gone");
+    if (blob === "sealed-write-key") return { writeSecret: "cew_property" };
+    return { username: "comm_user", password: "secret" };
+  },
   sealSecretsForOrg: async () => "sealed",
 }));
 vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
@@ -151,7 +157,11 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
     return h.rate;
   },
 }));
-vi.mock("@/lib/northbound/write-credential", () => ({ verifyWriteCredential: async () => h.writeKeyValid }));
+// The broker's write-key check is stubbed; the board's `writeKeyOpens` is real, on the world's blob.
+vi.mock("@/lib/northbound/write-credential", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  verifyWriteCredential: async () => h.writeKeyValid,
+}));
 vi.mock("@/lib/northbound/auth-failures", () => ({
   noteFailedCredential: async (_headers: unknown, _bearer: unknown, reason: string) => {
     h.observed.authReason = reason;
@@ -310,7 +320,12 @@ interface Case {
   route: "read" | "write";
   cred: Credential;
   solution: (typeof SOLUTION_STATES)[number];
-  writeKey: boolean;
+  /**
+   * The credential's write key: presented and valid, absent, or sealed on the
+   * row but unopenable (a data key gone, a corrupt blob), which the write
+   * route refuses exactly as an absent one (P0.2 review).
+   */
+  writeKey: boolean | "unopenable";
   rate: (typeof RATES)[number];
   idempotencyKey: boolean;
   iface: Iface;
@@ -355,7 +370,7 @@ function expected(c: Case): Decision_ {
 
   const write = c.route === "write";
   // Stage 2: the write key.
-  if (write && !c.writeKey) return refuse(403, "WRITE_KEY_INVALID");
+  if (write && c.writeKey !== true) return refuse(403, "WRITE_KEY_INVALID");
   // Stage 3: the credential's own limit.
   if (c.rate === "limited") return refuse(429, "RATE_LIMITED");
   if (c.rate === "unavailable") return refuse(503, "LIMITER_UNAVAILABLE");
@@ -474,10 +489,11 @@ function buildWorld(c: Case): World {
     tokenHash: k.lookup === "current" ? TOKEN_HASH : "hash_of_the_current_key",
     previousTokenHash: k.lookup === "previous" ? TOKEN_HASH : null,
     overlapForTokenHash: null,
-    // A write key is sealed on the row exactly when the case presents a valid
-    // one (the write-key check itself is stubbed): the lane board reads only
-    // whether one exists.
-    secretsCiphertext: c.writeKey ? "sealed-write-key" : null,
+    // A write key is sealed on the row when the case has one, valid or not
+    // (the broker's write-key check is stubbed to the case); the lane board
+    // opens it, as the write route does.
+    secretsCiphertext:
+      c.writeKey === true ? "sealed-write-key" : c.writeKey === "unopenable" ? "unopenable-write-key" : null,
   };
   client.overlapForTokenHash = k.overlapBound ? client.tokenHash : "hash_of_some_other_key";
 
@@ -673,7 +689,7 @@ async function runBroker(c: Case): Promise<Observed> {
     c.rate === "allowed"
       ? { allowed: true, remaining: 59, resetMs: 0 }
       : { allowed: false, remaining: 0, resetMs: 9_000, reason: c.rate === "limited" ? "limited" : "unavailable" };
-  h.writeKeyValid = c.writeKey;
+  h.writeKeyValid = c.writeKey === true;
   h.observed = {
     authReason: null,
     accessReason: null,
@@ -940,7 +956,7 @@ function interfaceGrid(): Case[] {
 function writeSwitchGrid(): Case[] {
   const out: Case[] = [];
   for (const route of ROUTES)
-    for (const writeKey of bools)
+    for (const writeKey of [false, true, "unopenable"] as const)
       for (const idempotencyKey of bools)
         for (const writeEnabled of bools)
           for (const custom of bools)
@@ -1043,7 +1059,7 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
         sapClient,
       },
       solution: flip(0.8) ? "ACTIVE" : pick(SOLUTION_STATES),
-      writeKey: flip(0.9),
+      writeKey: flip(0.9) ? true : flip() ? "unopenable" : false,
       rate: flip(0.9) ? "allowed" : pick(RATES),
       idempotencyKey: flip(0.9),
       iface: {
@@ -1179,6 +1195,18 @@ describe("the broker's governance decision agrees with the decision-table oracle
     const c: Case = { ...baseCase("read"), evidence: { via: 0, version: "earlier" } };
     expect((await runBroker(c)).allow).toBe(true);
     expect((await runLane(c))?.verdict.status).toBe("unknown");
+  });
+
+  it("a write key that will not open is drawn refused at the key, never Live (P0.2 review)", async () => {
+    // The write route opens the sealed key on every write and refuses when it
+    // will not open; the board used to ask only whether a blob existed.
+    const c: Case = { ...baseCase("write"), writeKey: "unopenable" };
+    const broker = await runBroker(c);
+    expect(broker).toMatchObject({ allow: false, reason: "WRITE_KEY_INVALID" });
+    expect((await runLane(c))?.verdict).toMatchObject({ status: "keyNotValid", brokenHop: "key" });
+    // The same lane with a key that opens is Live and served.
+    expect((await runBroker({ ...c, writeKey: true })).allow).toBe(true);
+    expect((await runLane({ ...c, writeKey: true }))?.verdict.status).toBe("live");
   });
 
   it("compared the lane board with the broker on most cases, reaching Live and refusals alike (P0.2)", () => {

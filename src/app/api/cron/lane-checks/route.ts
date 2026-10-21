@@ -52,6 +52,7 @@ async function checkLanes(): Promise<NextResponse> {
       skippedNoService: result.skippedNoService,
       skippedNoAccess: result.skippedNoAccess,
       unreadable: result.unreadable,
+      discardedConnectionChanged: result.discardedConnectionChanged,
       byReadStatus: result.byReadStatus,
     });
     return NextResponse.json({ data: result });

@@ -40,6 +40,7 @@ import {
 } from "@/components/ops/OpsChrome";
 import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { ProductLabel } from "@/components/sap/ProductLabel";
+import { CONNECTION_PROOF_TTL_MS, type ConnectionHealthVerdict } from "@/lib/coreedge/freshness";
 
 interface Connection {
   id: string;
@@ -49,6 +50,11 @@ interface Connection {
   environment: string | null;
   writeEnabled: boolean;
   status: string;
+  /**
+   * The route's `connectionHealthVerdict` for this row (P0.2, A50): the same
+   * reading its count tile used. An OK whose proof has aged is `stale`.
+   */
+  verdict?: ConnectionHealthVerdict;
   lastValidatedAt: string | null;
   neverTested: boolean;
 }
@@ -67,10 +73,14 @@ interface ConnectionsPayload {
     needsAttention: number;
     unknown: number;
     neverTested: number;
+    /** An OK older than `provenance.healthyWithinHours`: counted here, not as healthy (P0.2, A50). */
+    stale?: number;
   };
   deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
   provenance: {
     activeOnly: boolean;
+    /** How old an OK may be and still count as healthy. */
+    healthyWithinHours?: number;
     excludedInactive: number;
     why: string;
     fallbackIsShared: string | null;
@@ -103,7 +113,29 @@ const PROBE: Record<string, { tone: OpsTone; label: string; meaning: string }> =
     // Framed as ours, never as a tenant failure.
     meaning: "no probe path is configured — our gap, not the tenant's",
   },
+  /*
+   * Recorded by the probe sweep and "Probe now" since P0.2 (A50), when the
+   * stored secret will not open. No request reached SAP: it is ours to fix,
+   * and the broker refuses every call through this connection meanwhile.
+   */
+  UNREADABLE: {
+    tone: "bad",
+    label: "UNREADABLE",
+    meaning: "the stored secret would not open — ours to fix, and every call through it is refused",
+  },
 };
+
+/** The chip for one row: its verdict first, so an aged OK is never drawn as a live 200. */
+function healthChip(c: Connection, hours: number): { tone: OpsTone; label: string; meaning: string } {
+  if (c.verdict === "stale") {
+    return {
+      tone: "muted",
+      label: `${c.status} · stale`,
+      meaning: `the last probe said ${c.status} more than ${hours} h ago and none has succeeded since — our evidence has aged, which says nothing either way about SAP`,
+    };
+  }
+  return PROBE[c.status] ?? { tone: "muted", label: c.status, meaning: "an unrecognised probe outcome" };
+}
 
 export function ConnectionsHealthClient() {
   const { feed, reload, fetchedAt } = useOpsFeed<ConnectionsPayload>("/api/ops/connections-health");
@@ -183,23 +215,31 @@ function ConnectionsBody({
 }) {
   const { counts, connections, provenance, bindingBacklog } = data;
   const declared = counts.total - bindingBacklog.undeclaredEnvironment;
+  const hours = provenance.healthyWithinHours ?? CONNECTION_PROOF_TTL_MS / 3_600_000;
 
   return (
     <>
       {/* THE FLEET, ROLLED UP — the counts the endpoint always computed and no
-          screen rendered. Four buckets plus the total; NEVER_TESTED stays its
-          own tile because it is the absence of a result, not a member of the
-          scale of outcomes. */}
+          screen rendered. Five buckets plus the total, and every connection
+          sits in exactly one of them; NEVER_TESTED stays its own tile because
+          it is the absence of a result, not a member of the scale of
+          outcomes. STALE is its own tile since P0.2 (A50): an OK whose proof
+          has aged is not healthy, and it was in no tile at all. */}
       {counts.total > 0 ? (
         <OpsCard>
           <div style={{ display: "flex", gap: 30, padding: "15px 16px", flexWrap: "wrap" }}>
             <Stat label="Active connections" value={count(counts.total)} />
-            <Stat label="Healthy" value={count(counts.healthy)} basis="last probe returned 200" />
+            <Stat label="Healthy" value={count(counts.healthy)} basis={`last probe returned 200 within ${hours} h`} />
+            <Stat
+              label="Stale"
+              value={count(counts.stale ?? 0)}
+              basis={`OK older than ${hours} h — our evidence has aged, not SAP`}
+            />
             <Stat
               label="Needs attention"
               value={count(counts.needsAttention)}
               tone={counts.needsAttention > 0 ? "attention" : "default"}
-              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR"
+              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR · UNREADABLE"
             />
             <Stat
               label="Unknown"
@@ -287,11 +327,7 @@ function ConnectionsBody({
                       meaning="no probe has run — the absence of a result, not a result"
                     />
                   ) : (
-                    <OpsChip
-                      tone={PROBE[c.status]?.tone ?? "muted"}
-                      label={PROBE[c.status]?.label ?? c.status}
-                      meaning={PROBE[c.status]?.meaning ?? "an unrecognised probe outcome"}
-                    />
+                    <OpsChip {...healthChip(c, hours)} />
                   )}
                 </td>
                 <td style={opsMonoStyle}>{sinceLabel(c.lastValidatedAt)}</td>

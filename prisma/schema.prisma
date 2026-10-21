@@ -771,6 +771,13 @@ model SapConnection {
   /// different fixes, and collapsing them would hide which one you have.
   lastValidationStatus String?
   isActive             Boolean   @default(true)
+  /// Bumped by every save of the connection's settings (upsertSapConnection):
+  /// what it points at and what it signs in with. NOT `updatedAt`, which every
+  /// probe moves. A lane check records its evidence only while the row still
+  /// carries the revision the check read through (lane-check-sweep.ts), so a
+  /// re-save during a check cannot leave the previous system's proof standing
+  /// under the same id (P0.2, A18).
+  revision             Int       @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

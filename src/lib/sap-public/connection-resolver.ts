@@ -98,6 +98,15 @@ export interface ResolvedSapConnection {
    * can share a baseUrl and differ only here.
    */
   client: string | null;
+  /**
+   * The row's settings revision when it was read (SapConnection.revision):
+   * bumped by every save. A lane check made through this object records its
+   * evidence only while the row still carries it (lane-check-sweep.ts
+   * `recordLaneCheck`). Always set by `openConnectionRow`; optional only so a
+   * connection built outside the table (a test fixture) need not invent one —
+   * and a check through such an object records nothing, which fails safe.
+   */
+  revision?: number;
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -191,6 +200,7 @@ async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnec
     timeoutMs: r.timeoutMs,
     environment: r.environment,
     client: r.client,
+    revision: r.revision,
   };
 }
 
@@ -713,15 +723,30 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
     connectionAad(input.organizationId, input.product, input.key),
   );
   /*
-   * A RE-SAVE REPLACES WHAT THE LANE EVIDENCE PROVED (P0.2, A18). The lane
-   * board uses a check only while it was made through the connection the
+   * A RE-SAVE REPLACES WHAT THE EVIDENCE PROVED (P0.2, A18, A50, A60). The
+   * lane board uses a check only while it was made through the connection the
    * broker binds — but a re-save keeps the row's id and changes its host,
    * client or secret in place, so the id alone cannot tell the old proof from
-   * the new system. The checks made through this connection are dropped in
-   * the same transaction: its lanes read Unknown until the next check (the
-   * nightly sweep, or Re-check), never Live on the previous system's proof.
-   * The checks are a cache of the latest result, not a record; the probe
-   * history (SapConnectionProbeEvent) and the call audit are untouched.
+   * the new system. So, in the same transaction:
+   *
+   *   - the lane checks and the per-service health made through this
+   *     connection are dropped: its lanes read Unknown and its services
+   *     unproven until the next check (the nightly sweep, or Re-check), never
+   *     Live or "readable" on the previous system's proof;
+   *   - its probe status and last success are cleared: it reads "never
+   *     tested" until the next probe, not healthy on the old tenant's 200;
+   *   - its `revision` is bumped, so a lane check already reading through the
+   *     previous settings records nothing when it finishes
+   *     (lane-check-sweep.ts `recordLaneCheck`). Without it, a check that
+   *     started before this save wrote the old system's proof under this id
+   *     after the deletes above.
+   *
+   * All of these are caches of the latest result, not records; the probe
+   * history (SapConnectionProbeEvent) and the call audit are untouched. One
+   * consequence, recorded in docs/runbooks/coreedge-lane-truth.md: the first
+   * probe after a re-save starts from "never tested", so a failure then is
+   * counted as needing attention but is not mailed as a healthy-to-failing
+   * drift — the new settings were never healthy.
    */
   const row = await prisma.$transaction(async (tx) => {
     const saved = await tx.sapConnection.upsert({
@@ -760,9 +785,14 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
         isActive: input.isActive ?? true,
         environment: normalizeEnvironment(input.environment),
         client: input.client ?? null,
+        revision: { increment: 1 },
+        lastValidationStatus: null,
+        lastValidatedAt: null,
       },
     });
-    await tx.laneCheck.deleteMany({ where: { organizationId: input.organizationId, connectionId: saved.id } });
+    const dropped = { where: { organizationId: input.organizationId, connectionId: saved.id } };
+    await tx.laneCheck.deleteMany(dropped);
+    await tx.sapServiceHealth.deleteMany(dropped);
     return saved;
   });
   return redactConnection(row);

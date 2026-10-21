@@ -32,6 +32,8 @@
  * different question and writes different rows; neither replaces the other.
  */
 
+import type { Prisma } from "@prisma/client";
+
 import {
   laneAuthorisation,
   type LaneConnection,
@@ -87,6 +89,13 @@ export interface LaneSweepResult {
   readonly skippedNoAccess: number;
   /** Lanes whose product's stored connection secret would not open. */
   readonly unreadable: number;
+  /**
+   * Lanes read, and their answer discarded, because their connection was
+   * re-saved while the read ran (`recordLaneCheck`): the answer was about the
+   * previous settings. Counted in `checked` and `byReadStatus` too, since SAP
+   * was asked; the next check records the new settings' answer.
+   */
+  readonly discardedConnectionChanged: number;
   readonly byReadStatus: Readonly<Record<string, number>>;
 }
 
@@ -339,6 +348,7 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     skippedNoService: 0,
     skippedNoAccess: 0,
     unreadable: 0,
+    discardedConnectionChanged: 0,
     byReadStatus: {} as Record<string, number>,
   };
 
@@ -452,7 +462,12 @@ function countSkip(
  */
 export type LaneRecheckOutcome =
   | { readonly ok: true; readonly readStatus: string; readonly checkedAt: Date }
-  | { readonly ok: false; readonly skipped: LaneCheckSkip | "noService" };
+  /**
+   * `connectionChanged`: SAP was read, and the connection was re-saved while
+   * it was, so the answer described the previous settings and was not
+   * recorded (`recordLaneCheck`).
+   */
+  | { readonly ok: false; readonly skipped: LaneCheckSkip | "noService" | "connectionChanged" };
 
 export async function recheckOneLane(
   organizationId: string,
@@ -505,8 +520,9 @@ export async function recheckOneLane(
   );
   if (servicePath === null) return { ok: false, skipped: "noService" };
 
-  const tally = { checked: 0, byReadStatus: {} as Record<string, number> };
+  const tally = { checked: 0, discardedConnectionChanged: 0, byReadStatus: {} as Record<string, number> };
   await checkOneLane(target, servicePath, plan.connection, now, tally);
+  if (tally.discardedConnectionChanged > 0) return { ok: false, skipped: "connectionChanged" };
 
   // `checkOneLane` records exactly one read status; naming it back to the
   // caller is what lets the screen say what changed without a second query.
@@ -520,7 +536,7 @@ async function checkOneLane(
   servicePath: string,
   connection: ResolvedSapConnection,
   now: Date,
-  result: { checked: number; byReadStatus: Record<string, number> },
+  result: { checked: number; discardedConnectionChanged: number; byReadStatus: Record<string, number> },
 ): Promise<void> {
   // 1 · Metadata reachability, through the same probe the Studio test uses.
   const probeStatus = resolveProbePath(connection)
@@ -559,45 +575,92 @@ async function checkOneLane(
     readRowCount: read.records.length,
   };
 
-  await prisma.laneCheck.upsert({
-    where: {
-      solutionId_interfaceId_environment: {
-        solutionId: target.solutionId,
-        interfaceId: target.interfaceId,
-        environment: target.environment,
+  const recorded = await recordLaneCheck(connection, async (tx) => {
+    await tx.laneCheck.upsert({
+      where: {
+        solutionId_interfaceId_environment: {
+          solutionId: target.solutionId,
+          interfaceId: target.interfaceId,
+          environment: target.environment,
+        },
       },
-    },
-    create: ledger,
-    update: ledger,
-  });
+      create: ledger,
+      update: ledger,
+    });
 
-  // The per-service matrix the SAP systems screen reads. Keyed by service, not
-  // by lane: several apps can read the same service through one system.
-  await prisma.sapServiceHealth.upsert({
-    where: {
-      connectionId_serviceName_entitySet: {
+    // The per-service matrix the SAP systems screen reads. Keyed by service,
+    // not by lane: several apps can read the same service through one system.
+    await tx.sapServiceHealth.upsert({
+      where: {
+        connectionId_serviceName_entitySet: {
+          connectionId: connection.id,
+          serviceName: target.externalId,
+          entitySet: target.entitySet,
+        },
+      },
+      create: {
+        organizationId: target.organizationId,
         connectionId: connection.id,
         serviceName: target.externalId,
         entitySet: target.entitySet,
+        metadataStatus: probeStatus,
+        metadataAt: probeStatus === null ? null : now,
+        readStatus,
+        readAt: now,
+        readRowCount: read.records.length,
       },
-    },
-    create: {
-      organizationId: target.organizationId,
-      connectionId: connection.id,
-      serviceName: target.externalId,
-      entitySet: target.entitySet,
-      metadataStatus: probeStatus,
-      metadataAt: probeStatus === null ? null : now,
-      readStatus,
-      readAt: now,
-      readRowCount: read.records.length,
-    },
-    update: {
-      metadataStatus: probeStatus,
-      metadataAt: probeStatus === null ? null : now,
-      readStatus,
-      readAt: now,
-      readRowCount: read.records.length,
-    },
+      update: {
+        metadataStatus: probeStatus,
+        metadataAt: probeStatus === null ? null : now,
+        readStatus,
+        readAt: now,
+        readRowCount: read.records.length,
+      },
+    });
+  });
+  if (!recorded) result.discardedConnectionChanged++;
+}
+
+/**
+ * Write a check's evidence ONLY while its connection still holds the settings
+ * the check read through (P0.2, A18).
+ *
+ * THE RACE THIS CLOSES. The sweep opens a product's connections once, then
+ * reads SAP lane by lane for seconds to minutes. A re-save in the meantime
+ * (`upsertSapConnection`) keeps the row's id, points it somewhere else and
+ * drops the checks made through it — and the reads still running then wrote
+ * the OLD system's answer under that same id, after the drop. The board took
+ * it as proof for the new system: Live for up to a day while the broker,
+ * bound to the new host, might refuse every call. A Re-check pressed just
+ * before a save did the same.
+ *
+ * HOW. In one transaction: lock the connection row FOR SHARE and compare its
+ * `revision` with the one this check loaded, then write. A re-save's UPDATE
+ * waits for the lock, so the two serialise: either this commits first and the
+ * re-save's deletes (in its own transaction, after its UPDATE) remove what was
+ * written, or the re-save commits first and the revision no longer matches,
+ * so nothing is written. A deleted connection matches no row and writes
+ * nothing too. FOR SHARE, not FOR UPDATE: two lanes recorded through one
+ * connection never wait on each other.
+ *
+ * Returns whether the evidence was recorded. Exported for its test against a
+ * real database (tests/integration/lane-check-resave.test.ts).
+ */
+export async function recordLaneCheck(
+  connection: Pick<ResolvedSapConnection, "id" | "organizationId" | "revision">,
+  write: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<boolean> {
+  // A connection not read from the table carries no revision: nothing proves
+  // what it read through, so nothing is recorded.
+  const loaded = connection.revision;
+  if (loaded === undefined) return false;
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ revision: number }[]>`
+      SELECT "revision" FROM "SapConnection"
+      WHERE "id" = ${connection.id} AND "organizationId" = ${connection.organizationId}
+      FOR SHARE`;
+    if (rows[0]?.revision !== loaded) return false;
+    await write(tx);
+    return true;
   });
 }

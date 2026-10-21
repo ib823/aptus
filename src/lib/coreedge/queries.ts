@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
 import { GRANT_SELECT, READABLE_INTERFACE_SELECT } from "@/lib/northbound/access";
-import type { BindingEstate } from "@/lib/northbound/authorisation";
+import { routeOf, type BindingEstate } from "@/lib/northbound/authorisation";
 import { loadBindingEstate } from "@/lib/northbound/binding";
 import {
   keyState,
@@ -13,6 +13,7 @@ import {
   type ClientTokenPrefix,
   type KeyState,
 } from "@/lib/northbound/key-policy";
+import { writeKeyOpens } from "@/lib/northbound/write-credential";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { responseSchemaState } from "@/lib/studio/contract-provenance";
@@ -177,12 +178,14 @@ export async function listLanes(
     }),
     /*
      * Which credentials hold a write key: the write route refuses every write
-     * from one that does not. A FILTER on the sealed column that selects only
-     * the id — the key itself is never read here.
+     * from one that does not, or from one whose key will not open. The sealed
+     * blob is read only to be opened below, for apps with a feed that writes,
+     * exactly as the write route opens it; the key itself never leaves
+     * `writeKeyOpens`.
      */
     prisma.solutionClient.findMany({
       where: { organizationId, solutionId: { in: solutionIds }, NOT: { secretsCiphertext: null } },
-      select: { id: true },
+      select: { id: true, solutionId: true, secretsCiphertext: true },
     }),
     /*
      * The per-lane check ledger. One row per (solution, interface, environment),
@@ -215,6 +218,34 @@ export async function listLanes(
   );
   const bindingMode = grantBindingMode();
   const writeKeyIds = new Set(writeKeyHolders.map((c) => c.id));
+  /*
+   * THE KEY HOP OPENS THE WRITE KEY, as the binding hop opens the connection
+   * (P0.2 review). `verifyWriteCredential` opens it on every write and
+   * refuses when it will not open — sealed under a data key that is gone, or
+   * corrupt — so a board that asked only whether one exists drew Live a
+   * write lane whose every write is refused. Opened only for apps with a
+   * feed that writes: no other lane asks.
+   */
+  const writingApps = new Set(
+    solutions.filter((s) => s.interfaces.some((f) => routeOf(f) === "write")).map((s) => s.id),
+  );
+  const unopenableWriteKeys = new Set(
+    (
+      await Promise.all(
+        writeKeyHolders
+          .filter((c) => writingApps.has(c.solutionId) && c.secretsCiphertext !== null)
+          .map(async (c) =>
+            (await writeKeyOpens(organizationId, {
+              id: c.id,
+              solutionId: c.solutionId,
+              secretsCiphertext: c.secretsCiphertext ?? "",
+            }))
+              ? null
+              : c.id,
+          ),
+      )
+    ).filter((id): id is string => id !== null),
+  );
 
   const lanes: LaneRow[] = [];
 
@@ -250,6 +281,7 @@ export async function listLanes(
                   revokedAt: client.revokedAt,
                   expiresAt: client.expiresAt,
                   writeKeyIssued: writeKeyIds.has(client.id),
+                  writeKeyUnopenable: unopenableWriteKeys.has(client.id),
                 },
           estate: estates.get(feed.sapProduct) ?? { kind: "unknownProduct" },
           now,
@@ -281,10 +313,15 @@ export async function listLanes(
          * connection the broker binds today, against this entity set, at this
          * feed version (A18). A connection-level green cannot support the
          * claim that THIS app can read THIS dataset here.
+         *
+         * Judged against `auth.bound`, the connection the sweep reads
+         * through: a write lane refused at a write gate (writes off, service
+         * unverified) still has a check made through it, and calling that
+         * check superseded said "it changed" when nothing had.
          */
         const evidence = laneEvidence(
           checkByLane.get(`${solution.id}::${feed.id}::${environment}`),
-          auth.connection,
+          auth.bound,
           feed,
         );
 
@@ -297,6 +334,7 @@ export async function listLanes(
           probe: evidence.probe,
           read: evidence.read,
           evidenceSuperseded: evidence.superseded,
+          evidencePredatesKey: evidence.predatesKey,
           /*
            * WHETHER A CHECK WAS EVER COMING. These mirror the sweep's skips
            * (lane-check-sweep.ts): live apps only (isLaneCheckedApp), feeds

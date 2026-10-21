@@ -137,6 +137,13 @@ export interface KeyFacts {
    * presented key against this one, and there is none to match).
    */
   readonly writeKeyIssued: boolean;
+  /**
+   * The issued write key will not open — sealed under a data key that is gone,
+   * or corrupt. The write route opens it on every call and refuses the write,
+   * so a lane that writes is refused at the key exactly as if none were
+   * issued. Absent means it was not found unopenable.
+   */
+  readonly writeKeyUnopenable?: boolean;
 }
 
 export interface AccessFacts {
@@ -254,6 +261,16 @@ export const UNCHECKED_REASONS = [
    * nothing about the lane today, and the lane says that rather than "never".
    */
   "accessRefused",
+  /*
+   * TWO MORE WITH P0.2's review. A write lane refused at its write gates —
+   * writes switched off on the connection, or the feed's own service not yet
+   * verified through it — is refused by a SETTING, which no check decides;
+   * it read "not checked since it changed" although nothing had. And a check
+   * written before checks recorded what they proved is set aside without
+   * anything having changed either, so it says that instead.
+   */
+  "refusedBySetting",
+  "checkPredatesEvidenceKey",
   "changedSinceCheck",
   "notRunYet",
 ] as const;
@@ -313,6 +330,12 @@ export interface LaneFacts {
    * the lane as it stands.
    */
   readonly evidenceSuperseded: boolean;
+  /**
+   * The check set aside was written before checks recorded the dataset and
+   * feed version they proved (lane-authorisation.ts `laneEvidence`). Nothing
+   * is known to have changed: only what that check proved is unknown.
+   */
+  readonly evidencePredatesKey?: boolean;
   readonly sweep: SweepFacts;
   readonly now?: Date;
 }
@@ -490,8 +513,9 @@ function deriveHopVerdict(facts: LaneFacts): HopVerdict {
       status: "unknown",
       brokenHop: null,
       undecidedHop: "sapMetadata",
-      because:
-        "The SAP system, the dataset or the feed's definition changed after the last check, so that check proves nothing about this lane now.",
+      because: facts.evidencePredatesKey
+        ? "The last check was recorded before CoreEdge noted which SAP system, dataset and feed version a check proves, so it cannot speak for this lane now. Nothing about the lane is known to have changed."
+        : "The SAP system, the dataset or the feed's definition changed after the last check, so that check proves nothing about this lane now.",
       checkedAt: null,
     };
   }
@@ -738,6 +762,12 @@ function keyVerdict(facts: LaneFacts, now: Date): HopVerdict | null {
       "Access is approved but no write key has been issued for this environment, so northbound refuses every write.",
     );
   }
+  if (lane.route === "write" && key.writeKeyUnopenable === true) {
+    return refused(
+      "keyNotValid",
+      "A write key is issued for this environment, but CoreEdge cannot open it, so northbound refuses every write. Ours to fix, not SAP's: issue the write key again.",
+    );
+  }
   return null;
 }
 
@@ -805,13 +835,17 @@ function whyUnchecked(facts: LaneFacts): UncheckedReason {
   if (!facts.sweep.appIsActive) return "appNotLive";
   if (!facts.sweep.feedHasDataset) return "feedHasNoDataset";
   if (facts.access.refusal !== null) return "accessRefused";
-  if (refusal !== null && refusal !== "WRITES_DISABLED" && refusal !== "CUSTOM_SERVICE_UNVERIFIED") {
-    return "noSapSystemHere";
-  }
+  // A write gate on a bound connection: a setting refuses the lane, and the
+  // sweep still reads through that connection. No check decides it, and none
+  // having run since a change would be a false reason (P0.2 review).
+  if (refusal === "WRITES_DISABLED" || refusal === "CUSTOM_SERVICE_UNVERIFIED") return "refusedBySetting";
+  if (refusal !== null) return "noSapSystemHere";
   // After the system, as the sweep asks it: a connection is found first, then
   // the service it would be asked for.
   if (!facts.sweep.feedServiceResolves) return "feedServiceUnresolved";
-  if (facts.evidenceSuperseded) return "changedSinceCheck";
+  if (facts.evidenceSuperseded) {
+    return facts.evidencePredatesKey === true ? "checkPredatesEvidenceKey" : "changedSinceCheck";
+  }
   return "notRunYet";
 }
 

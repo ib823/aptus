@@ -125,7 +125,8 @@ function laneFrom(input: {
     now: NOW,
     bindingMode: input.bindingMode ?? "legacy",
   });
-  const evidence = laneEvidence("check" in input ? input.check : FRESH_CHECK, auth.connection, iface);
+  // As listLanes judges it: against the connection the sweep reads through.
+  const evidence = laneEvidence("check" in input ? input.check : FRESH_CHECK, auth.bound, iface);
   const facts: LaneFacts = {
     lane: { operation: iface.operation as "READ", environment: input.environment ?? "PROD", route: auth.route },
     appRetired: false,
@@ -135,6 +136,7 @@ function laneFrom(input: {
     probe: evidence.probe,
     read: evidence.read,
     evidenceSuperseded: evidence.superseded,
+    evidencePredatesKey: evidence.predatesKey,
     sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: true },
     now: NOW,
   };
@@ -194,6 +196,21 @@ describe("A14: the access hop applies the broker's grant and interface rules", (
     expect(laneFrom({ grants: [pending, grant()] }).verdict.status).toBe("live");
   });
 
+  it("a write lane whose sealed write key will not open is refused at the key, as the write route refuses it", () => {
+    // P0.2 review: the board asked only whether a blob existed; the write
+    // route opens it on every call and refuses the write when it will not.
+    const iface = feed({ operation: "CREATE", mode: "WRITE" });
+    const v = laneFrom({
+      iface,
+      grants: [grant({ operation: "CREATE" })],
+      credential: credential({ writeKeyUnopenable: true }),
+    }).verdict;
+    expect(v).toMatchObject({ status: "keyNotValid", brokenHop: "key" });
+    expect(v.because).toContain("cannot open");
+    // A read lane on the same credential does not ask for the write key.
+    expect(laneFrom({ credential: credential({ writeKeyUnopenable: true }) }).verdict.status).toBe("live");
+  });
+
   it("a write lane with no write key issued is refused at the key", () => {
     const iface = feed({ operation: "CREATE", mode: "WRITE" });
     const v = laneFrom({
@@ -247,6 +264,40 @@ describe("A15: binding is the broker's, on product and SAP client", () => {
       estate: { kind: "connections", connections: [connection({ writeEnabled: false })] },
     }).verdict;
     expect(v).toMatchObject({ status: "systemOff", brokenHop: "binding" });
+  });
+});
+
+describe("a write gate is a setting, not a change (P0.2 review)", () => {
+  const iface = feed({ operation: "CREATE", mode: "WRITE" });
+  const grants = [grant({ operation: "CREATE" })];
+
+  it("writes off, with a fresh check through the bound connection: refused by a setting, never 'changed since check'", () => {
+    const { auth, verdict } = laneFrom({
+      iface,
+      grants,
+      estate: { kind: "connections", connections: [connection({ writeEnabled: false })] },
+    });
+    // The sweep reads through the bound connection, so its check is not superseded.
+    expect(auth.connection).toBeNull();
+    expect(auth.bound?.id).toBe("conn_prod");
+    expect(laneEvidence(FRESH_CHECK, auth.bound, iface).superseded).toBe(false);
+    expect(verdict).toMatchObject({ status: "systemOff", brokenHop: "binding", unchecked: "refusedBySetting" });
+  });
+
+  it("a custom service not verified through the bound connection: refused by a setting too", () => {
+    const custom = feed({
+      operation: "CREATE",
+      mode: "WRITE",
+      externalId: "custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2",
+      servicePath: "/sap/opu/odata/sap/ZUI_TRAVEL_O2",
+      odataVersion: "V2",
+    });
+    const { auth, verdict } = laneFrom({
+      iface: custom,
+      grants: [grant({ operation: "CREATE", externalId: custom.externalId })],
+    });
+    expect(auth.binding.refusal).toBe("CUSTOM_SERVICE_UNVERIFIED");
+    expect(verdict.unchecked).toBe("refusedBySetting");
   });
 });
 
@@ -307,12 +358,26 @@ describe("A18: evidence is tied to the connection, dataset and feed version that
   });
 
   it("a check against another entity set, or an earlier version of the feed, is set aside", () => {
-    expect(laneFrom({ check: { ...FRESH_CHECK, entitySet: "A_Other" } }).verdict.status).toBe("unknown");
-    expect(laneFrom({ check: { ...FRESH_CHECK, interfaceVersion: 3 } }).verdict.status).toBe("unknown");
-    // A row written before P0.2 says nothing about what it proved.
-    expect(laneFrom({ check: { ...FRESH_CHECK, entitySet: null, interfaceVersion: null } }).verdict.status).toBe(
-      "unknown",
-    );
+    expect(laneFrom({ check: { ...FRESH_CHECK, entitySet: "A_Other" } }).verdict).toMatchObject({
+      status: "unknown",
+      unchecked: "changedSinceCheck",
+    });
+    expect(laneFrom({ check: { ...FRESH_CHECK, interfaceVersion: 3 } }).verdict).toMatchObject({
+      status: "unknown",
+      unchecked: "changedSinceCheck",
+    });
+  });
+
+  it("a row written before checks were keyed is set aside without claiming anything changed (P0.2 review)", () => {
+    // Every LaneCheck row on the day of the migration: entitySet and
+    // interfaceVersion NULL. Nothing changed; we only do not know what it proved.
+    const v = laneFrom({ check: { ...FRESH_CHECK, entitySet: null, interfaceVersion: null } }).verdict;
+    expect(v).toMatchObject({ status: "unknown", unchecked: "checkPredatesEvidenceKey" });
+    expect(v.because).not.toMatch(/changed after/);
+    expect(laneEvidence({ ...FRESH_CHECK, interfaceVersion: null }, connection(), feed())).toMatchObject({
+      superseded: true,
+      predatesKey: true,
+    });
   });
 });
 
