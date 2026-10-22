@@ -29,6 +29,14 @@ export interface ConnectionFormFields {
   readonly authType: "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer" | "api-key";
   readonly apiKey: string;
   readonly apiKeyHeader: string;
+  /**
+   * The Header name field is untouched on a re-save of an API-key connection
+   * (wave 2 rotation probe review round 2). The header name is sealed with
+   * the key, so the form cannot show it; while the field is blank the save
+   * asks the route to keep the stored one (`keepStoredApiKeyHeader`) instead
+   * of resetting it to `apikey`. Typing a name sends that name.
+   */
+  readonly keepStoredApiKeyHeader?: boolean;
   readonly username: string;
   readonly password: string;
   readonly bearerToken: string;
@@ -134,9 +142,10 @@ export function formWriteTarget(
  * The non-secret settings a connection stores, as the Connections screen
  * loads them: everything the save route accepts that is not sealed. The
  * sealed ones (user, client id, company id, SAML user, API-key header, and
- * every secret) are never read back, so the form asks for them; the API-key
- * header field starts at "apikey", not blank (a known limit in
- * docs/runbooks/coreedge-governed-pipeline.md).
+ * every secret) are never read back, so the form asks for them. The API-key
+ * header is the one sealed setting a re-save keeps without it being typed:
+ * the form leaves its field blank and the route keeps the stored name
+ * (`ConnectionFormFields.keepStoredApiKeyHeader`).
  */
 export interface StoredConnectionSettings {
   readonly label: string;
@@ -295,7 +304,16 @@ export function connectionSaveBody(
     ...(f.authType === "basic" ? { username: f.username.trim(), password: f.password } : {}),
     ...(f.authType === "bearer" ? { bearerToken: f.bearerToken } : {}),
     ...(f.authType === "api-key"
-      ? { apiKey: f.apiKey, ...(f.apiKeyHeader.trim() ? { apiKeyHeader: f.apiKeyHeader.trim() } : {}) }
+      ? {
+          apiKey: f.apiKey,
+          // A typed header name is sent; a blank field on a re-save of an
+          // API-key connection keeps the stored one, sealed and never shown.
+          ...(f.apiKeyHeader.trim()
+            ? { apiKeyHeader: f.apiKeyHeader.trim() }
+            : f.keepStoredApiKeyHeader
+              ? { keepStoredApiKeyHeader: true }
+              : {}),
+        }
       : {}),
     ...(f.authType === "oauth-saml-bearer"
       ? {

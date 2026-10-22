@@ -89,6 +89,7 @@ import {
   isAllowedApiKeyHeader,
   normalizeEnvironment,
   SapConnectionChangedError,
+  storedApiKeyHeader,
   upsertSapConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
@@ -268,6 +269,16 @@ const upsertSchema = z
           "apiKeyHeader must be a plain header name (letters, digits, hyphens) and cannot be one the transport sets itself — Authorization, Cookie and Host among them.",
       })
       .optional(),
+    /**
+     * Keep the API-key header name the replaced connection stores, when this
+     * save sends none (wave 2 rotation probe review round 2). The header is
+     * sealed with the key, so the Connections form cannot show it; it sends
+     * this while its Header name field is blank on a re-save of an API-key
+     * connection, and a re-save no longer resets a custom header to
+     * `apikey`. Absent (any other caller): a save without `apiKeyHeader`
+     * uses the default, as before. Ignored when `apiKeyHeader` is sent.
+     */
+    keepStoredApiKeyHeader: z.boolean().optional(),
     oauthTokenUrl: httpsUrl.optional(),
     /** Accepted from older callers and ignored: nothing reads a connection write secret (file header). */
     writeSecret: z.string().max(500).optional(),
@@ -870,6 +881,19 @@ export async function POST(request: NextRequest) {
     missing = stepUp.outcome === "warned" ? stepUp.missing : null;
 
     /*
+     * THE STORED API-KEY HEADER, KEPT WHEN ASKED (wave 2 rotation probe review
+     * round 2). A form re-save sends no header name (it is sealed, so the form
+     * cannot show it) and asks for the stored one: from the row this attempt
+     * judged, so the probe and the save both send the key in the header the
+     * connection uses. Only the name is read back; it is never logged.
+     */
+    const keptHeader =
+      input.authType === "api-key" && !input.apiKeyHeader && input.keepStoredApiKeyHeader === true && judged.existing
+        ? await storedApiKeyHeader(organizationId, input.product, key, judged.existing)
+        : null;
+    const attemptSecrets = keptHeader ? { ...secrets, apiKeyHeader: keptHeader } : secrets;
+
+    /*
      * PROBE BEFORE SWAP (P0.14, rotation.ts, rotation-probe.ts). Re-saving a
      * connection is how its secret is rotated, and the save writes the new
      * one unconditionally: a mistyped password takes every lane on that
@@ -897,7 +921,7 @@ export async function POST(request: NextRequest) {
       label: input.label,
       baseUrl: input.baseUrl.replace(/\/+$/, ""),
       authType: input.authType,
-      secrets,
+      secrets: attemptSecrets,
       oauthTokenUrl: input.oauthTokenUrl ?? null,
       writeEnabled,
       apiPath: input.apiPath ?? null,
@@ -960,7 +984,7 @@ export async function POST(request: NextRequest) {
         label: input.label,
         baseUrl: input.baseUrl,
         authType: input.authType,
-        secrets,
+        secrets: attemptSecrets,
         oauthTokenUrl: input.oauthTokenUrl ?? null,
         environment,
         client: input.client ?? null,

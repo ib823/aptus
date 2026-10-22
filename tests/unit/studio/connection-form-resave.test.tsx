@@ -133,6 +133,50 @@ describe("a form re-save keeps the stored settings", () => {
     expect(sentBody()).toMatchObject({ timeoutMs: 30000 });
   });
 
+  /*
+   * Wave 2 rotation probe review round 2. The API-key header name is sealed,
+   * so the form cannot show it; the field started at "apikey" and every
+   * re-save reset a custom header. Over a stored API-key connection it now
+   * starts blank, says the stored name is kept, and the save asks the route
+   * to keep it; a typed name is sent; a new connection still starts at "apikey".
+   */
+  it("an API-key re-save keeps the stored header unless one is typed", async () => {
+    respond({ connection: { id: "conn_3" }, replaced: true });
+    const apiKeyRow: StudioConnection = { ...STORED, id: "conn_3", key: "gw-dev", authType: "api-key" };
+    openForm([apiKeyRow]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "gw-dev" } });
+    const header = screen.getByLabelText("Header name") as HTMLInputElement;
+    expect(header.value).toBe("");
+    expect(screen.getByTestId("api-key-header-kept").textContent).toMatch(/keeps the one this connection stores/);
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "KEY-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(sentBody()).toMatchObject({ authType: "api-key", apiKey: "KEY-2", keepStoredApiKeyHeader: true });
+    expect(sentBody()).not.toHaveProperty("apiKeyHeader");
+
+    // A typed name is the one sent, and nothing asks to keep the stored one.
+    cleanup();
+    vi.clearAllMocks();
+    respond({ connection: { id: "conn_3" }, replaced: true });
+    openForm([apiKeyRow]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "gw-dev" } });
+    fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-api-key" } });
+    expect(screen.queryByTestId("api-key-header-kept")).toBeNull();
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "KEY-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(sentBody()).toMatchObject({ apiKeyHeader: "x-api-key" });
+    expect(sentBody()).not.toHaveProperty("keepStoredApiKeyHeader");
+  });
+
+  it("a new API-key connection, or a row that was not API-key, starts the header at apikey", () => {
+    openForm([STORED]);
+    fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-dev" } });
+    fireEvent.change(screen.getByDisplayValue(/^Basic/), { target: { value: "api-key" } });
+    expect((screen.getByLabelText("Header name") as HTMLInputElement).value).toBe("apikey");
+    expect(screen.queryByTestId("api-key-header-kept")).toBeNull();
+  });
+
   it("a new connection starts blank", () => {
     openForm([STORED]);
     fireEvent.change(screen.getByPlaceholderText("x5m-100"), { target: { value: "erp-new" } });

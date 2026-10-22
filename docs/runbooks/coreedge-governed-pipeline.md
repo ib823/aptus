@@ -184,8 +184,18 @@ every re-save from the form cleared the probe path and the timeout: the probe
 then judged the new secret at another service or with the default timeout,
 and refused correct rotations. The sealed values (user, client id, company
 id, SAML user and every secret) are never readable, so they are always typed.
-The API-key header is sealed too but is not typed fresh: its field starts at
-`apikey` (see the known limits below).
+The API-key header name is sealed too, and is kept without being typed
+(wave 2 rotation probe review round 2): over a stored API-key connection the
+Header name field starts blank and says the stored name is kept, and the save
+sends `keepStoredApiKeyHeader: true` instead of a header. The route then reads
+the header name, and only the name, from the row it judged (active or not)
+and uses it for the probe and the save, so a custom header (`x-api-key`, say)
+is no longer reset to `apikey`: the probe sends the new key in the header the
+connection uses. A typed name is sent and saved as typed. An API caller that
+sends neither gets the default `apikey`, as before. When the stored row has no
+header, is not an API-key connection, has changed since it was judged or will
+not open, the save uses the default, as every save did before. Step-up and the
+audit row are unchanged; the header name is not on the audit row.
 
 One stored setting starts blank instead (wave 2 rotation probe review round
 1): the environment of a **deactivated** connection when another active
@@ -200,25 +210,6 @@ the environment among the stored settings it changes.
 (P0.2), so until its next Test or nightly probe the connection is not known to
 work, and a second re-save in that window is `skipped` with
 `not_known_working`. Press Test after rotating a secret.
-
-### Known limits
-
-- **A stored custom API-key header is reset to `apikey` by a form re-save.**
-  The header name is sealed with the secrets, so the form cannot read it back,
-  and its field starts at `apikey`, not blank; it is not one of the stored
-  settings the form names before Save. Re-saving an API-key connection whose
-  stored header is something else (`x-api-key`, say) from the form therefore
-  sends the right key in the wrong header unless the person retypes the header
-  name. Bound: only API-key connections whose stored header is not `apikey`
-  (compared case-insensitively), and only re-saves from the form (an API
-  caller sends its own header). main's form reset it the same way, so nothing
-  changes on deploy under the default (`observe`). The probe's answer is SAP's
-  true verdict on the bundle as sent (the gateway's 401): under `observe` the
-  wrong header is saved and the warning says SAP refused the new
-  credentials, which points at the key rather than the header; under
-  `enforce` the save is refused, which keeps the working connection, with a
-  message that says to check what was typed. Workaround: type the stored
-  header name into Header name when re-saving.
 
 ### Switching to enforce
 

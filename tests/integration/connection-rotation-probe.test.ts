@@ -38,7 +38,12 @@ import { prisma } from "@/lib/db/prisma";
 import { POST as testConnection } from "@/app/api/studio/connections/[id]/test/route";
 import { POST as saveConnection } from "@/app/api/studio/connections/route";
 import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
-import { connectionSaveBody, storedEnvironmentTwin, storedFormSettings } from "@/lib/studio/connection-form";
+import {
+  connectionSaveBody,
+  storedEnvironmentTwin,
+  storedFormSettings,
+  type ConnectionFormFields,
+} from "@/lib/studio/connection-form";
 
 const RUN = `p014r-${randomUUID().slice(0, 8)}`;
 const KEY = "c".repeat(64);
@@ -54,6 +59,8 @@ const EDMX =
  */
 const sap = {
   password: "Old-Password-1",
+  /** The API gateway's one key, read from `x-api-key` only (an API-key connection with a custom header). */
+  apiKey: "KEY-1",
   released: null as string[] | null,
   down: false,
   delayMs: 0,
@@ -91,7 +98,14 @@ const fakeSap = vi.fn(async (url: string | URL | Request, init?: RequestInit) =>
     }
     return Response.json({ error: "invalid_grant", errorMessage: "Unable to validate the SAML assertion" }, { status: 400 });
   }
-  const auth = new Headers(init?.headers).get("authorization") ?? "";
+  const sent = new Headers(init?.headers);
+  // API-key auth: the gateway reads `x-api-key`; a key in any other header is unauthenticated.
+  if (sent.has("x-api-key") || sent.has("apikey")) {
+    return sent.get("x-api-key") === sap.apiKey
+      ? new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } })
+      : new Response("", { status: 401 });
+  }
+  const auth = sent.get("authorization") ?? "";
   if (auth === "Bearer TOKEN-OK") return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
   if (auth !== `Basic ${Buffer.from(`COMM_USER:${sap.password}`).toString("base64")}`) return new Response("", { status: 401 });
   if (sap.released && !sap.released.some((path) => href.includes(`${path}/$metadata`))) return new Response("", { status: 403 });
@@ -139,8 +153,13 @@ function apiSave(f: Fixture, password: string, extra: Record<string, unknown> = 
   });
 }
 
-/** A re-save as the Connections form sends it: the stored settings loaded, the new password typed. */
-async function formSave(f: Fixture, password: string) {
+/**
+ * A re-save as the Connections form sends it: the stored settings loaded, the
+ * new password typed (or the fields in `typed`, as the person typed them).
+ * The Header name field follows ConnectionsClient: blank, keeping the stored
+ * header, over an API-key row until typed in; "apikey" otherwise.
+ */
+async function formSave(f: Fixture, password: string, typed: Partial<ConnectionFormFields> = {}) {
   const row = await prisma.sapConnection.findFirst({
     where: { organizationId: f.org, product: f.product, key: f.key },
     select: {
@@ -161,9 +180,12 @@ async function formSave(f: Fixture, password: string) {
         environment: storedEnvironmentTwin(row, others) ? "" : stored.environment,
         product: f.product,
         key: f.key,
-        apiKey: "", apiKeyHeader: "apikey", username: "COMM_USER", password, bearerToken: "", clientId: "",
+        apiKey: "", apiKeyHeader: row?.authType === "api-key" ? "" : "apikey", keepStoredApiKeyHeader: row?.authType === "api-key",
+        username: "COMM_USER", password, bearerToken: "", clientId: "",
         clientSecret: "", companyId: "", samlAssertion: "", samlSigning: "key", samlPrivateKey: "", samlUserId: "",
         allowWrites: Boolean(row?.writeEnabled),
+        ...typed,
+        ...(typed.apiKeyHeader !== undefined ? { keepStoredApiKeyHeader: false } : {}),
       },
       row ? { isActive: row.isActive, writeEnabled: row.writeEnabled } : null,
     ),
@@ -238,7 +260,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
     vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", KEY);
     vi.stubEnv("COREEDGE_JOURNEY_EVENTS", "off");
     vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "example.com");
-    Object.assign(sap, { password: "Old-Password-1", released: null, down: false, delayMs: 0, silentAt: null });
+    Object.assign(sap, { password: "Old-Password-1", apiKey: "KEY-1", released: null, down: false, delayMs: 0, silentAt: null });
     sf.assertion = "GOOD-ASSERTION";
     fakeSap.mockClear();
   });
@@ -528,6 +550,57 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
       const sfData = await ok(await sfSave(g, "WRONG-ASSERTION", { apiPath: "odata/v2" }));
       expect(fakeSap).not.toHaveBeenCalled();
       expect(sfData.rotationProbe).toMatchObject({ ran: false, outcome: "skipped", reason: "probe_path_invalid" });
+    });
+
+    /*
+     * Wave 2 rotation probe review round 2. The API-key header name is sealed
+     * with the key, so the form cannot show it; its field started at
+     * "apikey", and a re-save reset a custom header: under enforce the right
+     * key was refused (sent in the wrong header), under observe it was saved
+     * with a wrong warning and every call then failed. The form now leaves
+     * the field blank and the route keeps the stored header, for the probe
+     * and the save.
+     */
+    it("a form re-save of an API-key connection keeps its custom header, and the probe sends the key in it", async () => {
+      const f = await fixture("s4hana");
+      const apiKeySave = (apiKey: string, extra: Record<string, unknown> = {}) =>
+        post({
+          product: f.product, key: f.key, label: "s4hana DEV", baseUrl: BASE_URL.s4hana, environment: "DEV",
+          authType: "api-key", apiKey, ...extra,
+        });
+      await ok(await apiKeySave("KEY-1", { apiKeyHeader: "x-api-key" }));
+      await prove(f);
+      const stored = async () => (await resolveSapConnection(f.org, f.product, f.key))?.secrets;
+
+      sap.apiKey = "KEY-2";
+      fakeSap.mockClear();
+      const data = await ok(await formSave(f, "", { apiKey: "KEY-2" }));
+      expect(data.rotationProbe).toMatchObject({ mode, ran: true, outcome: "passed", warning: null });
+      const probed = new Headers(metadataCalls()[0]![1]?.headers);
+      expect(probed.get("x-api-key")).toBe("KEY-2");
+      expect(probed.has("apikey")).toBe(false);
+      expect(await stored()).toMatchObject({ apiKey: "KEY-2", apiKeyHeader: "x-api-key" });
+      expect(JSON.stringify(await lastAudit(f))).not.toContain("KEY-2");
+
+      // A deactivated row brought back by a form re-save keeps it too (not probed).
+      const deactivate = () =>
+        prisma.sapConnection.updateMany({ where: { organizationId: f.org, key: f.key }, data: { isActive: false } });
+      await deactivate();
+      const back = await ok(await formSave(f, "", { apiKey: "KEY-2" }));
+      expect(back.rotationProbe).toMatchObject({ ran: false, reason: "deactivated" });
+      expect(await stored()).toMatchObject({ apiKey: "KEY-2", apiKeyHeader: "x-api-key" });
+
+      // A header the person types is the one saved, and then the one kept.
+      await deactivate();
+      await ok(await formSave(f, "", { apiKey: "KEY-2", apiKeyHeader: "X-Gateway-Key" }));
+      expect(await stored()).toMatchObject({ apiKey: "KEY-2", apiKeyHeader: "X-Gateway-Key" });
+      await deactivate();
+      await ok(await formSave(f, "", { apiKey: "KEY-2" }));
+      expect(await stored()).toMatchObject({ apiKey: "KEY-2", apiKeyHeader: "X-Gateway-Key" });
+
+      // An API caller that sends no header gets the default, as before.
+      await ok(await apiKeySave("KEY-2"));
+      expect((await stored())?.apiKeyHeader).toBeUndefined();
     });
 
     it("a save that keeps the credentials, a new connection and one SAP last refused send nothing", async () => {

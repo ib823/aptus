@@ -502,7 +502,7 @@ function ConnectionForm({
   const [apiPathTyped, setApiPath] = useState<string | null>(null);
   const [timeoutMsTyped, setTimeoutMs] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [apiKeyHeader, setApiKeyHeader] = useState("apikey");
+  const [apiKeyHeaderTyped, setApiKeyHeader] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [bearerToken, setBearerToken] = useState("");
@@ -547,6 +547,16 @@ function ConnectionForm({
   const oauthTokenUrl = oauthTokenUrlTyped ?? stored.oauthTokenUrl;
   const apiPath = apiPathTyped ?? stored.apiPath;
   const timeoutMs = timeoutMsTyped ?? stored.timeoutMs;
+  /*
+   * THE API-KEY HEADER IS KEPT, NOT RESET (wave 2 rotation probe review round
+   * 2). It is sealed with the key, so this form cannot show it. Over a stored
+   * API-key connection the field starts blank and, until the person types
+   * in it, the save asks the route to keep the stored header name: a field
+   * that started at "apikey" reset a custom header on every re-save, and the
+   * rotation probe then judged the right key in the wrong header.
+   */
+  const keepStoredApiKeyHeader = apiKeyHeaderTyped === null && replacing?.authType === "api-key";
+  const apiKeyHeader = apiKeyHeaderTyped ?? (keepStoredApiKeyHeader ? "" : "apikey");
   /** The stored settings this save changes, said before Save (`changedStoredSettings`). */
   const changedSettings = replacing
     ? changedStoredSettings(stored, { product, client, label, baseUrl, environment, authType, oauthTokenUrl, apiPath, timeoutMs })
@@ -638,7 +648,7 @@ function ConnectionForm({
         body: JSON.stringify(
           connectionSaveBody(
             {
-              product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, username,
+              product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, keepStoredApiKeyHeader, username,
               password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
               samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites,
             },
@@ -711,7 +721,7 @@ function ConnectionForm({
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, replacing]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, keepStoredApiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, replacing]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -928,8 +938,21 @@ function ConnectionForm({
             {/* SAP's sandbox reads `apikey`; other API-key gateways name theirs
                 differently. Sent as its own header — no Authorization at all,
                 and never a header the transport sets for itself. */}
-            <input value={apiKeyHeader} onChange={(e) => setApiKeyHeader(e.target.value)} placeholder="apikey" style={input} />
+            <input
+              value={apiKeyHeader}
+              onChange={(e) => setApiKeyHeader(e.target.value)}
+              placeholder={keepStoredApiKeyHeader ? "the stored one" : "apikey"}
+              style={input}
+            />
           </Label>
+          {keepStoredApiKeyHeader && (
+            <p
+              data-testid="api-key-header-kept"
+              style={{ gridColumn: "1 / -1", margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--ink-secondary)" }}
+            >
+              Header name left blank keeps the one this connection stores. It is sealed with the key, so it is not shown.
+            </p>
+          )}
         </div>
       )}
       {authType === "oauth-saml-bearer" && (

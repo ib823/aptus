@@ -309,6 +309,36 @@ export async function hasActiveSapConnection(
   return rows.some((r) => r.key === key);
 }
 
+/**
+ * The API-key header name sealed in a stored connection, or null: the only
+ * value this returns from the bundle, never a secret (wave 2 rotation probe
+ * review round 2). The Connections form cannot read the header back, so a
+ * re-save that leaves its Header name blank asks the save route to keep the
+ * stored one rather than reset it to `apikey`.
+ *
+ * Read from the row the save judged (`judged`: its id and revision), active
+ * or not, since a re-save may bring a deactivated row back. Null when that
+ * row is gone or changed, is not an API-key connection, will not open,
+ * stores no header (the default) or stores one the header rule refuses; the
+ * save then sends what it sent before, the default.
+ */
+export async function storedApiKeyHeader(
+  organizationId: string,
+  product: string,
+  key: string,
+  judged: { readonly id: string; readonly revision: number },
+): Promise<string | null> {
+  if (!organizationId || !key) return null;
+  const row = await prisma.sapConnection.findFirst({ where: { organizationId, product, key } });
+  if (!row || row.id !== judged.id || row.revision !== judged.revision || row.authType !== "api-key") return null;
+  try {
+    const header = (await openConnectionRow(row)).secrets.apiKeyHeader?.trim();
+    return header && isAllowedApiKeyHeader(header) ? header : null;
+  } catch {
+    return null;
+  }
+}
+
 export {
   selectConnectionForEnvironment,
   type BindableConnection,

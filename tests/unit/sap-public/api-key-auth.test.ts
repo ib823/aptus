@@ -132,7 +132,10 @@ describe("the route and the form know the type", () => {
   it("the form offers it, names SAP's sandbox, and defaults the header to apikey", () => {
     const ui = read("src/components/studio/ConnectionsClient.tsx");
     expect(ui).toMatch(/<option value="api-key">API key header — SAP Business Accelerator Hub sandbox<\/option>/);
-    expect(ui).toContain('useState("apikey")');
+    // A new connection's header starts at apikey; a re-save of an API-key
+    // connection starts blank and keeps the stored one (wave 2 rotation probe
+    // review round 2, tests/unit/studio/connection-form-resave.test.tsx).
+    expect(ui).toContain('apiKeyHeaderTyped ?? (keepStoredApiKeyHeader ? "" : "apikey")');
     expect(ui).toMatch(/authType === "api-key" && !apiKey/);
   });
 
