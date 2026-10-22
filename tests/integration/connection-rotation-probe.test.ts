@@ -38,7 +38,7 @@ import { prisma } from "@/lib/db/prisma";
 import { POST as testConnection } from "@/app/api/studio/connections/[id]/test/route";
 import { POST as saveConnection } from "@/app/api/studio/connections/route";
 import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
-import { connectionSaveBody, storedFormSettings } from "@/lib/studio/connection-form";
+import { connectionSaveBody, storedEnvironmentTwin, storedFormSettings } from "@/lib/studio/connection-form";
 
 const RUN = `p014r-${randomUUID().slice(0, 8)}`;
 const KEY = "c".repeat(64);
@@ -60,6 +60,13 @@ const sap = {
   silentAt: null as string | null,
 };
 
+/**
+ * SuccessFactors' token endpoint. It takes one assertion; any other gets
+ * RFC 6749's 400 invalid_grant, as SuccessFactors answers an assertion, a key
+ * or a company id it will not take.
+ */
+const sf = { assertion: "GOOD-ASSERTION" };
+
 function wait(ms: number, signal: AbortSignal | null | undefined): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException("aborted", "AbortError"));
@@ -78,7 +85,14 @@ const fakeSap = vi.fn(async (url: string | URL | Request, init?: RequestInit) =>
   }
   if (sap.delayMs > 0) await wait(sap.delayMs, init?.signal);
   if (sap.down) return new Response("", { status: 503 });
+  if (href.includes("/oauth/token")) {
+    if (new URLSearchParams(String(init?.body ?? "")).get("assertion") === sf.assertion) {
+      return Response.json({ access_token: "TOKEN-OK", expires_in: 3600 });
+    }
+    return Response.json({ error: "invalid_grant", errorMessage: "Unable to validate the SAML assertion" }, { status: 400 });
+  }
   const auth = new Headers(init?.headers).get("authorization") ?? "";
+  if (auth === "Bearer TOKEN-OK") return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
   if (auth !== `Basic ${Buffer.from(`COMM_USER:${sap.password}`).toString("base64")}`) return new Response("", { status: 401 });
   if (sap.released && !sap.released.some((path) => href.includes(`${path}/$metadata`))) return new Response("", { status: 403 });
   return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
@@ -130,15 +144,21 @@ async function formSave(f: Fixture, password: string) {
   const row = await prisma.sapConnection.findFirst({
     where: { organizationId: f.org, product: f.product, key: f.key },
     select: {
-      label: true, baseUrl: true, authType: true, environment: true, client: true, oauthTokenUrl: true,
-      apiPath: true, timeoutMs: true, isActive: true, writeEnabled: true,
+      product: true, key: true, label: true, baseUrl: true, authType: true, environment: true, client: true,
+      oauthTokenUrl: true, apiPath: true, timeoutMs: true, isActive: true, writeEnabled: true,
     },
   });
   const stored = storedFormSettings(row);
+  // The form's other rows, for its twin rule (ConnectionsClient `storedEnvironmentTwin`).
+  const others = await prisma.sapConnection.findMany({
+    where: { organizationId: f.org },
+    select: { product: true, key: true, label: true, isActive: true, environment: true, client: true },
+  });
   return post(
     connectionSaveBody(
       {
         ...stored,
+        environment: storedEnvironmentTwin(row, others) ? "" : stored.environment,
         product: f.product,
         key: f.key,
         apiKey: "", apiKeyHeader: "apikey", username: "COMM_USER", password, bearerToken: "", clientId: "",
@@ -158,6 +178,15 @@ function post(body: Record<string, unknown>) {
       body: JSON.stringify(body),
     }),
   );
+}
+
+/** A SuccessFactors SAML-bearer save with a pre-signed assertion, as an API caller sends it. */
+function sfSave(f: Fixture, assertion: string, extra: Record<string, unknown> = {}) {
+  return post({
+    product: "successfactors", key: f.key, label: "SF DEV", baseUrl: BASE_URL.successfactors, environment: "DEV",
+    authType: "oauth-saml-bearer", clientId: "API-KEY-1", companyId: "ACME",
+    oauthTokenUrl: "https://api17.sapsf.com/oauth/token", samlAssertion: assertion, ...extra,
+  });
 }
 
 const rowOf = (f: Fixture) =>
@@ -210,6 +239,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
     vi.stubEnv("COREEDGE_JOURNEY_EVENTS", "off");
     vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "example.com");
     Object.assign(sap, { password: "Old-Password-1", released: null, down: false, delayMs: 0, silentAt: null });
+    sf.assertion = "GOOD-ASSERTION";
     fakeSap.mockClear();
   });
   afterEach(() => {
@@ -436,6 +466,70 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
       expect(await storedPassword(f)).toBe("New-Password-2");
     });
 
+    /*
+     * Wave 2 rotation probe review round 1. SuccessFactors' token endpoint
+     * refuses a wrong assertion, key or company id with 400 invalid_grant: the
+     * platform's one classifier (isCredentialRefusal, TOKEN_REJECTED) and the
+     * Test button call it a refused credential. The probe recorded it as no
+     * verdict, so under enforce the wrong assertion replaced a working one.
+     */
+    it("SuccessFactors: the token endpoint's 400 invalid_grant to a new assertion is a refused sign-in", async () => {
+      const f = await fixture("successfactors");
+      await ok(await sfSave(f, "GOOD-ASSERTION"));
+      await prove(f);
+      const before = (await rowOf(f))!.secretsCiphertext;
+      fakeSap.mockClear();
+      const res = await sfSave(f, "WRONG-ASSERTION");
+      expect(fakeSap.mock.calls.some(([url]) => String(url).includes("/oauth/token"))).toBe(true);
+      const storedAssertion = async () => (await resolveSapConnection(f.org, f.product, f.key))?.secrets.samlAssertion;
+      if (mode === "enforce") {
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as SaveData).error!.message).toContain("SAP refused the new credentials");
+        expect((await rowOf(f))!.secretsCiphertext).toBe(before);
+        expect(await storedAssertion()).toBe("GOOD-ASSERTION");
+        expect(await lastAudit(f, "TEST_CONNECT")).toMatchObject({
+          event: "connection_rotation_refused",
+          rotationProbe: { mode: "enforce", ran: true, outcome: "rejected", reason: "token_http_400" },
+        });
+      } else {
+        const data = await ok(res);
+        expect(data.rotationProbe).toMatchObject({ mode: "observe", ran: true, outcome: "rejected", reason: "token_http_400" });
+        expect(data.rotationProbe!.warning).toMatch(/^SAP refused the new credentials; calls through this connection will fail/);
+        expect(data.rotationProbe!.warning).not.toContain("did not say");
+        expect(await storedAssertion()).toBe("WRONG-ASSERTION");
+      }
+    });
+
+    /*
+     * Wave 2 rotation probe review round 1. A probe path without a leading
+     * "/" cannot be joined to the base URL, so the probe built no request,
+     * yet it was recorded as `ran: true, noAnswer`. It is skipped before
+     * anything is sent (the token exchange too), saved, and never claimed.
+     */
+    it("a probe path without a leading slash: nothing is sent, and no probe is claimed", async () => {
+      const f = await fixture("s4hana");
+      await ok(await apiSave(f, "Old-Password-1"));
+      await prove(f);
+      fakeSap.mockClear();
+      const data = await ok(await apiSave(f, "Mistyped-Password", { apiPath: "sap/opu/odata/sap/API_BUSINESS_PARTNER" }));
+      expect(fakeSap).not.toHaveBeenCalled();
+      expect(data.rotationProbe).toMatchObject({ mode, ran: false, outcome: "skipped", reason: "probe_path_invalid" });
+      expect(data.rotationProbe!.warning).toContain("could not be checked");
+      expect(data.rotationProbe!.warning).toContain('starts with "/"');
+      expect(await storedPassword(f)).toBe("Mistyped-Password");
+      expect(await lastAudit(f)).toMatchObject({ rotationProbe: { mode, ran: false, outcome: "skipped", reason: "probe_path_invalid" } });
+      expect((await lastAudit(f, "TEST_CONNECT"))?.event).not.toBe("connection_rotation_probed");
+
+      // OAuth: not even the token exchange is sent.
+      const g = await fixture("successfactors");
+      await ok(await sfSave(g, "GOOD-ASSERTION"));
+      await prove(g);
+      fakeSap.mockClear();
+      const sfData = await ok(await sfSave(g, "WRONG-ASSERTION", { apiPath: "odata/v2" }));
+      expect(fakeSap).not.toHaveBeenCalled();
+      expect(sfData.rotationProbe).toMatchObject({ ran: false, outcome: "skipped", reason: "probe_path_invalid" });
+    });
+
     it("a save that keeps the credentials, a new connection and one SAP last refused send nothing", async () => {
       const f = await fixture("s4hana");
       fakeSap.mockClear();
@@ -453,6 +547,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
       expect(refusedBefore.rotationProbe).toMatchObject({ ran: false, outcome: "skipped", reason: "last_probe_refused" });
       expect(fakeSap).not.toHaveBeenCalled();
       expect(await storedPassword(f)).toBe("Anything-1");
+    });
+  });
+
+  /*
+   * Wave 2 rotation probe review round 1, under today's settings. Bringing
+   * back a deactivated row whose environment a live row now holds saved on
+   * main (its form sent no environment, so the twin rule never ran). The form
+   * that sends stored settings back would be refused as a twin; it starts the
+   * environment blank for that row, so the save goes through as on main.
+   */
+  it("a form re-save of a deactivated row next to its live twin saves, as on main", async () => {
+    const f = await fixture("s4hana");
+    await ok(await apiSave(f, "Old-Password-1"));
+    await prisma.sapConnection.updateMany({ where: { organizationId: f.org, key: f.key }, data: { isActive: false } });
+    await ok(await apiSave({ ...f, key: `${f.key}-live` }, "Old-Password-1"));
+
+    const data = await ok(await formSave(f, "Old-Password-1"));
+    expect(data.rotationProbe).toMatchObject({ ran: false, outcome: "skipped", reason: "deactivated" });
+    expect(await rowOf(f)).toMatchObject({ isActive: true, environment: null });
+    expect(await prisma.sapConnection.findFirst({ where: { organizationId: f.org, key: `${f.key}-live` } })).toMatchObject({
+      isActive: true,
+      environment: "DEV",
     });
   });
 

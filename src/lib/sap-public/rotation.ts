@@ -20,7 +20,7 @@
  *             what SAP answered, and the form shows a warning when SAP refused
  *             the new secret or the probe could not check it.
  *   enforce — refuses one case only: SAP refused the sign-in with the new
- *             secret (its 401, or its token endpoint's 401 or 403) while the
+ *             secret (its 401, or its token endpoint's 400, 401 or 403) while the
  *             stored one is known to work. Everything else saves, as under
  *             observe.
  *   off     — no probe.
@@ -28,6 +28,8 @@
  * No refusal is ever made without a request to SAP, and no audit row claims a
  * probe that did not reach it (`ran`).
  */
+
+import { isCredentialRefusal } from "./oauth-saml-bearer";
 
 /** COREEDGE_ROTATION_PROBE. */
 export type RotationProbeMode = "observe" | "enforce" | "off";
@@ -43,7 +45,7 @@ export function rotationProbeMode(env: Record<string, string | undefined> = proc
 /**
  *   passed    SAP answered the `$metadata` with a metadata document: it took the new secret.
  *   rejected  SAP refused the sign-in with the new secret: the tenant's 401,
- *             or the token endpoint's 401 or 403 (`probeOutcome`).
+ *             or the token endpoint's 400, 401 or 403 (`probeOutcome`).
  *   noAnswer  a request was sent and SAP gave no verdict on the sign-in: it
  *             did not answer in time, failed (5xx), could not be reached, or
  *             answered something that is not about the credential (a 403 or
@@ -87,7 +89,9 @@ export type RotationSkipReason =
   /** No probe path, and the product has no default service (ECC without an API path): no request can be made. */
   | "no_probe_path"
   /** The new credentials could not be turned into a sign-in (a field missing, a key that cannot sign): nothing was sent. */
-  | "credentials_unusable";
+  | "credentials_unusable"
+  /** The probe path cannot be joined to the base URL (no leading "/"), so no request could be built: nothing was sent. */
+  | "probe_path_invalid";
 
 /** What the probe's one request came back with: connection-health.ts `fetchMetadataDocument`'s result. */
 export interface ProbeAnswer {
@@ -100,8 +104,9 @@ export interface ProbeAnswer {
 /**
  * The outcome of the probe's request, from what came back alone.
  *
- * REJECTED MEANS THE SIGN-IN WAS REFUSED: the token endpoint's 401 or 403
- * (it refused the client credentials or the assertion), or the tenant's 401
+ * REJECTED MEANS THE SIGN-IN WAS REFUSED: the token endpoint's 400, 401 or
+ * 403 (it refused the client credentials or the assertion; the shared
+ * `isCredentialRefusal`), or the tenant's 401
  * (it refused the user and password, or the token). The tenant's 403 is not:
  * it comes after a sign-in SAP accepted, and says the user may not read that
  * service, which is as often the communication arrangement not releasing
@@ -113,9 +118,13 @@ export interface ProbeAnswer {
 export function probeOutcome(answer: ProbeAnswer): Pick<RotationProbeRecord, "ran" | "outcome" | "reason"> {
   const who = answer.signedIn ? "sap" : "token";
   if (answer.status === "OK") return { ran: true, outcome: "passed", reason: "metadata_ok" };
-  const signInRefused = answer.signedIn
-    ? answer.httpStatus === 401
-    : answer.httpStatus === 401 || answer.httpStatus === 403;
+  // The token step's refusal is the platform's one line (P0.5,
+  // oauth-saml-bearer.ts `isCredentialRefusal`: 400, 401, 403 is
+  // TOKEN_REJECTED), the line the broker and the Test button draw: a
+  // SuccessFactors token endpoint answers an assertion it will not take with
+  // RFC 6749's 400 invalid_grant (wave 2 rotation probe review round 1).
+  const signInRefused =
+    answer.httpStatus !== null && (answer.signedIn ? answer.httpStatus === 401 : isCredentialRefusal(answer.httpStatus));
   if (signInRefused) return { ran: true, outcome: "rejected", reason: `${who}_http_${answer.httpStatus}` };
   // The credential step refused before sending anything (connection-health.ts
   // maps a ConnectionConfigError or an unusable SAML key to UNAUTHORIZED with
@@ -159,7 +168,10 @@ export function rotationProbeWarning(
   if (record.outcome === "noAnswer") {
     return `The new ${what} could not be checked: SAP did not say whether it accepts ${it === "it" ? "it" : "them"}.${why} It was saved; test the connection once SAP answers.`;
   }
-  if (record.outcome === "skipped" && (record.reason === "no_probe_path" || record.reason === "credentials_unusable")) {
+  if (
+    record.outcome === "skipped" &&
+    (record.reason === "no_probe_path" || record.reason === "credentials_unusable" || record.reason === "probe_path_invalid")
+  ) {
     return `The new ${what} could not be checked.${why} It was saved; test the connection to see whether SAP accepts ${it === "it" ? "it" : "them"}.`;
   }
   return null;

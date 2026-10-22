@@ -36,6 +36,7 @@ import { LANE_PROOF_TTL_MS } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { reachedDirectly } from "@/lib/governed/transport";
 import { resolveSapConnection, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
+import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { writeTargetChanges } from "@/lib/studio/connection-form";
 import { fetchMetadataDocument, resolveProbePath } from "@/lib/studio/connection-health";
 
@@ -183,6 +184,19 @@ export interface RotationProbeResult {
   readonly refused: boolean;
 }
 
+/** The URL fetchMetadataDocument requests can be built: the same buildSapUrl call, nothing sent. */
+function probeUrlBuilds(target: ResolvedSapConnection, path: string): boolean {
+  try {
+    buildSapUrl({ baseUrl: target.baseUrl, path: `${path}/$metadata`, client: target.client });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const PROBE_PATH_INVALID_DETAIL =
+  `The connection's probe path cannot be joined to its base URL (a probe path starts with "/"), so nothing was sent to SAP. Correct the probe path.`;
+
 const NO_PROBE_PATH_DETAIL =
   "This connection has no probe path, and its product has no default service to check. Add a probe path to have new credentials checked when they are saved.";
 
@@ -226,6 +240,11 @@ export async function probeForSave(input: {
   const target = probeTarget(candidate, existing);
   const path = resolveProbePath(target);
   if (!path) return skipped("no_probe_path", NO_PROBE_PATH_DETAIL);
+  // A probe path the URL builder refuses (no leading "/": it would be joined
+  // onto the hostname) fails inside the probe before any request, after a
+  // token exchange for OAuth: checked here first, so nothing is sent and the
+  // record never says a probe ran (wave 2 rotation probe review round 1).
+  if (!probeUrlBuilds(target, path)) return skipped("probe_path_invalid", PROBE_PATH_INVALID_DETAIL);
 
   const { answer, detail } = await probeRotation(target, path, input.fetchImpl);
   const record: RotationProbeRecord = { mode, ...answer };

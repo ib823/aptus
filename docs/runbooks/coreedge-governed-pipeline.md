@@ -130,7 +130,10 @@ out still clears them on the row, as before; the probe uses the stored values
 because that is where the stored secret was proven). A connection with no
 probe path anywhere (ECC, whose product has no default service, without an
 API path) cannot be probed: it is `skipped` with `no_probe_path`, saved, and
-the form says the new secret could not be checked. The whole probe stops at 40
+the form says the new secret could not be checked. A probe path the URL
+builder refuses (one without a leading `/`, which would be joined onto the
+hostname) is `skipped` with `probe_path_invalid` the same way, before any
+request, the token exchange included: nothing is sent, and `ran` is false. The whole probe stops at 40
 seconds (`ROTATION_PROBE_DEADLINE_MS`); the token exchange keeps its own
 10-second limit. The route declares `maxDuration = 90` (seconds). **Open
 item:** confirm the production Vercel plan's function duration limit (roadmap
@@ -140,7 +143,9 @@ D11).
 
 - `passed`: SAP served the `$metadata` with the new secret.
 - `rejected`: SAP refused the sign-in: the tenant's 401, or its token
-  endpoint's 401 or 403. The tenant's own 403 is not a refused sign-in: it
+  endpoint's 400, 401 or 403 (`isCredentialRefusal`, the line the broker and
+  the Test button draw: SuccessFactors answers an assertion, key or company
+  id it will not take with 400 `invalid_grant`). The tenant's own 403 is not a refused sign-in: it
   comes after a sign-in SAP accepted and says the user may not read that
   service, which a correct secret also gets at a service whose `$metadata`
   the communication arrangement does not release.
@@ -178,13 +183,42 @@ before Save any stored setting the save changes. Before, it started blank, so
 every re-save from the form cleared the probe path and the timeout: the probe
 then judged the new secret at another service or with the default timeout,
 and refused correct rotations. The sealed values (user, client id, company
-id, SAML user, API-key header and every secret) are never readable, so they
-are always typed.
+id, SAML user and every secret) are never readable, so they are always typed.
+The API-key header is sealed too but is not typed fresh: its field starts at
+`apikey` (see the known limits below).
+
+One stored setting starts blank instead (wave 2 rotation probe review round
+1): the environment of a **deactivated** connection when another active
+connection of the same product and SAP client now has that environment. Saving
+makes a row active, and the route refuses a save whose environment an active
+row already holds (the twin rule), so sending the stored environment back
+would refuse a save main's blank form made. The field starts blank, as on
+main, says which live connection holds the environment, and the save names
+the environment among the stored settings it changes.
 
 **After a rotation, Test it.** A save clears the connection's probe status
 (P0.2), so until its next Test or nightly probe the connection is not known to
 work, and a second re-save in that window is `skipped` with
 `not_known_working`. Press Test after rotating a secret.
+
+### Known limits
+
+- **A stored custom API-key header is reset to `apikey` by a form re-save.**
+  The header name is sealed with the secrets, so the form cannot read it back,
+  and its field starts at `apikey`, not blank; it is not one of the stored
+  settings the form names before Save. Re-saving an API-key connection whose
+  stored header is something else (`x-api-key`, say) from the form therefore
+  sends the right key in the wrong header unless the person retypes the header
+  name. Bound: only API-key connections whose stored header is not `apikey`
+  (compared case-insensitively), and only re-saves from the form (an API
+  caller sends its own header). main's form reset it the same way, so nothing
+  changes on deploy under the default (`observe`). The probe's answer is SAP's
+  true verdict on the bundle as sent (the gateway's 401): under `observe` the
+  wrong header is saved and the warning says SAP refused the new
+  credentials, which points at the key rather than the header; under
+  `enforce` the save is refused, which keeps the working connection, with a
+  message that says to check what was typed. Workaround: type the stored
+  header name into Header name when re-saving.
 
 ### Switching to enforce
 
@@ -241,7 +275,11 @@ is not probed). Or set `COREEDGE_ROTATION_PROBE=observe` and redeploy.
 - The Connections form now loads and sends back the stored non-secret
   settings of the connection it replaces (probe path, timeout, token URL and
   the rest), so a re-save from the form no longer clears them. The API's
-  semantics are unchanged: what a caller leaves out is still cleared.
+  semantics are unchanged: what a caller leaves out is still cleared. The one
+  exception keeps main's result: a deactivated connection whose environment
+  a live connection now holds starts with the environment blank, so bringing
+  it back saves (with the environment cleared) as it did on main instead of
+  being refused as a twin.
 - Operations and the SAP system screen each gain a section; nothing is removed.
 
 ## Rolling back

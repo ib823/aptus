@@ -44,6 +44,7 @@ import {
   changedStoredSettings,
   connectionSaveBody,
   formWriteTarget,
+  storedEnvironmentTwin,
   storedFormSettings,
   writeTargetChanges,
   type ConnectionFormFields,
@@ -539,7 +540,9 @@ function ConnectionForm({
   const client = clientTyped ?? stored.client;
   const label = labelTyped ?? stored.label;
   const baseUrl = baseUrlTyped ?? stored.baseUrl;
-  const environment = environmentTyped ?? stored.environment;
+  /** A deactivated row whose stored environment a live row now holds starts blank, as on main (`storedEnvironmentTwin`). */
+  const environmentTwin = storedEnvironmentTwin(replacing, connections);
+  const environment = environmentTyped ?? (environmentTwin ? "" : stored.environment);
   const authType = authTypeTyped ?? stored.authType;
   const oauthTokenUrl = oauthTokenUrlTyped ?? stored.oauthTokenUrl;
   const apiPath = apiPathTyped ?? stored.apiPath;
@@ -832,6 +835,13 @@ function ConnectionForm({
         </Label>
         <Label text="Environment" hint="Optional. Blank shows no chip rather than a guess.">
           <input value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="DEV" style={input} />
+          {environmentTwin && environmentTyped === null ? (
+            <span data-testid="environment-twin-notice" style={{ fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)" }}>
+              This connection was {replacing?.environment}, but “{environmentTwin.label}” ({environmentTwin.key}) is now the
+              active {replacing?.environment} connection, so the field starts blank. Give this one another environment, or
+              deactivate that one first.
+            </span>
+          ) : null}
           {envOutsideGrantVocabulary && (
             <span style={{ fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)" }}>
               Grants and runtime credentials use SANDBOX, DEV, TEST or PROD — a credential can

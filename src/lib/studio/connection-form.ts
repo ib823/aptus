@@ -134,7 +134,9 @@ export function formWriteTarget(
  * The non-secret settings a connection stores, as the Connections screen
  * loads them: everything the save route accepts that is not sealed. The
  * sealed ones (user, client id, company id, SAML user, API-key header, and
- * every secret) are never read back, so the form always asks for them.
+ * every secret) are never read back, so the form asks for them; the API-key
+ * header field starts at "apikey", not blank (a known limit in
+ * docs/runbooks/coreedge-governed-pipeline.md).
  */
 export interface StoredConnectionSettings {
   readonly label: string;
@@ -187,6 +189,48 @@ export function storedFormSettings(row: StoredConnectionSettings | null): Stored
     apiPath: row?.apiPath ?? "",
     timeoutMs: row?.timeoutMs === null || row?.timeoutMs === undefined ? "" : String(row.timeoutMs),
   };
+}
+
+/** A connection as the form's twin check reads it: the binding tuple and whether it serves. */
+export interface TwinCandidate {
+  readonly product: string;
+  readonly key: string;
+  readonly label: string;
+  readonly isActive: boolean;
+  readonly environment: string | null;
+  readonly client: string | null;
+}
+
+/**
+ * The active connection that now holds the stored environment of the
+ * DEACTIVATED row a save replaces, or null (wave 2 rotation probe review
+ * round 1). Saving a row makes it active, and the route refuses a save whose
+ * environment an active row of the product and SAP client already has (its
+ * twin rule, `findActiveTwin`). The form on main started blank and sent no
+ * environment, so bringing back a retired row next to its live replacement
+ * saved, with the environment cleared; a form that sends the stored
+ * environment back would be refused instead. So, for that row only, the
+ * form starts the Environment field blank, as main did, names the twin, and
+ * says the stored environment is changed (`changedStoredSettings`).
+ */
+export function storedEnvironmentTwin<T extends TwinCandidate>(
+  replacing: TwinCandidate | null,
+  connections: readonly T[],
+): T | null {
+  if (!replacing || replacing.isActive) return null;
+  const environment = parseSapEnvironment(replacing.environment);
+  if (!environment) return null;
+  const client = replacing.client?.trim() || null;
+  return (
+    connections.find(
+      (c) =>
+        c.isActive &&
+        c.product === replacing.product &&
+        c.key !== replacing.key &&
+        parseSapEnvironment(c.environment) === environment &&
+        (c.client?.trim() || null) === client,
+    ) ?? null
+  );
 }
 
 /** Each stored setting as `connectionSaveBody` sends it: null when it is not sent. */

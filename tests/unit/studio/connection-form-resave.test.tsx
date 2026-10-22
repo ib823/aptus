@@ -25,7 +25,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/lib/auth/step-up-client", () => ({ fetchWithStepUp: mocks.fetchWithStepUp }));
 
 import { ConnectionsClient, type StudioConnection } from "@/components/studio/ConnectionsClient";
-import { changedStoredSettings, storedFormSettings } from "@/lib/studio/connection-form";
+import { changedStoredSettings, storedEnvironmentTwin, storedFormSettings } from "@/lib/studio/connection-form";
 
 const reload = vi.fn();
 beforeEach(() => {
@@ -148,6 +148,43 @@ describe("a form re-save keeps the stored settings", () => {
     expect(changedStoredSettings(stored, { ...stored, product: "s4hana", environment: "dev", baseUrl: `${STORED.baseUrl}/` })).toEqual([]);
     expect(changedStoredSettings(stored, { ...stored, product: "s4hana", apiPath: "", timeoutMs: "" })).toEqual(["apiPath", "timeoutMs"]);
     expect(storedFormSettings(null)).toMatchObject({ label: "", apiPath: "", timeoutMs: "", authType: "basic" });
+  });
+});
+
+/*
+ * Wave 2 rotation probe review round 1. Bringing back a deactivated row whose
+ * environment a live row now holds: main's form started blank and sent no
+ * environment, which the route's twin rule never checks, so it saved. A form
+ * that sent the stored environment back would be refused as a twin. For that
+ * row the field starts blank, as on main, and the form says why.
+ */
+describe("reactivating a deactivated row next to its live twin", () => {
+  const RETIRED: StudioConnection = { ...STORED, id: "conn_old", key: "erp-dev-old", label: "ERP DEV (old)", isActive: false };
+  const LIVE: StudioConnection = { ...STORED, id: "conn_live", key: "erp-dev", label: "ERP DEV" };
+
+  it("starts the environment blank, names the twin and the change, and sends no environment", async () => {
+    respond({ connection: { id: "conn_old" }, replaced: true });
+    openForm([RETIRED, LIVE]);
+    rotate("erp-dev-old");
+    expect((screen.getByPlaceholderText("DEV") as HTMLInputElement).value).toBe("");
+    expect(screen.getByTestId("environment-twin-notice").textContent).toContain("“ERP DEV” (erp-dev) is now the active DEV connection");
+    expect(screen.getByTestId("settings-changed-notice").textContent).toMatch(/environment/);
+    // Everything else stored is still sent back.
+    expect((screen.getByPlaceholderText("/sap/opu/odata/sap/ZMY_SERVICE") as HTMLInputElement).value).toBe(STORED.apiPath);
+    fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(sentBody()).not.toHaveProperty("environment");
+    expect(sentBody()).toMatchObject({ key: "erp-dev-old", apiPath: STORED.apiPath, timeoutMs: 30000 });
+  });
+
+  it("keeps the stored environment when no live row holds it, or the row is active", () => {
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, LIVE])).toBe(LIVE);
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, { ...LIVE, isActive: false }])).toBeNull();
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, { ...LIVE, environment: "TEST" }])).toBeNull();
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, { ...LIVE, product: "ecc" }])).toBeNull();
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, { ...LIVE, client: "200" }])).toBeNull();
+    expect(storedEnvironmentTwin({ ...RETIRED, isActive: true }, [RETIRED, LIVE])).toBeNull();
+    expect(storedEnvironmentTwin(RETIRED, [RETIRED, { ...LIVE, environment: "dev" }])?.key).toBe("erp-dev");
   });
 });
 

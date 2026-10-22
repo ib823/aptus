@@ -5,11 +5,12 @@
  *
  * The probe used to refuse whenever the new secret was unproven; every one of
  * those inferences refused correct rotations somewhere. Now a save is refused
- * only under enforce, and only on SAP's own 401 or 403 to the new secret.
+ * only under enforce, and only on SAP's own refusal of the sign-in.
  */
 
 import { describe, expect, it } from "vitest";
 
+import { isCredentialRefusal } from "@/lib/sap-public/oauth-saml-bearer";
 import {
   probeOutcome,
   rotationProbeMode,
@@ -39,7 +40,7 @@ describe("what SAP's answer says about the new secret", () => {
     expect(probeOutcome({ status: "OK", httpStatus: 200, signedIn: true })).toEqual({ ran: true, outcome: "passed", reason: "metadata_ok" });
   });
 
-  it("a refused sign-in: the tenant's 401, or the token endpoint's 401 or 403: rejected", () => {
+  it("a refused sign-in: the tenant's 401, or the token endpoint's 400, 401 or 403: rejected", () => {
     expect(probeOutcome({ status: "UNAUTHORIZED", httpStatus: 401, signedIn: true })).toEqual({
       ran: true,
       outcome: "rejected",
@@ -68,12 +69,36 @@ describe("what SAP's answer says about the new secret", () => {
     expect(probeOutcome({ status: "ERROR", httpStatus: 503, signedIn: true }).reason).toBe("sap_http_503");
     expect(probeOutcome({ status: "NOT_FOUND", httpStatus: 404, signedIn: true }).outcome).toBe("noAnswer");
     expect(probeOutcome({ status: "ERROR", httpStatus: null, signedIn: true }).reason).toBe("sap_unreachable");
-    // A token endpoint's 400 is recorded, not acted on: only 401 and 403 are a rejection.
+    // The token endpoint failing, or a wrong token URL, is not a verdict on the credential.
+    expect(probeOutcome({ status: "ERROR", httpStatus: 503, signedIn: false }).outcome).toBe("noAnswer");
+    expect(probeOutcome({ status: "ERROR", httpStatus: 404, signedIn: false }).outcome).toBe("noAnswer");
+    // The tenant's own 400 is about the request, not the sign-in.
+    expect(probeOutcome({ status: "ERROR", httpStatus: 400, signedIn: true }).outcome).toBe("noAnswer");
+  });
+
+  /*
+   * Wave 2 rotation probe review round 1. SuccessFactors answers an assertion,
+   * a key or a company id it will not take with RFC 6749's 400 invalid_grant.
+   * The probe draws the token step's line where the broker and the Test button
+   * draw it, the shared isCredentialRefusal (TOKEN_REJECTED), not a list of
+   * its own that recorded the refusal as no verdict.
+   */
+  it("the token endpoint's 400 is a refused sign-in, by the shared classifier: rejected", () => {
     expect(probeOutcome({ status: "UNAUTHORIZED", httpStatus: 400, signedIn: false })).toEqual({
       ran: true,
-      outcome: "noAnswer",
+      outcome: "rejected",
       reason: "token_http_400",
     });
+    for (const status of [400, 401, 403, 404, 405, 429, 500, 503]) {
+      expect(probeOutcome({ status: "UNAUTHORIZED", httpStatus: status, signedIn: false }).outcome === "rejected").toBe(
+        isCredentialRefusal(status),
+      );
+    }
+    for (const mode of ["observe", "enforce"] as const) {
+      const r: RotationProbeRecord = { mode, ...probeOutcome({ status: "UNAUTHORIZED", httpStatus: 400, signedIn: false }) };
+      expect(rotationRefused(r, true)).toBe(mode === "enforce");
+      expect(rotationProbeWarning(r, "oauth-saml-bearer", null)).toMatch(/^SAP refused the new credentials/);
+    }
   });
 
   it("a credential that could not be built sent nothing: skipped, and never said to have run", () => {
@@ -130,6 +155,9 @@ describe("what the form is told after a save", () => {
     expect(rotationProbeWarning(record({ ran: false, outcome: "skipped", reason: "no_probe_path" }), "basic", "No probe path.")).toContain(
       "could not be checked",
     );
+    expect(
+      rotationProbeWarning(record({ ran: false, outcome: "skipped", reason: "probe_path_invalid" }), "basic", "Bad path."),
+    ).toContain("could not be checked. Bad path.");
   });
 
   it("nothing when the probe passed or did not apply", () => {
