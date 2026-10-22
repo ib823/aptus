@@ -782,7 +782,7 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
       implemented: true,
       basis: [
         "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts).",
-        "A rotated SAP connection secret is probed (sign-in, metadata, one proven read) before it replaces a working one (rotation-probe.ts; P0.14).",
+        "A re-saved SAP connection secret is sent to SAP once (sign-in and $metadata) before it replaces a working one: COREEDGE_ROTATION_PROBE=observe (default) reports what SAP answered, enforce refuses a secret SAP refused the sign-in for (rotation-probe.ts; P0.14).",
       ],
       limits:
         kms.length > 0

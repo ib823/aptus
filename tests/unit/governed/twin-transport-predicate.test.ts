@@ -34,7 +34,7 @@ import { reachedDirectly, registerTwinEngine, transportRefusal } from "@/lib/gov
 import type { AuthorisableInterface } from "@/lib/northbound/authorisation";
 import { readVerdicts } from "@/lib/northbound/read-verdict";
 import { planLaneCheck } from "@/lib/ops/lane-check-sweep";
-import { rotationProbeMayApply } from "@/lib/sap-public/rotation-probe";
+import { rotationProbeSkip } from "@/lib/sap-public/rotation-probe";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 const DAY = 24 * 3_600_000;
@@ -174,7 +174,7 @@ describe("discovery's callable asks the same predicate", () => {
 
 describe("the rotation probe", () => {
   it("never probes a TWIN connection: its new credentials are not sent to the base URL", () => {
-    expect(rotationProbeMayApply({ isActive: true, lastValidationStatus: "OK", transport: "DIRECT" }, {})).toBe(true);
-    expect(rotationProbeMayApply({ isActive: true, lastValidationStatus: "OK", transport: "TWIN" }, {})).toBe(false);
+    expect(rotationProbeSkip({ isActive: true, lastValidationStatus: "OK", transport: "DIRECT" }, "observe")).toBeNull();
+    expect(rotationProbeSkip({ isActive: true, lastValidationStatus: "OK", transport: "TWIN" }, "enforce")).toBe("tenant_twin");
   });
 });

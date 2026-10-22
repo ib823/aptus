@@ -1,10 +1,10 @@
 // @vitest-environment node
 /**
- * A rotation probe that passed is on the record even when the save then does
- * not happen (wave 2 integration review round 3).
+ * A rotation probe that reached SAP is on the record even when the save then
+ * does not happen (wave 2 integration review round 3).
  *
- * The probe sends the new credentials to the client's SAP (sign-in, the probe
- * path's $metadata, one proven read). The only row that said so was the
+ * The probe sends the new credentials to the client's SAP (sign-in and the
+ * probe path's $metadata). The only row that said so was the
  * save's own audit row, written after the upsert, so a save that failed to
  * seal (500) or lost its row three times (409) after a passing probe left
  * SAP requests that nothing recorded, although the A.3 #9 exemption for the
@@ -108,7 +108,7 @@ const probedRows = (connectionId: string) =>
     select: { after: true },
   });
 
-describe.skipIf(!process.env.TEST_DATABASE_URL)("a passing rotation probe is recorded when the save does not happen", () => {
+describe.skipIf(!process.env.TEST_DATABASE_URL)("a rotation probe that reached SAP is recorded when the save does not happen", () => {
   beforeAll(async () => {
     await prisma.organization.create({ data: { id: ORG, name: "Rotation probe unsaved", type: "client" } });
     await prisma.user.create({ data: { id: USER.id, email: USER.email, name: USER.name, role: USER.role, organizationId: ORG } });
@@ -145,7 +145,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a passing rotation probe is rec
     expect(fakeSap.mock.calls.some(([url]) => String(url).includes("$metadata"))).toBe(true);
     const rows = await probedRows(id);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.after).toMatchObject({ probes: 1, saved: false, reason: "seal_or_persist_failed" });
+    expect(rows[0]!.after).toMatchObject({
+      probes: 1,
+      saved: false,
+      reason: "seal_or_persist_failed",
+      rotationProbe: { ran: true, outcome: "passed" },
+    });
     // Never what was typed.
     expect(JSON.stringify(rows[0]!.after)).not.toContain("Pw-2");
     vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", KEY);
@@ -174,6 +179,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a passing rotation probe is rec
       orderBy: { at: "desc" },
       select: { after: true },
     });
-    expect(saved?.after).toMatchObject({ event: "connection_replaced", rotationProbed: true });
+    expect(saved?.after).toMatchObject({
+      event: "connection_replaced",
+      rotationProbe: { mode: "observe", ran: true, outcome: "passed", reason: "metadata_ok" },
+    });
+    // The misleading boolean is gone (wave 2 final review round 3).
+    expect(saved?.after).not.toHaveProperty("rotationProbed");
   });
 });

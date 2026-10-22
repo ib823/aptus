@@ -51,6 +51,9 @@ export default async function StudioConnectionsPage() {
           // "Not probeable" with no way to see WHY from the same screen.
           apiPath: true,
           timeoutMs: true,
+          // Non-secret, like the host: the form sends it back on a re-save
+          // unless it is edited (wave 2 final review round 3).
+          oauthTokenUrl: true,
           writeEnabled: true,
           isActive: true,
           lastValidatedAt: true,

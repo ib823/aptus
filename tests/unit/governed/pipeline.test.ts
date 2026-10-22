@@ -102,8 +102,8 @@ describe("no transaction is held open across a call to SAP", () => {
 
   it("the rotation probe runs before, and outside, the save", () => {
     const route = code(read("src/app/api/studio/connections/route.ts"));
-    expect(route.indexOf("probeRotation(")).toBeGreaterThan(-1);
-    expect(route.indexOf("probeRotation(")).toBeLessThan(route.indexOf("upsertSapConnection({"));
+    expect(route.indexOf("probeForSave(")).toBeGreaterThan(-1);
+    expect(route.indexOf("probeForSave(")).toBeLessThan(route.indexOf("upsertSapConnection({"));
     expect(code(read("src/lib/sap-public/rotation-probe.ts"))).not.toMatch(/\$transaction/);
   });
 });

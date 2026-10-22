@@ -387,10 +387,10 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
   },
   {
     id: "probe-before-swap",
-    name: "A rotated SAP connection secret probed before it replaces a working one",
+    name: "A re-saved SAP connection secret checked against SAP before it is stored (observe by default, enforce refuses a refused sign-in)",
     roadmap: "P0.14",
     cells: [SECRETS],
-    code: { file: "src/lib/sap-public/rotation-probe.ts", exports: ["probeRotation", "rotationProbeApplies"] },
+    code: { file: "src/lib/sap-public/rotation-probe.ts", exports: ["probeRotation", "probeForSave"] },
     terms: [/\bprobe[- ]before[- ]swap\b/i, /\bCOREEDGE_ROTATION_PROBE\b/],
   },
   {

@@ -40,7 +40,16 @@ import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
-import { connectionSaveBody, formWriteTarget, writeTargetChanges, type WriteTargetField } from "@/lib/studio/connection-form";
+import {
+  changedStoredSettings,
+  connectionSaveBody,
+  formWriteTarget,
+  storedFormSettings,
+  writeTargetChanges,
+  type ConnectionFormFields,
+  type StoredSetting,
+  type WriteTargetField,
+} from "@/lib/studio/connection-form";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -63,6 +72,8 @@ export interface StudioConnection {
   /** The probe path — the value that decides NO_PROBE_PATH on the health chip. */
   apiPath: string | null;
   timeoutMs: number | null;
+  /** The OAuth token endpoint (a column, not a secret): a re-save sends it back unless it is edited. */
+  oauthTokenUrl?: string | null;
   writeEnabled: boolean;
   isActive: boolean;
   lastValidatedAt: string | null;
@@ -466,14 +477,29 @@ function ConnectionForm({
   basicAuthNotices: Readonly<Record<string, string>>;
 }) {
   const [product, setProduct] = useState("s4hana");
-  const [client, setClient] = useState("");
   const [key, setKey] = useState("");
-  const [label, setLabel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [environment, setEnvironment] = useState("");
-  const [authType, setAuthType] = useState<
-    "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer" | "api-key"
-  >("basic");
+  /*
+   * A RE-SAVE KEEPS WHAT IS STORED (wave 2 final review round 3). The route
+   * replaces every column with what the save sends, and this form started
+   * blank, so re-saving a connection to rotate its password silently cleared
+   * its probe path and timeout (and any other setting not typed again): the
+   * Test then probed another service, a slow tenant timed out, and the
+   * rotation probe judged the new secret somewhere it was never proven.
+   *
+   * Each stored setting is null until the person edits it, and until then
+   * the field shows, and the save sends, the stored value of the connection
+   * being replaced (`storedFormSettings`). Clearing a field is a visible
+   * edit, and the form says before Save which stored settings the save
+   * changes. Secrets are sealed and never readable, so they are always typed.
+   */
+  const [clientTyped, setClient] = useState<string | null>(null);
+  const [labelTyped, setLabel] = useState<string | null>(null);
+  const [baseUrlTyped, setBaseUrl] = useState<string | null>(null);
+  const [environmentTyped, setEnvironment] = useState<string | null>(null);
+  const [authTypeTyped, setAuthType] = useState<ConnectionFormFields["authType"] | null>(null);
+  const [oauthTokenUrlTyped, setOauthTokenUrl] = useState<string | null>(null);
+  const [apiPathTyped, setApiPath] = useState<string | null>(null);
+  const [timeoutMsTyped, setTimeoutMs] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyHeader, setApiKeyHeader] = useState("apikey");
   const [username, setUsername] = useState("");
@@ -481,7 +507,6 @@ function ConnectionForm({
   const [bearerToken, setBearerToken] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const [oauthTokenUrl, setOauthTokenUrl] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [samlAssertion, setSamlAssertion] = useState("");
   /*
@@ -492,8 +517,6 @@ function ConnectionForm({
   const [samlSigning, setSamlSigning] = useState<"key" | "assertion">("key");
   const [samlPrivateKey, setSamlPrivateKey] = useState("");
   const [samlUserId, setSamlUserId] = useState("");
-  const [apiPath, setApiPath] = useState("");
-  const [timeoutMs, setTimeoutMs] = useState("");
   /*
    * "Allow writes" (P0.3). Null until the person touches the box, and until
    * then it follows the connection being replaced: ticked when that one allows
@@ -502,6 +525,29 @@ function ConnectionForm({
   const [allowWritesChoice, setAllowWritesChoice] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A save that went through with a warning from the probe of its new secret: shown before the page reloads. */
+  const [savedWarning, setSavedWarning] = useState<SavedWarning | null>(null);
+
+  /*
+   * THE ROW THIS SAVE REPLACES, and what is stored on it. The key is
+   * normalized exactly as the server stores it, or "SF-Prod" would read as
+   * new against a stored "sf-prod".
+   */
+  const normalizedKey = sanitizeTenantKey(key);
+  const replacing = connections.find((c) => c.product === product && c.key === normalizedKey) ?? null;
+  const stored = storedFormSettings(replacing);
+  const client = clientTyped ?? stored.client;
+  const label = labelTyped ?? stored.label;
+  const baseUrl = baseUrlTyped ?? stored.baseUrl;
+  const environment = environmentTyped ?? stored.environment;
+  const authType = authTypeTyped ?? stored.authType;
+  const oauthTokenUrl = oauthTokenUrlTyped ?? stored.oauthTokenUrl;
+  const apiPath = apiPathTyped ?? stored.apiPath;
+  const timeoutMs = timeoutMsTyped ?? stored.timeoutMs;
+  /** The stored settings this save changes, said before Save (`changedStoredSettings`). */
+  const changedSettings = replacing
+    ? changedStoredSettings(stored, { product, client, label, baseUrl, environment, authType, oauthTokenUrl, apiPath, timeoutMs })
+    : [];
 
   /*
    * TWO ENVIRONMENT VOCABULARIES, RECONCILED ON SIGHT. The connection's
@@ -523,12 +569,8 @@ function ConnectionForm({
    * A warning, not a disabled button: Basic still authenticates until SAP's
    * (tentative) deletion date, and the server saves it too. A key that matches
    * an existing connection of this product is a re-save — credential rotation
-   * on a connection already running — so it gets no notice. The key is
-   * normalized exactly as the server stores it, or "SF-Prod" would read as new
-   * against a stored "sf-prod".
+   * on a connection already running — so it gets no notice.
    */
-  const normalizedKey = sanitizeTenantKey(key);
-  const replacing = connections.find((c) => c.product === product && c.key === normalizedKey) ?? null;
   const isNewConnection = replacing === null;
   /**
    * Writes are live on the row being replaced — active AND allowed, the rule
@@ -626,7 +668,10 @@ function ConnectionForm({
        */
       const json = (await res
         .json()
-        .catch(() => null)) as { error?: { message?: string; correlationId?: string } } | null;
+        .catch(() => null)) as {
+        error?: { message?: string; correlationId?: string };
+        data?: { rotationProbe?: { outcome?: string; warning?: string | null } };
+      } | null;
 
       if (!res.ok) {
         const stated = json?.error?.message;
@@ -640,6 +685,20 @@ function ConnectionForm({
               `(HTTP ${res.status}). This is a problem with the environment rather than ` +
               `with what you entered — report the status code to whoever operates it.`,
         );
+      }
+      /*
+       * SAVED, BUT SAP REFUSED THE NEW SECRET OR COULD NOT CHECK IT (wave 2
+       * final review round 3). Under observe the save goes through and its
+       * response says what the probe found; reloading at once would wipe the
+       * one sentence that says calls are about to fail. The typed secrets are
+       * cleared here instead, and the warning stays until the person reloads.
+       */
+      const warning = json?.data?.rotationProbe?.warning;
+      if (warning) {
+        for (const clear of [setPassword, setBearerToken, setApiKey, setClientSecret, setSamlAssertion, setSamlPrivateKey]) clear("");
+        setSavedWarning({ refused: json?.data?.rotationProbe?.outcome === "rejected", text: warning });
+        setBusy(false);
+        return;
       }
       // A FULL reload, deliberately: the form holds typed SECRETS, and a
       // router.refresh() keeps client state — leaving a password sitting in a
@@ -991,9 +1050,40 @@ function ConnectionForm({
         </p>
       ) : null}
 
+      {changedSettings.length > 0 ? (
+        <p role="status" data-testid="settings-changed-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+          This save changes the stored {changedSettings.map((f) => STORED_SETTING_NAMES[f]).join(", ")} of this connection.
+          Fields left as they were keep what is stored.
+        </p>
+      ) : null}
+
       {error && (
         <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">{error}</p>
       )}
+
+      {savedWarning ? (
+        <div
+          role="alert"
+          data-testid="rotation-probe-warning"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 12,
+            borderRadius: "var(--radius-input, 8px)",
+            background: savedWarning.refused ? "var(--status-revoked-bg)" : "var(--status-awaiting-bg)",
+            color: savedWarning.refused ? "var(--status-revoked-fg)" : "var(--status-awaiting-fg)",
+          }}
+        >
+          <strong style={{ fontSize: 13 }}>Saved, with a warning</strong>
+          <span style={{ fontSize: 13, lineHeight: "20px" }}>{savedWarning.text}</span>
+          <span>
+            <button type="button" style={testBtn} onClick={() => window.location.reload()}>
+              Reload connections
+            </button>
+          </span>
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
@@ -1017,6 +1107,25 @@ function ConnectionForm({
     </div>
   );
 }
+
+/** What a save that went through says about the probe of its new secret (rotation.ts `rotationProbeWarning`). */
+interface SavedWarning {
+  /** SAP refused the new secret: drawn as an error, not a caution. */
+  readonly refused: boolean;
+  readonly text: string;
+}
+
+/** How the settings-changed notice names each stored setting. */
+const STORED_SETTING_NAMES: Record<StoredSetting, string> = {
+  label: "label",
+  baseUrl: "base URL",
+  environment: "environment",
+  client: "SAP client",
+  authType: "auth type",
+  oauthTokenUrl: "token URL",
+  apiPath: "probe path",
+  timeoutMs: "timeout",
+};
 
 /** How the moved-writes notice names each part of the write target. */
 const TARGET_FIELD_NAMES: Record<WriteTargetField, string> = {

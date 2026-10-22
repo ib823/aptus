@@ -131,6 +131,95 @@ export function formWriteTarget(
 }
 
 /**
+ * The non-secret settings a connection stores, as the Connections screen
+ * loads them: everything the save route accepts that is not sealed. The
+ * sealed ones (user, client id, company id, SAML user, API-key header, and
+ * every secret) are never read back, so the form always asks for them.
+ */
+export interface StoredConnectionSettings {
+  readonly label: string;
+  readonly baseUrl: string;
+  readonly authType: string;
+  readonly environment: string | null;
+  readonly client: string | null;
+  readonly oauthTokenUrl?: string | null;
+  readonly apiPath: string | null;
+  readonly timeoutMs: number | null;
+}
+
+/** A stored setting the form shows and sends back (wave 2 final review round 3). */
+export type StoredSetting =
+  | "label"
+  | "baseUrl"
+  | "environment"
+  | "client"
+  | "authType"
+  | "oauthTokenUrl"
+  | "apiPath"
+  | "timeoutMs";
+
+export type StoredFormSettings = Pick<ConnectionFormFields, StoredSetting>;
+
+const FORM_AUTH_TYPES: ReadonlySet<string> = new Set([
+  "basic",
+  "bearer",
+  "oauth-client-credentials",
+  "oauth-saml-bearer",
+  "api-key",
+]);
+
+/**
+ * What the form's fields hold for the connection a save replaces, until the
+ * person edits them: its stored settings, as typed text (wave 2 final review
+ * round 3). A form that started blank sent no probe path or timeout on a
+ * re-save, and the route, which replaces every column with what is sent,
+ * cleared them: a rotation silently changed where and how long the
+ * connection is probed. A new connection (`row` null) starts blank.
+ */
+export function storedFormSettings(row: StoredConnectionSettings | null): StoredFormSettings {
+  return {
+    label: row?.label ?? "",
+    baseUrl: row?.baseUrl ?? "",
+    environment: row?.environment ?? "",
+    client: row?.client ?? "",
+    authType: row && FORM_AUTH_TYPES.has(row.authType) ? (row.authType as ConnectionFormFields["authType"]) : "basic",
+    oauthTokenUrl: row?.oauthTokenUrl ?? "",
+    apiPath: row?.apiPath ?? "",
+    timeoutMs: row?.timeoutMs === null || row?.timeoutMs === undefined ? "" : String(row.timeoutMs),
+  };
+}
+
+/** Each stored setting as `connectionSaveBody` sends it: null when it is not sent. */
+function sentSettings(f: StoredFormSettings & Pick<ConnectionFormFields, "product">): Record<StoredSetting, string | null> {
+  const oauth = f.authType === "oauth-client-credentials" || f.authType === "oauth-saml-bearer";
+  const timeout = f.timeoutMs.trim() && Number.isFinite(Number(f.timeoutMs)) ? String(Number(f.timeoutMs)) : null;
+  return {
+    label: f.label.trim(),
+    baseUrl: f.baseUrl.trim().replace(/\/+$/, ""),
+    environment: f.environment.trim().toUpperCase() || null,
+    client: PRODUCT_MARKS[f.product]?.addressesClient && f.client.trim() ? f.client.trim() : null,
+    authType: f.authType,
+    oauthTokenUrl: oauth && f.oauthTokenUrl.trim() ? f.oauthTokenUrl.trim() : null,
+    apiPath: f.apiPath.trim() || null,
+    timeoutMs: timeout,
+  };
+}
+
+/**
+ * Which stored settings a re-save changes: what the form will send against
+ * what it loaded. The form names them before Save, so clearing the probe
+ * path, or any other stored setting, is never silent.
+ */
+export function changedStoredSettings(
+  stored: StoredFormSettings,
+  form: StoredFormSettings & Pick<ConnectionFormFields, "product">,
+): StoredSetting[] {
+  const before = sentSettings({ ...stored, product: form.product });
+  const after = sentSettings(form);
+  return (Object.keys(after) as StoredSetting[]).filter((k) => before[k] !== after[k]);
+}
+
+/**
  * The POST /api/studio/connections body the form sends — one function, so the
  * route-level test of a create reaching its first 201 (P0.3) sends exactly
  * what this screen sends, and nothing a screen does not offer.
