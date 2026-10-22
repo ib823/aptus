@@ -117,7 +117,7 @@ not mean every SAP release has been tested end to end.
 | Connection to S/4HANA Cloud Public Edition, with Test | The host must be on the SAP domain allow-list and reachable from the CoreEdge host. |
 | Northbound read of an SAP-published service | Returns the first N rows of one entity set, where N is at most 100. There is no filter (section 8). |
 | Test Console | Reads only, with `limit` at most 50 (`src/app/api/studio/test/broker-run/route.ts:62`). |
-| Starter kit download | A TypeScript/Node client, an OpenAPI 3.1 file, a mock server and fixtures. It covers reads only (`src/lib/studio/scaffold.ts:1017-1036`). |
+| Starter kit download | A TypeScript/Node client, the contract as OpenAPI 3.1 (`openapi.json`) and 3.0.3 (`openapi-3.0.json`), a mock server and fixtures (`src/lib/studio/scaffold.ts:1130-1151`). The OpenAPI files draw `POST …/data/write`, with its body, for a create interface (`src/lib/contracts/openapi.ts:387`); the client, demo and mock cover reads only. |
 
 ### Works with conditions
 
@@ -249,7 +249,7 @@ Keep them in your secrets manager.
 | `DIRECT_DATABASE_URL` | Required. The Prisma CLI refuses to run without it (`prisma/schema.prisma:5-9`). | Yes | The same as `DATABASE_URL` when no connection pooler is used. With a pooler (typical on option B), the direct, unpooled URL, which migrations use. |
 | `NEXTAUTH_SECRET` | Required | Yes | From 4.2 |
 | `NEXTAUTH_URL` | Required | No | Your public `https://` URL |
-| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request (`src/app/api/studio/interfaces/[id]/scaffold/route.ts:48-50`), so check `COREEDGE_BASE_URL` in a downloaded kit. |
+| `NEXT_PUBLIC_APP_URL` | Recommended. Set it before building. | No | The same URL. It is used for page metadata (it defaults to the original deployment's URL), the sitemap and presales links (`src/app/layout.tsx:29`; `src/lib/http/app-origin.ts:15-20`). Starter kits do **not** use it: they take their base URL from the origin of the browser request, on the original path `/api/northbound` (`src/app/api/studio/interfaces/[id]/scaffold/route.ts`), so check `COREEDGE_BASE_URL` in a downloaded kit. The versioned `/api/northbound/v1` serves the same API; kits move to it in a later release. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Required in practice. Without `SMTP_USER`, a production instance sends no magic link and nobody can sign in (`auth-options.ts:60-68`). | `SMTP_PASS` is | Your relay. Optionally set `EMAIL_SENDER_NAME` too, so that emails do not carry the original branding. |
 | `SAP_CONNECTION_ENCRYPTION_KEY` | Required for CoreEdge. The preflight only warns, but without it no SAP connection can be saved. | Yes | From 4.2 |
 | `CRON_SECRET` | Required by the production preflight. With it unset, every scheduled job refuses all callers (`src/lib/ops/cron.ts:28-33`). | Yes | From 4.2 |
@@ -1046,11 +1046,17 @@ interface:
   `PurchaseOrder`, not ABAP's upper-case component names.
 - Use that OData version's encodings. In V2, `Edm.DateTime` is `/Date(<ms>)/`
   and `Edm.Decimal` is a JSON string. V4 uses ISO 8601 dates and JSON numbers.
-- There is no request contract to check against, because `requestSchema` is
-  never written (`src/app/api/northbound/interfaces/[id]/schema/route.ts:121`).
-  Use the service's `$metadata` as the contract, or the interface's `/schema`
-  once a response schema has been captured in Studio
-  (`src/app/api/studio/interfaces/[id]/capture-schema/route.ts:68`).
+- Check the body against the interface's request contract. Once the service
+  has been verified in Studio, `GET /interfaces/{id}/schema` returns
+  `requestSchema`: the JSON Schema of `record`, compiled from the service's own
+  `$metadata` (`src/lib/contracts/record.ts:105`). It names the properties a
+  create may send, in that version's encodings, and the ones it must send.
+  It is null for a read interface, before a verify, and after the interface's
+  contract changes until the next verify
+  (`src/app/api/northbound/interfaces/[id]/schema/route.ts:185`). The same
+  response's `contract` field gives the source (`metadata`, `sampled` or
+  `none`), the semantic version and the JSON Schemas of the record, create,
+  update and key. With no compiled contract, use the service's `$metadata`.
 - `/ui2/cl_json` writes upper-case names by default, which SAP rejects (422).
   Its `camel_case` mode gives lowerCamelCase (`purchaseOrder`), which does not
   match either. Map names explicitly, and convert V2 dates and decimals
@@ -1089,8 +1095,10 @@ it.
   send again under a new key.
 
 Always log `x-correlation-id`, for example in the application log (BAL). It is
-the key that links your call to the CoreEdge audit trail. The middleware's
-`RATE_LIMIT_EXCEEDED` answer is the one response without it.
+the key that links your call to the CoreEdge audit trail. Every northbound
+answer carries it, the middleware's `RATE_LIMIT_EXCEEDED` and
+`LIMITER_UNAVAILABLE` included; for those no audit row exists, because the
+call never reached the broker.
 
 ### 6.3 ADT tooling: the bundled abap-mcp server
 
@@ -1333,7 +1341,7 @@ is logged.
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. On `/api/northbound` the middleware also limits each credential (600 a minute) and each calling address (6,000 a minute, and 60 failed key lookups a minute), answered `RATE_LIMITED_ADDRESS` (section 6.2). A call with no `Authorization` header, and every other `/api/*` route, keeps the per-IP limit of 300 GET and 120 POST a minute. |
 | Timeouts | Reads: 15 s by default, 30 s at most. Writes: 45 s at most. Token requests: 10 s. |
-| Contracts | `requestSchema` is never written, so a write interface has no request contract. |
+| Contracts | A write interface's request contract (`requestSchema`) exists only after its service has been verified, and only until its contract next changes. Without a verify, the service's `$metadata` is the contract. |
 | Tokens | A SANDBOX or DEV token issued without an expiry never expires. A TEST or PROD token issued since P0.11 always has one, 90 days at most by default, and a PROD issue without one is refused; an older TEST or PROD token may have none and is shown as "no expiry - set one". Grants must have one. |
 
 ### Product gaps that matter most for an ABAP team
@@ -1427,15 +1435,30 @@ Every call needs `Authorization: Bearer ce_...`.
 | Method and path | Purpose | Calls SAP? |
 |---|---|---|
 | `GET /api/northbound/interfaces` | Lists this solution's interfaces, with `callable` and `service: { source: "custom" \| "catalogue", odataVersion }` | No |
-| `GET /api/northbound/interfaces/{id}/schema` | Returns the stored response schema. `requestSchema` is always null. | No |
+| `GET /api/northbound/interfaces/{id}/schema` | Returns the captured response schema; `requestSchema`, the compiled body of a write once the service is verified (null otherwise); and `contract`, the compiled contract's source, semantic version and JSON Schemas. | No |
 | `GET /api/northbound/interfaces/{id}/data?limit=N` | Read. N is between 1 and 100. | Yes |
 | `POST /api/northbound/interfaces/{id}/data/write` | Create. Also needs `X-CoreEdge-Write-Key` and `Idempotency-Key`. | Yes |
+
+Every path above is also served under `/api/northbound/v1` (for example
+`/api/northbound/v1/interfaces/{id}/data`), by the same code. An SM59 path
+prefix of `/api/northbound` or `/api/northbound/v1` behaves identically. Set
+new destinations to `/api/northbound` for now: `v1` is new in this release,
+and a CoreEdge rolled back to the release before would not serve it.
+Every response names its API version in `CoreEdge-Version` (today `2026-10`);
+your program may send that header to pin the version, and need not. The
+versions, the deprecation policy and the `Deprecation` and `Sunset` headers are
+in the developer guide (*API versions and deprecation*) and
+`docs/coreedge/api-changelog.md`. The samples in section 6.2 and exercise 1 are
+replayed against both paths and every supported version on every CI run
+(`tests/integration/northbound-consumer-replay.test.ts`).
 
 The success envelope is `{ "data": ... }`. The error envelope is
 `{ "error": { "code", "message", "correlationId" } }`. Every response from the
 northbound route handlers carries `x-correlation-id` and `cache-control: no-store`
-(`src/lib/northbound/respond.ts:60-61,84-86`). The middleware's per-IP 429
-`RATE_LIMIT_EXCEEDED` answers before the route and carries neither (section 6.2).
+(`src/lib/northbound/respond.ts`, `northboundError`). The middleware's
+refusals on a northbound path use the same envelope and both headers,
+including the per-IP 429 `RATE_LIMIT_EXCEEDED`, which answers before the
+route (section 6.2; `src/middleware.ts`, `machineRefusal`).
 
 A DRAFT interface is still served for reads, with the header
 `x-coreedge-interface-status: DRAFT`. Writes require ACTIVE and return 403
@@ -1600,6 +1623,5 @@ write-replay rule in `docs/coreedge-developer-guide.md` and the status of
 | Connection environment | The form describes the field as free text | Only SANDBOX, DEV, TEST, PROD and their aliases are accepted |
 | Write keys | The activation refusal says to issue the write credential "under API Access" (`write-readiness.ts`) | No screen calls the write-credential API |
 | Read options | The design mock lists `$top`, `$skip`, `$filter` and `$select` | Only `limit` is read |
-| Starter kit OpenAPI | Its 400 description says "pass ?entity=" (`src/lib/studio/scaffold.ts:146`) | `?entity=` is ignored |
 | `SAP_CONTENT_RELEASE`, `EMAIL_SERVER`, `DEFAULT_AI_PROVIDER` | `.env.example` gives defaults of 2602, "alternative to SMTP" and anthropic | The code defaults to 2608, always sends mail through `SMTP_*`, and falls back to OpenAI |
 | Catalogue rebuild | The button warns that rows SAP no longer publishes disappear | The rebuild route contains no delete |

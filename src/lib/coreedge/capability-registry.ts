@@ -49,6 +49,7 @@
  * it imports only modules that do not reach the database.
  */
 
+import { checkRegistry, NORTHBOUND_API_VERSIONS, type NorthboundApiVersion } from "@/lib/northbound/version-policy";
 import { BUILT_IN_KEY_PROVIDER_NAMES } from "@/lib/sap-public/keys/key-provider";
 import { ODATA_VERSIONS, validateServicePath } from "@/lib/sap-public/service-path";
 import { SAP_ODATA_PRODUCTS, type SapOdataProduct } from "@/lib/sap-public/tdd-connector";
@@ -220,6 +221,17 @@ export interface CodeFacts {
   readonly grantBindingDefault: string;
   /** Files the Studio starter kit writes. */
   readonly starterKitFiles: readonly string[];
+  /**
+   * The dated northbound API versions registered, oldest first, when the
+   * registry keeps the deprecation policy (version-policy.ts checkRegistry);
+   * none when it breaks it (P1.10).
+   */
+  readonly northboundApiVersions: readonly string[];
+}
+
+/** The registered northbound versions, or none when the registry breaks the deprecation policy (P1.10). */
+export function registeredApiVersions(registry: readonly NorthboundApiVersion[] = NORTHBOUND_API_VERSIONS): string[] {
+  return checkRegistry(registry).length === 0 ? registry.map((v) => v.version) : [];
 }
 
 export function readCodeFacts(): CodeFacts {
@@ -252,6 +264,7 @@ export function readCodeFacts(): CodeFacts {
     keyProviders: [...BUILT_IN_KEY_PROVIDER_NAMES],
     grantBindingDefault: grantBindingMode({} as NodeJS.ProcessEnv),
     starterKitFiles: kit.map((f) => f.path),
+    northboundApiVersions: registeredApiVersions(),
   };
 }
 
@@ -271,13 +284,20 @@ export const BROKER_FACTS = {
   writeOperations: ["CREATE"],
   /** Neither executor sends $batch. */
   batch: false,
-  /** The northbound routes, relative to src/app/api/northbound. */
+  /** The northbound routes a credential calls, relative to src/app/api/northbound. */
   northboundRoutes: [
     "interfaces/route.ts",
     "interfaces/[id]/data/route.ts",
     "interfaces/[id]/data/write/route.ts",
     "interfaces/[id]/schema/route.ts",
   ],
+  /** Northbound routes that need no credential: the version changelog (P1.10). */
+  northboundPublicRoutes: ["versions/route.ts"],
+  /**
+   * The versioned base path's directory (P1.10): every route above is also
+   * served under it, by a file that re-exports the original handler.
+   */
+  northboundAliasDir: "v1",
   /** Machine prefixes reserved in rate-limit.ts that have no route yet. */
   unbuiltMachineRoutes: ["/api/twin", "/api/events/ingest", "/api/mgmt", "/api/outbound", "/api/mcp"],
   /** The SapAuthType union in connection-resolver.ts. */
@@ -338,6 +358,15 @@ export const EVIDENCE: Readonly<Record<string, Evidence>> = {
   "consumerAuth:JS_TS|STATIC_BEARER": {
     tests: ["tests/unit/northbound/auth.test.ts", "tests/unit/studio/scaffold-kit-contract.test.ts"],
     docs: ["docs/coreedge-abap-lab-guide.md"],
+  },
+  "lifecycle:API_VERSIONING": {
+    tests: [
+      "tests/integration/northbound-consumer-replay.test.ts",
+      "tests/integration/northbound-versioning.test.ts",
+      "tests/unit/northbound/version-policy.test.ts",
+      "tests/unit/northbound/versioned-routes.test.ts",
+    ],
+    docs: ["docs/coreedge/api-changelog.md", "docs/coreedge-developer-guide.md"],
   },
 };
 
@@ -667,7 +696,7 @@ const CONSUMER_STATIC_LIMITS: Readonly<Record<Consumer, readonly string[] | "uns
   DOTNET: ["No .NET SDK or sample: the starter kit generates TypeScript only (scaffold.ts)."],
   ABAP_ONPREM: ["SM59 stores no static header, so the header is set in code; no ABAP sample."],
   ABAP_CLOUD: ["Whether a communication arrangement can store a static header is unconfirmed; no ABAP sample."],
-  LOW_CODE: ["OpenAPI 3.1 import into low-code tools (e.g. Power Platform) is unverified."],
+  LOW_CODE: ["OpenAPI 3.1 and 3.0.3 import into low-code tools (e.g. Power Platform) is unverified."],
   AI_AGENT: ["No MCP server or tool schema: /api/mcp is a reserved prefix with no route."],
   HUMAN_TESTER: ["The Test Console reads only, at most 50 rows (broker-run route); otherwise a manual curl."],
   GO: ["No Go SDK or sample: the starter kit generates TypeScript only (scaffold.ts)."],
@@ -743,6 +772,11 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
       implemented: kit.includes("client.ts"),
       basis: [
         "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4).",
+        ...(kit.includes("openapi-3.0.json")
+          ? [
+              "The kit's OpenAPI 3.1 and 3.0.3 documents, and the solution's (GET /api/studio/solutions/[id]/openapi), describe every served operation, header and error code, with record and write-body schemas compiled from the service's own $metadata once it is verified (lib/contracts/openapi.ts, compile.ts; P1.3).",
+            ]
+          : []),
       ],
       limits: ["TypeScript only, reads only."],
     },
@@ -793,6 +827,7 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
       implemented: true,
       basis: [
         "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8).",
+        "A verify compiles the service's $metadata into a ContractSnapshot whose semantic version is a structural diff's verdict against the last one (removed or retyped is major, added optional is minor; lib/contracts/diff.ts, snapshot.ts; P1.3).",
       ],
       limits: [
         "Most deprecated APIs name no successor (the Hub's Successors field is behind its login), and no impact alert reaches interface owners (P3.8).",
@@ -820,12 +855,24 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
       basis: ["A Z* or YY1_* service is registered by path and verified from $metadata per environment (service-verifications.ts; P1.1)."],
       limits: ["Building the service and transporting it stay in SAP; nothing re-verifies or gates it on promotion (P3.4)."],
     },
-    API_VERSIONING: {
-      implemented: false,
-      basis: [
-        "The northbound routes are unversioned (no /api/northbound/v1, no version header, no Deprecation or Sunset header, no changelog; P1.10). Interfaces carry a version number and DEPRECATED refuses reads, but nothing tells a consumer.",
-      ],
-    },
+    API_VERSIONING:
+      facts.northboundApiVersions.length > 0
+        ? {
+            implemented: true,
+            basis: [
+              `Dated northbound versions (${facts.northboundApiVersions.join(", ")}): every response names its version in CoreEdge-Version, a request may pin one, an unknown or retired one is a 400 UNSUPPORTED_VERSION, and an unpinned request is served the oldest supported version (version-policy.ts, versioned-route.ts; P1.10).`,
+              "Served at /api/northbound/v1/* and the original /api/northbound/* by the same handlers; Deprecation (RFC 9745) and Sunset (RFC 8594) headers, a 6-month overlap the registry is checked against in CI, and a changelog (GET /api/northbound/versions, docs/coreedge/api-changelog.md).",
+              "The starter kit and the ABAP lab-guide samples are replayed on both paths and every supported version in CI (northbound-consumer-replay.test.ts). A deprecation's announcement date is checked in review (roadmap P1.10, open decision).",
+            ],
+            evidenceKey: "lifecycle:API_VERSIONING",
+            what: "Dated northbound versions with deprecation headers and a changelog.",
+          }
+        : {
+            implemented: false,
+            basis: [
+              "No dated northbound version that keeps the deprecation policy is registered (version-policy.ts NORTHBOUND_API_VERSIONS, checkRegistry; P1.10).",
+            ],
+          },
     PERFORMANCE_TEST: {
       implemented: false,
       basis: ["No load test of the broker: tests/performance holds synthetic portal benchmarks, and no twin exists to load (A.3 #14)."],

@@ -18,6 +18,7 @@ import {
   TOKEN_REQUEST_TIMEOUT_MS,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
@@ -78,6 +79,13 @@ export interface NorthboundWriteResult {
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_TIMEOUT_MS = 45_000;
+/**
+ * The most of a write's answer that is read, in decoded bytes: one record is
+ * a few KB. Read whole before, a builder's own host could answer a small
+ * compressed body that inflates past the instance's memory (read.ts,
+ * MAX_READ_BODY_BYTES). Past it the body counts as one that is not JSON.
+ */
+export const MAX_WRITE_RESPONSE_BYTES = 1024 * 1024;
 
 /**
  * Statuses with which SAP, or BTP API Management in front of it, declines to
@@ -315,8 +323,9 @@ export async function writeEntitySet(
 
     let json: unknown = null;
     let text: string;
+    let truncated = false;
     try {
-      text = await res.text();
+      ({ text, truncated } = await bodyPrefix(res, MAX_WRITE_RESPONSE_BYTES));
     } catch (err) {
       /*
        * SAP HAS ALREADY ANSWERED; only the body was lost — the timeout fired
@@ -330,7 +339,9 @@ export async function writeEntitySet(
       if (res.status === 200) throw err;
       text = "";
     }
-    if (text) {
+    // A body past the bound is read as one that is not JSON: a 201 or 200
+    // with it is an invalid write response (below), anything else its status.
+    if (text && !truncated) {
       try {
         json = JSON.parse(text);
       } catch {

@@ -15,6 +15,10 @@
  * The datasets come back as a picker: choosing one saves it on the interface
  * (a contract change, so verification clears) and verifies again at once, so
  * the developer never has to type an entity-set name SAP already told us.
+ * A verify lists the first MAX_LISTED_DATASETS names of a service that
+ * declares more (structural hardening round 3); the picker then says so —
+ * "the first 500 of 600" — and takes any other name typed in (round 4), so
+ * no dataset the service declares is out of reach.
  * When the service says it is another OData version than the interface does,
  * the panel offers to switch the version and verify again — the only other
  * way out of that answer would be a hand-written API call.
@@ -57,12 +61,31 @@ interface VerifyOutcome {
   verified: boolean;
   detail: string;
   entitySets: string[];
+  /** How many datasets the service declares in all; `entitySets` lists the first of them (additive, round 3). */
+  entitySetCount?: number;
   entitySet: string | null;
   suggestedEntitySet: string | null;
   detectedODataVersion?: string | null;
   boundTo: { label: string; environment: string | null; sapClient: string | null } | null;
   /** The interface version the answer describes. */
   interfaceVersion?: number;
+  /** What became of the compiled contract (P1.3); null when nothing was compiled. */
+  contract?:
+    | { status: "RECORDED" | "UNCHANGED"; semver: string; bump: string | null }
+    | { status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED"; detail: string }
+    | null;
+}
+
+/** One plain sentence about the compiled contract, or null when there is nothing to say. */
+export function contractSentence(contract: VerifyOutcome["contract"]): string | null {
+  if (!contract) return null;
+  if ("semver" in contract) {
+    if (contract.status === "UNCHANGED") return `Contract unchanged: version ${contract.semver}, compiled from this description.`;
+    return contract.bump === "initial" || contract.bump === null
+      ? `Contract compiled from this description: version ${contract.semver}.`
+      : `Contract compiled from this description: version ${contract.semver} (a ${contract.bump} change).`;
+  }
+  return contract.detail;
 }
 
 const CHIP: Record<string, { status: HonestStatus; label: string }> = {
@@ -74,7 +97,10 @@ const CHIP: Record<string, { status: HonestStatus; label: string }> = {
   TIMEOUT: { status: "PROBE_FAILED", label: "no answer" },
   ERROR: { status: "PROBE_FAILED", label: "failed" },
   METADATA_TOO_LARGE: { status: "PROBE_FAILED", label: "too large" },
+  BUSY: { status: "PROBE_FAILED", label: "busy, retry" },
+  COMPILER_UNAVAILABLE: { status: "PROBE_FAILED", label: "not run" },
   CHANGED_DURING_VERIFY: { status: "PROBE_FAILED", label: "changed meanwhile" },
+  NOT_RECORDED: { status: "PROBE_FAILED", label: "not recorded" },
   BINDING_REFUSED: { status: "NOT_CHECKED", label: "no connection" },
 };
 
@@ -111,6 +137,86 @@ export function initialDatasetPick(
   const own = current ?? out.entitySet;
   if (own && out.entitySets.includes(own)) return own;
   return out.entitySets[0] ?? "";
+}
+
+/**
+ * Said under the picker when the answer lists fewer datasets than the service
+ * declares: how many are shown of how many, and that another can be typed.
+ * Null when every dataset is listed.
+ */
+export function datasetListNote(listed: number, count: number | undefined): string | null {
+  if (count === undefined || count <= listed) return null;
+  return `Showing the first ${listed.toLocaleString("en")} of ${count.toLocaleString("en")} datasets. For another, type its name.`;
+}
+
+/**
+ * The dataset picker: the listed names, and — when the service declares more
+ * than were listed — a field for any other name (datasetListNote).
+ */
+export function DatasetChoice({
+  sets,
+  count,
+  current,
+  pick,
+  onPick,
+  onChoose,
+  busy,
+  idPrefix,
+  children,
+}: {
+  sets: readonly string[];
+  count: number | undefined;
+  current: string | null;
+  pick: string;
+  onPick: (name: string) => void;
+  onChoose: (name: string) => void;
+  busy: boolean;
+  idPrefix: string;
+  children?: React.ReactNode;
+}) {
+  const [typed, setTyped] = useState("");
+  const note = datasetListNote(sets.length, count);
+  const name = typed.trim();
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <label htmlFor={`${idPrefix}-sets`} style={{ ...muted, fontWeight: 600 }}>
+          Datasets
+        </label>
+        <select id={`${idPrefix}-sets`} value={pick} onChange={(e) => onPick(e.target.value)} style={selectStyle}>
+          {sets.map((n) => (
+            <option key={n} value={n}>
+              {n}
+              {n === current ? " (current)" : ""}
+            </option>
+          ))}
+        </select>
+        <button type="button" style={btn} disabled={busy || pick === "" || pick === current} onClick={() => onChoose(pick)}>
+          Use this dataset
+        </button>
+        {children}
+      </span>
+      {note && (
+        <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={muted}>{note}</span>
+          <label htmlFor={`${idPrefix}-typed`} style={{ ...muted, fontWeight: 600 }}>
+            Dataset name
+          </label>
+          <input
+            id={`${idPrefix}-typed`}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            style={{ ...selectStyle, padding: "0 8px" }}
+          />
+          <button type="button" style={btn} disabled={busy || name === "" || name === current} onClick={() => onChoose(name)}>
+            Use this name
+          </button>
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function ServiceVerifyPanel({
@@ -323,6 +429,7 @@ export function ServiceVerifyPanel({
               {current.boundTo && <span style={muted}>Answered by {current.boundTo.label}</span>}
             </span>
             <span style={{ color: "var(--ink-secondary)" }}>{current.detail}</span>
+            {contractSentence(current.contract) && <span style={muted}>{contractSentence(current.contract)}</span>}
             {canSwitchVersion && (
               <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
                 <span>
@@ -346,28 +453,18 @@ export function ServiceVerifyPanel({
               </span>
             )}
             {canAuthor && sets.length > 0 && (
-              <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <label htmlFor={`${ids}-sets`} style={{ ...muted, fontWeight: 600 }}>
-                  Datasets
-                </label>
-                <select id={`${ids}-sets`} value={pick} onChange={(e) => setPick(e.target.value)} style={selectStyle}>
-                  {sets.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                      {n === entitySet ? " (current)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  style={btn}
-                  disabled={busy || pick === "" || pick === entitySet}
-                  onClick={() => void chooseDataset(pick)}
-                >
-                  Use this dataset
-                </button>
+              <DatasetChoice
+                sets={sets}
+                count={current.entitySetCount}
+                current={entitySet}
+                pick={pick}
+                onPick={setPick}
+                onChoose={(name) => void chooseDataset(name)}
+                busy={busy}
+                idPrefix={ids}
+              >
                 {liveWriteWarning}
-              </span>
+              </DatasetChoice>
             )}
           </>
         )}

@@ -229,6 +229,7 @@ describe("the bundle", () => {
       "demo.mjs",
       "fixtures.json",
       "mock.mjs",
+      "openapi-3.0.json",
       "openapi.json",
       "package.json",
     ]);

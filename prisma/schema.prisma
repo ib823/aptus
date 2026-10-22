@@ -991,6 +991,8 @@ model Interface {
   testCases TestCase[]
   /// The grants bound to this interface (ApiAccessGrant.interfaceId).
   grants    ApiAccessGrant[]
+  /// Its compiled contracts (P1.3): ContractSnapshot.interfaceId.
+  contractSnapshots ContractSnapshot[]
 
   @@index([organizationId, externalId])
   @@index([solutionId])
@@ -1742,6 +1744,15 @@ model NorthboundAuditEvent {
   /// — earlier replays were never marked, and cannot now be told apart.
   replayed Boolean @default(false)
 
+  /// Which dated version of the northbound API served the call ("2026-10"),
+  /// and the base path it came in on: "/api/northbound/v1", or the original
+  /// "/api/northbound", which is the same implementation (roadmap P1.10).
+  /// Stamped from the version wrapper's context in the same insert, so it
+  /// costs no query. NULL for rows written before P1.10, and for calls no
+  /// northbound version served (console reads, Test Console dry runs).
+  apiVersion  String?
+  apiBasePath String?
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])
@@ -2029,6 +2040,93 @@ model MockFixture {
   entitySet        String?
 
   @@index([organizationId, interfaceId, scenario])
+}
+
+/// One immutable, compiled contract of an interface (P1.3).
+///
+/// The Contract IR slice of the interface's dataset — compiled from the
+/// service's own $metadata when it could be read (source METADATA), inferred
+/// from sampled rows when it could not (SAMPLED) — with its content hash and
+/// semantic version. A new row is written only when the hash differs from the
+/// interface's latest; the version bump is the structural diff's verdict
+/// (src/lib/contracts/diff.ts). Rows are never updated: a later contract is a
+/// later row, so an upgrade can always be diffed against what came before.
+///
+/// Compiled at verification time (the verify-service route) and on a schema
+/// capture, never on the broker's per-call path. Which snapshot is CURRENT is
+/// decided against the interface's service and dataset now (snapshot.ts).
+model ContractSnapshot {
+  id             String @id @default(cuid())
+  organizationId String
+  interfaceId    String
+
+  /// The interface's contract version when this was compiled (provenance).
+  interfaceVersion Int
+  /// The service identity and dataset it describes: Interface.externalId
+  /// (catalogue apiId, or custom:<path>) and the entity set.
+  externalId       String
+  entitySet        String
+
+  /// METADATA | SAMPLED
+  source       String
+  /// "V2" | "V4"
+  odataVersion String
+  /// MAJOR.MINOR.PATCH, and its parts for ordering and uniqueness.
+  semver       String
+  semverMajor  Int
+  semverMinor  Int
+  semverPatch  Int
+  /// sha256 (hex) of the canonical, normalised contract (canonical.ts).
+  contentHash  String
+  /// The InterfaceContract (src/lib/contracts/ir.ts).
+  ir           Json
+  irVersion    Int
+  /// Bytes of the canonical JSON `contentHash` was taken over (≤ MAX_CONTRACT_BYTES),
+  /// so a document built from several snapshots is refused before their IRs
+  /// are read (doc-inputs.ts). Null on rows recorded before it was kept.
+  irBytes      Int?
+  /// What changed against the previous snapshot: { bump, changes[], omitted? },
+  /// bounded (storedDiff, diff.ts); null on the first.
+  diff         Json?
+  /// What GET /schema serves, rendered once when this row was recorded (or
+  /// re-attached by a verify that found it unchanged): the four schemas, and
+  /// the create and update bodies (null when the contract has none), as compact
+  /// JSON. At most one row of an interface holds them (the one /schema
+  /// serves), at most 1 MiB together; null on every other row, and on rows
+  /// recorded before them, which /schema answers as NOT_RENDERED. Served as
+  /// they are until the interface's next verify or capture renders them again,
+  /// whatever renderer wrote them.
+  schemasText    String?
+  createBodyText String?
+  updateBodyText String?
+
+  /// Where a METADATA contract was read: the environment and connection whose
+  /// binding answered the verify. Null for SAMPLED.
+  environment  String?
+  connectionId String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  interface Interface @relation(fields: [interfaceId], references: [id], onDelete: Cascade)
+
+  @@unique([interfaceId, semverMajor, semverMinor, semverPatch])
+  @@index([organizationId, interfaceId, createdAt])
+}
+
+/// The wall time an organisation's Contract Compiler jobs used on one UTC day
+/// (lib/contracts/contract-time.ts): checked before a job is queued, charged
+/// when its worker has exited. Rows older than a week are deleted by the charge.
+model ContractTime {
+  organizationId String
+  day            DateTime  @db.Date
+  /// Wall time of the day's settled jobs.
+  ms             Int       @default(0)
+  /// Deadlines reserved by the jobs in flight, given back as each settles.
+  reservedMs     Int       @default(0)
+  /// When the latest of those reservations expires: past it they count as 0 (a job that never settled).
+  reservedUntil  DateTime? @db.Timestamptz(3)
+
+  @@id([organizationId, day])
 }
 
 /// Every attempt to use one of the two intentional auth backdoors.

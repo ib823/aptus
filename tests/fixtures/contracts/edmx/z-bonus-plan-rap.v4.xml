@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.3 golden set): a customer's own Z* RAP
+  service on OData V4, as a service binding publishes it under
+  /sap/opu/odata4/sap/zui_bonusplan_o4/srvd/sap/zui_bonusplan/0001. Invented
+  end to end. z-bonus-plan-rap.v4.json is the same service in CSDL JSON; the
+  two must compile to the same IR.
+-->
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Org.OData.Core.V1.xml">
+    <edmx:Include Namespace="Org.OData.Core.V1" Alias="SAP__core"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Org.OData.Capabilities.V1.xml">
+    <edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="SAP__capabilities"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/com.sap.vocabularies.Common.v1.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.Common.v1" Alias="SAP__common"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/com.sap.vocabularies.PersonalData.v1.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.PersonalData.v1" Alias="SAP__PersonalData"/>
+  </edmx:Reference>
+  <edmx:DataServices>
+    <Schema Namespace="com.example.zbonusplan" Alias="SAP__self" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="BonusPlanType">
+        <Key>
+          <PropertyRef Name="PlanUUID"/>
+        </Key>
+        <Property Name="PlanUUID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="PlanName" Type="Edm.String" Nullable="false" MaxLength="40"/>
+        <Property Name="Employee" Type="Edm.String" Nullable="false" MaxLength="12"/>
+        <Property Name="TargetAmount" Type="Edm.Decimal" Nullable="false" Precision="15" Scale="2"/>
+        <Property Name="Currency" Type="Edm.String" Nullable="false" MaxLength="5"/>
+        <Property Name="ValidFrom" Type="Edm.Date" Nullable="false"/>
+        <Property Name="ValidTo" Type="Edm.Date"/>
+        <Property Name="Notes" Type="Edm.String" MaxLength="max"/>
+        <Property Name="LocalLastChangedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <NavigationProperty Name="_Targets" Type="Collection(SAP__self.BonusTargetType)" Partner="_Plan" ContainsTarget="true"/>
+      </EntityType>
+      <EntityType Name="BonusTargetType">
+        <Key>
+          <PropertyRef Name="PlanUUID"/>
+          <PropertyRef Name="TargetNo"/>
+        </Key>
+        <Property Name="PlanUUID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="TargetNo" Type="Edm.Int32" Nullable="false"/>
+        <Property Name="Description" Type="Edm.String" Nullable="false" MaxLength="80"/>
+        <Property Name="Weight" Type="Edm.Decimal" Nullable="false" Precision="5" Scale="2"/>
+        <NavigationProperty Name="_Plan" Type="SAP__self.BonusPlanType" Nullable="false" Partner="_Targets"/>
+      </EntityType>
+      <Action Name="Approve" IsBound="true">
+        <Parameter Name="_it" Type="SAP__self.BonusPlanType" Nullable="false"/>
+        <ReturnType Type="SAP__self.BonusPlanType" Nullable="false"/>
+      </Action>
+      <EntityContainer Name="Container">
+        <EntitySet Name="BonusPlan" EntityType="SAP__self.BonusPlanType">
+          <NavigationPropertyBinding Path="_Targets" Target="BonusTarget"/>
+        </EntitySet>
+        <EntitySet Name="BonusTarget" EntityType="SAP__self.BonusTargetType">
+          <NavigationPropertyBinding Path="_Plan" Target="BonusPlan"/>
+        </EntitySet>
+      </EntityContainer>
+      <Annotations Target="SAP__self.Container/BonusPlan">
+        <Annotation Term="SAP__capabilities.InsertRestrictions">
+          <Record>
+            <PropertyValue Property="Insertable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.DeleteRestrictions">
+          <Record>
+            <PropertyValue Property="Deletable" Bool="true"/>
+          </Record>
+        </Annotation>
+        <Annotation Term="SAP__capabilities.UpdateRestrictions">
+          <Record>
+            <PropertyValue Property="Updatable" Bool="true"/>
+          </Record>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="SAP__self.BonusPlanType">
+        <Annotation Term="SAP__common.Label" String="Bonus Plan"/>
+        <Annotation Term="SAP__PersonalData.EntitySemantics" EnumMember="SAP__PersonalData.EntitySemanticsType/DataSubjectDetails"/>
+      </Annotations>
+      <Annotations Target="SAP__self.BonusPlanType/PlanUUID">
+        <Annotation Term="SAP__core.Computed"/>
+      </Annotations>
+      <Annotations Target="SAP__self.BonusPlanType/Employee">
+        <Annotation Term="SAP__common.Label" String="Employee"/>
+        <Annotation Term="SAP__PersonalData.FieldSemantics" EnumMember="SAP__PersonalData.FieldSemanticsType/DataSubjectID"/>
+        <Annotation Term="SAP__PersonalData.IsPotentiallyPersonal"/>
+      </Annotations>
+      <Annotations Target="SAP__self.BonusPlanType/TargetAmount">
+        <Annotation Term="SAP__PersonalData.IsPotentiallySensitive" Bool="true"/>
+      </Annotations>
+      <Annotations Target="SAP__self.BonusPlanType/LocalLastChangedAt">
+        <Annotation Term="SAP__core.Computed"/>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

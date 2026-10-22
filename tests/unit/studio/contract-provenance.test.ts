@@ -49,7 +49,8 @@ function apply(row: Row, data: Row): void {
   }
 }
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
+  const { capturedSchemaFactRows, fixtureBodyTextRows, fixtureFactRows, isFixtureBodiesQuery, isFixtureFactsQuery } = await import("../../helpers/captured-schema-facts");
   const prisma: Row = {
     interface: {
       findFirst: async ({ where }: { where: Row }) =>
@@ -100,8 +101,31 @@ vi.mock("@/lib/db/prisma", () => {
         return { id: `a${store.audits.length}` };
       },
     },
+    // P1.3: no compiled contract in this sequence (the kit and /schema read
+    // snapshots; a capture records a sampled one, which is not asserted here).
+    contractSnapshot: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async ({ data }: { data: Row }) => ({ id: "snap_1", createdAt: new Date(), ...data }),
+    },
+    apiAccessGrant: { findMany: async () => [] },
   };
+  // The readers learn a stored schema's stamp and size first (response-schema-states.ts), then read it by id.
+  (prisma.interface as Row).findMany = async ({ where }: { where: Row }) =>
+    store.iface && matches(store.iface, where) ? [{ id: store.iface.id, responseSchema: store.iface.responseSchema ?? null }] : [];
+  prisma.$queryRaw = async (q: unknown) =>
+    isFixtureBodiesQuery(q)
+      ? fixtureBodyTextRows(store.fixtures, q)
+      : isFixtureFactsQuery(q)
+        ? fixtureFactRows(store.fixtures, q)
+        : store.iface
+          ? capturedSchemaFactRows([store.iface], q)
+          : [];
   prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
+  // A fixture body written from its text (json-text.ts), and a capture's schema, in the row's own transaction.
+  const { applyRawWrite } = await import("../../helpers/raw-sql-standin");
+  prisma.$executeRaw = async (q: unknown) =>
+    applyRawWrite({ snapshots: [], interfaces: store.iface ? [store.iface] : [], fixtures: store.fixtures }, q);
   return { prisma };
 });
 vi.mock("@/lib/auth/session", () => ({
@@ -148,6 +172,8 @@ import {
 } from "@/lib/studio/contract-provenance";
 import { servedFixture, servedFixtures, SCENARIO_STATUS } from "@/lib/studio/fixtures";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
+import { LIMITS } from "@/lib/contracts/budget";
+import { isFixtureBodiesQuery } from "../../helpers/captured-schema-facts";
 
 const ctx = { params: Promise.resolve({ id: "if_1" }) };
 const post = (url: string, body: unknown) =>
@@ -366,6 +392,58 @@ describe("the audit's sequence, through the routes", () => {
     expect(fixtures.fixtures.map((f) => f.scenario)).toEqual(["needs_setup"]);
     expect(fixtures.withheld.map((w) => w.scenario).sort()).toEqual(["data", "empty"]);
     expect(JSON.stringify(fixtures.fixtures)).not.toContain("Old");
+  });
+});
+
+/*
+ * Structural hardening round 3: capture-fixture read its body with no bound
+ * and stored 25 rows of any width, and every kit download then loaded every
+ * stored body whole — tens of MB of engine CPU and a pooled connection —
+ * before the kit's own bounds refused it. A fixture is now bounded where it
+ * is written, and read by size first where it is served.
+ */
+describe("a fixture is bounded where it is written and where the kit reads it", () => {
+  const wideRows = (rows: number, width: number) => Array.from({ length: rows }, (_, i) => ({ Id: String(i), Photo: "A".repeat(width) }));
+
+  it("capture-fixture refuses a body past its stated size before parsing it, and stores nothing", async () => {
+    const res = await captureFixture(post("http://localhost/x", { readStatus: "OK", rows: wideRows(25, 200_000) }), ctx);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: { code: string; message: string } }).error).toMatchObject({ code: "TOO_LARGE" });
+    expect(store.fixtures).toHaveLength(0);
+  });
+
+  it("capture-fixture still records a wide recording inside the bound (25 photos of 150 KB)", async () => {
+    const ok = await captureFixture(post("http://localhost/x", { readStatus: "OK", rows: wideRows(25, 150_000) }), ctx);
+    expect(ok.status).toBe(200);
+    expect(store.fixtures).toHaveLength(1);
+    expect(JSON.stringify(store.fixtures[0]!.body).length).toBeLessThanOrEqual(LIMITS.fixture.bytes);
+  });
+
+  it("the kit reads fixtures by size first: one past what a kit carries is named, too large, and its body is never read", async () => {
+    const { prisma } = await import("@/lib/db/prisma");
+    const reads = vi.spyOn(prisma, "$queryRaw");
+    const stamp = { interfaceVersion: 1, entitySet: "A_BusinessPartner", sourceStatus: 200, capturedAt: new Date() };
+    store.fixtures.push(
+      { id: "fx_huge", organizationId: "org_a", interfaceId: "if_1", scenario: "data", status: 200, body: { records: [{ Photo: "A".repeat(LIMITS.fixture.storedTextBytes) }] }, ...stamp },
+      { id: "fx_empty", organizationId: "org_a", interfaceId: "if_1", scenario: "empty", status: 200, body: { records: [] }, ...stamp },
+    );
+    const res = await scaffold(new NextRequest("http://localhost/api/studio/interfaces/if_1/scaffold"), ctx);
+    // Before: every body loaded, then the kit refused as larger than 32 MB.
+    expect(res.status).toBe(200);
+    const files = ((await res.json()) as { data: { files: { path: string; contents: string }[] } }).data.files;
+    const fixtures = JSON.parse(files.find((f) => f.path === "fixtures.json")!.contents) as {
+      fixtures: { scenario: string }[];
+      withheld: { scenario: string; reason: string }[];
+    };
+    expect(fixtures.fixtures.map((f) => f.scenario)).toEqual(["empty"]);
+    expect(fixtures.withheld).toEqual([{ scenario: "data", reason: expect.stringContaining("larger than the 8 MB") as string }]);
+    expect(files.find((f) => f.path === "README.md")!.contents).toContain("larger than the recorded fixtures a\nstarter kit carries");
+    // Only the bodies that fit were asked for.
+    // (The bodies are read as their stored text: fixture-store.ts, structural hardening round 4.)
+    const asked = reads.mock.calls
+      .filter(([q]) => isFixtureBodiesQuery(q))
+      .flatMap(([q]) => ((q as unknown as { values: unknown[] }).values ?? []).slice(2));
+    expect(asked).toEqual(["fx_empty"]);
   });
 });
 

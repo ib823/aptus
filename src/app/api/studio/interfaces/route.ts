@@ -37,6 +37,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { idsWithRequestSchema } from "@/lib/contracts/record";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
@@ -56,7 +57,7 @@ import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verific
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { responseSchemaState } from "@/lib/studio/contract-provenance";
+import { responseSchemaStates } from "@/lib/studio/response-schema-states";
 import { grantsForInterfaceWhere, grantsUsableUnder } from "@/lib/studio/grant-binding";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import {
@@ -275,8 +276,11 @@ export async function GET(request: NextRequest) {
       mode: true,
       status: true,
       mappingVersion: true,
-      requestSchema: true,
-      responseSchema: true,
+      // Neither stored schema: an org-wide list says whether there is a
+      // requestSchema, and where the responseSchema stands, each by a query
+      // that never reads the column (below), so the list's work is bounded
+      // by its small columns whatever was stored (hostile-input review round
+      // 2; P1.3 structural containment).
       solutionId: true,
       updatedAt: true,
       servicePath: true,
@@ -294,12 +298,19 @@ export async function GET(request: NextRequest) {
   // connection id or host the gate compares against. Connections are read
   // only when some interface carries a verification.
   const anyVerified = interfaces.some((i) => i.serviceVerifications != null);
-  const connections = anyVerified ? await loadCurrentConnections(organizationId) : [];
+  const [connections, withRequestSchema, schemaStates] = await Promise.all([
+    anyVerified ? loadCurrentConnections(organizationId) : Promise.resolve([] as Awaited<ReturnType<typeof loadCurrentConnections>>),
+    idsWithRequestSchema({ organizationId, ...(solutionId ? { solutionId } : {}) }),
+    responseSchemaStates(organizationId, interfaces, solutionId),
+  ]);
   return studioOk({
     interfaces: interfaces.map(({ serviceVerifications, ...rest }) => ({
       ...rest,
-      // Whether the stored schema is THIS contract's (contract-provenance.ts, A38).
-      responseSchemaState: responseSchemaState(rest.responseSchema, rest),
+      // Whether a write body is recorded for it; GET …/schema serves the body.
+      hasRequestSchema: withRequestSchema.has(rest.id),
+      // Whether the stored schema is THIS contract's (contract-provenance.ts, A38),
+      // read from the schema's stamp in the database, never the schema itself.
+      responseSchemaState: schemaStates.get(rest.id) ?? "none",
       serviceVerifiedEnvironments: verifiedEnvironmentsForDisplay(
         serviceVerifications,
         connections.filter((c) => c.product === rest.sapProduct),
@@ -675,7 +686,10 @@ export async function PATCH(request: NextRequest) {
           // Mode follows the operation: a READ interface is read-mode, anything else
           // carries the stronger review. Derived, never client-supplied.
           mode: nextMode,
-          ...(contractChanged ? { version: { increment: 1 } } : {}),
+          // A new contract: the request schema compiled for the old one goes
+          // (P1.3), as the captured response schema does below. Verify writes
+          // it again for the new one.
+          ...(contractChanged ? { version: { increment: 1 }, requestSchema: Prisma.DbNull } : {}),
           ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
           ...(serviceChanged
             ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }

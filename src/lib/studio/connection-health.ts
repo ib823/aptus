@@ -34,6 +34,7 @@ import {
 } from "@/lib/northbound/failure-reason";
 import { publicCredentialFailure } from "@/lib/sap-public/upstream-failure";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
 export type ConnectionHealthStatus =
@@ -54,8 +55,8 @@ export interface ConnectionHealthResult {
   durationMs: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 10_000;
-const MAX_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = 10_000;
+export const MAX_TIMEOUT_MS = 30_000;
 
 /**
  * The path to probe: the connection's explicit `apiPath` if set, else the first
@@ -98,47 +99,17 @@ export const METADATA_SNIFF_BYTES = 8 * 1024;
 /** An EDMX root element, under any namespace prefix (V2 and V4 alike). */
 const EDMX_ROOT = /<(?:[A-Za-z_][\w.-]*:)?Edmx[\s>]/;
 
-/**
- * The start of the body, no further than `maxBytes`. A real $metadata document
+/*
+ * THE BODY IS READ BY bodyPrefix (body-prefix.ts), no further than `maxBytes`. A real $metadata document
  * can run to megabytes; the connection probe needs only its root element, so
  * it reads METADATA_SNIFF_BYTES and cancels the rest of the stream rather than
  * reading it. Service verification reads the whole document, up to its own
  * bound, because it lists the entity sets.
  *
  * `truncated` says the read stopped on size while the body had more to give —
- * so a caller that needs the whole document knows it does not have it.
+ * so a caller that needs the whole document knows it does not have it
+ * (the same bound every other read of a builder-named host has).
  */
-async function bodyPrefix(
-  res: Response,
-  maxBytes: number = METADATA_SNIFF_BYTES,
-): Promise<{ text: string; truncated: boolean }> {
-  if (res.body && typeof res.body.getReader === "function") {
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let text = "";
-    let size = 0;
-    let truncated = false;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      text += decoder.decode(value, { stream: true });
-      if (size > maxBytes) {
-        truncated = true;
-        break;
-      }
-    }
-    text += decoder.decode();
-    await reader.cancel().catch(() => undefined);
-    return { text: text.slice(0, maxBytes), truncated };
-  }
-  // Not a stream (a test double, or an environment without one).
-  const full = typeof res.text === "function" ? await res.text() : "";
-  return {
-    text: full.slice(0, maxBytes),
-    truncated: new TextEncoder().encode(full).byteLength > maxBytes,
-  };
-}
 
 /**
  * WHAT THE TENANT ANSWERED, judged on more than the status (audit A21).

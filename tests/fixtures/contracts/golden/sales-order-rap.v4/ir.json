@@ -1,0 +1,397 @@
+{
+  "complexTypes": [
+    {
+      "name": "Money",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "Amount",
+          "name": "Amount",
+          "nullable": true,
+          "precision": 15,
+          "scale": 2,
+          "type": "Edm.Decimal"
+        },
+        {
+          "maxLength": 3,
+          "name": "Currency",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "qualifiedName": "com.example.salesorder.Money"
+    }
+  ],
+  "container": "com.example.salesorder.Container",
+  "edmxVersion": "4.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "countable": true,
+        "creatable": true,
+        "deletable": false,
+        "filterable": true,
+        "nonFilterableProperties": [
+          "ContactEmail",
+          "Tags"
+        ],
+        "nonSortableProperties": [
+          "Tags"
+        ],
+        "searchable": true,
+        "selectSupported": true,
+        "skipSupported": true,
+        "topSupported": true,
+        "updatable": true
+      },
+      "entityType": "com.example.salesorder.SalesOrderType",
+      "label": "Sales Order",
+      "name": "SalesOrder",
+      "navigationBindings": [
+        {
+          "path": "_Item",
+          "target": "SalesOrderItem"
+        },
+        {
+          "path": "_SoldToParty",
+          "target": "Customer"
+        }
+      ]
+    },
+    {
+      "capabilities": {},
+      "entityType": "com.example.salesorder.SalesOrderItemType",
+      "name": "SalesOrderItem",
+      "navigationBindings": [
+        {
+          "path": "_SalesOrder",
+          "target": "SalesOrder"
+        }
+      ]
+    },
+    {
+      "capabilities": {
+        "creatable": false,
+        "deletable": false,
+        "updatable": false
+      },
+      "entityType": "com.example.salesorder.CustomerType",
+      "name": "Customer"
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "SalesOrder"
+      ],
+      "label": "Sales Order",
+      "name": "SalesOrderType",
+      "navigations": [
+        {
+          "collection": true,
+          "containsTarget": true,
+          "name": "_Item",
+          "partner": "_SalesOrder",
+          "target": "com.example.salesorder.SalesOrderItemType"
+        },
+        {
+          "collection": false,
+          "name": "_SoldToParty",
+          "nullable": false,
+          "referentialConstraints": [
+            {
+              "property": "SoldToParty",
+              "referencedProperty": "Customer"
+            }
+          ],
+          "target": "com.example.salesorder.CustomerType"
+        }
+      ],
+      "properties": [
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "label": "Sales Order",
+          "maxLength": 10,
+          "name": "SalesOrder",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "name": "SalesOrderUUID",
+          "nullable": false,
+          "type": "Edm.Guid"
+        },
+        {
+          "capabilities": {
+            "immutable": true
+          },
+          "label": "Sales Document Type",
+          "maxLength": 4,
+          "name": "SalesOrderType",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "mandatory": true
+          },
+          "label": "Sold-to Party",
+          "maxLength": 10,
+          "name": "SoldToParty",
+          "nullable": false,
+          "personalData": {
+            "fieldSemantics": "DataSubjectID"
+          },
+          "quickInfo": "Customer who orders",
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "mandatory": true
+          },
+          "maxLength": 35,
+          "name": "PurchaseOrderByCustomer",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "name": "RequestedDeliveryDate",
+          "nullable": true,
+          "type": "Edm.Date"
+        },
+        {
+          "name": "TotalNetAmount",
+          "nullable": false,
+          "precision": 16,
+          "scale": 3,
+          "type": "Edm.Decimal"
+        },
+        {
+          "name": "NetValue",
+          "nullable": true,
+          "type": "com.example.salesorder.Money"
+        },
+        {
+          "name": "Status",
+          "nullable": false,
+          "type": "com.example.salesorder.OverallStatus"
+        },
+        {
+          "name": "ItemCount",
+          "nullable": false,
+          "type": "Edm.Int64"
+        },
+        {
+          "collection": true,
+          "maxLength": 20,
+          "name": "Tags",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Contact E-Mail",
+          "maxLength": 241,
+          "name": "ContactEmail",
+          "nullable": true,
+          "personalData": {
+            "isPotentiallyPersonal": true
+          },
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "name": "CreatedAt",
+          "nullable": true,
+          "precision": 7,
+          "type": "Edm.DateTimeOffset"
+        },
+        {
+          "name": "DeliveryTime",
+          "nullable": true,
+          "precision": 0,
+          "type": "Edm.TimeOfDay"
+        },
+        {
+          "capabilities": {
+            "computed": true
+          },
+          "name": "LastChangedAt",
+          "nullable": true,
+          "precision": 7,
+          "type": "Edm.DateTimeOffset"
+        }
+      ],
+      "qualifiedName": "com.example.salesorder.SalesOrderType"
+    },
+    {
+      "key": [
+        "SalesOrder",
+        "SalesOrderItem"
+      ],
+      "name": "SalesOrderItemType",
+      "navigations": [
+        {
+          "collection": false,
+          "name": "_SalesOrder",
+          "nullable": false,
+          "partner": "_Item",
+          "target": "com.example.salesorder.SalesOrderType"
+        }
+      ],
+      "properties": [
+        {
+          "maxLength": 10,
+          "name": "SalesOrder",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "maxLength": 6,
+          "name": "SalesOrderItem",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "maxLength": 40,
+          "name": "Material",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "name": "RequestedQuantity",
+          "nullable": false,
+          "precision": 15,
+          "scale": 3,
+          "type": "Edm.Decimal"
+        }
+      ],
+      "qualifiedName": "com.example.salesorder.SalesOrderItemType"
+    },
+    {
+      "key": [
+        "Customer"
+      ],
+      "name": "CustomerType",
+      "navigations": [],
+      "properties": [
+        {
+          "maxLength": 10,
+          "name": "Customer",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "maxLength": 80,
+          "name": "CustomerName",
+          "nullable": false,
+          "type": "Edm.String"
+        }
+      ],
+      "qualifiedName": "com.example.salesorder.CustomerType"
+    }
+  ],
+  "enumTypes": [
+    {
+      "members": [
+        {
+          "name": "Open",
+          "value": "0"
+        },
+        {
+          "name": "InProcess",
+          "value": "1"
+        },
+        {
+          "name": "Completed",
+          "value": "2"
+        }
+      ],
+      "name": "OverallStatus",
+      "qualifiedName": "com.example.salesorder.OverallStatus",
+      "underlyingType": "Edm.Byte"
+    }
+  ],
+  "irVersion": 1,
+  "namespaces": [
+    "com.example.salesorder"
+  ],
+  "odataVersion": "V4",
+  "operations": [
+    {
+      "entitySet": "SalesOrder",
+      "kind": "action",
+      "name": "RecalculateAll",
+      "parameters": [],
+      "returnType": {
+        "collection": true,
+        "nullable": false,
+        "type": "com.example.salesorder.SalesOrderType"
+      }
+    },
+    {
+      "bindingType": "com.example.salesorder.SalesOrderType",
+      "bound": true,
+      "kind": "action",
+      "name": "Release",
+      "parameters": [
+        {
+          "name": "_it",
+          "nullable": false,
+          "type": "com.example.salesorder.SalesOrderType"
+        }
+      ],
+      "returnType": {
+        "nullable": false,
+        "type": "com.example.salesorder.SalesOrderType"
+      }
+    },
+    {
+      "bindingType": "com.example.salesorder.SalesOrderType",
+      "bound": true,
+      "kind": "action",
+      "name": "SetDeliveryBlock",
+      "parameters": [
+        {
+          "name": "_it",
+          "nullable": false,
+          "type": "com.example.salesorder.SalesOrderType"
+        },
+        {
+          "name": "BlockReason",
+          "nullable": false,
+          "type": "Edm.String"
+        }
+      ],
+      "returnType": {
+        "nullable": false,
+        "type": "com.example.salesorder.SalesOrderType"
+      }
+    },
+    {
+      "bindingCollection": true,
+      "bindingType": "com.example.salesorder.SalesOrderType",
+      "bound": true,
+      "kind": "function",
+      "name": "GetOpenItemCount",
+      "parameters": [
+        {
+          "collection": true,
+          "name": "_it",
+          "nullable": false,
+          "type": "com.example.salesorder.SalesOrderType"
+        }
+      ],
+      "returnType": {
+        "nullable": false,
+        "type": "Edm.Int32"
+      }
+    }
+  ]
+}

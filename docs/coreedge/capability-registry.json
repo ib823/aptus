@@ -45,6 +45,7 @@
     "starterKitFiles": [
       "README.md",
       "openapi.json",
+      "openapi-3.0.json",
       "client.ts",
       ".env.example",
       ".gitignore",
@@ -52,6 +53,9 @@
       "demo.mjs",
       "mock.mjs",
       "fixtures.json"
+    ],
+    "northboundApiVersions": [
+      "2026-10"
     ]
   },
   "coreedgeToday": {
@@ -1631,7 +1635,7 @@
         "row": "LOW_CODE",
         "col": "STATIC_BEARER",
         "status": "partial",
-        "note": "Static bearer key. OpenAPI 3.1 import into low-code tools (e.g. Power Platform) is unverified.",
+        "note": "Static bearer key. OpenAPI 3.1 and 3.0.3 import into low-code tools (e.g. Power Platform) is unverified.",
         "basis": [
           "A ce_ bearer key, looked up by its SHA-256 hash (auth.ts, bearer.ts)."
         ]
@@ -1769,18 +1773,19 @@
         "row": "DEVELOP_SDK_CODEGEN",
         "col": "",
         "status": "partial",
-        "note": "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4). TypeScript only, reads only.",
+        "note": "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4). The kit's OpenAPI 3.1 and 3.0.3 documents, and the solution's (GET /api/studio/solutions/[id]/openapi), describe every served operation, header and error code, with record and write-body schemas compiled from the service's own $metadata once it is verified (lib/contracts/openapi.ts, compile.ts; P1.3). TypeScript only, reads only.",
         "basis": [
-          "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4)."
+          "The starter kit generates a TypeScript read client and OpenAPI 3.1 (scaffold.ts); CI compiles the client under strict (check-scaffold-client.ts; P0.4).",
+          "The kit's OpenAPI 3.1 and 3.0.3 documents, and the solution's (GET /api/studio/solutions/[id]/openapi), describe every served operation, header and error code, with record and write-body schemas compiled from the service's own $metadata once it is verified (lib/contracts/openapi.ts, compile.ts; P1.3)."
         ]
       },
       {
         "row": "CI_PRECOMMIT_GOVERNANCE",
         "col": "",
         "status": "none",
-        "note": "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only.",
+        "note": "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, openapi-3.0.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only.",
         "basis": [
-          "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only."
+          "The starter kit ships no CI workflow (scaffold.ts writes README.md, openapi.json, openapi-3.0.json, client.ts, .env.example, .gitignore, package.json, demo.mjs, mock.mjs, fixtures.json), and Studio APIs accept browser sessions only."
         ]
       },
       {
@@ -1826,9 +1831,10 @@
         "row": "SAP_UPGRADE_IMPACT",
         "col": "",
         "status": "partial",
-        "note": "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8). Most deprecated APIs name no successor (the Hub's Successors field is behind its login), and no impact alert reaches interface owners (P3.8).",
+        "note": "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8). A verify compiles the service's $metadata into a ContractSnapshot whose semantic version is a structural diff's verdict against the last one (removed or retyped is major, added optional is minor; lib/contracts/diff.ts, snapshot.ts; P1.3). Most deprecated APIs name no successor (the Hub's Successors field is behind its login), and no impact alert reaches interface owners (P3.8).",
         "basis": [
-          "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8)."
+          "The catalogue tracks deprecation and recorded successors (hub-successors.ts); SAP's lifecycle state, version and named successor are stamped on deploy from the committed Hub snapshot (hub-lifecycle-snapshot.ts; P0.8).",
+          "A verify compiles the service's $metadata into a ContractSnapshot whose semantic version is a structural diff's verdict against the last one (removed or retyped is major, added optional is minor; lib/contracts/diff.ts, snapshot.ts; P1.3)."
         ]
       },
       {
@@ -1871,10 +1877,12 @@
       {
         "row": "API_VERSIONING",
         "col": "",
-        "status": "none",
-        "note": "The northbound routes are unversioned (no /api/northbound/v1, no version header, no Deprecation or Sunset header, no changelog; P1.10). Interfaces carry a version number and DEPRECATED refuses reads, but nothing tells a consumer.",
+        "status": "full",
+        "note": "Dated northbound versions with deprecation headers and a changelog. Tested and documented; no material limit.",
         "basis": [
-          "The northbound routes are unversioned (no /api/northbound/v1, no version header, no Deprecation or Sunset header, no changelog; P1.10). Interfaces carry a version number and DEPRECATED refuses reads, but nothing tells a consumer."
+          "Dated northbound versions (2026-10): every response names its version in CoreEdge-Version, a request may pin one, an unknown or retired one is a 400 UNSUPPORTED_VERSION, and an unpinned request is served the oldest supported version (version-policy.ts, versioned-route.ts; P1.10).",
+          "Served at /api/northbound/v1/* and the original /api/northbound/* by the same handlers; Deprecation (RFC 9745) and Sunset (RFC 8594) headers, a 6-month overlap the registry is checked against in CI, and a changelog (GET /api/northbound/versions, docs/coreedge/api-changelog.md).",
+          "The starter kit and the ABAP lab-guide samples are replayed on both paths and every supported version in CI (northbound-consumer-replay.test.ts). A deprecation's announcement date is checked in review (roadmap P1.10, open decision)."
         ]
       },
       {

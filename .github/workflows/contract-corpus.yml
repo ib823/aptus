@@ -1,0 +1,85 @@
+name: Contract Corpus
+
+# P1.3 — the Contract Compiler over SAP's own service descriptions.
+#
+# The golden tests (tests/unit/contracts) run on descriptions written for this
+# repository, because SAP's $metadata files are not bundled here: their
+# redistribution rights are unverified (roadmap §9.1 #17). This job fetches 20
+# or more real S/4HANA Cloud descriptions from the SAP Business Accelerator Hub
+# sandbox AT TEST TIME, compiles them, validates every generated OpenAPI
+# document against the 3.1 and 3.0.3 specifications, and measures PersonalData
+# annotation coverage (the input P1.5 needs).
+#
+# NOTHING IS STORED. The descriptions live in the script's memory only: no
+# artefact is uploaded, no cache holds them (the pnpm cache below is the
+# dependency store, nothing else), and the log and the step summary carry the
+# public API ids and counts — never a description's content.
+#
+# THE SECRET: SAP_API_HUB_SANDBOX_API_KEY, the API key api.sap.com shows a
+# signed-in user (Settings → Show API Key). Add it under Settings → Secrets and
+# variables → Actions → New repository secret. Without it — and on pull
+# requests from forks, which receive no secrets — the job skips cleanly with a
+# notice. docs/runbooks/coreedge-contract-compiler.md has the details.
+
+on:
+  schedule:
+    # Weekly, Monday 04:17 UTC: SAP publishes description changes on its own
+    # cadence, and a weekly run notices them without spending the Hub's quota.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      apis:
+        description: "Comma-separated API ids to compile instead of the built-in list (optional)"
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - "src/lib/contracts/**"
+      - "scripts/contract-corpus.ts"
+      - "scripts/lib/contract-corpus.ts"
+      - ".github/workflows/contract-corpus.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: Compile SAP's published descriptions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Is the API key configured?
+        id: gate
+        env:
+          KEY: ${{ secrets.SAP_API_HUB_SANDBOX_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::SAP_API_HUB_SANDBOX_API_KEY is not set; the contract corpus check is skipped."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: pnpm/action-setup@v6
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile and measure (in memory; nothing stored)
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          SAP_API_HUB_SANDBOX_API_KEY: ${{ secrets.SAP_API_HUB_SANDBOX_API_KEY }}
+          CONTRACT_CORPUS_APIS: ${{ github.event.inputs.apis }}
+        run: pnpm contracts:corpus

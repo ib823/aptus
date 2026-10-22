@@ -38,6 +38,7 @@
  * falling back to something that usually works. "Not probeable" is a state, not
  * an error, and it has a different fix than a failure does.
  */
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import type { HubContentType } from "@/lib/sap-public/hub-content";
 import {
   HARVEST_CHUNK_DEFAULT,
@@ -124,6 +125,13 @@ export function harvestFileUrl(src: HarvestSource, type: HarvestType): string {
   return `https://raw.githubusercontent.com/${src.repo}/${src.ref}/${HARVEST_REPO_PATH}/${type}.json`;
 }
 
+/**
+ * The most of one harvested file that is read, in decoded bytes
+ * (body-prefix.ts). The largest committed file is about 3 MB; read whole
+ * before, and fetch inflates without a limit.
+ */
+export const MAX_HARVEST_FILE_BYTES = 32 * 1024 * 1024;
+
 export interface HarvestFetchOk {
   rows: Record<string, unknown>[];
 }
@@ -150,7 +158,10 @@ export async function fetchHarvestRows(url: string, fetchImpl: typeof fetch = fe
   if (!res.ok) {
     return { error: `${url} returned HTTP ${res.status}. The commit may predate the harvest files, or the repository may not be public.` };
   }
-  const text = await res.text();
+  const { text, truncated } = await bodyPrefix(res, MAX_HARVEST_FILE_BYTES);
+  if (truncated) {
+    return { error: `${url} is larger than ${MAX_HARVEST_FILE_BYTES / (1024 * 1024)} MB, so it was not read.` };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

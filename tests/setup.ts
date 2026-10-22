@@ -13,3 +13,13 @@ import "@testing-library/jest-dom/vitest";
  * default is hidden by this line.
  */
 process.env.COREEDGE_STEP_UP ??= "off";
+
+/*
+ * THE CONTRACT COMPILER'S DAILY TIME IS A DEPLOYMENT'S, NOT A SUITE'S
+ * (lib/contracts/contract-time.ts). A suite compiles hundreds of
+ * descriptions — many built to run to their limits — under a handful of
+ * organisation ids, in one process: past any production allowance. Unlimited
+ * here (0), so the compiler's other limits are what each suite meets; the
+ * allowance's own suite sets it.
+ */
+process.env.COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY ??= "0";

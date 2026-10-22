@@ -24,6 +24,7 @@
  * useful thing than a description of what SAP documents.
  */
 
+import { BudgetExceeded, chargeJson, LIMITS, OutputBudget } from "@/lib/contracts/budget";
 import { isEnvelopeKey, stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 
 export interface CapturedSchema {
@@ -99,8 +100,46 @@ function jsonTypeOf(value: unknown): { type?: string; format?: string } | null {
 }
 
 /**
+ * Keys one sampled row may carry before anything is done with it: the field
+ * bound, and as many again for envelope keys the strip would remove.
+ */
+export const MAX_SAMPLED_ROW_KEYS = 2 * LIMITS.capturedSchema.properties;
+
+/** Rows looked at: the capture route accepts at most 100, so one more says the rest are refused anyway. */
+const ROWS_LOOKED_AT = 101;
+
+/**
+ * Whether any row carries more keys than a captured schema could describe —
+ * counted up to the bound and no further, before a row is copied, stripped
+ * or validated (each of which is a pass over every key it has).
+ */
+export function rowsPastCaptureBound(rows: unknown): boolean {
+  if (!Array.isArray(rows)) return false;
+  const n = Math.min(rows.length, ROWS_LOOKED_AT);
+  for (let i = 0; i < n; i++) {
+    const row: unknown = rows[i];
+    if (row === null || typeof row !== "object") continue;
+    let keys = 0;
+    for (const key in row) {
+      if (Object.prototype.hasOwnProperty.call(row, key) && ++keys > MAX_SAMPLED_ROW_KEYS) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Build a schema from sampled rows. Returns null when there is nothing to learn
  * from — the caller then keeps the honest open shape rather than inventing one.
+ *
+ * BOUNDED BEFORE IT IS BUILT (budget.ts, LIMITS.capturedSchema). The rows
+ * come from a tenant's SAP system, which an attacker may control: one row of
+ * 358,000 distinct short keys made an 11.5 MB schema, seconds of sorting on
+ * the request thread, and a contract and /schema answer of the same size.
+ * So a row with more keys than a schema could describe is refused before it
+ * is stripped (rowsPastCaptureBound), distinct fields are counted as they are
+ * first seen and the inference stops past `properties` (BudgetExceeded
+ * "capturedSchema") before anything is sorted or built, and the schema built
+ * is refused past `bytes` of compact JSON. Every reader of a stored schema relies on these two bounds.
  */
 export function inferResponseSchema(
   rows: readonly Record<string, unknown>[],
@@ -109,6 +148,8 @@ export function inferResponseSchema(
   contract?: CaptureContract,
 ): CapturedSchema | null {
   if (rows.length === 0) return null;
+  const maxProperties = LIMITS.capturedSchema.properties;
+  if (rowsPastCaptureBound(rows)) throw new BudgetExceeded("capturedSchema", MAX_SAMPLED_ROW_KEYS, MAX_SAMPLED_ROW_KEYS + 1);
 
   const seenIn = new Map<string, number>();
   const types = new Map<string, Set<string>>();
@@ -125,7 +166,11 @@ export function inferResponseSchema(
      * validator reject every row. See odata-envelope.ts.
      */
     for (const [key, value] of Object.entries(stripODataEnvelope(row))) {
-      seenIn.set(key, (seenIn.get(key) ?? 0) + 1);
+      const seen = seenIn.get(key);
+      if (seen === undefined && seenIn.size >= maxProperties) {
+        throw new BudgetExceeded("capturedSchema", maxProperties, seenIn.size + 1);
+      }
+      seenIn.set(key, (seen ?? 0) + 1);
       if (value === null) {
         sawNull.add(key);
         continue;
@@ -168,7 +213,7 @@ export function inferResponseSchema(
   const assertRequired = rows.length >= MIN_SAMPLE_FOR_REQUIRED;
   const required = assertRequired ? [...alwaysPresent] : [];
 
-  return {
+  const schema: CapturedSchema = {
     type: "object",
     properties,
     required,
@@ -189,6 +234,9 @@ export function inferResponseSchema(
       ...(contract ? { interfaceVersion: contract.version, entitySet: contract.entitySet } : {}),
     },
   };
+  // Long names make a large schema of few fields: its compact JSON is bounded too.
+  chargeJson(schema, new OutputBudget("capturedSchema", LIMITS.capturedSchema.bytes));
+  return schema;
 }
 
 /**
