@@ -212,7 +212,6 @@ import { contractSecondsPerOrgDay } from "@/lib/contracts/contract-time";
 import { MAX_DOCUMENT_CONTRACT_BYTES } from "@/lib/contracts/doc-inputs";
 import { envelopeIsolates } from "@/lib/contracts/envelope";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
-import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 
@@ -613,7 +612,7 @@ describe("/schema and a sampled contract of an earlier contract", () => {
       { params: Promise.resolve({ id: "if_1" }) },
     );
     expect(cap.status).toBe(200);
-    Object.assign(db.snapshots[0]!, { schemasText: null, createBodyText: null, updateBodyText: null, schemaTextsVersion: null });
+    Object.assign(db.snapshots[0]!, { schemasText: null, createBodyText: null, updateBodyText: null });
     const d = await data<{ contract: Row }>(await schemaRoute());
     expect(d.contract).toMatchObject({ source: "sampled", schemas: null, schemasOmitted: "NOT_RENDERED" });
     expect(d.contract.schemasNote).toMatch(/Capture the schema again in the Test Console/);
@@ -1163,41 +1162,13 @@ describe("the read paths and the compiler", () => {
     await verify();
     const snap = db.snapshots[0]!;
     const rendered = await schemaRoute().then((r) => r.text());
-    Object.assign(snap, { schemasText: null, createBodyText: null, updateBodyText: null, schemaTextsVersion: null });
+    Object.assign(snap, { schemasText: null, createBodyText: null, updateBodyText: null });
     const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
     expect(d.contract).toMatchObject({ source: "metadata", snapshotId: snap.id, schemas: null, schemasOmitted: "NOT_RENDERED" });
     expect(d.contract.schemasNote).toMatch(/Verify the service again/);
     expect(d.requestSchema).toBeNull();
     // A verify of the same contract re-attaches them, rendered from the row's own IR: the same bytes.
     expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
-    expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
-  });
-
-  /*
-   * Consolidated review round 3: serving texts only at the running renderer
-   * version answered NOT_RENDERED for every interface of every organisation
-   * while a build re-rendered them under the live deployment (and for good
-   * when that build failed), and for every row a re-render run did not
-   * reach. Texts of any version are served: each is a self-consistent render
-   * of the row's own IR, and the version only picks the re-render's rows.
-   */
-  it("texts another renderer version wrote are served as they are, older or newer, and a verify renders them at this one", async () => {
-    await verify();
-    const snap = db.snapshots[0]!;
-    expect(snap.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION);
-    const rendered = await schemaRoute().then((r) => r.text());
-    for (const other of [SCHEMA_TEXTS_VERSION - 1, SCHEMA_TEXTS_VERSION + 1]) {
-      snap.schemaTextsVersion = other;
-      const d = await data<{ requestSchema: unknown; contract: Row }>(await schemaRoute());
-      expect(d.contract).toMatchObject({ snapshotId: snap.id });
-      expect(d.contract.schemas).not.toBeNull();
-      expect(d.contract).not.toHaveProperty("schemasOmitted");
-      expect(d.requestSchema).not.toBeNull();
-      expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
-    }
-    snap.schemaTextsVersion = SCHEMA_TEXTS_VERSION - 1;
-    expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
-    expect(snap.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION);
     expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
   });
 

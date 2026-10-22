@@ -30,8 +30,12 @@
  *     without throwing, inside the contract budget, in proportion to the
  *     description (budget.ts), or refused for a stated budget;
  *   - /schema spliced from those texts is, byte for byte, what f54c6f5a
- *     rendered on every read (tests/helpers/schema-reference.ts), with and
- *     without a current stamp;
+ *     rendered on every read, with and without a current stamp: for the
+ *     default seed, against the digests f54c6f5a's own renderForRead wrote
+ *     for every case and dataset (FROZEN, below), so a renderer change on
+ *     a fuzz shape the goldens lack fails here until the file is changed
+ *     deliberately; for any seed, against tests/helpers/schema-reference.ts
+ *     (the current renderer, so it holds only the splice to it);
  *   - the starter kit and the solution document render under their stated
  *     budgets, or are refused there (at download), in time linear in what
  *     they write; the stored diff is bounded.
@@ -40,6 +44,10 @@
  * CONTRACTS_FUZZ_SEED (default 13). A long local run:
  *   CONTRACTS_FUZZ_ITERATIONS=5000 pnpm vitest run tests/property/contracts-fuzz.property.test.ts
  */
+
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -61,6 +69,22 @@ const SEED = Number(process.env.CONTRACTS_FUZZ_SEED ?? 13);
 /** Every Nth case also runs in the real envelope (a worker each, so not every case). */
 const ENVELOPE_EVERY = Number(process.env.CONTRACTS_FUZZ_ENVELOPE_EVERY ?? 15);
 const MAX_INPUT = LIMITS.sourceBytes;
+
+/*
+ * /SCHEMA AS f54c6f5a SERVED IT, FROZEN (consolidated containment review
+ * round 5). For each dataset the default run prepares — `case:index:name`
+ * — the sha256 of its three /schema bodies (no stamp, CREATE, UPDATE; joined
+ * by "\n"), written once by f54c6f5a's own renderForRead("schema") from the
+ * contract as stored (jsonb's key order). Not rewritten by `-u`: a change is
+ * a deliberate edit of this file, and /schema then serves each interface's
+ * previous render until its next verify or capture (the runbook's accepted
+ * risks).
+ */
+const FROZEN = JSON.parse(readFileSync(path.resolve(__dirname, "../fixtures/contracts/fuzz-schema-reads.f54c6f5a.json"), "utf8")) as {
+  seed: number;
+  iterations: number;
+  digests: Record<string, string>;
+};
 
 const REFUSALS = new Set([
   "EMPTY",
@@ -656,18 +680,27 @@ function timed<T>(fn: () => T): { value: T; ms: number } {
  * /schema as the route serves it — spliced from the stored texts — against
  * what f54c6f5a rendered on every read, with no stamp and with a current
  * CREATE and UPDATE stamp: the same bytes, or a failure naming the case.
+ * Answers whether the frozen digest for `key` was compared (see FROZEN).
  */
-function expectSchemaAsBefore(where: string, p: Extract<RecordableContract, { ok: true }>, contract: InterfaceContract, entitySet: string): void {
+function expectSchemaAsBefore(where: string, key: string, p: Extract<RecordableContract, { ok: true }>, contract: InterfaceContract, entitySet: string): boolean {
+  const served: string[] = [];
   const texts = { schemas: textOf(p.texts.schemas), create: p.texts.create && textOf(p.texts.create), update: p.texts.update && textOf(p.texts.update) };
   for (const operation of [null, "CREATE", "UPDATE"]) {
     const stamp: RequestSchemaStamp | null =
       operation === null ? null : { semver: "1.0.0", entitySet, operation, snapshotId: "snap_1", contentHash: p.hash, interfaceVersion: 1 };
     const raw = new RawJson();
     const body = stamp ? requestSchemaText(operation === "UPDATE" ? texts.update : texts.create, stamp) : null;
-    const served = raw.stringify({ schemas: raw.slot(texts.schemas), requestSchema: body === null ? null : raw.slot(body) });
+    const text = raw.stringify({ schemas: raw.slot(texts.schemas), requestSchema: body === null ? null : raw.slot(body) });
     const before = referenceSchemaMembers(contract, entitySet, "snap_1", stamp ? { "x-contract": stamp } : null, { version: 1, entitySet });
-    if (served !== before) throw new Error(`${where}: /schema (${operation ?? "no stamp"}) differs from f54c6f5a's`);
+    if (text !== before) throw new Error(`${where}: /schema (${operation ?? "no stamp"}) differs from the reference splice`);
+    served.push(text);
   }
+  if (SEED !== FROZEN.seed) return false;
+  const frozen = FROZEN.digests[key];
+  if (frozen === undefined) return false;
+  const digest = createHash("sha256").update(served.join("\n")).digest("hex");
+  if (digest !== frozen) throw new Error(`${where}: /schema of ${key} differs from what f54c6f5a rendered (${digest})`);
+  return true;
 }
 
 /** The starter kit and the solution document of a contract, each under its own budget: what each wrote, or null when refused there. */
@@ -715,6 +748,8 @@ interface Stats {
   maxContractPerSource: number;
   /** Datasets whose /schema was compared with f54c6f5a's, byte for byte. */
   schemaAsBefore: number;
+  /** Of those, the ones compared with f54c6f5a's frozen digest. */
+  schemaFrozen: number;
   /** Datasets whose kit or document is refused at download (past its budget). */
   downloadsRefused: number;
   maxSchemaPerContract: number;
@@ -769,6 +804,7 @@ describe("the Contract Compiler against generated descriptions", () => {
         maxInput: 0,
         maxContractPerSource: 0,
         schemaAsBefore: 0,
+        schemaFrozen: 0,
         downloadsRefused: 0,
         maxSchemaPerContract: 0,
         maxKitPerContract: 0,
@@ -823,7 +859,7 @@ describe("the Contract Compiler against generated descriptions", () => {
 
         // 2. Every dataset (a sample of a large service's): made ready to record without throwing, inside its budgets.
         const sets = ir.entitySets.length <= 6 ? ir.entitySets : [ir.entitySets[0]!, ...Array.from({ length: 5 }, () => r.pick(ir.entitySets))];
-        for (const set of sets) {
+        for (const [k, set] of sets.entries()) {
           stats.datasets += 1;
           const slice = sliceForEntitySet(ir, set.name, sourceLength);
           const heads = { previous: previous === null ? [] : [previous], unchangedHashes: [] };
@@ -840,7 +876,7 @@ describe("the Contract Compiler against generated descriptions", () => {
           expect(p.bytes, `${where}: contract bytes`).toBeLessThanOrEqual(contractLimit(sourceLength));
           stats.maxContractPerSource = Math.max(stats.maxContractPerSource, p.bytes / doc.length);
           // 3. /schema from its stored texts is f54c6f5a's /schema, byte for byte.
-          expectSchemaAsBefore(where, p, slice.contract, set.name);
+          if (expectSchemaAsBefore(where, `${i}:${k}:${set.name}`, p, slice.contract, set.name)) stats.schemaFrozen += 1;
           stats.schemaAsBefore += 1;
           const schemaBytes = p.texts.schemas.byteLength + (p.texts.create?.byteLength ?? 0) + (p.texts.update?.byteLength ?? 0);
           // The diff against the previous case's contract, as stored: bounded, and the whole record in linear time.
@@ -877,6 +913,8 @@ describe("the Contract Compiler against generated descriptions", () => {
       expect(stats.refusals.size).toBeGreaterThan(1);
       // /schema was compared, not merely rendered.
       expect(stats.schemaAsBefore).toBe(stats.prepared);
+      // The default run reaches every frozen digest: a changed grammar or seed cannot quietly compare none.
+      if (SEED === FROZEN.seed && ITERATIONS >= FROZEN.iterations) expect(stats.schemaFrozen).toBe(Object.keys(FROZEN.digests).length);
       // The envelope was compared, not merely run.
       expect(stats.envelopeAgreements).toBe(stats.envelopeRuns);
       expect(stats.envelopeAgreements).toBeGreaterThan(0);

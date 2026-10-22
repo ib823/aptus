@@ -42,10 +42,11 @@
  * interface, in the same transaction as the row, its diff and the write
  * interface's stamp. An interface therefore holds at most 1 MiB of texts. A
  * row without them is served as NOT_RENDERED until the interface is verified
- * (or captured) again. Texts of another renderer version
- * (SCHEMA_TEXTS_VERSION, render-version.ts) are served as they are — a
- * self-consistent render of the row's own IR — until the build's re-render
- * (contracts/rerender.ts) renders the row again (consolidated review round 3).
+ * (or captured) again. Texts written by an earlier renderer are served as
+ * they are — a self-consistent render of the row's own IR — until the
+ * interface's next verify or capture renders them again: nothing re-renders
+ * stored rows outside a job charged to their organisation (consolidated
+ * review round 5).
  *
  * WHICH ONE IS CURRENT. The newest snapshot whose service (externalId) and
  * dataset match the interface now. Pointing the interface at another dataset
@@ -65,7 +66,6 @@ import { nextSemver, semverParts, type Bump, type StoredContractDiff } from "@/l
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import type { PreviousHeads, RecordableContract } from "@/lib/contracts/jobs";
 import { jsonTextRef } from "@/lib/contracts/render-input";
-import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
 import { JSON_TEXT_PLACEHOLDER, setJsonText, type RawExecutor } from "@/lib/db/json-text";
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -414,12 +414,11 @@ async function setSchemaTexts(
 ): Promise<void> {
   const text = (t: Uint8Array<ArrayBuffer> | null) => (t === null ? null : textOf(t));
   await tx.$executeRaw(Prisma.sql`
-    UPDATE "ContractSnapshot" SET "schemasText" = ${textOf(texts.schemas)}, "createBodyText" = ${text(texts.create)}, "updateBodyText" = ${text(texts.update)},
-      "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION}
+    UPDATE "ContractSnapshot" SET "schemasText" = ${textOf(texts.schemas)}, "createBodyText" = ${text(texts.create)}, "updateBodyText" = ${text(texts.update)}
     WHERE "id" = ${rowId} AND "organizationId" = ${scope.organizationId}
   `);
   await tx.$executeRaw(Prisma.sql`
-    UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL, "schemaTextsVersion" = NULL
+    UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL
     WHERE "organizationId" = ${scope.organizationId} AND "interfaceId" = ${interfaceId} AND "id" <> ${rowId} AND "schemasText" IS NOT NULL
   `);
 }

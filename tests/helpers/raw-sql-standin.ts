@@ -177,17 +177,17 @@ export function applyRawWrite(tables: { snapshots: Row[]; interfaces?: Row[]; fi
     let n = 0;
     for (const r of tables.snapshots) {
       if ((r.organizationId ?? org) === org && r.interfaceId === interfaceId && r.id !== keep && typeof r.schemasText === "string") {
-        Object.assign(r, { schemasText: null, createBodyText: null, updateBodyText: null, schemaTextsVersion: null });
+        Object.assign(r, { schemasText: null, createBodyText: null, updateBodyText: null });
         n += 1;
       }
     }
     return n;
   }
   if (/^UPDATE "ContractSnapshot" SET "schemasText" = /.test(sql)) {
-    const [schemasText, createBodyText, updateBodyText, schemaTextsVersion, id, org] = values as [string, string | null, string | null, number, string, string];
+    const [schemasText, createBodyText, updateBodyText, id, org] = values as [string, string | null, string | null, string, string];
     const r = tables.snapshots.find((x) => x.id === id && (x.organizationId ?? org) === org);
     if (!r) return 0;
-    Object.assign(r, { schemasText, createBodyText, updateBodyText, schemaTextsVersion });
+    Object.assign(r, { schemasText, createBodyText, updateBodyText });
     return 1;
   }
   if (/^UPDATE "Interface" SET "responseSchema" = /.test(sql)) {

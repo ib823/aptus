@@ -8,7 +8,7 @@
  * reached. Type-only imports are erased and not followed.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import path from "path";
 
 import { describe, expect, it } from "vitest";
@@ -87,5 +87,34 @@ describe("GET /schema and its /v1 alias load nothing that renders, compiles or s
   it("and the import reader sees a forbidden module where one is imported (the test can fail)", () => {
     const graph = reached(path.join(ROOT, "src/app/api/studio/interfaces/[id]/scaffold/route.ts"));
     expect(graph.has(path.join(ROOT, "src/lib/contracts/envelope.ts"))).toBe(true);
+  });
+});
+
+/*
+ * NOTHING RE-RENDERS STORED /SCHEMA TEXTS OUTSIDE A TENANT'S JOB
+ * (consolidated containment review round 5). The build re-rendered every
+ * organisation's rows against production before `next build`, only ever
+ * forward, so a failed build or an Instant Rollback left the live deployment
+ * serving a newer render than its kit and document. The texts are written
+ * only where a verify or a capture records (snapshot.ts, setSchemaTexts),
+ * and the build runs no contracts script.
+ */
+describe("the /schema texts are written only by a record or a capture", () => {
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      return e.isDirectory() ? files(full) : /\.(ts|tsx|mjs|js)$/.test(e.name) ? [full] : [];
+    });
+
+  it("no module but snapshot.ts writes them", () => {
+    const writers = [...files(SRC), ...files(path.join(ROOT, "scripts"))]
+      .filter((f) => /"schemasText"\s*=/.test(readFileSync(f, "utf8")))
+      .map((f) => path.relative(ROOT, f));
+    expect(writers).toEqual(["src/lib/contracts/snapshot.ts"]);
+  });
+
+  it("vercel-build renders no contract", () => {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(pkg.scripts["vercel-build"]).not.toMatch(/rerender|schema-texts|contracts/);
   });
 });

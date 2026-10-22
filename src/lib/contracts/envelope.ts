@@ -22,8 +22,9 @@
  *   - SLOT FIRST: a job's inputs are loaded only once it holds its slot
  *     (runContractJob's loader), so a job refused or still waiting has cost
  *     the request thread nothing;
- *   - its organisation's daily allowance (contract-time.ts): checked and
- *     the job's deadline reserved in one statement once the job holds its
+ *   - its organisation's daily allowance (contract-time.ts): read before
+ *     the gate, so a spent organisation is refused ALLOWANCE at once
+ *     without queueing; then checked again and the job's deadline reserved in one statement once the job holds its
  *     slot (the gate is per process; the reservation holds across
  *     instances, and expires should it never be settled), and settled to
  *     the job's wall time from spawn to exit once the worker has gone. A
@@ -257,8 +258,9 @@ export interface EnvelopeOptions {
 }
 
 /**
- * Run one job in a fresh worker, in order: the gate, then with the slot
- * held the allowance (its deadline reserved) and `load` (null declines the
+ * Run one job in a fresh worker, in order: the admission (contractJobAdmission:
+ * the compiler on, the organisation's day not spent), the gate, then with the
+ * slot held the allowance (its deadline reserved) and `load` (null declines the
  * job, and null is answered), the worker, its exit, the slot freed, the
  * reservation settled to the wall time (0 for a job that never ran).
  */
@@ -272,7 +274,11 @@ export async function runContractJob<K extends Job["kind"]>(
   const deadlineAt = opts.deadlineAt ?? null;
   const limits = opts.limits ?? CONTRACT_JOB_LIMITS;
   const left = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
-  if (contractIsolates() === 0) return refuse("DISABLED", kind, queuedAt);
+  // Off, or the organisation's day spent: refused before the gate, so a spent
+  // organisation is told ALLOWANCE at once instead of waiting out a busy gate
+  // to be told BUSY (consolidated review round 5).
+  const admission = await contractJobAdmission<JobOutput<K>>(kind, tenant);
+  if (admission !== null) return admission;
   const wait = left(GATE.maxWaitMs);
   const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
   if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
@@ -312,7 +318,8 @@ export async function runContractJob<K extends Job["kind"]>(
 /**
  * Whether a job of this organisation may start at all: DISABLED while the
  * compiler is off, ALLOWANCE once the organisation has used its day; null
- * when it may. A read that reserves nothing: the verify asks it BEFORE it
+ * when it may. A read that reserves nothing, and every job's first step
+ * (runContractJob), before the gate. The verify also asks it BEFORE it
  * fetches a description (service-verify.ts), so an organisation whose time is
  * spent, or a deployment with the compiler off, costs no 8 MiB fetch and no
  * read of it on the request thread (consolidated review round 1); the record

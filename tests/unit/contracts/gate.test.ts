@@ -209,7 +209,7 @@ describe("the gate's bounds, before anything is loaded", () => {
   });
 });
 
-describe("the compiler turned off is answered before the gate; the allowance once the slot is held", () => {
+describe("the compiler turned off and a spent day are answered before the gate; the reservation once the slot is held", () => {
   it("COREEDGE_CONTRACT_ISOLATES=0: every job is DISABLED, nothing loaded or charged", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
@@ -228,6 +228,32 @@ describe("the compiler turned off is answered before the gate; the allowance onc
     expect(r).toMatchObject({ ok: false, reason: "ALLOWANCE", retryAfterMs: 3_600_000 });
     expect(r && !r.ok && r.detail).toContain("40 s of contract compile time");
     expect(load).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Consolidated containment review round 5: the allowance was read only
+   * once the slot was held, so on a busy gate a spent organisation queued,
+   * waited out its 10 s and was told BUSY "try again in a few seconds"
+   * until 00:00 UTC. It is read before the gate: ALLOWANCE at once, no
+   * waiting place taken, nothing reserved.
+   */
+  it("a spent organisation on a busy gate is refused ALLOWANCE at once, without queueing", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    time.reserve.mockClear();
+    const holder = holding();
+    const running = runContractJob("render", holder.load, { tenant: "org_busy_holder" });
+    await tick();
+    expect(contractGateState()).toMatchObject({ running: 1, waiting: 0 });
+    time.check.mockResolvedValueOnce({ ok: false, detail: "your organisation has used its 40 s of contract compile time for today.", retryAfterMs: 3_600_000 } as never);
+    const load = vi.fn(async () => null);
+    const spent = runContractJob("render", load, { tenant: "org_spent_busy" });
+    const first = await Promise.race([spent, tick().then(() => "still waiting" as const)]);
+    expect(first).toMatchObject({ ok: false, reason: "ALLOWANCE", retryAfterMs: 3_600_000 });
+    expect(contractGateState()).toMatchObject({ running: 1, waiting: 0 });
+    expect(load).not.toHaveBeenCalled();
+    expect(time.reserve).toHaveBeenCalledTimes(1);
+    holder.release();
+    await running;
   });
 
   /*

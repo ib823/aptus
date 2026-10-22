@@ -1964,14 +1964,12 @@ model ContractSnapshot {
   /// the create and update bodies (null when the contract has none), as compact
   /// JSON. At most one row of an interface holds them (the one /schema
   /// serves), at most 1 MiB together; null on every other row, and on rows
-  /// recorded before them, which /schema answers as NOT_RENDERED.
-  schemasText        String?
-  createBodyText     String?
-  updateBodyText     String?
-  /// The renderer version that wrote the three texts (SCHEMA_TEXTS_VERSION,
-  /// contracts/render-version.ts). /schema serves the texts whatever it is;
-  /// the build re-renders the rows of an older version (contracts/rerender.ts).
-  schemaTextsVersion Int?
+  /// recorded before them, which /schema answers as NOT_RENDERED. Served as
+  /// they are until the interface's next verify or capture renders them again,
+  /// whatever renderer wrote them.
+  schemasText    String?
+  createBodyText String?
+  updateBodyText String?
 
   /// Where a METADATA contract was read: the environment and connection whose
   /// binding answered the verify. Null for SAMPLED.

@@ -448,41 +448,13 @@ export function renderJob(stored: RenderJobInput): RenderJobOutput {
   }
 }
 
-// ---------------------------------------------------------------- texts (a stored row, re-rendered)
-
-/**
- * A stored snapshot's /schema texts rendered again from what the row holds —
- * its IR as `ir::text`, its dataset and its canonical size — after a deploy
- * that changed SCHEMA_TEXTS_VERSION (scripts/rerender-schema-texts.ts). The
- * same render the record wrote, from the same text, so the same bytes the
- * running renderer would write for that row; SAP is not asked.
- */
-export interface TextsJobInput {
-  ir: string;
-  entitySet: string;
-  bytes: number;
-}
-
-export type TextsJobOutput = { ok: true; texts: SchemaTexts } | { ok: false; reason: "OUTPUT_TOO_LARGE" };
-
-export function textsJob(input: TextsJobInput): TextsJobOutput {
-  try {
-    const t = renderSchemaTexts(JSON.parse(input.ir) as InterfaceContract, input.entitySet, input.bytes);
-    return { ok: true, texts: { schemas: utf8(t.schemas), create: t.create === null ? null : utf8(t.create), update: t.update === null ? null : utf8(t.update) } };
-  } catch (err) {
-    if (err instanceof BudgetExceeded) return { ok: false, reason: "OUTPUT_TOO_LARGE" };
-    throw err;
-  }
-}
-
 // ---------------------------------------------------------------- the jobs
 
 export type Job =
   | { kind: "record"; input: RecordJobInput }
   | { kind: "capture"; input: CaptureJobInput }
   | { kind: "fixture"; input: FixtureJobInput }
-  | { kind: "render"; input: RenderJobInput }
-  | { kind: "texts"; input: TextsJobInput };
+  | { kind: "render"; input: RenderJobInput };
 
 export type JobOutput<K extends Job["kind"]> = K extends "record"
   ? CompiledService
@@ -490,9 +462,7 @@ export type JobOutput<K extends Job["kind"]> = K extends "record"
     ? CaptureJobOutput
     : K extends "fixture"
       ? FixtureJobOutput
-      : K extends "texts"
-        ? TextsJobOutput
-        : RenderJobOutput;
+      : RenderJobOutput;
 
 export function runJob(job: Job): unknown {
   switch (job.kind) {
@@ -504,7 +474,5 @@ export function runJob(job: Job): unknown {
       return fixtureJob(job.input);
     case "render":
       return renderJob(job.input);
-    case "texts":
-      return textsJob(job.input);
   }
 }

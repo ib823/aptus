@@ -31,7 +31,6 @@ import { recordableContract, textOf } from "@/lib/contracts/jobs";
 import { buildContractSchemas, standaloneSchemas } from "@/lib/contracts/json-schema";
 import { toTypeName } from "@/lib/contracts/names";
 import { buildNorthboundOpenApi, type OpenApiVersion } from "@/lib/contracts/openapi";
-import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 
 import { validateOpenApi30, validateOpenApi31 } from "../../helpers/openapi-validate";
@@ -150,17 +149,17 @@ describe("one service in two forms", () => {
 });
 
 /*
- * THE /SCHEMA TEXTS ARE VERSIONED (consolidated review round 1). /schema
- * serves texts rendered at record time and stored with SCHEMA_TEXTS_VERSION;
- * a renderer change that is not a version bump would leave /schema serving
- * the old render beside a kit and a document rendering the new one under the
- * same contentHash. So each golden's texts are kept byte for byte, and the
- * digest of all of them is recorded per version in a plain file that `-u`
- * does not rewrite: a changed render fails here until the version is bumped
- * and its digest added (never an existing entry changed).
+ * THE /SCHEMA TEXTS ARE FROZEN (consolidated review rounds 1 and 5). /schema
+ * serves texts rendered at record time, and a stored row keeps them until its
+ * interface's next verify or capture, while the kit and the document render
+ * on every download: a renderer change leaves /schema one render behind them
+ * under the same contentHash until then. So each golden's texts are kept byte
+ * for byte, and the digest of all of them is kept in a plain file that `-u`
+ * does not rewrite: a changed render fails here until that file is changed
+ * deliberately (the fuzz test holds the shapes the goldens lack the same way).
  */
-describe("the /schema texts, as a verify records them, per renderer version", () => {
-  const VERSIONS = path.resolve(__dirname, GOLDEN, "schema-texts-versions.json");
+describe("the /schema texts, as a verify records them", () => {
+  const DIGEST = path.resolve(__dirname, GOLDEN, "schema-texts.sha256");
   const texts = CASES.filter((c) => !c.file.endsWith(".json")).map(({ file, entitySet }) => {
     const r = compileContract(readFileSync(path.join(EDMX, file), "utf8"));
     if (!r.ok) throw new Error(file);
@@ -178,15 +177,12 @@ describe("the /schema texts, as a verify records them, per renderer version", ()
     await expect(`${JSON.stringify(t, null, 2)}\n`).toMatchFileSnapshot(`${GOLDEN}/${base}/schema-texts.json`);
   });
 
-  it("their digest is the one recorded for SCHEMA_TEXTS_VERSION: a changed render bumps the version", () => {
+  it("their digest is the one recorded: a changed render is a deliberate change of the file", () => {
     const digest = createHash("sha256").update(JSON.stringify(texts)).digest("hex");
-    const recorded = JSON.parse(readFileSync(VERSIONS, "utf8")) as Record<string, string>;
     expect(
-      recorded[String(SCHEMA_TEXTS_VERSION)],
-      `The /schema texts changed (digest ${digest}). Bump SCHEMA_TEXTS_VERSION (src/lib/contracts/render-version.ts) and add its digest to ${path.basename(VERSIONS)}; never change an existing entry.`,
+      readFileSync(DIGEST, "utf8").trim(),
+      `The /schema texts changed (digest ${digest}). Stored rows keep their previous render until each interface's next verify or capture (docs/runbooks/coreedge-contract-compiler.md); if that is intended, write the new digest to ${path.basename(DIGEST)}.`,
     ).toBe(digest);
-    // Each version names one render: no two versions share a digest.
-    expect(new Set(Object.values(recorded)).size).toBe(Object.keys(recorded).length);
   });
 
   it("x-personal-data is written in the order the stored IR (jsonb) has it, as the kit and the document read it", () => {

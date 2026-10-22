@@ -11,4 +11,4 @@
 -- Print it with its _prisma_migrations line:
 --   pnpm migrations:backout-sql 20261024030000_contract_schema_texts
 DROP TABLE "ContractTime";
-ALTER TABLE "ContractSnapshot" DROP COLUMN "schemasText", DROP COLUMN "createBodyText", DROP COLUMN "updateBodyText", DROP COLUMN "schemaTextsVersion";
+ALTER TABLE "ContractSnapshot" DROP COLUMN "schemasText", DROP COLUMN "createBodyText", DROP COLUMN "updateBodyText";

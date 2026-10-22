@@ -7,11 +7,9 @@
 -- an interface holds them (the writer nulls the others in the same
 -- transaction), at most 1 MiB together; text, so PostgreSQL TOASTs and
 -- compresses them.
---
--- schemaTextsVersion: the renderer version that wrote them
--- (lib/contracts/render-version.ts). /schema serves the texts whatever it
--- is; the build re-renders the rows of an older version from their own IR
--- (lib/contracts/rerender.ts).
+-- They are served as they are until the interface's next verify or capture
+-- renders them again; nothing re-renders stored rows outside a job charged to
+-- their organisation.
 --
 -- ContractTime: each organisation's compiler wall time per UTC day, the one
 -- allowance that remains (lib/contracts/contract-time.ts): ms, the settled
@@ -28,8 +26,7 @@
 -- AlterTable
 ALTER TABLE "ContractSnapshot" ADD COLUMN     "createBodyText" TEXT,
 ADD COLUMN     "schemasText" TEXT,
-ADD COLUMN     "updateBodyText" TEXT,
-ADD COLUMN     "schemaTextsVersion" INTEGER;
+ADD COLUMN     "updateBodyText" TEXT;
 
 -- CreateTable
 CREATE TABLE "ContractTime" (

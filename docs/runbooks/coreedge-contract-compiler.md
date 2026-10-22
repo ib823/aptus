@@ -249,7 +249,6 @@ allow-listed `*.ondemand.com` host; operators and the platform are trusted.
 | `capture` | capture-schema | the raw request text (≤ 4.5 MiB), the previous heads | the captured schema's text and the small validated fields; the SAMPLED contract made ready as `record` makes one |
 | `fixture` | capture-fixture | the raw request text (≤ 4.5 MiB) | the compact body text (≤ 4.5 MiB), the scenario and status |
 | `render` | scaffold, solutions/[id]/openapi | the kit's or document's inputs, loaded once the job holds its slot (IRs as `ir::text`, the captured schema under the ≤ 1 MiB stored / ≤ 520 KiB served decision, fixture bodies size-first ≤ 8 MiB, the grants), ≤ 16 MiB (`INPUT_TOO_LARGE` past it) | the kit's files or the document, under its budget (32 MiB caps, 32 KiB per interface, 1,016 interfaces) |
-| `texts` | scripts/rerender-schema-texts.ts (the build) | a stored row's `ir::text` (≤ 2 MiB), its dataset and size; no tenant | its `/schema` texts, under the same 1 MiB cap (`OUTPUT_TOO_LARGE` past it) |
 
 Everything the request thread only stores or sends crosses back as UTF-8
 bytes, transferred, and is written as text. **The `/schema` texts** — the
@@ -262,11 +261,7 @@ it is stored**: the jsonb column keeps object keys shorter-first, then
 bytewise, and the kit and the document render `ir::text`, so the texts are
 rendered from the contract in that order (`inJsonbKeyOrder`), and a contract
 whose hash is the interface's current row's is rendered from that row's own
-`ir::text` (which a new row of it then stores too). They are stored with
-`SCHEMA_TEXTS_VERSION` (`src/lib/contracts/render-version.ts`), and served
-whatever version wrote them (consolidated review round 3): each is a
-self-consistent render of the row's own IR, and the version only picks the
-rows the build renders again (below). Each record or capture write is **one
+`ir::text` (which a new row of it then stores too). Each record or capture write is **one
 transaction**: the snapshot (or nothing, when UNCHANGED), its IR and diff,
 the texts on the row they were rendered from when it is the row `/schema`
 will serve (a new row, or — UNCHANGED — the current row, re-rendered from its
@@ -274,34 +269,30 @@ own IR, so the same bytes it held), the texts nulled on every other row of
 the interface, and the write interface's `requestSchema` stamp; a capture's
 schema on the interface in the same transaction, or nothing.
 
-**A renderer change is re-rendered by the build, not by re-verifying.** Any
-change to what `renderSchemaTexts` writes (`json-schema.ts`, or how it is
-called) bumps `SCHEMA_TEXTS_VERSION` and adds its digest to
-`tests/fixtures/contracts/golden/schema-texts-versions.json` (the golden
-test fails until it does). The texts are a pure function of the row's own
-`ir::text`, dataset and size, so `vercel-build` runs
-`scripts/rerender-schema-texts.ts` after the migrations
-(`src/lib/contracts/rerender.ts`): each interface's current row whose texts
-are absent or of an **older** version — and no other row of the interface
-holds texts — is rendered again in a worker job with no tenant (its heap and
-deadline as any job's, no organisation's allowance) and written only while
-still so, so a verify that recorded meanwhile is never overwritten, and an
-old deployment's run never downgrades a newer render. The bytes are the ones
-a record would write for that row. The rows are taken **in turn across
-organisations** (each organisation's first row, then each one's second, …),
-so an organisation with many interfaces delays only its own rows. The run
-never fails the build: it stops after 5 minutes, logs
-`[rerender-schema-texts] version N: … rendered, … refused, … left` and exits
-0; `left > 0` is logged as a WARNING: those rows serve their previous render
-until the next deploy's run or a run by hand (`pnpm exec tsx
-scripts/rerender-schema-texts.ts`, a checkout against the production
-database). A row it refuses (its texts past 1 MiB, or a job limit) keeps
-what it holds. **It runs while the previous deployment still serves**, and
-that is safe: the old deployment serves the new render early, the new one
-serves the old render of a row not yet reached, neither answers
-`NOT_RENDERED` because of a version, and a failed or unpromoted build leaves
-every row servable. An Instant Rollback needs nothing run. The kit and the
-document are unaffected either way.
+**A renderer change reaches `/schema` at each interface's next verify or
+capture, never by a backfill.** Nothing renders stored rows outside a job
+charged to their organisation: no build step, no script, no job without a
+tenant (consolidated containment review round 5 removed the build's
+re-render, which ran against production before `next build`, so a failed
+build, an unpromoted one or an Instant Rollback left the live deployment
+serving a newer render it could not produce). `/schema` serves a row's stored
+texts as they are, whichever renderer wrote them: each is a self-consistent
+render of the row's own IR. Every verify — UNCHANGED included — and every
+capture renders the current row's texts again, inside the gate and charged
+to the organisation. So after a deploy that changes what `renderSchemaTexts`
+writes, an interface's `/schema` stays **one render behind** its kit and
+document under the same `contentHash` until its next verify or capture
+(accepted risk R11); after an Instant Rollback or a revert, the rows a
+verify re-rendered on the newer deployment stay ahead the same way until
+verified again on the older one. **Any such change is deliberate**: the
+golden test holds the goldens' texts to the digest in
+`tests/fixtures/contracts/golden/schema-texts.sha256`, and the fuzz test
+holds every seeded fuzz dataset's `/schema` (no stamp, CREATE and UPDATE) to
+what f54c6f5a's own renderer wrote
+(`tests/fixtures/contracts/fuzz-schema-reads.f54c6f5a.json`); neither file
+is rewritten by `-u`. A release that changes either says so in its notes, so
+that builders whose consumers validate against `requestSchema` can verify
+their interfaces again. The kit and the document are unaffected either way.
 
 **The gate (`src/lib/contracts/envelope.ts`), per function instance.** Vercel
 groups a Next app's routes into functions by their configuration, and each
@@ -319,7 +310,7 @@ one bound that holds across all of them (it is reserved in Postgres).
 | Dispatch | a freed slot goes to the waiting job whose organisation was served least recently (never served first; first in, first out on a tie; the map forgets an organisation after an hour) |
 | Wait | at most min(10 s, the caller's deadline); then `BUSY`, out of the queue |
 | Worker limits | old generation 384 MB, young 32 MB, stack 4 MB, 10 s from spawn (or less: the caller's deadline bounds wait and run together) |
-| Order per job | queue → slot held → allowance checked and the job's deadline (10 s) reserved, in one statement → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
+| Order per job | admission (the compiler on, the organisation's day not spent: one read, refused `DISABLED` or `ALLOWANCE` at once, before any queue) → queue → slot held → allowance checked and the job's deadline (10 s) reserved, in one statement → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
 
 A job's slot is free only once its worker has exited (5 s grace, logged), so
 live isolates never pass `COREEDGE_CONTRACT_ISOLATES`. The heap cap survives
@@ -360,12 +351,15 @@ therefore never verifies: custom writes cannot be unlocked until it is on
 again.
 
 **Each organisation's compiler time (`src/lib/contracts/contract-time.ts`).**
-One row per organisation and UTC day in `ContractTime`: a job is refused,
-once it holds its slot and before anything is loaded, when the organisation has used
+One row per organisation and UTC day in `ContractTime`: a job is refused
+when the organisation has used
 `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` (default 40; 0 is unlimited), and
 every job is charged its wall time from spawn to exit — verify, capture,
 fixture, kit and document alike, a job killed at its deadline or heap
-included. **Reserved, then settled** (consolidated review round 2): the gate
+included. The day is read **before the gate** (consolidated containment
+review round 5; before, a spent organisation queued, waited out a busy gate's
+10 s and was told `BUSY`, retry in seconds, until 00:00 UTC), and checked
+again once the job holds its slot. **Reserved, then settled** (consolidated review round 2): the gate
 is per instance, so a check that only read the row let every instance admit
 its own queue for an organisation already at its cap. The row keeps the
 settled time (`ms`) and the deadlines of the jobs in flight (`reservedMs`)
@@ -404,7 +398,7 @@ never touches it.
 | verify-service | `contract: NOT_COMPILED`, retry in 5 s (also while the organisation's jobs in flight hold the rest of its day); a 4th concurrent verify of one organisation `status: BUSY` before SAP is asked | `status: COMPILER_UNAVAILABLE` before SAP is asked, the stored datasets, `contract: NOT_COMPILED`, its words, retry at 00:00 UTC | `status: COMPILER_UNAVAILABLE` before SAP is asked, `NOT_COMPILED` "compiler disabled" | `NOT_COMPILED` (`TOO_LARGE`, `OUTPUT_TOO_LARGE`, `RESOURCE_LIMIT`) |
 | capture-schema, capture-fixture | 503, `Retry-After: 5`, nothing stored | 429 until 00:00 UTC, nothing stored | 503, nothing stored | 422 `TOO_LARGE`; a body past 4.5 MiB has its own message |
 | scaffold, solutions/[id]/openapi (deadline 25 s) | 503, `Retry-After: 5` | 429 until 00:00 UTC | 503, no `Retry-After` | 422 with the input's or the output's message |
-| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, whatever `SCHEMA_TEXTS_VERSION` wrote the texts it has (its `schemasNote` says verify again for `metadata`, capture again for `sampled`) |
+| `/schema`, `/v1/…/schema` | never | never | unaffected | `schemasOmitted: TOO_LARGE` past the documents' budget; `NOT_RENDERED` for a current snapshot without texts, whichever renderer wrote the texts it has (its `schemasNote` says verify again for `metadata`, capture again for `sampled`) |
 
 The Studio screens say a refused download: the Test Console's Generate and
 the Solutions screen's OpenAPI buttons (fetched, no longer a plain link that
@@ -550,7 +544,11 @@ the stored texts is f54c6f5a's rendered `/schema`, with and without a current
 stamp (`tests/unit/contracts/jobs.test.ts`,
 `tests/property/contracts-fuzz.property.test.ts`, against
 `tests/helpers/schema-reference.ts`, which renders the contract as jsonb
-returns it — f54c6f5a rendered `ir::text` — and, in
+returns it — f54c6f5a rendered `ir::text` — with the current renderer, so it
+holds the splice; the fuzz test also holds every seeded dataset to the
+digests f54c6f5a's own `renderForRead("schema")` wrote
+(`tests/fixtures/contracts/fuzz-schema-reads.f54c6f5a.json`), so it holds
+the renderer too; and, in
 `tests/integration/contract-snapshots.test.ts`, the stored row's own
 `ir::text`); each golden's texts are kept byte for byte
 (`tests/fixtures/contracts/golden/*/schema-texts.json`); the kit and the document of every
@@ -565,7 +563,8 @@ weights and asserts, for every case, that the compile never throws; that a
 sample — refused descriptions too — gives the same answer as the record job
 in the real envelope and in process, field by field; that every dataset is
 made ready to record inside its budgets or refused for a stated one; that its
-`/schema` is f54c6f5a's byte for byte; and that the kit and the document
+`/schema` is f54c6f5a's byte for byte (for seed 13, against the digests
+f54c6f5a's own renderer wrote); and that the kit and the document
 render under their budgets or are refused there, in linear time. CI runs
 120 cases from seed 13 (deterministic); `CONTRACTS_FUZZ_ITERATIONS` and
 `CONTRACTS_FUZZ_SEED` for a long local run.
@@ -635,25 +634,25 @@ it prevents.
   the day's refusal.
 - **R7. `NOT_RENDERED` after an interface is pointed back to an earlier
   dataset without a re-verify.** The earlier row lost its texts to the newer
-  one, and the build's re-render leaves it alone (the newer row still holds
-  texts). Fix: verify again for a `metadata` contract, capture again in the
+  one. Fix: verify again for a `metadata` contract, capture again in the
   Test Console for a `sampled` one; the `schemasNote` says which.
-- **R11. The previous render, after a renderer change, for the rows the
-  build's re-render does not render.** `scripts/rerender-schema-texts.ts`
-  re-renders every current row of an older version from its stored IR in
-  `vercel-build`; a row whose texts under the new renderer pass 1 MiB (or
-  that hits a job limit) is refused and logged, and rows past the run's
-  5-minute budget are left (a WARNING in the build log). Those interfaces
-  keep serving their previous, self-consistent render — never
-  `NOT_RENDERED` for a version (consolidated review round 3) — while the kit
-  and the document render the new one under the same `contentHash`; during
-  a deploy the live deployment likewise serves rows the build has already
-  re-rendered. The bound: the deploy window (about 6-11 minutes measured)
-  for every row, and for a row the run leaves, until the next deploy's run
-  or a run by hand. The run covers about 0.15-0.5 s per row on one vCPU, so
-  the 5 minutes reach about 600-2,000 interfaces per run, taken in turn
-  across organisations, so one organisation's many interfaces delay only its
-  own.
+- **R11. `/schema` one render behind after a renderer change, until the
+  interface's next verify or capture.** Nothing re-renders stored rows (no
+  build step, no script; consolidated containment review round 5), so after
+  a deploy that changes what `renderSchemaTexts` writes, every interface's
+  `/schema` keeps serving its previous, self-consistent render of the same
+  IR — never `NOT_RENDERED` for it — while the kit and the document render
+  the new one under the same `contentHash`. After an Instant Rollback or a
+  revert, the interfaces verified on the newer deployment stay ahead the
+  same way. The bound: per interface, until its next verify or capture,
+  which re-renders its texts (UNCHANGED included) inside the gate and
+  charged to its organisation; nothing else is wrong meanwhile (the IR, the
+  hash, the kit and the document are current). Such a change cannot happen
+  by accident: the goldens' digest (`schema-texts.sha256`) and the seeded
+  fuzz datasets' digests from f54c6f5a (`fuzz-schema-reads.f54c6f5a.json`)
+  fail the tests until changed deliberately, and the release notes then say
+  to verify again. Closing it would need a tenant-less re-render over every
+  organisation's rows, the mechanism round 5 removed.
 - **R8. Storage.** Texts ≤ 1 MiB per interface; IR history as before. There is
   no organisation storage quota; that gap predates this change.
 - **R9. Vercel's runtime heap flags are unverified.** The jobs fail closed
@@ -667,10 +666,9 @@ it prevents.
   and update bodies, about 1,000 without — wider than any dataset of the
   goldens or the corpus list we know of, but not proven against SAP's own
   descriptions here (`pnpm contracts:corpus` needs
-  `SAP_API_HUB_SANDBOX_API_KEY`; run it before promoting). After this change,
-  the build's re-render gives the texts to every interface verified before
-  it whose row keeps its size (`irBytes`); a row from before that column
-  answers `NOT_RENDERED` until verified again. A verify of an
+  `SAP_API_HUB_SANDBOX_API_KEY`; run it before promoting). There is no
+  backfill: a snapshot without texts answers `NOT_RENDERED` until its
+  interface is verified (or captured) again. A verify of an
   organisation whose compile time is spent, or with the compiler off, is
   `COMPILER_UNAVAILABLE` and verifies nothing. A contract whose kit or document passes its budget is now recorded
   and refused only at download. A 4th concurrent verify of one organisation

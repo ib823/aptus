@@ -763,7 +763,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     expect(await record({ scope, iface, contract: swapped, environment: "DEV" })).toMatchObject({ status: "UNCHANGED" });
     expect(await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE")).toEqual(before);
     // Lost, and re-rendered by the swapped verify: from the row's own IR, so the same bytes.
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL, "schemaTextsVersion" = NULL WHERE "id" = ${first.snapshot.id} AND "organizationId" = ${ORG}`;
+    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemasText" = NULL, "createBodyText" = NULL, "updateBodyText" = NULL WHERE "id" = ${first.snapshot.id} AND "organizationId" = ${ORG}`;
     expect(await record({ scope, iface, contract: swapped, environment: "PROD" })).toMatchObject({ status: "UNCHANGED" });
     expect(await snapshotSchemaTexts(scope, first.snapshot.id, "UPDATE")).toEqual(before);
     // And they are what f54c6f5a's /schema rendered from the stored row's ir::text.

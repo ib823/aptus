@@ -34,7 +34,7 @@ import { longestStall } from "../helpers/stall";
 vi.setConfig({ testTimeout: 180_000 });
 
 /** Every statement the app's client sends, counted (the base client's query events). */
-const counter = vi.hoisted(() => ({ queries: 0, onQuery: null as ((query: string, params: string) => void) | null }));
+const counter = vi.hoisted(() => ({ queries: 0 }));
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -43,9 +43,8 @@ vi.mock("@/lib/db/prisma", async () => {
     datasourceUrl: process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused",
     log: [{ emit: "event", level: "query" }],
   });
-  base.$on("query", (e) => {
+  base.$on("query", () => {
     counter.queries += 1;
-    counter.onQuery?.(e.query, e.params);
   });
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
@@ -72,8 +71,6 @@ import { planDocInputs } from "@/lib/contracts/doc-inputs";
 import { CONTRACT_JOB_LIMITS, contractJobAdmission, runJobInEnvelope } from "@/lib/contracts/envelope";
 import { recordJob, type CompiledService, type Job } from "@/lib/contracts/jobs";
 import { recordVerifiedContract, snapshotBodies } from "@/lib/contracts/record";
-import { SCHEMA_TEXTS_VERSION } from "@/lib/contracts/render-version";
-import { rerenderSchemaTexts } from "@/lib/contracts/rerender";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import * as snapshots from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
@@ -617,151 +614,5 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     vi.unstubAllEnvs();
     expect(refused.status).toBe(429);
     expect(Number(refused.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
-  });
-
-  /*
-   * Consolidated review round 2: a deploy that bumps SCHEMA_TEXTS_VERSION (or
-   * an Instant Rollback across one) left every interface's /schema
-   * NOT_RENDERED until each was re-verified against its live SAP system. The
-   * texts are a pure function of the stored row, so the build re-renders them
-   * from it (scripts/rerender-schema-texts.ts).
-   */
-  it("after a renderer-version change the stored rows are re-rendered from their own IR, byte for byte, never over a newer render", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const iface = await newInterface("rerender", { operation: "CREATE", mode: "WRITE" });
-    const entitySet = iface.entitySet!;
-    const record = async (description: string) => {
-      const heads = await snapshots.loadRecordHeads(scope, iface, "DEV");
-      const job = await runJobInEnvelope({ kind: "record", input: { description, entitySet, ...heads } }, { tenant: ORG });
-      const compiled: CompiledService = job.ok ? job.value : { ok: false, reason: job.reason, detail: job.detail };
-      return recordVerifiedContract({ scope, iface: { ...iface, entitySet }, compiled, heads, environment: "DEV", connectionId: "conn_dev", actorId: "u_r5" });
-    };
-    expect(await record(wideDescription(40))).toMatchObject({ status: "RECORDED" });
-    expect(await record(wideDescription(40, "Other"))).toMatchObject({ status: "RECORDED", semver: "2.0.0" });
-    type Texts = { id: string; schemasText: string | null; createBodyText: string | null; updateBodyText: string | null; schemaTextsVersion: number | null };
-    const rows = async () =>
-      prisma.contractSnapshot.findMany({
-        where: { organizationId: ORG, interfaceId: iface.id },
-        orderBy: { semverMajor: "asc" },
-        select: { id: true, schemasText: true, createBodyText: true, updateBodyText: true, schemaTextsVersion: true },
-      }) as Promise<Texts[]>;
-    const [older, current] = await rows();
-    expect(older!.schemasText).toBeNull();
-    expect(current!.schemasText).not.toBeNull();
-    const rendered = { ...current! };
-
-    // Texts of an older renderer version (a bump): rendered again, the same bytes.
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION - 1} WHERE "id" = ${current!.id}`;
-    const outcome = await rerenderSchemaTexts({ organizationId: ORG });
-    expect(outcome.rendered).toBeGreaterThanOrEqual(1);
-    expect((await rows())[1]).toEqual(rendered);
-    // A newer version's (an old deployment's run, after a rollback): never downgraded (round 3).
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION + 1} WHERE "id" = ${current!.id}`;
-    await rerenderSchemaTexts({ organizationId: ORG });
-    expect((await rows())[1]).toEqual({ ...rendered, schemaTextsVersion: SCHEMA_TEXTS_VERSION + 1 });
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION} WHERE "id" = ${current!.id}`;
-    // Nothing to do: nothing written.
-    const again = await rerenderSchemaTexts({ organizationId: ORG });
-    expect((await rows())[1]).toEqual(rendered);
-    expect(again.rendered).toBe(0);
-
-    // Another row of the interface holds texts (a verify wrote them meanwhile, or the interface was pointed back): never overwritten.
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION - 1} WHERE "id" = ${current!.id}`;
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemasText" = '{}', "schemaTextsVersion" = ${SCHEMA_TEXTS_VERSION} WHERE "id" = ${older!.id}`;
-    await rerenderSchemaTexts({ organizationId: ORG });
-    expect((await rows())[1]!.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION - 1);
-    await prisma.$executeRaw`UPDATE "ContractSnapshot" SET "schemasText" = NULL, "schemaTextsVersion" = NULL WHERE "id" = ${older!.id}`;
-
-    // Its own deadline: past it, the rest are left for the next run, and nothing is written.
-    const late = await rerenderSchemaTexts({ deadlineAt: Date.now() - 1, organizationId: ORG });
-    expect(late).toMatchObject({ rendered: 0 });
-    expect(late.left).toBeGreaterThanOrEqual(1);
-    expect((await rows())[1]!.schemaTextsVersion).toBe(SCHEMA_TEXTS_VERSION - 1);
-    // A run within it puts the row back; no organisation was charged for it.
-    const before = await msToday(ORG);
-    await rerenderSchemaTexts({ organizationId: ORG });
-    expect((await rows())[1]).toEqual(rendered);
-    expect(await msToday(ORG)).toBe(before);
-  });
-  /*
-   * Consolidated review round 3: the build's re-render took the rows in
-   * organisation order and stopped at its budget, and /schema served texts
-   * only at the running version, so one organisation with a few hundred
-   * interfaces left every organisation sorted after it NOT_RENDERED after a
-   * deploy. The rows are now taken in turn across organisations, and a row
-   * the run does not reach keeps serving its previous render.
-   */
-  it("the re-render takes organisations in turn, and a row it does not reach still serves its previous texts", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    // A recorded contract and its texts, copied to 30 interfaces of ORG (A) and one of OTHER (B), all an older render.
-    const model = await newInterface("rr-model");
-    const heads = await snapshots.loadRecordHeads(scope, model, "DEV");
-    const job = await runJobInEnvelope({ kind: "record", input: { description: wideDescription(10), entitySet: model.entitySet!, ...heads } }, { tenant: null });
-    const compiled: CompiledService = job.ok ? job.value : { ok: false, reason: job.reason, detail: job.detail };
-    expect(await recordVerifiedContract({ scope, iface: { ...model, entitySet: model.entitySet! }, compiled, heads, environment: "DEV", connectionId: "conn_dev", actorId: "u_r5" })).toMatchObject({ status: "RECORDED" });
-    const otherSolution = await prisma.solution.create({
-      data: { organizationId: OTHER, name: "Round 3", slug: `${RUN}-other-app`, classification: "CLIENT_APP", businessProblem: "Round 3.", dataClass: "INTERNAL", status: "ACTIVE" },
-      select: { id: true },
-    });
-    const ifaceOf = (organizationId: string, id: string, sol: string) => ({
-      id,
-      organizationId,
-      solutionId: sol,
-      name: id,
-      sapProduct: "s4hana",
-      externalId: model.externalId,
-      operation: "READ",
-      mode: "READ",
-      entitySet: model.entitySet,
-    });
-    const aIds = Array.from({ length: 30 }, (_, i) => `${RUN}-rr-a-${String(i).padStart(2, "0")}`);
-    const bId = `${RUN}-rr-b-00`;
-    await prisma.interface.createMany({ data: [...aIds.map((id) => ifaceOf(ORG, id, solutionId)), ifaceOf(OTHER, bId, otherSolution.id)] });
-    const [src] = await prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "ContractSnapshot" WHERE "organizationId" = ${ORG} AND "interfaceId" = ${model.id} AND "schemasText" IS NOT NULL`;
-    for (const [organizationId, interfaceId] of [...aIds.map((id) => [ORG, id] as const), [OTHER, bId] as const]) {
-      await prisma.$executeRaw`
-        INSERT INTO "ContractSnapshot" ("id", "organizationId", "interfaceId", "interfaceVersion", "externalId", "entitySet", "source", "odataVersion",
-          "semver", "semverMajor", "semverMinor", "semverPatch", "contentHash", "ir", "irVersion", "irBytes", "diff",
-          "schemasText", "createBodyText", "updateBodyText", "schemaTextsVersion", "createdAt")
-        SELECT ${`${interfaceId}-snap`}, ${organizationId}, ${interfaceId}, 1, "externalId", "entitySet", "source", "odataVersion",
-          "semver", "semverMajor", "semverMinor", "semverPatch", "contentHash", "ir", "irVersion", "irBytes", NULL,
-          "schemasText", "createBodyText", "updateBodyText", ${SCHEMA_TEXTS_VERSION - 1}, now()
-        FROM "ContractSnapshot" WHERE "id" = ${src!.id}`;
-    }
-    // The run's clock jumps past its deadline once B's row has been rendered (or after three of A's, which
-    // organisation order would reach first): whatever the machine's speed, the run renders a known prefix.
-    const realNow = Date.now.bind(Date);
-    let jump = 0;
-    const read: string[] = [];
-    vi.spyOn(Date, "now").mockImplementation(() => realNow() + jump);
-    counter.onQuery = (query, params) => {
-      if (!query.includes('"ir"::text')) return;
-      const org = params.includes(`"${OTHER}"`) ? "B" : params.includes(`"${ORG}"`) ? "A" : "?";
-      if (read.includes("B") || read.filter((o) => o === "A").length >= 3) jump = 3_600_000;
-      read.push(org);
-    };
-    let outcome;
-    try {
-      outcome = await rerenderSchemaTexts({ deadlineAt: realNow() + 600_000 });
-    } finally {
-      counter.onQuery = null;
-      vi.mocked(Date.now).mockRestore();
-    }
-    // B's one row came before A's second: in turn, not in organisation order.
-    const secondA = read.indexOf("A", read.indexOf("A") + 1);
-    expect(read.indexOf("B"), read.join(",")).toBeGreaterThanOrEqual(0);
-    expect(secondA === -1 || read.indexOf("B") < secondA, read.join(",")).toBe(true);
-    expect(outcome.left).toBeGreaterThanOrEqual(25);
-    const version = async (organizationId: string, id: string) =>
-      (await prisma.contractSnapshot.findFirst({ where: { organizationId, interfaceId: id }, select: { schemaTextsVersion: true } }))?.schemaTextsVersion;
-    expect(await version(OTHER, bId)).toBe(SCHEMA_TEXTS_VERSION);
-    // A's rows the run did not reach still serve their previous texts: never NOT_RENDERED for a version.
-    const left = aIds.at(-1)!;
-    expect(await version(ORG, left)).toBe(SCHEMA_TEXTS_VERSION - 1);
-    const summaries = await snapshots.currentSnapshotSummaries(scope, [{ id: left, externalId: model.externalId, entitySet: model.entitySet }]);
-    expect(summaries.get(left)?.schemasBytes).toBeGreaterThan(0);
-    const texts = await snapshots.snapshotSchemaTexts(scope, `${left}-snap`, null);
-    expect(texts?.schemas).toBeTruthy();
-    await prisma.contractSnapshot.deleteMany({ where: { organizationId: { in: [ORG, OTHER] }, interfaceId: { in: [...aIds, bId] } } });
   });
 });
