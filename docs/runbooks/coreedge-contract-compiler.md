@@ -57,7 +57,9 @@ stored snapshot in a worker.
   schemas were not rendered when it was recorded (`schemasNote` says what
   renders them: for a `metadata` contract, verify the service again; for a
   `sampled` one, capture the schema again in the Test Console, or verify the
-  service if its description compiles).
+  service if its description compiles). A version recorded while `/schema`
+  reads is served, never answered `NOT_RENDERED` (consolidated containment
+  review round 6: the route reads the new head once more).
 - `GET /api/studio/interfaces` no longer returns `requestSchema` (always null
   before P1.3); it returns `hasRequestSchema`, as the Studio page does.
 - `POST /api/studio/interfaces/{id}/verify-service` adds `contract` to its answer
@@ -310,7 +312,7 @@ one bound that holds across all of them (it is reserved in Postgres).
 | Dispatch | a freed slot goes to the waiting job whose organisation was served least recently (never served first; first in, first out on a tie; the map forgets an organisation after an hour) |
 | Wait | at most min(10 s, the caller's deadline); then `BUSY`, out of the queue |
 | Worker limits | old generation 384 MB, young 32 MB, stack 4 MB, 10 s from spawn (or less: the caller's deadline bounds wait and run together) |
-| Order per job | admission (the compiler on, the organisation's day not spent: one read, refused `DISABLED` or `ALLOWANCE` at once, before any queue) → queue → slot held → allowance checked and the job's deadline (10 s) reserved, in one statement → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
+| Order per job | admission (the compiler on, the organisation's day not spent: one read, refused `DISABLED` or `ALLOWANCE` at once, before any queue) → queue → slot held → allowance checked and the job's deadline (10 s) reserved, in one statement → load inputs → spawn → result and the worker's exit → reservation settled to the wall time (0 for a job that never ran) → slot freed (settled first, so the organisation's next job never reserves against this one's reservation: consolidated containment review round 6) |
 
 A job's slot is free only once its worker has exited (5 s grace, logged), so
 live isolates never pass `COREEDGE_CONTRACT_ISOLATES`. The heap cap survives

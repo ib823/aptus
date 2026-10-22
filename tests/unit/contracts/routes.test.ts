@@ -52,6 +52,8 @@ const { db, mocks } = vi.hoisted(() => ({
     contractTimeMs: 0,
     /** Every raw statement sent, for the reads that must send none of some. */
     sql: [] as string[],
+    /** Run once just before the next /schema texts read is answered: a record committing between /schema's two reads. */
+    beforeSchemaTexts: null as null | (() => Promise<void>),
   },
   mocks: { user: vi.fn(), binding: vi.fn(), authHeaders: vi.fn(), audit: vi.fn(), record: vi.fn(), hub: vi.fn(), rate: vi.fn() },
 }));
@@ -149,6 +151,11 @@ vi.mock("@/lib/db/prisma", async () => {
       // And what the contract paths ask in one statement each (raw-sql-standin.ts).
       $queryRaw: async (q: unknown) => {
         db.sql.push(sqlOf(q));
+        const hook = isSchemaTextsQuery(q) ? db.beforeSchemaTexts : null;
+        if (hook) {
+          db.beforeSchemaTexts = null;
+          await hook();
+        }
         return sqlOf(q).includes('"ContractTime"')
           ? // A job's reservation (contract-time.ts) returns no row once the day is spent; a check reads the row.
             sqlOf(q).includes("RETURNING") && db.contractTimeMs >= contractSecondsPerOrgDay() * 1000
@@ -284,6 +291,7 @@ beforeEach(() => {
   db.failSnapshotCreate = false;
   db.contractTimeMs = 0;
   db.sql = [];
+  db.beforeSchemaTexts = null;
   seed();
   mocks.user.mockResolvedValue(BUILDER);
   mocks.binding.mockResolvedValue({ ok: true, connection: CONNECTION, bindingUnverified: false });
@@ -1170,6 +1178,36 @@ describe("the read paths and the compiler", () => {
     // A verify of the same contract re-attaches them, rendered from the row's own IR: the same bytes.
     expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "UNCHANGED" });
     expect(await schemaRoute().then((r) => r.text())).toBe(rendered);
+  });
+
+  /*
+   * Consolidated containment review round 6: /schema reads the current row's
+   * summary and its texts in two statements, and a record commits its new
+   * row with the texts moved onto it in between. The route answered
+   * NOT_RENDERED ("Verify the service again") for a contract that had texts.
+   */
+  it("a version recorded between /schema's summary and its texts is served, never NOT_RENDERED", async () => {
+    await verify();
+    expect(db.snapshots[0]).toMatchObject({ semver: "1.0.0" });
+    const changed = RAP.replace(
+      '<Property Name="SalesOrderType" Type="Edm.String" Nullable="false" MaxLength="4"/>',
+      '<Property Name="SalesOrderType" Type="Edm.String" Nullable="false" MaxLength="4"/><Property Name="DeliveryNote" Type="Edm.String" MaxLength="40"/>',
+    );
+    expect(changed).not.toBe(RAP);
+    vi.stubGlobal("fetch", vi.fn(async () => xml(changed)));
+    // The summary has picked 1.0.0; the record of 1.1.0 commits before its texts are read.
+    db.beforeSchemaTexts = async () => {
+      expect((await data<{ contract: Row }>(await verify())).contract).toMatchObject({ status: "RECORDED", semver: "1.1.0" });
+    };
+    const d = await data<{ contract: Row & { schemas: { record: { properties: Row } } | null } }>(await schemaRoute());
+    expect(db.beforeSchemaTexts).toBeNull();
+    expect(db.snapshots[0]!.schemasText).toBeNull();
+    expect(d.contract).toMatchObject({ source: "metadata", semver: "1.1.0", snapshotId: db.snapshots[1]!.id });
+    expect(d.contract).not.toHaveProperty("schemasOmitted");
+    expect(d.contract.schemas!.record.properties).toHaveProperty("DeliveryNote");
+    // The same contract a read after the record gives. (Its requestSchema
+    // follows the interface's stamp, read before the record moved it.)
+    expect(JSON.stringify(d.contract)).toBe(JSON.stringify((await data<{ contract: Row }>(await schemaRoute())).contract));
   });
 
   it("with the organisation's compiler time spent: /schema still serves; the kit and the document are 429 until 00:00 UTC; the verify's contract says so", async () => {

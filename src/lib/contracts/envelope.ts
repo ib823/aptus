@@ -309,9 +309,16 @@ export async function runContractJob<K extends Job["kind"]>(
     wallMs = ran.wallMs;
     return ran.result;
   } finally {
-    release();
     // Settled to the wall time from spawn to exit; a job that never ran gives its reservation back.
-    if (tenant !== null && reservation !== null && (wallMs > 0 || reservation.ms > 0)) await chargeContractTime(tenant, wallMs, reservation.at, reservation.ms);
+    // Settled BEFORE the slot is freed, so the organisation's next job, which
+    // release() hands the slot at once, never reserves against this job's
+    // reservation still on the row (consolidated containment review round 6).
+    // chargeContractTime never throws; release() runs whatever happens.
+    try {
+      if (tenant !== null && reservation !== null && (wallMs > 0 || reservation.ms > 0)) await chargeContractTime(tenant, wallMs, reservation.at, reservation.ms);
+    } finally {
+      release();
+    }
   }
 }
 

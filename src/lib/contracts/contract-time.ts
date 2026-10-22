@@ -18,7 +18,9 @@
  * checks it (reserveContractTime), once it holds its slot in the gate, and
  * settles to its real wall time once its worker has gone (chargeContractTime
  * with what it reserved). A process holds at most one reservation per
- * organisation (the gate runs one job of an organisation at a time), so the
+ * organisation (the gate runs one job of an organisation at a time, and a
+ * job settles before it frees its slot: consolidated containment review
+ * round 6), so the
  * day's total is at most the allowance plus one deadline per instance.
  *
  * A RESERVATION EXPIRES (consolidated review round 4). One that is never

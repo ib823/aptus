@@ -34,7 +34,7 @@ import { longestStall } from "../helpers/stall";
 vi.setConfig({ testTimeout: 180_000 });
 
 /** Every statement the app's client sends, counted (the base client's query events). */
-const counter = vi.hoisted(() => ({ queries: 0 }));
+const counter = vi.hoisted(() => ({ queries: 0, /** ms each job's settling statement (contract-time.ts) is held for, 0 for none. */ slowSettleMs: 0 }));
 
 vi.mock("@/lib/db/prisma", async () => {
   const { PrismaClient } = await import("@prisma/client");
@@ -46,7 +46,18 @@ vi.mock("@/lib/db/prisma", async () => {
   base.$on("query", () => {
     counter.queries += 1;
   });
-  return { prisma: base.$extends(tenantScopeGuard()) };
+  return {
+    prisma: base.$extends(tenantScopeGuard()).$extends({
+      query: {
+        // A settling statement held open on demand: a loaded pooler, without leaving a race to chance.
+        async $executeRaw({ args, query }) {
+          const sql = (args as unknown as { sql?: string }).sql ?? "";
+          if (counter.slowSettleMs > 0 && sql.includes('INSERT INTO "ContractTime"')) await new Promise((r) => setTimeout(r, counter.slowSettleMs));
+          return query(args);
+        },
+      },
+    }),
+  };
 });
 vi.mock("@/lib/auth/session", () => ({
   getCurrentUser: async () => ({ id: "u_r5", email: "dev@abeam.com", role: "consultant", organizationId: ORG, authMethod: "session" }),
@@ -582,6 +593,33 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
     expect(await reserveContractTime(OTHER, deadline, new Date(Date.now() - deadline - RESERVATION_GRACE_MS - 1_000))).toMatchObject({ ok: true });
     expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: true });
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated containment review round 6: a job freed its slot before it
+   * settled, and release() hands the slot to the organisation's next job at
+   * once, so that job reserved against the first job's reservation still on
+   * the row. In the last deadline of the day it was refused BUSY with time
+   * left (measured: 8 of 15 at 31 s of 40 s). A job now settles first.
+   */
+  it("an organisation's queued job reserves only after the job before it settled: never BUSY with time left", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    await chargeContractTime(OTHER, 31_000);
+    // A slow settling statement (a loaded pooler) holds the window open, so the race is not left to chance.
+    counter.slowSettleMs = 300;
+    try {
+      const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+      const results = await Promise.all([runJobInEnvelope(job, { tenant: OTHER }), runJobInEnvelope(job, { tenant: OTHER })]);
+      expect(results.map((r) => (r.ok ? "ok" : `${r.reason}:${r.cause ?? ""}`))).toEqual(["ok", "ok"]);
+    } finally {
+      counter.slowSettleMs = 0;
+    }
+    expect(await reservedToday(OTHER)).toBe(0);
+    expect(await msToday(OTHER)).toBeGreaterThan(31_000);
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     vi.unstubAllEnvs();
   });

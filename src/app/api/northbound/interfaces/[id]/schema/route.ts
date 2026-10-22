@@ -42,7 +42,10 @@
  * longer the row a verify last rendered: the interface pointed back at an
  * earlier dataset) answers `schemas: null` with `schemasOmitted:
  * "NOT_RENDERED"` and a note saying what renders them (a verify for a
- * compiled contract, a capture for a sampled one). A row past the documents'
+ * compiled contract, a capture for a sampled one). Texts the summary counted
+ * but that a record moved to its new row between the two reads are not
+ * missing: the new head is read once more and served (consolidated
+ * containment review round 6). A row past the documents'
  * budget (MAX_DOCUMENT_CONTRACT_BYTES, kept at record time) is
  * `schemasOmitted: "TOO_LARGE"`.
  *
@@ -187,16 +190,19 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       ? ((await readCurrentCapturedSchemas(client.organizationId, [iface], new Map([[iface.id, facts]]))).get(iface.id) ?? null)
       : null;
   // The summary first, without its IR: what it is and how large.
-  const current = (await currentSnapshotSummaries(client.scope, [iface])).get(iface.id) ?? null;
   // A SAMPLED snapshot is the captured schema with a version, so it follows
   // that capture's provenance (A38): served only while the capture is of
   // THIS contract, exactly as the kit and the solution document decide. A
   // compiled one describes the dataset whatever else changed.
-  const servable = current && (current.source === "METADATA" || schemaState === "current") ? current : null;
+  const servableNow = async () => {
+    const current = (await currentSnapshotSummaries(client.scope, [iface])).get(iface.id) ?? null;
+    return current && (current.source === "METADATA" || schemaState === "current") ? current : null;
+  };
+  let servable = await servableNow();
   // THE DOCUMENTS' BUDGET (doc-inputs.ts), from the size kept at record time
   // and before the IR is read: a snapshot past it is named, not rendered.
   const inBudget = (bytes: number | null) => bytes === null || bytes <= MAX_DOCUMENT_CONTRACT_BYTES;
-  const tooLarge = servable !== null && !inBudget(servable.irBytes);
+  let tooLarge = servable !== null && !inBudget(servable.irBytes);
   // The captured schema, within its own share (LIMITS.capturedSchema.served):
   // what is served beside the contract's schemas, and charged as such.
   let responseSchema: unknown = null;
@@ -219,15 +225,26 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   let schemas: string | null = null;
   let requestSchema: string | null = null;
   let notRendered = false;
-  if (servable && !tooLarge) {
+  for (let attempt = 0; servable && !tooLarge; attempt++) {
     const stamp = currentRequestSchemaStamp(iface.requestSchema, iface, servable.id);
     const texts = servable.schemasBytes === null ? null : await snapshotSchemaTexts(client.scope, servable.id, stamp ? (stamp.operation === "UPDATE" ? "UPDATE" : "CREATE") : null);
-    if (texts?.schemas == null) notRendered = true;
-    else {
+    if (texts?.schemas != null) {
       schemas = raw.slot(texts.schemas);
       const body = stamp ? requestSchemaText(texts.body, stamp) : null;
       if (body !== null) requestSchema = raw.slot(body);
+      break;
     }
+    // The summary and the texts are two statements, and a record moves the
+    // texts to its new row in one transaction (snapshot.ts, setSchemaTexts):
+    // texts the summary counted but that are gone were superseded in between
+    // (consolidated containment review round 6). The new head is read once.
+    const head = attempt === 0 && servable.schemasBytes !== null ? await servableNow() : null;
+    if (head === null || head.id === servable.id) {
+      notRendered = true;
+      break;
+    }
+    servable = head;
+    tooLarge = !inBudget(head.irBytes);
   }
   const contract = servable
     ? {
