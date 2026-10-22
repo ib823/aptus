@@ -35,7 +35,11 @@
 import { LANE_PROOF_TTL_MS } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { reachedDirectly } from "@/lib/governed/transport";
-import { resolveSapConnection, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
+import {
+  buildAuthHeadersFromConnection,
+  resolveSapConnection,
+  type ResolvedSapConnection,
+} from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { writeTargetChanges } from "@/lib/studio/connection-form";
 import { fetchMetadataDocument, resolveProbePath } from "@/lib/studio/connection-health";
@@ -194,6 +198,35 @@ function probeUrlBuilds(target: ResolvedSapConnection, path: string): boolean {
   }
 }
 
+/**
+ * The new key or token can travel in an HTTP header. fetch refuses a header
+ * value with a character above U+00FF (a zero-width space or a typographic
+ * apostrophe pasted with the key) before it opens a connection, and
+ * fetchMetadataDocument would report that as SAP not answering (wave 2
+ * rotation probe validation). Only the two types whose header is the secret
+ * itself are checked: basic is base64, and the OAuth and SAML types send
+ * what their token endpoint returns. A credential that cannot be built at all
+ * is left to the probe, which already reports it as `credentials_unusable`.
+ */
+async function headerCarriesCredentials(target: ResolvedSapConnection): Promise<boolean> {
+  if (target.authType !== "api-key" && target.authType !== "bearer") return true;
+  let headers: Record<string, string>;
+  try {
+    headers = await buildAuthHeadersFromConnection(target);
+  } catch {
+    return true;
+  }
+  try {
+    new Headers(headers);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const UNSENDABLE_CREDENTIALS_DETAIL =
+  "The new key or token holds a character an HTTP header cannot carry (often an invisible one pasted with it), so nothing was sent to SAP and no call through this connection can succeed. Retype it and save again.";
+
 const PROBE_PATH_INVALID_DETAIL =
   `The connection's probe path cannot be joined to its base URL (a probe path starts with "/"), so nothing was sent to SAP. Correct the probe path.`;
 
@@ -245,6 +278,7 @@ export async function probeForSave(input: {
   // token exchange for OAuth: checked here first, so nothing is sent and the
   // record never says a probe ran (wave 2 rotation probe review round 1).
   if (!probeUrlBuilds(target, path)) return skipped("probe_path_invalid", PROBE_PATH_INVALID_DETAIL);
+  if (!(await headerCarriesCredentials(target))) return skipped("credentials_unusable", UNSENDABLE_CREDENTIALS_DETAIL);
 
   const { answer, detail } = await probeRotation(target, path, input.fetchImpl);
   const record: RotationProbeRecord = { mode, ...answer };

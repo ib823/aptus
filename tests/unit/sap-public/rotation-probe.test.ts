@@ -164,6 +164,44 @@ describe("when a save is not probed: nothing is sent, and the record says why", 
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  /*
+   * Wave 2 rotation probe validation (medium). A key or token pasted with a
+   * zero-width space or a typographic apostrophe cannot go in a header: fetch
+   * throws before it opens a connection. The record said ran:true and
+   * noAnswer, and enforce saved it. It is now skipped, before any request.
+   */
+  it.each([
+    ["observe", "api-key", { apiKey: "KEY-1​", apiKeyHeader: "x-api-key" }],
+    ["enforce", "api-key", { apiKey: "KEY-1​", apiKeyHeader: "x-api-key" }],
+    ["observe", "bearer", { bearerToken: "TOK’s" }],
+    ["enforce", "bearer", { bearerToken: "TOK’s" }],
+  ] as const)("%s: a %s secret no header can carry is skipped, and nothing is sent", async (mode, authType, secrets) => {
+    db.stored = storedRow({ authType, secrets: { ...secrets, apiKey: "KEY-1", bearerToken: "TOK-1" } });
+    // What undici does with the request's headers before anything leaves the process.
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      new Headers(init?.headers);
+      return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
+    });
+    const probe = await run(mode, fetchImpl as unknown as typeof fetch, { candidate: candidate({ authType, secrets }) });
+    expect(probe.record).toEqual({ mode, ran: false, outcome: "skipped", reason: "credentials_unusable" });
+    expect(probe.refused).toBe(false);
+    expect(probe.detail).toMatch(/cannot carry/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("a Latin-1 character a header can carry is still sent and checked", async () => {
+    db.stored = storedRow({ authType: "api-key", secrets: { apiKey: "OLD", apiKeyHeader: "x-api-key" } });
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      new Headers(init?.headers);
+      return new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } });
+    });
+    const probe = await run("enforce", fetchImpl as unknown as typeof fetch, {
+      candidate: candidate({ authType: "api-key", secrets: { apiKey: "café", apiKeyHeader: "x-api-key" } }),
+    });
+    expect(probe.record).toEqual({ mode: "enforce", ran: true, outcome: "passed", reason: "metadata_ok" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("a lane's fresh proven read counts as the stored secret working, without an OK probe", async () => {
     db.laneRead = true;
     const fetchImpl = sap(401);
