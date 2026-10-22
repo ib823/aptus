@@ -26,13 +26,21 @@ where the shape in them comes from.
    content hash, its OData version, its source (`METADATA`), and a semantic
    version — 1.0.0 the first time; afterwards the previous one bumped by the
    structural diff (`diff.ts`). The same contract again records nothing.
-3. **Writes `requestSchema`'s stamp** for a write interface: which snapshot and
+3. **Writes `requestSchemaStamp`** for a write interface: which snapshot and
    interface version the body its write sends is of (`x-contract`), never the
    body itself — that is a multiple of the contract, and Studio's lists read
    the column. `/schema` serves the body the record rendered and stored on the
-   stamped snapshot, and only while the stamp matches; a contract change in
-   Studio clears it. The lists ask whether there is one by id, without
-   reading it.
+   stamped snapshot, as `requestSchema`, and only while the stamp matches; a
+   contract change in Studio clears it. The lists ask whether there is one by
+   id, without reading it. **`Interface.requestSchema` itself stays NULL**:
+   every build before P1.3 (wave 2, c7cfd162) returns that column from
+   `/schema` as stored and the Studio calls it "captured", and none of their
+   PATCHes clears it, so after an Instant Rollback to one a stamp stored there
+   was served as a JSON Schema with no type or properties, which accepts any
+   record (P1 on wave 2 integration review round 1; migration
+   `20261026050000_interface_request_schema_stamp`). Rolled back, those builds
+   serve `requestSchema: null`, as they did before P1.3; rolled forward again,
+   a stamp older than the interface's version is never served.
 4. **Falls back to sampled rows.** A schema capture also records a `SAMPLED`
    snapshot while no compiled one describes the interface. A compiled one is
    never pushed aside by a capture.
@@ -135,9 +143,9 @@ stored snapshot in a worker.
   contract counts its version) plus one per interface past the first, their
   patches, and a digest as build metadata — so a major bump of any interface
   raises the document's major. An interface leaving the document lowers it.
-  A write interface's `requestSchema` is written from the snapshot that is
-  current after the verify, and `/schema` serves it only while that snapshot
-  is still the current one.
+  A write interface's `requestSchemaStamp` is written from the snapshot that
+  is current after the verify, and `/schema` serves that snapshot's body as
+  `requestSchema` only while it is still the current one.
 
 ## Semantic versions
 
@@ -268,7 +276,7 @@ transaction**: the snapshot (or nothing, when UNCHANGED), its IR and diff,
 the texts on the row they were rendered from when it is the row `/schema`
 will serve (a new row, or — UNCHANGED — the current row, re-rendered from its
 own IR, so the same bytes it held), the texts nulled on every other row of
-the interface, and the write interface's `requestSchema` stamp; a capture's
+the interface, and the write interface's `requestSchemaStamp`; a capture's
 schema on the interface in the same transaction, or nothing.
 
 **A renderer change reaches `/schema` at each interface's next verify or
@@ -448,9 +456,18 @@ brotli before `text()` sees a byte, so a body read whole costs whatever its
 sender inflates it to: about 0.4 MB of gzip from a BTP trial host can expand
 to hundreds of MB. Each reader stops at its bound in DECODED bytes and
 cancels the stream: the data read (`readEntitySet`: Studio's broker run, the
-northbound `/data` read, the lane sweep) 3.125 MiB (32 KiB for each of its
-100 rows; past it `ERROR`, invalid body, "ask for fewer records"); a write's
-answer 1 MiB (past it an invalid write response); an OAuth client-credentials
+northbound `/data` read, the lane sweep, the rotation probe) 16 MiB (past it
+`ERROR`, invalid body, "ask for fewer records"); a write's answer 16 MiB (past
+it a 201 is still `CREATED`, with no record and its Location; a 200 is an
+invalid write response). Both are above the ~4.5 MB a Vercel function can
+return, so no answer a deployment could serve before the bound is cut, and so
+no healthy SAP answer is cut into an `ERROR` that the circuit breaker counts
+as an upstream error, that refuses a correct secret rotation, or that fails a
+lane proof (P1 on wave 2 integration review round 1: at 3.125 MiB and 1 MiB
+wide rows such as photos or attachments, read with no `$select`, and a 201
+echoing a base64 upload were cut). Each in-flight read or write holds at most
+its 16 MiB (twice as UTF-16 while parsed), where a pre-P1 build read it
+unbounded; an OAuth client-credentials
 token answer 64 KiB (as the SAML exchange already was); the verify's
 description 8 MiB and the probe's 8 KiB (as before); an Ariba page 8 MiB and
 token 64 KiB; a hub-harvest file 32 MiB. `tests/unit/contracts/gate.test.ts` holds

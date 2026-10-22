@@ -537,9 +537,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
 
     const current = await currentContractSnapshot(scope, iface);
     expect(current?.semver).toBe("2.0.0");
-    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true, version: true, entitySet: true } });
+    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchemaStamp: true, version: true, entitySet: true } });
     // /schema's body: the current snapshot's stored text, spliced with the stamp.
-    const stamp = currentRequestSchemaStamp(row!.requestSchema, row!, current!.id);
+    const stamp = currentRequestSchemaStamp(row!.requestSchemaStamp, row!, current!.id);
     expect(stamp).not.toBeNull();
     const texts = await snapshotSchemaTexts(scope, current!.id, "CREATE");
     const served = JSON.parse(requestSchemaText(texts!.body, stamp!)!) as { required: string[]; "x-contract": { semver: string } };
@@ -548,7 +548,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     expect(served!.required).toEqual(standaloneSchemas(current!.contract, "SalesOrder").create!.required);
     expect(served!.required).toContain("Region");
     // A body stamped with any other snapshot is never served.
-    expect(currentRequestSchemaStamp(row!.requestSchema, row!, "another-snapshot")).toBeNull();
+    expect(currentRequestSchemaStamp(row!.requestSchemaStamp, row!, "another-snapshot")).toBeNull();
     // PROD's UNCHANGED verify of the older contract left the texts on the current row.
     expect(await rowsWithTexts(iface.id)).toEqual([current!.id]);
   });
@@ -573,9 +573,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
     const rap = readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/sales-order-rap.v4.xml"), "utf8");
     const outcome = await recordVerifiedContract({ scope, iface, ...(await compiledFor(iface, "DEV", rap)), environment: "DEV", connectionId: "conn_DEV", actorId: "u1" });
     expect(outcome).toMatchObject({ status: "RECORDED", requestSchemaWritten: true });
-    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true } });
-    expect(Object.keys(row!.requestSchema as object)).toEqual(["x-contract"]);
-    expect(Buffer.byteLength(JSON.stringify(row!.requestSchema))).toBeLessThan(2048);
+    const row = await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { requestSchema: true, requestSchemaStamp: true } });
+    expect(Object.keys(row!.requestSchemaStamp as object)).toEqual(["x-contract"]);
+    expect(Buffer.byteLength(JSON.stringify(row!.requestSchemaStamp))).toBeLessThan(2048);
+    // NOT in requestSchema (P1 on wave 2 integration review round 1): every
+    // build before P1.3 returns that column from /schema as stored and the
+    // Studio calls it "captured", so after an Instant Rollback the bare stamp
+    // was served as a JSON Schema that accepts any record. It stays NULL,
+    // what an older build means by "none compiled".
+    expect(row!.requestSchema).toBeNull();
     // And a list asks whether there is one without reading it.
     const ids = await idsWithRequestSchema({ organizationId: ORG, solutionId });
     expect(ids.has(iface.id)).toBe(true);

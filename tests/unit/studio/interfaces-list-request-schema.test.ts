@@ -76,7 +76,7 @@ describe("GET /api/studio/interfaces", () => {
     // The presence query filters on the column and selects only ids.
     const presence = mocks.findMany.mock.calls.map((c) => c[0] as { where: unknown; select: Record<string, unknown> }).find((a) => Object.keys(a.select).length === 1);
     expect(presence?.select).toEqual({ id: true });
-    expect(JSON.stringify(presence?.where)).toContain("requestSchema");
+    expect(JSON.stringify(presence?.where)).toContain("requestSchemaStamp");
     expect(body.data.interfaces.map((i) => [i.id, i.hasRequestSchema])).toEqual([
       ["if_1", true],
       ["if_2", false],

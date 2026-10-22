@@ -53,15 +53,22 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 100;
 /**
- * The most of a read's body that is read, in DECODED bytes: 32 KiB for each
- * of the MAX_LIMIT rows a read may ask for (a real row, envelope and deferred
- * links included, is a few KB). The body was read whole before, and fetch
- * inflates before reading, so a builder's own host answering ~0.4 MB of gzip
- * that expands to hundreds of MB could take a shared instance down with two
- * reads at once (consolidated review round 1). Past it the stream is
- * cancelled and the read is an invalid body, said as too large.
+ * The most of a read's body that is read, in DECODED bytes. The body was read
+ * whole before, and fetch inflates before reading, so a builder's own host
+ * answering ~0.4 MB of gzip that expands to hundreds of MB could take a shared
+ * instance down with two reads at once (consolidated review round 1). Past it
+ * the stream is cancelled and the read is an invalid body, said as too large.
+ *
+ * 16 MiB, NOT a per-row allowance. It was 100 x 32 KiB = 3.125 MiB, and wide
+ * rows (a SuccessFactors Photo or Attachment, any binary or long-text
+ * property: the broker sends no $select) pass that at a high limit. Such a
+ * read was served before the bound, and cut at it the ERROR counted against
+ * SAP: a circuit upstream-error, a refused rotation probe, a failing lane
+ * proof (P1 on wave 2 integration review round 1). 16 MiB is above the
+ * ~4.5 MB a Vercel function can return, so nothing a deployment serves is
+ * cut, and it still caps a bomb far below a 2 GB instance.
  */
-export const MAX_READ_BODY_BYTES = MAX_LIMIT * 32 * 1024;
+export const MAX_READ_BODY_BYTES = 16 * 1024 * 1024;
 
 /** OData v2 nests rows under `d.results`; v4 puts them in `value`. */
 function isRecord(value: unknown): value is Record<string, unknown> {

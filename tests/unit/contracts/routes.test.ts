@@ -260,6 +260,7 @@ function seed(over: Row = {}) {
       status: "DRAFT",
       serviceVerifications: null,
       requestSchema: null,
+      requestSchemaStamp: null,
       responseSchema: null,
       createdAt: new Date("2026-10-01T00:00:00.000Z"),
       ...over,
@@ -326,8 +327,10 @@ describe("verify-service compiles and records the contract", () => {
     });
     // Only the stamp is stored: the body is a multiple of the contract, and
     // GET …/schema renders it from the stamped snapshot (round 2).
-    const rs = db.interfaces[0]!.requestSchema as Row;
+    const rs = db.interfaces[0]!.requestSchemaStamp as Row;
     expect(Object.keys(rs)).toEqual(["x-contract"]);
+    // Never in requestSchema, which a build before P1.3 serves raw (P1 on wave 2 integration review round 1).
+    expect(db.interfaces[0]!.requestSchema).toBeNull();
     expect(rs["x-contract"]).toMatchObject({ semver: "1.0.0", interfaceVersion: 2, entitySet: "SalesOrder", operation: "CREATE" });
     expect(mocks.audit.mock.calls.at(-1)![0].data.after.contract).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
   });
@@ -343,7 +346,7 @@ describe("verify-service compiles and records the contract", () => {
     seed({ operation: "READ", mode: "READ" });
     const d = await data<{ contract: Row }>(await verify());
     expect(d.contract).toMatchObject({ status: "RECORDED", requestSchemaWritten: false });
-    expect(db.interfaces[0]!.requestSchema).toBeNull();
+    expect(db.interfaces[0]!.requestSchemaStamp).toBeNull();
   });
 
   it("a description the compiler refuses still verifies, as before", async () => {
@@ -665,7 +668,7 @@ describe("the starter kit and the solution document use the compiled contract", 
   it("the solution document, in 3.1 and 3.0.3, validates and covers every interface but a deprecated one", async () => {
     await verify();
     db.interfaces.push(
-      { ...db.interfaces[0]!, id: "if_2", name: "Orders read", operation: "READ", mode: "READ", requestSchema: null },
+      { ...db.interfaces[0]!, id: "if_2", name: "Orders read", operation: "READ", mode: "READ", requestSchemaStamp: null },
       { ...db.interfaces[0]!, id: "if_3", name: "Old", operation: "READ", mode: "READ", status: "DEPRECATED" },
     );
     db.grants = [{ id: "g1", organizationId: "org_a", interfaceId: "if_2", operation: "READ", environment: "TEST", decision: "APPROVED", expiresAt: null, revokedAt: null }];
@@ -709,7 +712,7 @@ describe("the starter kit and the solution document use the compiled contract", 
   it("refuses a kit and a solution document past the render budget, before reading any IR", async () => {
     await verify();
     expect(db.snapshots[0]!.irBytes).toBeGreaterThan(0); // kept at record time
-    db.interfaces.push({ ...db.interfaces[0]!, id: "if_2", name: "Orders read", operation: "READ", mode: "READ", requestSchema: null });
+    db.interfaces.push({ ...db.interfaces[0]!, id: "if_2", name: "Orders read", operation: "READ", mode: "READ", requestSchemaStamp: null });
     // Each under the budget alone, past it together.
     const share = Math.ceil(MAX_DOCUMENT_CONTRACT_BYTES * 0.6);
     db.snapshots.push({ ...db.snapshots[0]!, id: "snap_2", interfaceId: "if_2" });

@@ -969,8 +969,14 @@ model Interface {
   /// READ | WRITE (WRITE implies a stronger review path).
   mode       String
 
+  /// Written by nothing; null. Builds before P1.3 serve it raw from /schema.
   requestSchema  Json?
   responseSchema Json?
+  /// A write interface's `{"x-contract": stamp}` (P1.3, contracts/record.ts):
+  /// which snapshot's body /schema serves as requestSchema. Its own column so
+  /// that a build before P1.3, which serves requestSchema as stored, never
+  /// serves the bare stamp as a schema after an Instant Rollback.
+  requestSchemaStamp Json?
   /// ALWAYS null in v1 — the mapping engine is v2.
   mappingVersion Int?
 

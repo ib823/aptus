@@ -340,6 +340,18 @@ describe("this repository's migrations", () => {
     expect(local.filter((m) => m.sql.length === 0).map((m) => m.name)).toEqual([]);
   });
 
+  // An operator copies the command from the file mid-rollback; a migration
+  // renamed after its backout.sql was written printed a name the script no
+  // longer knows (P1 on wave 2 integration review round 1).
+  it("name only their own directory in backout.sql, so its printed command runs", () => {
+    const wrong = local.flatMap((m) =>
+      [...(m.backoutFile ?? "").matchAll(/(?:Backout for|migrations:backout-sql) (\d{14}_[a-z0-9_]+)/g)]
+        .filter((hit) => hit[1] !== m.name)
+        .map((hit) => `${m.name}: ${hit[0]}`),
+    );
+    expect(wrong).toEqual([]);
+  });
+
   it.skipIf(!gitHasCommit(ROOT, PROTOCOL_CUTOFF_COMMIT))("have a cutoff manifest that is exactly git's view of the cutoff commit", () => {
     expect(Object.fromEntries(cutoffMigrations())).toEqual(Object.fromEntries(gitMigrationsAt(ROOT, PROTOCOL_CUTOFF_COMMIT)));
   });

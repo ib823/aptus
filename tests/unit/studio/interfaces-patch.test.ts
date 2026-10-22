@@ -294,12 +294,12 @@ describe("version bumps track the contract, not cosmetics", () => {
 describe("the compiled request schema belongs to one contract (P1.3)", () => {
   it("is cleared with the version bump when the contract changes", async () => {
     await PATCH(req({ id: "if_1", entitySet: "A_Supplier" }));
-    expect(lastUpdateData().requestSchema).toBe(Prisma.DbNull);
+    expect(lastUpdateData().requestSchemaStamp).toBe(Prisma.DbNull);
   });
 
   it("is left alone by an edit that is not a contract change", async () => {
     await PATCH(req({ id: "if_1", name: "Nicer name" }));
-    expect(lastUpdateData()).not.toHaveProperty("requestSchema");
+    expect(lastUpdateData()).not.toHaveProperty("requestSchemaStamp");
   });
 });
 

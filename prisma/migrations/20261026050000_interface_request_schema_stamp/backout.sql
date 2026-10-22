@@ -1,0 +1,13 @@
+-- Backout for 20261026050000_interface_request_schema_stamp (P1.3).
+--
+-- In this file, not in migration.sql, because an applied migration is never
+-- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
+--
+-- Run it only after the deployment is rolled back to code that never reads
+-- the column. What it loses: which snapshot's body each write interface's
+-- /schema serves as requestSchema (a re-verify writes it again; until then
+-- requestSchema is null).
+--
+-- Print it with its _prisma_migrations line:
+--   pnpm migrations:backout-sql 20261026050000_interface_request_schema_stamp
+ALTER TABLE "Interface" DROP COLUMN "requestSchemaStamp";

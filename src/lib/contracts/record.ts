@@ -8,7 +8,7 @@
  *      envelope. Nothing about the description is computed on this thread.
  *   2. One transaction records a ContractSnapshot when the contract is new
  *      (snapshot.ts), puts the /schema texts on the interface's current row,
- *      and — for a write interface — WRITES `requestSchema`'s stamp: which
+ *      and — for a write interface — WRITES `requestSchemaStamp`: which
  *      snapshot and interface version the body its write sends is of,
  *      conditional on that version (a PATCH that landed meanwhile wins). A
  *      capture writes its schema on the interface in the same transaction.
@@ -124,9 +124,12 @@ export async function recordVerifiedContract(input: {
       operation: iface.operation,
     };
     // THE STAMP, NOT THE BODY: the body is on the snapshot (its texts), a few hundred bytes here whatever the contract.
+    // NOT IN requestSchema: a build before P1.3 serves that column raw from
+    // /schema, so after an Instant Rollback the bare stamp would be served as
+    // a schema that accepts any record (P1 on wave 2 integration review round 1).
     const written = await tx.interface.updateMany({
       where: { id: iface.id, organizationId: input.scope.organizationId, version: iface.version },
-      data: { requestSchema: { "x-contract": stamp } as unknown as Prisma.InputJsonObject },
+      data: { requestSchemaStamp: { "x-contract": stamp } as unknown as Prisma.InputJsonObject },
     });
     requestSchemaWritten = written.count > 0;
   };
@@ -193,7 +196,7 @@ export async function snapshotBodies(
  */
 export async function idsWithRequestSchema(where: Prisma.InterfaceWhereInput): Promise<Set<string>> {
   const rows = await prisma.interface.findMany({
-    where: { AND: [where, { requestSchema: { not: Prisma.DbNull } }] },
+    where: { AND: [where, { requestSchemaStamp: { not: Prisma.DbNull } }] },
     select: { id: true },
   });
   return new Set(rows.map((r) => r.id));

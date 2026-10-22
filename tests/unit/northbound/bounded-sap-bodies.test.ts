@@ -61,8 +61,8 @@ function endless(chunk: string): { stream: ReadableStream<Uint8Array>; state: { 
 }
 
 describe("readEntitySet against a gzip bomb served by a real HTTP server", () => {
-  // 64 MiB of valid OData once inflated; about 64 KB on the wire.
-  const INFLATED = 64 * 1024 * 1024;
+  // 256 MiB of valid OData once inflated; about 256 KB on the wire.
+  const INFLATED = 256 * 1024 * 1024;
   const json = Buffer.concat([Buffer.from('{"d":{"results":['), Buffer.alloc(INFLATED, " "), Buffer.from("]}}")]);
   const bomb = gzipSync(json, { level: 9 });
   let server: Server;
@@ -82,14 +82,14 @@ describe("readEntitySet against a gzip bomb served by a real HTTP server", () =>
   });
 
   it("is refused as an invalid body past its bound, the stream cancelled, never parsed", async () => {
-    expect(bomb.length).toBeLessThan(256 * 1024);
+    expect(bomb.length).toBeLessThan(512 * 1024);
     const r = await readEntitySet({ connection: conn(baseUrl), servicePath: "/sap/opu/odata/sap/ZBOMB_SRV", entitySet: "Rows", limit: 100 });
     expect(r.status).toBe("ERROR");
     expect(r.failureReason).toBe(FAILURE_REASON_INVALID_BODY);
     expect(r.records).toEqual([]);
     expect(r.detail).toMatch(/larger than .* MB, so it was not read/);
-    // It stopped near its bound: well short of the 64 MiB the body inflates to.
-    // Read whole, the same body parsed as an EMPTY read of 64 MiB.
+    // It stopped near its bound: well short of the 256 MiB the body inflates to.
+    // Read whole, the same body parsed as an EMPTY read of 256 MiB.
     expect(MAX_READ_BODY_BYTES).toBeLessThan(INFLATED / 8);
   });
 
@@ -103,10 +103,11 @@ describe("readEntitySet against a gzip bomb served by a real HTTP server", () =>
 });
 
 describe("the other readers of a body a builder or a remote host chooses", () => {
-  it("a write's answer past its bound is an invalid write response, and the stream is cancelled", async () => {
+  it("a write's answer past its bound is not parsed, and the stream is cancelled", async () => {
     const handshake = new Response("", { headers: { "x-csrf-token": "t" } });
     const { stream, state } = endless('{"d":{"ID":"1","Pad":"' + "a".repeat(64 * 1024));
-    const f = vi.fn().mockResolvedValueOnce(handshake).mockResolvedValueOnce(new Response(stream, { status: 201 }));
+    // A 200, not a 201: a 201 past the bound stays CREATED (wide-sap-answers.test.ts).
+    const f = vi.fn().mockResolvedValueOnce(handshake).mockResolvedValueOnce(new Response(stream, { status: 200 }));
     const r = await writeEntitySet(
       { connection: conn("https://my1234-api.s4hana.cloud.sap"), servicePath: "/sap/odata/API_TEST", entitySet: "A_Thing", payload: { Name: "x" } },
       f as unknown as typeof fetch,

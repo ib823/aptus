@@ -161,7 +161,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
       entitySet: true,
       mode: true,
       version: true,
-      requestSchema: true,
+      requestSchemaStamp: true,
       // Not responseSchema: its size is read first, and it only when bounded (below).
       solutionId: true,
     },
@@ -230,7 +230,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   let requestSchema: string | null = null;
   let notRendered = false;
   for (let attempt = 0; servable && !tooLarge; attempt++) {
-    const stamp = currentRequestSchemaStamp(iface.requestSchema, iface, servable.id);
+    const stamp = currentRequestSchemaStamp(iface.requestSchemaStamp, iface, servable.id);
     const texts = servable.schemasBytes === null ? null : await snapshotSchemaTexts(client.scope, servable.id, stamp ? (stamp.operation === "UPDATE" ? "UPDATE" : "CREATE") : null);
     if (texts?.schemas != null) {
       schemas = raw.slot(texts.schemas);

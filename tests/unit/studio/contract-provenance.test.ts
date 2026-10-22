@@ -198,7 +198,7 @@ function freshInterface(): Row {
     version: 1,
     status: "DRAFT",
     mappingVersion: null,
-    requestSchema: null,
+    requestSchemaStamp: null,
     responseSchema: null,
     servicePath: null,
     odataVersion: null,

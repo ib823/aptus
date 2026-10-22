@@ -253,7 +253,7 @@ describe("GET /api/northbound/interfaces/{id}/schema", () => {
       entitySet: "A_BusinessPartner",
       mode: "LIVE",
       version: 1,
-      requestSchema: null,
+      requestSchemaStamp: null,
       responseSchema,
       solutionId: "sol_1",
     });

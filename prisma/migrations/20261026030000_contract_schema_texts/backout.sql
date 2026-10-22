@@ -1,4 +1,4 @@
--- Backout for 20261024030000_contract_schema_texts (P1.3).
+-- Backout for 20261026030000_contract_schema_texts (P1.3).
 --
 -- In this file, not in migration.sql, because an applied migration is never
 -- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
@@ -9,6 +9,6 @@
 -- the day (the allowance starts again from zero).
 --
 -- Print it with its _prisma_migrations line:
---   pnpm migrations:backout-sql 20261024030000_contract_schema_texts
+--   pnpm migrations:backout-sql 20261026030000_contract_schema_texts
 DROP TABLE "ContractTime";
 ALTER TABLE "ContractSnapshot" DROP COLUMN "schemasText", DROP COLUMN "createBodyText", DROP COLUMN "updateBodyText";
