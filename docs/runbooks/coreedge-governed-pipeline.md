@@ -59,6 +59,20 @@ Until an engine is registered a TWIN connection is refused at `bindConnection`
 with `TRANSPORT_UNAVAILABLE` and its fetch never reaches the network. Nothing
 in the product sets TWIN yet.
 
+**The transport is part of the one predicate** (wave 2 integration review
+round 3). `transportRefusal` (transport.ts) is what `bindConnection` asks, and
+the lane board, discovery's `callable` and the lane sweep's plan ask it too, so
+a lane on a TWIN connection with no engine is drawn refused at binding ("served
+by the Tenant Twin"), never Live, and discovery says `callable: false`
+(`TRANSPORT_UNAVAILABLE`). And nothing outside the pipeline sends a TWIN
+connection's stored credentials to its base URL any more (`reachedDirectly`):
+the nightly lane sweep and Re-check skip it (`skippedTwin` in the sweep's
+summary), the nightly connection probe skips it, Probe now and a builder's Test
+answer 409 and send nothing, the rotation probe does not run on its re-save,
+and the Workbench console refuses it at `bind` (503 `TRANSPORT_UNAVAILABLE`,
+audited on both trails). Every row is `DIRECT` unless P1.6 or an operator marks
+it `TWIN`, so none of this changes a call or a check that works today.
+
 **The circuit breaker is wired.** See
 [`coreedge-circuit-breaker.md`](coreedge-circuit-breaker.md).
 
@@ -93,13 +107,15 @@ the route now, after step-up and before writing anything:
 1. signs in with the new credentials (a token is issued, or a header built, and
    SAP does not answer 401);
 2. reads the service metadata from the connection's probe path (the request the
-   Test button sends). Required only when the working secret read it (last Test
-   OK, or proven by the save that stored it): a probe path whose `$metadata`
-   the arrangement does not release (last Test `NOT_FOUND`), a sweep that met a
-   timeout (`TIMEOUT`), or a connection with no probe path at all (ECC, whose
-   product has no default service, without an API path) is not held against
-   the new secret, which is then judged by step 3 (with no probe path, step 3
-   also decides the sign-in);
+   Test button sends). Required only when the working secret is proven to read
+   it: its last Test or nightly probe was OK, or a proof of these settings is
+   still fresh (see "Evidence counts only while it is true"). A probe path
+   whose `$metadata` the arrangement does not release (last Test `NOT_FOUND`),
+   one that has answered nothing but `TIMEOUT` or `ERROR` for longer than the
+   lane TTL, or a connection with no probe path at all (ECC, whose product has
+   no default service, without an API path) is not held against the new
+   secret, which is then judged by step 3 (with no probe path, step 3 also
+   decides the sign-in);
 3. reads one row from the dataset proven readable through this connection, as
    the broker reads it. With no proven read there is nothing to compare against
    and this step is not run.
@@ -110,7 +126,16 @@ which step and that nothing changed), a `TEST_CONNECT` config-audit row records
 working secret keeps serving. When SAP did not answer a step (a timeout or a
 5xx), the message says so ("SAP did not answer ..."), not that the credential
 was wrong. If all pass the secret is stored and the save's audit row says
-`rotationProbed: true`.
+`rotationProbed: true` (and `rotationProbes: n` when a save judged again after
+the row changed probed more than once).
+
+**A probe that passed is on the record even when the save does not happen**
+(wave 2 integration review round 3). A passing probe has already sent the new
+credentials to SAP. When the save then fails to seal (500), loses its row three
+times (409), or is refused when judged again, a `TEST_CONNECT` config-audit row
+records `connection_rotation_probed` with `probes`, `saved: false` and the
+`reason` (`seal_or_persist_failed`, `conflict`, `refused_when_judged_again`,
+`step_up_required`, `rotation_refused`), never the secret.
 
 **The proof outlives the save.** Every re-save clears the probe status and drops
 the connection's lane checks (P0.2: they were made with the settings the save
@@ -137,9 +162,22 @@ rotation is therefore still probed and refused.
   broken; the probe is then off), `NOT_FOUND` and `NO_PROBE_PATH` (the working
   secret no longer reads the `$metadata` either, so it is not demanded of the
   new one) set it aside. `TIMEOUT`, `ERROR`, `UNREADABLE` and
-  `GROUP_UNREADABLE` say nothing about this credential, and the proof stands:
-  a probe that answered OK since the last save (`lastValidatedAt`) or the
-  carried proof still protects the next save.
+  `GROUP_UNREADABLE` say nothing about this credential, and the proof stands
+  **for the lane TTL (24 hours) from when it was made** (wave 2 integration
+  review round 3): a probe that answered OK after the last save on the record,
+  or the proof a save carried, still protects the next save for a day. After
+  that, a probe path that has answered nothing but `TIMEOUT` or `ERROR` no
+  longer shows that the old secret reads its `$metadata`, and a correct new
+  secret is not refused for it. Without the limit such a rotation was refused
+  for as long as the failure lasted: a Test only writes `ERROR` again.
+- `lastValidatedAt` (when a probe last answered OK) counts as a proof of the
+  current settings only when it is later than the connection's last save on
+  the record (the newest `connection_created` or `connection_replaced` audit
+  row). The code before wave 2 never cleared it on a save, so on deploy day a
+  row can carry an OK observed with other secrets, other settings or even
+  another system. With no save on the record it proves nothing. A carried
+  proof keeps the time it was made (`metadataProvenAt`), so carrying it through
+  a label fix does not make it fresh.
 
 **A save may wait on SAP.** A probed save makes up to three SAP requests in
 series (a token exchange for OAuth, the `$metadata`, one row), so it takes as
@@ -160,14 +198,15 @@ Not probed, and saved exactly as before:
   `UNAUTHORIZED`: the secret is broken, which is when it gets rotated), and one
   with no evidence of working (nothing working to protect);
 - a re-save that keeps the sign-in credentials (the auth type, the token
-  endpoint and every secret except the write secret): a label fix, or ticking
-  Allow writes and adding the write secret. Nothing is sent to SAP, so a SAP
-  outage does not refuse it; the audit row says
+  endpoint and every sealed secret): a label fix, or ticking Allow writes.
+  Nothing is sent to SAP, so a SAP outage does not refuse it; the audit row says
   `rotationProbeSkipped: "credentials_unchanged"` and carries the proof forward;
 - a re-point: a save that changes the host or base path, the environment or the
   SAP client. The old system's proof says nothing about the new one; the audit
   row says `rotationProbeSkipped: "repointed"`, carries no proof, and the new
-  system is proven by its first Test, lane check or nightly probe.
+  system is proven by its first Test, lane check or nightly probe;
+- a connection served by the Tenant Twin (`transport: TWIN`): nothing is sent
+  to the customer's SAP from here (above).
 
 **If SAP is down while a secret must be changed** (for example the old password
 was revoked at SAP and the host is also unreachable): deactivate the connection,
@@ -191,6 +230,13 @@ and redeploy; only the exact word `off` turns the probe off.
   credentials, or re-points the connection to another system, is not probed
   and saves as before. A probed save takes as long as SAP takes to answer the
   probe, never more than 40 seconds plus a token exchange (above).
+- Rows saved before the deploy (wave 2 integration review round 3): their
+  `lastValidatedAt` counts only when it is later than their last save on the
+  record and within the last 24 hours, and a probe status of `TIMEOUT` or
+  `ERROR` holds a proof for 24 hours at most. So a connection whose probe path
+  has answered `ERROR` for longer than that while its lanes serve, the case
+  most likely on deploy day, is not refused a correct rotation for its
+  `$metadata`; one whose last probe was `OK` is protected as intended.
 - Operations and the SAP system screen each gain a section; nothing is removed.
 
 ## Rolling back
@@ -201,16 +247,18 @@ migration drops it, which loses nothing (every row is `DIRECT`).
 ## For P1.6 and P4.1
 
 - P1.6 (Tenant Twin) registers its engine with `registerTwinEngine` and marks a
-  connection `transport: TWIN`. Before it lets anyone do that, the nightly lane
-  sweep, the connection probe, the rotation probe and the Workbench console
-  reads must route through `transportFor(connection)` too, for both the data
-  request and the credential step (`transport.fetch` and
-  `transport.authHeaders`): today they call `fetch` and
-  `buildAuthHeadersFromConnection` directly, so they would send a TWIN
-  connection's request to its `baseUrl` and its client secret or SAML
-  assertion to its real token endpoint. The governed read and write already
-  do both (`tests/unit/governed/twin-transport-credentials.test.ts` checks
-  every auth type makes no global fetch).
+  connection `transport: TWIN`. The nightly lane sweep, the connection probe,
+  Probe now, the Test button, the rotation probe and the Workbench console
+  reads call `fetch` and `buildAuthHeadersFromConnection` directly, so they
+  SKIP a TWIN connection today (`reachedDirectly`, wave 2 integration review
+  round 3) rather than send its request to its `baseUrl` and its client secret
+  or SAML assertion to its real token endpoint. A TWIN lane is therefore never
+  checked, and with an engine registered it reads "not checked yet" on the
+  board. P1.6 decides how a twin lane is proven: route those callers through
+  `transportFor(connection)` for both the data request and the credential
+  step (`transport.fetch` and `transport.authHeaders`), as the governed read
+  and write already do (`tests/unit/governed/twin-transport-credentials.test.ts`
+  checks every auth type makes no global fetch).
 - P4.1 adds the dispatcher, connector and integration-suite transports on the
   same interface, and moves `sapFetch` and the Ariba connector onto it.
 - P0.14b brings the remaining Workbench console routes onto the pipeline.

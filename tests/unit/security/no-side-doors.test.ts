@@ -123,7 +123,8 @@ const AUDIT = {
 const EXEMPT: Record<string, { reads: string; recorded: string; moves: string }> = {
   "src/app/api/studio/connections/route.ts": {
     reads: "the sign-in, $metadata and one proven read a ROTATED secret must pass before it replaces a working one (P0.14 probe-before-swap)",
-    recorded: "the save's ConfigAudit row",
+    recorded:
+      "the save's ConfigAudit row; a refused probe's TEST_CONNECT row; and, when a probe passed but the save did not happen, a TEST_CONNECT connection_rotation_probed row",
     moves: "cannot bind through the pipeline: the secret under test is not stored yet; P4.1 gives it the dispatcher",
   },
   "src/app/api/studio/connections/[id]/test/route.ts": {

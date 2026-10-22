@@ -112,6 +112,9 @@ describe("the console connection load", () => {
     expect(text).toContain('FROM "SapConnection" WHERE "organizationId" = $1 AND "product" = $2 AND "key" = $3 AND "isActive" = true');
     // The grants: the caller's organization, the connection's own environment, read only beside it.
     expect(text).toContain('FROM "ApiAccessGrant" g, c WHERE g."organizationId" = $4 AND g."environment" = c."environment"::text');
+    // Each grant's app status (wave 2 integration review round 3): the grant's
+    // own app, in the grant's organization, which the line above binds to $4.
+    expect(text).toContain('FROM "Solution" s WHERE s."id" = g."solutionId" AND s."organizationId" = g."organizationId"');
   });
 
   it("is what the tenant guard demands of the queries it replaced", async () => {

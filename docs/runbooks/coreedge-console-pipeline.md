@@ -17,8 +17,8 @@ write-test) open a console call (`openConsoleCall`,
 | Step | What it decides | Refusal (HTTP status) |
 |---|---|---|
 | authenticate | the route's own role gate (unchanged), and a signed-in person | as before |
-| `authorise()` | a sandbox developer reads SANDBOX systems only (P0.13); a stored connection's environment ceiling (Sandbox and Dev freely, TEST, PROD or undeclared only under a live grant) | `SANDBOX_ONLY`, `NO_APPROVED_GRANT`, `UNDECLARED_ENVIRONMENT` (403) |
-| `bind()` | a deployment tenant's (and Ariba's) configured hosts against the SAP host allow-list | `HOST_NOT_ALLOWED` (403), only under `COREEDGE_ENV_TENANT_HOSTS=enforce` |
+| `authorise()` | a sandbox developer reads SANDBOX systems only (P0.13); a stored connection's environment ceiling (Sandbox and Dev freely, TEST, PROD or undeclared only under a live grant the broker's rules still honour, see `COREEDGE_CONSOLE_GRANTS` below) | `SANDBOX_ONLY`, `NO_APPROVED_GRANT`, `UNDECLARED_ENVIRONMENT` (403) |
+| `bind()` | a stored connection served by the Tenant Twin (`transport: TWIN`), which the console never calls; a deployment tenant's (and Ariba's) configured hosts against the SAP host allow-list | `TRANSPORT_UNAVAILABLE` (503); `HOST_NOT_ALLOWED` (403), only under `COREEDGE_ENV_TENANT_HOSTS=enforce` |
 | `contain()` | the console's own circuit for this system in this organization (reads only), shared by every console route | `CIRCUIT_OPEN` (503), only under `COREEDGE_CIRCUIT_BREAKER=enforce` |
 | `callSap(fn, describe)` | the connector call, timed, its outcome told to the circuit: SAP's 4xx (429 and 400 included) counts nothing, and a fan-out tells what its requests were answered, not its row's 200 (see `docs/runbooks/coreedge-circuit-breaker.md`) | none: SAP's answer is reported as before |
 | audit | automatic: every refusal above and every `callSap` | none |
@@ -125,6 +125,41 @@ admits. Enforcing on deploy could stop a console read that works today.
 Set `COREEDGE_ENV_TENANT_HOSTS=observe` (or remove it) and redeploy. Nothing
 is stored by the setting; no data changes either way.
 
+## The setting: `COREEDGE_CONSOLE_GRANTS`
+
+The environment ceiling asks "is this organization cleared for this landscape
+at all?", deliberately coarser than the broker on WHICH service (a discovery
+console cannot require a grant for the service it is discovering). It was also
+coarser, by accident, on WHETHER a grant still counts (wave 2 integration
+review round 3): any unrevoked, unexpired grant for the environment opened it,
+including one whose app is `RETIRED` (or gone), and a legacy unbound grant
+under `COREEDGE_GRANT_BINDING=strict`. The broker, the lane board and
+discovery refuse both (`SOLUTION_RETIRED`, `GRANT_NEEDS_REAPPROVAL`), so every
+builder of the organization could keep reading PROD through the console after
+the integration was retired or its approval invalidated. The console load now
+reads each grant's interface and its app's status
+(`src/lib/governed/call-loads.ts` `loadConsoleConnection`), and the ceiling
+asks `consoleCeilingSetAside` (`src/lib/sap-public/console-read-guard.ts`) of
+each live grant.
+
+| Value | Behaviour |
+|---|---|
+| `observe` (default; also any unrecognised value) | The ceiling answers as before. A read that only such a grant opens goes ahead, is logged (`[console-grants] ... COREEDGE_CONSOLE_GRANTS=enforce would refuse it`, with the organization, the environment, the reason and the correlation id) and is recorded on its platform row (`detail.ceilingWouldRefuse`: `SOLUTION_RETIRED`, `SOLUTION_MISSING` or `GRANT_NEEDS_REAPPROVAL`). |
+| `enforce` | Such a grant does not count. A read with no other live grant for the environment is refused `403 NO_APPROVED_GRANT`, and the message says why the approval it has does not count. |
+
+**Why observe is the default.** Counting fewer grants is a new refusal on a
+console read that works today: an organization whose only PROD approval is a
+retired app's would lose its PROD preview on deploy.
+
+**Before switching to enforce.** Query the platform rows over a working week:
+`PlatformAuditEvent` with `action = 'SAP_CONSOLE_READ'` and
+`detail->>'ceilingWouldRefuse' IS NOT NULL` (or search the logs for
+`[console-grants]`). Each organization listed needs a live approval of an
+active app, bound to an interface, for that environment (Studio, API Access),
+or it loses console reads of that landscape. Then set
+`COREEDGE_CONSOLE_GRANTS=enforce` and redeploy. Rolling back: set it to
+`observe` (or remove it) and redeploy; nothing is stored either way.
+
 ## Finding a console read
 
 - By the correlation id the person was given: Operations' correlation search
@@ -168,6 +203,8 @@ exemption that no longer reaches SAP outside the pipeline fails it too.
   directly today; a Control Tower view is not built.
 - **When to enforce the host check** in production (see above), and whether
   `http` deployment tenants should ever be allowed.
+- **When to enforce `COREEDGE_CONSOLE_GRANTS`** (see above): the product
+  owner's call once the observed rows are reviewed.
 - **The exempted routes** move by P3 (A.3 #9 for all routes) or with P4.1's
   transport dispatcher; the owner of each is not assigned.
 

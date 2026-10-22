@@ -6,10 +6,12 @@
  *
  * WHY THIS COULD NOT PASS BEFORE. Every step below had a route, and three of
  * them had no screen: no component called POST
- * /api/studio/clients/write-credential, the Connections form had no
- * write-secret field (so no screen could allow writes on a connection), and a
- * re-save — how credentials are rotated — sent no `writeEnabled` and switched
- * a writing connection's writes off. The Interfaces screen meanwhile told
+ * /api/studio/clients/write-credential, the Connections form had no way to
+ * allow writes on a connection, and a re-save — how credentials are rotated —
+ * sent no `writeEnabled` and switched a writing connection's writes off.
+ * (P0.3 first added a "write secret" field for it, which nothing ever read;
+ * wave 2 integration review round 3 removed it, and step 2 now proves the
+ * create reaches its 201 with no such value anywhere in the journey.) The Interfaces screen meanwhile told
  * builders to issue the write credential "under API Access", where there was
  * no such action.
  *
@@ -126,7 +128,6 @@ function form(over: Partial<ConnectionFormFields>): ConnectionFormFields {
     apiPath: "",
     timeoutMs: "",
     allowWrites: false,
-    writeSecret: "",
     ...over,
   };
 }
@@ -240,7 +241,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
     session.user = DEVELOPER;
     const saved = await ok<{ connection: { id: string; writeEnabled: boolean } }>(
       // `null`: the form showed this key as new (P0.3 review round 2).
-      await saveConnection(req(connectionSaveBody(form({ allowWrites: true, writeSecret: "a-write-secret" }), null))),
+      await saveConnection(req(connectionSaveBody(form({ allowWrites: true }), null))),
     );
     expect(saved.connection.writeEnabled).toBe(true);
     // Recorded as the governance action it is.
@@ -341,7 +342,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a create interface reaches its 
       await saveConnection(
         req(
           connectionSaveBody(
-            form({ password: "a-rotated-password", allowWrites: true, writeSecret: "a-write-secret" }),
+            form({ password: "a-rotated-password", allowWrites: true }),
             { isActive: true, writeEnabled: true },
           ),
         ),

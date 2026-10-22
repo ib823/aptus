@@ -358,6 +358,8 @@ export const RECHECK_COPY = {
     noConnection: "Nothing to check: no SAP system is connected for this environment.",
     noService: "Nothing to check: CoreEdge cannot resolve the SAP service this feed names, so it would refuse every call on it too.",
     unreadable: "Could not check: the SAP system's secret would not open.",
+    servedByTwin:
+      "Nothing to check: this SAP system's connection is served by the Tenant Twin, so CoreEdge does not read the client's SAP system through it.",
     appNotLive: "Nothing to check: the app is not live, so CoreEdge does not read the client's SAP system for it.",
     accessRefused: "Nothing to check: northbound refuses this lane's access, so CoreEdge does not read the client's SAP system for it.",
     connectionChanged:
@@ -401,6 +403,7 @@ export const UNCHECKED_AGE: Readonly<Record<UncheckedReason, string>> = {
   secretWouldNotOpen: "not checked · the secret would not open",
   accessRefused: "not checked · the broker refuses this lane",
   refusedBySetting: "a setting, not a check · writes refused here",
+  servedByTwin: "not checked · served by the Tenant Twin",
   checkPredatesEvidenceKey: "not checked since CoreEdge was upgraded",
   changedSinceCheck: "not checked since it changed",
   notRunYet: "not checked yet",
@@ -435,6 +438,8 @@ export const UNCHECKED_ANNOUNCED: Readonly<Record<UncheckedReason, string>> = {
     "and no check is scheduled because northbound refuses this lane's access",
   refusedBySetting:
     "and that is a setting on the SAP system's connection, not the result of a check",
+  servedByTwin:
+    "and no check is scheduled because this SAP system's connection is served by the Tenant Twin",
   checkPredatesEvidenceKey:
     "and its last check was recorded before CoreEdge noted what a check proves, so the next check will speak for it",
   changedSinceCheck:
@@ -466,6 +471,8 @@ export const UNCHECKED_EXPLANATION: Readonly<Record<UncheckedReason, string>> = 
     "Northbound refuses this lane's access, so the nightly check does not read the client's SAP system for it. Once access is approved here, the next nightly check covers it — or re-check it then.",
   refusedBySetting:
     "Northbound refuses this lane's writes because of a setting on the SAP system's connection: writes are switched off, or this feed's own service has not been verified through it. No check decides that, so no age is shown. The nightly check still reads through this connection, so the lane has current proof behind it the day the setting allows writes.",
+  servedByTwin:
+    "This SAP system's connection is marked to be served by the Tenant Twin, so CoreEdge keeps calls off the client's SAP system: the nightly check does not read through it, and northbound refuses every call while no twin engine is available on this deployment. Set the connection back to DIRECT to serve it from the client's SAP system again.",
   checkPredatesEvidenceKey:
     "The last check was recorded before CoreEdge began noting which SAP system, dataset and feed version a check proves, so it cannot speak for this lane today. Nothing about the lane is known to have changed. The next nightly check covers it, or re-check it now.",
   changedSinceCheck:

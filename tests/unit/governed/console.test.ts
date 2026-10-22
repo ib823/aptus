@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   orgRows: [] as Record<string, unknown>[],
   platformRows: [] as Record<string, unknown>[],
   ceiling: null as null | "NO_APPROVED_GRANT" | "UNDECLARED_ENVIRONMENT",
+  /** Allowed only on a grant the broker no longer honours, under observe (review round 3). */
+  observed: null as null | "SOLUTION_RETIRED",
   ceilingAsked: [] as Record<string, unknown>[],
 }));
 
@@ -26,7 +28,9 @@ vi.mock("@/lib/sap-public/console-read-guard", async (importOriginal) => ({
   ...(await importOriginal<typeof ConsoleReadGuard>()),
   decideConsoleRead: async (input: Record<string, unknown>) =>
     h.ceilingAsked.push(input) &&
-    h.ceiling === null ? { allowed: true, refusal: null, message: null } : { allowed: false, refusal: h.ceiling, message: `refused: ${h.ceiling}` },
+    h.ceiling === null
+      ? { allowed: true, refusal: null, message: null, ...(h.observed ? { observed: h.observed } : {}) }
+      : { allowed: false, refusal: h.ceiling, message: `refused: ${h.ceiling}` },
   recordConsoleRead: async (row: Record<string, unknown>) => {
     h.orgRows.push(row);
   },
@@ -103,6 +107,7 @@ beforeEach(() => {
   h.orgRows = [];
   h.platformRows = [];
   h.ceiling = null;
+  h.observed = null;
   h.ceilingAsked = [];
   vi.unstubAllEnvs();
   forgetEnvTenantHostWarnings();
@@ -180,7 +185,7 @@ describe("authorise: the console's ceilings, each refusal audited", () => {
    * only grants read for the viewer's own organization.
    */
   it("judges the grants read with the connection, for the viewer's organization only", async () => {
-    const grant = { decision: "APPROVED", expiresAt: null, revokedAt: null };
+    const grant = { decision: "APPROVED", expiresAt: null, revokedAt: null, interfaceId: "if_1", solutionStatus: "ACTIVE" };
     const withCeiling = (organizationId: string) => {
       const t = connection("PROD");
       return { ...t, resolved: { ...t.resolved, connection: { ...t.resolved.connection, ceiling: { organizationId, grants: [grant] } } } };
@@ -193,6 +198,22 @@ describe("authorise: the console's ceilings, each refusal audited", () => {
     // Not read with the connection: the same.
     expect((await open({ target: connection("PROD") }).authorise()).ok).toBe(true);
     expect(h.ceilingAsked[2]).toEqual({ organizationId: "org_a", environment: "PROD" });
+  });
+
+  it("a read opened only by a grant the broker no longer honours is logged and recorded as what enforce would refuse", async () => {
+    h.observed = "SOLUTION_RETIRED";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const call = open({ target: connection("PROD") });
+    await throughContain(call);
+    await call.callSap(async () => 1, { answered: () => ({ status: 200, rowCount: 1 }), failed: () => ({ status: 502, rowCount: null }) });
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("COREEDGE_CONSOLE_GRANTS=enforce would refuse"))).toBe(true);
+    expect(h.platformRows[0]).toMatchObject({ detail: { ceilingWouldRefuse: "SOLUTION_RETIRED" } });
+    // A read the ceiling honours carries no such field.
+    h.observed = null;
+    const plain = open({ target: connection("PROD") });
+    await throughContain(plain);
+    await plain.callSap(async () => 1, { answered: () => ({ status: 200, rowCount: 1 }), failed: () => ({ status: 502, rowCount: null }) });
+    expect(h.platformRows[1]!.detail).not.toHaveProperty("ceilingWouldRefuse");
   });
 
   it("does not ask the grant question of a deployment tenant, which no organization owns", async () => {
@@ -254,6 +275,25 @@ describe("bind: the deployment tenant's host against the stored-connection allow
     await throughContain(call);
     await call.callSap(async () => 1, { answered: () => ({ status: 200, rowCount: 1 }), failed: () => ({ status: 502, rowCount: null }) });
     expect(h.platformRows[0]).toMatchObject({ detail: { hostCheck: "not-checked", source: "connection" } });
+  });
+
+  /*
+   * Wave 2 integration review round 3: the console sends through the
+   * Workbench connector's own fetch with the stored credentials, so a
+   * connection served by the Tenant Twin is refused before anything is sent.
+   */
+  it("refuses a stored connection served by the Tenant Twin, before anything is sent, on both trails", async () => {
+    const twin = connection("DEV");
+    const call = open({ target: { ...twin, resolved: { ...twin.resolved, connection: { ...twin.resolved.connection, transport: "TWIN" } } } });
+    expect((await call.authorise()).ok).toBe(true);
+    const r = await call.bind();
+    expect(!r.ok && r.refusal).toMatchObject({ reason: "TRANSPORT_UNAVAILABLE", status: 503, step: "bindConnection" });
+    expect(h.orgRows).toEqual([expect.objectContaining({ status: 503 })]);
+    expect(h.platformRows).toEqual([expect.objectContaining({ outcome: "BLOCKED", reason: "TRANSPORT_UNAVAILABLE" })]);
+    await expect(call.contain()).rejects.toBeInstanceOf(ConsolePipelineError);
+    // A DIRECT one binds as before.
+    const direct = open({ target: { ...twin, resolved: { ...twin.resolved, connection: { ...twin.resolved.connection, transport: "DIRECT" } } } });
+    await throughContain(direct);
   });
 
   it("checks Ariba's base and token URLs, and an Ariba call has no organization row", async () => {

@@ -34,6 +34,7 @@ import { sendEmail } from "@/lib/email/brevo";
 import { esc } from "@/lib/email/templates";
 import { isDriftTransition } from "@/lib/ops/incidents";
 import { countedProbeEvents, probeEventSource, type ProbeSource } from "@/lib/ops/probe-event-source";
+import { reachedDirectly } from "@/lib/governed/transport";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
 import {
   clearUnreadableOnceGroupOpens,
@@ -45,9 +46,20 @@ import {
 
 const SWEEP_CONCURRENCY = 4;
 
+/**
+ * Why a TWIN connection is not probed (wave 2 integration review round 3).
+ * The probe signs in with the stored credentials and asks the base URL for
+ * its $metadata through the platform's own fetch, and a connection marked
+ * TWIN is kept off the customer's SAP (transport.ts `reachedDirectly`).
+ */
+export const TWIN_NOT_PROBED =
+  "This connection is served by the Tenant Twin, so CoreEdge does not probe the client's SAP system through it. Set it back to DIRECT to probe it.";
+
 export interface SweepResult {
   probed: number;
   skippedNoPath: number;
+  /** Active connections served by the Tenant Twin: never probed from here (TWIN_NOT_PROBED). */
+  skippedTwin: number;
   unreadable: number;
   byStatus: Record<string, number>;
   transitions: { connectionId: string; from: string | null; to: string }[];
@@ -448,6 +460,7 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
   const result: SweepResult = {
     probed: 0,
     skippedNoPath: 0,
+    skippedTwin: 0,
     unreadable: 0,
     byStatus: {},
     transitions: [],
@@ -487,6 +500,10 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
         if (!row) continue;
         const conn = byKey.get(row.key);
         if (!conn) continue;
+        if (!reachedDirectly(conn)) {
+          result.skippedTwin++;
+          continue;
+        }
         if (!resolveProbePath(conn)) {
           result.skippedNoPath++;
           continue;
@@ -574,6 +591,8 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
 export type ProbeOneOutcome =
   | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
   | { outcome: "not-found" }
+  /** The connection is served by the Tenant Twin: nothing was sent (TWIN_NOT_PROBED). */
+  | { outcome: "servedByTwin"; detail: string }
   | {
       outcome: "unreadable";
       detail: string;
@@ -668,6 +687,7 @@ export async function probeOneConnection(
       detail: `The stored connection "${row.key}" is active but could not be resolved with the rest of its product group. Re-save it in Studio, or deactivate it.`,
     };
   }
+  if (!reachedDirectly(conn)) return { outcome: "servedByTwin", detail: TWIN_NOT_PROBED };
 
   const probe = await probeConnection(conn);
   // Guarded by the revision the probe read through (`revisionGuard`).

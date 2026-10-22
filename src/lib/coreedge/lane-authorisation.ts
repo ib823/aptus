@@ -15,8 +15,11 @@
  *   key      the credential row, judged by keyRefusal in the derivation; and
  *            for a lane that writes, whether a write key is sealed on it.
  *   binding  bindingFor on the organisation's connections for the feed's
- *            product, with the credential's SAP client; for a write, the
- *            write route's gates on the bound connection.
+ *            product, with the credential's SAP client; then the bound
+ *            connection's transport (transport.ts `transportRefusal`: a TWIN
+ *            connection with no twin engine is refused, as the broker's
+ *            binding step refuses it); for a write, the write route's gates
+ *            on the bound connection.
  *
  * `laneEvidence` then decides which check row may speak for the lane: only
  * one made through the bound connection, against the feed's entity set and
@@ -42,6 +45,7 @@ import {
   type BindingEstate,
   type BrokerRoute,
 } from "@/lib/northbound/authorisation";
+import { reachedDirectly, transportRefusal } from "@/lib/governed/transport";
 import type { BindableConnection } from "@/lib/sap-public/connection-selection";
 import { grantFetchedFor, type GrantBindingMode } from "@/lib/studio/grant-binding";
 import { effectiveDecision } from "@/lib/studio/grants";
@@ -88,6 +92,11 @@ export interface LaneConnection extends BindableConnection {
   readonly client: string | null;
   readonly baseUrl: string;
   readonly writeEnabled: boolean;
+  /**
+   * How the broker reaches it (SapConnection.transport): DIRECT, or TWIN for
+   * the Tenant Twin. Absent reads as DIRECT, as transport.ts reads it.
+   */
+  readonly transport?: string | null;
 }
 
 export interface LaneAuthorisationInput<C extends LaneConnection> {
@@ -122,8 +131,16 @@ export interface LaneAuthorisation<C extends LaneConnection> {
    * write switch, its custom-service verification). The sweep reads through
    * this one: a read through it is evidence for the lane the day those gates
    * open, and the board refuses the lane at binding until then.
+   *
+   * Null for a connection that is not reached DIRECT (transport.ts
+   * `reachedDirectly`): the sweep reads SAP with the platform's own fetch and
+   * the connection's stored credentials, and a TWIN connection is kept off
+   * the customer's SAP, so nothing reads through it and no check speaks for
+   * it (wave 2 integration review round 3).
    */
   readonly bound: C | null;
+  /** The chosen connection is not reached DIRECT, so `bound` is null for it. */
+  readonly notDirect: boolean;
 }
 
 export function laneAuthorisation<C extends LaneConnection>(
@@ -170,10 +187,10 @@ export function laneAuthorisation<C extends LaneConnection>(
   const binding: BindingFacts = {
     refusal: !bound.ok
       ? bound.reason
-      : route === "write"
-        ? writeSwitchRefusal(iface, credentialEnvironment, bound.connection)
-        : null,
+      : (transportRefusal(bound.connection) ??
+        (route === "write" ? writeSwitchRefusal(iface, credentialEnvironment, bound.connection) : null)),
   };
+  const notDirect = bound.ok && !reachedDirectly(bound.connection);
 
   return {
     route,
@@ -183,7 +200,8 @@ export function laneAuthorisation<C extends LaneConnection>(
     key,
     binding,
     connection: bound.ok && binding.refusal === null ? bound.connection : null,
-    bound: bound.ok ? bound.connection : null,
+    bound: bound.ok && !notDirect ? bound.connection : null,
+    notDirect,
   };
 }
 

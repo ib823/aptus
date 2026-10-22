@@ -84,9 +84,9 @@ describe("a partial write cannot empty the credential bundle", () => {
     expect(schema).not.toMatch(/baseUrl|authType|password|label/);
   });
 
-  it("refuses to enable writes without the secret it cannot see", () => {
-    // Flipping the switch on a connection that never had a write secret would
-    // claim a capability that fails at the first attempt.
+  it("refuses to enable writes through the toggle: a save from the form is the one door", () => {
+    // The save says which system the writes are for and records it; the
+    // toggle cannot. Not a write secret: nothing reads one (review round 3).
     // `row`: the row as read by the attempt that writes (review round 4).
     expect(flat(route)).toMatch(/writeEnabled === true && !row\.writeEnabled/);
   });

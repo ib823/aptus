@@ -82,6 +82,7 @@ import {
   DEPLOYMENT_AUDIT_SCOPE,
   newCorrelationId,
   recordConsoleRead,
+  type ConsoleCeilingSetAside,
 } from "@/lib/sap-public/console-read-guard";
 import {
   aribaUrls,
@@ -92,6 +93,7 @@ import {
   type HostCheck,
 } from "@/lib/sap-public/env-tenant-hosts";
 import type { ResolvedReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { reachedDirectly } from "./transport";
 import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
 
 import { circuitKeyForConnection, circuitKeyForConsoleRead, circuitKeyForDeploymentTenant } from "./containment";
@@ -183,6 +185,9 @@ const hostRefusalMessage =
   "connection must pass, so the console does not call it. Nothing was sent. An operator can add the domain to " +
   "SAP_HOST_ALLOWLIST_EXTRA, or set COREEDGE_ENV_TENANT_HOSTS=observe.";
 
+const twinRefusalMessage =
+  "This connection is served by the Tenant Twin, so the console does not read the client's SAP system through it. Nothing was sent.";
+
 /**
  * Open a console call for a person a route's own gate has let through. Call
  * the steps in order: `authorise`, `bind`, `contain`, then `callSap`.
@@ -202,6 +207,12 @@ export class ConsoleCall {
   /** The permit was used by `callSap` or given back by `release`: nothing more to settle. */
   private permitSettled = false;
   private hostCheck: HostCheck | null = null;
+  /**
+   * The environment ceiling let this read through only on a grant the
+   * broker's rules no longer honour, under COREEDGE_CONSOLE_GRANTS=observe:
+   * why enforce would refuse it (console-read-guard.ts, review round 3).
+   */
+  private ceilingObserved: ConsoleCeilingSetAside | null = null;
 
   constructor(private readonly input: ConsoleCallInput) {
     this.mode = input.mode ?? "read";
@@ -242,6 +253,13 @@ export class ConsoleCall {
       if (!decision.allowed) {
         return this.refuse(refusal("authorise", decision.refusal ?? "NO_APPROVED_GRANT", decision.message ?? ""));
       }
+      if (decision.observed) {
+        this.ceilingObserved = decision.observed;
+        console.warn(
+          "[console-grants] a console read was opened only by a grant the broker no longer honours; COREEDGE_CONSOLE_GRANTS=enforce would refuse it",
+          { organizationId: viewer.organizationId, environment: conn.environment, reason: decision.observed, correlationId: this.correlationId },
+        );
+      }
     }
     this.authorised = true;
     return passed();
@@ -256,8 +274,20 @@ export class ConsoleCall {
    */
   async bind(): Promise<StepResult<void>> {
     if (!this.authorised) throw new ConsolePipelineError("bind() before authorise()");
-    const mode = envTenantHostMode();
     const { target } = this.input;
+    /*
+     * A STORED CONNECTION SERVED BY THE TENANT TWIN IS NOT CALLED FROM HERE
+     * (wave 2 integration review round 3). The console sends through the
+     * Workbench connector's own fetch with the connection's stored
+     * credentials, and a TWIN connection is kept off the customer's SAP
+     * (transport.ts `reachedDirectly`). Every row is DIRECT unless P1.6 or an
+     * operator marks it TWIN, so this refuses no read that works today.
+     */
+    const conn = this.connection;
+    if (conn && !reachedDirectly(conn)) {
+      return this.refuse(refusal("bindConnection", "TRANSPORT_UNAVAILABLE", twinRefusalMessage));
+    }
+    const mode = envTenantHostMode();
     const urls =
       target.kind === "ariba"
         ? aribaUrls()
@@ -449,6 +479,7 @@ export class ConsoleCall {
         rowCount: outcome.rowCount,
         ...(how.blocked ? { step: how.blocked.step } : {}),
         hostCheck: this.hostCheck === null ? "not-checked" : this.hostCheck.allowed ? "allowed" : "unlisted",
+        ...(this.ceilingObserved ? { ceilingWouldRefuse: this.ceilingObserved } : {}),
         ...(this.hostCheck && !this.hostCheck.allowed
           ? { unlistedHosts: this.hostCheck.findings.map((f) => ({ variable: f.variable, host: f.host })) }
           : {}),

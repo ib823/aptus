@@ -181,7 +181,7 @@ export function writeReadinessRefusal(operation: string, rows: readonly WriteRea
   // The one half no developer action fixes: say who can, and where (P0.3:
   // the Connections form is where writes are switched on).
   const vetoed = rows.some((r) => r.writesDisabled)
-    ? " A builder enables writes on the connection under Connections: save it with Allow writes ticked and its write secret."
+    ? " A builder enables writes on the connection under Connections: save it with Allow writes ticked."
     : "";
   return (
     `A ${operation} interface cannot be activated until some environment holds the full write chain — ` +

@@ -8,13 +8,24 @@
  * Saving secrets (POST) and anything that turns writes on (PATCH) need a fresh
  * passkey once COREEDGE_STEP_UP is enforce (lib/auth/step-up.ts).
  *
- * WRITES ARE SWITCHED ON HERE, FROM THE FORM (P0.3). `writeEnabled` needs the
- * write secret, which is sealed with the rest of the bundle and never read
- * back, so the only door is a save that supplies it — and the Connections
- * form never offered the field, so no screen could enable writes, and every
- * re-save (how credentials are rotated) silently switched a writing
- * connection's writes off. The form now carries "Allow writes" and the write
- * secret, ticked by default when re-saving a connection that allows writes.
+ * WRITES ARE SWITCHED ON HERE, FROM THE FORM (P0.3). A save is the only door
+ * that turns `writeEnabled` on — and the Connections form never offered it,
+ * so no screen could enable writes, and every re-save (how credentials are
+ * rotated) silently switched a writing connection's writes off. The form now
+ * carries "Allow writes", ticked by default when re-saving a connection that
+ * allows writes.
+ *
+ * THERE IS NO CONNECTION WRITE SECRET (wave 2 integration review round 3).
+ * A save that turned writes on had to carry a `writeSecret`, sealed with the
+ * bundle, and nothing ever read it back: not the broker's write route (it
+ * checks the app's own write key), not the SAP request, not the Workbench
+ * write-back (it checks the deployment's env secret). Any string switched
+ * writes on, so the requirement, the form field and PATCH's "requires the
+ * write secret" refusal told operators a second factor guarded writes when
+ * none did. What guards a write is this switch, the passkey and audit row of
+ * the save that turns it on, the approved write grant and the app's write
+ * key. A `writeSecret` an older caller still sends is accepted and ignored:
+ * it is not sealed, and it changes nothing.
  * A save that turns writes on is the governance action
  * `connection.enable_writes`; one that turns them off (writeEnabled omitted or
  * false over a writing row) says so in its response and its audit row, and is
@@ -264,6 +275,7 @@ const upsertSchema = z
       })
       .optional(),
     oauthTokenUrl: httpsUrl.optional(),
+    /** Accepted from older callers and ignored: nothing reads a connection write secret (file header). */
     writeSecret: z.string().max(500).optional(),
     writeEnabled: z.boolean().optional(),
     /**
@@ -387,14 +399,6 @@ const upsertSchema = z
       }
     }
 
-    // writeEnabled without a write secret is a switch wired to nothing.
-    if (v.writeEnabled && !v.writeSecret) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["writeSecret"],
-        message: "writeSecret is required when writes are enabled",
-      });
-    }
   });
 
 const patchSchema = z.object({
@@ -564,6 +568,8 @@ interface SaveJudgement {
     lastValidationStatus: string | null;
     /** When a probe of these settings last answered OK; cleared by every save (rotation-probe.ts `rotationEvidence`). */
     lastValidatedAt: Date | null;
+    /** SapConnection.transport: a TWIN connection is never probed (rotation-probe.ts `rotationProbeMayApply`). */
+    transport: string;
   } | null;
   writableAfter: boolean;
   targetChanges: WriteTargetField[];
@@ -608,6 +614,8 @@ async function judgeSave(
       // last save, which a later transient status does not undo (review round 2).
       lastValidationStatus: true,
       lastValidatedAt: true,
+      // A connection served by the Tenant Twin is never probed (rotation-probe.ts).
+      transport: true,
     },
   });
 
@@ -792,6 +800,32 @@ export async function POST(request: NextRequest) {
   let rotationProof: RotationProof | null = null;
   /** Why a save that would have been probed was not: nothing to prove, or another system. */
   let rotationSkipped: "credentials_unchanged" | "repointed" | null = null;
+  /*
+   * A PROBE THAT PASSED IS ON THE RECORD WHATEVER HAPPENS TO THE SAVE (wave 2
+   * integration review round 3). A passing probe sent the new credentials to
+   * the client's SAP (sign-in, $metadata, a proven read), and the only row
+   * that said so was the save's own, written after the upsert: a save that
+   * then failed to seal (500), lost the row three times (409), or was refused
+   * when judged again left SAP requests nobody could see. The A.3 #9
+   * exemption for this route says the probe is recorded; `unsaved` makes that
+   * true on every way out that does not reach the save's audit row.
+   */
+  let probesPassed = 0;
+  let probedConnectionId: string | null = null;
+  const unsaved = async (response: Response, reason: string): Promise<Response> => {
+    if (probesPassed > 0 && probedConnectionId !== null) {
+      await writeConfigAudit({
+        organizationId,
+        actorId: userId,
+        entityType: "Connection",
+        entityId: probedConnectionId,
+        action: "TEST_CONNECT",
+        // What happened, never what was typed.
+        after: { event: "connection_rotation_probed", product: input.product, key, probes: probesPassed, saved: false, reason },
+      });
+    }
+    return response;
+  };
   const secrets = {
     ...(input.username ? { username: input.username } : {}),
     ...(input.password ? { password: input.password } : {}),
@@ -804,11 +838,11 @@ export async function POST(request: NextRequest) {
     ...(input.samlUserId ? { samlUserId: input.samlUserId } : {}),
     ...(input.apiKey ? { apiKey: input.apiKey } : {}),
     ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
-    ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+    // Never `writeSecret`: nothing reads one, so it is not sealed (file header).
   };
   for (let attempt = 1; ; attempt += 1) {
     const verdict = await judgeSave(organizationId, key, input, environment, writeEnabled);
-    if ("refusal" in verdict) return withStepUpRecorded(missing, verdict.refusal);
+    if ("refusal" in verdict) return unsaved(await withStepUpRecorded(missing, verdict.refusal), "refused_when_judged_again");
     judged = verdict;
 
     /*
@@ -822,7 +856,7 @@ export async function POST(request: NextRequest) {
       action: judged.enablesWrites ? "connection.enable_writes" : "connection.save_secrets",
       targetId: judged.existing?.id ?? null,
     });
-    if (!stepUp.ok) return stepUp.response;
+    if (!stepUp.ok) return unsaved(stepUp.response, "step_up_required");
     missing = stepUp.outcome === "warned" ? stepUp.missing : null;
 
     /*
@@ -851,7 +885,7 @@ export async function POST(request: NextRequest) {
      * it the save after any re-save went unprobed and a typo there replaced
      * a secret just proven. Only a save that changes the sign-in credentials
      * on the same system is probed: one that keeps them (a label fix, the
-     * write secret added to switch writes on) has nothing to prove and is
+     * switching writes on) has nothing to prove and is
      * not refused because SAP is down, and carries the proof to the revision
      * it writes; one that points the connection at another system (host,
      * environment or SAP client) is a re-point, saved as before with no proof
@@ -915,9 +949,14 @@ export async function POST(request: NextRequest) {
             action: "TEST_CONNECT",
             after: { event: "connection_rotation_refused", product: input.product, key, failedAt: decision.failedAt },
           });
-          return withStepUpRecorded(missing, studioError("VALIDATION_ERROR", decision.reason));
+          return unsaved(
+            await withStepUpRecorded(missing, studioError("VALIDATION_ERROR", decision.reason)),
+            "rotation_refused",
+          );
         }
         rotationProbed = true;
+        probesPassed += 1;
+        probedConnectionId = current.id;
         rotationProof = proofFromProbe(savedRevision, probe, evidence.read);
       }
     }
@@ -975,24 +1014,30 @@ export async function POST(request: NextRequest) {
        */
       if (error instanceof SapConnectionChangedError) {
         if (attempt < MAX_SAVE_ATTEMPTS) continue;
-        return withStepUpRecorded(
-          missing,
-          studioError(
-            "CONFLICT",
-            `The connection "${key}" kept changing while this save was being made, so nothing was saved. ` +
-              "Reload the page to see it as it is, then save again.",
+        return unsaved(
+          await withStepUpRecorded(
+            missing,
+            studioError(
+              "CONFLICT",
+              `The connection "${key}" kept changing while this save was being made, so nothing was saved. ` +
+                "Reload the page to see it as it is, then save again.",
+            ),
           ),
+          "conflict",
         );
       }
       console.error("[studio/connections] seal or persist failed:", error);
-      return withStepUpRecorded(
-        missing,
-        studioError(
-          "INTERNAL",
-          "The connection could not be sealed and was not saved. This is a deployment " +
-            "configuration problem, not a problem with what you entered — quote the " +
-            "correlation ID to whoever operates this environment.",
+      return unsaved(
+        await withStepUpRecorded(
+          missing,
+          studioError(
+            "INTERNAL",
+            "The connection could not be sealed and was not saved. This is a deployment " +
+              "configuration problem, not a problem with what you entered — quote the " +
+              "correlation ID to whoever operates this environment.",
+          ),
         ),
+        "seal_or_persist_failed",
       );
     }
   }
@@ -1019,7 +1064,7 @@ export async function POST(request: NextRequest) {
    * not a 403 later. The form keeps writes on by default (P0.3).
    */
   const writesOffNotice = disablesWrites
-    ? "Writes are now OFF on this connection: this save did not keep them on. Every create through it is refused until it is saved again with Allow writes ticked and its write secret."
+    ? "Writes are now OFF on this connection: this save did not keep them on. Every create through it is refused until it is saved again with Allow writes ticked."
     : null;
   /*
    * A SAVE THAT REACTIVATES A CONNECTION SAYS SO (P0.3 review round 2). An
@@ -1070,6 +1115,8 @@ export async function POST(request: NextRequest) {
       secretsRotated: true,
       // The new secret was proven against SAP before it replaced a working one.
       ...(rotationProbed ? { rotationProbed: true } : {}),
+      // A save judged again after the row changed may have probed more than once.
+      ...(probesPassed > 1 ? { rotationProbes: probesPassed } : {}),
       ...(rotationSkipped ? { rotationProbeSkipped: rotationSkipped } : {}),
       // What the credentials just stored are proven to do, keyed by the
       // revision this save wrote: the next save's probe reads it back
@@ -1170,7 +1217,7 @@ export async function PATCH(request: NextRequest) {
 
   /*
    * JUDGED ON THE ROW IT OVERWRITES (P0.3 review round 4), as POST is. The
-   * twin check, the "enabling writes needs the write secret" refusal and the
+   * twin check, the "writes are switched on by a save" refusal and the
    * passkey decision are made on a read, and the update used to write
    * whatever had happened since. An operator's Deactivate (or writes-off)
    * landing between the two was undone: a builder with no passkey, whose
@@ -1217,17 +1264,17 @@ export async function PATCH(request: NextRequest) {
       if (twin) return withStepUpRecorded(missing, studioError("CONFLICT", twinRefusal(twin, target, "this connection")));
     }
 
-    // Enabling writes needs a write secret, which lives sealed and unreadable from
-    // here. Flipping the switch on a connection that never had one would produce a
-    // connection that claims to allow writes and fails at the first attempt, so the
-    // caller is sent to POST — where the secret can actually be supplied, and
-    // which the Connections form now offers (P0.3).
+    // Writes are switched on by a save from the Connections form (POST), one
+    // door: the save says which system the writes are for (environment, host,
+    // SAP client), records them on its audit row and asks for the passkey as
+    // `connection.enable_writes`. Not because of a write secret, which nothing
+    // reads (file header; wave 2 integration review round 3).
     if (writeEnabled === true && !row.writeEnabled) {
       return withStepUpRecorded(
         missing,
         studioError(
           "VALIDATION_ERROR",
-          "Enabling writes requires the write secret. Save the connection again from the Connections form with Allow writes ticked and its write secret entered.",
+          "Writes are switched on by saving the connection from the Connections form with Allow writes ticked, so the save records which SAP system they are for.",
         ),
       );
     }

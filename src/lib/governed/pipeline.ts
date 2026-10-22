@@ -97,7 +97,7 @@ import {
   governedCircuitBreaker,
 } from "./containment";
 import { afterResponse } from "./after-response";
-import { transportFor, type Transport } from "./transport";
+import { transportFor, transportRefusal, type Transport } from "./transport";
 
 /* ── the steps and the refusal table ──────────────────────────────────── */
 
@@ -545,12 +545,15 @@ export async function bindConnection(
       }),
     );
   }
+  // transport.ts `transportRefusal`: the predicate the lane board and
+  // discovery's `callable` ask too (wave 2 integration review round 3).
   const transport = transportFor(binding.connection);
-  if (!transport.available()) {
+  const unavailable = transportRefusal(binding.connection);
+  if (unavailable !== null) {
     return refused(
       refusal(
         "bindConnection",
-        "TRANSPORT_UNAVAILABLE",
+        unavailable,
         "This connection is served by the Tenant Twin, which is not available on this deployment.",
         { audit: { connection: binding.connection } },
       ),

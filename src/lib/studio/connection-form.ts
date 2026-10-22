@@ -8,10 +8,11 @@
  * screen sends, and so the component's own module keeps no secret-shaped
  * field (tests/unit/studio/connections-secret-safety.test.ts).
  *
- * "Allow writes" (P0.3): `writeEnabled` is sent, with the write secret, only
- * when ticked. The route refuses `writeEnabled` without a secret, and reads an
- * absent `writeEnabled` as off — which, over a connection that allowed
- * writes, its response says.
+ * "Allow writes" (P0.3): `writeEnabled` is sent only when ticked. The route
+ * reads an absent `writeEnabled` as off — which, over a connection that
+ * allowed writes, its response says. There is no connection write secret
+ * (wave 2 integration review round 3): the form asked for one, sealed it, and
+ * nothing ever read it back, so it gated nothing.
  */
 
 import { parseSapEnvironment } from "@/lib/sap-public/environment";
@@ -43,8 +44,6 @@ export interface ConnectionFormFields {
   readonly timeoutMs: string;
   /** "Allow writes" (P0.3). */
   readonly allowWrites: boolean;
-  /** Sealed with the rest of the bundle; required when writes are allowed. */
-  readonly writeSecret: string;
 }
 
 /**
@@ -182,11 +181,10 @@ export function connectionSaveBody(
       ? { clientId: f.clientId.trim(), clientSecret: f.clientSecret, oauthTokenUrl: f.oauthTokenUrl.trim() }
       : {}),
     /*
-     * Writes (P0.3): on only when ticked, and always with the secret — the
-     * route refuses writeEnabled without one. Unticked sends nothing, which the
+     * Writes (P0.3): on only when ticked. Unticked sends nothing, which the
      * route reads as off; over a writing connection its response says so.
      */
-    ...(f.allowWrites ? { writeEnabled: true, writeSecret: f.writeSecret } : {}),
+    ...(f.allowWrites ? { writeEnabled: true } : {}),
     // What the form showed for the row it replaces (P0.3 review round 2).
     ...(rendered === undefined
       ? {}

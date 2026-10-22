@@ -325,6 +325,8 @@ export interface BindableConnectionSummary extends BindableConnection {
   key: string;
   label: string;
   product: string;
+  /** How the broker reaches it (transport.ts): discovery's `callable` asks `transportRefusal` of it. */
+  transport?: string;
 }
 
 /**
@@ -342,7 +344,7 @@ export async function listBindableConnections(
   if (!organizationId) return [];
   return prisma.sapConnection.findMany({
     where: { organizationId, product, isActive: true },
-    select: { key: true, label: true, product: true, environment: true, client: true },
+    select: { key: true, label: true, product: true, environment: true, client: true, transport: true },
     orderBy: { createdAt: "asc" },
   });
 }

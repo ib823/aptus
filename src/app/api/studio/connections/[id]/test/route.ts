@@ -22,7 +22,8 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
-import { recordUnreadableOne } from "@/lib/ops/connection-probe-sweep";
+import { reachedDirectly } from "@/lib/governed/transport";
+import { recordUnreadableOne, TWIN_NOT_PROBED } from "@/lib/ops/connection-probe-sweep";
 import { probeEventSource } from "@/lib/ops/probe-event-source";
 import { resolveSapConnections } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -112,6 +113,9 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
     return studioError("CONFLICT", refused.detail);
   }
   if (!resolved) return studioError("NOT_FOUND", "Connection not found.");
+  // A connection served by the Tenant Twin is kept off the client's SAP
+  // (transport.ts `reachedDirectly`): nothing is sent, nothing recorded.
+  if (!reachedDirectly(resolved)) return studioError("CONFLICT", TWIN_NOT_PROBED);
 
   const result = await probeConnection(resolved);
 

@@ -230,16 +230,23 @@ function openForm(connections: StudioConnection[]) {
   if (connections.length > 0) fireEvent.click(screen.getByRole("button", { name: /Add a connection/ }));
 }
 
-describe("Connections · Allow writes and the write secret", () => {
-  it("offers both on a new connection, unticked, and requires the secret once ticked", () => {
+describe("Connections · Allow writes", () => {
+  /*
+   * No write secret (wave 2 integration review round 3). The form asked for
+   * one on every save that kept writes on and sealed it, and nothing ever read
+   * it back: any string switched writes on. It is gone, so the screen no
+   * longer claims a second factor that does not exist.
+   */
+  it("offers Allow writes on a new connection, unticked, and asks for no write secret once ticked", () => {
     openForm([]);
     const allow = screen.getByRole("checkbox", { name: /Allow writes/ }) as HTMLInputElement;
     expect(allow.checked).toBe(false);
     expect(screen.queryByLabelText(/Write secret/)).toBeNull();
 
     fireEvent.click(allow);
-    expect(screen.getByLabelText(/Write secret/)).toBeTruthy();
-    expect(document.body.textContent).toContain("the write secret (writes are allowed)");
+    expect(allow.checked).toBe(true);
+    expect(screen.queryByLabelText(/Write secret/)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/write secret/i);
   });
 
   it("starts ticked when re-saving a connection that allows writes, so a rotation keeps them on", () => {
@@ -301,7 +308,6 @@ describe("Connections · Allow writes and the write secret", () => {
     const [username, password] = [screen.getByLabelText("Username"), screen.getByLabelText("Password")];
     fireEvent.change(username, { target: { value: "COMM_USER" } });
     fireEvent.change(password, { target: { value: "p" } });
-    fireEvent.change(screen.getByLabelText(/Write secret/), { target: { value: "w" } });
     fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("changed since");
@@ -310,15 +316,16 @@ describe("Connections · Allow writes and the write secret", () => {
     expect(body).toMatchObject({ writeEnabled: true, environment: "DEV" });
   });
 
-  it("sends writeEnabled with the secret only when writes are allowed", () => {
+  it("sends writeEnabled only when writes are allowed, and never a write secret", () => {
     const base = {
       product: "s4hana", client: "", key: "erp-dev", label: "ERP DEV", baseUrl: "https://my000001-api.s4hana.cloud.sap",
       environment: "DEV", authType: "basic" as const, apiKey: "", apiKeyHeader: "apikey", username: "u", password: "p",
       bearerToken: "", clientId: "", clientSecret: "", oauthTokenUrl: "", companyId: "", samlAssertion: "",
       samlSigning: "key" as const, samlPrivateKey: "", samlUserId: "", apiPath: "", timeoutMs: "",
     };
-    expect(connectionSaveBody({ ...base, allowWrites: true, writeSecret: "s" })).toMatchObject({ writeEnabled: true, writeSecret: "s" });
-    const off = connectionSaveBody({ ...base, allowWrites: false, writeSecret: "ignored" });
+    expect(connectionSaveBody({ ...base, allowWrites: true })).toMatchObject({ writeEnabled: true });
+    expect(connectionSaveBody({ ...base, allowWrites: true })).not.toHaveProperty("writeSecret");
+    const off = connectionSaveBody({ ...base, allowWrites: false });
     expect("writeEnabled" in off).toBe(false);
     expect("writeSecret" in off).toBe(false);
   });

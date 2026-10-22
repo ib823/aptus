@@ -9,11 +9,14 @@
  * cell is therefore a statement of fact, not a mask over a value in memory.
  *
  * WRITES ARE SWITCHED ON HERE (P0.3). The API always accepted `writeEnabled`
- * with a write secret on a save, and the form never offered either — so no
- * screen could allow writes on a connection, and every re-save (how
- * credentials are rotated) sent no `writeEnabled` and switched a writing
- * connection's writes off. The form now carries "Allow writes" and the write
- * secret. Re-saving a connection whose writes are live (active, writes
+ * on a save, and the form never offered it — so no screen could allow writes
+ * on a connection, and every re-save (how credentials are rotated) sent no
+ * `writeEnabled` and switched a writing connection's writes off. The form now
+ * carries "Allow writes". It asked for a "write secret" too, which nothing
+ * ever read back, so it gated nothing and is gone (wave 2 integration review
+ * round 3): what gates a write is this switch, the passkey and the audit row
+ * on the save, the approved write grant and the app's write key. Re-saving a
+ * connection whose writes are live (active, writes
  * allowed) starts with the box ticked, so a rotation keeps them on; unticking
  * it says, before Save, that the save turns them off. A DEACTIVATED
  * connection starts unticked: a save reactivates the row, so a ticked default
@@ -497,7 +500,6 @@ function ConnectionForm({
    * writes, so re-saving to rotate credentials keeps them on.
    */
   const [allowWritesChoice, setAllowWritesChoice] = useState<boolean | null>(null);
-  const [writeSecret, setWriteSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -580,7 +582,6 @@ function ConnectionForm({
     missing.push("the registration's private key and the SuccessFactors user id to sign for");
   if (authType === "oauth-saml-bearer" && samlSigning === "assertion" && !samlAssertion.trim())
     missing.push("a pre-signed SAML assertion");
-  if (allowWrites && !writeSecret) missing.push("the write secret (writes are allowed)");
 
   const submit = useCallback(async () => {
     setBusy(true);
@@ -594,7 +595,7 @@ function ConnectionForm({
             {
               product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, username,
               password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
-              samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret,
+              samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites,
             },
             // What this form showed for the row it replaces: the route refuses
             // the save (409) when the row has changed since the page loaded —
@@ -648,7 +649,7 @@ function ConnectionForm({
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, writeSecret, replacing]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, replacing]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -966,17 +967,6 @@ function ConnectionForm({
           environment, with an approved write grant and a write key issued under API Access. Allowing writes is a
           governance action: Save asks for your passkey and the change is recorded.
         </span>
-        {allowWrites ? (
-          <Label text="Write secret" hint="Sealed with the other secrets and never shown again. Enter it on every save that keeps writes on.">
-            <input
-              type="password"
-              value={writeSecret}
-              onChange={(e) => setWriteSecret(e.target.value)}
-              autoComplete="new-password"
-              style={input}
-            />
-          </Label>
-        ) : null}
         {turnsWritesOff ? (
           <p role="status" data-testid="writes-off-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
             This connection allows writes today. Saving it without Allow writes turns them off, and every create through

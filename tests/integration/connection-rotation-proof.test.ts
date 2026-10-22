@@ -279,9 +279,25 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the rotation probe across re-sa
     const key = "dev";
     expect((await save(key, "Pw-1")).status).toBe(200);
     await testedOk(org, key);
-    // Tick Allow writes, enter the write secret, retype the (unchanged) password.
+    // Tick Allow writes and retype the (unchanged) password. The write secret an
+    // older caller still sends is accepted and ignored (review round 3).
     expect((await save(key, "Pw-1", { writeEnabled: true, writeSecret: "write-1" })).status).toBe(200);
     await expectTypoRefused(org, key, "Pw-1-typo", "Pw-1", { writeEnabled: true, writeSecret: "write-1" });
+  });
+
+  /*
+   * No connection write secret (wave 2 integration review round 3): writes
+   * are switched on without one, and one an older caller sends is neither
+   * required nor sealed, because nothing reads it.
+   */
+  it("switches writes on without a write secret, and does not seal one an older caller sends", async () => {
+    const org = await freshOrg();
+    expect((await save("dev", "Pw-1", { writeEnabled: true })).status).toBe(200);
+    expect((await resolveSapConnection(org, "s4hana", "dev"))?.writeEnabled).toBe(true);
+    expect((await save("dev", "Pw-1", { writeEnabled: true, writeSecret: "x" })).status).toBe(200);
+    const resolved = await resolveSapConnection(org, "s4hana", "dev");
+    expect(resolved?.writeEnabled).toBe(true);
+    expect(resolved?.secrets).not.toHaveProperty("writeSecret");
   });
 
   it("ECC with no probe path: a correct secret swaps on the proven read, a typo is refused", async () => {
@@ -500,5 +516,72 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the rotation probe across re-sa
     sap.password = "Pw-2";
     expect((await save(key, "Pw-2")).status).toBe(200);
     expect((await resolveSapConnection(org, "s4hana", key))?.secrets.password).toBe("Pw-2");
+  });
+
+  /*
+   * A PROOF IS ABOUT THE SETTINGS SAVED, AND IT AGES (wave 2 integration
+   * review round 3). The code before wave 2 never cleared lastValidatedAt on
+   * a save, so on deploy day a connection could carry an OK observed before
+   * its last save, beside an ERROR its probe path has answered ever since
+   * while its lanes serve. That old OK was held against a correct rotation as
+   * a metadata proof, the save was refused for the 5xx (or 400), and a Test
+   * only wrote ERROR again: the rotation was refused for good.
+   */
+  async function rowAsOnDeployDay(org: string, key: string, state: { savedAt: Date; validatedAt: Date }): Promise<void> {
+    const row = await stored(org, key);
+    // The save on the record, as the code before wave 2 wrote it: no proof.
+    await prisma.configAudit.deleteMany({ where: { organizationId: org, entityId: row!.id } });
+    await prisma.configAudit.create({
+      data: {
+        organizationId: org,
+        actorId: `${org}-dev`,
+        entityType: "Connection",
+        entityId: row!.id,
+        action: "CREATE",
+        after: { event: "connection_created", product: "s4hana", key },
+        at: state.savedAt,
+      },
+    });
+    await prisma.sapConnection.updateMany({
+      where: { id: row!.id, organizationId: org },
+      data: { lastValidationStatus: "ERROR", lastValidatedAt: state.validatedAt },
+    });
+  }
+
+  it.each([500, 400])(
+    "an OK observed before the last save is not held against a correct rotation (probe path answers %s)",
+    async (metadataStatus) => {
+      const org = await freshOrg();
+      const key = "dev";
+      expect((await save(key, "Pw-1")).status).toBe(200);
+      const hour = 60 * 60 * 1000;
+      await rowAsOnDeployDay(org, key, { validatedAt: new Date(Date.now() - 3 * hour), savedAt: new Date(Date.now() - 2 * hour) });
+      sap.metadataStatus = metadataStatus;
+      sap.password = "Pw-2";
+      const rotated = await save(key, "Pw-2");
+      expect(rotated.status).toBe(200);
+      expect((await resolveSapConnection(org, "s4hana", key))?.secrets.password).toBe("Pw-2");
+    },
+  );
+
+  it("an OK since the save that ERROR has followed for longer than the lane TTL is not held against a correct rotation", async () => {
+    const org = await freshOrg();
+    const key = "dev";
+    expect((await save(key, "Pw-1")).status).toBe(200);
+    const day = 24 * 60 * 60 * 1000;
+    await rowAsOnDeployDay(org, key, { savedAt: new Date(Date.now() - 30 * day), validatedAt: new Date(Date.now() - 2 * day) });
+    sap.metadataStatus = 500;
+    sap.password = "Pw-2";
+    expect((await save(key, "Pw-2")).status).toBe(200);
+    expect((await resolveSapConnection(org, "s4hana", key))?.secrets.password).toBe("Pw-2");
+  });
+
+  it("a fresh OK since the save still protects the secret through an ERROR", async () => {
+    const org = await freshOrg();
+    const key = "dev";
+    expect((await save(key, "Pw-1")).status).toBe(200);
+    const hour = 60 * 60 * 1000;
+    await rowAsOnDeployDay(org, key, { savedAt: new Date(Date.now() - 3 * hour), validatedAt: new Date(Date.now() - 2 * hour) });
+    await expectTypoRefused(org, key, "Pw-typo", "Pw-1");
   });
 });

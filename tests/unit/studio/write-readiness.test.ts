@@ -165,7 +165,7 @@ describe("your own API: verification is a third half, per environment (review ro
     );
     const msg = writeReadinessRefusal("CREATE", rows);
     // P0.3: who (any builder, not only an administrator) and how, now the form offers it.
-    expect(msg).toContain("A builder enables writes on the connection under Connections: save it with Allow writes ticked and its write secret.");
+    expect(msg).toContain("A builder enables writes on the connection under Connections: save it with Allow writes ticked.");
     expect(rows.filter((r) => r.environment !== "PROD").every((r) => !("writesDisabled" in r))).toBe(true);
   });
 });

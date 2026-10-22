@@ -288,7 +288,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
         grants: Record<string, unknown>[] | null;
       }[];
       const connectionKeys = sql.connection ? Object.keys(sql.connection) : undefined;
-      const grantKeys = ["decision", "expiresAt", "revokedAt"];
+      const grantKeys = ["decision", "expiresAt", "revokedAt", "interfaceId", "solutionStatus"];
       const order = (a: Record<string, unknown> | null, b: Record<string, unknown> | null) => JSON.stringify(a).localeCompare(JSON.stringify(b));
       return {
         sql: {

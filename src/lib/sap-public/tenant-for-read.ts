@@ -100,6 +100,12 @@ export interface ResolvedReadTenant {
      * were not read with it; the ceiling then reads them itself.
      */
     ceiling?: { readonly organizationId: string; readonly grants: readonly CeilingGrantRow[] };
+    /**
+     * SapConnection.transport. The console reads with the platform's own
+     * fetch, so it refuses a connection served by the Tenant Twin
+     * (governed/console.ts bind; wave 2 integration review round 3).
+     */
+    transport?: string;
   } | null;
 }
 
@@ -175,6 +181,7 @@ export async function resolveReadTenant(
     connection: {
       id: connection.id,
       environment: connection.environment,
+      ...(connection.transport ? { transport: connection.transport } : {}),
       ...(connection.ceilingGrants ? { ceiling: { organizationId, grants: connection.ceilingGrants } } : {}),
     },
   };

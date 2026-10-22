@@ -129,19 +129,29 @@ its first 201 without calling the API by hand:
   not all held by live members, a slot whose owner was deactivated or left
   counting as empty, as the route judges it (review round 2). The route
   re-checks every gate. The key is shown once.
-- **Allow writes and the write secret (Studio > Connections).** The form now
-  has an "Allow writes" box and, when ticked, a write-secret field. A save that
-  turns writes on is audited and stepped up as `connection.enable_writes`
+- **Allow writes (Studio > Connections).** The form now has an "Allow writes"
+  box. A save that turns writes on is audited and stepped up as
+  `connection.enable_writes`
   (otherwise `connection.save_secrets`, as before). "On" means live, as PATCH
   judges it: the row active AND allowing writes. A save always leaves the row
   active, so re-saving a DEACTIVATED connection with writes kept on is a save
   that turns writes on: it is stepped up as `connection.enable_writes`, and its
   audit row carries `writesEnabled: true` and `isActiveBefore: false` (review
   round 1).
+- **There is no connection write secret (wave 2 integration review round 3).**
+  The form first asked for a "write secret" on every save that kept writes on,
+  and the API refused `writeEnabled` without one, but nothing ever read it
+  back: not the broker's write route (it checks the app's own write key,
+  `x-coreedge-write-key`), not the SAP request, not the Workbench write-back
+  (it checks the deployment's `{PREFIX}_WRITE_SECRET`). Any string switched
+  writes on, so it told operators a second factor guarded writes when none
+  did. The field and the requirement are gone. What guards a create is the
+  connection's Allow writes switch (switched on only by a stepped-up, audited
+  save), the app's approved write grant and its write key. A `writeSecret` an
+  older API caller still sends is accepted and ignored: it is not sealed.
 - **A re-save keeps writes on.** Re-saving a connection whose writes are live
-  (how credentials are rotated) starts with the box ticked; the builder
-  re-enters the write secret like every other secret. Unticking it says, before
-  Save, that the save turns writes off. A deactivated connection starts
+  (how credentials are rotated) starts with the box ticked. Unticking it says,
+  before Save, that the save turns writes off. A deactivated connection starts
   unticked, so rotating it does not quietly re-arm writes an operator stopped.
 - **Writes are allowed for a system, not a row (review round 2).** A save that
   keeps writes on while changing the environment, the SAP host or base path
@@ -172,8 +182,8 @@ its first 201 without calling the API by hand:
   action. A row that changes three times during one save answers 409 "kept
   changing", and nothing is saved.
 - **The toggle is held to the same rule (review round 4).** PATCH (Activate,
-  Deactivate, writes off) judged its gates (the twin check, "enabling writes
-  requires the write secret" and the passkey for a toggle that turns writes
+  Deactivate, writes off) judged its gates (the twin check, the refusal to
+  turn writes on from the toggle and the passkey for a toggle that turns writes
   back on) on a read, then updated the row whatever had happened since. A
   builder without a passkey whose Activate had read the row while it was
   still active undid a Deactivate that landed after that read, and writes came

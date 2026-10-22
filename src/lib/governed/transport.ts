@@ -36,10 +36,14 @@
  *           auth type).
  *
  * WHAT IT DOES NOT COVER YET. The Workbench console reads (`sapFetch` in
- * tdd-connector.ts), the Ariba connector, the nightly lane sweep and the
- * connection probe call `fetch` directly. P4.1 moves the first two; P1.6 must
- * route the sweep and the probe through `transportFor` before it lets anyone
- * mark a connection TWIN (docs/runbooks/coreedge-governed-pipeline.md).
+ * tdd-connector.ts), the Ariba connector, the nightly lane sweep, the
+ * connection probe, Test, Probe now and the rotation probe call `fetch`
+ * directly. So they skip a connection that is not reached DIRECT
+ * (`reachedDirectly`, wave 2 integration review round 3) rather than send a
+ * TWIN connection's credentials to its base URL. P4.1 moves the first two
+ * onto a transport; P1.6 decides how a twin lane is proven, by routing the
+ * sweep and the probe through `transportFor`
+ * (docs/runbooks/coreedge-governed-pipeline.md).
  */
 
 import { buildAuthHeadersFromConnection, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
@@ -124,4 +128,35 @@ export function parseTransportKind(value: unknown): TransportKind {
 /** The transport a connection is called through. */
 export function transportFor(connection: { readonly transport?: string | null }): Transport {
   return parseTransportKind(connection.transport) === "TWIN" ? TWIN_TRANSPORT : DIRECT_TRANSPORT;
+}
+
+/** Why the broker would not call through this connection's transport. */
+export type TransportRefusal = "TRANSPORT_UNAVAILABLE";
+
+/**
+ * THE TRANSPORT HALF OF THE ONE PREDICATE (wave 2 integration review round 3).
+ * The broker's binding step refuses a connection whose transport cannot serve
+ * a call now (a TWIN connection with no twin engine registered), and the lane
+ * board, discovery's `callable` and the sweeps ask this same function, so no
+ * screen draws Live or callable a connection the broker answers 503 for.
+ *
+ * Exactly `transportFor(connection).available()`, asked of the kind and the
+ * engine registry alone: it names neither transport, so a screen that asks it
+ * does not reach the network (tests/unit/security/no-side-doors.test.ts).
+ */
+export function transportRefusal(connection: { readonly transport?: string | null }): TransportRefusal | null {
+  return parseTransportKind(connection.transport) === "TWIN" && twinEngine === null ? "TRANSPORT_UNAVAILABLE" : null;
+}
+
+/**
+ * May code OUTSIDE the pipeline reach this connection with the platform's own
+ * fetch and its stored credentials? Only a DIRECT one. The lane sweep, the
+ * connection probe, Probe now, a builder's Test, the console and the rotation
+ * probe all call `fetch` directly (see the file header); a connection an
+ * operator or P1.6 marked TWIN is kept off the customer's SAP, so none of
+ * them may send its credentials to its base URL. They skip it until P1.6
+ * routes them through `transportFor` (docs/runbooks/coreedge-governed-pipeline.md).
+ */
+export function reachedDirectly(connection: { readonly transport?: string | null }): boolean {
+  return parseTransportKind(connection.transport) === "DIRECT";
 }

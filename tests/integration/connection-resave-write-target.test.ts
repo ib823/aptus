@@ -136,7 +136,6 @@ function form(key: string, over: Partial<ConnectionFormFields> = {}): Connection
     apiPath: "",
     timeoutMs: "",
     allowWrites: true,
-    writeSecret: "w",
     ...over,
   };
 }
@@ -396,7 +395,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
       expect((await lastAudit(id, "UPDATE"))?.after).toMatchObject({ event: "connection_toggled", isActive: false });
     });
 
-    it("a stale request cannot switch writes back on without the write secret", async () => {
+    it("a stale request cannot switch writes back on through the toggle", async () => {
       const id = await writingDevConnection(`${RUN}-pw`);
       vi.stubEnv("COREEDGE_STEP_UP", "enforce");
       operatorAfterRead(id, { writeEnabled: false });
@@ -404,7 +403,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a form re-save that moves or ou
       session.user = BUILDER;
       const res = await patchConnection(req({ id, isActive: true, writeEnabled: true }, "PATCH"));
       expect(res.status, await res.clone().text()).toBe(400);
-      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/write secret/);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/switched on by saving the connection/);
       expect(await row(id)).toMatchObject({ isActive: true, writeEnabled: false });
     });
 

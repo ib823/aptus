@@ -318,6 +318,10 @@ export interface CeilingGrantRow {
   readonly decision: string;
   readonly expiresAt: Date | null;
   readonly revokedAt: Date | null;
+  /** Null for a legacy unbound grant: strict grant binding does not honour it (review round 3). */
+  readonly interfaceId: string | null;
+  /** The owning app's status, or null when it is gone: a RETIRED app's grant authorises nothing (review round 3). */
+  readonly solutionStatus: string | null;
 }
 
 export interface ConsoleConnectionLoad {
@@ -339,7 +343,8 @@ export interface ConsoleConnectionLoad {
  */
 export const CONSOLE_CONNECTION_REFERENCE = [
   "sapConnection.findMany({ where: { organizationId, product, key, isActive: true }, orderBy: { createdAt: 'asc' } })",
-  "apiAccessGrant.findMany({ where: { organizationId, environment: connection.environment }, select: { decision, expiresAt, revokedAt } })",
+  "apiAccessGrant.findMany({ where: { organizationId, environment: connection.environment }, select: { decision, expiresAt, revokedAt, interfaceId, solutionId } })",
+  "solution.findFirst({ where: { id: grant.solutionId, organizationId }, select: { status } }) per grant",
 ] as const;
 
 interface ConsoleConnectionSqlRow {
@@ -386,7 +391,10 @@ export async function loadConsoleConnection(organizationId: string, product: str
                 'createdAt', c."createdAt")
          FROM c) AS "connection",
       (SELECT json_agg(json_build_object(
-                'decision', g."decision"::text, 'expiresAt', g."expiresAt", 'revokedAt', g."revokedAt")
+                'decision', g."decision"::text, 'expiresAt', g."expiresAt", 'revokedAt', g."revokedAt",
+                'interfaceId', g."interfaceId",
+                'solutionStatus', (SELECT s."status"::text FROM "Solution" s
+                                    WHERE s."id" = g."solutionId" AND s."organizationId" = g."organizationId"))
                 ORDER BY g."createdAt", g."id")
          FROM "ApiAccessGrant" g, c
         WHERE g."organizationId" = ${organizationId}

@@ -99,6 +99,13 @@ export interface LaneSweepResult {
   /** Lanes whose product's stored connection secret would not open. */
   readonly unreadable: number;
   /**
+   * Lanes whose connection is served by the Tenant Twin (transport TWIN).
+   * The sweep reads with the platform's own fetch and the stored
+   * credentials, and a TWIN connection is kept off the customer's SAP, so it
+   * is not read (wave 2 integration review round 3).
+   */
+  readonly skippedTwin: number;
+  /**
    * Lanes read, and their answer discarded, because their connection was
    * re-saved while the read ran (`recordLaneCheck`): the answer was about the
    * previous settings. Counted in `checked` and `byReadStatus` too, since SAP
@@ -202,7 +209,7 @@ interface LaneTarget {
 }
 
 /** Why the sweep — or a person's Re-check — does not read SAP for a lane. */
-export type LaneCheckSkip = "appNotLive" | "noEntitySet" | "accessRefused" | "unreadable" | "noConnection";
+export type LaneCheckSkip = "appNotLive" | "noEntitySet" | "accessRefused" | "unreadable" | "noConnection" | "servedByTwin";
 
 /** The rows `planLaneCheck` judges one lane on. */
 export interface LaneCheckPlanInput<C extends LaneConnection> {
@@ -233,6 +240,10 @@ export interface LaneCheckPlanInput<C extends LaneConnection> {
  *                       credential's SAP client). The sweep used to read
  *                       through whichever connection declared the
  *                       environment, whatever its product or client (A15).
+ *   5. servedByTwin   — the connection it would bind is not reached DIRECT
+ *                       (transport.ts `reachedDirectly`): its stored
+ *                       credentials are never sent to its base URL from here
+ *                       (wave 2 integration review round 3).
  *
  * The service is resolved after, by the caller: it is asynchronous.
  */
@@ -251,6 +262,7 @@ export function planLaneCheck<C extends LaneConnection>(
     now: input.now,
   });
   if (auth.access.refusal !== null) return { ok: false, skipped: "accessRefused" };
+  if (auth.notDirect) return { ok: false, skipped: "servedByTwin" };
   if (auth.bound === null) {
     return { ok: false, skipped: auth.binding.refusal === "CONNECTION_UNREADABLE" ? "unreadable" : "noConnection" };
   }
@@ -357,6 +369,7 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     skippedNoService: 0,
     skippedNoAccess: 0,
     unreadable: 0,
+    skippedTwin: 0,
     discardedConnectionChanged: 0,
     byReadStatus: {} as Record<string, number>,
   };
@@ -434,7 +447,13 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
 }
 
 function countSkip(
-  result: { skippedNoConnection: number; skippedNoEntitySet: number; skippedNoAccess: number; unreadable: number },
+  result: {
+    skippedNoConnection: number;
+    skippedNoEntitySet: number;
+    skippedNoAccess: number;
+    unreadable: number;
+    skippedTwin: number;
+  },
   skipped: LaneCheckSkip,
 ): void {
   switch (skipped) {
@@ -452,6 +471,9 @@ function countSkip(
       return;
     case "noConnection":
       result.skippedNoConnection++;
+      return;
+    case "servedByTwin":
+      result.skippedTwin++;
       return;
   }
 }

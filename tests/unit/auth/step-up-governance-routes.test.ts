@@ -446,7 +446,6 @@ const ROUTES: readonly RouteCase[] = [
           // No environment: every case in this table seeds its own row, and
           // two active rows may not both claim one environment for a product.
           writeEnabled: true,
-          writeSecret: "a-write-secret-nobody-reads",
         }),
       ),
     wrote: async (ctx) =>

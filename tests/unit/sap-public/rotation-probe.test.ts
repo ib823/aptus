@@ -215,8 +215,10 @@ describe("a step SAP did not answer", () => {
 });
 
 describe("when the probe runs", () => {
+  /** Judged an hour after PROVEN_AT, well inside the lane TTL. */
+  const NOW = new Date(PROVEN_AT.getTime() + 60 * 60 * 1000);
   const evidence = (status: string | null, read: typeof READ | null, carried: Parameters<typeof rotationEvidence>[2] = null) =>
-    rotationEvidence({ lastValidationStatus: status }, read, carried);
+    rotationEvidence({ lastValidationStatus: status }, read, carried, { now: NOW });
 
   it("when replacing an active connection whose last probe was OK, or that a lane has proven a read through", () => {
     expect(rotationProbeApplies(null, evidence(null, null), {})).toBe(false);
@@ -239,9 +241,9 @@ describe("when the probe runs", () => {
    * probed (wave 2 integration review round 1).
    */
   it("counts what the save that stored the secret proved, until a probe writes a newer status", () => {
-    const carriedMetadata = { metadata: true, read: null };
+    const carriedMetadata = { metadata: true, metadataProvenAt: PROVEN_AT, read: null };
     expect(rotationProbeApplies({ isActive: true, lastValidationStatus: null }, evidence(null, null, carriedMetadata), {})).toBe(true);
-    expect(evidence(null, null, carriedMetadata)).toEqual({ metadata: true, read: null });
+    expect(evidence(null, null, carriedMetadata)).toEqual({ metadata: true, metadataProvenAt: PROVEN_AT, read: null });
     // A later status that says nothing about the credential keeps the proof
     // (wave 2 integration review round 2): SAP not answering, or a sealed set
     // this platform could not open (for the group marker, not even this row's).
@@ -255,19 +257,54 @@ describe("when the probe runs", () => {
     expect(evidence("NO_PROBE_PATH", null, carriedMetadata).metadata).toBe(false);
     expect(evidence("UNAUTHORIZED", null, carriedMetadata).metadata).toBe(false);
     // A carried read counts like a lane's; a lane's own read is preferred.
-    const carriedRead = { metadata: false, read: { ...READ, interfaceId: "iface_carried" } };
+    const carriedRead = { metadata: false, metadataProvenAt: null, read: { ...READ, interfaceId: "iface_carried" } };
     expect(evidence(null, null, carriedRead).read?.interfaceId).toBe("iface_carried");
     expect(evidence(null, READ, carriedRead).read).toBe(READ);
   });
 
   it("counts a probe that answered OK since the last save, whatever transient status came after", () => {
+    const savedBefore = new Date(PROVEN_AT.getTime() - 60 * 1000);
     const sinceSave = (status: string | null) =>
-      rotationEvidence({ lastValidationStatus: status, lastValidatedAt: PROVEN_AT }, null, null);
+      rotationEvidence({ lastValidationStatus: status, lastValidatedAt: PROVEN_AT }, null, null, { lastSavedAt: savedBefore, now: NOW });
     expect(sinceSave("TIMEOUT").metadata).toBe(true);
     expect(sinceSave("GROUP_UNREADABLE").metadata).toBe(true);
     expect(sinceSave("NOT_FOUND").metadata).toBe(false);
     // No OK since the save, and a TIMEOUT: nothing proven, as before.
-    expect(rotationEvidence({ lastValidationStatus: "TIMEOUT", lastValidatedAt: null }, null, null).metadata).toBe(false);
+    expect(rotationEvidence({ lastValidationStatus: "TIMEOUT", lastValidatedAt: null }, null, null, { now: NOW }).metadata).toBe(false);
+  });
+
+  /*
+   * Wave 2 integration review round 3. The code before wave 2 never cleared
+   * lastValidatedAt on a save, so it is a proof about the current settings
+   * only when it is later than the last save on the record; and under ERROR
+   * or TIMEOUT a proof stands for the lane TTL, not for ever.
+   */
+  it("counts lastValidatedAt only when it is later than the last save on the record", () => {
+    const judge = (lastSavedAt: Date | null) =>
+      rotationEvidence({ lastValidationStatus: "ERROR", lastValidatedAt: PROVEN_AT }, null, null, { lastSavedAt, now: NOW }).metadata;
+    expect(judge(new Date(PROVEN_AT.getTime() - 1))).toBe(true);
+    // An OK observed before the last save: about settings the row no longer has.
+    expect(judge(new Date(PROVEN_AT.getTime() + 1))).toBe(false);
+    expect(judge(PROVEN_AT)).toBe(false);
+    // No save on the record: nothing says the OK is about these settings.
+    expect(judge(null)).toBe(false);
+    // The last probe OK is the proof whatever the record says.
+    expect(rotationEvidence({ lastValidationStatus: "OK", lastValidatedAt: PROVEN_AT }, null, null, { now: NOW }).metadata).toBe(true);
+  });
+
+  it("a metadata proof held through ERROR or TIMEOUT lapses after the lane TTL", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const savedBefore = new Date(PROVEN_AT.getTime() - 60 * 1000);
+    for (const status of ["ERROR", "TIMEOUT"]) {
+      const at = (now: Date) =>
+        rotationEvidence({ lastValidationStatus: status, lastValidatedAt: PROVEN_AT }, null, null, { lastSavedAt: savedBefore, now });
+      expect(at(new Date(PROVEN_AT.getTime() + day)).metadata).toBe(true);
+      expect(at(new Date(PROVEN_AT.getTime() + day + 1)).metadata).toBe(false);
+      // A carried proof ages by when it was made, not by when it was carried.
+      const carried = { metadata: true, metadataProvenAt: PROVEN_AT, read: null };
+      const late = new Date(PROVEN_AT.getTime() + day + 1);
+      expect(rotationEvidence({ lastValidationStatus: status }, null, carried, { now: late }).metadata).toBe(false);
+    }
   });
 
   it("asks the new secret to prove what the old one proved", () => {
@@ -303,17 +340,23 @@ describe("what a save proves, and what it carries", () => {
       entitySet: "A_X",
       provenAt: now.toISOString(),
     };
-    expect(proofFromProbe(4, passed, READ, now)).toEqual({ revision: 4, metadata: true, read: provenNow });
-    expect(proofFromProbe(4, { ...passed, dataRead: null }, null, now)).toEqual({ revision: 4, metadata: true, read: null });
+    const metadataProvenAt = now.toISOString();
+    expect(proofFromProbe(4, passed, READ, now)).toEqual({ revision: 4, metadata: true, metadataProvenAt, read: provenNow });
+    expect(proofFromProbe(4, { ...passed, dataRead: null }, null, now)).toEqual({ revision: 4, metadata: true, metadataProvenAt, read: null });
     const readOnly = { ...passed, metadata: { step: "metadata", ok: false, detail: "404" } } as const;
     expect(proofFromProbe(4, readOnly, READ, now)).toEqual({ revision: 4, metadata: false, read: provenNow });
   });
 
   it("a save that kept the credentials carries the evidence; the metadata only at the same probe path", () => {
-    const ev = rotationEvidence({ lastValidationStatus: "OK" }, READ, null);
+    const ev = rotationEvidence({ lastValidationStatus: "OK", lastValidatedAt: PROVEN_AT }, READ, null);
     // Carried with the time it was proven: a save that proves nothing new does not make an old read fresh.
     const carriedRead = { ...READ, provenAt: PROVEN_AT.toISOString() };
-    expect(carriedProof(7, ev, { probePathUnchanged: true })).toEqual({ revision: 7, metadata: true, read: carriedRead });
+    expect(carriedProof(7, ev, { probePathUnchanged: true })).toEqual({
+      revision: 7,
+      metadata: true,
+      metadataProvenAt: PROVEN_AT.toISOString(),
+      read: carriedRead,
+    });
     expect(carriedProof(7, ev, { probePathUnchanged: false })).toEqual({ revision: 7, metadata: false, read: carriedRead });
     expect(carriedProof(7, rotationEvidence({ lastValidationStatus: "OK" }, null, null), { probePathUnchanged: false })).toBeNull();
   });

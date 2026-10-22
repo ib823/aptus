@@ -163,10 +163,22 @@ export async function referenceConsoleConnection(db: ReferenceFake, organization
   const grants =
     environment === null
       ? []
-      : (((await db.apiAccessGrant?.findMany?.({
-          where: { organizationId, environment },
-          select: { decision: true, expiresAt: true, revokedAt: true },
-        })) ?? []) as Row[]);
+      : await Promise.all(
+          (((await db.apiAccessGrant?.findMany?.({
+            where: { organizationId, environment },
+            select: { decision: true, expiresAt: true, revokedAt: true, interfaceId: true, solutionId: true },
+          })) ?? []) as Row[]).map(async ({ solutionId, ...g }) => {
+            // The owning app's status, in this organization (wave 2
+            // integration review round 3). A fake with no solution table
+            // carries none: absent, not null.
+            if (!db.solution?.findFirst) return g;
+            const solution = (await db.solution.findFirst({
+              where: { id: solutionId, organizationId },
+              select: { status: true },
+            })) as Row | null;
+            return { ...g, solutionStatus: solution?.status ?? null };
+          }),
+        );
   return [{ connection, grants: grants.length === 0 ? null : grants }];
 }
 

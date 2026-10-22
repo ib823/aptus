@@ -28,6 +28,7 @@ import type {
   BrokerRoute,
   WriteSwitchRefusal,
 } from "@/lib/northbound/authorisation";
+import type { TransportRefusal } from "@/lib/governed/transport";
 import { keyRefusal } from "@/lib/northbound/key-policy";
 import type { ConnectionBindingFailure } from "@/lib/sap-public/connection-selection";
 import { isWriteOperation, type GrantOperation } from "@/lib/studio/grants";
@@ -173,7 +174,7 @@ export interface AccessFacts {
 }
 
 /** Why the broker would not bind a call on this lane to one SAP system. */
-export type LaneBindingRefusal = ConnectionBindingFailure | WriteSwitchRefusal;
+export type LaneBindingRefusal = ConnectionBindingFailure | WriteSwitchRefusal | TransportRefusal;
 
 export interface BindingFacts {
   /**
@@ -275,6 +276,13 @@ export const UNCHECKED_REASONS = [
    * anything having changed either, so it says that instead.
    */
   "refusedBySetting",
+  /*
+   * The bound connection is served by the Tenant Twin (SapConnection.transport
+   * TWIN) and no twin engine is available: the broker refuses every call, and
+   * nothing reads the client's SAP system through it (wave 2 integration
+   * review round 3).
+   */
+  "servedByTwin",
   "checkPredatesEvidenceKey",
   "changedSinceCheck",
   "notRunYet",
@@ -840,6 +848,11 @@ function bindingVerdict(facts: LaneFacts): HopVerdict | null {
       );
     case "WRITES_DISABLED":
       return refused("systemOff", "Writes are switched off on this SAP system's connection.");
+    case "TRANSPORT_UNAVAILABLE":
+      return refused(
+        "bindingRefused",
+        "This SAP system's connection is served by the Tenant Twin, which is not available on this deployment, so the broker refuses every call through it.",
+      );
     case "CUSTOM_SERVICE_UNVERIFIED":
       return refused(
         "bindingRefused",
@@ -870,6 +883,9 @@ function whyUnchecked(facts: LaneFacts): UncheckedReason {
   // sweep still reads through that connection. No check decides it, and none
   // having run since a change would be a false reason (P0.2 review).
   if (refusal === "WRITES_DISABLED" || refusal === "CUSTOM_SERVICE_UNVERIFIED") return "refusedBySetting";
+  // The connection's transport (a TWIN connection with no twin engine): the
+  // broker refuses the lane, and no sweep reads through it.
+  if (refusal === "TRANSPORT_UNAVAILABLE") return "servedByTwin";
   if (refusal !== null) return "noSapSystemHere";
   // After the system, as the sweep asks it: a connection is found first, then
   // the service it would be asked for.

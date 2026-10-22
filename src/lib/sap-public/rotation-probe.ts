@@ -42,9 +42,18 @@
  * (`SETS_METADATA_PROOF_ASIDE`): a sweep's one TIMEOUT left the next typo
  * unprobed. The probe as a whole has one deadline (`probeRotation`).
  *
+ * A METADATA PROOF IS ABOUT THESE SETTINGS, AND IT AGES (review round 3).
+ * `lastValidatedAt` counts only when it is later than the last save on the
+ * record (`lastConnectionSaveAt`): the code before wave 2 never cleared it on
+ * a save, so on deploy day a row could carry an OK from secrets, settings or
+ * a system it no longer has. And under ERROR or TIMEOUT a proof stands for
+ * LANE_PROOF_TTL_MS, not for ever: a probe path whose $metadata has answered
+ * nothing else for longer than that refused every correct rotation, and a
+ * Test could not clear it.
+ *
  * ONLY A CHANGED CREDENTIAL ON THE SAME SYSTEM IS PROBED (review round 1).
- * A re-save that leaves the sign-in credentials as they are (a label fix, the
- * write secret added to switch writes on) has nothing to prove, and a SAP
+ * A re-save that leaves the sign-in credentials as they are (a label fix, or
+ * switching writes on) has nothing to prove, and a SAP
  * outage is no reason to refuse it (`sameSignInCredentials`). A re-save that
  * points the connection at another system (host, environment or SAP client)
  * is a re-point, not a rotation: the old system's proof says nothing about the
@@ -76,6 +85,7 @@
  */
 
 import { LANE_PROOF_TTL_MS } from "@/lib/coreedge/freshness";
+import { reachedDirectly } from "@/lib/governed/transport";
 import { isLaneCheckedApp } from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { resolveReadDefinition } from "@/lib/northbound/read-definition";
@@ -99,7 +109,12 @@ export function rotationProbeEnabled(env: Record<string, string | undefined> = p
   return env.COREEDGE_ROTATION_PROBE?.trim().toLowerCase() !== "off";
 }
 
-type ExistingConnection = { readonly isActive?: boolean | null; readonly lastValidationStatus?: string | null } | null;
+type ExistingConnection = {
+  readonly isActive?: boolean | null;
+  readonly lastValidationStatus?: string | null;
+  /** SapConnection.transport: a TWIN connection is never probed from here (transport.ts `reachedDirectly`). */
+  readonly transport?: string | null;
+} | null;
 
 /**
  * Could the connection being replaced be working today? The cheap half of the
@@ -111,6 +126,10 @@ export function rotationProbeMayApply(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (!existing || !rotationProbeEnabled(env)) return false;
+  // The probe sends the new credentials to the base URL with the platform's
+  // own fetch; a connection served by the Tenant Twin is kept off the
+  // customer's SAP, so it is saved as before (wave 2 integration review round 3).
+  if (!reachedDirectly(existing)) return false;
   return existing.isActive === true && existing.lastValidationStatus !== "UNAUTHORIZED";
 }
 
@@ -135,6 +154,12 @@ export interface RotationReadTarget {
 export interface RotationEvidence {
   /** It read the probe path's $metadata: a probe since the last save was OK, or the save that stored it proved it. */
   readonly metadata: boolean;
+  /**
+   * When that metadata proof was made, or null when there is none. A save
+   * that keeps the credentials carries it forward with this time, so carrying
+   * a proof never makes it fresher (wave 2 integration review round 3).
+   */
+  readonly metadataProvenAt: Date | null;
   /** A dataset it read: a lane's proven read, or the one the save that stored it read. */
   readonly read: RotationReadTarget | null;
 }
@@ -153,7 +178,17 @@ export interface RotationProof {
   /** The revision the save wrote: the proof is about that revision's settings and nothing later. */
   readonly revision: number;
   readonly metadata: boolean;
+  /** When the metadata proof was made (ISO), when there is one. A proof without it dates from its save's audit row. */
+  readonly metadataProvenAt?: string;
   readonly read: RotationProofRead | null;
+}
+
+/** The proof a save recorded, as the next save reads it back (`carriedRotationProof`). */
+export interface CarriedRotationProof {
+  readonly metadata: boolean;
+  /** When the carried metadata proof was made. */
+  readonly metadataProvenAt: Date | null;
+  readonly read: RotationReadTarget | null;
 }
 
 /**
@@ -172,27 +207,65 @@ export interface RotationProof {
  */
 const SETS_METADATA_PROOF_ASIDE: ReadonlySet<string> = new Set(["UNAUTHORIZED", "NOT_FOUND", "NO_PROBE_PATH"]);
 
+/** When the evidence is judged, and when the settings it describes were last saved. */
+export interface RotationEvidenceContext {
+  /**
+   * When the connection was last saved: the newest `connection_created` or
+   * `connection_replaced` audit row (`lastConnectionSaveAt`), or null when no
+   * save is on the record. `lastValidatedAt` proves something about the
+   * current settings only when it is later than this. The code before wave 2
+   * never cleared it on a save, so a row saved before the deploy can carry an
+   * OK observed with secrets, settings or even a system it no longer has
+   * (wave 2 integration review round 3).
+   */
+  readonly lastSavedAt?: Date | null;
+  readonly now?: Date;
+}
+
 /**
  * The evidence, from the row's own probe record, the lanes' proven read and
  * the proof carried from the save that stored the secret.
  *
- * The metadata is proven when the last probe was OK, or when it was proven
- * since the last save (a probe since then answered OK: `lastValidatedAt`,
- * which only a real 200 sets and every save clears; or the save itself proved
- * it: carried) and no later status set that proof aside
- * (`SETS_METADATA_PROOF_ASIDE`).
+ * The metadata is proven when the last probe was OK. Otherwise it is proven
+ * by an earlier proof of THESE settings, still fresh, that no later status
+ * set aside (`SETS_METADATA_PROOF_ASIDE`):
+ *
+ *   - a probe that answered OK after the last save on the record:
+ *     `lastValidatedAt` (only a real 200 sets it), later than `lastSavedAt`.
+ *     With no save on the record, it proves nothing;
+ *   - or what the save itself proved, carried on its audit row.
+ *
+ * FRESH MEANS WITHIN THE LANE TTL (review round 3). A status that says nothing
+ * about the credential (TIMEOUT, ERROR) keeps the proof, so a sweep's one
+ * blip does not leave the next typo unprobed. But a probe path that has
+ * answered nothing but ERROR or TIMEOUT for longer than LANE_PROOF_TTL_MS no
+ * longer shows that the old secret reads its $metadata, and holding that
+ * against a correct new secret refused the rotation for as long as the
+ * failure lasted: a Test only writes ERROR again, and only a save (the thing
+ * refused) moves the proof.
  */
 export function rotationEvidence(
   existing: { readonly lastValidationStatus?: string | null; readonly lastValidatedAt?: Date | null },
   laneRead: RotationReadTarget | null,
-  carried: { readonly metadata: boolean; readonly read: RotationReadTarget | null } | null,
+  carried: CarriedRotationProof | null,
+  context: RotationEvidenceContext = {},
 ): RotationEvidence {
+  const now = context.now ?? new Date();
   const status = existing.lastValidationStatus ?? null;
-  const provenSinceSave = (existing.lastValidatedAt ?? null) !== null || carried?.metadata === true;
-  return {
-    metadata: status === "OK" || (provenSinceSave && (status === null || !SETS_METADATA_PROOF_ASIDE.has(status))),
-    read: laneRead ?? carried?.read ?? null,
-  };
+  const read = laneRead ?? carried?.read ?? null;
+  const validatedAt = existing.lastValidatedAt ?? null;
+  if (status === "OK") return { metadata: true, metadataProvenAt: validatedAt ?? now, read };
+  if (status !== null && SETS_METADATA_PROOF_ASIDE.has(status)) return { metadata: false, metadataProvenAt: null, read };
+  const lastSavedAt = context.lastSavedAt ?? null;
+  const probedSinceSave =
+    validatedAt !== null && lastSavedAt !== null && validatedAt.getTime() > lastSavedAt.getTime() ? validatedAt : null;
+  const carriedAt = carried?.metadata === true ? carried.metadataProvenAt : null;
+  let provenAt: Date | null = null;
+  for (const at of [probedSinceSave, carriedAt]) {
+    if (at === null || now.getTime() - at.getTime() > LANE_PROOF_TTL_MS) continue;
+    if (provenAt === null || at.getTime() > provenAt.getTime()) provenAt = at;
+  }
+  return { metadata: provenAt !== null, metadataProvenAt: provenAt, read };
 }
 
 /** Is the connection being replaced one whose secret is working today? */
@@ -255,7 +328,8 @@ export function proofFromProbe(
 ): RotationProof | null {
   const metadata = probe.metadata?.ok === true;
   const proven = probe.dataRead?.ok === true && read ? proofRead({ ...read, provenAt: now }) : null;
-  return metadata || proven ? { revision, metadata, read: proven } : null;
+  if (!metadata && !proven) return null;
+  return { revision, metadata, ...(metadata ? { metadataProvenAt: now.toISOString() } : {}), read: proven };
 }
 
 /**
@@ -268,11 +342,14 @@ export function carriedProof(
   evidence: RotationEvidence,
   options: { readonly probePathUnchanged: boolean },
 ): RotationProof | null {
-  const metadata = evidence.metadata && options.probePathUnchanged;
+  const metadataProvenAt = evidence.metadata && options.probePathUnchanged ? evidence.metadataProvenAt : null;
+  const metadata = metadataProvenAt !== null;
   // Carried as proven, with the time it was proven: a save that changes
-  // nothing proves nothing new, so it does not make an old read fresh.
+  // nothing proves nothing new, so it does not make an old read, or an old
+  // metadata proof, fresh (review round 3).
   const read = evidence.read ? proofRead(evidence.read) : null;
-  return metadata || read ? { revision, metadata, read } : null;
+  if (!metadata && !read) return null;
+  return { revision, metadata, ...(metadataProvenAt ? { metadataProvenAt: metadataProvenAt.toISOString() } : {}), read };
 }
 
 const PROVEN_READ = ["OK", "EMPTY"];
@@ -421,13 +498,22 @@ function parseProofRead(value: unknown): Required<ReadClaim> | null {
   };
 }
 
-function parseProof(after: unknown, revision: number): { readonly metadata: boolean; readonly read: ReadClaim | null } | null {
+function parseProof(
+  after: unknown,
+  revision: number,
+  savedAt: Date,
+): { readonly metadata: boolean; readonly metadataProvenAt: Date | null; readonly read: ReadClaim | null } | null {
   if (typeof after !== "object" || after === null) return null;
   const proof = (after as { rotationProof?: unknown }).rotationProof;
   if (typeof proof !== "object" || proof === null) return null;
   const p = proof as Record<string, unknown>;
   if (p.revision !== revision) return null;
-  return { metadata: p.metadata === true, read: parseProofRead(p.read) };
+  const metadata = p.metadata === true;
+  // A proof recorded without its time dates from the save that recorded it,
+  // the latest it can have been made.
+  const recorded = typeof p.metadataProvenAt === "string" ? new Date(p.metadataProvenAt) : null;
+  const metadataProvenAt = !metadata ? null : recorded !== null && !Number.isNaN(recorded.getTime()) ? recorded : savedAt;
+  return { metadata, metadataProvenAt, read: parseProofRead(p.read) };
 }
 
 /**
@@ -443,7 +529,7 @@ export async function carriedRotationProof(
   connectionId: string,
   revision: number,
   now: Date = new Date(),
-): Promise<{ readonly metadata: boolean; readonly read: RotationReadTarget | null } | null> {
+): Promise<CarriedRotationProof | null> {
   const audit = await prisma.configAudit.findFirst({
     where: {
       organizationId,
@@ -453,9 +539,10 @@ export async function carriedRotationProof(
       after: { path: ["rotationProof", "revision"], equals: revision },
     },
     orderBy: { at: "desc" },
-    select: { after: true },
+    select: { after: true, at: true },
   });
-  const proof = parseProof(audit?.after, revision);
+  if (!audit) return null;
+  const proof = parseProof(audit.after, revision, audit.at);
   if (!proof) return null;
   let read: RotationReadTarget | null = null;
   if (proof.read) {
@@ -465,7 +552,31 @@ export async function carriedRotationProof(
     });
     read = await liveReadTarget(proof.read, feed, now);
   }
-  return proof.metadata || read ? { metadata: proof.metadata, read } : null;
+  return proof.metadata || read ? { metadata: proof.metadata, metadataProvenAt: proof.metadataProvenAt, read } : null;
+}
+
+/**
+ * When this connection was last saved, by the record: the newest
+ * `connection_created` or `connection_replaced` audit row, which the save
+ * path writes and wrote before wave 2 too. Null when none is on the record,
+ * and then a `lastValidatedAt` proves nothing (`rotationEvidence`).
+ */
+export async function lastConnectionSaveAt(organizationId: string, connectionId: string): Promise<Date | null> {
+  const audit = await prisma.configAudit.findFirst({
+    where: {
+      organizationId,
+      entityType: "Connection",
+      entityId: connectionId,
+      action: { in: ["CREATE", "UPDATE"] },
+      OR: [
+        { after: { path: ["event"], equals: "connection_created" } },
+        { after: { path: ["event"], equals: "connection_replaced" } },
+      ],
+    },
+    orderBy: { at: "desc" },
+    select: { at: true },
+  });
+  return audit?.at ?? null;
 }
 
 /** All the evidence the gate decides from, for the row the save replaces. */
@@ -479,11 +590,12 @@ export async function loadRotationEvidence(
   },
   now: Date = new Date(),
 ): Promise<RotationEvidence> {
-  const [laneRead, carried] = await Promise.all([
+  const [laneRead, carried, lastSavedAt] = await Promise.all([
     provenReadTarget(organizationId, existing.id, now),
     carriedRotationProof(organizationId, existing.id, existing.revision, now),
+    lastConnectionSaveAt(organizationId, existing.id),
   ]);
-  return rotationEvidence(existing, laneRead, carried);
+  return rotationEvidence(existing, laneRead, carried, { lastSavedAt, now });
 }
 
 /** SAP did not answer: a timeout, a network failure, or a 5xx. Says nothing about a credential. */

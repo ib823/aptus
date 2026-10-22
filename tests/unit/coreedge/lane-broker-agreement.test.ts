@@ -301,6 +301,25 @@ describe("a write gate is a setting, not a change (P0.2 review)", () => {
   });
 });
 
+/*
+ * Wave 2 integration review round 3: the bound connection's transport. The
+ * broker refuses a TWIN connection with no twin engine (503
+ * TRANSPORT_UNAVAILABLE); the board drew the lane Live on a fresh check
+ * through it, and the sweep kept reading the customer's SAP through it.
+ */
+describe("the connection's transport is the broker's too", () => {
+  it("a lane bound to a TWIN connection, with a fresh check through it, is refused at binding, never Live", () => {
+    const { auth, verdict } = laneFrom({ estate: { kind: "connections", connections: [connection({ transport: "TWIN" })] } });
+    expect(auth.binding.refusal).toBe("TRANSPORT_UNAVAILABLE");
+    expect(auth.bound).toBeNull();
+    expect(verdict).toMatchObject({ status: "bindingRefused", brokenHop: "binding", unchecked: "servedByTwin" });
+  });
+
+  it("the same lane on a DIRECT connection stays Live", () => {
+    expect(laneFrom({ estate: { kind: "connections", connections: [connection({ transport: "DIRECT" })] } }).verdict.status).toBe("live");
+  });
+});
+
 describe("A16: an unproven hop is drawn unproven", () => {
   it("no check at all: access, key and binding passed, the rest not checked", () => {
     const { verdict } = laneFrom({ check: undefined });

@@ -329,6 +329,12 @@ interface Connection {
   active: boolean;
   /** What the interface's service verification holds under this connection's key. */
   verification: Verification;
+  /**
+   * SapConnection.transport (P0.14). Absent is DIRECT. No twin engine is
+   * registered here, so the broker refuses a TWIN connection it binds, and
+   * the lane board must draw that refusal (wave 2 integration review round 3).
+   */
+  transport?: "DIRECT" | "TWIN";
 }
 interface Case {
   route: "read" | "write";
@@ -457,6 +463,10 @@ function expected(c: Case): Decision_ {
     if (k.sapClient && only.client !== null && only.client !== k.sapClient) return refuse(403, "NO_MATCH_FOR_CLIENT");
     bound = only;
   }
+
+  // Stage 7b: the bound connection's transport. A TWIN connection with no
+  // twin engine on the deployment is refused before anything is called.
+  if (bound.transport === "TWIN") return refuse(503, "TRANSPORT_UNAVAILABLE");
 
   // Stage 8: the write switches. Verified means a verify made in this
   // environment through this very connection, SAP client and host.
@@ -624,6 +634,7 @@ function buildWorld(c: Case): World {
     environment: x.env,
     client: x.client,
     isActive: x.active,
+    transport: x.transport ?? "DIRECT",
     createdAt: at(n),
   }));
   if (c.foreign) {
@@ -761,6 +772,9 @@ async function runBroker(c: Case): Promise<Observed> {
   else if (c.route === "write" && o.rateCalled && !o.accessCalled && res.status === 400) reason = "IDEMPOTENCY_KEY_REQUIRED";
   else if (o.accessReason) reason = o.accessReason;
   else if (auditedBinding) reason = auditedBinding;
+  // The bound connection's transport (a TWIN connection, no twin engine): the
+  // only 503 after the binding, the circuit breaker observing by default.
+  else if (!allow && o.bindingCalled && res.status === 503) reason = "TRANSPORT_UNAVAILABLE";
   else if (!allow && o.bindingCalled && res.status === 403) reason = "WRITES_DISABLED";
   else if (!allow && o.bindingCalled && res.status === 400) reason = "CUSTOM_SERVICE_UNVERIFIED";
   else if (!allow) reason = `UNEXPLAINED_${res.status}`;
@@ -965,10 +979,13 @@ function interfaceGrid(): Case[] {
  * Grid D: the write switches, the write key and the idempotency key; and the
  * verification of a custom service through the bound connection, beside an
  * inactive connection for the same environment and client that may hold the
- * entry instead.
+ * entry instead; and the bound connection's transport (DIRECT, or TWIN with
+ * no twin engine: wave 2 integration review round 3).
  */
+const TRANSPORTS = ["DIRECT", "TWIN"] as const;
 function writeSwitchGrid(): Case[] {
   const out: Case[] = [];
+  for (const transport of TRANSPORTS)
   for (const route of ROUTES)
     for (const writeKey of [false, true, "unopenable"] as const)
       for (const idempotencyKey of bools)
@@ -978,7 +995,7 @@ function writeSwitchGrid(): Case[] {
               for (const inactiveBeside of [null, ...VERIFICATIONS])
                 for (const rate of RATES) {
                   const c = baseCase(route);
-                  const bound: Connection = { ...GOOD_CONNECTION("TEST"), writeEnabled, verification };
+                  const bound: Connection = { ...GOOD_CONNECTION("TEST"), writeEnabled, verification, transport };
                   out.push({
                     ...c,
                     writeKey,
@@ -1059,6 +1076,7 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       readable: flip(0.95),
       active: flip(0.9),
       verification: flip(0.6) ? "matching" : pick(VERIFICATIONS),
+      transport: flip(0.08) ? "TWIN" : "DIRECT",
     }));
     out.push({
       route: pick(ROUTES),
@@ -1292,6 +1310,7 @@ describe("the broker's governance decision agrees with the decision-table oracle
       "NO_MATCH_FOR_ENVIRONMENT",
       "UNDECLARED_ENVIRONMENT_WRITE",
       "NO_DECLARED_CANDIDATE",
+      "TRANSPORT_UNAVAILABLE",
       "WRITES_DISABLED",
       "CUSTOM_SERVICE_UNVERIFIED",
       "ALLOWED",

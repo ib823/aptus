@@ -86,12 +86,11 @@ function form(key: string, over: Partial<ConnectionFormFields> = {}): Connection
     apiPath: "",
     timeoutMs: "",
     allowWrites: false,
-    writeSecret: "",
     ...over,
   };
 }
 
-const writing = (key: string) => form(key, { allowWrites: true, writeSecret: "a-write-secret" });
+const writing = (key: string) => form(key, { allowWrites: true });
 
 /** A connection that allows writes, then deactivated (an incident). */
 async function deactivatedWritingConnection(key: string): Promise<string> {
