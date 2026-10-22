@@ -177,6 +177,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
    * the group's statuses brought in line with what the broker now does
    * (round 7). `studioSave` below goes through the route itself.
    */
+  /**
+   * One environment per key, so no two active rows share a binding tuple: the
+   * migrated schema's SapConnection_active_binding_tuple index refuses that,
+   * as production does (wave 2 final review).
+   */
+  const environmentOf = (key: string) => (key.endsWith("prod") ? "PROD" : key.endsWith("qa") ? "TEST" : "DEV");
+
   const save = async (key: string, baseUrl: string) => {
     const saved = await upsertSapConnection({
       organizationId: org,
@@ -186,7 +193,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
       baseUrl,
       authType: "basic",
       secrets: { username: "comm_user", password: "secret" },
-      environment: key.endsWith("prod") ? "PROD" : "DEV",
+      environment: environmentOf(key),
     });
     await settleConnectionGroup(org, "s4hana");
     return saved;
@@ -206,7 +213,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a connection probe and a re-sav
           authType: "basic",
           username: "comm_user",
           password: "secret",
-          environment: key.endsWith("prod") ? "PROD" : "DEV",
+          environment: environmentOf(key),
         }),
       }) as never,
     );

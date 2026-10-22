@@ -102,6 +102,7 @@ import {
   rotationProbeApplies,
   rotationProbeMayApply,
   rotationRequirements,
+  sameProbePath,
   sameSignInCredentials,
   type RotationProof,
 } from "@/lib/sap-public/rotation-probe";
@@ -936,7 +937,8 @@ export async function POST(request: NextRequest) {
           probePathUnchanged: (stored.apiPath?.trim() || null) === (input.apiPath?.trim() || null),
         });
       } else {
-        const required = rotationRequirements(evidence);
+        // The metadata proof holds only at the probe path it was made at (wave 2 final review).
+        const required = rotationRequirements(evidence, { probePathUnchanged: sameProbePath(stored, candidate) });
         const probe = await probeRotation(candidate, evidence.read, undefined, { metadataRequired: required.metadataRequired });
         const decision = decideRotation(probe, new Date(), required);
         if (!decision.swap) {

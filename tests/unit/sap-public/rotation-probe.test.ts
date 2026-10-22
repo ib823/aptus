@@ -24,6 +24,7 @@ import {
   rotationProbeMayApply,
   ROTATION_PROBE_DEADLINE_MS,
   rotationRequirements,
+  sameProbePath,
   sameSignInCredentials,
 } from "@/lib/sap-public/rotation-probe";
 
@@ -311,6 +312,21 @@ describe("when the probe runs", () => {
     expect(rotationRequirements(evidence("OK", null))).toEqual({ metadataRequired: true, dataReadRequired: false });
     expect(rotationRequirements(evidence("OK", READ))).toEqual({ metadataRequired: true, dataReadRequired: true });
     expect(rotationRequirements(evidence("NOT_FOUND", READ))).toEqual({ metadataRequired: false, dataReadRequired: true });
+  });
+
+  it("demands the metadata only at the probe path it was proven at (wave 2 final review)", () => {
+    expect(rotationRequirements(evidence("OK", READ), { probePathUnchanged: false })).toEqual({
+      metadataRequired: false,
+      dataReadRequired: true,
+    });
+    const zcustom = { product: "s4hana", apiPath: "/sap/opu/odata/sap/ZCUSTOM_SRV" };
+    // The form re-saves without the path: S/4 falls back to its default service, ECC to none.
+    expect(sameProbePath(zcustom, { product: "s4hana", apiPath: null })).toBe(false);
+    expect(sameProbePath({ ...zcustom, product: "ecc" }, { product: "ecc", apiPath: null })).toBe(false);
+    expect(sameProbePath(zcustom, { product: "s4hana", apiPath: " /sap/opu/odata/sap/ZCUSTOM_SRV " })).toBe(true);
+    expect(sameProbePath({ product: "s4hana", apiPath: null }, { product: "s4hana", apiPath: "" })).toBe(true);
+    // A stored row that would not open: the proof is still demanded.
+    expect(sameProbePath(null, { product: "s4hana", apiPath: null })).toBe(true);
   });
 
   it("COREEDGE_ROTATION_PROBE=off turns it off; anything else leaves it on", () => {

@@ -115,7 +115,14 @@ the route now, after step-up and before writing anything:
    lane TTL, or a connection with no probe path at all (ECC, whose product has
    no default service, without an API path) is not held against the new
    secret, which is then judged by step 3 (with no probe path, step 3 also
-   decides the sign-in);
+   decides the sign-in). The metadata proof was made at the stored probe
+   path, so it is required only when the save keeps that path, as the probe
+   resolves it (wave 2 final review). Studio's form never pre-fills the API
+   path, so a rotation typed there drops a stored one; the new secret is then
+   probed at the product's default service (none on ECC), that step is
+   recorded but not required, and step 3 decides. With no proven read either,
+   such a save is judged on the sign-in alone (on ECC, with no probe path, on
+   nothing: it saves as it did before the probe);
 3. reads one row from the dataset proven readable through this connection, as
    the broker reads it. With no proven read there is nothing to compare against
    and this step is not run.

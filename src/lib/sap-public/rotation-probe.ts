@@ -278,12 +278,42 @@ export function rotationProbeApplies(
   return evidence.metadata || evidence.read !== null;
 }
 
-/** What the working secret proved, which the new one must prove too (decideRotation's options). */
-export function rotationRequirements(evidence: RotationEvidence): {
+/**
+ * What the working secret proved, which the new one must prove too (decideRotation's options).
+ *
+ * The metadata proof was made at the stored row's probe path, so it is
+ * demanded of the new secret only at that same path (wave 2 final review).
+ * Studio's form never pre-fills the probe path, so a rotation typed there
+ * drops a stored one: the new secret was then held to a $metadata at another
+ * service (S/4's default, which the arrangement may not release) or at none
+ * (ECC), and a correct rotation was refused. When the path changes, the
+ * metadata step is recorded but not required; the data read, when one is
+ * proven, decides, as `carriedProof` already treats a moved probe path.
+ */
+export function rotationRequirements(
+  evidence: RotationEvidence,
+  options: { readonly probePathUnchanged?: boolean } = {},
+): {
   readonly metadataRequired: boolean;
   readonly dataReadRequired: boolean;
 } {
-  return { metadataRequired: evidence.metadata, dataReadRequired: evidence.read !== null };
+  return {
+    metadataRequired: evidence.metadata && (options.probePathUnchanged ?? true),
+    dataReadRequired: evidence.read !== null,
+  };
+}
+
+/**
+ * Whether a save keeps the path its connection's $metadata is probed at, as
+ * the probe resolves it (an empty API path is the product's default service).
+ * `stored` is null when the stored row could not be opened; the path is then
+ * taken as kept, so the metadata proof is still demanded.
+ */
+export function sameProbePath(
+  stored: Pick<ResolvedSapConnection, "apiPath" | "product"> | null,
+  candidate: Pick<ResolvedSapConnection, "apiPath" | "product">,
+): boolean {
+  return stored === null || resolveProbePath(stored) === resolveProbePath(candidate);
 }
 
 /**

@@ -636,11 +636,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
    * that is down is a failure, never the "ok" that closes the circuit.
    *
    * Each case gets its own stored connection, so its circuit and Probe all's
-   * per-tenant limit start clean.
+   * per-tenant limit start clean. Only as production can hold them (wave 2
+   * final review): the migrated schema's SapConnection_active_binding_tuple
+   * index lets an organization hold one active row per (product, environment,
+   * client), and S/4HANA Cloud and SuccessFactors have no SAP client. So the
+   * DEV row the case replaces (the organization's own, or the previous case's)
+   * is deactivated first, as an operator would. This block runs last.
    */
   describe("the console circuit, under COREEDGE_CIRCUIT_BREAKER=enforce", () => {
     let n = 0;
     const fresh = async (product: "s4hana" | "successfactors") => {
+      await prisma.sapConnection.updateMany({
+        where: { organizationId: ORG, product, environment: "DEV", isActive: true },
+        data: { isActive: false },
+      });
       const key = `${RUN}-circuit-${n++}`;
       const saved = await upsertSapConnection({
         organizationId: ORG,
