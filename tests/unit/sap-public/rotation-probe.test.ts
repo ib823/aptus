@@ -289,8 +289,14 @@ describe("when the probe runs", () => {
     expect(judge(PROVEN_AT)).toBe(false);
     // No save on the record: nothing says the OK is about these settings.
     expect(judge(null)).toBe(false);
-    // The last probe OK is the proof whatever the record says.
+    // The last probe OK is the proof when no save on the record came after it.
     expect(rotationEvidence({ lastValidationStatus: "OK", lastValidatedAt: PROVEN_AT }, null, null, { now: NOW }).metadata).toBe(true);
+    const ok = (lastSavedAt: Date) =>
+      rotationEvidence({ lastValidationStatus: "OK", lastValidatedAt: PROVEN_AT }, null, null, { lastSavedAt, now: NOW }).metadata;
+    expect(ok(new Date(PROVEN_AT.getTime() - 1))).toBe(true);
+    // Wave 2 final review round 2: an OK left on the row by a pre-deploy save
+    // (which never cleared the status) is about settings it may no longer have.
+    expect(ok(new Date(PROVEN_AT.getTime() + 1))).toBe(false);
   });
 
   it("a metadata proof held through ERROR or TIMEOUT lapses after the lane TTL", () => {
@@ -325,8 +331,14 @@ describe("when the probe runs", () => {
     expect(sameProbePath({ ...zcustom, product: "ecc" }, { product: "ecc", apiPath: null })).toBe(false);
     expect(sameProbePath(zcustom, { product: "s4hana", apiPath: " /sap/opu/odata/sap/ZCUSTOM_SRV " })).toBe(true);
     expect(sameProbePath({ product: "s4hana", apiPath: null }, { product: "s4hana", apiPath: "" })).toBe(true);
-    // A stored row that would not open: the proof is still demanded.
-    expect(sameProbePath(null, { product: "s4hana", apiPath: null })).toBe(true);
+    // ECC with no probe path: no metadata request can be made, so a metadata
+    // proof is never demanded of it (wave 2 final review round 2).
+    expect(
+      rotationRequirements(evidence("OK", READ), { probePathUnchanged: true, candidateProbePath: null }).metadataRequired,
+    ).toBe(false);
+    expect(
+      rotationRequirements(evidence("OK", READ), { probePathUnchanged: true, candidateProbePath: "/sap/x" }).metadataRequired,
+    ).toBe(true);
   });
 
   it("COREEDGE_ROTATION_PROBE=off turns it off; anything else leaves it on", () => {
@@ -419,6 +431,27 @@ describe("the probe's deadline", () => {
     expect(d.swap).toBe(false);
     if (!d.swap) expect(d.reason).toContain("SAP did not answer");
   }, 4_000);
+
+  /*
+   * Wave 2 final review round 2. A metadata step that is not required (the
+   * save moved the probe path) with no proven read to run: when SAP did not
+   * answer it, nothing judged the new credential, so it is refused rather
+   * than swapped in on a sign-in SAP never judged.
+   */
+  it("refuses when the only step that reached SAP went unanswered, even when it was not required", async () => {
+    const probe = await probeRotation(candidate(), null, sap(503, 200), { metadataRequired: false });
+    expect(probe.metadata).toMatchObject({ ok: false, unavailable: true });
+    const d = decideRotation(probe, new Date(), { metadataRequired: false, dataReadRequired: false });
+    expect(d.swap).toBe(false);
+    if (!d.swap) {
+      expect(d.failedAt).toBe("metadata");
+      expect(d.reason).toContain("SAP did not answer");
+    }
+    // An answered refusal (403 at a service the arrangement does not release)
+    // still stands in for the sign-in, as before.
+    const answered = await probeRotation(candidate(), null, sap(403, 200), { metadataRequired: false });
+    expect(decideRotation(answered, new Date(), { metadataRequired: false, dataReadRequired: false }).swap).toBe(true);
+  });
 
   it("stops the data read at the deadline too, with no probe path", async () => {
     const probe = await probeRotation(candidate({ product: "ecc", apiPath: null, timeoutMs: 30_000 }), READ, silent as unknown as typeof fetch, {

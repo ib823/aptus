@@ -43,11 +43,13 @@ const USER = { id: `${RUN}-dev`, email: `${RUN}-dev@abeam.com`, name: "Dev", rol
 /** The one password this SAP system accepts, as it changes over the test. */
 // And whether the probe path's $metadata is released to it: a data service
 // can work while its $metadata is not in the communication arrangement.
-const sap = { password: "Working-Password-1", metadataStatus: 200, metadataOnlyAt: null as string | null };
+// And whether the gateway answers at all (`down`: 503 to everything).
+const sap = { password: "Working-Password-1", metadataStatus: 200, metadataOnlyAt: null as string | null, down: false };
 const EDMX =
   '<?xml version="1.0"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx"></edmx:Edmx>';
 
 const fakeSap = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+  if (sap.down) return new Response("", { status: 503 });
   const auth = new Headers(init?.headers).get("authorization") ?? "";
   const expected = `Basic ${Buffer.from(`COMM_USER:${sap.password}`).toString("base64")}`;
   if (auth !== expected) return new Response("", { status: 401 });
@@ -240,18 +242,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
    * and kept the dead one sealed. The metadata is demanded only at the path it
    * was proven at; a typo is still refused at sign-in. Its own organization,
    * whose DEV binding is free.
+   *
+   * Wave 2 final review round 2: "unopenable" is the same save after the
+   * stored row stopped decrypting (a keyring mix-up, a restore). The path is
+   * judged from the row's plaintext column, so the correct password still
+   * replaces it.
    */
   it.each([
-    ["s4hana", "https://my000001-api.s4hana.cloud.sap", null],
-    ["ecc", "https://ecc.example.com", "100"],
-  ] as const)("%s: a correct password re-saved without its probe path replaces the dead one", async (product, baseUrl, client) => {
-    const org = `${RUN}-path-${product}-org`;
-    const builder = { ...USER, id: `${RUN}-path-${product}-dev`, email: `${RUN}-path-${product}@abeam.com`, organizationId: org };
+    ["s4hana", "openable", "https://my000001-api.s4hana.cloud.sap", null],
+    ["ecc", "openable", "https://ecc.example.com", "100"],
+    ["s4hana", "unopenable", "https://my000001-api.s4hana.cloud.sap", null],
+    ["ecc", "unopenable", "https://ecc.example.com", "100"],
+  ] as const)("%s (%s row): a correct password re-saved without its probe path replaces the dead one", async (product, variant, baseUrl, client) => {
+    const tag = `${product}-${variant}`;
+    const org = `${RUN}-path-${tag}-org`;
+    const builder = { ...USER, id: `${RUN}-path-${tag}-dev`, email: `${RUN}-path-${tag}@abeam.com`, organizationId: org };
     await prisma.organization.create({ data: { id: org, name: "Rotation probe path", type: "client" } });
     await prisma.user.create({ data: { id: builder.id, email: builder.email, name: builder.name, role: builder.role, organizationId: org } });
     session.user = builder;
     vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "example.com");
-    const key = `${RUN}-path-${product}`;
+    const key = `${RUN}-path-${tag}`;
     const body = (password: string, apiPath?: string) =>
       saveConnection(
         new NextRequest("http://localhost/api/studio/connections", {
@@ -285,15 +295,121 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("probe before swap on the connec
 
       // SAP Basis rotates the password: the stored one is dead.
       sap.password = "New-Password-2";
+      if (variant === "unopenable") {
+        // The stored row no longer opens: the key it was sealed with is gone.
+        vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", "d".repeat(64));
+        await expect(resolveSapConnection(org, product, key)).rejects.toThrow();
+      }
       // A typo, re-saved from the form (no probe path), is still refused.
       if (product === "s4hana") {
         expect((await body("New-Pasword-2")).status).toBe(400);
-        expect(await secret()).toBe("Old-Password-1");
+        if (variant === "openable") expect(await secret()).toBe("Old-Password-1");
+      }
+      // Wave 2 final review round 2: while SAP does not answer (a 503 from
+      // the gateway), a re-save is not judged on a sign-in SAP never made,
+      // whether or not it keeps the path. Nothing is changed.
+      if (product === "s4hana" && variant === "openable") {
+        sap.down = true;
+        try {
+          for (const apiPath of [undefined, "/sap/opu/odata/sap/ZCUSTOM_SRV"]) {
+            const unanswered = await body("New-Pasword-2", apiPath);
+            expect(unanswered.status).toBe(400);
+            expect(((await unanswered.json()) as { error: { message: string } }).error.message).toContain("SAP did not answer");
+            expect(await secret()).toBe("Old-Password-1");
+          }
+        } finally {
+          sap.down = false;
+        }
       }
       // The right one, re-saved from the form, replaces it.
       const resaved = await body("New-Password-2");
       expect(resaved.status, JSON.stringify(await resaved.clone().json())).toBe(200);
       expect(await secret()).toBe("New-Password-2");
+    } finally {
+      sap.metadataOnlyAt = null;
+      sap.down = false;
+      vi.stubEnv("SAP_CONNECTION_ENCRYPTION_KEY", "c".repeat(64));
+      session.user = USER;
+      await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: org } });
+      await prisma.configAudit.deleteMany({ where: { organizationId: org } });
+      await prisma.organization.delete({ where: { id: org } });
+      await prisma.user.delete({ where: { id: builder.id } });
+    }
+  });
+
+  /*
+   * AN OK FROM SETTINGS THE ROW NO LONGER HAS (wave 2 final review round 2).
+   * Before wave 2, a save never cleared the probe status, and the Studio form
+   * never sent the API path, so a form re-save of an ECC connection dropped
+   * its path and kept its OK. ECC has no default service and the sweep skips
+   * a row with no probe path, so that OK stays. Counted as a metadata proof,
+   * it refused every correct rotation without a call to SAP until someone
+   * pressed Test. On S/4 the same OK held a correct rotation to the default
+   * service's $metadata, which the arrangement does not release (403 here).
+   * An OK observed before the last save on the record is no longer proof of
+   * these settings.
+   */
+  it.each([
+    ["ecc", "https://ecc.example.com", "100"],
+    ["s4hana", "https://my000001-api.s4hana.cloud.sap", null],
+  ] as const)("%s: an OK left by a pre-deploy form save that dropped the path does not refuse a correct rotation", async (product, baseUrl, client) => {
+    const org = `${RUN}-stale-ok-${product}-org`;
+    const builder = { ...USER, id: `${RUN}-stale-ok-${product}-dev`, email: `${RUN}-stale-ok-${product}@abeam.com`, organizationId: org };
+    await prisma.organization.create({ data: { id: org, name: "Rotation stale OK", type: "client" } });
+    await prisma.user.create({ data: { id: builder.id, email: builder.email, name: builder.name, role: builder.role, organizationId: org } });
+    session.user = builder;
+    vi.stubEnv("SAP_HOST_ALLOWLIST_EXTRA", "example.com");
+    const key = `${RUN}-stale-ok-${product}`;
+    const body = (password: string, apiPath?: string) =>
+      saveConnection(
+        new NextRequest("http://localhost/api/studio/connections", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            product,
+            key,
+            label: `${product} DEV`,
+            baseUrl,
+            authType: "basic",
+            username: "COMM_USER",
+            password,
+            environment: "DEV",
+            ...(client ? { client } : {}),
+            ...(apiPath ? { apiPath } : {}),
+          }),
+        }),
+      );
+    sap.password = "Old-1";
+    sap.metadataOnlyAt = "/ZCUSTOM_SRV/";
+    try {
+      expect((await body("Old-1", "/sap/opu/odata/sap/ZCUSTOM_SRV")).status).toBe(200);
+      const row = await prisma.sapConnection.findFirst({ where: { organizationId: org, product, key }, select: { id: true } });
+      const tested = await testConnection(new NextRequest("http://localhost/x", { method: "POST" }), {
+        params: Promise.resolve({ id: row!.id }),
+      });
+      expect(((await tested.json()) as { data: { status: string } }).data.status).toBe("OK");
+      const proven = await prisma.sapConnection.findFirst({ where: { id: row!.id, organizationId: org }, select: { lastValidatedAt: true } });
+
+      // A main-era form save: the path dropped, the status left as it was,
+      // and its connection_replaced audit row on the record.
+      await prisma.sapConnection.updateMany({ where: { id: row!.id, organizationId: org }, data: { apiPath: null } });
+      await prisma.configAudit.create({
+        data: {
+          organizationId: org,
+          actorId: builder.id,
+          entityType: "Connection",
+          entityId: row!.id,
+          action: "UPDATE",
+          after: { event: "connection_replaced", product, key },
+          at: new Date(proven!.lastValidatedAt!.getTime() + 1000),
+        },
+      });
+
+      // SAP Basis rotates the password, and the right one is typed into the form.
+      sap.password = "New-2";
+      const resaved = await body("New-2");
+      expect(resaved.status, JSON.stringify(await resaved.clone().json())).toBe(200);
+      expect((await resolveSapConnection(org, product, key))?.secrets.password).toBe("New-2");
     } finally {
       sap.metadataOnlyAt = null;
       session.user = USER;

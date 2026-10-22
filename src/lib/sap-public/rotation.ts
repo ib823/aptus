@@ -144,6 +144,18 @@ export function decideRotation(
     };
   }
 
+  // A metadata request SAP did not answer judged nothing: with no data read
+  // after it, nothing has judged the new credential, so it is not swapped in
+  // (wave 2 final review round 2). Only an answered, non-401 response stands
+  // in for the sign-in.
+  if (probe.dataRead === null && !probe.metadata.ok && probe.metadata.unavailable) {
+    return {
+      swap: false,
+      probe,
+      failedAt: "metadata",
+      reason: unansweredReason("metadata request", probe.metadata.detail),
+    };
+  }
   if (probe.dataRead === null && !dataReadRequired) {
     return { swap: true, probe, graceUntil: new Date(now.getTime() + GRACE_WINDOW_MS) };
   }

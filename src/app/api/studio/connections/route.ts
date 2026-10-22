@@ -122,6 +122,7 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeTargetChanges, type WriteTargetField } from "@/lib/studio/connection-form";
+import { resolveProbePath } from "@/lib/studio/connection-health";
 import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -571,6 +572,8 @@ interface SaveJudgement {
     lastValidatedAt: Date | null;
     /** SapConnection.transport: a TWIN connection is never probed (rotation-probe.ts `rotationProbeMayApply`). */
     transport: string;
+    /** The stored API path (plaintext): the metadata proof holds only at the probe path it resolves to. */
+    apiPath: string | null;
   } | null;
   writableAfter: boolean;
   targetChanges: WriteTargetField[];
@@ -617,6 +620,9 @@ async function judgeSave(
       lastValidatedAt: true,
       // A connection served by the Tenant Twin is never probed (rotation-probe.ts).
       transport: true,
+      // Where its $metadata is probed: the metadata proof holds only there,
+      // and it is plaintext, so it is known when the secrets will not open.
+      apiPath: true,
     },
   });
 
@@ -938,7 +944,12 @@ export async function POST(request: NextRequest) {
         });
       } else {
         // The metadata proof holds only at the probe path it was made at (wave 2 final review).
-        const required = rotationRequirements(evidence, { probePathUnchanged: sameProbePath(stored, candidate) });
+        // Judged from the row's plaintext API path, which is known even when its
+        // secrets will not open (wave 2 final review round 2).
+        const required = rotationRequirements(evidence, {
+          probePathUnchanged: sameProbePath({ apiPath: current.apiPath, product: input.product }, candidate),
+          candidateProbePath: resolveProbePath(candidate),
+        });
         const probe = await probeRotation(candidate, evidence.read, undefined, { metadataRequired: required.metadataRequired });
         const decision = decideRotation(probe, new Date(), required);
         if (!decision.swap) {

@@ -226,7 +226,9 @@ export interface RotationEvidenceContext {
  * The evidence, from the row's own probe record, the lanes' proven read and
  * the proof carried from the save that stored the secret.
  *
- * The metadata is proven when the last probe was OK. Otherwise it is proven
+ * The metadata is proven when the last probe was OK, unless that OK was
+ * observed before the last save on the record (wave 2 final review round 2).
+ * Otherwise it is proven
  * by an earlier proof of THESE settings, still fresh, that no later status
  * set aside (`SETS_METADATA_PROOF_ASIDE`):
  *
@@ -254,9 +256,15 @@ export function rotationEvidence(
   const status = existing.lastValidationStatus ?? null;
   const read = laneRead ?? carried?.read ?? null;
   const validatedAt = existing.lastValidatedAt ?? null;
-  if (status === "OK") return { metadata: true, metadataProvenAt: validatedAt ?? now, read };
-  if (status !== null && SETS_METADATA_PROOF_ASIDE.has(status)) return { metadata: false, metadataProvenAt: null, read };
   const lastSavedAt = context.lastSavedAt ?? null;
+  // An OK observed before the last save on the record is about settings the
+  // row may no longer have (wave 2 final review round 2): the code before wave
+  // 2 never cleared the status on a save, so a pre-deploy form re-save that
+  // dropped the API path kept its OK. It then falls through to the rules below.
+  const okBeforeLastSave =
+    validatedAt !== null && lastSavedAt !== null && lastSavedAt.getTime() > validatedAt.getTime();
+  if (status === "OK" && !okBeforeLastSave) return { metadata: true, metadataProvenAt: validatedAt ?? now, read };
+  if (status !== null && SETS_METADATA_PROOF_ASIDE.has(status)) return { metadata: false, metadataProvenAt: null, read };
   const probedSinceSave =
     validatedAt !== null && lastSavedAt !== null && validatedAt.getTime() > lastSavedAt.getTime() ? validatedAt : null;
   const carriedAt = carried?.metadata === true ? carried.metadataProvenAt : null;
@@ -292,13 +300,24 @@ export function rotationProbeApplies(
  */
 export function rotationRequirements(
   evidence: RotationEvidence,
-  options: { readonly probePathUnchanged?: boolean } = {},
+  options: {
+    readonly probePathUnchanged?: boolean;
+    /**
+     * The candidate's probe path as the probe resolves it, when known. With
+     * none (ECC without an API path) no metadata request can be made, so a
+     * metadata proof cannot be reproduced and is never demanded (wave 2 final
+     * review round 2): demanding it refused every correct rotation without a
+     * call to SAP.
+     */
+    readonly candidateProbePath?: string | null;
+  } = {},
 ): {
   readonly metadataRequired: boolean;
   readonly dataReadRequired: boolean;
 } {
   return {
-    metadataRequired: evidence.metadata && (options.probePathUnchanged ?? true),
+    metadataRequired:
+      evidence.metadata && (options.probePathUnchanged ?? true) && options.candidateProbePath !== null,
     dataReadRequired: evidence.read !== null,
   };
 }
@@ -306,14 +325,16 @@ export function rotationRequirements(
 /**
  * Whether a save keeps the path its connection's $metadata is probed at, as
  * the probe resolves it (an empty API path is the product's default service).
- * `stored` is null when the stored row could not be opened; the path is then
- * taken as kept, so the metadata proof is still demanded.
+ * `stored` is the judged row's own plaintext columns, never the opened secret
+ * set: a row whose secrets will not open (a keyring mix-up, a restore) still
+ * has its API path, and taking the path as kept then held a correct form
+ * rotation to the default service's $metadata (wave 2 final review round 2).
  */
 export function sameProbePath(
-  stored: Pick<ResolvedSapConnection, "apiPath" | "product"> | null,
+  stored: Pick<ResolvedSapConnection, "apiPath" | "product">,
   candidate: Pick<ResolvedSapConnection, "apiPath" | "product">,
 ): boolean {
-  return stored === null || resolveProbePath(stored) === resolveProbePath(candidate);
+  return resolveProbePath(stored) === resolveProbePath(candidate);
 }
 
 /**

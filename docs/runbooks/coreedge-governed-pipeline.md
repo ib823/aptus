@@ -122,7 +122,14 @@ the route now, after step-up and before writing anything:
    probed at the product's default service (none on ECC), that step is
    recorded but not required, and step 3 decides. With no proven read either,
    such a save is judged on the sign-in alone (on ECC, with no probe path, on
-   nothing: it saves as it did before the probe);
+   nothing: it saves as it did before the probe). Only an answered, non-401
+   response stands in for the sign-in: when SAP did not answer that request
+   (a timeout, a network failure or a 5xx) the save is refused as SAP not
+   answering, and nothing changes (wave 2 final review round 2). The probe
+   path is judged from the row's plaintext API path, so a row whose secrets
+   no longer open (a keyring mix-up, a restore) is judged the same way. A
+   connection with no probe path is never held to a metadata step, since
+   none can be made;
 3. reads one row from the dataset proven readable through this connection, as
    the broker reads it. With no proven read there is nothing to compare against
    and this step is not run.
@@ -182,7 +189,13 @@ rotation is therefore still probed and refused.
   the record (the newest `connection_created` or `connection_replaced` audit
   row). The code before wave 2 never cleared it on a save, so on deploy day a
   row can carry an OK observed with other secrets, other settings or even
-  another system. With no save on the record it proves nothing. A carried
+  another system. With no save on the record it proves nothing. The same rule
+  applies to a last status of `OK` (wave 2 final review round 2): an `OK`
+  observed before the last save on the record is not a metadata proof. Before
+  wave 2 a save never cleared the status, and the form never sent the API
+  path, so a form re-save that dropped the path kept its `OK`; on ECC (no
+  default service, skipped by the sweep) that `OK` stayed for good and
+  refused every correct rotation without calling SAP. A carried
   proof keeps the time it was made (`metadataProvenAt`), so carrying it through
   a label fix does not make it fresh.
 
@@ -243,7 +256,9 @@ and redeploy; only the exact word `off` turns the probe off.
   `ERROR` holds a proof for 24 hours at most. So a connection whose probe path
   has answered `ERROR` for longer than that while its lanes serve, the case
   most likely on deploy day, is not refused a correct rotation for its
-  `$metadata`; one whose last probe was `OK` is protected as intended.
+  `$metadata`; one whose last probe was `OK` is protected as intended, unless
+  that `OK` is older than its last save on the record, when it proves nothing
+  (wave 2 final review round 2).
 - Operations and the SAP system screen each gain a section; nothing is removed.
 
 ## Rolling back
