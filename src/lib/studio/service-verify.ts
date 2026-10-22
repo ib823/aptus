@@ -282,6 +282,12 @@ export const VERIFY_RESPONSE_MARGIN_MS = 15_000;
 
 export const VERIFY_BUSY_DETAIL =
   "This organisation is already verifying other services. Verify again when those have answered.";
+/**
+ * Refused for the instance's verifies in flight, not the organisation's own
+ * (consolidated review round 4): said so, and audited as unavailable, not as
+ * the organisation's throttle.
+ */
+export const VERIFY_BUSY_INSTANCE_DETAIL = "CoreEdge is verifying many services at once just now. Try again in a few seconds.";
 
 /**
  * THE FETCH GATE: at most this many verifies in flight per organisation, and
@@ -295,10 +301,11 @@ export const FETCH_GATE = { perOrganization: 3, perProcess: 16 } as const;
 
 const inFlight = { total: 0, byOrganization: new Map<string, number>() };
 
-/** Enter the fetch gate: the function that leaves it, or null (BUSY). */
-function enterFetchGate(organizationId: string | null): (() => void) | null {
+/** Enter the fetch gate: the function that leaves it, or the limit that refused (BUSY). */
+function enterFetchGate(organizationId: string | null): (() => void) | "organization" | "process" {
   const mine = organizationId === null ? 0 : (inFlight.byOrganization.get(organizationId) ?? 0);
-  if (inFlight.total >= FETCH_GATE.perProcess || mine >= FETCH_GATE.perOrganization) return null;
+  if (mine >= FETCH_GATE.perOrganization) return "organization";
+  if (inFlight.total >= FETCH_GATE.perProcess) return "process";
   inFlight.total += 1;
   if (organizationId !== null) inFlight.byOrganization.set(organizationId, mine + 1);
   let left = false;
@@ -317,26 +324,27 @@ export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl
   const started = Date.now();
   const deadlineAt = input.deadlineAt ?? started + VERIFY_REQUEST_BUDGET_MS;
   const leave = enterFetchGate(input.organizationId ?? null);
-  if (leave) {
+  if (typeof leave === "function") {
     try {
       return await verifyOnce(input, fetchImpl, deadlineAt);
     } finally {
       leave();
     }
   }
+  const mine = leave === "organization";
   return {
     status: "BUSY",
     verified: false,
-    detail: VERIFY_BUSY_DETAIL,
+    detail: mine ? VERIFY_BUSY_DETAIL : VERIFY_BUSY_INSTANCE_DETAIL,
     httpStatus: null,
     durationMs: Date.now() - started,
     entitySets: [],
     entitySetCount: 0,
     detectedODataVersion: null,
     suggestedEntitySet: null,
-    // Refused here, before SAP was asked: what a throttle answers.
-    auditStatus: 429,
-    failureReason: "VERIFY_BUSY",
+    // Refused here, before SAP was asked: the organisation's own throttle, or the instance unavailable.
+    auditStatus: mine ? 429 : 503,
+    failureReason: mine ? "VERIFY_BUSY" : "VERIFY_BUSY_INSTANCE",
   };
 }
 

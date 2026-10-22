@@ -333,6 +333,17 @@ export async function recordContractSnapshot(input: {
 
     try {
       const written = await prisma.$transaction(async (tx) => {
+        /*
+         * ONE TEXT WRITER OF AN INTERFACE AT A TIME (consolidated review round
+         * 4). At READ COMMITTED an UNCHANGED record that read X as current
+         * could null the texts a concurrent record had just committed on the
+         * newer row Y, leaving the current row without them (and the build's
+         * re-render skips an interface whose other row holds texts). The
+         * interface's own row, locked first, orders the two: the second sees
+         * the first's row as current, and writes no stale texts. NO KEY: it
+         * conflicts with itself, not with a snapshot insert's foreign-key check.
+         */
+        await tx.$executeRaw(Prisma.sql`SELECT 1 FROM "Interface" WHERE "id" = ${iface.id} AND "organizationId" = ${scope.organizationId} FOR NO KEY UPDATE`);
         let result: Extract<RecordOutcome, { status: "RECORDED" | "UNCHANGED" }> | null = outcome;
         if (result === null) {
           const [semverMajor, semverMinor, semverPatch] = semverParts(next!.semver);

@@ -15,11 +15,23 @@
  * function group), so a check that only read the row let every instance
  * admit its own queue of jobs for an organisation already at its cap. A job
  * therefore reserves its deadline on the row in the same statement that
- * checks it (reserveContractTime), and settles to its real wall time once
- * its worker has gone (chargeContractTime with what it reserved). The day's
- * total is then at most the allowance plus one job's deadline, however many
- * instances run. A process that dies between the two leaves the reservation
- * held for the day: at most one deadline too much, which fails safe.
+ * checks it (reserveContractTime), once it holds its slot in the gate, and
+ * settles to its real wall time once its worker has gone (chargeContractTime
+ * with what it reserved). A process holds at most one reservation per
+ * organisation (the gate runs one job of an organisation at a time), so the
+ * day's total is at most the allowance plus one deadline per instance.
+ *
+ * A RESERVATION EXPIRES (consolidated review round 4). One that is never
+ * settled (the process died between the two statements, or the settling
+ * statement failed) held the rest of the organisation's day: every job of
+ * it BUSY until 00:00 UTC. The row's reservedUntil is the latest expiry of
+ * its reservations (each its deadline plus RESERVATION_GRACE_MS from when
+ * it was taken), and once that has passed every job that reserved is gone,
+ * so the reservations count as 0. A leaked reservation therefore blocks for
+ * at most one deadline plus RESERVATION_GRACE_MS (about 20 s) after the
+ * organisation's last reservation, never the day. A job still running past
+ * its expiry (a load or a settling statement slower than the grace) only
+ * lets one more job be admitted early: at most one deadline over, as above.
  *
  * SPENT IS NOT IN FLIGHT (consolidated review round 3). The reservations are
  * their own column (reservedMs), apart from the settled time (ms): a job is
@@ -84,6 +96,13 @@ export async function checkContractTime(organizationId: string, now: Date = new 
   return (rows[0]?.ms ?? 0) < seconds * 1000 ? { ok: true } : spent(seconds, now);
 }
 
+/**
+ * How long past its deadline a reservation is held: the worker's exit grace
+ * (5 s, envelope.ts), the job's load before it and the settling statement
+ * after it. Past it, the reservation no longer counts (see the header).
+ */
+export const RESERVATION_GRACE_MS = 10_000;
+
 /** What a job reserved, settled with chargeContractTime(organizationId, wallMs, at, ms). */
 export interface ContractTimeReservation {
   at: Date;
@@ -95,11 +114,12 @@ export interface ContractTimeReservation {
  * to the organisation's reservations only while its settled time and
  * reservations together are under the allowance, so concurrent jobs on any
  * number of instances are admitted one reservation at a time, and none once
- * they reach the allowance. Not admitted, the row is read again: the day is
- * spent only when the settled time has reached the allowance, and otherwise
- * the job is refused as in flight (BUSY). With the allowance unlimited
- * nothing is reserved (0 ms), and the job's wall time is still charged when
- * it settles.
+ * they reach the allowance. Reservations whose expiry (reservedUntil) has
+ * passed count as 0, and are replaced by this one. Not admitted, the row is
+ * read again: the day is spent only when the settled time has reached the
+ * allowance, and otherwise the job is refused as in flight (BUSY). With the
+ * allowance unlimited nothing is reserved (0 ms), and the job's wall time is
+ * still charged when it settles.
  */
 export async function reserveContractTime(
   organizationId: string,
@@ -109,11 +129,17 @@ export async function reserveContractTime(
   const seconds = contractSecondsPerOrgDay();
   if (seconds === 0) return { ok: true, reservation: { at: now, ms: 0 } };
   const ms = clampMs(reserveMs);
+  const at = now.toISOString();
+  const until = new Date(now.getTime() + ms + RESERVATION_GRACE_MS).toISOString();
+  // The reservations that still count: none once the latest of them has expired.
+  const held = Prisma.sql`(CASE WHEN "ContractTime"."reservedUntil" < ${at}::timestamptz THEN 0 ELSE "ContractTime"."reservedMs" END)`;
   const rows = await prisma.$queryRaw<{ ms: number }[]>(Prisma.sql`
-    INSERT INTO "ContractTime" ("organizationId", "day", "ms", "reservedMs") VALUES (${organizationId}, ${utcDay(now)}::date, 0, ${ms})
+    INSERT INTO "ContractTime" ("organizationId", "day", "ms", "reservedMs", "reservedUntil")
+      VALUES (${organizationId}, ${utcDay(now)}::date, 0, ${ms}, ${until}::timestamptz)
     ON CONFLICT ("organizationId", "day") DO UPDATE
-      SET "reservedMs" = LEAST("ContractTime"."reservedMs"::bigint + EXCLUDED."reservedMs", 2000000000)::int
-      WHERE "ContractTime"."ms"::bigint + "ContractTime"."reservedMs" < ${seconds * 1000}
+      SET "reservedMs" = LEAST(${held}::bigint + EXCLUDED."reservedMs", 2000000000)::int,
+        "reservedUntil" = GREATEST("ContractTime"."reservedUntil", EXCLUDED."reservedUntil")
+      WHERE "ContractTime"."ms"::bigint + ${held} < ${seconds * 1000}
     RETURNING "ms"
   `);
   if (rows.length > 0) return { ok: true, reservation: { at: now, ms } };
@@ -131,7 +157,7 @@ let prunedAt = 0;
  * what the job reserved before it ran (0 for a plain charge). A job that
  * never ran settles with 0 and so only gives its reservation back. Never
  * throws: a charge that fails is logged, and a reservation it failed to
- * settle stays held for the day.
+ * settle stays held until it expires (see the header).
  */
 export async function chargeContractTime(organizationId: string, wallMs: number, now: Date = new Date(), reservedMs = 0): Promise<void> {
   const ms = clampMs(wallMs);

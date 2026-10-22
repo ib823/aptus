@@ -59,7 +59,15 @@ import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-
 import { GET as scaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
 import { LIMITS } from "@/lib/contracts/budget";
 import { compileContract } from "@/lib/contracts/compile";
-import { chargeContractTime, checkContractTime, nextUtcMidnight, reserveContractTime } from "@/lib/contracts/contract-time";
+import {
+  chargeContractTime,
+  checkContractTime,
+  contractSecondsPerOrgDay,
+  DEFAULT_CONTRACT_SECONDS_PER_ORG_DAY,
+  nextUtcMidnight,
+  RESERVATION_GRACE_MS,
+  reserveContractTime,
+} from "@/lib/contracts/contract-time";
 import { planDocInputs } from "@/lib/contracts/doc-inputs";
 import { CONTRACT_JOB_LIMITS, contractJobAdmission, runJobInEnvelope } from "@/lib/contracts/envelope";
 import { recordJob, type CompiledService, type Job } from "@/lib/contracts/jobs";
@@ -467,17 +475,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
    * already at its cap (measured: 12 jobs past the cap on 3 processes). Each
    * job now reserves its deadline in the statement that checks the row.
    */
-  it("the allowance holds across instances: a job reserves its deadline before it is queued and settles to its wall time", async () => {
+  it("the allowance holds across instances: a job reserves its deadline once it holds its slot and settles to its wall time", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     await chargeContractTime(OTHER, 39_999);
     const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
     // Six at once: before, four ran here (one running, three waiting) and two were BUSY. Now one
-    // runs, and the other five, refused while it holds the rest of the day, are BUSY (round 3).
+    // runs; the two past the gate's places are BUSY, and the three that waited reserve only once
+    // they hold the slot, after the first has settled and spent the day: ALLOWANCE (round 4).
     const results = await Promise.all(Array.from({ length: 6 }, () => runJobInEnvelope(job, { tenant: OTHER })));
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason)).toEqual(Array(5).fill("BUSY"));
+    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason).sort()).toEqual([...Array(3).fill("ALLOWANCE"), ...Array(2).fill("BUSY")]);
     // Settled to the one job's wall time: the day's total is under the allowance plus one deadline.
     const after = await msToday(OTHER);
     expect(after).toBeGreaterThan(39_999);
@@ -534,6 +543,48 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs an
     for (let i = 0; i < 4; i++) expect(await reserveContractTime(OTHER, 10_000)).toMatchObject({ ok: true });
     expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: false, reason: "BUSY" });
     expect(await checkContractTime(OTHER)).toEqual({ ok: true });
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated containment review round 4. reservedMs went down only when
+   * a job settled, and the settling statement swallows its own errors: a
+   * reservation whose process died or whose settle failed held the rest of
+   * the organisation's day, every job of it BUSY ("try again in a few
+   * seconds") until 00:00 UTC. A reservation now expires a deadline plus
+   * RESERVATION_GRACE_MS after it was taken. At the shipped 40 s default.
+   */
+  it("a reservation that is never settled stops blocking once it expires, and never holds the day", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // The shipped default (tests/setup.ts turns the allowance off).
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", undefined);
+    expect(contractSecondsPerOrgDay()).toBe(DEFAULT_CONTRACT_SECONDS_PER_ORG_DAY);
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    const t0 = new Date(Date.UTC(2031, 2, 4, 12, 0, 0));
+    const at = (ms: number) => new Date(t0.getTime() + ms);
+    const deadline = CONTRACT_JOB_LIMITS.deadlineMs;
+    // 30 s settled, and a job's reservation that is never settled (its process died).
+    await chargeContractTime(OTHER, 30_000, t0);
+    expect(await reserveContractTime(OTHER, deadline, t0)).toMatchObject({ ok: true });
+    // While it may still be in flight, the next job is BUSY, not the day's refusal.
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS - 1))).toEqual({ ok: false, inFlight: true });
+    // Past its expiry it counts for nothing: the next job reserves, and holds the row in its turn.
+    const next = await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 1));
+    expect(next).toMatchObject({ ok: true, reservation: { ms: deadline } });
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 2))).toEqual({ ok: false, inFlight: true });
+    // Settled, it gives its own reservation back; the day's settled time is still what decides ALLOWANCE.
+    if (next.ok) await chargeContractTime(OTHER, 2_000, next.reservation.at, next.reservation.ms);
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 3))).toMatchObject({ ok: true });
+    await chargeContractTime(OTHER, 10_000, at(60_000));
+    expect(await reserveContractTime(OTHER, deadline, at(10 * 60_000))).toMatchObject({ ok: false, retryAfterMs: expect.any(Number) });
+
+    // End to end, today: a leaked reservation taken a deadline and the grace ago no longer refuses a job.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    await chargeContractTime(OTHER, 30_000);
+    const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+    expect(await reserveContractTime(OTHER, deadline, new Date(Date.now() - deadline - RESERVATION_GRACE_MS - 1_000))).toMatchObject({ ok: true });
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: true });
     await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
     vi.unstubAllEnvs();
   });

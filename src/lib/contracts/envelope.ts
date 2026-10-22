@@ -23,11 +23,12 @@
  *     (runContractJob's loader), so a job refused or still waiting has cost
  *     the request thread nothing;
  *   - its organisation's daily allowance (contract-time.ts): checked and
- *     the job's deadline reserved in one statement before the job is queued
- *     (the gate is per process; the reservation holds across instances), and
- *     settled to the job's wall time from spawn to exit once the worker has
- *     gone. A job refused only because the organisation's jobs in flight
- *     hold the rest of the day is BUSY, not ALLOWANCE.
+ *     the job's deadline reserved in one statement once the job holds its
+ *     slot (the gate is per process; the reservation holds across
+ *     instances, and expires should it never be settled), and settled to
+ *     the job's wall time from spawn to exit once the worker has gone. A
+ *     job refused only because the organisation's jobs in flight hold the
+ *     rest of the day is BUSY, not ALLOWANCE.
  *
  * Whatever runs past a limit ends as a typed refusal (EnvelopeRefusal), never
  * an out-of-memory, a crash or a blocked event loop. A job's slot is free only
@@ -53,7 +54,7 @@ import v8 from "node:v8";
 import { Worker } from "node:worker_threads";
 
 import { LIMITS } from "@/lib/contracts/budget";
-import { chargeContractTime, checkContractTime, reserveContractTime } from "@/lib/contracts/contract-time";
+import { chargeContractTime, checkContractTime, type ContractTimeReservation, reserveContractTime } from "@/lib/contracts/contract-time";
 import type { EnvelopeRefusal, Job, JobOutput } from "@/lib/contracts/jobs";
 import { inputBytesUpTo } from "@/lib/contracts/render-input";
 import { HEAP_NOT_CAPPED, type WorkerInput, type WorkerReply } from "@/lib/contracts/worker-protocol";
@@ -256,8 +257,8 @@ export interface EnvelopeOptions {
 }
 
 /**
- * Run one job in a fresh worker, in order: the allowance (its deadline
- * reserved), the gate, `load` (only once the slot is held; null declines the
+ * Run one job in a fresh worker, in order: the gate, then with the slot
+ * held the allowance (its deadline reserved) and `load` (null declines the
  * job, and null is answered), the worker, its exit, the slot freed, the
  * reservation settled to the wall time (0 for a job that never ran).
  */
@@ -272,36 +273,39 @@ export async function runContractJob<K extends Job["kind"]>(
   const limits = opts.limits ?? CONTRACT_JOB_LIMITS;
   const left = (ms: number) => (deadlineAt === null ? ms : Math.min(ms, deadlineAt - Date.now()));
   if (contractIsolates() === 0) return refuse("DISABLED", kind, queuedAt);
-  // The allowance, checked and this job's deadline reserved in one statement
-  // (contract-time.ts): the per-process gate below cannot see other instances.
-  const reserved = tenant === null ? null : await reserveContractTime(tenant, limits.deadlineMs);
-  if (reserved !== null && !reserved.ok) {
-    // The rest of the day held by the organisation's jobs in flight: BUSY, which clears in seconds.
-    if ("inFlight" in reserved) return refuse("BUSY", kind, queuedAt, "allowance-in-flight");
-    return refuse("ALLOWANCE", kind, queuedAt, "allowance", reserved.detail, reserved.retryAfterMs);
-  }
+  const wait = left(GATE.maxWaitMs);
+  const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
+  if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
+  let reservation: ContractTimeReservation | null = null;
   let wallMs = 0;
   try {
-    const wait = left(GATE.maxWaitMs);
-    const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
-    if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
-    try {
-      const job = await load();
-      if (job === null) return null;
-      const runMs = left(limits.deadlineMs);
-      if (job.kind === "render" && inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes) {
-        return refuse("RESOURCE_LIMIT", kind, queuedAt, INPUT_CAUSE);
+    // The allowance, checked and this job's deadline reserved in one statement
+    // (contract-time.ts): the per-process gate cannot see other instances. Only
+    // once the slot is held, so a waiter holds nothing and a process at most one
+    // reservation per organisation (consolidated review round 4).
+    if (tenant !== null) {
+      const reserved = await reserveContractTime(tenant, limits.deadlineMs);
+      if (!reserved.ok) {
+        // The rest of the day held by the organisation's jobs in flight: BUSY, which clears in seconds.
+        if ("inFlight" in reserved) return refuse("BUSY", kind, queuedAt, "allowance-in-flight");
+        return refuse("ALLOWANCE", kind, queuedAt, "allowance", reserved.detail, reserved.retryAfterMs);
       }
-      if (runMs <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
-      const ran = await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
-      wallMs = ran.wallMs;
-      return ran.result;
-    } finally {
-      release();
+      reservation = reserved.reservation;
     }
+    const job = await load();
+    if (job === null) return null;
+    const runMs = left(limits.deadlineMs);
+    if (job.kind === "render" && inputBytesUpTo(job.input, LIMITS.renderInput.bytes) > LIMITS.renderInput.bytes) {
+      return refuse("RESOURCE_LIMIT", kind, queuedAt, INPUT_CAUSE);
+    }
+    if (runMs <= 0) return refuse("BUSY", kind, queuedAt, REQUEST_DEADLINE_CAUSE);
+    const ran = await runWorker<JobOutput<K>>(job, { ...limits, deadlineMs: runMs }, queuedAt, runMs < limits.deadlineMs);
+    wallMs = ran.wallMs;
+    return ran.result;
   } finally {
+    release();
     // Settled to the wall time from spawn to exit; a job that never ran gives its reservation back.
-    if (tenant !== null && reserved?.ok && (wallMs > 0 || reserved.reservation.ms > 0)) await chargeContractTime(tenant, wallMs, reserved.reservation.at, reserved.reservation.ms);
+    if (tenant !== null && reservation !== null && (wallMs > 0 || reservation.ms > 0)) await chargeContractTime(tenant, wallMs, reservation.at, reservation.ms);
   }
 }
 

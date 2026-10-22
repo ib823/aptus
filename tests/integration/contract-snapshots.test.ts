@@ -686,6 +686,62 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
   });
 
   /*
+   * Consolidated containment review round 4. At READ COMMITTED an UNCHANGED
+   * record (DEV, against X) read X as current while a PROD record of a newer
+   * contract (Y) was still open; once PROD committed, the UNCHANGED record
+   * put the texts back on X and nulled them on Y, the current row, which
+   * then answered NOT_RENDERED until the next verify (the build's re-render
+   * skips an interface whose other row holds texts). Here the PROD record is
+   * held open inside its transaction (alsoWrite) until the DEV record waits
+   * on a lock, which makes the interleaving certain rather than a 1-in-280
+   * race. Now the interface's row orders the two writers.
+   */
+  it("an UNCHANGED record racing a newer version's record leaves the texts on the current row", async () => {
+    const iface = await newInterface("racing-texts");
+    const x = await record({ scope, iface, contract: salesOrder(), environment: "DEV" });
+    if (x.status !== "RECORDED") throw new Error(x.status);
+    const added = salesOrder();
+    added.entityType.properties.push({ name: "Region", type: "Edm.String", nullable: true });
+    const devHeads = await loadRecordHeads(scope, iface, "DEV");
+    const dev = recordableContract(salesOrder(), undefined, iface.entitySet, devHeads);
+    const prodHeads = await loadRecordHeads(scope, iface, "PROD");
+    const prod = recordableContract(added, undefined, iface.entitySet, prodHeads);
+    if (!dev.ok || !prod.ok) throw new Error("not recordable");
+
+    let inside!: () => void;
+    const isInside = new Promise<void>((resolve) => (inside = resolve));
+    let go!: () => void;
+    const held = new Promise<void>((resolve) => (go = resolve));
+    const prodRecord = recordContractSnapshot({
+      scope,
+      iface,
+      contract: prod,
+      heads: prodHeads,
+      environment: "PROD",
+      alsoWrite: async () => {
+        inside();
+        await held;
+      },
+    });
+    await isInside;
+    const devRecord = recordContractSnapshot({ scope, iface, contract: dev, heads: devHeads, environment: "DEV" });
+    // Until the DEV record waits on a lock (the interface's row now; X's row, which PROD nulled, before).
+    for (let i = 0; i < 150; i++) {
+      const [waiting] = await prisma.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS "n" FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid WHERE NOT l.granted AND a.datname = current_database()`;
+      if ((waiting?.n ?? 0) > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    go();
+    const [p, d] = await Promise.all([prodRecord, devRecord]);
+    expect(p).toMatchObject({ status: "RECORDED", snapshot: { semver: "1.1.0" } });
+    expect(d).toMatchObject({ status: "UNCHANGED", snapshot: { id: x.snapshot.id } });
+    if (p.status !== "RECORDED") throw new Error(p.status);
+    expect(await rowsWithTexts(iface.id)).toEqual([p.snapshot.id]);
+    expect((await currentSnapshotSummaries(scope, [iface])).get(iface.id)).toMatchObject({ id: p.snapshot.id, schemasBytes: expect.any(Number) });
+  });
+
+  /*
    * Consolidated review round 1. (a) An UNCHANGED verify rewrote the row's
    * texts from its own compile: two systems listing the same fields in
    * another order (same hash, the IR's order kept) flipped /schema between

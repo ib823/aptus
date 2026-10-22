@@ -1991,11 +1991,13 @@ model ContractSnapshot {
 /// when its worker has exited. Rows older than a week are deleted by the charge.
 model ContractTime {
   organizationId String
-  day            DateTime @db.Date
+  day            DateTime  @db.Date
   /// Wall time of the day's settled jobs.
-  ms             Int      @default(0)
+  ms             Int       @default(0)
   /// Deadlines reserved by the jobs in flight, given back as each settles.
-  reservedMs     Int      @default(0)
+  reservedMs     Int       @default(0)
+  /// When the latest of those reservations expires: past it they count as 0 (a job that never settled).
+  reservedUntil  DateTime? @db.Timestamptz(3)
 
   @@id([organizationId, day])
 }

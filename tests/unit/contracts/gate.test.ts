@@ -44,7 +44,7 @@ import {
   runJobInEnvelope,
 } from "@/lib/contracts/envelope";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
-import { FETCH_GATE, verifyServiceMetadata } from "@/lib/studio/service-verify";
+import { FETCH_GATE, VERIFY_BUSY_DETAIL, VERIFY_BUSY_INSTANCE_DETAIL, verifyServiceMetadata } from "@/lib/studio/service-verify";
 
 vi.setConfig({ testTimeout: 120_000 });
 afterEach(() => {
@@ -137,8 +137,8 @@ describe("the gate's bounds, before anything is loaded", () => {
     // Refused by its own organisation's share: the words do not blame other organisations (review round 2).
     expect(busy && !busy.ok && busy.detail).toContain("your organisation's other verifies, captures or downloads");
     expect(busy && !busy.ok && busy.detail).not.toContain("other organisations");
-    // Its reservation is given back: settled with no wall time.
-    expect(time.charge).toHaveBeenCalledWith("org_five", 0, new Date(0), CONTRACT_JOB_LIMITS.deadlineMs);
+    // Refused at the gate, it reserved nothing; nor did the three waiting: only the job that holds the slot (round 4).
+    expect(time.reserve.mock.calls.filter((c) => c[0] === "org_five")).toHaveLength(1);
     // Waiting, the other three have loaded nothing either.
     for (const h of waiting) expect(h.load).not.toHaveBeenCalled();
     first.release();
@@ -209,7 +209,7 @@ describe("the gate's bounds, before anything is loaded", () => {
   });
 });
 
-describe("the compiler turned off, and the allowance, are answered before the gate", () => {
+describe("the compiler turned off is answered before the gate; the allowance once the slot is held", () => {
   it("COREEDGE_CONTRACT_ISOLATES=0: every job is DISABLED, nothing loaded or charged", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
@@ -245,6 +245,35 @@ describe("the compiler turned off, and the allowance, are answered before the ga
     expect(r).not.toHaveProperty("retryAfterMs");
     expect(load).not.toHaveBeenCalled();
     expect(time.charge).not.toHaveBeenCalledWith("org_in_flight", expect.anything(), expect.anything(), expect.anything());
+  });
+});
+
+/*
+ * Consolidated containment review round 4: a job reserved its deadline
+ * before it was queued, so an organisation's one running and three waiting
+ * jobs held four deadlines (its whole default day), and a process that died
+ * leaked all four. Now only a job that holds its slot reserves: a waiter
+ * holds nothing.
+ */
+describe("the reservation is taken once the slot is held", () => {
+  it("an organisation's waiting jobs reserve nothing until each holds its slot", async () => {
+    time.reserve.mockClear();
+    const first = holding();
+    const running = runContractJob("render", first.load, { tenant: "org_reserve" });
+    await tick();
+    const waiting = [holding(), holding(), holding()];
+    const queued = waiting.map((w) => runContractJob("render", w.load, { tenant: "org_reserve" }));
+    await tick();
+    expect(contractGateState()).toMatchObject({ running: 1, waiting: 3 });
+    expect(time.reserve).toHaveBeenCalledTimes(1);
+    first.release();
+    await running;
+    await tick();
+    expect(time.reserve).toHaveBeenCalledTimes(2);
+    for (const w of waiting) w.release();
+    await Promise.all(queued);
+    expect(time.reserve).toHaveBeenCalledTimes(4);
+    expect(contractGateState()).toEqual({ running: 0, waiting: 0, runningByOrg: {} });
   });
 });
 
@@ -301,7 +330,7 @@ describe("the verify's fetch gate: no queue, before SAP is asked", () => {
     expect(slow).toHaveBeenCalledTimes(FETCH_GATE.perOrganization);
     const fourthFetch = vi.fn(async () => xml(ONE_SET));
     const fourth = await verify("org_burst", fourthFetch);
-    expect(fourth).toMatchObject({ status: "BUSY", verified: false, httpStatus: null, entitySets: [], auditStatus: 429 });
+    expect(fourth).toMatchObject({ status: "BUSY", verified: false, httpStatus: null, entitySets: [], auditStatus: 429, failureReason: "VERIFY_BUSY", detail: VERIFY_BUSY_DETAIL });
     expect(fourthFetch).not.toHaveBeenCalled();
     // Another organisation is not behind them.
     const other = await verify("org_other", vi.fn(async () => xml(ONE_SET)));
@@ -310,6 +339,42 @@ describe("the verify's fetch gate: no queue, before SAP is asked", () => {
     for (const r of await Promise.all(three)) expect(r).toMatchObject({ status: "OK", verified: true });
     // Out of the gate again: the next one is fetched.
     expect(await verify("org_burst", vi.fn(async () => xml(ONE_SET)))).toMatchObject({ status: "OK" });
+  });
+
+  /*
+   * Consolidated containment review round 4: refused because OTHER
+   * organisations held the instance's sixteen places, a verify was told its
+   * own organisation was busy, and audited as that organisation's throttle.
+   */
+  it("refused for the instance's verifies, not its own, an organisation is told so and audited as unavailable", async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    const slow = vi.fn(async () => {
+      await answered;
+      return xml(ONE_SET);
+    });
+    const verify = (organizationId: string, fetchImpl: unknown) =>
+      verifyServiceMetadata(
+        { connection: CONNECTION, servicePath: "/sap/opu/odata/sap/Z_SRV", declaredVersion: "V2", entitySet: "T", organizationId },
+        fetchImpl as typeof fetch,
+      );
+    const held = Array.from({ length: FETCH_GATE.perProcess }, (_, i) => verify(`org_${Math.floor(i / FETCH_GATE.perOrganization)}`, slow));
+    await tick();
+    expect(slow).toHaveBeenCalledTimes(FETCH_GATE.perProcess);
+    const victimFetch = vi.fn(async () => xml(ONE_SET));
+    const victim = await verify("org_victim", victimFetch);
+    expect(victim).toMatchObject({
+      status: "BUSY",
+      verified: false,
+      detail: VERIFY_BUSY_INSTANCE_DETAIL,
+      auditStatus: 503,
+      failureReason: "VERIFY_BUSY_INSTANCE",
+    });
+    expect(victimFetch).not.toHaveBeenCalled();
+    // An organisation at its own three is still told it is its own.
+    expect(await verify("org_0", vi.fn(async () => xml(ONE_SET)))).toMatchObject({ detail: VERIFY_BUSY_DETAIL, auditStatus: 429, failureReason: "VERIFY_BUSY" });
+    answer();
+    for (const r of await Promise.all(held)) expect(r).toMatchObject({ status: "OK" });
   });
 
   it("a hung SAP holds one of an organisation's three, and a teammate's verify of a healthy system proceeds", async () => {

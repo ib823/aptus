@@ -72,7 +72,9 @@ stored snapshot in a worker.
   writes cannot be unlocked until it is on again. `entitySets` lists the first 500
   dataset names (as many as the interface stores) and `entitySetCount` says
   how many there are; a verify sent while its organisation already has three
-  in flight answers `status: BUSY` at once, having asked SAP nothing.
+  in flight answers `status: BUSY` at once, having asked SAP nothing (and one
+  refused because the instance already has sixteen in flight says it is the
+  instance, not the organisation).
 - `POST /api/studio/interfaces/{id}/capture-fixture` refuses a body past
   4.5 MiB with 422 `TOO_LARGE`; the starter kit names a recorded fixture past
   what a kit carries as withheld, too large, instead of loading it. It answers
@@ -317,7 +319,7 @@ one bound that holds across all of them (it is reserved in Postgres).
 | Dispatch | a freed slot goes to the waiting job whose organisation was served least recently (never served first; first in, first out on a tie; the map forgets an organisation after an hour) |
 | Wait | at most min(10 s, the caller's deadline); then `BUSY`, out of the queue |
 | Worker limits | old generation 384 MB, young 32 MB, stack 4 MB, 10 s from spawn (or less: the caller's deadline bounds wait and run together) |
-| Order per job | allowance checked and the job's deadline (10 s) reserved, in one statement → queue → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
+| Order per job | queue → slot held → allowance checked and the job's deadline (10 s) reserved, in one statement → load inputs → spawn → result and the worker's exit → slot freed → reservation settled to the wall time (0 for a job that never ran) |
 
 A job's slot is free only once its worker has exited (5 s grace, logged), so
 live isolates never pass `COREEDGE_CONTRACT_ISOLATES`. The heap cap survives
@@ -335,8 +337,12 @@ the input.
 **The verify's fetch gate (`src/lib/studio/service-verify.ts`).** At most 3
 verifies of one organisation, and 16 of the process, in flight from before
 SAP is asked until the verify has answered, with **no queue**: past either,
-`status: BUSY` at once, SAP never asked. A hung SAP holds one of an
-organisation's three. The verify has 45 s (`maxDuration` 60). **First the
+`status: BUSY` at once, SAP never asked. Past the organisation's three it
+says the organisation is already verifying other services (`VERIFY_BUSY`,
+audited 429); past the instance's sixteen, held by other organisations, it
+says CoreEdge is verifying many services at once (`VERIFY_BUSY_INSTANCE`,
+audited 503, never the organisation's throttle; consolidated review round
+4). A hung SAP holds one of an organisation's three. The verify has 45 s (`maxDuration` 60). **First the
 job's own admission** (`contractJobAdmission`: the compiler on, the
 organisation's time for today not spent), **before SAP is asked**: refused,
 the verify answers at once `status: COMPILER_UNAVAILABLE`, `verified: false`,
@@ -354,8 +360,8 @@ therefore never verifies: custom writes cannot be unlocked until it is on
 again.
 
 **Each organisation's compiler time (`src/lib/contracts/contract-time.ts`).**
-One row per organisation and UTC day in `ContractTime`: a job is refused
-before it is queued once the organisation has used
+One row per organisation and UTC day in `ContractTime`: a job is refused,
+once it holds its slot and before anything is loaded, when the organisation has used
 `COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY` (default 40; 0 is unlimited), and
 every job is charged its wall time from spawn to exit — verify, capture,
 fixture, kit and document alike, a job killed at its deadline or heap
@@ -372,8 +378,16 @@ again: the day is spent (the refusal) only when the **settled** `ms` has
 reached the allowance; otherwise the organisation's own jobs in flight hold
 the rest, and the job is `BUSY` (retry in seconds, like any busy gate). So
 the day's total is at most the allowance plus one deadline, however many
-instances run; a process that dies between the two leaves the 10 s
-reserved for the day, which fails safe. The verify's own pre-SAP check
+instances run. Only a job that holds its slot reserves (consolidated review
+round 4; before, an organisation's one running and three waiting jobs each
+held 10 s, the whole default day), so a process holds at most one
+reservation per organisation. **A reservation expires**: the row's
+`reservedUntil` is the latest of its reservations' deadline + 10 s
+(`RESERVATION_GRACE_MS`: the worker's 5 s exit grace, the load and the
+settling statement), and past it `reservedMs` counts as 0. A reservation
+never settled (its process died, or the settling statement failed) therefore
+makes the organisation's jobs `BUSY` for at most about 20 s after its last
+reservation, never for the day. The verify's own pre-SAP check
 (`contractJobAdmission`) is a plain read of the settled time, so nothing is
 reserved twice and a verify is never refused for another builder's job in
 flight. The refusal says "your organisation has used its N s of contract
@@ -523,7 +537,7 @@ wrote (so every stored content hash is unchanged):
 | Captured schema | ≤ 2,000 fields and 512 KiB, from a request body ≤ 4.5 MiB; read back only while its stored text is ≤ 1 MiB, and served (by all three readers alike) only while its served JSON is ≤ 520 KiB |
 | Recorded fixture | ≤ 4.5 MiB of compact JSON, from a request body ≤ 4.5 MiB; a kit reads fixtures only while their stored text adds up to ≤ 8 MiB, and names the rest as too large |
 | Verify's datasets | ≤ 500 names cross back, with their count and whether the interface's dataset is among them |
-| Snapshot history | ≤ 100 rows per interface, plus each environment's newest; `/schema` texts on one row per interface |
+| Snapshot history | ≤ 100 rows per interface, plus each environment's newest; `/schema` texts on one row per interface, the current one (the records of one interface take its row's lock first, so two at once cannot leave them on an older row) |
 
 **The Studio list reads no schema.** `GET /api/studio/interfaces` and the
 Interfaces page select neither `requestSchema` nor `responseSchema`; where
@@ -592,7 +606,14 @@ it prevents.
   costs at most about 3 s of CPU a minute (5% of one vCPU); other tenants'
   reads slow only when many organisations read flat out at once.
 - **R4. Request-thread copies.** A verify holds ≤ 8 MiB of description, ≤ 16
-  per process; a kit or document loader copies ≤ 16 MiB per job, one per slot
+  per process. Those 16 places are shared, with no queue: about six
+  organisations (Sybils of one builder, or a busy hour) each holding three
+  verifies of slow hosts (a BTP trial host can hold a read for its 30 s
+  timeout) fill one instance's places, and another organisation's verify on
+  that instance is `BUSY` at once for up to 30 s, said as the instance's
+  (`VERIFY_BUSY_INSTANCE`, audited 503) and cheap to retry. Closing it would
+  need a queue or a per-organisation share of the memory, the mechanisms this
+  design removed. A kit or document loader copies ≤ 16 MiB per job, one per slot
   (the record and capture loaders ≤ 7 head IRs, likewise: the heads and the
   interface's current row); a capture holds ≤ 4.5 MiB of text.
 - **R5. CPU sharing.** On 1 vCPU one job shares the CPU with the request
@@ -604,10 +625,14 @@ it prevents.
   the allowance (consolidated review round 2; before, each instance's gate
   admitted its own 4 × 10 s). Beyond that, a job in flight at the crossing
   can pass its own 10 s by the time its worker takes to exit after the
-  deadline (milliseconds; at most the 5 s grace), and a process that dies
-  between reserving and settling leaves 10 s reserved for the day (fails
-  safe). Reservations are kept apart from settled time (round 3), so jobs
-  in flight make the next job `BUSY` for seconds, never the day's refusal.
+  deadline (milliseconds; at most the 5 s grace), and a job whose load or
+  settling statement outlasts its reservation's 10 s + 10 s lets one more
+  job be admitted early (one more deadline). A process that dies between
+  reserving and settling leaves at most one reservation per organisation,
+  which expires within about 20 s (round 4; before, up to four, held for
+  the rest of the day). Reservations are kept apart from settled time
+  (round 3), so jobs in flight make the next job `BUSY` for seconds, never
+  the day's refusal.
 - **R7. `NOT_RENDERED` after an interface is pointed back to an earlier
   dataset without a re-verify.** The earlier row lost its texts to the newer
   one, and the build's re-render leaves it alone (the newer row still holds
