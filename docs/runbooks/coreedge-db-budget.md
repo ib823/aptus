@@ -38,6 +38,23 @@ also once per tenant per ten minutes), not by an application's calls.
 | Catalogue list with the live overlay (`/api/sap/tdd/hub-content?dataProbe=1`) | the page's own, plus 4 | the console read's 4, beside the catalogue page's counts and rows and the V4 addresses the overlay verified, which vary with the page (measured once, for a one-page search: 7 in all without the overlay, 14 with it); the test asserts the console's 4 and that everything else is the catalogue's |
 | Probe all (`/api/sap/tdd/hub-content/probe-all`), per run | **6** + **1** per service | the console read's 4, the candidate rows and the decision-log entry; then one stored result per service probed, and one more per V4 address it verifies or withdraws |
 
+**`GET /schema` and its `/v1` alias** (P1.3 on P0.19). Not a governed read:
+it reaches no SAP system, so it is not on the pipeline and is not held to the
+read's 4. It serves the texts a verify stored (the Contract Compiler,
+`docs/runbooks/coreedge-contract-compiler.md`) and renders nothing; the two
+paths are one handler. Measured warm, served
+(`NORTHBOUND_SCHEMA_STATEMENTS`, `src/lib/governed/db-budget.ts`), and
+asserted exactly by the budget test on both paths. Its key's `lastUsedAt`
+stamp follows the governed calls' rule, at most once a minute per key (+1);
+before P1 met the pipeline it wrote one on every call. Size the pool with
+it: after the data read it is the consumer read called most (60 a minute per
+credential, 120 per organisation).
+
+| `/schema` call | Statements | What they are |
+|---|---|---|
+| A contract a verify recorded | **6** | the key, the interface, the captured schema's stamp and size, the current snapshot's summary, its stored texts, the audit row; a captured schema of this contract adds its read |
+| An interface with no contract recorded yet | **5** | the same, without the texts |
+
 **The console counts its session** (P0.14b review round 4). The console's
 `authenticate` step is the person's session, as the broker's is the key, but
 the budget test mocked `getCurrentUser`, so the figures above left it out.

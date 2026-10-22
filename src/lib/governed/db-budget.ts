@@ -165,3 +165,25 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   /** ...plus one stored result per service probed (and one more per V4 address it verifies or withdraws). */
   probeAllPerService: 1,
 } as const;
+
+/**
+ * WHAT GET /schema SENDS (P1.3 on P0.19), and its /v1 alias, which is the
+ * same handler. NOT a governed read: it reaches no SAP system, so it is not on
+ * the pipeline and not held to `DB_BUDGET.read`. It serves the texts a verify
+ * stored (P1.3, lib/contracts/snapshot.ts) and renders nothing. Measured warm
+ * (a key stamped in the last minute), and asserted exactly by
+ * tests/integration/governed-db-budget.test.ts, so a change in either is seen.
+ */
+export const NORTHBOUND_SCHEMA_STATEMENTS = {
+  /**
+   * A contract a verify recorded: the key (the governed read's one-statement
+   * lookup), the interface, the captured schema's stamp and size, the current
+   * snapshot's summary, its stored texts, and the audit row. A captured
+   * schema of this contract adds its read (+1); texts a record moved between
+   * the summary and the texts read the new head once more (+1, rare). The
+   * key's `lastUsedAt` stamp, at most once a minute per key: +1.
+   */
+  compiled: 6,
+  /** No contract recorded yet: the same, without the texts. */
+  none: 5,
+} as const;

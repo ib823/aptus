@@ -107,7 +107,11 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
     return unauthenticated(correlationId);
   }
   const client = auth.client;
-  void touchClientLastUsed(client.clientId, client.organizationId);
+  // At most once a minute per key, as the governed calls stamp it (P0.19,
+  // auth.ts LAST_USED_STAMP_INTERVAL_MS): this is a high-frequency read
+  // (P1.3), and an UPDATE of the key's row on every one was a statement of
+  // its own on every call (governed-db-budget.test.ts, GET /schema).
+  void touchClientLastUsed(client.clientId, client.organizationId, auth.lastUsedAt);
 
   const { id } = await ctx.params;
 
