@@ -50,9 +50,10 @@
  * as `moreRemaining`.
  *
  * AND THE CONSOLE'S PLATFORM-SCOPE COPY (P0.14b). A Workbench console read
- * also leaves a PlatformAuditEvent row (SAP_CONSOLE_READ): the same record of
- * the same read, on the same legal basis, so it expires on the same period, in
- * the same run (`sweepConsoleReads`). The write-back's rows on that table are
+ * also leaves a PlatformConsoleRead row: the same record of the same read, on
+ * the same legal basis, so it expires on the same period, in the same run
+ * (`sweepConsoleReads`). So do the SAP_CONSOLE_READ rows a pre-release P0.14b
+ * build wrote to PlatformAuditEvent; the write-back's rows on that table are
  * never swept.
  */
 
@@ -224,20 +225,25 @@ export async function enforceNorthboundAuditRetention(
  * THE CONSOLE'S PLATFORM-SCOPE READ ROWS (P0.14b review). Since the Workbench
  * console runs on the governed pipeline (lib/governed/console.ts), every
  * console read leaves, beside the organization's own row swept above, a
- * platform-scope copy in PlatformAuditEvent (action SAP_CONSOLE_READ) naming
- * the reader, their email and organization, and the client's tenant, service
- * and entity set. It is the same record of the same read: personal data about
- * the actor and commercially sensitive data about the client, held for the
- * same necessity, which ends on the same day. Kept forever, a person's console
- * activity outlived the organization's trail (and the organization), on a
- * table that grows by a row per console call and that no screen shows.
+ * platform-scope copy in PlatformConsoleRead naming the reader, their email
+ * and organization, and the client's tenant, service and entity set. It is
+ * the same record of the same read: personal data about the actor and
+ * commercially sensitive data about the client, held for the same necessity,
+ * which ends on the same day. Kept forever, a person's console activity
+ * outlived the organization's trail (and the organization), on a table that
+ * grows by a row per console call.
  *
- * So it expires on the same period. ONLY that action: the write-back's rows on
- * the same table (SAP_WORKBENCH_WRITE, SAP_WORKBENCH_WRITE_TEST, P0.7) record a
- * change made to a client's SAP system and are not swept at any age. Each
- * outcome row is held by a RESTRICT foreign key, so an event and its outcome
- * are deleted together, in one transaction, with the action and the age
- * re-asserted in both deletes, as the sweep above re-asserts them.
+ * So it expires on the same period, the age re-asserted in the delete as the
+ * sweep above re-asserts it.
+ *
+ * AND THE ROWS A PRE-RELEASE BUILD WROTE ELSEWHERE. Before integration review
+ * round 4 a console read was a PlatformAuditEvent row (action
+ * SAP_CONSOLE_READ) with its PlatformAuditOutcome; a database that build wrote
+ * to keeps them, so they expire on the same period too. ONLY that action: the
+ * write-back's rows on the same table (P0.7) record a change made to a
+ * client's SAP system and are not swept at any age. Each outcome row is held
+ * by a RESTRICT foreign key, so an event and its outcome are deleted together,
+ * in one transaction, with the action and the age re-asserted in both deletes.
  */
 async function sweepConsoleReads(
   cutoff: Date,
@@ -245,8 +251,24 @@ async function sweepConsoleReads(
   startedAt: number,
   budgetMs: number,
 ): Promise<{ deleted: number; moreRemaining: boolean }> {
-  const consoleRead = { action: PLATFORM_CONSOLE_READ_ACTION, at: { lt: cutoff } };
   let deleted = 0;
+  for (;;) {
+    const doomed = await prisma.platformConsoleRead.findMany({
+      where: { at: { lt: cutoff } },
+      select: { id: true },
+      orderBy: { at: "asc" },
+      take: limit,
+    });
+    if (doomed.length === 0) break;
+    const result = await prisma.platformConsoleRead.deleteMany({
+      where: { id: { in: doomed.map((d) => d.id) }, at: { lt: cutoff } },
+    });
+    deleted += result.count;
+    if (doomed.length < limit) break;
+    if (Date.now() - startedAt >= budgetMs) return { deleted, moreRemaining: true };
+  }
+
+  const consoleRead = { action: PLATFORM_CONSOLE_READ_ACTION, at: { lt: cutoff } };
   for (;;) {
     const doomed = await prisma.platformAuditEvent.findMany({
       where: consoleRead,

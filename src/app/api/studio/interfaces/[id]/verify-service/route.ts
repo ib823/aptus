@@ -39,6 +39,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { reachedDirectly } from "@/lib/governed/transport";
 import { newCorrelationId } from "@/lib/northbound/respond";
 import {
   connectionRefusalMessage,
@@ -60,6 +61,10 @@ import { MAX_STORED_ENTITY_SETS, verifyServiceMetadata } from "@/lib/studio/serv
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+
+/** Why a TWIN connection is not verified from here (wave 2 integration review round 4). */
+const TWIN_NOT_VERIFIED =
+  "The connection for this environment is served by the Tenant Twin, so CoreEdge does not ask the client's SAP system for this service's description through it and records no verification. Nothing was sent.";
 
 const bodySchema = z.object({
   environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
@@ -191,6 +196,69 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   const connection = binding.connection;
+
+  /*
+   * A CONNECTION SERVED BY THE TENANT TWIN IS NOT VERIFIED FROM HERE (wave 2
+   * integration review round 4). This route fetches the service's $metadata
+   * with the platform's own fetch and the connection's stored credentials,
+   * and a TWIN connection is kept off the customer's SAP (transport.ts
+   * `reachedDirectly`), as the connection Test, the sweeps, the rotation
+   * probe and the console keep it. Nor is a verification recorded: the
+   * write route's custom-service gate accepts the stamp, and a write through
+   * the twin would then be cleared by an answer from a different system.
+   * Every row is DIRECT unless P1.6 or an operator marks it TWIN, so this
+   * refuses no verify that works today.
+   */
+  if (!reachedDirectly(connection)) {
+    await recordConsoleRead({
+      organizationId: scope.organizationId,
+      actorUserId: user.id,
+      externalId: iface.externalId,
+      environment: connection.environment ?? environment,
+      // The broker's answer for this binding (pipeline.ts TRANSPORT_UNAVAILABLE).
+      status: 503,
+      rowCount: null,
+      correlationId,
+      connectionId: connection.id,
+      connectionEnvironment: connection.environment,
+    });
+    await writeConfigAudit({
+      organizationId: scope.organizationId,
+      actorId: user.id,
+      entityType: "Interface",
+      entityId: iface.id,
+      action: "TEST_CONNECT",
+      after: {
+        event: "service_verify",
+        environment,
+        sapClient: connection.client,
+        connectionId: connection.id,
+        serviceSource,
+        status: "BINDING_REFUSED",
+        bindingRefusal: "TRANSPORT_UNAVAILABLE",
+        reachedSap: false,
+        verified: false,
+        interfaceVersion: iface.version,
+      },
+    });
+    return studioOk({
+      status: "BINDING_REFUSED" as const,
+      verified: false,
+      detail: TWIN_NOT_VERIFIED,
+      httpStatus: null,
+      durationMs: 0,
+      entitySets: [] as string[],
+      entitySet: iface.entitySet,
+      suggestedEntitySet: null,
+      detectedODataVersion: null,
+      serviceSource,
+      boundTo: null,
+      bindingRefusal: "TRANSPORT_UNAVAILABLE" as const,
+      interfaceVersion: iface.version,
+      correlationId,
+    });
+  }
+
   const result = await verifyServiceMetadata({
     connection,
     servicePath: resolved.service.path,

@@ -7,8 +7,10 @@
  * but a builder's Test, Ops "Probe now" and the rotation probe on the save
  * path called `fetch` directly and kept sending the connection's stored (or
  * new) credentials to its base URL. Each now skips a connection that is not
- * reached DIRECT and sends nothing. The pure consumers (the lane board, the
- * lane sweep's plan, discovery, the console) are
+ * reached DIRECT and sends nothing. So does an interface's Verify service
+ * (integration review round 4), which also records no verification: the
+ * write route's custom-service gate accepts that stamp. The pure consumers
+ * (the lane board, the lane sweep's plan, discovery, the console) are
  * tests/unit/governed/twin-transport-predicate.test.ts and
  * tests/unit/governed/console.test.ts.
  *
@@ -36,6 +38,7 @@ vi.mock("@/lib/db/prisma", async () => {
 import { prisma } from "@/lib/db/prisma";
 import { POST as testConnection } from "@/app/api/studio/connections/[id]/test/route";
 import { POST as saveConnection } from "@/app/api/studio/connections/route";
+import { POST as verifyService } from "@/app/api/studio/interfaces/[id]/verify-service/route";
 import { probeOneConnection } from "@/lib/ops/connection-probe-sweep";
 import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
 
@@ -77,6 +80,7 @@ const test = (id: string) =>
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("a TWIN connection is not reached with its credentials", () => {
   let id: string;
+  let interfaceId: string;
 
   beforeAll(async () => {
     vi.stubEnv("COREEDGE_STEP_UP", "off");
@@ -93,6 +97,37 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a TWIN connection is not reache
     expect(((await (await test(id)).json()) as { data: { validated: boolean } }).data.validated).toBe(true);
     // Then moved to the twin, as P1.6 (or an operator, today) marks it.
     await prisma.sapConnection.updateMany({ where: { id, organizationId: ORG }, data: { transport: "TWIN" } });
+    // A customer-built service the builder will verify in DEV.
+    const solution = await prisma.solution.create({
+      data: {
+        organizationId: ORG,
+        name: "Twin app",
+        slug: `${RUN}-app`,
+        classification: "CLIENT_APP",
+        businessProblem: "Twin transport test.",
+        dataClass: "INTERNAL",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    interfaceId = (
+      await prisma.interface.create({
+        data: {
+          organizationId: ORG,
+          solutionId: solution.id,
+          name: "Travel",
+          sapProduct: "s4hana",
+          operation: "CREATE",
+          mode: "WRITE",
+          status: "ACTIVE",
+          externalId: "custom:/sap/opu/odata/sap/ZUI_TRAVEL_O2",
+          servicePath: "/sap/opu/odata/sap/ZUI_TRAVEL_O2",
+          odataVersion: "V2",
+          entitySet: "A_Travel",
+        },
+        select: { id: true },
+      })
+    ).id;
   });
   beforeEach(() => fakeSap.mockClear());
   afterAll(async () => {
@@ -100,6 +135,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a TWIN connection is not reache
     vi.unstubAllGlobals();
     await prisma.sapConnectionProbeEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.configAudit.deleteMany({ where: { organizationId: ORG } });
+    await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: ORG } });
+    await prisma.interface.deleteMany({ where: { organizationId: ORG } });
+    await prisma.solution.deleteMany({ where: { organizationId: ORG } });
     await prisma.sapConnection.deleteMany({ where: { organizationId: ORG } });
     await prisma.user.delete({ where: { id: USER.id } });
     await prisma.organization.delete({ where: { id: ORG } });
@@ -117,6 +155,30 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a TWIN connection is not reache
     expect(await probeOneConnection(ORG, id, "manual")).toMatchObject({ outcome: "servedByTwin" });
     expect(fakeSap).not.toHaveBeenCalled();
     expect(await prisma.sapConnectionProbeEvent.count({ where: { organizationId: ORG, connectionId: id } })).toBe(before);
+  });
+
+  it("an interface's Verify service sends nothing and records no verification (integration review round 4)", async () => {
+    const res = await verifyService(
+      new NextRequest(`http://localhost/api/studio/interfaces/${interfaceId}/verify-service`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ environment: "DEV" }),
+      }),
+      { params: Promise.resolve({ id: interfaceId }) },
+    );
+    expect(res.status).toBe(200);
+    const data = ((await res.json()) as { data: { status: string; verified: boolean; bindingRefusal?: string } }).data;
+    expect(data).toMatchObject({ status: "BINDING_REFUSED", verified: false, bindingRefusal: "TRANSPORT_UNAVAILABLE" });
+    expect(fakeSap).not.toHaveBeenCalled();
+    const iface = await prisma.interface.findFirst({
+      where: { id: interfaceId, organizationId: ORG },
+      select: { serviceVerifications: true, serviceVerifiedAt: true },
+    });
+    expect(iface).toEqual({ serviceVerifications: null, serviceVerifiedAt: null });
+    // Audited both ways, as every other outcome is.
+    expect(
+      await prisma.northboundAuditEvent.count({ where: { organizationId: ORG, connectionId: id, status: 503, dryRun: true } }),
+    ).toBe(1);
   });
 
   it("a re-save is not probed against the customer's SAP: the new credentials are not sent there", async () => {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * A console read's platform rows are stamped in UTC, whatever the database
+ * A console read's platform row is stamped in UTC, whatever the database
  * session's time zone (P0.14b review round 4), against a REAL PostgreSQL.
  *
  * `consoleReadInsert` is one raw statement. Left to the column default, its
@@ -45,28 +45,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a console read's rows on a non-
 
   afterAll(async () => {
     // Test-database housekeeping for this run's namespace only.
-    const ids = (await prisma.platformAuditEvent.findMany({ where: { actorUserId }, select: { id: true } })).map((e) => e.id);
-    await prisma.platformAuditOutcome.deleteMany({ where: { eventId: { in: ids } } });
-    await prisma.platformAuditEvent.deleteMany({ where: { id: { in: ids } } });
+    await prisma.platformConsoleRead.deleteMany({ where: { actorUserId } });
   });
 
   // Fixed literals: SET takes no bind parameter for the zone.
-  it.each(["Asia/Tokyo", "America/Los_Angeles"])("stamps the event and its outcome at UTC on a session in %s", async (zone) => {
-    const ids = { event: randomUUID(), outcome: randomUUID() };
+  it.each(["Asia/Tokyo", "America/Los_Angeles"])("stamps the row at UTC on a session in %s", async (zone) => {
+    const id = randomUUID();
     const before = Date.now();
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`SET LOCAL TIME ZONE '${zone}'`);
       const [setting] = await tx.$queryRaw<Array<{ tz: string }>>`SELECT current_setting('TimeZone') AS tz`;
       expect(setting?.tz).toBe(zone);
-      await tx.$executeRaw(consoleReadInsert(READ, ids));
+      await tx.$executeRaw(consoleReadInsert(READ, id));
     });
     const after = Date.now();
 
-    const row = await prisma.platformAuditEvent.findUniqueOrThrow({ where: { id: ids.event }, include: { result: true } });
-    for (const at of [row.at, row.result!.at]) {
-      expect(at.getTime()).toBeGreaterThanOrEqual(before - 1_000);
-      expect(at.getTime()).toBeLessThanOrEqual(after + 1_000);
-    }
-    expect(row.result!.at.getTime()).toBe(row.at.getTime());
+    const row = await prisma.platformConsoleRead.findUniqueOrThrow({ where: { id } });
+    expect(row.at.getTime()).toBeGreaterThanOrEqual(before - 1_000);
+    expect(row.at.getTime()).toBeLessThanOrEqual(after + 1_000);
+    expect(row).toMatchObject({ outcome: "SUCCEEDED", status: 200, durationMs: 12, correlationId: READ.correlationId });
   });
 });

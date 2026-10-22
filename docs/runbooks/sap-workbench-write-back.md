@@ -65,16 +65,22 @@ first SAP call (for the write-test, before the `$metadata` read as well):
 
 The write-back's rows (`SAP_WORKBENCH_WRITE`, `SAP_WORKBENCH_WRITE_TEST`) are
 never updated or deleted, at any age: there is no update of either table in
-the code, and the only delete is limited to the console's read rows
+the code, and the only delete is limited to console read rows
 (`tests/unit/northbound/dod-gaps.test.ts` asserts both). The database allows
 one outcome per event (`eventId` is unique).
 
-The same two tables also hold the Workbench console's read rows
-(`SAP_CONSOLE_READ`, P0.14b). Those are deleted by the nightly
-northbound-retention job (`src/lib/northbound/retention.ts`
+The Workbench console's reads (P0.14b) are NOT written to these tables: they
+are `PlatformConsoleRead` rows, a table of their own, because the code before
+P0.14b reads every `PlatformAuditEvent` row as a write, and an Instant Rollback
+to it would have shown each console read on this ledger as a write-back (wave
+2 integration review round 4). Only a database a pre-release P0.14b build
+wrote to holds console reads here, with action `SAP_CONSOLE_READ`; this
+ledger filters them out. Both kinds of console read row are deleted by the
+nightly northbound-retention job (`src/lib/northbound/retention.ts`
 `sweepConsoleReads`) once they are older than
 `NORTHBOUND_AUDIT_RETENTION_DAYS`, with the organization's copy of the same
-read; see `docs/runbooks/coreedge-console-pipeline.md`.
+read; see `docs/runbooks/coreedge-console-pipeline.md` (including what a
+rollback shows on such a database).
 
 ## If the audit cannot be written
 
@@ -102,8 +108,9 @@ never recorded. The feed is `GET /api/ops/workbench-writes`.
 
 These tables hold SAP writes only. The same admins' passkey enrolments,
 revocations and `STEP_UP_MISSING` admissions are in `PlatformGovernanceAudit`
-(`docs/runbooks/coreedge-step-up.md`), which this screen does not show. To
-answer "what did this admin do", query both.
+(`docs/runbooks/coreedge-step-up.md`), and what they read from the Workbench
+console is in `PlatformConsoleRead`; this screen shows neither. To answer
+"what did this admin do", query all three.
 
 It is not shown to `support` users or to anyone scoped to an organization: the
 rows belong to no organization, and the people in them are platform admins.

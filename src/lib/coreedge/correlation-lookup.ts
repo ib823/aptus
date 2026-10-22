@@ -249,8 +249,11 @@ export async function lookupCorrelationId(
      * places. Reported from the window rather than from a second query: a count
      * over the whole table to answer a miss would be the expensive scan this
      * index exists to avoid.
+     *
+     * One place is still asked first, by its own index: the console's
+     * platform-scope trail, for a call that has no row here at all.
      */
-    return { kind: "not-found" };
+    return lookupConsoleRead(organizationId, trimmed, now);
   }
 
   const ageDays = (now.getTime() - row.at.getTime()) / 86_400_000;
@@ -272,6 +275,88 @@ export async function lookupCorrelationId(
       rowCount: row.rowCount,
       durationMs: row.durationMs,
       dryRun: row.dryRun,
+    },
+  };
+}
+
+/**
+ * A WORKBENCH CONSOLE CALL WITH NO ORGANIZATION ROW (wave 2 integration review
+ * round 4). Every console call quotes its correlation id (console.ts
+ * `consoleRefusalBody`), but only an OData read files the organization's
+ * NorthboundAuditEvent row: an Ariba call leaves only the platform-scope
+ * `PlatformConsoleRead`. So an id the Ariba explorer handed a member of this
+ * organization used to read here as "no call in this organization has that
+ * correlation id", which was false.
+ *
+ * Asked only on a miss, through the table's own index, with the searcher's
+ * organization leading it (`actorOrganizationId`): a console call is this
+ * organization's when one of its members made it. Like the organization row,
+ * it never returns what was read: the parameters' names and fingerprint are
+ * not selected, and the row count is a count.
+ */
+async function lookupConsoleRead(
+  organizationId: string,
+  correlationId: string,
+  now: Date,
+): Promise<CorrelationOutcome> {
+  const read = await prisma.platformConsoleRead.findFirst({
+    where: { actorOrganizationId: organizationId, correlationId },
+    select: {
+      correlationId: true,
+      at: true,
+      product: true,
+      serviceKey: true,
+      outcome: true,
+      status: true,
+      reason: true,
+      durationMs: true,
+      detail: true,
+    },
+    orderBy: { at: "desc" },
+  });
+  if (read === null) return { kind: "not-found" };
+
+  const ageDays = (now.getTime() - read.at.getTime()) / 86_400_000;
+  if (ageDays > CORRELATION_WINDOW_DAYS) {
+    return { kind: "outside-window", windowDays: CORRELATION_WINDOW_DAYS };
+  }
+
+  const detail: Record<string, unknown> =
+    read.detail !== null && typeof read.detail === "object" && !Array.isArray(read.detail) ? read.detail : {};
+  const numberOr = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const stringOr = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+  // A refused call's row has no status of its own (nothing was sent); the
+  // status it was answered with is in its detail, as on the organization row.
+  const status = read.status ?? numberOr(detail.status) ?? 0;
+  const blocked = read.outcome === "BLOCKED";
+  const environmentRaw = stringOr(detail.environment) ?? read.product;
+  const rowCount = numberOr(detail.rowCount);
+  const attributable: AttributableRow = {
+    status,
+    operation: "READ",
+    bindingRefusal: null,
+    // A gate's refusal is read as the organization row records one: only the
+    // reasons CoreEdge itself gives before SAP are failure reasons.
+    failureReason: blocked ? (read.reason !== null && REFUSED_BEFORE_SAP.has(read.reason) ? read.reason : null) : read.reason,
+    durationMs: blocked ? null : read.durationMs,
+    connectionId: stringOr(detail.connectionId),
+    replayed: false,
+  };
+  return {
+    kind: "found",
+    call: {
+      correlationId: read.correlationId,
+      at: read.at,
+      status,
+      operation: "READ",
+      externalId: read.serviceKey,
+      environment: parseLaneEnvironment(environmentRaw),
+      environmentRaw,
+      ...attributeAuditRow(attributable, rowCount),
+      rowCount,
+      durationMs: attributable.durationMs,
+      // A console read: never billed.
+      dryRun: true,
     },
   };
 }

@@ -92,8 +92,10 @@ durable trail of their passkeys.
 
 `PlatformGovernanceAudit` is not the only tenantless trail. Workbench writes to
 SAP by the same platform admins are in `PlatformAuditEvent` and
-`PlatformAuditOutcome` (`docs/runbooks/sap-workbench-write-back.md`). To answer
-"what did this admin do", query both.
+`PlatformAuditOutcome` (`docs/runbooks/sap-workbench-write-back.md`), and what
+they read from the Workbench console is in `PlatformConsoleRead`
+(`docs/runbooks/coreedge-console-pipeline.md`). To answer "what did this admin
+do", query all three.
 
 Each route asks **after** its own role, tenant and ownership checks, just
 before it writes. A refusal the person cannot fix never costs them a passkey

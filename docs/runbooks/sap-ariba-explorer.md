@@ -173,7 +173,9 @@ allow-list (`COREEDGE_ENV_TENANT_HOSTS`, default `observe`: logged and
 recorded, never refused; `enforce`: `403 HOST_NOT_ALLOWED` before the token
 exchange), the console's own circuit for the realm is consulted (observing
 unless `COREEDGE_CIRCUIT_BREAKER=enforce`), and every call leaves a
-platform-scope row (`PlatformAuditEvent`, action `SAP_CONSOLE_READ`) naming the
-person, the endpoint and the realm, with the result's status and reason. The
+platform-scope row (`PlatformConsoleRead`) naming the person, the endpoint and
+the realm, with the result's status and reason. An Ariba call files no
+organization row, so Operations' correlation search finds its id through that
+row, for a call made by a member of the searcher's organization. The
 best-effort `logDecision` entry is still written beside it. See
 `docs/runbooks/coreedge-console-pipeline.md`.

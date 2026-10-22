@@ -46,7 +46,7 @@
  *                  `callSap` makes writes the organization's console row
  *                  (NorthboundAuditEvent, dryRun) where there is a tenant to
  *                  file it under, and the platform-scope row
- *                  (PlatformAuditEvent `SAP_CONSOLE_READ`) always. A route
+ *                  (PlatformConsoleRead) always. A route
  *                  cannot reach SAP through this module without both.
  *
  * `callSap` REFUSES TO RUN until authorise, bind and contain have passed — a

@@ -224,7 +224,7 @@ describe("#8 · the audit trail is append-only", () => {
         // The platform trails are held to the same rule: P0.12's PlatformGovernanceAudit is
         // append-only, and P0.7's outcome is a second row, never an update of
         // the first.
-        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(update|updateMany|upsert)/.test(
+        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome|platformConsoleRead)\s*\.\s*(update|updateMany|upsert)/.test(
           readFileSync(f, "utf8"),
         ),
       )
@@ -244,7 +244,7 @@ describe("#8 · the audit trail is append-only", () => {
     const deleters = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome)\s*\.\s*(delete|deleteMany)/.test(
+        /(configAudit|northboundAuditEvent|platformGovernanceAudit|platformAuditEvent|platformAuditOutcome|platformConsoleRead)\s*\.\s*(delete|deleteMany)/.test(
           readFileSync(f, "utf8"),
         ),
       )
@@ -281,6 +281,13 @@ describe("#8 · the audit trail is append-only", () => {
     // The CODE never names a write-back action; the comment above the sweep
     // may, to say why those rows are kept.
     expect(stripSource(retention, "comments")).not.toMatch(/SAP_WORKBENCH_WRITE/);
+  });
+
+  it("and the console's own read table only by age (integration review round 4)", () => {
+    const retention = read(RETENTION_MODULE);
+    const consoleDeletes = [...retention.matchAll(/platformConsoleRead\.deleteMany\(\{([\s\S]*?)\}\);/g)];
+    expect(consoleDeletes).toHaveLength(1);
+    expect(consoleDeletes[0]![1]).toMatch(/at:\s*\{\s*lt:\s*cutoff\s*\}/);
   });
 
   it("and the write-back runbook says so, rather than that the platform tables are never deleted from (review round 3)", () => {

@@ -407,7 +407,7 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     roadmap: "P0.14b",
     cells: [GOVERN],
     code: { file: "src/lib/governed/console.ts", exports: ["openConsoleCall", "CONSOLE_PRINCIPAL"] },
-    terms: [/\bconsole pipeline\b/i, /\bSAP_CONSOLE_READ\b/, /\bno[- ]side[- ]doors test\b/i],
+    terms: [/\bconsole pipeline\b/i, /\bSAP_CONSOLE_READ\b/, /\bPlatformConsoleRead\b/, /\bno[- ]side[- ]doors test\b/i],
   },
   {
     id: "env-tenant-hosts",

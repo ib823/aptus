@@ -70,13 +70,15 @@ the next preview is refused). The two rows stay two statements, so that
 either trail can fail without losing the other or the read.
 
 **The console's platform row is one statement** (P0.14b review round 3).
-`recordPlatformConsoleRead` wrote the `PlatformAuditEvent` and its
+`recordPlatformConsoleRead` wrote a `PlatformAuditEvent` and its
 `PlatformAuditOutcome` as a nested create, which Prisma sends as BEGIN, two
 INSERTs, a SELECT and COMMIT, so a warm preview of a stored DEV connection
-sent 7 statements where it had sent 2 before P0.14b. It is now one
-data-modifying CTE (`consoleReadInsert`, `src/lib/audit/platform-audit.ts`):
-atomic without a transaction, so an event is still never stored without its
-outcome. A console route that makes two SAP calls (the entity list with its
+sent 7 statements where it had sent 2 before P0.14b. It became one
+data-modifying CTE, and since wave 2 integration review round 4 it is one
+INSERT of a `PlatformConsoleRead` row that holds the event and its outcome
+together (`consoleReadInsert`, `src/lib/audit/platform-audit.ts`): atomic
+without a transaction, and off the Workbench write tables, which the code
+before P0.14b reads as writes. A console route that makes two SAP calls (the entity list with its
 probe fan-out) writes each call's two rows; work a route does besides the
 call (Probe all's catalogue query and result writes, the capability probe's
 catalogue read and decision-log entry) is the route's own, and is stated and

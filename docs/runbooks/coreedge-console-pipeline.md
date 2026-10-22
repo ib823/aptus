@@ -43,10 +43,10 @@ principal `console`, for the signed-in person. Each call writes:
   `dryRun: true`, the person as `actorUserId`, no solution or credential; a
   reader with no organization reading the deployment tenant is filed under
   `-deployment-`). Ariba calls have no organization row, as before.
-- NEW: one platform-scope row, `PlatformAuditEvent` with action
-  `SAP_CONSOLE_READ` and its `PlatformAuditOutcome` in the same statement
-  (one round trip, no transaction: `consoleReadInsert`; the console's
-  database budget is in `docs/runbooks/coreedge-db-budget.md`):
+- NEW: one platform-scope row, a `PlatformConsoleRead` holding the event and
+  its outcome together (one statement, one round trip, no transaction:
+  `consoleReadInsert`; the console's database budget is in
+  `docs/runbooks/coreedge-db-budget.md`):
   the person (id, email, role, organization), the product, tenant, service or
   fan-out sentinel, entity set, a fingerprint of the parameters chosen (never
   their values), the correlation id the person was given (the same one as on
@@ -111,8 +111,7 @@ admits. Enforcing on deploy could stop a console read that works today.
    never a URL path or a secret. Exit 0: nothing would be refused; 1: something
    would; 2: a prefix's configuration cannot be read. Delete the pulled file.
 2. Search the logs for `[env-tenant-hosts]` over a working week; or query the
-   platform rows: `PlatformAuditEvent` with `action = 'SAP_CONSOLE_READ'` whose
-   outcome `detail->>'hostCheck' = 'unlisted'`.
+   platform rows: `PlatformConsoleRead` whose `detail->>'hostCheck' = 'unlisted'`.
 3. For each unlisted host that is a real SAP system on a customer or partner
    domain, add the domain to `SAP_HOST_ALLOWLIST_EXTRA`. A tenant on `http` or
    an IP address cannot pass: give it an https DNS name or leave the setting at
@@ -152,8 +151,7 @@ console read that works today: an organization whose only PROD approval is a
 retired app's would lose its PROD preview on deploy.
 
 **Before switching to enforce.** Query the platform rows over a working week:
-`PlatformAuditEvent` with `action = 'SAP_CONSOLE_READ'` and
-`detail->>'ceilingWouldRefuse' IS NOT NULL` (or search the logs for
+`PlatformConsoleRead` with `detail->>'ceilingWouldRefuse' IS NOT NULL` (or search the logs for
 `[console-grants]`). Each organization listed needs a live approval of an
 active app, bound to an interface, for that environment (Studio, API Access),
 or it loses console reads of that landscape. Then set
@@ -163,11 +161,38 @@ or it loses console reads of that landscape. Then set
 ## Finding a console read
 
 - By the correlation id the person was given: Operations' correlation search
-  finds the organization's row; for the platform trail,
-  `SELECT * FROM "PlatformAuditEvent" WHERE "correlationId" = '…'` (indexed).
+  finds the organization's row, and, for a call that has none (an Ariba call,
+  which files no organization row), the platform row of a call made by a
+  member of the searcher's organization (`actorOrganizationId`; wave 2
+  integration review round 4). For the platform trail directly:
+  `SELECT * FROM "PlatformConsoleRead" WHERE "correlationId" = '…'`.
 - Everything a person read from the console:
-  `WHERE action = 'SAP_CONSOLE_READ' AND "actorUserId" = '…' ORDER BY at DESC`
+  `SELECT * FROM "PlatformConsoleRead" WHERE "actorUserId" = '…' ORDER BY at DESC`
   (indexed on `actorUserId, at`).
+
+## Rolling back the deploy (Instant Rollback)
+
+Console reads are `PlatformConsoleRead` rows, a table no build before P0.14b
+reads. They were `PlatformAuditEvent` rows (action `SAP_CONSOLE_READ`) until
+wave 2 integration review round 4, and the code before P0.14b reads EVERY row
+of that table as a Workbench write: rolled back to it, Operations > Workbench
+writes counted and listed each console read as a write-back into a client's
+SAP, most of them `SUCCEEDED`. With the separate table a rollback leaves that
+ledger true, and nothing needs doing.
+
+One case remains: a database that a PRE-RELEASE P0.14b build (a preview of
+the wave 2 branch before round 4) wrote to holds console reads on
+`PlatformAuditEvent`. The wave 2 ledger filters them out
+(`action: { in: PLATFORM_AUDIT_ACTIONS }`); the ledger before P0.14b does not.
+If such a database is rolled back to code before P0.14b, the Workbench writes
+screen counts those rows too. Tell them apart with
+`SELECT count(*) FROM "PlatformAuditEvent" WHERE action = 'SAP_CONSOLE_READ'`:
+they are reads, not writes, and changed nothing in SAP. The write-back's own
+rows are `action IN ('SAP_WORKBENCH_WRITE', 'SAP_WORKBENCH_WRITE_TEST')`. The
+code before P0.14b does not sweep any of these rows; the nightly retention run
+of the wave 2 code deletes both kinds of console read row by age once it is
+rolled forward. Production never ran a pre-release build, so this does not
+apply there unless a preview shared its database.
 
 ## The exemption list (A.3 #9)
 
@@ -185,8 +210,9 @@ exemption that no longer reaches SAP outside the pipeline fails it too.
 ## Open decisions
 
 - **Retention of console read rows.** The platform-scope console read rows
-  (`SAP_CONSOLE_READ`) now expire with the organization's copy of the same
-  reads: the nightly `/api/cron/northbound-retention` run deletes them past
+  (`PlatformConsoleRead`, and the `SAP_CONSOLE_READ` rows a pre-release build
+  left on `PlatformAuditEvent`) now expire with the organization's copy of the
+  same reads: the nightly `/api/cron/northbound-retention` run deletes them past
   `NORTHBOUND_AUDIT_RETENTION_DAYS` (default 30), on the legal basis stated in
   `src/lib/northbound/retention.ts`, and records how many as
   `consoleReadsDeleted` in its CronRunLog row. The write-back's rows on the

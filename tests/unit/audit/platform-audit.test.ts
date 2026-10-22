@@ -206,15 +206,28 @@ describe("recordPlatformConsoleRead — a console read's row (P0.14b review roun
     expect(mocks.executeRaw).toHaveBeenCalledTimes(1);
     expect(mocks.eventCreate).not.toHaveBeenCalled();
     const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
-    expect(statement.sql).toMatch(/INSERT INTO "PlatformAuditEvent"/);
-    expect(statement.sql).toMatch(/INSERT INTO "PlatformAuditOutcome"/);
+    expect(statement.sql).toMatch(/INSERT INTO "PlatformConsoleRead"/);
     expect(statement.sql).not.toMatch(/\bBEGIN\b/i);
     // The payload's values never reach it, only their fingerprint and field names.
     expect(statement.values).toContain(JSON.stringify(["entity", "limit"]));
     expect(statement.values).not.toContain(2);
   });
 
-  it("binds both rows' `at` in UTC, whatever the database session's time zone (review round 4)", async () => {
+  it("never writes to the Workbench WRITE tables: code before P0.14b reads every row there as a write (integration review round 4)", async () => {
+    /*
+     * Rolled back to a build before P0.14b (an Instant Rollback keeps the
+     * migrations), the Workbench writes ledger counted and listed every
+     * PlatformAuditEvent row as a write-back into a client's SAP, with no
+     * action filter. A console read on that table read as a write there.
+     */
+    mocks.executeRaw.mockResolvedValue(1);
+    await recordPlatformConsoleRead(READ);
+    const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
+    expect(statement.sql).not.toMatch(/"PlatformAuditEvent"|"PlatformAuditOutcome"/);
+    expect(statement.values).not.toContain("SAP_CONSOLE_READ");
+  });
+
+  it("binds `at` in UTC, whatever the database session's time zone (review round 4)", async () => {
     /*
      * Left to the column default, CURRENT_TIMESTAMP was cast into a
      * `timestamp(3)` (no zone) at the SESSION's wall time: on a non-UTC
@@ -226,13 +239,11 @@ describe("recordPlatformConsoleRead — a console read's row (P0.14b review roun
     await recordPlatformConsoleRead(READ);
     const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
     const flat = statement.sql.replace(/\s+/g, " ");
-    expect(flat).toMatch(/INSERT INTO "PlatformAuditEvent" \([^)]*"correlationId", "at"\)/);
-    expect(flat).toMatch(/INSERT INTO "PlatformAuditOutcome" \([^)]*"durationMs", "at"\)/);
-    expect(flat.match(/\?::timestamptz AT TIME ZONE 'UTC'/g)).toHaveLength(2);
+    expect(flat).toMatch(/INSERT INTO "PlatformConsoleRead" \([^)]*"durationMs", "at"\)/);
+    expect(flat.match(/\?::timestamptz AT TIME ZONE 'UTC'/g)).toHaveLength(1);
     expect(flat).not.toMatch(/CURRENT_TIMESTAMP|now\(\)/i);
     const stamps = statement.values.filter((v): v is string => typeof v === "string" && /^\d{4}-\d\d-\d\dT.*Z$/.test(v));
-    expect(stamps).toHaveLength(2);
-    expect(stamps[0]).toBe(stamps[1]);
+    expect(stamps).toHaveLength(1);
     expect(Math.abs(Date.parse(stamps[0]!) - Date.now())).toBeLessThan(60_000);
   });
 

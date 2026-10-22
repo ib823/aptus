@@ -37,9 +37,11 @@
  *
  * WHAT IT DOES NOT COVER YET. The Workbench console reads (`sapFetch` in
  * tdd-connector.ts), the Ariba connector, the nightly lane sweep, the
- * connection probe, Test, Probe now and the rotation probe call `fetch`
- * directly. So they skip a connection that is not reached DIRECT
- * (`reachedDirectly`, wave 2 integration review round 3) rather than send a
+ * connection probe, Test, Probe now, the rotation probe and an interface's
+ * Verify service (round 4) call `fetch` directly. So they skip a connection
+ * that is not reached DIRECT (`reachedDirectly`, wave 2 integration review
+ * round 3; tests/unit/security/no-side-doors.test.ts holds every exempt route
+ * that binds a stored connection to it) rather than send a
  * TWIN connection's credentials to its base URL. P4.1 moves the first two
  * onto a transport; P1.6 decides how a twin lane is proven, by routing the
  * sweep and the probe through `transportFor`

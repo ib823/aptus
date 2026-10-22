@@ -44,7 +44,7 @@ import { ERROR_CODES } from "@/types/api";
  *
  * AUDITED, NOT BEST-EFFORT LOGGED (P0.14b). The call runs on the console
  * pipeline (governed/console.ts) and leaves a platform-scope row
- * (PlatformAuditEvent `SAP_CONSOLE_READ`) naming the person, the endpoint and
+ * (PlatformConsoleRead) naming the person, the endpoint and
  * the realm; the `logDecision` entry it used to rely on is kept beside it.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {

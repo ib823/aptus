@@ -395,9 +395,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
     vi.unstubAllGlobals();
     await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: ORG } });
     // The console's platform rows (append-only in the code; a test's own rows are removed here).
-    const platform = await prisma.platformAuditEvent.findMany({ where: { actorUserId: ids.user }, select: { id: true } });
-    await prisma.platformAuditOutcome.deleteMany({ where: { eventId: { in: platform.map((p) => p.id) } } });
-    await prisma.platformAuditEvent.deleteMany({ where: { id: { in: platform.map((p) => p.id) } } });
+    await prisma.platformConsoleRead.deleteMany({ where: { actorUserId: ids.user } });
     await prisma.northboundIdempotencyKey.deleteMany({ where: { organizationId: ORG } });
     await prisma.developerJourneyEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.catalogueAddressVerification.deleteMany({ where: { organizationId: ORG } });
@@ -589,14 +587,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.total, report("console preview", c)).toBe(4);
       expect(sessionLookups(c), report("console preview", c)).toHaveLength(1);
       expect(c.response.filter((s) => /^(BEGIN|COMMIT)\b/i.test(s)), report("console preview", c)).toEqual([]);
-      expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console preview", c)).toHaveLength(1);
+      expect(c.response.filter((s) => s.includes("PlatformConsoleRead")), report("console preview", c)).toHaveLength(1);
+      // Never on the Workbench write tables (integration review round 4).
+      expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console preview", c)).toEqual([]);
       // ...and the row is whole: the event with its outcome.
-      const row = await prisma.platformAuditEvent.findFirst({
+      const row = await prisma.platformConsoleRead.findFirst({
         where: { actorUserId: ids.user, serviceKey: "purchase-orders" },
-        include: { result: true },
         orderBy: { at: "desc" },
       });
-      expect(row?.result?.outcome).toBe("SUCCEEDED");
+      expect(row?.outcome).toBe("SUCCEEDED");
     });
 
     it("a preview refused by the environment ceiling stays within the console budget", async () => {
@@ -755,7 +754,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       // The session, the platform row, and the decision-log entry the route has always written beside it.
       expect(c.total, report("console ariba", c)).toBe(3);
       expect(sessionLookups(c), report("console ariba", c)).toHaveLength(1);
-      expect(c.response.filter((s) => s.includes("PlatformAuditEvent")), report("console ariba", c)).toHaveLength(1);
+      expect(c.response.filter((s) => s.includes("PlatformConsoleRead")), report("console ariba", c)).toHaveLength(1);
     });
   });
 

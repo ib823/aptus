@@ -60,6 +60,11 @@ export function tokenPrefixFor(environment: string): typeof LIVE_TOKEN_PREFIX | 
  * every path that mints one. The claim page shows the same four, so the
  * reference the recipient is told to expect is the one every console shows.
  * Four base64url characters of a 32-byte key are not a secret.
+ *
+ * Written in the SAME update as the new `tokenHash`: a database trigger
+ * clears the tail of any key change that does not write one
+ * (migration 20261025040000_token_tail_binding), so a key changed by code
+ * that predates the column never keeps the previous key's ending.
  */
 export const TOKEN_TAIL_LENGTH = 4;
 

@@ -47,6 +47,21 @@ Operations > Tokens all show `prefix…tail` from it. A key minted before this
 release has no tail recorded (only its hash is stored, so there is nothing to
 backfill from): the screens say "ending not recorded" until its next rotation.
 
+**The tail always names the current key (integration review round 4).** The
+code before this release does not know the column. Rolled back to it, a
+rotation, a re-issue or a collected claim link wrote a new key and left the
+previous key's tail in place, so after rolling forward every screen showed
+the reference of a key that no longer existed. Migration
+`20261025040000_token_tail_binding` adds a database trigger
+(`SolutionClient_token_tail_binding`): an UPDATE that changes `tokenHash`
+without writing a new `tokenTail` clears the tail, whichever build sends it,
+so the screens say "ending not recorded" instead. Every mint in this release
+writes both in one statement and keeps its tail; a new key whose last four
+equal the old key's (one in 64^4) is cleared too, which is never a wrong
+reference. A trigger, not a check on each screen, because the screens never
+read the hash (`tests/unit/ops/ops-endpoints.test.ts`,
+`tests/unit/coreedge/pr6-screens.test.ts`).
+
 **Every cron is on the jobs strip (A51).** The strip's list lived in the jobs
 route and omitted `northbound-retention` and `lane-checks`.
 `src/lib/ops/scheduled-jobs.ts` now lists every job that records a run, with
@@ -240,13 +255,19 @@ writes off and see the broker refuse.
 
 ## Backout
 
-Roll the code back first. Then, if the columns must go:
-`pnpm migrations:backout-sql 20261025010000_truthful_registers` prints the SQL
-(`backout.sql` beside the migration) with its `_prisma_migrations` line. The
-code before P0.3 never reads or writes either column, so dropping them is never
-needed for safety. Dropping loses the import times (Catalogue Health before
-P0.3 judges from `updatedAt` again, as it did) and the key tails recorded since
-the deploy.
+Roll the code back first (Vercel Instant Rollback keeps the columns and the
+trigger, and that is the safe default). While rolled back, every key change
+clears that key's tail through the trigger; after rolling forward those keys
+show "ending not recorded" until their next rotation, never another key's
+ending. If the columns must go anyway, back out newest first:
+`pnpm migrations:backout-sql 20261025040000_token_tail_binding` (the trigger),
+then `pnpm migrations:backout-sql 20261025010000_truthful_registers` print the
+SQL (`backout.sql` beside each migration) with its `_prisma_migrations` line.
+The code before P0.3 never reads or writes either column, so dropping them is
+never needed for safety. Dropping loses the import times (Catalogue Health
+before P0.3 judges from `updatedAt` again, as it did) and the key tails
+recorded since the deploy. Backing out the trigger alone, with the column
+kept, brings the stale-tail hazard back for a rollback after it.
 
 ## Open decisions
 

@@ -349,6 +349,43 @@ describe("A.3 #9: every route that reaches SAP uses the pipeline and writes an a
     }
   });
 
+  /*
+   * AN EXEMPT ROUTE KEEPS A TWIN CONNECTION OFF THE CUSTOMER'S SAP (wave 2
+   * integration review round 4). An exemption fetches with the platform's own
+   * fetch and a stored connection's credentials, outside the pipeline's bind
+   * step, so each must ask transport.ts `reachedDirectly` itself: Verify
+   * service did not, and sent a TWIN connection's credentials to its base URL
+   * and recorded the answer as the write gate's verification. Each chain is
+   * the route, then each module it imports on the way to the check; the
+   * behaviour is tests/integration/twin-transport-consumers.test.ts.
+   */
+  const TWIN_GUARD: Record<keyof typeof EXEMPT, readonly string[]> = {
+    "src/app/api/studio/connections/route.ts": ["src/lib/sap-public/rotation-probe.ts"],
+    "src/app/api/studio/connections/[id]/test/route.ts": [],
+    "src/app/api/studio/interfaces/[id]/verify-service/route.ts": [],
+    "src/app/api/coreedge/lanes/recheck/route.ts": ["src/lib/ops/lane-check-sweep.ts", "src/lib/coreedge/lane-authorisation.ts"],
+    "src/app/api/cron/lane-checks/route.ts": ["src/lib/ops/lane-check-sweep.ts", "src/lib/coreedge/lane-authorisation.ts"],
+    "src/app/api/cron/connection-probes/route.ts": ["src/lib/ops/connection-probe-sweep.ts"],
+    "src/app/api/ops/connections-health/probe/route.ts": ["src/lib/ops/connection-probe-sweep.ts"],
+  };
+
+  it("every exemption asks reachedDirectly before it sends a stored connection's credentials (review round 4)", () => {
+    expect(Object.keys(TWIN_GUARD).sort()).toEqual(Object.keys(EXEMPT).sort());
+    const code = (file: string) => {
+      const src = SOURCES.find((s) => s.file === file)?.src;
+      expect(src, `${file} is not in src`).toBeDefined();
+      return src!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    };
+    for (const [route, chain] of Object.entries(TWIN_GUARD)) {
+      const files = [route, ...chain];
+      for (let i = 0; i + 1 < files.length; i++) {
+        const next = files[i + 1]!.replace(/^src\//, "@/").replace(/\.ts$/, "");
+        expect(code(files[i]!), `${files[i]} does not import ${next}`).toContain(`"${next}"`);
+      }
+      expect(code(files.at(-1)!), `${route}: ${files.at(-1)} does not ask reachedDirectly`).toMatch(/\breachedDirectly\(/);
+    }
+  });
+
   it("no Workbench console route and no broker route is exempt (P0.14b)", () => {
     for (const route of Object.keys(EXEMPT)) {
       expect(route.startsWith("src/app/api/sap/"), route).toBe(false);

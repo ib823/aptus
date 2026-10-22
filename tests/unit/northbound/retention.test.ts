@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   platformDeleteMany: vi.fn(),
   outcomeDeleteMany: vi.fn(),
   transaction: vi.fn(),
+  consoleFindMany: vi.fn(),
+  consoleDeleteMany: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -31,6 +33,7 @@ vi.mock("@/lib/db/prisma", () => ({
     northboundAuditEvent: { findMany: mocks.findMany, deleteMany: mocks.deleteMany },
     platformAuditEvent: { findMany: mocks.platformFindMany, deleteMany: mocks.platformDeleteMany },
     platformAuditOutcome: { deleteMany: mocks.outcomeDeleteMany },
+    platformConsoleRead: { findMany: mocks.consoleFindMany, deleteMany: mocks.consoleDeleteMany },
     $transaction: mocks.transaction,
   },
 }));
@@ -58,6 +61,12 @@ beforeEach(() => {
   mocks.outcomeDeleteMany.mockReset();
   mocks.transaction.mockReset();
   mocks.platformFindMany.mockResolvedValue([]);
+  mocks.consoleFindMany.mockReset();
+  mocks.consoleDeleteMany.mockReset();
+  mocks.consoleFindMany.mockResolvedValue([]);
+  mocks.consoleDeleteMany.mockImplementation(async (args: { where: { id: { in: string[] } } }) => ({
+    count: args.where.id.in.length,
+  }));
   mocks.platformDeleteMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => ({ count: where.id.in.length }));
   mocks.outcomeDeleteMany.mockImplementation(async ({ where }: { where: { eventId: { in: string[] } } }) => ({
     count: where.eventId.in.length,
@@ -248,16 +257,50 @@ describe("the sweep", () => {
 
 /*
  * P0.14b review: since the console runs on the governed pipeline, every
- * console read also leaves a platform-scope copy in PlatformAuditEvent
- * (action SAP_CONSOLE_READ) with the reader's email and the client's tenant,
- * service and entity set. The organization's copy of the same read expires
- * here, on the period and legal basis above; the platform copy was kept
- * forever, on a table that grows by a row per console call and that no
- * screen shows. It expires with the organization's copy now. The WRITE
- * actions on that table (P0.7's fail-closed write-back trail) are never
- * touched.
+ * console read also leaves a platform-scope copy (PlatformConsoleRead since
+ * integration review round 4) with the reader's email and the client's
+ * tenant, service and entity set. The organization's copy of the same read
+ * expires here, on the period and legal basis above; the platform copy was
+ * kept forever, on a table that grows by a row per console call. It expires
+ * with the organization's copy now.
  */
 describe("the console's platform-scope read rows expire with the organization's", () => {
+  const CUTOFF = new Date("2026-08-13T00:00:00.000Z");
+
+  it("selects PlatformConsoleRead rows by age, oldest first, bounded by the batch, and re-asserts the age in the delete", async () => {
+    mocks.consoleFindMany.mockResolvedValueOnce([{ id: "c1" }, { id: "c2" }]).mockResolvedValue([]);
+    const result = await enforceNorthboundAuditRetention(NOW, 30);
+    expect(mocks.consoleFindMany).toHaveBeenCalledWith({
+      where: { at: { lt: CUTOFF } },
+      select: { id: true },
+      orderBy: { at: "asc" },
+      take: RETENTION_BATCH_LIMIT,
+    });
+    expect(mocks.consoleDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["c1", "c2"] }, at: { lt: CUTOFF } } });
+    expect(result).toMatchObject({ deleted: 0, consoleReadsDeleted: 2, moreRemaining: false });
+  });
+
+  it("keeps taking PlatformConsoleRead batches until one comes back short, and stops on the time budget", async () => {
+    const batch = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `c${i}` }));
+    mocks.consoleFindMany.mockResolvedValueOnce(batch(3)).mockResolvedValueOnce(batch(1)).mockResolvedValue([]);
+    expect(await enforceNorthboundAuditRetention(NOW, 30, 3)).toMatchObject({ consoleReadsDeleted: 4, moreRemaining: false });
+
+    mocks.consoleFindMany.mockReset();
+    mocks.consoleFindMany.mockResolvedValue(batch(3));
+    mocks.platformFindMany.mockClear();
+    expect(await enforceNorthboundAuditRetention(NOW, 30, 3, 0)).toMatchObject({ consoleReadsDeleted: 3, moreRemaining: true });
+    // The budget is spent: the legacy rows wait for the next run.
+    expect(mocks.platformFindMany).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * A database a pre-release P0.14b build wrote to holds console reads as
+ * PlatformAuditEvent rows (action SAP_CONSOLE_READ) with their outcome. They
+ * expire on the same period. The WRITE actions on that table (P0.7's
+ * fail-closed write-back trail) are never touched.
+ */
+describe("the console reads a pre-release build left on PlatformAuditEvent expire too", () => {
   const CUTOFF = new Date("2026-08-13T00:00:00.000Z");
 
   it("selects only SAP_CONSOLE_READ rows, by age, oldest first, bounded by the batch", async () => {

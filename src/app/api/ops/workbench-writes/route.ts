@@ -55,11 +55,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
   const unresolvedBefore = new Date(now.getTime() - PENDING_UNRESOLVED_AFTER_MINUTES * 60 * 1000);
   /*
-   * WRITES ONLY. Since P0.14b the same table holds the console's reads
-   * (action SAP_CONSOLE_READ, written with their outcome in one statement).
-   * Counted here, every preview would be a "write" — and one whose outcome
-   * row failed to insert would read as UNRESOLVED, "check SAP before
-   * repeating it", about a read that changed nothing.
+   * WRITES ONLY. The console's reads are PlatformConsoleRead rows, a table
+   * this ledger never reads (and neither did any build before P0.14b, so a
+   * rollback leaves it true: integration review round 4). A database a
+   * pre-release P0.14b build wrote to also holds console reads HERE (action
+   * SAP_CONSOLE_READ). Counted, every preview would be a "write" — and one
+   * whose outcome row failed to insert would read as UNRESOLVED, "check SAP
+   * before repeating it", about a read that changed nothing.
    */
   const actions = { in: [...PLATFORM_AUDIT_ACTIONS] };
   const where = { at: { gte: since }, action: actions };

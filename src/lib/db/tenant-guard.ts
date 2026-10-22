@@ -42,6 +42,10 @@ import type { Prisma } from "@prisma/client";
  * owns, made by platform admins who may have none. There is no tenant to scope
  * it to, so its reads are gated to `platform_admin` instead
  * (/api/ops/workbench-writes). tenant-guard.test.ts pins this.
+ * `PlatformConsoleRead` (P0.14b, the console's platform-scope read rows) is
+ * absent for the same reason: the reader may have no organization, and the
+ * system read may belong to none. Its one organization-facing read, the
+ * correlation search, names the organization in its own `where`.
  */
 export const TENANT_ANCHORED_MODELS = [
   "Solution",

@@ -6,8 +6,9 @@
  * WHAT IS RECORDED. For every scenario below, through the shipped route: the
  * HTTP status, the error code (or "ok"), the sentence the caller was given,
  * every NorthboundAuditEvent row the call wrote (the organization's console
- * trail, `dryRun: true`) and every PlatformAuditEvent row with its outcome
- * (the platform-scope trail), with the fields that change on every call
+ * trail, `dryRun: true`), every PlatformAuditEvent row with its outcome (the
+ * write-back's trail, P0.7) and every PlatformConsoleRead row (the console's
+ * platform-scope trail), with the fields that change on every call
  * removed (`id`, `at`, `correlationId`, `durationMs`, `eventId`) and
  * run-specific ids replaced by names.
  *
@@ -21,7 +22,10 @@
  * The test checks the routes against `after`, and checks `after` against
  * `before`: every answer, every organization row and every write-back row is
  * the same; the ONLY difference allowed is the platform-scope row each console
- * call now adds (action SAP_CONSOLE_READ, principal "console").
+ * call now adds (`consoleReads`, principal "console"). It is a
+ * PlatformConsoleRead, never a PlatformAuditEvent: the code before P0.14b
+ * reads every row of that table as a Workbench write, so a rollback would
+ * have listed each console read as one (integration review round 4).
  *
  * WHAT IS REAL: every route, the role gates, the console ceilings, the
  * connection resolver and sealing, the Workbench connector, the audit inserts,
@@ -83,6 +87,7 @@ import { POST as probeAllRoute } from "@/app/api/sap/tdd/hub-content/probe-all/r
 import { POST as writeTestRoute } from "@/app/api/sap/tdd/hub-content/write-test/route";
 import { POST as writeRoute } from "@/app/api/sap/tdd/write/route";
 import { GET as aribaCallRoute } from "@/app/api/sap/ariba/call/route";
+import { lookupCorrelationId } from "@/lib/coreedge/correlation-lookup";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import {
   __setGovernedCircuitStore,
@@ -207,8 +212,10 @@ interface Observed {
   message: string | null;
   /** The organization's console trail (NorthboundAuditEvent, dryRun). */
   audits: unknown[];
-  /** The platform-scope trail (PlatformAuditEvent + its outcome). */
+  /** The write-back's trail (PlatformAuditEvent + its outcome). */
   platform: unknown[];
+  /** The console's platform-scope trail (PlatformConsoleRead). Absent from the "before" file: P0.14b added it. */
+  consoleReads?: unknown[];
 }
 
 const STRIPPED = new Set(["id", "at", "correlationId", "durationMs", "eventId"]);
@@ -237,8 +244,9 @@ function anonymise(value: unknown): unknown {
 
 const seenNorthbound = new Set<string>();
 const seenPlatform = new Set<string>();
+const seenConsole = new Set<string>();
 
-async function newRows(): Promise<{ audits: unknown[]; platform: unknown[] }> {
+async function newRows(): Promise<{ audits: unknown[]; platform: unknown[]; consoleReads: unknown[] }> {
   const nb = await prisma.northboundAuditEvent.findMany({
     where: { organizationId: { in: [ORG, "-deployment-"] }, actorUserId: { in: USER_IDS } },
     orderBy: [{ at: "asc" }, { externalId: "asc" }],
@@ -252,7 +260,13 @@ async function newRows(): Promise<{ audits: unknown[]; platform: unknown[] }> {
   });
   const platform = pl.filter((r) => !seenPlatform.has(r.id));
   for (const r of platform) seenPlatform.add(r.id);
-  return { audits: audits.map(anonymise), platform: platform.map(anonymise) };
+  const cr = await prisma.platformConsoleRead.findMany({
+    where: { actorUserId: { in: USER_IDS } },
+    orderBy: [{ at: "asc" }, { serviceKey: "asc" }],
+  });
+  const consoleReads = cr.filter((r) => !seenConsole.has(r.id));
+  for (const r of consoleReads) seenConsole.add(r.id);
+  return { audits: audits.map(anonymise), platform: platform.map(anonymise), consoleReads: consoleReads.map(anonymise) };
 }
 
 async function observe(res: Response): Promise<Observed> {
@@ -434,6 +448,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
     vi.unstubAllGlobals();
     await prisma.platformAuditOutcome.deleteMany({ where: { event: { actorUserId: { in: USER_IDS } } } });
     await prisma.platformAuditEvent.deleteMany({ where: { actorUserId: { in: USER_IDS } } });
+    await prisma.platformConsoleRead.deleteMany({ where: { actorUserId: { in: USER_IDS } } });
     await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: ORG } });
     await prisma.northboundAuditEvent.deleteMany({ where: { organizationId: "-deployment-", actorUserId: { in: USER_IDS } } });
     await prisma.catalogueAddressVerification
@@ -534,15 +549,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
         const res = await c.call();
         expect(res.status).toBe(c.status);
         expect(sentToUnlisted()).toBe(before);
-        const { audits, platform } = await newRows();
+        const { audits, platform, consoleReads } = await newRows();
         if (c.trail === "read") {
           expect(audits).toEqual([expect.objectContaining({ status: 403, failureReason: "HOST_NOT_ALLOWED", rowCount: null })]);
-          expect(platform).toEqual([
-            expect.objectContaining({ action: "SAP_CONSOLE_READ", result: expect.objectContaining({ outcome: "BLOCKED", reason: "HOST_NOT_ALLOWED" }) }),
-          ]);
+          expect(consoleReads).toEqual([expect.objectContaining({ outcome: "BLOCKED", reason: "HOST_NOT_ALLOWED", status: null })]);
+          expect(platform).toEqual([]);
         } else {
           // P0.7's row, written first, says the write was refused before any was sent.
           expect(audits).toEqual([]);
+          expect(consoleReads).toEqual([]);
           expect(platform).toEqual([
             expect.objectContaining({ result: expect.objectContaining({ outcome: "BLOCKED", reason: "HOST_NOT_ALLOWED" }) }),
           ]);
@@ -561,11 +576,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
         const res = await ariba("endpoint=sourcing-events&realm=myrealm-T");
         expect(res.status).toBe(403);
         expect((fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length).toBe(calls);
-        const { audits, platform } = await newRows();
+        const { audits, platform, consoleReads } = await newRows();
         expect(audits).toEqual([]);
-        expect(platform).toEqual([
-          expect.objectContaining({ product: "ariba", result: expect.objectContaining({ outcome: "BLOCKED", reason: "HOST_NOT_ALLOWED" }) }),
-        ]);
+        expect(platform).toEqual([]);
+        expect(consoleReads).toEqual([expect.objectContaining({ product: "ariba", outcome: "BLOCKED", reason: "HOST_NOT_ALLOWED" })]);
+
+        /*
+         * THE ID IT WAS HANDED IS FOUND (integration review round 4). An Ariba
+         * call files no organization row, so Operations' correlation search
+         * used to tell this member of the organization that no call in it had
+         * the id the refusal quoted.
+         */
+        const quoted = ((await res.json()) as { error: { correlationId?: string } }).error.correlationId;
+        expect(quoted).toMatch(/\S/);
+        const found = await lookupCorrelationId(ORG, quoted!);
+        expect(found).toMatchObject({
+          kind: "found",
+          call: { correlationId: quoted, status: 403, operation: "READ", externalId: "sourcing-events", brokenHop: "binding", dryRun: true },
+        });
+        expect(found.kind === "found" && found.call.outcome).toMatch(/host allow-list/);
+        // Still this organization's alone: another organization's search does not see it.
+        expect(await lookupCorrelationId(`${ORG}-other`, quoted!)).toEqual({ kind: "not-found" });
       } finally {
         vi.stubEnv("COREEDGE_ENV_TENANT_HOSTS", "");
         vi.stubEnv("ARIBA_BASE_URL", "https://openapi.ariba.com");
@@ -587,10 +618,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Workbench console on the go
         message: b.message,
         audits: b.audits,
       });
-      // The write-back's fail-closed rows (P0.7): unchanged.
-      const writes = (rows: unknown[]) => rows.filter((r) => (r as { action: string }).action !== "SAP_CONSOLE_READ");
-      expect(writes(a.platform), key).toEqual(writes(b.platform));
-      expect(b.platform.filter((r) => (r as { action: string }).action === "SAP_CONSOLE_READ"), key).toEqual([]);
+      // The write-back's fail-closed rows (P0.7): unchanged, and nothing else
+      // on those tables (integration review round 4).
+      expect(a.platform, key).toEqual(b.platform);
+      expect(b.consoleReads, key).toBeUndefined();
     }
   });
 

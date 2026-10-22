@@ -23,39 +23,37 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "e0710ab45eb472170f6b808e82c494bf7082032d4d2aa8d6fd96cb9d0ca3a584",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -85,39 +83,37 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -147,39 +143,37 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:platform_admin>@abeam.com",
         "actorOrganizationId": null,
         "actorRole": "platform_admin",
         "actorUserId": "<user:platform_admin>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "-deployment-",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "-deployment-",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -209,45 +203,43 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-unlisted",
+          "hostCheck": "unlisted",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200,
+          "unlistedHosts": [
+            {
+              "host": "s4.landscape.example.net",
+              "variable": "S4_TDD_TENANTS_JSON[<run>-unlisted]"
+            }
+          ]
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-unlisted",
-            "hostCheck": "unlisted",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200,
-            "unlistedHosts": [
-              {
-                "host": "s4.landscape.example.net",
-                "variable": "S4_TDD_TENANTS_JSON[<run>-unlisted]"
-              }
-            ]
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-unlisted",
         "tenantLabel": "Env unlisted"
       }
@@ -277,40 +269,38 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "BLOCKED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -340,40 +330,38 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:sandbox_developer>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "sandbox_developer",
         "actorUserId": "<user:sandbox_developer>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "BLOCKED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "SANDBOX_ONLY",
-          "sapStatus": null
-        },
+        "reason": "SANDBOX_ONLY",
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": null,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -403,39 +391,37 @@
         "status": 502
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP failed, did not answer, or could not be authenticated to",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/preview",
+          "rowCount": null,
+          "source": "connection",
+          "status": 502
+        },
         "entitySet": "A_PurchaseOrder",
+        "outcome": "FAILED",
         "payloadFields": [
           "entity",
           "limit"
         ],
         "payloadSha256": "5a68a6b7f4dd7e57b53db9b4f493b70d7adcd47086b0a919ca4cd97b654be69d",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP failed, did not answer, or could not be authenticated to",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/preview",
-            "rowCount": null,
-            "source": "connection",
-            "status": 502
-          },
-          "outcome": "FAILED",
-          "reason": "HTTP_500",
-          "sapStatus": 502
-        },
+        "reason": "HTTP_500",
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 502,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -465,38 +451,36 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "92e2f3ffd20ae174a7b7e34f8ec6d781d6619cbbbd1b0e0537f99712031d568f",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -544,72 +528,67 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "c775500ea34eded73c2a3c3bede193f0d839e6c14b36f21b6cc31472e0720a91",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       },
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "c775500ea34eded73c2a3c3bede193f0d839e6c14b36f21b6cc31472e0720a91",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-probe-fanout-purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -639,39 +618,37 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "92e2f3ffd20ae174a7b7e34f8ec6d781d6619cbbbd1b0e0537f99712031d568f",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -701,38 +678,36 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:sandbox_developer>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "sandbox_developer",
         "actorUserId": "<user:sandbox_developer>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "92e2f3ffd20ae174a7b7e34f8ec6d781d6619cbbbd1b0e0537f99712031d568f",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -762,38 +737,36 @@
         "status": 401
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered and refused the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/entities",
+          "rowCount": null,
+          "source": "connection",
+          "status": 401
+        },
         "entitySet": "-",
+        "outcome": "SAP_REFUSED",
         "payloadFields": [
           "probe"
         ],
         "payloadSha256": "92e2f3ffd20ae174a7b7e34f8ec6d781d6619cbbbd1b0e0537f99712031d568f",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered and refused the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/entities",
-            "rowCount": null,
-            "source": "connection",
-            "status": 401
-          },
-          "outcome": "SAP_REFUSED",
-          "reason": "HTTP_401",
-          "sapStatus": 401
-        },
+        "reason": "HTTP_401",
         "serviceKey": "purchase-orders",
         "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "status": 401,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -823,36 +796,34 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/operations",
+          "rowCount": 4,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/operations",
-            "rowCount": 4,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-operations-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -882,36 +853,34 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:platform_admin>@abeam.com",
         "actorOrganizationId": null,
         "actorRole": "platform_admin",
         "actorUserId": "<user:platform_admin>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "-deployment-",
+          "principal": "console",
+          "route": "/api/sap/tdd/operations",
+          "rowCount": 4,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "-deployment-",
-            "principal": "console",
-            "route": "/api/sap/tdd/operations",
-            "rowCount": 4,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-operations-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -941,37 +910,35 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/operations",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/operations",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "-operations-",
         "servicePath": null,
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -1001,36 +968,34 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:successfactors:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/capabilities",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "successfactors",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:successfactors:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/capabilities",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-capabilities-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-sf-dev",
         "tenantLabel": "successfactors DEV"
       }
@@ -1060,37 +1025,35 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:sandbox_developer>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "sandbox_developer",
         "actorUserId": "<user:sandbox_developer>",
+        "detail": {
+          "connectionId": "<connection:successfactors:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/capabilities",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "successfactors",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:successfactors:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/capabilities",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "SANDBOX_ONLY",
-          "sapStatus": null
-        },
+        "reason": "SANDBOX_ONLY",
         "serviceKey": "-capabilities-",
         "servicePath": null,
+        "status": null,
         "tenantKey": "<run>-sf-dev",
         "tenantLabel": "successfactors DEV"
       }
@@ -1120,37 +1083,35 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/capabilities",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/capabilities",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "-capabilities-",
         "servicePath": null,
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -1180,38 +1141,36 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:successfactors:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content",
+          "rowCount": 2,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "dataProbe"
         ],
         "payloadSha256": "cfd509a705954cfe40b1f9284d8e9da625b550999a0bbdc71c07f67d847a74dd",
         "product": "successfactors",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:successfactors:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content",
-            "rowCount": 2,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-hub-overlay-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-sf-dev",
         "tenantLabel": "successfactors DEV"
       }
@@ -1241,39 +1200,37 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [
           "dataProbe"
         ],
         "payloadSha256": "cfd509a705954cfe40b1f9284d8e9da625b550999a0bbdc71c07f67d847a74dd",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "-hub-overlay-",
         "servicePath": null,
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -1303,36 +1260,34 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/[id]",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/[id]",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "API_<tag>_SRV",
         "servicePath": "/sap/opu/odata/sap/API_<tag>_SRV",
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -1362,37 +1317,35 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/[id]",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/[id]",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "API_<tag>_SRV",
         "servicePath": "/sap/opu/odata/sap/API_<tag>_SRV",
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -1422,36 +1375,34 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:sandbox_developer>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "sandbox_developer",
         "actorUserId": "<user:sandbox_developer>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/[id]",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [],
         "payloadSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/[id]",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "API_<tag>_SRV",
         "servicePath": "/sap/opu/odata/sap/API_<tag>_SRV",
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -1481,39 +1432,37 @@
         "status": 403
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:PROD>",
+          "environment": "PROD",
+          "hostCheck": "not-checked",
+          "meaning": "refused by the console before any request was sent to SAP",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/probe-all",
+          "rowCount": null,
+          "source": "connection",
+          "status": 403,
+          "step": "authorise"
+        },
         "entitySet": "-",
+        "outcome": "BLOCKED",
         "payloadFields": [
           "includeDeprecated"
         ],
         "payloadSha256": "18d08c9c052cd196ceae0d4c3fb8e049f1a1cccdbfd8cb9a8bd6c48dcd1663f6",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:PROD>",
-            "environment": "PROD",
-            "hostCheck": "not-checked",
-            "meaning": "refused by the console before any request was sent to SAP",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/probe-all",
-            "rowCount": null,
-            "source": "connection",
-            "status": 403,
-            "step": "authorise"
-          },
-          "outcome": "BLOCKED",
-          "reason": "NO_APPROVED_GRANT",
-          "sapStatus": null
-        },
+        "reason": "NO_APPROVED_GRANT",
         "serviceKey": "-probe-all-",
         "servicePath": null,
+        "status": null,
         "tenantKey": "<run>-prod",
         "tenantLabel": "s4hana PROD"
       }
@@ -1543,38 +1492,36 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": "<connection:s4hana:DEV>",
+          "environment": "DEV",
+          "hostCheck": "not-checked",
+          "meaning": "SAP answered the read",
+          "organizationScope": "<org>",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/probe-all",
+          "rowCount": 1,
+          "source": "connection",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "includeDeprecated"
         ],
         "payloadSha256": "18d08c9c052cd196ceae0d4c3fb8e049f1a1cccdbfd8cb9a8bd6c48dcd1663f6",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": "<connection:s4hana:DEV>",
-            "environment": "DEV",
-            "hostCheck": "not-checked",
-            "meaning": "SAP answered the read",
-            "organizationScope": "<org>",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/probe-all",
-            "rowCount": 1,
-            "source": "connection",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-probe-all-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-dev",
         "tenantLabel": "s4hana DEV"
       }
@@ -1604,38 +1551,36 @@
         "status": 200
       }
     ],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:platform_admin>@abeam.com",
         "actorOrganizationId": null,
         "actorRole": "platform_admin",
         "actorUserId": "<user:platform_admin>",
+        "detail": {
+          "connectionId": null,
+          "environment": "deployment:<run>-env",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": "-deployment-",
+          "principal": "console",
+          "route": "/api/sap/tdd/hub-content/probe-all",
+          "rowCount": 1,
+          "source": "deployment",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "includeDeprecated"
         ],
         "payloadSha256": "18d08c9c052cd196ceae0d4c3fb8e049f1a1cccdbfd8cb9a8bd6c48dcd1663f6",
         "product": "s4hana",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "deployment:<run>-env",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": "-deployment-",
-            "principal": "console",
-            "route": "/api/sap/tdd/hub-content/probe-all",
-            "rowCount": 1,
-            "source": "deployment",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "-probe-all-",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
@@ -1646,14 +1591,27 @@
     "answer": "ok",
     "message": null,
     "audits": [],
-    "platform": [
+    "platform": [],
+    "consoleReads": [
       {
-        "action": "SAP_CONSOLE_READ",
         "actorEmail": "<user:consultant>@abeam.com",
         "actorOrganizationId": "<org>",
         "actorRole": "consultant",
         "actorUserId": "<user:consultant>",
+        "detail": {
+          "connectionId": null,
+          "environment": "ariba",
+          "hostCheck": "allowed",
+          "meaning": "SAP answered the read",
+          "organizationScope": null,
+          "principal": "console",
+          "route": "/api/sap/ariba/call",
+          "rowCount": 1,
+          "source": "ariba",
+          "status": 200
+        },
         "entitySet": "-",
+        "outcome": "SUCCEEDED",
         "payloadFields": [
           "endpoint",
           "limit",
@@ -1661,25 +1619,10 @@
         ],
         "payloadSha256": "0f10e21e663aff160a0fdc05f5c94c2198d9e447e1cc2fed6deb1e4c136d5043",
         "product": "ariba",
-        "result": {
-          "detail": {
-            "connectionId": null,
-            "environment": "ariba",
-            "hostCheck": "allowed",
-            "meaning": "SAP answered the read",
-            "organizationScope": null,
-            "principal": "console",
-            "route": "/api/sap/ariba/call",
-            "rowCount": 1,
-            "source": "ariba",
-            "status": 200
-          },
-          "outcome": "SUCCEEDED",
-          "reason": null,
-          "sapStatus": 200
-        },
+        "reason": null,
         "serviceKey": "sourcing-events",
         "servicePath": null,
+        "status": 200,
         "tenantKey": "myrealm-T",
         "tenantLabel": null
       }
@@ -1690,7 +1633,8 @@
     "answer": "FORBIDDEN",
     "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This read has no Sandbox system behind it.",
     "audits": [],
-    "platform": []
+    "platform": [],
+    "consoleReads": []
   },
   "write: the deployment tenant": {
     "status": 200,
@@ -1722,7 +1666,8 @@
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
-    ]
+    ],
+    "consoleReads": []
   },
   "write: SAP 500": {
     "status": 502,
@@ -1754,7 +1699,8 @@
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
-    ]
+    ],
+    "consoleReads": []
   },
   "write-test: the deployment tenant": {
     "status": 200,
@@ -1790,6 +1736,7 @@
         "tenantKey": "<run>-env",
         "tenantLabel": "Env sandbox"
       }
-    ]
+    ],
+    "consoleReads": []
   }
 }

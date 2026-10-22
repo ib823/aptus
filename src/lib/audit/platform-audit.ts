@@ -47,18 +47,24 @@
  * AND WHAT A PERSON READ, SINCE P0.14b. Every Workbench console call that
  * reaches SAP (preview, entities, operations, capabilities, the catalogue
  * probes, Probe all, the Ariba explorer) runs on the governed pipeline as the
- * named "console" principal (lib/governed/console.ts) and leaves one row here:
- * action `SAP_CONSOLE_READ`, written with its outcome in one statement
- * (`recordPlatformConsoleRead`) after the call, because a read changes nothing
- * in SAP and is not held to the write's fail-closed rule — exactly as the
- * organization's own console row (NorthboundAuditEvent, `dryRun: true`) is
- * not. It is never billed: the usage rollup reads only NorthboundAuditEvent.
- * Readers of the WRITE trail filter on `PLATFORM_AUDIT_ACTIONS`, the write
- * actions, so a console read never appears on the write ledger as a write
- * whose outcome is unknown. A console read row expires with the
- * organization's copy of the same read (northbound/retention.ts
- * `sweepConsoleReads`, the one module allowed to delete audit rows); a write's
- * rows never do.
+ * named "console" principal (lib/governed/console.ts) and leaves one
+ * `PlatformConsoleRead` row, event and outcome together, written in one
+ * statement (`recordPlatformConsoleRead`) after the call, because a read
+ * changes nothing in SAP and is not held to the write's fail-closed rule —
+ * exactly as the organization's own console row (NorthboundAuditEvent,
+ * `dryRun: true`) is not. It is never billed: the usage rollup reads only
+ * NorthboundAuditEvent. A console read row expires with the organization's
+ * copy of the same read (northbound/retention.ts `sweepConsoleReads`, the one
+ * module allowed to delete audit rows); a write's rows never do.
+ *
+ * NOT ON THE WRITE TABLES (wave 2 integration review round 4). Console reads
+ * were `PlatformAuditEvent` rows (action SAP_CONSOLE_READ), and the code
+ * before P0.14b reads every row of that table as a Workbench write: rolled
+ * back to it (the release protocol's Instant Rollback keeps the migrations),
+ * the Operations write ledger listed each console read as a write-back into a
+ * client's SAP, most of them SUCCEEDED. No build before P0.14b reads
+ * `PlatformConsoleRead`. Readers of the write trail still filter on
+ * `PLATFORM_AUDIT_ACTIONS`, for the rows a pre-release build wrote there.
  */
 
 import { createHash, randomUUID } from "crypto";
@@ -74,7 +80,12 @@ import { Prisma } from "@prisma/client";
 export const PLATFORM_AUDIT_ACTIONS = ["SAP_WORKBENCH_WRITE", "SAP_WORKBENCH_WRITE_TEST"] as const;
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];
 
-/** A read a person made from the Workbench console (P0.14b). Not a write: never on the write ledger. */
+/**
+ * The action a PRE-RELEASE P0.14b build gave a console read on `PlatformAuditEvent`.
+ * Nothing writes it now (console reads are `PlatformConsoleRead` rows); the
+ * retention sweep still deletes such rows by age, and the write ledger never
+ * lists them.
+ */
 export const PLATFORM_CONSOLE_READ_ACTION = "SAP_CONSOLE_READ" as const;
 
 /**
@@ -354,47 +365,41 @@ export interface PlatformConsoleReadInput {
 }
 
 /**
- * The statement that writes one console read: the event and its outcome in
- * ONE round trip, a data-modifying CTE (P0.14b review round 3).
+ * The statement that writes one console read: ONE row, event and outcome
+ * together, in ONE round trip (P0.14b review round 3), with no transaction on
+ * the response path of a console call (governed/db-budget.ts).
  *
- * It was a nested `create`, which Prisma sends as BEGIN, INSERT event, INSERT
- * outcome, SELECT and COMMIT: five round trips and a transaction on the
- * response path of every console call, so a warm preview sent 7 statements
- * where it had sent 2, over the read budget (governed/db-budget.ts). One
- * statement is atomic in PostgreSQL without a transaction around it, so the
- * event is still never stored without its outcome. The ids are made here
- * (the model's `cuid()` default is Prisma's, not the database's), and so is
- * `at` (review round 4): `@default(now())` is Prisma's too — the nested create
- * sent the time, in UTC. Left to the column's DEFAULT CURRENT_TIMESTAMP, a
- * `timestamp(3)` without a zone took the SESSION's wall time, so on a database
- * or role set to any other zone every console row was off by the offset from
- * the organization's copy of the same read, and the retention sweep's UTC
- * cutoff deleted it early or late. Both rows are bound as UTC wall time,
- * whatever the session's zone, as idempotency.ts and grant-binding.ts do.
+ * The id is made here (the model's `cuid()` default is Prisma's, not the
+ * database's), and so is `at` (review round 4): left to the column's DEFAULT
+ * CURRENT_TIMESTAMP, a `timestamp(3)` without a zone takes the SESSION's wall
+ * time, so on a database or role set to any other zone every console row was
+ * off by the offset from the organization's copy of the same read, and the
+ * retention sweep's UTC cutoff deleted it early or late. It is bound as UTC
+ * wall time, whatever the session's zone, as idempotency.ts and
+ * grant-binding.ts do.
+ *
+ * Into `PlatformConsoleRead`, never `PlatformAuditEvent` (integration review
+ * round 4): see this file's header.
  */
 export function consoleReadInsert(
   input: PlatformConsoleReadInput,
-  ids = { event: randomUUID(), outcome: randomUUID() },
+  id: string = randomUUID(),
   now: Date = new Date(),
 ): Prisma.Sql {
   const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
   const reason = input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null;
   const at = Prisma.sql`(${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
   return Prisma.sql`/* governed:console-read-audit */
-    WITH "event" AS (
-      INSERT INTO "PlatformAuditEvent"
-        ("id", "action", "actorUserId", "actorEmail", "actorRole", "actorOrganizationId", "product", "tenantKey",
-         "tenantLabel", "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId", "at")
-      VALUES (${ids.event}, ${PLATFORM_CONSOLE_READ_ACTION}, ${input.actor.id}, ${input.actor.email}, ${input.actor.role},
-        ${input.actor.organizationId}, ${input.target.product}, ${input.target.tenantKey}, ${input.target.tenantLabel ?? null},
-        ${input.target.serviceKey}, ${input.target.servicePath ?? null}, ${input.target.entitySet}, ${payloadSha256},
-        ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId}, ${at})
-      RETURNING "id"
-    )
-    INSERT INTO "PlatformAuditOutcome" ("id", "eventId", "outcome", "sapStatus", "reason", "detail", "durationMs", "at")
-    SELECT ${ids.outcome}, "event"."id", ${input.outcome}, ${input.status}::integer, ${reason},
-      ${JSON.stringify(input.detail)}::jsonb, ${input.durationMs ?? null}::integer, ${at}
-    FROM "event"`;
+    INSERT INTO "PlatformConsoleRead"
+      ("id", "actorUserId", "actorEmail", "actorRole", "actorOrganizationId", "product", "tenantKey", "tenantLabel",
+       "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId",
+       "outcome", "status", "reason", "detail", "durationMs", "at")
+    VALUES (${id}, ${input.actor.id}, ${input.actor.email}, ${input.actor.role}, ${input.actor.organizationId},
+      ${input.target.product}, ${input.target.tenantKey}, ${input.target.tenantLabel ?? null},
+      ${input.target.serviceKey}, ${input.target.servicePath ?? null}, ${input.target.entitySet}, ${payloadSha256},
+      ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId},
+      ${input.outcome}, ${input.status}::integer, ${reason}, ${JSON.stringify(input.detail)}::jsonb,
+      ${input.durationMs ?? null}::integer, ${at})`;
 }
 
 /**
