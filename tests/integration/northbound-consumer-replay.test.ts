@@ -51,7 +51,7 @@ vi.mock("@/lib/db/prisma", async () => {
 });
 
 import { prisma } from "@/lib/db/prisma";
-import { isReservedName } from "@/lib/odata/params";
+import { isReservedName, parseQueryParams } from "@/lib/odata/params";
 import { buildScaffold } from "@/lib/studio/scaffold";
 import { supportedVersions, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -243,7 +243,12 @@ function guideSamples(): { reads: Sample[]; create: Sample; appendix: { method: 
   expect(section62).toMatch(/path prefix\s+`\/api\/northbound`/);
 
   // The two read outlines (ABAP Cloud and classic): their path and headers.
-  const abapBlocks = [...section62.matchAll(/```abap\n([\s\S]*?)```/g)].map((m) => m[1]!);
+  // The query-and-page outline (P1.4) is a query, which a deployment serves
+  // only with its switch on and the interface's policy: it is checked against
+  // the query grammar (queryOutline, below), not replayed here.
+  const allAbap = [...section62.matchAll(/```abap\n([\s\S]*?)```/g)].map((m) => m[1]!);
+  expect(allAbap).toHaveLength(3);
+  const abapBlocks = allAbap.filter((block) => /data\?limit=/.test(block));
   expect(abapBlocks).toHaveLength(2);
   const reads: Sample[] = abapBlocks.map((block, i) => {
     const uri = /(?:i_uri_path|uri)\s*=\s*\|([^|]+)\|/.exec(block)?.[1];
@@ -435,6 +440,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
    * one of them stays a legacy read, answered byte for byte as before, with
    * COREEDGE_QUERY_SURFACE on or off.
    */
+  it("the guide's query-and-page outline sends only parameters of the query grammar, the same ones on every page", () => {
+    const section62 = between("### 6.2 ABAP as consumer", "### 6.3 ");
+    const outline = [...section62.matchAll(/```abap\n([\s\S]*?)```/g)].map((m) => m[1]!).find((b) => !/data\?limit=/.test(b));
+    expect(outline).toBeDefined();
+    // The parameters, as the ABAP string template joins them.
+    const params = [...outline!.matchAll(/`([^`]*)`/g)].map((m) => m[1]!).filter((t) => /^&?[a-z]+[.=]/i.test(t)).join("");
+    const parsed = parseQueryParams(new URLSearchParams(params), params.length + 1);
+    expect(parsed).toMatchObject({ surface: true, ok: true, kind: "LIST" });
+    // The cursor is added to the same parameters, and the parse of both agrees on everything else.
+    const next = parseQueryParams(new URLSearchParams(`${params}&cursor=cec1.t1.${"A".repeat(40)}`), params.length + 60);
+    expect(next).toMatchObject({ surface: true, ok: true, cursor: `cec1.t1.${"A".repeat(40)}` });
+  });
+
   it("sent no request that carries a reserved query name, so none changes meaning", () => {
     const reads = targets.filter((t) => /\/data(\?|$)/.test(t));
     expect(reads.length).toBeGreaterThan(0);
