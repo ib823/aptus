@@ -230,9 +230,29 @@ async function sapGet(
   }
 }
 
-/** The detail of a call that got no answer: deliberately generic, as the caught error commonly carries the host. */
+/** The detail of a read that failed without a status: deliberately generic, as the caught error commonly carries the host. */
+const UNREAD_DETAIL = "The read could not be completed.";
+
+/** The detail of a call that got no answer. */
 function failedDetail(got: Extract<SapGet, { kind: "failed" }>): string {
-  return got.aborted ? `The tenant did not respond within ${got.timeoutMs}ms.` : "The read could not be completed.";
+  return got.aborted ? `The tenant did not respond within ${got.timeoutMs}ms.` : UNREAD_DETAIL;
+}
+
+/*
+ * READING SAP'S ANSWER CAN THROW TOO. A 200 nested deep enough (a 40 KB body
+ * of 20,000 brackets) overflows the stack in the envelope stripper. The read
+ * sat inside the GET's own catch until sapGet was shared, and such an answer
+ * was ERROR, audited and counted by the breaker; it stays so, with the same
+ * generic detail and the cause reduced to a code, instead of escaping the
+ * route as a bare 500 that writes no audit row and leaves a half-open
+ * circuit's probe holding its lease.
+ */
+function readAnswer<T>(read: () => T): { ok: true; value: T } | { ok: false; failureReason: string } {
+  try {
+    return { ok: true, value: read() };
+  } catch (err) {
+    return { ok: false, failureReason: failureReasonFromError(err) };
+  }
 }
 
 /**
@@ -284,7 +304,11 @@ export async function readEntitySet(
     };
   }
 
-  const records = got.httpStatus === 200 ? extractRecords(got.json) : [];
+  const read = readAnswer(() => (got.httpStatus === 200 ? extractRecords(got.json) : []));
+  if (!read.ok) {
+    return { status: "ERROR", httpStatus: null, records: [], detail: UNREAD_DETAIL, durationMs: Date.now() - started, failureReason: read.failureReason };
+  }
+  const records = read.value;
   if (records === null) {
     return {
       status: "ERROR", httpStatus: got.httpStatus, records: [],
@@ -381,7 +405,9 @@ export async function readQuery(
         return done("ERROR", got.httpStatus, `The tenant responded with HTTP ${got.httpStatus}.`, failureReason);
     }
   }
-  const answer = readQueryAnswer(got.json, query, input.countAsked);
+  const read = readAnswer(() => readQueryAnswer(got.json, query, input.countAsked));
+  if (!read.ok) return done("ERROR", null, UNREAD_DETAIL, read.failureReason);
+  const answer = read.value;
   if (!answer.ok) return done("ERROR", got.httpStatus, "The tenant returned an invalid OData response.", FAILURE_REASON_INVALID_BODY);
   const served = answer.rows.length;
   const status: QueryReadStatus = query.kind === "KEY" || served > 0 ? "OK" : "EMPTY";

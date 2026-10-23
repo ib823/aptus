@@ -103,6 +103,25 @@ describe("a wide read SAP answered", () => {
   });
 });
 
+/*
+ * A deeply nested answer overflows the stack in the envelope stripper. Since
+ * the GET was shared with the query surface (sapGet), reading the answer sat
+ * outside its catch: the RangeError escaped the route as a bare 500 with no
+ * audit row, and the breaker never heard of the call. It is ERROR again, as it
+ * was when the read had one catch around everything.
+ */
+describe("a SAP answer too deep to read", () => {
+  const deep = (depth: number) => `{"d":{"results":[{"Order":"1","Deep":${"[".repeat(depth)}${"]".repeat(depth)}}]}}`;
+
+  it("is ERROR on the legacy read, counted against the system, and not thrown", async () => {
+    const f = vi.fn().mockResolvedValue(new Response(deep(20_000), { status: 200, headers: { "content-type": "application/json" } }));
+    const r = await readEntitySet({ connection: conn(), servicePath: SERVICE, entitySet: "A_Order", limit: 10 }, f as unknown as typeof fetch);
+    expect(r).toMatchObject({ status: "ERROR", httpStatus: null, records: [], detail: "The read could not be completed.", failureReason: "FETCH_FAILED" });
+    expect(httpStatusFor(r.status)).toBe(502);
+    expect(circuitOutcomeForRead(r.status)).toBe("upstream-error");
+  });
+});
+
 function handshakeThen(answer: Response): typeof fetch {
   return vi
     .fn()
