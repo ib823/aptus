@@ -403,6 +403,8 @@ describe("A.3 #9: every route that reaches SAP uses the pipeline and writes an a
       "src/app/api/sap/tdd/hub-content/write-test/route.ts",
       "src/app/api/sap/tdd/operations/route.ts",
       "src/app/api/sap/tdd/preview/route.ts",
+      // P1.2: the tenant's own Gateway catalogue, listed inside callSap.
+      "src/app/api/sap/tdd/tenant-services/route.ts",
       "src/app/api/sap/tdd/write/route.ts",
     ]);
   });

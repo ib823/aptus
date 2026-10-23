@@ -106,6 +106,12 @@ export interface ResolvedReadTenant {
      * (governed/console.ts bind; wave 2 integration review round 3).
      */
     transport?: string;
+    /**
+     * SapConnection.revision when it was read: a stored tenant service listing
+     * records it, so a listing of a connection re-pointed since is shown as
+     * such (P1.2, tenant-listing.ts).
+     */
+    revision?: number;
   } | null;
 }
 
@@ -182,6 +188,7 @@ export async function resolveReadTenant(
       id: connection.id,
       environment: connection.environment,
       ...(connection.transport ? { transport: connection.transport } : {}),
+      ...(connection.revision !== undefined ? { revision: connection.revision } : {}),
       ...(connection.ceilingGrants ? { ceiling: { organizationId, grants: connection.ceilingGrants } } : {}),
     },
   };

@@ -11,6 +11,21 @@ import {
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 import { sanitizeTenantKey } from "./tenant-key";
 import { ENTITY_SET_TAG, parseEntitySets, type SapEntitySet } from "./entity-set-tags";
+import { bodyPrefix } from "./body-prefix";
+import {
+  LISTING_LIMITS,
+  parseServiceCollectionPage,
+  parseV4ServiceGroups,
+  servicePathFromEntry,
+  V2_CATALOGUE_PATH,
+  V4_CATALOGUE_PATH,
+  type CatalogueStatus,
+  type GatewayCatalogueListing,
+  type ListedService,
+  listedService,
+  type ListingLimits,
+  type V4CatalogueStatus,
+} from "./tenant-discovery";
 
 /**
  * The env tenant's auth types — the SAME four the stored-connection path
@@ -1087,6 +1102,149 @@ export async function inspectSapService(
     throw new SapHttpError(`Metadata request failed: HTTP ${response.status}`, response.status);
   }
   return { entitySets: parseEntitySets(text) };
+}
+
+/* ── the tenant's own service catalogue (P1.2) ─────────────────────────── */
+
+type CataloguePage =
+  | { readonly ok: true; readonly text: string; readonly bytes: number; readonly httpStatus: number }
+  | { readonly ok: false; readonly status: CatalogueStatus; readonly httpStatus: number | null };
+
+/**
+ * One catalogue request, its body read no further than `maxBytes` decoded
+ * bytes (bodyPrefix), and NEVER FOLLOWED ANYWHERE: `redirect: "manual"`, and
+ * a 3xx is a sign-in redirect, so the user could not read the catalogue (as
+ * the connection probe reads one, connection-health.ts). A body past its
+ * bound is not parsed at all: half a JSON page is not a page.
+ */
+async function readCataloguePage(url: string, headers: Record<string, string>, timeoutMs: number, maxBytes: number): Promise<CataloguePage> {
+  let res: Response;
+  try {
+    res = await sapFetch(url, { headers, redirect: "manual" }, timeoutMs);
+  } catch (err) {
+    return { ok: false, status: err instanceof Error && /timed out/.test(err.message) ? "TIMEOUT" : "ERROR", httpStatus: null };
+  }
+  const refuse = async (status: CatalogueStatus): Promise<CataloguePage> => {
+    await res.body?.cancel().catch(() => undefined);
+    return { ok: false, status, httpStatus: res.status };
+  };
+  if (res.status >= 300 && res.status < 400) return refuse("UNAUTHORIZED");
+  if (res.status === 401 || res.status === 403) return refuse("UNAUTHORIZED");
+  if (res.status === 404) return refuse("NOT_FOUND");
+  if (!res.ok) return refuse("ERROR");
+  const body = await bodyPrefix(res, maxBytes);
+  if (body.truncated) return { ok: false, status: "TRUNCATED", httpStatus: res.status };
+  return { ok: true, text: body.text, bytes: new TextEncoder().encode(body.text).byteLength, httpStatus: res.status };
+}
+
+/**
+ * LIST THE TENANT'S OWN SERVICES (P1.2): the OData V2 Gateway catalogue's
+ * ServiceCollection, page by page, and — only when `v4` is asked for — the
+ * OData V4 catalogue's service groups. Called only inside a console call's
+ * callSap (api/sap/tdd/tenant-services), through this connector's own fetch
+ * and credentials, so the A.3 #9 census is unchanged.
+ *
+ * Bounded everywhere (tenant-discovery.ts LISTING_LIMITS): CoreEdge's own
+ * `$skip`, never the server's `__next`; at most `maxPages` pages of
+ * `pageSize`, each read to at most `pageBytes`, `totalBytes` in all, within
+ * `deadlineMs`, stopping at `maxEntries`. A first page that fails is the
+ * listing's status; a later one makes it TRUNCATED, with what was read.
+ *
+ * NO URL IT RETURNS: each entry's address is reduced to a validated path on
+ * the connection's own origin, or null (servicePathFromEntry). A credential
+ * that cannot be obtained throws SapCredentialError before any request.
+ */
+export async function listGatewayCatalogue(
+  prefix: string,
+  tenant: SapTenant,
+  options: { readonly v4?: boolean; readonly limits?: ListingLimits } = {},
+): Promise<GatewayCatalogueListing> {
+  const limits = options.limits ?? LISTING_LIMITS;
+  const startedAt = Date.now();
+  const left = () => limits.deadlineMs - (Date.now() - startedAt);
+  const headers = { ...(await authHeadersFor(prefix, tenant)), Accept: "application/json" };
+  const timeoutFor = () => Math.max(1, Math.min(getRequestTimeoutMs(prefix), left()));
+  const answers: (number | null)[] = [];
+  const entries: ListedService[] = [];
+  let dropped = 0;
+  let bytes = 0;
+  let status: CatalogueStatus = "OK";
+  let truncated = false;
+  const stop = (why: CatalogueStatus) => {
+    // A failure after the first page leaves a partial list: say so, keep it.
+    status = entries.length > 0 || why === "TRUNCATED" ? "TRUNCATED" : why;
+    truncated = status === "TRUNCATED";
+  };
+
+  for (let page = 0; ; page++) {
+    if (page >= limits.maxPages) {
+      stop("TRUNCATED");
+      break;
+    }
+    if (left() <= 0) {
+      stop("TIMEOUT");
+      break;
+    }
+    const url = buildSapUrl({
+      baseUrl: tenant.baseUrl,
+      path: `${V2_CATALOGUE_PATH}/ServiceCollection`,
+      client: tenant.client,
+      query: { $format: "json", $top: limits.pageSize, $skip: page * limits.pageSize },
+    });
+    const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes);
+    answers.push(read.httpStatus);
+    if (!read.ok) {
+      stop(read.status);
+      break;
+    }
+    const parsed = parseServiceCollectionPage(read.text, limits.pageSize);
+    if (!parsed) {
+      stop("ERROR");
+      break;
+    }
+    dropped += parsed.dropped;
+    bytes += read.bytes;
+    let full = false;
+    for (const e of parsed.entries) {
+      if (entries.length >= limits.maxEntries) {
+        full = true;
+        break;
+      }
+      entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
+    }
+    if (full) {
+      stop("TRUNCATED");
+      break;
+    }
+    // A page shorter than asked is the last one.
+    if (parsed.listed < limits.pageSize) break;
+    // Full, or past the byte bound, with more pages to come.
+    if (entries.length >= limits.maxEntries || bytes >= limits.totalBytes) {
+      stop("TRUNCATED");
+      break;
+    }
+  }
+
+  let v4Status: V4CatalogueStatus = "NOT_TRIED";
+  if (options.v4 === true && left() > 0 && entries.length < limits.maxEntries) {
+    const url = buildSapUrl({
+      baseUrl: tenant.baseUrl,
+      path: `${V4_CATALOGUE_PATH}/ServiceGroups`,
+      client: tenant.client,
+      query: { $expand: "DefaultSystem($expand=Services)", $top: limits.pageSize },
+    });
+    const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes);
+    answers.push(read.httpStatus);
+    const parsed = read.ok ? parseV4ServiceGroups(read.text, limits.maxEntries - entries.length) : null;
+    v4Status = read.ok ? (parsed ? "OK" : "ERROR") : read.status === "UNAUTHORIZED" || read.status === "NOT_FOUND" ? read.status : "ERROR";
+    if (parsed) {
+      dropped += parsed.dropped;
+      for (const e of parsed.entries) entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
+      if (parsed.entries.length < parsed.listed - parsed.dropped) truncated = true;
+    }
+  }
+
+  return { entries, status, v4Status, truncated, dropped, answers };
 }
 
 /**

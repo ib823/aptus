@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   classifyService,
@@ -269,5 +269,109 @@ describe("what is stored", () => {
   it("is read back only as this build understands it", () => {
     expect(readStoredEntries([stored(1), { id: "x", class: "SOMETHING_NEW" }, null])).toEqual([stored(1)]);
     expect(readStoredEntries("not an array")).toEqual([]);
+  });
+});
+
+describe("listGatewayCatalogue: the connector's listing (no live lab)", () => {
+  const tenant = {
+    key: "lab",
+    label: "Lab",
+    baseUrl: "https://lab.example.invalid",
+    authHeaders: async () => ({ Authorization: "Basic dGVzdDp0ZXN0" }),
+  };
+  const page = (ids: string[], extra: Record<string, unknown> = {}) =>
+    new Response(JSON.stringify({ d: { results: ids.map((ID) => ({ ID })), ...extra } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  const limits = { ...LISTING_LIMITS, pageSize: 2 };
+
+  async function list(fetchImpl: (url: string, init: RequestInit) => Response | Promise<Response>, options: { v4?: boolean; limits?: typeof limits } = {}) {
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve(fetchImpl(url, init));
+    });
+    try {
+      const { listGatewayCatalogue } = await import("@/lib/sap-public/tdd-connector");
+      return { result: await listGatewayCatalogue("S4_TDD", tenant, { limits, ...options }), calls };
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it("pages with its own $skip until a short page, never following __next or a redirect", async () => {
+    const { result, calls } = await list((url) => {
+      const skip = Number(/\$skip=(\d+)/.exec(url)![1]);
+      return skip === 0
+        ? page(["ZA_0001", "ZB_0001"], { __next: "http://169.254.169.254/next" })
+        : page(["ZC_0001"]);
+    });
+    expect(result.status).toBe("OK");
+    expect(result.truncated).toBe(false);
+    expect(result.entries.map((e) => e.id)).toEqual(["ZA_0001", "ZB_0001", "ZC_0001"]);
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://lab.example.invalid/sap/opu/odata/IWFND/CATALOGSERVICE;v=2/ServiceCollection?$format=json&$top=2&$skip=0",
+      "https://lab.example.invalid/sap/opu/odata/IWFND/CATALOGSERVICE;v=2/ServiceCollection?$format=json&$top=2&$skip=2",
+    ]);
+    expect(calls.every((c) => c.init.redirect === "manual")).toBe(true);
+    // What leaves the connector is a path, never the listed URL.
+    expect(JSON.stringify(result)).not.toContain("http");
+  });
+
+  it("stops at its page limit and says the list is incomplete", async () => {
+    const { result, calls } = await list(() => page(["ZA_0001", "ZB_0001"]), { limits: { ...limits, maxPages: 3 } });
+    expect(calls).toHaveLength(3);
+    expect(result.status).toBe("TRUNCATED");
+    expect(result.truncated).toBe(true);
+  });
+
+  it("stops at its entry limit", async () => {
+    const { result } = await list(() => page(["ZA_0001", "ZB_0001"]), { limits: { ...limits, maxEntries: 3 } });
+    expect(result.entries).toHaveLength(3);
+    expect(result.status).toBe("TRUNCATED");
+  });
+
+  it.each([
+    [403, "UNAUTHORIZED"],
+    [401, "UNAUTHORIZED"],
+    [302, "UNAUTHORIZED"],
+    [404, "NOT_FOUND"],
+    [500, "ERROR"],
+  ] as const)("a first page answered %i is %s, with no entries", async (status, expected) => {
+    const { result } = await list(() => new Response("", { status, headers: status === 302 ? { location: "https://idp.example/login" } : {} }));
+    expect(result.status).toBe(expected);
+    expect(result.entries).toEqual([]);
+    expect(result.answers).toEqual([status]);
+  });
+
+  it("keeps what was read when a later page fails, as TRUNCATED", async () => {
+    const { result } = await list((url) => (/\$skip=0/.test(url) ? page(["ZA_0001", "ZB_0001"]) : new Response("", { status: 503 })));
+    expect(result.status).toBe("TRUNCATED");
+    expect(result.entries).toHaveLength(2);
+    expect(result.answers).toEqual([200, 503]);
+  });
+
+  it("refuses a page past its byte bound without parsing it", async () => {
+    const { result } = await list(() => page(["ZA_0001"], { padding: "x".repeat(4096) }), { limits: { ...limits, pageBytes: 1024 } });
+    expect(result.status).toBe("TRUNCATED");
+    expect(result.entries).toEqual([]);
+  });
+
+  it("is not a page when the body is not OData's JSON (a login page with 200)", async () => {
+    const { result } = await list(() => new Response("<html>sign in</html>", { status: 200 }));
+    expect(result.status).toBe("ERROR");
+  });
+
+  it("asks the V4 catalogue only when told to", async () => {
+    const v4Body = JSON.stringify({ value: [{ GroupId: "ZUI_X_O4", DefaultSystem: { Services: [{ ServiceId: "ZUI_X_O4", ServiceVersion: "0001" }] } }] });
+    const handler = (url: string) =>
+      url.includes("/odata4/") ? new Response(v4Body, { status: 200 }) : page(["ZA_0001"]);
+    const without = await list(handler);
+    expect(without.calls.some((c) => c.url.includes("/odata4/"))).toBe(false);
+    expect(without.result.v4Status).toBe("NOT_TRIED");
+    const withV4 = await list(handler, { v4: true });
+    expect(withV4.result.v4Status).toBe("OK");
+    expect(withV4.result.entries.map((e) => e.technicalName)).toEqual(["ZA", "ZUI_X_O4"]);
   });
 });

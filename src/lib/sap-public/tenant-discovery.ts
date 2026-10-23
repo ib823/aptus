@@ -103,6 +103,29 @@ export interface CatalogueEntry {
   readonly title: string | null;
 }
 
+/** An entry as the connector hands it back: its address reduced to a validated path (or none), never a URL. */
+export interface ListedService extends Omit<CatalogueEntry, "serviceUrl"> {
+  readonly path: string | null;
+}
+
+/** An entry with its address replaced by the path derived from it: the URL itself goes no further. */
+export function listedService(entry: CatalogueEntry, path: string | null): ListedService {
+  return { id: entry.id, technicalName: entry.technicalName, version: entry.version, odataVersion: entry.odataVersion, title: entry.title, path };
+}
+
+/** What one listing of a tenant's catalogue came back with (tdd-connector.ts, listGatewayCatalogue). */
+export interface GatewayCatalogueListing {
+  readonly entries: readonly ListedService[];
+  readonly status: CatalogueStatus;
+  readonly v4Status: V4CatalogueStatus;
+  /** More was listed than was read: a limit stopped the listing, or a later page failed. */
+  readonly truncated: boolean;
+  /** Entries present but not usable. */
+  readonly dropped: number;
+  /** The HTTP status of each request that left, null when it was not answered: the audit's load and the circuit's evidence. */
+  readonly answers: readonly (number | null)[];
+}
+
 /** One stored entry of a listing (TenantServiceListing.entries): no credential, no host, no URL. */
 export interface ListingEntry {
   readonly id: string;
