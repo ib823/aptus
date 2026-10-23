@@ -143,6 +143,13 @@ interface RunState {
   /** The chip's own words, when a query outcome says more than the status (a record SAP does not have). */
   statusLabel?: string | undefined;
   statusMeaning?: string | undefined;
+  /**
+   * What this run sent: the query (trimmed; null for a ?limit run), the
+   * entity and the limit. A saved case records these, never the fields as
+   * they are when Save is clicked, so a refused query is saved as that query
+   * and an edit after the run cannot be stored beside an outcome it never had.
+   */
+  sent?: { readonly query: string | null; readonly entity: string; readonly limit: number } | undefined;
 }
 
 type BrokerReadStatus = "OK" | "EMPTY" | "NEEDS_SETUP" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
@@ -224,7 +231,7 @@ export function TestConsoleClient({
   const [limit, setLimit] = useState(10);
   /** The query the deployed app would send (P1.4); empty runs the ?limit read. */
   const [queryText, setQueryText] = useState("");
-  const [run, setRun] = useState<RunState>({ phase: "idle" });
+  const [run, setRunState] = useState<RunState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -372,6 +379,9 @@ export function TestConsoleClient({
   /** The only place a live SAP read is triggered — through the broker pipeline. */
   const doRun = useCallback(async () => {
     if (!selected) return;
+    const sent = { query: queryText.trim() || null, entity, limit };
+    // Every outcome of this run carries what it sent, for Save as test case.
+    const setRun = (state: RunState) => setRunState(state.phase === "done" ? { ...state, sent } : state);
     setRun({ phase: "running" });
     setSaved(null);
     try {
@@ -381,9 +391,9 @@ export function TestConsoleClient({
         body: JSON.stringify({
           interfaceId: selected.id,
           ...(credential ? { clientId: credential.clientId } : {}),
-          ...(entity ? { entity } : {}),
-          limit: Math.min(limit, 50),
-          ...(queryText.trim() ? { query: queryText.trim() } : {}),
+          ...(sent.entity ? { entity: sent.entity } : {}),
+          limit: Math.min(sent.limit, 50),
+          ...(sent.query ? { query: sent.query } : {}),
         }),
       });
       const json = (await res.json()) as {
@@ -476,7 +486,8 @@ export function TestConsoleClient({
   }, [selected, credential, entity, limit, queryText]);
 
   const saveCase = useCallback(async () => {
-    if (!selected || run.phase !== "done") return;
+    if (!selected || run.phase !== "done" || !run.sent) return;
+    const sent = run.sent;
     setSaving(true);
     try {
       const res = await fetch("/api/studio/test-cases", {
@@ -484,15 +495,15 @@ export function TestConsoleClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interfaceId: selected.id,
-          name: run.query
-            ? `${selected.name} — ${queryText.trim().slice(0, 80)}`
-            : `${selected.name} — ${entity || selected.entitySet || "default"} (${limit})`,
+          name: sent.query
+            ? `${selected.name} — ${sent.query.slice(0, 80)}`
+            : `${selected.name} — ${sent.entity || selected.entitySet || "default"} (${sent.limit})`,
           request: {
-            entity: entity || selected.entitySet,
-            limit,
+            entity: sent.entity || selected.entitySet,
+            limit: sent.limit,
             tenant: tenantKey,
-            // A query run replays as the same query.
-            ...(run.query ? { query: queryText.trim() } : {}),
+            // A query run replays as the same query, refused or ran.
+            ...(sent.query ? { query: sent.query } : {}),
             // WHICH system this outcome came from. A replay that ran as a
             // different environment's credential would be comparing a result
             // against a tenant that never produced it.
@@ -514,7 +525,7 @@ export function TestConsoleClient({
     } finally {
       setSaving(false);
     }
-  }, [selected, credential, run, entity, limit, tenantKey, loadCases, queryText]);
+  }, [selected, credential, run, tenantKey, loadCases]);
 
   /**
    * Turn the rows we just saw into a described contract.

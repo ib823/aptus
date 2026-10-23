@@ -146,6 +146,42 @@ describe("the Test Console's query run", () => {
     expect(screen.queryByText(/This is an empty resource/)).toBeNull();
   });
 
+  /*
+   * Save as test case records what the run sent, never the field as it is at
+   * Save: a refused query run was saved with no query (so it replayed as a
+   * ?limit read), and a query edited after a run was stored beside the
+   * outcome of the one before.
+   */
+  const savedCase = () => {
+    const call = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/api/studio/test-cases") && (init as RequestInit | undefined)?.method === "POST");
+    return call ? (JSON.parse((call[1] as RequestInit).body as string) as { name: string; request: Record<string, unknown>; lastOutcome: string }) : null;
+  };
+
+  it("saves a refused query run as the query that was refused", async () => {
+    brokerAnswer = {
+      outcome: "refused",
+      refusal: { kind: "POLICY_FIELD_NOT_GRANTED", message: "filter.NetAmount: not allowed.", query: { rule: "FIELD_NOT_FILTERABLE", parameter: "filter.NetAmount.gt" } },
+    };
+    render(<TestConsoleClient tenantKey="development" canSave interfaces={[IFACE]} />);
+    fireEvent.change(screen.getByLabelText(/Query parameters/), { target: { value: " filter.NetAmount.gt=1 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save as test case" }));
+    await waitFor(() => expect(savedCase()).not.toBeNull());
+    expect(savedCase()).toMatchObject({ name: "Order lines — filter.NetAmount.gt=1", request: { query: "filter.NetAmount.gt=1" }, lastOutcome: "FAIL" });
+  });
+
+  it("saves the query that ran, not the field as edited after the run", async () => {
+    render(<TestConsoleClient tenantKey="development" canSave interfaces={[IFACE]} />);
+    const field = screen.getByLabelText(/Query parameters/);
+    fireEvent.change(field, { target: { value: "filter.Customer.eq=C2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await screen.findByTestId("query-run");
+    fireEvent.change(field, { target: { value: "filter.Customer.eq=C9&count=true" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as test case" }));
+    await waitFor(() => expect(savedCase()).not.toBeNull());
+    expect(savedCase()).toMatchObject({ name: "Order lines — filter.Customer.eq=C2", request: { query: "filter.Customer.eq=C2" }, lastOutcome: "PASS" });
+  });
+
   it("reads the policy only when the builder is opened, and writes its parameters into the field", async () => {
     render(<TestConsoleClient tenantKey="development" canSave interfaces={[IFACE]} />);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/query-policy"))).toBe(false);
