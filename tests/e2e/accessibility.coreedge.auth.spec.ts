@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
@@ -215,6 +217,71 @@ test.describe("Control Tower · time to first call", () => {
       const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
       expect(report(violations)).toBe("");
     });
+  }
+});
+
+/**
+ * P1.9 · the parity scorecard, in both themes, at desktop width and on a phone.
+ *
+ * Unlike the other Control Tower screens this one is POPULATED in CI: it
+ * renders the committed docs/coreedge/parity-scorecard.json on the server, so
+ * the scan sees every table, rating chip and provenance strip the page has,
+ * not an empty state. The E2E user is a platform administrator (role "admin"),
+ * which is who the page is for.
+ *
+ * Its tables are wider than a phone, so each scroll box must take keyboard
+ * focus (scrollable-region-focusable, the rule the Test Console's rows failed);
+ * the phone run asserts the blockers table really scrolls, so the guard is
+ * exercised rather than passing on a box that happens to fit.
+ *
+ * The page's headline figure is also compared with the committed file read
+ * here with fs, the e2e half of "matches the CI JSON" (the unit test compares
+ * every figure with a fresh simulator run). Scoped to main[data-studio-main]
+ * for the shell's dark-mode defect described above.
+ */
+const PARITY_ROUTE = "/control-tower/parity";
+const PARITY_SCORECARD = JSON.parse(
+  readFileSync(path.join(process.cwd(), "docs", "coreedge", "parity-scorecard.json"), "utf8"),
+) as { steps: { atLeastPartial: number; partialPct: number }[] };
+
+test.describe("Control Tower · parity scorecard", () => {
+  for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "390px", width: 390, height: 844 }]) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`${PARITY_ROUTE} has no serious or critical violations at ${viewport.name} in ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        if (theme === "dark") {
+          // Seeded before navigation, for the reason the design-system scan gives.
+          await page.addInitScript(() => {
+            window.localStorage.setItem("theme", "dark");
+          });
+        }
+        await page.goto(PARITY_ROUTE);
+        await page.waitForLoadState("load");
+        const main = page.locator("main[data-studio-main]");
+        await expect(main.getByRole("heading", { level: 1, name: "Parity scorecard" })).toBeVisible();
+        if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+
+        // The serving build: a commit in full, or the sentence saying there is none.
+        await expect(main.getByRole("region", { name: "This build" })).toContainText(/[0-9a-f]{40}|No commit recorded/);
+        // CoreEdge today's partial count, as the committed file holds it.
+        const today = PARITY_SCORECARD.steps[0]!;
+        await expect(
+          main.getByRole("region", { name: "Headline: Integration Suite and CoreEdge" }).getByRole("row", { name: /at least partly supported/ }),
+        ).toContainText(`${today.atLeastPartial.toLocaleString("en")} (${today.partialPct.toFixed(1)}%)`);
+
+        if (viewport.name === "390px") {
+          const blockers = main.getByRole("region", { name: "Ranked blockers today" });
+          expect(await blockers.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+        }
+
+        const results = await new AxeBuilder({ page })
+          .include("main[data-studio-main]")
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+        expect(report(violations)).toBe("");
+      });
+    }
   }
 });
 
