@@ -139,11 +139,12 @@ export function compileQuery(
   const selectFor = (withKeys: readonly string[]): string[] | null => {
     if (!c.selectSupported || allColumns) return null;
     const wanted = new Set([...project, ...withKeys]);
-    return policy.readable.filter((n) => wanted.has(n));
+    const names = policy.readable.filter((n) => wanted.has(n));
+    return names.length > 0 ? names : null;
   };
   const options: [SapOption, string][] = [];
   const pushSelect = (names: string[] | null) => {
-    if (names !== null && names.length > 0) options.push(["$select", names.map(emitName).join(",")]);
+    if (names !== null) options.push(["$select", names.map(emitName).join(",")]);
   };
 
   if (ast.kind === "KEY") {

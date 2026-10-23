@@ -160,6 +160,16 @@ describe("$select", () => {
     expect(q.selectSent).toEqual(["SalesOrder", "CompanyCode", "Customer"]);
   });
 
+  it("is never sent empty", () => {
+    const q = compileQuery({ v: 1, kind: "LIST", select: ["Customer"], filter: [], orderby: [], key: null, count: false, pageSize: 5 }, prepared(orders("V2"), ORDERS_SOURCE), { skip: 0, top: 6, page0: true }, []);
+    // The overlap check's key part still goes; with neither, nothing does.
+    expect(q.options.find(([n]) => n === "$select")?.[1]).toBe("SalesOrder");
+    const single = prepared(orders("V2", { set: { pageable: false } }), { ...ORDERS_SOURCE, keyLookup: false });
+    const none = compileQuery({ v: 1, kind: "LIST", select: ["Customer"], filter: [], orderby: [], key: null, count: false, pageSize: 5 }, single, { skip: 0, top: 6, page0: true }, []);
+    expect(none.selectSent).toBeNull();
+    expect(none.options.map(([n]) => n)).not.toContain("$select");
+  });
+
   it("is left out when it would name every column, or when SAP does not support it", () => {
     const all = prepared(orders("V2"), { ...ORDERS_SOURCE, select: "*" });
     expect(compile("filter.CompanyCode.eq=1", all).options.map(([n]) => n)).not.toContain("$select");

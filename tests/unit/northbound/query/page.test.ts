@@ -154,6 +154,15 @@ describe("the page algorithm", () => {
     }
   });
 
+  it("issues no cursor where none is wanted (the Test Console's single page)", () => {
+    const r = okPage(assemblePage(ctx({ answer: { rows: rowsFrom(0, 11), more: false, totalCount: null, projected: false }, issueCursor: false })));
+    expect(r.page).toMatchObject({ nextCursor: null, complete: false, stopped: null, rowsServed: 10 });
+  });
+
+  it("refuses to start a chain no grant authorised", () => {
+    expect(() => assemblePage(ctx({ answer: { rows: rowsFrom(0, 11), more: false, totalCount: null, projected: false }, authorisingGrantIds: [] }))).toThrow(/no authorising grant/);
+  });
+
   it("an empty answer is a complete, empty page", () => {
     const r = okPage(assemblePage(ctx({ answer: { rows: [], more: false, totalCount: null, projected: false } })));
     expect(JSON.parse(r.body)).toEqual({

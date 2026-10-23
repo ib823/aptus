@@ -167,6 +167,12 @@ export interface PageContext {
   readonly connection: { readonly id: string; readonly revision: number };
   /** The grants authorising this call (resolveAccess): recorded on page 0. */
   readonly authorisingGrantIds: readonly string[];
+  /**
+   * False where a page is the only page there will be — the Test Console
+   * runs page 0 and refuses a cursor — so none is sealed: `nextCursor` stays
+   * null and the page says only whether SAP has more. Defaults to true.
+   */
+  readonly issueCursor?: boolean;
 }
 
 export type PageResult =
@@ -226,7 +232,12 @@ export function assemblePage(ctx: PageContext): PageResult {
     stopped = "ROW_CAP";
     flags.add("ROW_CAP");
   } else if (c.paging !== "OFFSET") stopped = "NOT_PAGEABLE";
-  else {
+  else if (ctx.issueCursor !== false) {
+    // A governed read is always authorised by some grant; a chain bound to
+    // none could never be checked against the live set.
+    if (cursor === null && ctx.authorisingGrantIds.length === 0) {
+      throw new QueryCompilerInvariantError("A paging chain with no authorising grant.");
+    }
     const seconds = Math.floor(ctx.now.getTime() / 1000);
     const servedBytes = bytes.reduce((a, b) => a + b, 0);
     const rb = Math.max(1, Math.round(((cursor?.payload.rb ?? 0) * rs + servedBytes) / (rs + k)));
