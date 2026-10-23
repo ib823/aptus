@@ -724,9 +724,10 @@
         "row": "ODATA_V2",
         "col": "SYNC_READ",
         "status": "partial",
-        "note": "OData V2 read. Reads send only $top and $format and return at most 100 rows: no filter, key, select, expand or paging (read.ts).",
+        "note": "OData V2 read. Legacy reads (?limit) send $top and $format and return at most 100 rows. Under an interface's query policy, reads add key lookup, AND filters (eq, in, gt, ge, lt, le), select, orderby, inline count and cursor paging (at most 1000 rows a page); no expand or OR (P1.4b).",
         "basis": [
-          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts)."
+          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts).",
+          "With query parameters, the same route builds the OData query from the request checked against the interface's query policy (compileQuery, operation-compiler.ts; P1.4, behind COREEDGE_QUERY_SURFACE)."
         ]
       },
       {
@@ -778,9 +779,9 @@
         "row": "ODATA_V2",
         "col": "BULK_BATCH",
         "status": "none",
-        "note": "No $batch in read.ts or write.ts, and reads stop at 100 rows.",
+        "note": "No $batch in read.ts or write.ts; a legacy read stops at 100 rows, and a query pages one governed call per page.",
         "basis": [
-          "No $batch in read.ts or write.ts, and reads stop at 100 rows."
+          "No $batch in read.ts or write.ts; a legacy read stops at 100 rows, and a query pages one governed call per page."
         ]
       },
       {
@@ -796,9 +797,10 @@
         "row": "ODATA_V4",
         "col": "SYNC_READ",
         "status": "partial",
-        "note": "OData V4 read. Reads send only $top and $format and return at most 100 rows: no filter, key, select, expand or paging (read.ts).",
+        "note": "OData V4 read. Legacy reads (?limit) send $top and $format and return at most 100 rows. Under an interface's query policy, reads add key lookup, AND filters (eq, in, gt, ge, lt, le), select, orderby, inline count and cursor paging (at most 1000 rows a page); no expand or OR (P1.4b).",
         "basis": [
-          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts)."
+          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts).",
+          "With query parameters, the same route builds the OData query from the request checked against the interface's query policy (compileQuery, operation-compiler.ts; P1.4, behind COREEDGE_QUERY_SURFACE)."
         ]
       },
       {
@@ -850,9 +852,9 @@
         "row": "ODATA_V4",
         "col": "BULK_BATCH",
         "status": "none",
-        "note": "No $batch in read.ts or write.ts, and reads stop at 100 rows.",
+        "note": "No $batch in read.ts or write.ts; a legacy read stops at 100 rows, and a query pages one governed call per page.",
         "basis": [
-          "No $batch in read.ts or write.ts, and reads stop at 100 rows."
+          "No $batch in read.ts or write.ts; a legacy read stops at 100 rows, and a query pages one governed call per page."
         ]
       },
       {
@@ -1333,7 +1335,7 @@
         "row": "SAP_STANDARD",
         "col": "",
         "status": "partial",
-        "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Reads send only $top and return at most 100 rows (read.ts).",
+        "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4).",
         "basis": [
           "SAP-published services resolve through the curated list or the Hub catalogue copy (resolve-hub-service.ts)."
         ]
@@ -1342,7 +1344,7 @@
         "row": "CUSTOMER_CUSTOM",
         "col": "",
         "status": "partial",
-        "note": "Customer-built services. Reads send only $top and return at most 100 rows (read.ts). No Z* or YY1_* call is recorded against a live tenant.",
+        "note": "Customer-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No Z* or YY1_* call is recorded against a live tenant.",
         "basis": [
           "Z* and YY1_* services are registered by service path and verified from $metadata per environment (service-path.ts, service-verifications.ts; P1.1)."
         ]
@@ -1351,7 +1353,7 @@
         "row": "PARTNER",
         "col": "",
         "status": "partial",
-        "note": "Partner-built services. Reads send only $top and return at most 100 rows (read.ts). No partner service is recorded against a live tenant.",
+        "note": "Partner-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No partner service is recorded against a live tenant.",
         "basis": [
           "A partner's namespaced Gateway service is registered by path on the same terms (service-path.ts; P1.1)."
         ]
