@@ -825,6 +825,8 @@ function PolicyEditor({
               const on = e.target.checked;
               update((d) => {
                 d.keyLookup = on;
+                // A key lookup needs every key part readable, and its Read box locks: tick them, so none is locked unticked.
+                if (on) for (const k of shape.keys) if (!shape.pinned.has(k)) d.read.add(k);
               });
             }}
           />

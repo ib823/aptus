@@ -211,6 +211,25 @@ describe("the field table", () => {
     expect(screen.getAllByText("kept: key lookup and paging need it")).toHaveLength(2);
   });
 
+  it("turning key lookup back on ticks the key parts it locks, on a dataset SAP does not page", async () => {
+    await renderCard(view({ basis: { ...BASIS, set: { pageable: false } }, source: null, compiled: null, revision: 0, interfaceStatus: "DRAFT" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose fields first" }));
+    const form = screen.getByRole("form", { name: "Edit the query policy" });
+    const keyLookup = within(form).getByRole("checkbox", { name: /Key lookup/ });
+    fireEvent.click(keyLookup);
+    fireEvent.click(within(form).getByRole("checkbox", { name: "Read Order" }));
+    expect((within(form).getByRole("checkbox", { name: "Read Order" }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(keyLookup);
+    const order = within(form).getByRole("checkbox", { name: "Read Order" }) as HTMLInputElement;
+    expect(order.disabled).toBe(true);
+    expect(order.checked).toBe(true);
+    fireEvent.click(within(form).getByRole("button", { name: "Save the policy" }));
+    await waitFor(() => expect(writes("PUT")).toHaveLength(1));
+    const sent = writes("PUT")[0]!.source as QueryPolicySourceV1;
+    expect(sent.keyLookup).toBe(true);
+    expect(sent.select === "*" || sent.select.includes("Order")).toBe(true);
+  });
+
   it("unticking Read clears the field's filters and sort (a hidden field is never a filter)", async () => {
     await openEditor();
     fireEvent.click(screen.getByRole("checkbox", { name: "Read Customer" }));
