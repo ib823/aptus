@@ -8,10 +8,10 @@
  * SuccessFactors Photo or Attachment; the broker sends no $select) pass the
  * first at a high limit, and a 201 echoing a base64 upload passes the second.
  * Both answers were served before the bounds. Cut at them, the read was an
- * ERROR on HTTP 200 that the breaker counted as an upstream error, the
- * rotation probe as "SAP refused a data read", and the consumer saw a 502;
- * the 201 was an ambiguous ERROR stored under the Idempotency-Key although
- * SAP had created the record.
+ * ERROR on HTTP 200 that the breaker counted as an upstream error and the
+ * consumer saw as a 502; the 201 was an ambiguous ERROR stored under the
+ * Idempotency-Key although SAP had created the record. (The rotation probe
+ * read a data row too; since the wave 2 redesign it reads only `$metadata`.)
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -23,7 +23,6 @@ import { FAILURE_REASON_INVALID_BODY } from "@/lib/northbound/failure-reason";
 import { httpStatusFor, MAX_READ_BODY_BYTES, readEntitySet } from "@/lib/northbound/read";
 import { MAX_WRITE_RESPONSE_BYTES, writeEntitySet } from "@/lib/northbound/write";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
-import { decideRotation } from "@/lib/sap-public/rotation";
 import { probeRotation } from "@/lib/sap-public/rotation-probe";
 
 const BASE = "https://my000001-api.s4hana.cloud.sap";
@@ -64,20 +63,15 @@ describe("a wide read SAP answered", () => {
     expect(circuitOutcomeForRead(r.status)).toBe("ok");
   });
 
-  it("lets the rotation probe swap a correct rotated secret", async () => {
-    const sap = (async (url: string | URL | Request) =>
+  it("cannot reach the rotation probe, which reads only $metadata", async () => {
+    const sap = vi.fn(async (url: string | URL | Request) =>
       String(url).includes("$metadata")
         ? new Response(EDMX, { status: 200, headers: { "content-type": "application/xml" } })
-        : new Response(PHOTO, { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-    const probe = await probeRotation(conn(), {
-      interfaceId: "iface_1",
-      interfaceVersion: 1,
-      servicePath: SERVICE,
-      entitySet: "Photo",
-      provenAt: new Date("2026-10-21T08:00:00.000Z"),
-    }, sap);
-    expect(probe.dataRead).toEqual({ step: "data-read", ok: true });
-    expect(decideRotation(probe).swap).toBe(true);
+        : new Response(PHOTO, { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const probe = await probeRotation(conn(), SERVICE, sap as unknown as typeof fetch);
+    expect(probe.answer).toEqual({ ran: true, outcome: "passed", reason: "metadata_ok" });
+    expect(sap.mock.calls.every(([url]) => String(url).includes("$metadata"))).toBe(true);
   });
 
   it("the bound sits above anything a Vercel function can return (~4.5 MB)", () => {
