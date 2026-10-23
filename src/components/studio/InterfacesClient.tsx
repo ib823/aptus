@@ -56,6 +56,8 @@ import {
   type ODataVersion,
 } from "@/lib/sap-public/service-path";
 import type { SchemaState } from "@/lib/studio/contract-provenance";
+import { SIGN_OFF_BASIS_LABELS, type SignOffBasis } from "@/lib/studio/api-policy";
+import { PolicySignOffDialog } from "@/components/studio/PolicySignOffDialog";
 import {
   describeWriteReadiness,
   readyEnvironments,
@@ -106,6 +108,10 @@ export interface StudioInterface {
   serviceVerifiedEntitySets?: readonly string[] | null;
   /** Your own API: each environment with a current successful verify (the write gate is per environment). */
   serviceVerifiedEnvironments?: readonly VerifiedEnvironment[];
+  /** The recorded contract and who described it (P1.2): a tenant's verify, an uploaded file, sampled rows. */
+  contract?: { semver: string; describedBy: "tenant" | "upload" | "sample" } | null;
+  /** The SAP API Policy §1.2 sign-off (P1.2), present only where one is needed. */
+  policySignOff?: { signed: { by: string | null; at: string; basis: SignOffBasis; reference: string } | null };
 }
 
 export type { VerifyTarget, RegisterProductOption, RegisterSolutionOption };
@@ -155,6 +161,7 @@ export function InterfacesClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(openRegister && canAuthor);
+  const [signingOff, setSigningOff] = useState(false);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
   const selectedIsCustom = selected?.servicePath != null && selected.servicePath !== "";
@@ -270,6 +277,7 @@ export function InterfacesClient({
                     <span style={{ display: "block", ...muted, color: isSelected ? "var(--ink-secondary)" : "var(--ink-muted)" }}>
                       {i.solutionName}
                       {i.servicePath ? " · own API" : ""}
+                      {i.policySignOff && !i.policySignOff.signed ? " · §1.2 sign-off needed" : ""}
                     </span>
                   </Td>
                   <Td>{i.operation}</Td>
@@ -394,6 +402,17 @@ export function InterfacesClient({
               </Row>
             )}
             <Row label="Version">v{selected.version}</Row>
+            <Row label="Recorded contract">
+              {selected.contract
+                ? `${selected.contract.semver} (${
+                    selected.contract.describedBy === "upload"
+                      ? "from file, not verified"
+                      : selected.contract.describedBy === "sample"
+                        ? "from sampled rows"
+                        : "from the tenant"
+                  })`
+                : "none yet: verify the service, or register it from its description file"}
+            </Row>
             <Row label="Request schema">
               {selected.hasRequestSchema ? "captured" : "not captured yet"}
             </Row>
@@ -422,7 +441,38 @@ export function InterfacesClient({
               audited per call — solution, operation, status and which connection answered.
             </Row>
             <Row label="Status">{selected.status}</Row>
+            {selected.policySignOff && (
+              <Row label="SAP API Policy §1.2">
+                {selected.policySignOff.signed ? (
+                  <span>
+                    Signed off by {selected.policySignOff.signed.by ?? "a member of your organization"} on{" "}
+                    {selected.policySignOff.signed.at.slice(0, 10)}: {SIGN_OFF_BASIS_LABELS[selected.policySignOff.signed.basis]}
+                    {selected.policySignOff.signed.reference ? ` (${selected.policySignOff.signed.reference})` : ""}.
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--status-awaiting-fg)" }}>
+                    Sign-off needed before approval: this interface calls a service your team built on SAP S/4HANA Cloud Public Edition.
+                  </span>
+                )}
+                {canAuthor && !selected.policySignOff.signed && (
+                  <button type="button" style={{ ...btnSmall, marginLeft: 8 }} onClick={() => setSigningOff(true)}>
+                    Record the sign-off
+                  </button>
+                )}
+              </Row>
+            )}
           </DetailCard>
+          {signingOff && (
+            <PolicySignOffDialog
+              interfaceId={selected.id}
+              serviceIdentity={selected.externalId}
+              onClose={() => setSigningOff(false)}
+              onSigned={() => {
+                setSigningOff(false);
+                router.refresh();
+              }}
+            />
+          )}
 
           {/* Disabled by design — see the file header. No aria-disabled: nothing
               here is interactive, so the state is carried by the copy ("not in

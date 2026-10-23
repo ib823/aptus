@@ -16,11 +16,13 @@
 
 import { useCallback, useId, useMemo, useState } from "react";
 
+import { technicalIdsForAddress } from "@/lib/sap-public/comm-scenarios";
 import {
   inferODataVersion,
   validateServicePath,
   type ODataVersion,
 } from "@/lib/sap-public/service-path";
+import { customerBuilt } from "@/lib/sap-public/tenant-discovery";
 
 export interface RegisterSolutionOption {
   id: string;
@@ -54,27 +56,54 @@ function needsDatasetToVerify(product: string, path: string): boolean {
   return product === "successfactors" && (path === "" || path.toLowerCase() === "/odata/v2");
 }
 
-type SubmitState = { kind: "idle" } | { kind: "saving" } | { kind: "error"; message: string };
+type SubmitState =
+  | { kind: "idle" }
+  | { kind: "saving" }
+  | { kind: "error"; message: string }
+  /** Registered, with the SAP API Policy §1.2 warning the server gave (P1.2, Q7: a warning, not a refusal). */
+  | { kind: "warned"; id: string; message: string };
+
+/**
+ * The technical name a Gateway path names, or null: /sap/opu/odata/sap/ZX_SRV
+ * is ZX_SRV, a V4 binding its service group. What the live §1.2 hint reads.
+ */
+function technicalNameOf(path: string, version: ODataVersion): string | null {
+  const [id] = technicalIdsForAddress({ path, protocol: version === "V4" ? "ODATAV4" : "ODATAV2" });
+  return id ? id.replace(/(_\d{4})?(_G4BA)?$/, "") : null;
+}
+
+/** What the dialog opens with, when Discover's tenant listing hands it a service (P1.2). */
+export interface RegisterInitialValues {
+  servicePath?: string;
+  odataVersion?: ODataVersion;
+  name?: string;
+  product?: string;
+}
 
 export function RegisterOwnApiDialog({
   solutions,
   products,
   onClose,
   onCreated,
+  initial,
 }: {
   solutions: readonly RegisterSolutionOption[];
   /** OData products only — Ariba has no service path. */
   products: readonly RegisterProductOption[];
   onClose: () => void;
   onCreated: (id: string) => void;
+  /** Pre-filled from a listed service (Discover, On this tenant); every field stays editable. */
+  initial?: RegisterInitialValues;
 }) {
   const ids = useId();
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
-  const [name, setName] = useState("");
-  const [product, setProduct] = useState(() => defaultRegisterProduct(products));
-  const [servicePath, setServicePath] = useState("");
-  const [version, setVersion] = useState<ODataVersion>("V2");
-  const [versionTouched, setVersionTouched] = useState(false);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [product, setProduct] = useState(() =>
+    initial?.product && products.some((p) => p.key === initial.product) ? initial.product : defaultRegisterProduct(products),
+  );
+  const [servicePath, setServicePath] = useState(initial?.servicePath ?? "");
+  const [version, setVersion] = useState<ODataVersion>(initial?.odataVersion ?? "V2");
+  const [versionTouched, setVersionTouched] = useState(initial?.odataVersion !== undefined);
   const [operation, setOperation] = useState<"READ" | "CREATE" | "UPDATE">("READ");
   const [entitySet, setEntitySet] = useState("");
   const [state, setState] = useState<SubmitState>({ kind: "idle" });
@@ -82,6 +111,14 @@ export function RegisterOwnApiDialog({
   const trimmedPath = servicePath.trim();
   const pathCheck = useMemo(() => validateServicePath(trimmedPath), [trimmedPath]);
   const pathError = trimmedPath.length > 0 && !pathCheck.ok ? pathCheck.message : null;
+  // SAP API Policy §1.2, as a hint while typing (P1.2): a name that is not one
+  // SAP reserves for customers may be an SAP service, and SAP's must be
+  // Published APIs. The server classifies it against SAP's own sources.
+  const technicalName = pathCheck.ok ? technicalNameOf(pathCheck.path, version) : null;
+  const policyHint =
+    technicalName !== null && customerBuilt(technicalName) === null
+      ? `${technicalName} is not a Z*, Y* or YY1_* name. If it is an SAP service, SAP API Policy §1.2 allows only Published APIs: add it from the SAP catalogue on Discover instead.`
+      : null;
   const selectedProduct = products.find((p) => p.key === product) ?? null;
 
   const onPathChange = (next: string) => {
@@ -115,9 +152,13 @@ export function RegisterOwnApiDialog({
           ...(entitySet.trim() ? { entitySet: entitySet.trim() } : {}),
         }),
       });
-      const json = (await res.json()) as { data?: { id: string }; error?: { message?: string } };
+      const json = (await res.json()) as { data?: { id: string; policyWarning?: { message: string } }; error?: { message?: string } };
       if (!res.ok || !json.data) {
         throw new Error(json.error?.message ?? "The interface could not be registered.");
+      }
+      if (json.data.policyWarning) {
+        setState({ kind: "warned", id: json.data.id, message: json.data.policyWarning.message });
+        return;
       }
       onCreated(json.data.id);
     } catch (err) {
@@ -227,6 +268,9 @@ export function RegisterOwnApiDialog({
                 {pathError ??
                   "The part of the service's address after the host, starting with /. Copy it from the service binding in ADT (Service URL) or from /IWFND/MAINT_SERVICE, without $metadata or ?sap-client. It starts with /sap/opu/odata/ or /sap/opu/odata4/ (SuccessFactors: /odata/v2). The host always comes from your connection."}
               </p>
+              {policyHint && product !== "successfactors" && (
+                <p style={{ ...hint, color: "var(--status-awaiting-fg)" }}>{policyHint}</p>
+              )}
             </div>
 
             <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
@@ -300,14 +344,25 @@ export function RegisterOwnApiDialog({
             {state.message}
           </p>
         )}
+        {state.kind === "warned" && (
+          <p role="status" style={{ margin: "12px 0 0", fontSize: 13, color: "var(--status-awaiting-fg)" }}>
+            Registered as a draft. {state.message}
+          </p>
+        )}
 
         <p style={{ ...hint, marginTop: 16 }}>Creates a DRAFT. It grants no access.</p>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+          {state.kind === "warned" ? (
+            <button type="button" onClick={() => onCreated(state.id)} style={btnPrimary}>
+              Done
+            </button>
+          ) : (
           <button type="button" onClick={onClose} style={btnSecondary}>
             Cancel
           </button>
-          {solutions.length > 0 && (
+          )}
+          {solutions.length > 0 && state.kind !== "warned" && (
             <button
               type="button"
               onClick={() => void submit()}
