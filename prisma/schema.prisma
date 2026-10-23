@@ -980,6 +980,31 @@ model Interface {
   /// ALWAYS null in v1 — the mapping engine is v2.
   mappingVersion Int?
 
+  /// The query policy a builder chose (P1.4, src/lib/odata/policy.ts
+  /// QueryPolicySourceV1): which fields a caller may read, filter and sort
+  /// on, key lookup, count and the page limits. Written only by the Studio
+  /// query-policy route; at most 32 KiB. Null: the interface serves no query
+  /// parameters. Never read on a governed call: the compiled form below is.
+  queryPolicy Json?
+  /// What the current METADATA contract lets a query do (P1.4,
+  /// src/lib/odata/basis.ts QueryBasisV1): the properties, keys and SAP's
+  /// capability annotations, derived in the contract worker and written by a
+  /// verify's transaction (contracts/record.ts) when that verify's contract is
+  /// the current one; at most 128 KiB. Outside the contract content hash.
+  /// Cleared by a PATCH that changes the contract. Read by Studio and the
+  /// policy compiler, never on a governed call.
+  queryBasis Json?
+  /// The policy compiled against the basis (P1.4, CompiledQueryPolicyV1): the
+  /// only shape the governed read enforces, read by the access-load statement
+  /// (governed/call-loads.ts) on query-surface calls only; at most 64 KiB.
+  /// Written by the compiler's callers alone: the Studio save, a verify's
+  /// recompile, and the PATCH that nulls it on a contract change.
+  queryPolicyCompiled Json?
+  /// +1 on every policy save, verify recompile and delete: Studio's
+  /// compare-and-set. A policy edit never bumps `version`; cursors bind the
+  /// compiled policy's content hash instead.
+  queryPolicyRevision Int @default(0)
+
   /// DRAFT | ACTIVE | DEPRECATED
   status String @default("DRAFT")
 
@@ -1758,6 +1783,45 @@ model NorthboundAuditEvent {
   /// northbound version served (console reads, Test Console dry runs).
   apiVersion  String?
   apiBasePath String?
+
+  /// The query surface (P1.4), written in the same insert as the rest of the
+  /// row (+0 statements; northbound/audit.ts). All null on a legacy ?limit
+  /// read, except responseBytes and queryRule on its byte guard's 413.
+  ///
+  /// queryKind: LIST (a chain's first page), PAGE (a cursor page) or KEY.
+  /// Null on a refusal before the query was checked.
+  queryKind String?
+  /// The query's shape with no literal in it (odata/ast.ts queryShape), at
+  /// most 1,024 characters: which fields, which operators, which order.
+  queryShape String?
+  /// `qh1.<kid>.` + a keyed HMAC of the query, literals included, under a
+  /// per-organisation subkey of the token ring (odata/ast.ts queryHash): the
+  /// same query hashes the same within one organisation, and a reader of this
+  /// table cannot brute-force a filter value from it (roadmap §9.1 #11).
+  queryHash String?
+  /// The effective fields that left CoreEdge (at most 256 names), or ["*"]
+  /// when the caller sent no select (the policy's readable fields at
+  /// queryPolicyRev).
+  requestedFields Json?
+  /// The compiled query policy's content hash the call was checked against.
+  queryPolicyRev String?
+  /// The paging chain, on every page of it, page 0 included; with pageIndex
+  /// and chainRows, what P3.5 groups full-table pagers and restarted chains by.
+  cursorChainId String?
+  pageIndex     Int?
+  /// Rows served in the chain, this page included.
+  chainRows     Int?
+  /// Bytes of the body sent (the query surface), or of the answer refused
+  /// (the legacy byte guard's 413).
+  responseBytes Int?
+  /// The rule of a query refusal or outcome (odata/rules.ts), or the cursor
+  /// check that failed; /^[A-Z][A-Z0-9_]{1,40}$/, checked at the one writer.
+  /// Never in failureReason, which keeps meaning "why the upstream call
+  /// failed" (correlation-lookup.ts reads a failureReason as reaching SAP).
+  queryRule String?
+  /// Comma-joined flags from a closed set (odata/rules.ts QUERY_FLAG_LIST):
+  /// what happened on a page that the status does not say.
+  queryFlags String?
 
   at DateTime @default(now())
 
