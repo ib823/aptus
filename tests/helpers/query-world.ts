@@ -73,7 +73,7 @@ export interface QueryWorld {
   readonly connectionId: string;
 }
 
-export async function seedQueryWorld(run: string, baseUrl: string = CANARY_ORIGIN): Promise<QueryWorld> {
+export async function seedQueryWorld(run: string, baseUrl: string = CANARY_ORIGIN, client: string | null = null): Promise<QueryWorld> {
   const organizationId = `${run}-org`;
   const userId = `${run}-builder`;
   await prisma.organization.create({ data: { id: organizationId, name: `Query ${run}`, type: "client" } });
@@ -87,6 +87,7 @@ export async function seedQueryWorld(run: string, baseUrl: string = CANARY_ORIGI
     authType: "basic",
     secrets: { username: "COMM_USER", password: `pw-${run}` },
     environment: "DEV",
+    ...(client === null ? {} : { client }),
   });
   const connection = await prisma.sapConnection.findFirstOrThrow({ where: { organizationId, product: "s4hana", key: "dev" }, select: { id: true } });
   return { organizationId, userId, connectionId: connection.id };

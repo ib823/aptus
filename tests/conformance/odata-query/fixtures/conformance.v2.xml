@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.4 conformance, tier 1). An OData V2 service
+  shaped like an SAP Gateway one, with a property of every type the query
+  surface writes as a literal, a composite key, keys of Guid and Int64 type, a
+  set SAP does not page, and an effective-dated key in the SuccessFactors
+  style. Every name and value is invented; it is not, and is not copied from,
+  any SAP $metadata document.
+-->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+  <edmx:DataServices m:DataServiceVersion="2.0">
+    <Schema Namespace="ZCONF_SRV" xml:lang="en" sap:schema-version="1" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+      <EntityType Name="ItemType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="ItemId"/>
+        </Key>
+        <Property Name="ItemId" Type="Edm.String" Nullable="false" MaxLength="20"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="80"/>
+        <Property Name="Guid" Type="Edm.Guid"/>
+        <Property Name="Count64" Type="Edm.Int64"/>
+        <Property Name="Amount" Type="Edm.Decimal" Precision="15" Scale="2"/>
+        <Property Name="Qty" Type="Edm.Int32"/>
+        <Property Name="Flag" Type="Edm.Boolean"/>
+        <Property Name="Posted" Type="Edm.DateTime" Precision="0" sap:display-format="Date"/>
+        <Property Name="Changed" Type="Edm.DateTime" Precision="0"/>
+        <Property Name="Stamp" Type="Edm.DateTimeOffset" Precision="0"/>
+        <Property Name="Note" Type="Edm.String" MaxLength="5000"/>
+      </EntityType>
+      <EntityType Name="LineType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="OrderId"/>
+          <PropertyRef Name="LineNo"/>
+        </Key>
+        <Property Name="OrderId" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="LineNo" Type="Edm.Int32" Nullable="false"/>
+        <Property Name="Product" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="ByGuidType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="Id"/>
+        </Key>
+        <Property Name="Id" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="ByNumberType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="Num"/>
+        </Key>
+        <Property Name="Num" Type="Edm.Int64" Nullable="false"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="NoPagingType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="Id"/>
+        </Key>
+        <Property Name="Id" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="EffectiveType" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="externalCode"/>
+          <PropertyRef Name="effectiveStartDate"/>
+        </Key>
+        <Property Name="externalCode" Type="Edm.String" Nullable="false" MaxLength="32"/>
+        <Property Name="effectiveStartDate" Type="Edm.DateTime" Nullable="false" sap:display-format="Date"/>
+        <Property Name="name" Type="Edm.String" MaxLength="80"/>
+      </EntityType>
+      <EntityContainer Name="ZCONF_SRV_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json">
+        <EntitySet Name="Items" EntityType="ZCONF_SRV.ItemType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+        <EntitySet Name="Lines" EntityType="ZCONF_SRV.LineType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+        <EntitySet Name="ByGuid" EntityType="ZCONF_SRV.ByGuidType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+        <EntitySet Name="ByNumber" EntityType="ZCONF_SRV.ByNumberType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+        <EntitySet Name="NoPaging" EntityType="ZCONF_SRV.NoPagingType" sap:pageable="false" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+        <EntitySet Name="Effective" EntityType="ZCONF_SRV.EffectiveType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>
