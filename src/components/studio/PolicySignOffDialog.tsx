@@ -14,6 +14,7 @@
 
 import { useId, useState } from "react";
 
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
 import {
   API_POLICY_ID,
@@ -46,6 +47,9 @@ export function PolicySignOffDialog({
   const [state, setState] = useState<SubmitState>({ kind: "idle" });
   const needsReference = basis !== "DOCUMENTATION";
   const canSubmit = state.kind !== "saving" && acknowledged && (!needsReference || reference.trim() !== "");
+  // Focus in on opening, Tab kept inside, Escape closes, focus back to the opener on closing. While the
+  // sign-off is recorded the passkey step-up may ask on top of this dialog, so the keyboard is left to it.
+  const { panelRef, headingRef } = useModalDialog({ onClose, paused: state.kind === "saving" });
 
   const submit = async () => {
     setState({ kind: "saving" });
@@ -66,6 +70,7 @@ export function PolicySignOffDialog({
   const titleId = `${ids}-title`;
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -75,7 +80,7 @@ export function PolicySignOffDialog({
       }}
     >
       <div style={dialog}>
-        <h2 id={titleId} style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>
+        <h2 id={titleId} ref={headingRef} tabIndex={-1} style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>
           SAP API Policy §1.2 sign-off
         </h2>
         <p style={{ ...hint, marginTop: 0 }}>

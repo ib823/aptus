@@ -16,6 +16,7 @@
 import { useId, useMemo, useState } from "react";
 
 import type { RegisterProductOption, RegisterSolutionOption } from "@/components/studio/RegisterOwnApiDialog";
+import { useModalDialog } from "@/hooks/useModalDialog";
 import { inferODataVersion, validateServicePath, type ODataVersion } from "@/lib/sap-public/service-path";
 
 /** As the server's MAX_UPLOAD_DESCRIPTION_BYTES (contracts/upload.ts). */
@@ -68,6 +69,8 @@ export function UploadDescriptionDialog({
   onClose: () => void;
 }) {
   const ids = useId();
+  // Focus in on opening, Tab kept inside, Escape closes, focus back to "Upload a description" on closing.
+  const { panelRef, headingRef } = useModalDialog({ onClose });
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -139,6 +142,7 @@ export function UploadDescriptionDialog({
   const titleId = `${ids}-title`;
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -148,7 +152,7 @@ export function UploadDescriptionDialog({
       }}
     >
       <div style={dialog}>
-        <h2 id={titleId} style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>
+        <h2 id={titleId} ref={headingRef} tabIndex={-1} style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>
           Register from a description file
         </h2>
         <p style={{ ...hint, marginTop: 0 }}>

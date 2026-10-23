@@ -2,7 +2,9 @@
  * P1.2 — register an interface from a description file, as the builder does
  * it (acceptance A2, end to end): Discover, "From a file", upload the YY1
  * golden description, pick its dataset, and the DRAFT appears in Interfaces
- * with "contract 1.0.0 (from file, not verified)".
+ * with "contract 1.0.0 (from file, not verified)". The dialog takes the
+ * keyboard as a modal dialog must (focus in, Tab kept inside, Escape out,
+ * focus back to its trigger).
  *
  * NO SAP SYSTEM IS CONTACTED. The upload is compiled in the contract worker
  * (P1.3's envelope) and stored; the integration test
@@ -35,6 +37,27 @@ test.describe("Discover · From a file (P1.2)", () => {
       await prisma.interface.deleteMany({ where: { id: { in: ids } } });
     }
     await prisma.$disconnect();
+  });
+
+  test("the dialog takes the keyboard: focus moves in, Tab stays inside, Escape closes it and returns focus", async ({ page }) => {
+    await page.goto("/studio/discover");
+    await page.getByRole("tab", { name: "From a file" }).click();
+    const trigger = page.getByRole("button", { name: "Upload a description" });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", { name: "Register from a description file" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Register from a description file" })).toBeFocused();
+    // Past the last control and back before the first, focus stays in the dialog.
+    for (let i = 0; i < 20; i++) await page.keyboard.press("Tab");
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    for (let i = 0; i < 20; i++) await page.keyboard.press("Shift+Tab");
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
   });
 
   test("an uploaded description becomes a DRAFT with its contract, not verified", async ({ page }) => {
