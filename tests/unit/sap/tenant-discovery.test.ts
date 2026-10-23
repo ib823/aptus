@@ -379,6 +379,58 @@ describe("listGatewayCatalogue: the connector's listing (no live lab)", () => {
     expect(result.entries).toEqual([]);
   });
 
+  /**
+   * A host that answers the headers at once and trickles the body: what the
+   * fetch would do, the stream errors when the request's signal aborts. It
+   * gives up by itself after two seconds, so a listing the deadline does not
+   * bound ends, slowly, instead of hanging the run.
+   */
+  const trickling = (_url: string, init: RequestInit) => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"d":{"results":['));
+        const stop = () => {
+          clearInterval(timer);
+          controller.error(new DOMException("This operation was aborted", "AbortError"));
+        };
+        if (init.signal?.aborted) return stop();
+        init.signal?.addEventListener("abort", stop, { once: true });
+        timer = setInterval(() => {
+          sent += 1;
+          if (sent > 40) {
+            clearInterval(timer);
+            controller.close();
+          } else controller.enqueue(new TextEncoder().encode(" "));
+        }, 50);
+      },
+      cancel() {
+        clearInterval(timer);
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  it("bounds the body reads by its deadline, not only the headers: a trickling page is a TIMEOUT", async () => {
+    const started = Date.now();
+    const { result } = await list(trickling, { limits: { ...limits, deadlineMs: 300 } });
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(result.status).toBe("TIMEOUT");
+    expect(result.entries).toEqual([]);
+    expect(result.answers).toEqual([200]);
+  });
+
+  it("keeps the pages read before the deadline when a later one trickles, as TRUNCATED", async () => {
+    const started = Date.now();
+    const { result } = await list((url, init) => (/\$skip=0/.test(url) ? page(["ZA_0001", "ZB_0001"]) : trickling(url, init)), {
+      limits: { ...limits, deadlineMs: 300 },
+    });
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(result.status).toBe("TRUNCATED");
+    expect(result.entries.map((e) => e.id)).toEqual(["ZA_0001", "ZB_0001"]);
+  });
+
   it("is not a page when the body is not OData's JSON (a login page with 200)", async () => {
     const { result } = await list(() => new Response("<html>sign in</html>", { status: 200 }));
     expect(result.status).toBe("ERROR");

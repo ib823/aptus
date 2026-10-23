@@ -647,7 +647,11 @@ async function sapFetch(input: string, init: RequestInit = {}, timeoutMs = 30000
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    // This timer bounds the headers only. A caller's own signal (a listing's
+    // deadline) aborts the request too and, unlike the timer, stays armed
+    // while the caller reads the body.
+    const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+    return await fetch(input, { ...init, signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`SAP request timed out after ${timeoutMs}ms`);
@@ -1115,12 +1119,19 @@ type CataloguePage =
  * bytes (bodyPrefix), and NEVER FOLLOWED ANYWHERE: `redirect: "manual"`, and
  * a 3xx is a sign-in redirect, so the user could not read the catalogue (as
  * the connection probe reads one, connection-health.ts). A body past its
- * bound is not parsed at all: half a JSON page is not a page.
+ * bound is not parsed at all: half a JSON page is not a page. `deadline` is
+ * the listing's: it aborts the body read too, and a page it cut is TIMEOUT.
  */
-async function readCataloguePage(url: string, headers: Record<string, string>, timeoutMs: number, maxBytes: number): Promise<CataloguePage> {
+async function readCataloguePage(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+  maxBytes: number,
+  deadline: AbortSignal,
+): Promise<CataloguePage> {
   let res: Response;
   try {
-    res = await sapFetch(url, { headers, redirect: "manual" }, timeoutMs);
+    res = await sapFetch(url, { headers, redirect: "manual", signal: deadline }, timeoutMs);
   } catch (err) {
     return { ok: false, status: err instanceof Error && /timed out/.test(err.message) ? "TIMEOUT" : "ERROR", httpStatus: null };
   }
@@ -1132,7 +1143,12 @@ async function readCataloguePage(url: string, headers: Record<string, string>, t
   if (res.status === 401 || res.status === 403) return refuse("UNAUTHORIZED");
   if (res.status === 404) return refuse("NOT_FOUND");
   if (!res.ok) return refuse("ERROR");
-  const body = await bodyPrefix(res, maxBytes);
+  let body: { text: string; truncated: boolean };
+  try {
+    body = await bodyPrefix(res, maxBytes);
+  } catch {
+    return { ok: false, status: deadline.aborted ? "TIMEOUT" : "ERROR", httpStatus: res.status };
+  }
   if (body.truncated) return { ok: false, status: "TRUNCATED", httpStatus: res.status };
   return { ok: true, text: body.text, bytes: new TextEncoder().encode(body.text).byteLength, httpStatus: res.status };
 }
@@ -1147,8 +1163,9 @@ async function readCataloguePage(url: string, headers: Record<string, string>, t
  * Bounded everywhere (tenant-discovery.ts LISTING_LIMITS): CoreEdge's own
  * `$skip`, never the server's `__next`; at most `maxPages` pages of
  * `pageSize`, each read to at most `pageBytes`, `totalBytes` in all, within
- * `deadlineMs`, stopping at `maxEntries`. A first page that fails is the
- * listing's status; a later one makes it TRUNCATED, with what was read.
+ * `deadlineMs` (the bodies' reads included), stopping at `maxEntries`. A
+ * first page that fails is the listing's status; a later one makes it
+ * TRUNCATED, with what was read.
  *
  * NO URL IT RETURNS: each entry's address is reduced to a validated path on
  * the connection's own origin, or null (servicePathFromEntry). A credential
@@ -1163,88 +1180,101 @@ export async function listGatewayCatalogue(
   const startedAt = Date.now();
   const left = () => limits.deadlineMs - (Date.now() - startedAt);
   const headers = { ...(await authHeadersFor(prefix, tenant)), Accept: "application/json" };
-  const timeoutFor = () => Math.max(1, Math.min(getRequestTimeoutMs(prefix), left()));
-  const answers: (number | null)[] = [];
-  const entries: ListedService[] = [];
-  let dropped = 0;
-  let bytes = 0;
-  let status: CatalogueStatus = "OK";
-  let truncated = false;
-  const stop = (why: CatalogueStatus) => {
-    // A failure after the first page leaves a partial list: say so, keep it.
-    status = entries.length > 0 || why === "TRUNCATED" ? "TRUNCATED" : why;
-    truncated = status === "TRUNCATED";
-  };
+  /*
+   * ONE DEADLINE FOR THE WHOLE LISTING, BODIES INCLUDED (P1.2 review round 1).
+   * sapFetch's own timer stops at the headers, so a host that answered them at
+   * once and trickled each body held the listing, and the console circuit's
+   * permit, for as long as it liked. This signal stays armed while each body
+   * is read: a read past the deadline aborts, and its page answers TIMEOUT.
+   */
+  const deadline = new AbortController();
+  const deadlineTimer = setTimeout(() => deadline.abort(), Math.max(0, left()));
+  try {
+    const timeoutFor = () => Math.max(1, Math.min(getRequestTimeoutMs(prefix), left()));
+    const answers: (number | null)[] = [];
+    const entries: ListedService[] = [];
+    let dropped = 0;
+    let bytes = 0;
+    let status: CatalogueStatus = "OK";
+    let truncated = false;
+    const stop = (why: CatalogueStatus) => {
+      // A failure after the first page leaves a partial list: say so, keep it.
+      status = entries.length > 0 || why === "TRUNCATED" ? "TRUNCATED" : why;
+      truncated = status === "TRUNCATED";
+    };
 
-  for (let page = 0; ; page++) {
-    if (page >= limits.maxPages) {
-      stop("TRUNCATED");
-      break;
-    }
-    if (left() <= 0) {
-      stop("TIMEOUT");
-      break;
-    }
-    const url = buildSapUrl({
-      baseUrl: tenant.baseUrl,
-      path: `${V2_CATALOGUE_PATH}/ServiceCollection`,
-      client: tenant.client,
-      query: { $format: "json", $top: limits.pageSize, $skip: page * limits.pageSize },
-    });
-    const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes);
-    answers.push(read.httpStatus);
-    if (!read.ok) {
-      stop(read.status);
-      break;
-    }
-    const parsed = parseServiceCollectionPage(read.text, limits.pageSize);
-    if (!parsed) {
-      stop("ERROR");
-      break;
-    }
-    dropped += parsed.dropped;
-    bytes += read.bytes;
-    let full = false;
-    for (const e of parsed.entries) {
-      if (entries.length >= limits.maxEntries) {
-        full = true;
+    for (let page = 0; ; page++) {
+      if (page >= limits.maxPages) {
+        stop("TRUNCATED");
         break;
       }
-      entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
-    }
-    if (full) {
-      stop("TRUNCATED");
-      break;
-    }
-    // A page shorter than asked is the last one.
-    if (parsed.listed < limits.pageSize) break;
-    // Full, or past the byte bound, with more pages to come.
-    if (entries.length >= limits.maxEntries || bytes >= limits.totalBytes) {
-      stop("TRUNCATED");
-      break;
-    }
-  }
-
-  let v4Status: V4CatalogueStatus = "NOT_TRIED";
-  if (options.v4 === true && left() > 0 && entries.length < limits.maxEntries) {
-    const url = buildSapUrl({
-      baseUrl: tenant.baseUrl,
-      path: `${V4_CATALOGUE_PATH}/ServiceGroups`,
-      client: tenant.client,
-      query: { $expand: "DefaultSystem($expand=Services)", $top: limits.pageSize },
-    });
-    const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes);
-    answers.push(read.httpStatus);
-    const parsed = read.ok ? parseV4ServiceGroups(read.text, limits.maxEntries - entries.length) : null;
-    v4Status = read.ok ? (parsed ? "OK" : "ERROR") : read.status === "UNAUTHORIZED" || read.status === "NOT_FOUND" ? read.status : "ERROR";
-    if (parsed) {
+      if (left() <= 0) {
+        stop("TIMEOUT");
+        break;
+      }
+      const url = buildSapUrl({
+        baseUrl: tenant.baseUrl,
+        path: `${V2_CATALOGUE_PATH}/ServiceCollection`,
+        client: tenant.client,
+        query: { $format: "json", $top: limits.pageSize, $skip: page * limits.pageSize },
+      });
+      const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes, deadline.signal);
+      answers.push(read.httpStatus);
+      if (!read.ok) {
+        stop(read.status);
+        break;
+      }
+      const parsed = parseServiceCollectionPage(read.text, limits.pageSize);
+      if (!parsed) {
+        stop("ERROR");
+        break;
+      }
       dropped += parsed.dropped;
-      for (const e of parsed.entries) entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
-      if (parsed.entries.length < parsed.listed - parsed.dropped) truncated = true;
+      bytes += read.bytes;
+      let full = false;
+      for (const e of parsed.entries) {
+        if (entries.length >= limits.maxEntries) {
+          full = true;
+          break;
+        }
+        entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
+      }
+      if (full) {
+        stop("TRUNCATED");
+        break;
+      }
+      // A page shorter than asked is the last one.
+      if (parsed.listed < limits.pageSize) break;
+      // Full, or past the byte bound, with more pages to come.
+      if (entries.length >= limits.maxEntries || bytes >= limits.totalBytes) {
+        stop("TRUNCATED");
+        break;
+      }
     }
-  }
 
-  return { entries, status, v4Status, truncated, dropped, answers };
+    let v4Status: V4CatalogueStatus = "NOT_TRIED";
+    if (options.v4 === true && left() > 0 && entries.length < limits.maxEntries) {
+      const url = buildSapUrl({
+        baseUrl: tenant.baseUrl,
+        path: `${V4_CATALOGUE_PATH}/ServiceGroups`,
+        client: tenant.client,
+        query: { $expand: "DefaultSystem($expand=Services)", $top: limits.pageSize },
+      });
+      const read = await readCataloguePage(url, headers, timeoutFor(), limits.pageBytes, deadline.signal);
+      answers.push(read.httpStatus);
+      const parsed = read.ok ? parseV4ServiceGroups(read.text, limits.maxEntries - entries.length) : null;
+      v4Status = read.ok ? (parsed ? "OK" : "ERROR") : read.status === "UNAUTHORIZED" || read.status === "NOT_FOUND" ? read.status : "ERROR";
+      if (parsed) {
+        dropped += parsed.dropped;
+        for (const e of parsed.entries) entries.push(listedService(e, servicePathFromEntry(e, tenant, url)));
+        if (parsed.entries.length < parsed.listed - parsed.dropped) truncated = true;
+      }
+    }
+
+    return { entries, status, v4Status, truncated, dropped, answers };
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
 }
 
 /**
