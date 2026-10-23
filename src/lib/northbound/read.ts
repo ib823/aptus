@@ -242,10 +242,11 @@ function failedDetail(got: Extract<SapGet, { kind: "failed" }>): string {
  * READING SAP'S ANSWER CAN THROW TOO. A 200 nested deep enough (a 40 KB body
  * of 20,000 brackets) overflows the stack in the envelope stripper. The read
  * sat inside the GET's own catch until sapGet was shared, and such an answer
- * was ERROR, audited and counted by the breaker; it stays so, with the same
- * generic detail and the cause reduced to a code, instead of escaping the
- * route as a bare 500 that writes no audit row and leaves a half-open
- * circuit's probe holding its lease.
+ * was ERROR, audited and counted by the breaker; on the legacy read it stays
+ * so, with the same generic detail and the cause reduced to a code, instead
+ * of escaping the route as a bare 500 that writes no audit row and leaves a
+ * half-open circuit's probe holding its lease. The query surface reads it as
+ * any body it cannot use (readQuery).
  */
 function readAnswer<T>(read: () => T): { ok: true; value: T } | { ok: false; failureReason: string } {
   try {
@@ -405,10 +406,12 @@ export async function readQuery(
         return done("ERROR", got.httpStatus, `The tenant responded with HTTP ${got.httpStatus}.`, failureReason);
     }
   }
+  // A body too deep to read is a body SAP answered and CoreEdge cannot use,
+  // as one of the wrong shape is: the caller's query shaped it, so it counts
+  // nothing against the circuit (circuitOutcomeForQuery).
   const read = readAnswer(() => readQueryAnswer(got.json, query, input.countAsked));
-  if (!read.ok) return done("ERROR", null, UNREAD_DETAIL, read.failureReason);
+  if (!read.ok || !read.value.ok) return done("ERROR", got.httpStatus, "The tenant returned an invalid OData response.", FAILURE_REASON_INVALID_BODY);
   const answer = read.value;
-  if (!answer.ok) return done("ERROR", got.httpStatus, "The tenant returned an invalid OData response.", FAILURE_REASON_INVALID_BODY);
   const served = answer.rows.length;
   const status: QueryReadStatus = query.kind === "KEY" || served > 0 ? "OK" : "EMPTY";
   return done(status, got.httpStatus, status === "EMPTY" ? classify(200, []).detail : `${served} record${served === 1 ? "" : "s"}.`, null, answer);

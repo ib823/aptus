@@ -157,11 +157,11 @@ describe("what readQuery makes of SAP's answer", () => {
     expect(r).toMatchObject({ status: "ERROR", failureReason: "INVALID_UPSTREAM_BODY", answer: null });
   });
 
-  it("a body nested too deep to read is ERROR, as on the legacy read, and is not thrown", async () => {
+  it("a body nested too deep to read is ERROR INVALID_UPSTREAM_BODY, is not thrown, and counts nothing, as a body of the wrong shape", async () => {
     const depth = 20_000;
     const { r } = await run("V2", "LIST", answer(`{"d":{"results":[{"Order":"1","Amount":${"[".repeat(depth)}${"]".repeat(depth)}}]}}`));
-    expect(r).toMatchObject({ status: "ERROR", httpStatus: null, answer: null, detail: "The read could not be completed.", failureReason: "FETCH_FAILED" });
-    expect(circuitOutcomeForQuery(r)).toBe("upstream-error");
+    expect(r).toMatchObject({ status: "ERROR", httpStatus: 200, answer: null, detail: "The tenant returned an invalid OData response.", failureReason: "INVALID_UPSTREAM_BODY" });
+    expect(circuitOutcomeForQuery(r)).toBe("refused");
   });
 
   it("a page past the 16 MiB bound is TOO_LARGE, which the caller can change", async () => {
