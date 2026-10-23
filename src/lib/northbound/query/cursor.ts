@@ -200,25 +200,27 @@ export function firstKeyMark(ring: TokenRing, keyText: string): string {
 
 /**
  * Whether SAP ignored $skip on a later page: some row is the one that ended
- * the previous page (`lk`), or the one that began the chain (`fk`).
+ * the previous page (`lk`), or the answer begins with the one that began the
+ * chain (`fk`).
  *
  * `lk` alone is not enough. Adaptive $top can ask a later page for fewer rows
  * than the page before served, and a service that ignores $skip answers from
  * offset 0, so the previous page's last row can fall outside the window it
- * returns while every row in it is a repeat. The chain's first row is in
- * every such window. `fk` is checked under the kid it names; a kid removed
- * from the ring since (a compromise) leaves `lk` to check alone.
+ * returns while every row in it is a repeat. Such a window begins with the
+ * chain's first row. Only its first row is compared with `fk`: ordered on a
+ * field edited during the run, the chain's first row can move later in the
+ * order and come back further down a page SAP did skip to, a repeat D8
+ * accepts. `fk` is checked under the kid it names; a kid removed from the
+ * ring since (a compromise) leaves `lk` to check alone.
  */
 export function repeatsChain(ring: TokenRing, cursor: OpenedCursor, keyTexts: readonly string[]): boolean {
   const tagLast = lastKeyTagger(ring, cursor.kid);
+  if (keyTexts.some((keyText) => tagLast(keyText) === cursor.payload.lk)) return true;
+  const head = keyTexts[0];
+  if (head === undefined) return false;
   const [, firstKid = "", firstTag = ""] = FIRST_KEY.exec(cursor.payload.fk) ?? [];
-  const sameKid = firstKid === cursor.kid;
-  const tagFirst = sameKid ? tagLast : ring.keys.has(firstKid) ? lastKeyTagger(ring, firstKid) : null;
-  return keyTexts.some((keyText) => {
-    const last = tagLast(keyText);
-    if (last === cursor.payload.lk) return true;
-    return tagFirst !== null && (sameKid ? last : tagFirst(keyText)) === firstTag;
-  });
+  const tagFirst = firstKid === cursor.kid ? tagLast : ring.keys.has(firstKid) ? lastKeyTagger(ring, firstKid) : null;
+  return tagFirst !== null && tagFirst(head) === firstTag;
 }
 
 /** The payload, sealed under the ring's active key. Throws on a payload this module would not open. */

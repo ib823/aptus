@@ -208,6 +208,29 @@ describe("the page algorithm", () => {
     expect(r).toMatchObject({ ok: false, rule: "UPSTREAM_IGNORED_PAGING" });
   });
 
+  /*
+   * D8 accepts a skip or a repeat under concurrent change. Ordered on a field
+   * someone edits during the run (a delta sync on a change date), the chain's
+   * first row can move to the end of the order while SAP honours $skip: it
+   * comes back on a later page, but not first, where an answer from offset 0
+   * puts it. That page is served.
+   */
+  it("the chain's first row moved later by a concurrent edit is served, not taken for an ignored $skip", () => {
+    let order = Array.from({ length: 25 }, (_, i) => i);
+    const window = (plan: { skip: number; ask: number | null }) =>
+      order.slice(plan.skip, plan.skip + plan.ask!).flatMap((n) => rowsFrom(n, 1));
+    const answer = (rows: AnswerRow[]) => ({ rows, more: false, totalCount: null, projected: false });
+    const c1 = next(assemblePage(ctx({ answer: answer(window(planPage(POLICY, ast(), null))) })));
+    // The first row is edited in SAP and now sorts last: page 1 skips a row (D8 accepts).
+    order = [...order.slice(1), 0];
+    const c2 = next(assemblePage(ctx({ answer: answer(window(planPage(POLICY, ast(), c1.payload))) }, POLICY, c1)));
+    const rows = window(planPage(POLICY, ast(), c2.payload));
+    expect(rows.map((r) => r.record.Id)).toEqual(["00021", "00022", "00023", "00024", "00000"]);
+    const r = okPage(assemblePage(ctx({ answer: answer(rows) }, POLICY, c2)));
+    expect(r.flags).not.toContain("SKIP_NOT_HONOURED");
+    expect(r.page).toMatchObject({ rowsServed: 25, complete: true });
+  });
+
   it("the overlap check derives its key once, and reads only the rows that could be served", () => {
     const c = next(assemblePage(ctx({ answer: { rows: rowsFrom(0, 11), more: false, totalCount: null, projected: false } })));
     const derive = vi.mocked(deriveTokenKey);
