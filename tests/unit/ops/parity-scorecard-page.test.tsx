@@ -68,8 +68,10 @@ interface Fresh {
 }
 
 // One fresh run of the simulator, independent of the committed file.
-const inputs = loadInputs() as { matrix: { roadmapPhases: { id: string; cellUpgrades?: unknown[] }[] } };
+const inputs = loadInputs();
 const fresh = simulateAll(inputs) as unknown as Fresh;
+/** The matrix's roadmap phases, for the count of each one's upgrades. */
+const roadmapPhases = inputs.matrix.roadmapPhases as { id: string; cellUpgrades?: unknown[] }[];
 
 const SHA = "3c15c8bf29c48267ce51f7865e83959cd51e3c17";
 const share = (count: number, pct: number) => `${formatCount(count)} (${formatPct(pct)})`;
@@ -181,7 +183,7 @@ describe("the page matches a fresh simulator run", () => {
       // The simulator does not count upgrades. The total is the matrix's own;
       // how many the code credits is gap-simulator.test.ts's to prove, so here
       // the page only has to print the file's count against that total.
-      const phase = inputs.matrix.roadmapPhases.find((p) => p.id === s.id);
+      const phase = roadmapPhases.find((p) => p.id === s.id);
       const credited = PARITY_SCORECARD.steps[i]!.upgrades?.creditedToday;
       expect(upgrades, s.id).toBe(phase ? `${credited} of ${phase.cellUpgrades?.length ?? 0}` : "Not a phase");
       // The biggest remaining blockers, in the simulator's order.
