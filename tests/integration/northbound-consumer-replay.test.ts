@@ -51,6 +51,7 @@ vi.mock("@/lib/db/prisma", async () => {
 });
 
 import { prisma } from "@/lib/db/prisma";
+import { isReservedName } from "@/lib/odata/params";
 import { buildScaffold } from "@/lib/studio/scaffold";
 import { supportedVersions, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -97,6 +98,8 @@ let ip = "";
 let current = "";
 /** Calls each seeded credential made, by route bucket, and the cells that made them. */
 const spent = new Map<string, { reads: number; writes: number; cells: Set<string> }>();
+/** Every request target the consumers sent, for the query-surface check (P1.4). */
+const targets: string[] = [];
 
 function useCell(base: string, pin: string | null): void {
   current = cellName(base, pin);
@@ -137,6 +140,7 @@ function startServer(): Promise<void> {
       headers.set("x-real-ip", ip);
       if (pinning) headers.set(VERSION_HEADER, pinning);
       count(headers, req.method ?? "GET");
+      targets.push(req.url ?? "/");
       const body = req.method === "GET" || req.method === "HEAD" ? null : (await readBody(req)).toString("utf8");
       const response = await serveNorthbound(
         new NextRequest(new URL(req.url ?? "/", origin), { method: req.method ?? "GET", headers, body }),
@@ -422,6 +426,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("consumers run unchanged on ever
       expect(res.status).toBe(401);
       expect(((await res.json()) as { error: { code: string } }).error.code).toBe("UNAUTHENTICATED");
     });
+  });
+
+  /*
+   * P1.4: the query surface applies only to a request carrying a reserved
+   * name (select, filter.*, orderby, key.*, count, pageSize, cursor, expand,
+   * filter, key). No request the shipped consumers send carries one, so every
+   * one of them stays a legacy read, answered byte for byte as before, with
+   * COREEDGE_QUERY_SURFACE on or off.
+   */
+  it("sent no request that carries a reserved query name, so none changes meaning", () => {
+    const reads = targets.filter((t) => /\/data(\?|$)/.test(t));
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.some((t) => t.includes("limit=50"))).toBe(true);
+    const reserved = targets.filter((t) => [...new URL(t, "http://x").searchParams.keys()].some(isReservedName));
+    expect(reserved).toEqual([]);
   });
 
   it("gave every cell its own credential, each well under its route buckets", () => {
