@@ -43,15 +43,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 const V2_ENVELOPE_KEYS = new Set(["__metadata", "__deferred", "__next"]);
 
 /**
- * V4 control information is any key carrying `@odata.` — on the row itself
+ * V4 control information is any key carrying `@` — on the row itself
  * (`@odata.etag`, `@odata.id`) or attached to a property (`to_Item@odata.navigationLink`).
  * An OData property name cannot contain `@`, so this never matches a field.
+ *
+ * ANY `@`, NOT ONLY `@odata.` (P1.4). OData JSON 4.01 writes control
+ * information without the `odata.` prefix — `@id`, `@editLink`,
+ * `to_Item@navigationLink` — and each of those is the same absolute URL on the
+ * connection's host. A 4.01 answer passed the old `@odata.` test untouched.
  *
  * Exported for the one caller that holds key NAMES rather than a row: a schema
  * captured before this rule existed (see servedResponseSchema).
  */
 export function isEnvelopeKey(key: string): boolean {
-  return V2_ENVELOPE_KEYS.has(key) || key.includes("@odata.");
+  return V2_ENVELOPE_KEYS.has(key) || key.includes("@");
 }
 
 /** An unexpanded V2 navigation: `{ "__deferred": { "uri": "https://<host>/..." } }`. */
@@ -75,7 +80,10 @@ export function stripODataEnvelope(record: Record<string, unknown>): Record<stri
     // An unexpanded navigation is omitted rather than emptied: what remains of
     // it without the URI is nothing, and `{}` would read as an empty entity.
     if (isEnvelopeKey(key) || isDeferredNavigation(value)) continue;
-    out[key] = stripValue(value);
+    // Defined, not assigned: `out["__proto__"] = v` sets the prototype of
+    // `out` instead of storing a field, so a row with a property of that name
+    // lost it — and kept whatever object it carried reachable as a prototype.
+    Object.defineProperty(out, key, { value: stripValue(value), enumerable: true, writable: true, configurable: true });
   }
   return out;
 }
