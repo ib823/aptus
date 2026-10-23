@@ -9,7 +9,10 @@
  * administrator, from the committed file, and compares every figure in its
  * tables with a FRESH simulator run made here, formatted the way the roadmap
  * formats it. A page that dropped a row, swapped two columns or formatted a
- * figure its own way fails here, whatever the file says.
+ * figure its own way fails here, whatever the file says. The one figure the
+ * simulator does not make, a phase's upgrades the code already credits, is
+ * checked against the matrix's count of them and the file's credited count,
+ * which gap-simulator.test.ts proves.
  *
  * THE BUILD SHA comes from the serving deployment's environment, as
  * /api/build's does, so it is stubbed rather than read from git.
@@ -40,7 +43,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import ParityScorecardPage from "@/app/(control-tower)/control-tower/parity/page";
-import { formatCount, formatPct, PARITY_SCORECARD } from "@/lib/coreedge/parity-scorecard";
+import { formatCount, formatPct, formatPoints, PARITY_SCORECARD } from "@/lib/coreedge/parity-scorecard";
 
 import { loadInputs, simulateAll } from "../../../scripts/coreedge/simulate-gap-matrix.mjs";
 
@@ -65,10 +68,13 @@ interface Fresh {
 }
 
 // One fresh run of the simulator, independent of the committed file.
-const fresh = simulateAll(loadInputs()) as unknown as Fresh;
+const inputs = loadInputs() as { matrix: { roadmapPhases: { id: string; cellUpgrades?: unknown[] }[] } };
+const fresh = simulateAll(inputs) as unknown as Fresh;
 
 const SHA = "3c15c8bf29c48267ce51f7865e83959cd51e3c17";
 const share = (count: number, pct: number) => `${formatCount(count)} (${formatPct(pct)})`;
+/** Points behind Integration Suite, worked out here from the fresh run's two percentages. */
+const behind = (is: number, coreedge: number) => formatPoints(is - coreedge);
 const LEVEL = ["none", "partial", "full"];
 /** The roadmap's wording of a cell (render-roadmap-figures.mjs prettyCell). */
 const label = (cell: string) => {
@@ -159,20 +165,29 @@ describe("the page matches a fresh simulator run", () => {
     ]);
   });
 
-  it("phase by phase: every step's full, partial and lifecycle figures, then Integration Suite", async () => {
+  it("phase by phase: every step's full, partial, lifecycle and points-behind figures, then Integration Suite", async () => {
     await renderPage();
     const rows = rowsOf("CoreEdge phase by phase against Integration Suite");
     const steps = [{ ...fresh.coreedgeToday, id: "Today" }, ...fresh.phases];
+    const IS = fresh.integrationSuite;
     expect(rows).toHaveLength(steps.length + 1);
     steps.forEach((s, i) => {
-      const [after, full, partial, lifecycle, , , , blockers] = rows[i]!;
+      const [after, full, partial, lifecycle, fullBehind, partialBehind, upgrades, blockers] = rows[i]!;
       expect(after!.startsWith(s.id), `row ${i}`).toBe(true);
       expect([full, partial, lifecycle], s.id).toEqual([share(s.fullySupported, s.fullPct), share(s.atLeastPartial, s.partialPct), String(s.lifecycleFull)]);
+      // Integration Suite minus CoreEdge, so a sign slip in the generator or the
+      // full and partial pair swapped on the page fails here.
+      expect([fullBehind, partialBehind], s.id).toEqual([behind(IS.fullPct, s.fullPct), behind(IS.partialPct, s.partialPct)]);
+      // The simulator does not count upgrades. The total is the matrix's own;
+      // how many the code credits is gap-simulator.test.ts's to prove, so here
+      // the page only has to print the file's count against that total.
+      const phase = inputs.matrix.roadmapPhases.find((p) => p.id === s.id);
+      const credited = PARITY_SCORECARD.steps[i]!.upgrades?.creditedToday;
+      expect(upgrades, s.id).toBe(phase ? `${credited} of ${phase.cellUpgrades?.length ?? 0}` : "Not a phase");
       // The biggest remaining blockers, in the simulator's order.
       const named = s.topBlockers.slice(0, 3).map((b) => `${label(b.cell)} ${formatPct(b.leveragePct)} (sole ${formatCount(b.soleBlocker)})`);
       expect(blockers, s.id).toBe(named.join(""));
     });
-    const IS = fresh.integrationSuite;
     expect(rows[steps.length]!.slice(0, 4)).toEqual([
       "Integration Suite (reference)",
       share(IS.fullySupported, IS.fullPct),
