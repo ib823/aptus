@@ -12,7 +12,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_DISCOVERY_STATEMENTS, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
 
 const RUNBOOK = readFileSync(path.join(process.cwd(), "docs/runbooks/coreedge-db-budget.md"), "utf8");
 
@@ -88,6 +88,17 @@ describe("the db budget runbook's table", () => {
     };
     expect(figuresOf(/^\| A contract a verify recorded/)).toEqual([NORTHBOUND_SCHEMA_STATEMENTS.compiled]);
     expect(figuresOf(/^\| An interface with no contract recorded yet/)).toEqual([NORTHBOUND_SCHEMA_STATEMENTS.none]);
+  });
+
+  it("states discovery's statements as db-budget.ts does", () => {
+    const rows = budgetSection().filter((l) => l.trimStart().startsWith("|"));
+    const figuresOf = (pattern: RegExp) => {
+      const row = rows.find((r) => pattern.test(r));
+      expect(row, String(pattern)).toBeDefined();
+      return [...row!.matchAll(/\*\*(\d+)\*\*/g)].map((m) => Number(m[1]));
+    };
+    expect(figuresOf(/^\| Discovery, warm/)).toEqual([NORTHBOUND_DISCOVERY_STATEMENTS.warm]);
+    expect(figuresOf(/^\| Discovery, key last stamped/)).toEqual([NORTHBOUND_DISCOVERY_STATEMENTS.stamped]);
   });
 
   it("does not file an Ariba call under the stored connection's statements", () => {

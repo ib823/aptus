@@ -124,7 +124,9 @@ import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/wr
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import { generateSessionToken, hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_DISCOVERY_STATEMENTS, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import { GET as discoveryRoute } from "@/app/api/northbound/interfaces/route";
+import { GET as discoveryRouteV1 } from "@/app/api/northbound/v1/interfaces/route";
 import { GET as schemaRoute } from "@/app/api/northbound/interfaces/[id]/schema/route";
 import { GET as schemaRouteV1 } from "@/app/api/northbound/v1/interfaces/[id]/schema/route";
 import { recordJob } from "@/lib/contracts/jobs";
@@ -822,6 +824,36 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       const c = await count(() => schema(path, tokens.live, schemaIds.bare));
       expect(c.status).toBe(200);
       expect(c.total, report(`schema bare ${path}`, c)).toBe(NORTHBOUND_SCHEMA_STATEMENTS.none);
+    });
+  });
+
+  /*
+   * DISCOVERY AND ITS /v1 ALIAS. Not a governed read: it lists the solution's
+   * interfaces and reaches no SAP system. It stamped the key's lastUsedAt on
+   * every call; it now follows the governed calls' once-a-minute rule, so a
+   * warm call sends no UPDATE and a stale key sends exactly one.
+   */
+  describe("GET /interfaces (discovery)", () => {
+    const discover = (path: "/api/northbound" | "/api/northbound/v1", token: string) =>
+      (path === "/api/northbound" ? discoveryRoute : discoveryRouteV1)(
+        new NextRequest(`http://localhost${path}/interfaces`, { headers: { authorization: `Bearer ${token}` } }),
+      );
+    const stampUpdates = (c: Counted) => [...c.response, ...c.after].filter((s) => /UPDATE\s+"public"\."SolutionClient"/i.test(s) && s.includes("lastUsedAt"));
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: warm, in the stated statements, with no key stamp", async (path) => {
+      await stampNow();
+      const c = await count(() => discover(path, tokens.live));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.warm);
+      expect(stampUpdates(c), report(`discovery ${path}`, c)).toHaveLength(0);
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: a key last stamped over a minute ago is stamped once", async (path) => {
+      await prisma.solutionClient.update({ where: { id: ids.client, organizationId: ORG }, data: { lastUsedAt: new Date(Date.now() - 5 * 60_000) } });
+      const c = await count(() => discover(path, tokens.live));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery stale ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.stamped);
+      expect(stampUpdates(c), report(`discovery stale ${path}`, c)).toHaveLength(1);
     });
   });
 

@@ -55,6 +55,19 @@ credential, 120 per organisation).
 | A contract a verify recorded | **6** | the key, the interface, the captured schema's stamp and size, the current snapshot's summary, its stored texts, the audit row; a captured schema of this contract adds its read |
 | An interface with no contract recorded yet | **5** | the same, without the texts |
 
+**Discovery (`GET /api/northbound/interfaces`) and its `/v1` alias.** Not a
+governed read either: it lists the solution's interfaces and reaches no SAP
+system; the two paths are one handler. Measured
+(`NORTHBOUND_DISCOVERY_STATEMENTS`, `src/lib/governed/db-budget.ts`) and
+asserted exactly by the budget test on both paths. Its key's `lastUsedAt`
+stamp follows the same once-a-minute rule; it was written on every call
+before.
+
+| Discovery call | Statements | What they are |
+|---|---|---|
+| Discovery, warm (key stamped in the last minute) | **5** | the key, the solution's interfaces, their grants, the connections their verdicts are read against, the audit row |
+| Discovery, key last stamped over a minute ago | **6** | the same, plus the key's `lastUsedAt` stamp |
+
 **The console counts its session** (P0.14b review round 4). The console's
 `authenticate` step is the person's session, as the broker's is the key, but
 the budget test mocked `getCurrentUser`, so the figures above left it out.

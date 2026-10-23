@@ -187,3 +187,23 @@ export const NORTHBOUND_SCHEMA_STATEMENTS = {
   /** No contract recorded yet: the same, without the texts. */
   none: 5,
 } as const;
+
+/**
+ * WHAT DISCOVERY SENDS (GET /api/northbound/interfaces, and its /v1 alias,
+ * which is the same handler). NOT a governed read either: it lists the
+ * solution's interfaces and reaches no SAP system. Measured warm (a key
+ * stamped in the last minute) and asserted exactly by
+ * tests/integration/governed-db-budget.test.ts. Its key's `lastUsedAt` stamp
+ * follows the governed calls' rule, at most once a minute per key (+1); it
+ * was written on every call before.
+ */
+export const NORTHBOUND_DISCOVERY_STATEMENTS = {
+  /**
+   * Warm: the key (the governed read's one-statement lookup), the solution's
+   * interfaces, their grants, the connections their verdicts are read
+   * against, and the audit row.
+   */
+  warm: 5,
+  /** A key last stamped over a minute ago: the same, plus the stamp. */
+  stamped: 6,
+} as const;
