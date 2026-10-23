@@ -21,8 +21,11 @@
 # JSON, and vercel-build re-checks it against the simulator, which reads the
 # matrix and the registry. A file inside an excluded directory cannot be
 # re-included, so the directory comes back first and its other children go
-# again, the same shape as the rule above one level down.
-!/docs/coreedge/
+# again, the same shape as the rule above one level down. The exception has no
+# trailing slash on purpose: Vercel's upload walker tests a directory as
+# "docs/coreedge", which "!/docs/coreedge/" does not match, and it never
+# descends into a directory it ignores.
+!/docs/coreedge
 /docs/coreedge/*
 !/docs/coreedge/parity-scorecard.json
 !/docs/coreedge/gap-matrix.json

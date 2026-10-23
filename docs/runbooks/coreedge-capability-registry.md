@@ -79,7 +79,9 @@ committed files, and uses no network, database or tenant; it takes about two
 seconds. It does not read the roadmap, so a prose rule can never block a
 deploy. The Vercel upload excludes `docs/`, so `.vercelignore` keeps exactly
 these three files (`tests/unit/build/runtime-assets.test.ts` checks the
-rules); the check names them if one goes missing.
+rules under git's matcher and under the one Vercel's upload walker uses, which
+tests each directory with no trailing slash); the check names them if one goes
+missing.
 
 The parity page imports the scorecard JSON statically, so it is bundled into
 the page's function: nothing is simulated or read from disk at request time.

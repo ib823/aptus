@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import ignore from "ignore";
 import { afterEach, describe, expect, it } from "vitest";
 
 const root = process.cwd();
@@ -38,6 +39,41 @@ afterEach(() => {
   }
 });
 
+// The parity scorecard (P1.9) is imported by its page, and vercel-build
+// re-checks it against the simulator, which reads the matrix and the registry:
+// all three must reach the build, and nothing else in docs/coreedge.
+const kept = [
+  asset,
+  "scripts/check-runtime-assets.mjs",
+  "src/app/api/coverage/route.ts",
+  "docs/coreedge/parity-scorecard.json",
+  "docs/coreedge/gap-matrix.json",
+  "docs/coreedge/capability-registry.json",
+];
+const excluded = [
+  "docs/README.md",
+  "docs/coreedge/runbook.md",
+  "docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md",
+  "docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md",
+  "tests/unit/example.ts",
+  "logs/build.log",
+];
+
+/*
+ * Vercel's upload walker (buildFileTree in @vercel/client) does not apply git's
+ * directory rules. It asks the `ignore` package, at the version the client pins
+ * and this repository pins with it, about each path relative to the root, a
+ * directory included and never with a trailing slash, and it does not descend
+ * into a directory that is ignored. So a file is uploaded only when neither it
+ * nor any directory above it is ignored. git check-ignore cannot show the
+ * difference: "!/docs/coreedge/" kept the scorecard's three inputs under git
+ * while the walker pruned the whole directory before it reached them.
+ */
+function uploaded(file: string, ig: ReturnType<typeof ignore>) {
+  const parts = file.split("/");
+  return parts.every((_, i) => !ig.ignores(parts.slice(0, i + 1).join("/")));
+}
+
 describe("developer-guide deployment assets", () => {
   it("keeps the runtime guide under the effective upload rules while excluding other docs", () => {
     const dir = fixture();
@@ -45,25 +81,6 @@ describe("developer-guide deployment assets", () => {
     expect(init.status, init.stderr).toBe(0);
     // .vercelignore uses gitignore rules; exercise the matcher, not source strings.
     write(dir, ".gitignore", readFileSync(path.join(root, ".vercelignore"), "utf8"));
-    // The parity scorecard (P1.9) is imported by its page, and vercel-build
-    // re-checks it against the simulator, which reads the matrix and the
-    // registry: all three must reach the build, and nothing else in docs/coreedge.
-    const kept = [
-      asset,
-      "scripts/check-runtime-assets.mjs",
-      "src/app/api/coverage/route.ts",
-      "docs/coreedge/parity-scorecard.json",
-      "docs/coreedge/gap-matrix.json",
-      "docs/coreedge/capability-registry.json",
-    ];
-    const excluded = [
-      "docs/README.md",
-      "docs/coreedge/runbook.md",
-      "docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md",
-      "docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md",
-      "tests/unit/example.ts",
-      "logs/build.log",
-    ];
     const result = spawnSync(
       "git",
       ["-c", "core.excludesFile=", "check-ignore", "--no-index", "--stdin"],
@@ -71,6 +88,13 @@ describe("developer-guide deployment assets", () => {
     );
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout.trim().split(/\r?\n/)).toEqual(excluded);
+  });
+
+  it("uploads the same files under Vercel's own matcher, which tests each directory on the way down", () => {
+    const ig = ignore().add(readFileSync(path.join(root, ".vercelignore"), "utf8"));
+    expect(kept.filter((file) => !uploaded(file, ig))).toEqual([]);
+    expect(excluded.filter((file) => uploaded(file, ig))).toEqual([]);
+    expect(ig.ignores("docs/coreedge")).toBe(false);
   });
 
   it("rejects a filtered checkout that has lost the guide before building", () => {
