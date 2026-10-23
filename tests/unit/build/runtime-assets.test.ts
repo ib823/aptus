@@ -45,8 +45,25 @@ describe("developer-guide deployment assets", () => {
     expect(init.status, init.stderr).toBe(0);
     // .vercelignore uses gitignore rules; exercise the matcher, not source strings.
     write(dir, ".gitignore", readFileSync(path.join(root, ".vercelignore"), "utf8"));
-    const kept = [asset, "scripts/check-runtime-assets.mjs", "src/app/api/coverage/route.ts"];
-    const excluded = ["docs/README.md", "docs/coreedge/runbook.md", "tests/unit/example.ts", "logs/build.log"];
+    // The parity scorecard (P1.9) is imported by its page, and vercel-build
+    // re-checks it against the simulator, which reads the matrix and the
+    // registry: all three must reach the build, and nothing else in docs/coreedge.
+    const kept = [
+      asset,
+      "scripts/check-runtime-assets.mjs",
+      "src/app/api/coverage/route.ts",
+      "docs/coreedge/parity-scorecard.json",
+      "docs/coreedge/gap-matrix.json",
+      "docs/coreedge/capability-registry.json",
+    ];
+    const excluded = [
+      "docs/README.md",
+      "docs/coreedge/runbook.md",
+      "docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md",
+      "docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md",
+      "tests/unit/example.ts",
+      "logs/build.log",
+    ];
     const result = spawnSync(
       "git",
       ["-c", "core.excludesFile=", "check-ignore", "--no-index", "--stdin"],

@@ -9,15 +9,27 @@
  *   the prose of sections 1 and 3 types no coverage figure outside a block.
  *   CI runs the same check as `pnpm coreedge:check`; this makes `pnpm test`
  *   catch it too.
+ * - The parity scorecard Control Tower renders (P1.9) is the committed file
+ *   the same run writes, in the roadmap's own words, and carries nothing that
+ *   would make it differ from one commit to the next but the figures.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { bareProseFigures, DOC_PATH, renderBlocks, renderDocument } from "../../../scripts/coreedge/render-roadmap-figures.mjs";
-import { loadInputs, simulateAll } from "../../../scripts/coreedge/simulate-gap-matrix.mjs";
+import {
+  bareProseFigures,
+  buildScorecard,
+  DOC_PATH,
+  renderBlocks,
+  renderDocument,
+  SCORECARD_PATH,
+  serializeScorecard,
+} from "../../../scripts/coreedge/render-roadmap-figures.mjs";
+import { loadInputs, MATRIX_PATH, REGISTRY_PATH, simulateAll } from "../../../scripts/coreedge/simulate-gap-matrix.mjs";
 
 type Cell = { row: string; col?: string; status: string };
 type Dims = Record<string, string[]>;
@@ -199,4 +211,93 @@ describe("the roadmap's simulated figures", () => {
   it("are the document in docs/coreedge", () => {
     expect(path.relative(process.cwd(), DOC_PATH)).toBe(path.join("docs", "coreedge", "CoreEdge-Gap-Study-and-Roadmap.md"));
   });
+});
+
+describe("the parity scorecard (P1.9)", () => {
+  /** The parts of the scorecard (untyped, from plain Node) these tests read. */
+  interface Scorecard {
+    inputs: { matrix: { sha256: string; revisedOn: string | null }; registry: { sha256: string } };
+    steps: { id: string; upgrades: { total: number; creditedToday: number } | null }[];
+    blockersToday: { rank: number; label: string; level: string; leverage: number; leveragePct: number; soleBlocker: number; raisedIn: string; note: string | null }[];
+    lifecycle: { stage: string; reachesFullIn: string }[];
+    problems: string[];
+  }
+  const scorecard = buildScorecard(results, inputs) as unknown as Scorecard;
+  const blocks = renderBlocks(results, inputs.matrix, inputs.registry, { withWhatIf: false });
+  /** A generated markdown table's body rows, as cells. */
+  const tableRows = (markdown: string) =>
+    markdown.split("\n").slice(2).map((line) => line.replace(/^\| | \|$/g, "").split(" | "));
+
+  it("is the committed file, byte for byte (run `pnpm coreedge:figures`)", () => {
+    const committed = readFileSync(SCORECARD_PATH, "utf8");
+    expect(serializeScorecard(scorecard) === committed, "docs/coreedge/parity-scorecard.json is stale").toBe(true);
+    expect(scorecard.problems).toEqual([]);
+  });
+
+  it("fingerprints the two committed inputs it was computed from", () => {
+    // Canonical: the parsed file re-serialised, so a CRLF checkout has CI's digest.
+    const canonical = (file: string) =>
+      createHash("sha256").update(JSON.stringify(JSON.parse(readFileSync(file, "utf8")))).digest("hex");
+    expect(scorecard.inputs.matrix.sha256).toBe(canonical(MATRIX_PATH));
+    expect(scorecard.inputs.registry.sha256).toBe(canonical(REGISTRY_PATH));
+    expect(scorecard.inputs.matrix.revisedOn).toBe(inputs.matrix.generatedAt);
+  });
+
+  it("words every ranked blocker as the roadmap's blockers-today table does", () => {
+    const rows = tableRows(blocks["blockers-today"] as string);
+    expect(rows).toHaveLength(scorecard.blockersToday.length);
+    scorecard.blockersToday.forEach((b, i) => {
+      const [rank, label, level, leverage, sole, raised] = rows[i]!;
+      expect([rank, label, level, raised], `rank ${b.rank}`).toEqual([String(b.rank), b.label, b.level, b.raisedIn]);
+      expect(leverage).toBe(`${b.leverage.toLocaleString("en")} (${b.leveragePct.toFixed(1)}%)`);
+      expect(sole).toBe(b.soleBlocker.toLocaleString("en"));
+      // The page prints the registry's reason beside each one.
+      expect(b.note, b.label).toBeTruthy();
+    });
+  });
+
+  it("gives every lifecycle stage the roadmap's \"reaches full in\"", () => {
+    const rows = tableRows(blocks.lifecycle as string);
+    expect(rows.map((r) => [r[0], r[4]])).toEqual(scorecard.lifecycle.map((l) => [l.stage, l.reachesFullIn]));
+  });
+
+  it("holds no timestamp and no commit, so the check is stable from one commit to the next", () => {
+    const keys: string[] = [];
+    const strings: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === "string") strings.push(v);
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") {
+        for (const [k, x] of Object.entries(v)) {
+          keys.push(k);
+          walk(x);
+        }
+      }
+    };
+    walk(JSON.parse(readFileSync(SCORECARD_PATH, "utf8")));
+    expect(keys.filter((k) => /time|stamp|commit|build|deploy|generatedAt|At$/i.test(k))).toEqual([]);
+    // A date is the matrix's own revision date, never a moment; a hash is an input's sha256, never a 40-character commit.
+    expect(strings.filter((v) => /\d{4}-\d{2}-\d{2}T\d/.test(v) || /^[0-9a-f]{40}$/.test(v))).toEqual([]);
+  });
+
+  it("credits a phase upgrade only once the code scores its cell at the upgrade's level", () => {
+    // P0's first upgrade the code does not yet meet; raising that one registry cell credits it, and nothing else moves.
+    const today = results.cellLevelsByPhase[0]!.levels;
+    const rank: Record<string, number> = { none: 0, partial: 1, full: 2 };
+    type Upgrade = { table: string; row: string; col: string; status: string };
+    const p0 = (inputs.matrix.roadmapPhases as { id: string; cellUpgrades: Upgrade[] }[]).find((p) => p.id === "P0")!;
+    const open = p0.cellUpgrades.find(
+      (u) => u.table !== "sapAuth" && (today[`${u.table}:${u.col ? `${u.row}|${u.col}` : u.row}`] ?? -1) < rank[u.status]!,
+    );
+    expect(open, "every P0 upgrade is credited: pick another phase for this test").toBeDefined();
+    const registry = structuredClone(inputs.registry);
+    const cell = (registry.coreedgeToday[open!.table] as Cell[]).find((c) => c.row === open!.row && (c.col ?? "") === (open!.col ?? ""))!;
+    cell.status = open!.status;
+    const after = buildScorecard(simulateAll({ matrix: inputs.matrix, registry }, { withCellLevels: true }), {
+      matrix: inputs.matrix,
+      registry,
+    }) as unknown as Scorecard;
+    const credited = (s: Scorecard) => Object.fromEntries(s.steps.map((x) => [x.id, x.upgrades?.creditedToday ?? null]));
+    expect(credited(after)).toEqual({ ...credited(scorecard), P0: credited(scorecard).P0! + 1 });
+  }, 30_000);
 });

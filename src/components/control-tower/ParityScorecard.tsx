@@ -302,7 +302,7 @@ function Lifecycle({ scorecard }: { scorecard: Scorecard }) {
       intro="Scored on their own, outside the scenario count: what it takes to find, build, govern, run and retire an integration."
     >
       <OpsTable
-        label="Lifecycle stages"
+        label="Lifecycle stages, Integration Suite and CoreEdge"
         head={["Stage", "What it means", "Integration Suite", "CoreEdge today", "CoreEdge reaches full in"]}
       >
         {scorecard.lifecycle.map((l) => (
