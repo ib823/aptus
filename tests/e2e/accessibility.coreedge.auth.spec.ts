@@ -262,7 +262,11 @@ test.describe("Control Tower · parity scorecard", () => {
         if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
 
         // The serving build: a commit in full, or the sentence saying there is none.
-        await expect(main.getByRole("region", { name: "This build" })).toContainText(/[0-9a-f]{40}|No commit recorded/);
+        // The region also holds the two 64-character input digests, so the commit
+        // must be 40 hex characters standing alone, not any 40 inside a digest.
+        await expect(main.getByRole("region", { name: "This build" })).toContainText(
+          /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])|No commit recorded/,
+        );
         // CoreEdge today's partial count, as the committed file holds it.
         const today = PARITY_SCORECARD.steps[0]!;
         await expect(
