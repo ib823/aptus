@@ -193,15 +193,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the Test Console's query run (P
     expect(cursor.body.data).toMatchObject({ outcome: "refused", refusal: { kind: "QUERY_INVALID", query: { rule: "PARAMETER_CONFLICT", parameter: "cursor" } } });
     const big = await run("pageSize=51");
     expect(big.body.data).toMatchObject({ outcome: "refused", refusal: { kind: "QUERY_INVALID", query: { rule: "PAGE_SIZE_NOT_ALLOWED" } } });
+    // The console's own limits are not called the app's refusal: the app pages on a cursor, and gets 51 rows.
+    for (const own of [cursor, big]) {
+      const message = (own.body.data as { refusal: { message: string } }).refusal.message;
+      expect(message).toContain("the deployed application is not limited this way");
+      expect(message).not.toContain("the deployed application would receive");
+    }
+    // Over the policy's maximum (500), the app's own refusal comes first, and is said to be the app's.
+    const over = await run("pageSize=600");
+    expect(over.body.data).toMatchObject({ outcome: "refused", refusal: { kind: "POLICY_FIELD_NOT_GRANTED", query: { rule: "PAGE_SIZE_NOT_ALLOWED", parameter: "pageSize" } } });
+    expect((over.body.data as { refusal: { message: string } }).refusal.message).toContain("(This is the refusal the deployed application would receive.)");
     const none = await run("limit=5");
     expect(none.status).toBe(400);
     expect(none.body.error!.message).toContain("Leave it empty for a ?limit run");
   });
 
-  it("refuses with the switch off, as the app would be refused", async () => {
+  it("refuses with the switch off, as the app would be refused, a cursor included", async () => {
     vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
     const r = await run("select=Order");
     expect(r.body.data).toMatchObject({ outcome: "refused", refusal: { kind: "QUERY_NOT_AVAILABLE", query: { rule: "NOT_ENABLED" } } });
+    const cursor = await run("pageSize=10&cursor=cec1.t0.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    expect(cursor.body.data).toMatchObject({ outcome: "refused", refusal: { kind: "QUERY_NOT_AVAILABLE", query: { rule: "NOT_ENABLED" } } });
   });
 
   it("leaves the ?limit run as it was: a status, no queryStatus", async () => {

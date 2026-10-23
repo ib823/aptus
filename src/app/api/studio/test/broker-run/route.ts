@@ -116,6 +116,9 @@ const CONSOLE_MAX_PAGE = 50;
 /** Said after every refusal the deployed application would receive too. */
 const SAME_AS_APP = " (This is the refusal the deployed application would receive.)";
 
+/** Said after the console's own refusals (a cursor, a page over its 50), which the deployed application never meets. */
+const CONSOLE_ONLY = " (This is the Test Console's own limit: the deployed application is not limited this way.)";
+
 /** The console renders refusals as outcomes, so they travel in the data; a query refusal's `error.query` with them. */
 function refusalOk(kind: string, message: string, query?: QueryRefusalDetail) {
   return studioOk({ outcome: "refused" as const, refusal: query === undefined ? { kind, message } : { kind, message, query } });
@@ -450,25 +453,33 @@ interface QueryRunContext {
  */
 async function consoleQueryRun(c: QueryRunContext): Promise<NextResponse> {
   const { scope, iface, client, audit, now, correlationId, query } = c;
-  const refuse = async (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit = {}) => {
-    const refused = queryRefusalOf(step, r, extra);
-    await audit.refused(refused);
-    return refusalOk(refused.reason, `${refused.message}${SAME_AS_APP}`, r.detail);
+  const refused = async (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit, said: string) => {
+    const refusal = queryRefusalOf(step, r, extra);
+    await audit.refused(refusal);
+    return refusalOk(refusal.reason, `${refusal.message}${said}`, r.detail);
   };
+  const refuse = (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit = {}) => refused(step, r, extra, SAME_AS_APP);
+  /*
+   * THE CONSOLE'S OWN LIMITS ARE NOT THE APP'S REFUSALS. Each is checked
+   * where the data route would have answered on its own, so the app's own
+   * refusal comes first (a pageSize over the policy's maximum is the app's
+   * POLICY_FIELD_NOT_GRANTED), and it is not called the app's refusal.
+   */
+  const refuseConsoleOnly = (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit = {}) => refused(step, r, extra, CONSOLE_ONLY);
 
   if (!query.ok) {
     return refuse("resolveInterface", queryRefusal("QUERY_INVALID", query.rule, query.message, query.parameter === undefined ? {} : { parameter: query.parameter }));
-  }
-  if (query.cursor !== null) {
-    return refuse(
-      "resolveInterface",
-      queryRefusal("QUERY_INVALID", "PARAMETER_CONFLICT", "The Test Console runs the first page only; send the query without cursor.", { parameter: "cursor" }),
-    );
   }
   // The switch, then the ring, as on the data route: off refuses, never ignores.
   const gate = querySurfaceGate();
   if (!gate.ok) return refuse("resolveInterface", gate);
   const ring = gate.ring;
+  if (query.cursor !== null) {
+    return refuseConsoleOnly(
+      "resolveInterface",
+      queryRefusal("QUERY_INVALID", "PARAMETER_CONFLICT", "The Test Console runs the first page only; send the query without cursor.", { parameter: "cursor" }),
+    );
+  }
 
   // 1 — the grant gate, with the compiled policy in the same statement.
   const access = await authorise("READ", scope, iface.solutionId, iface.id, client.environment, now, { withQueryPolicy: true });
@@ -484,12 +495,6 @@ async function consoleQueryRun(c: QueryRunContext): Promise<NextResponse> {
   const available = checkPolicyAvailable(context.policyRaw, { entitySet: granted.entitySet, sourcePresent: context.policySourcePresent });
   if (!available.ok) return refuse("authorise", available);
   const { policy } = available;
-  if (query.kind === "LIST" && query.pageSize !== null && query.pageSize > CONSOLE_MAX_PAGE) {
-    return refuse(
-      "authorise",
-      queryRefusal("QUERY_INVALID", "PAGE_SIZE_NOT_ALLOWED", `The Test Console shows at most ${CONSOLE_MAX_PAGE} records; send pageSize=${CONSOLE_MAX_PAGE} or less.`, { parameter: "pageSize" }),
-    );
-  }
   // A list without pageSize shows the policy's default page, within the console's.
   const asked = query.kind === "LIST" ? { ...query, pageSize: query.pageSize ?? Math.min(policy.compiled.page.defaultSize, CONSOLE_MAX_PAGE) } : query;
   const checked = checkQuery(asked, policy);
@@ -501,6 +506,14 @@ async function consoleQueryRun(c: QueryRunContext): Promise<NextResponse> {
     requestedFields: ast.select === null ? ["*"] : [...project],
     policyRev: policy.compiled.rev,
   };
+  // A page the policy allows but the console does not show.
+  if (ast.pageSize !== null && ast.pageSize > CONSOLE_MAX_PAGE) {
+    return refuseConsoleOnly(
+      "authorise",
+      queryRefusal("QUERY_INVALID", "PAGE_SIZE_NOT_ALLOWED", `The Test Console shows at most ${CONSOLE_MAX_PAGE} records; send pageSize=${CONSOLE_MAX_PAGE} or less.`, { parameter: "pageSize" }),
+      { query: base },
+    );
+  }
 
   // 2 — the connection binding, environment + SAP client, same as the broker.
   const bound = await bindConnection(scope.organizationId, iface.sapProduct, client.environment, "READ", client.sapClient, prefetchedConnectionsFor(granted));

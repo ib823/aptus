@@ -530,7 +530,9 @@ The starter kit's client has `query(params)` and `pages(params)`, which
 re-sends the same parameters with each `nextCursor`. The kit's mock serves
 recorded rows and does not evaluate queries, so it refuses them
 (`NOT_ENABLED`); test queries against a deployed CoreEdge, or run them in
-Studio's Test Console, which runs the first page exactly as your app's call.
+Studio's Test Console, which runs the first page as your app's call would,
+with two limits of its own that your app does not have: it shows at most 50
+rows, and it takes no `cursor`. It says so when it refuses for either.
 
 ---
 
