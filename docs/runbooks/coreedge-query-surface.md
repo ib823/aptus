@@ -152,9 +152,9 @@ records (`IsActiveEntity eq true`) are served.
 
 - **`502 UPSTREAM_ERROR`, rule `UPSTREAM_IGNORED_PAGING`** (flag
   `SKIP_NOT_HONOURED`): a page repeated the last row of the page before it,
-  so the service ignores `$skip`. Retrying will not help. The service cannot
-  be paged by offset: the builder sets a page size large enough for the
-  dataset, or the service is fixed. A page that returned more rows than
+  or the first row of the run, so the service ignores `$skip`. Retrying will
+  not help. The service cannot be paged by offset: the builder sets a page
+  size large enough for the dataset, or the service is fixed. A page that returned more rows than
   `$top` asked for is served cut, with `page.stopped: "UPSTREAM_IGNORED_PAGING"`
   (flag `TOP_NOT_HONOURED`).
 - **`502 UPSTREAM_ERROR`, rule `KEY_NOT_UNIQUE`**: a key lookup through the

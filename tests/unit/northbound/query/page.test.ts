@@ -11,7 +11,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The real derivation, counted: the overlap check derives its key once a page.
+vi.mock("@/lib/security/token-ring", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/security/token-ring")>();
+  return { ...real, deriveTokenKey: vi.fn(real.deriveTokenKey) };
+});
 
 import { basisOf, prepared, source } from "../../../helpers/odata-query";
 
@@ -32,7 +38,7 @@ import {
   type PageResult,
 } from "@/lib/northbound/query/page";
 import { northboundOkJson } from "@/lib/northbound/respond";
-import { readTokenRing } from "@/lib/security/token-ring";
+import { deriveTokenKey, readTokenRing, TOKEN_PURPOSES } from "@/lib/security/token-ring";
 
 const RING = readTokenRing({ COREEDGE_TOKEN_KEYS: `t1:${"11".repeat(32)}`, COREEDGE_TOKEN_ACTIVE_KEY: "t1", NODE_ENV: "production" });
 const BINDING: CursorBinding = { organizationId: "org_a", clientId: "cli_a", interfaceId: "if_a", apiVersion: "2026-10" };
@@ -152,6 +158,63 @@ describe("the page algorithm", () => {
       expect(r.rule).toBe("UPSTREAM_IGNORED_PAGING");
       expect(r.flags).toContain("SKIP_NOT_HONOURED");
     }
+  });
+
+  /*
+   * P-SKIP-IGNORED-ADAPTIVE. A page 0 that fills the byte cap gives page 1 a
+   * smaller adaptive $top than page 0 served. A service that ignores $skip
+   * answers from offset 0 again, and its window stops before page 0's last
+   * row, so `lk` alone passed and page 1 served page 0's rows again with a
+   * cursor. The chain's first row is in every such window.
+   */
+  it.each([
+    [2380, "page 0 not cut, but over 90% of the byte cap"],
+    [4000, "page 0 cut by bytes"],
+  ])("SAP ignoring $skip after an adaptive $top (rows of %i bytes, %s) is 502 UPSTREAM_IGNORED_PAGING", (width) => {
+    const tight = prepared(BASIS, source({ page: { defaultSize: 100, maxSize: 500, rowCap: 10_000, byteCap: 262_144 } }));
+    const fromZero = (ask: number) => rowsFrom(0, ask, width);
+    const plan0 = planPage(tight, ast(100), null);
+    const first = okPage(assemblePage(ctx({ answer: { rows: fromZero(plan0.ask!), more: false, totalCount: null, projected: false } }, tight, null, ast(100))));
+    const c = next(first);
+    const plan1 = planPage(tight, ast(100), c.payload);
+    expect(plan1.ask!).toBeLessThan(first.served);
+    const r = assemblePage(ctx({ answer: { rows: fromZero(plan1.ask!), more: false, totalCount: null, projected: false } }, tight, c, ast(100)));
+    expect(r).toMatchObject({ ok: false, rule: "UPSTREAM_IGNORED_PAGING" });
+    expect(r.flags).toContain("SKIP_NOT_HONOURED");
+    // A service that honours $skip is served.
+    expect(assemblePage(ctx({ answer: { rows: rowsFrom(first.served, plan1.ask!, width), more: false, totalCount: null, projected: false } }, tight, c, ast(100))).ok).toBe(true);
+  });
+
+  it("the chain's first row keeps its own kid across a rotation, and is checked under it", () => {
+    const k1 = `t1:${"11".repeat(32)}`;
+    const k2 = `t2:${"22".repeat(32)}`;
+    const before = readTokenRing({ COREEDGE_TOKEN_KEYS: `${k1},${k2}`, COREEDGE_TOKEN_ACTIVE_KEY: "t1", NODE_ENV: "production" });
+    const after = readTokenRing({ COREEDGE_TOKEN_KEYS: `${k1},${k2}`, COREEDGE_TOKEN_ACTIVE_KEY: "t2", NODE_ENV: "production" });
+    const open = (r: PageResult, ring: typeof RING) => {
+      const c = openCursor(okPage(r).page.nextCursor, BINDING, NOW, ring);
+      if (!c.ok) throw new Error("cursor did not open");
+      return c;
+    };
+    const c1 = open(assemblePage(ctx({ answer: { rows: rowsFrom(0, 11), more: false, totalCount: null, projected: false }, ring: before })), before);
+    expect(c1.payload.fk).toMatch(/^t1\./);
+    // Page 1 after the rotation: sealed under t2, the first row still under t1.
+    const c2 = open(assemblePage(ctx({ answer: { rows: rowsFrom(10, 11), more: false, totalCount: null, projected: false }, ring: after }, POLICY, c1)), after);
+    expect(c2.kid).toBe("t2");
+    expect(c2.payload.fk).toBe(c1.payload.fk);
+    // Page 2 from offset 0 with a window short of page 1's last row: the first row gives it away.
+    const r = assemblePage(ctx({ answer: { rows: rowsFrom(0, 5), more: false, totalCount: null, projected: false }, ring: after }, POLICY, c2));
+    expect(r).toMatchObject({ ok: false, rule: "UPSTREAM_IGNORED_PAGING" });
+  });
+
+  it("the overlap check derives its key once, and reads only the rows that could be served", () => {
+    const c = next(assemblePage(ctx({ answer: { rows: rowsFrom(0, 11), more: false, totalCount: null, projected: false } })));
+    const derive = vi.mocked(deriveTokenKey);
+    derive.mockClear();
+    // SAP honours $skip but ignores $top: 5,000 rows from offset 10.
+    const r = okPage(assemblePage(ctx({ answer: { rows: rowsFrom(10, 5000), more: false, totalCount: null, projected: false } }, POLICY, c)));
+    expect(r.flags).toContain("TOP_NOT_HONOURED");
+    expect(r.served).toBe(10);
+    expect(derive.mock.calls.filter(([, , purpose]) => purpose === TOKEN_PURPOSES.cursorLastKey)).toHaveLength(1);
   });
 
   it("issues no cursor where none is wanted (the Test Console's single page)", () => {

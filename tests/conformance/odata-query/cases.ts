@@ -422,6 +422,36 @@ export const CASES: ConformanceCase[] = [
       },
     ],
   })),
+  ...both((v) => {
+    const wide = (n: number) => item(v, n, { Note: `${"W".repeat(4000)}${n}` });
+    return {
+      id: "P-SKIP-IGNORED-ADAPTIVE",
+      policy: "itemsByteCap",
+      steps: [
+        {
+          query: "pageSize=200",
+          exchanges: [
+            { request: request(v, "Items", [["$orderby", "ItemId asc"], ["$top", "201"]]), answer: { ...listAnswer(v, "Items", Array.from({ length: 201 }, (_, i) => wide(i + 1))), gzip: true } },
+          ],
+          expect: { status: 200, page: { complete: false }, flags: "CUT_BY_BYTES" },
+        },
+        {
+          query: "pageSize=200",
+          next: true,
+          // SAP ignored $skip and answered from the start again. Adaptive $top
+          // asked for fewer rows than page 0 served, so the window stops short
+          // of page 0's last row; the chain's first row is in it.
+          exchanges: [
+            {
+              request: request(v, "Items", [["$orderby", "ItemId asc"], ["$top", "<adaptive>"], ["$skip", "<cut>"]]),
+              answer: listAnswer(v, "Items", Array.from({ length: 50 }, (_, i) => wide(i + 1))),
+            },
+          ],
+          expect: { status: 502, code: "UPSTREAM_ERROR", rule: "UPSTREAM_IGNORED_PAGING", flags: "ADAPTIVE_TOP,SKIP_NOT_HONOURED" },
+        },
+      ],
+    };
+  }),
   ...both((v) => ({
     id: "P-SKIP-PAST-END",
     policy: "items",
@@ -751,6 +781,7 @@ export const NAMED_IDS = [
   "P-SERVER-CAP",
   "P-TOP-IGNORED",
   "P-SKIP-IGNORED",
+  "P-SKIP-IGNORED-ADAPTIVE",
   "P-SKIP-PAST-END",
   "V2-P-NOT-PAGEABLE",
   "C-INLINE",

@@ -984,6 +984,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
           cn: "x",
           cr: 0,
           lk: "A".repeat(11),
+          fk: `t1.${"A".repeat(11)}`,
           rb: 50,
           iat: now,
           exp: now + 600,

@@ -69,6 +69,7 @@ function payload(over: Partial<CursorPayloadV1> = {}): CursorPayloadV1 {
     cn: "conn_1",
     cr: 4,
     lk: lastKeyTag(RING, "t1", '["1000123"]'),
+    fk: `t1.${lastKeyTag(RING, "t1", '["1000001"]')}`,
     rb: 420,
     iat: T,
     exp: T + CURSOR_TTL_SECONDS,
@@ -116,6 +117,7 @@ describe("sealing and opening", () => {
       cn: "c".repeat(64),
       g: grantTags(Array.from({ length: 20 }, (_, i) => `grant_${i}`)),
       rb: 4_000_000,
+      fk: `t999999.${"A".repeat(11)}`,
     });
     expect(big.g).toHaveLength(8);
     const text = sealCursor(big, BINDING, ring(`t999999:${K1}`, "t999999"));
@@ -129,7 +131,7 @@ describe("sealing and opening", () => {
     d.setAAD(Buffer.from(`cec1|t1|${BINDING.organizationId}|${BINDING.clientId}|${BINDING.interfaceId}|${BINDING.apiVersion}`));
     d.setAuthTag(sealed.subarray(sealed.length - 16));
     const plaintext = Buffer.concat([d.update(sealed.subarray(12, sealed.length - 16)), d.final()]).toString("utf8");
-    expect(Object.keys(JSON.parse(plaintext) as object)).toEqual(["v", "ch", "pi", "off", "rs", "iv", "pr", "qb", "g", "cn", "cr", "lk", "rb", "iat", "exp", "cx"]);
+    expect(Object.keys(JSON.parse(plaintext) as object)).toEqual(["v", "ch", "pi", "off", "rs", "iv", "pr", "qb", "g", "cn", "cr", "lk", "fk", "rb", "iat", "exp", "cx"]);
     expect(plaintext).not.toMatch(/:\/\/|example|sap-client|grant_1/);
   });
 });

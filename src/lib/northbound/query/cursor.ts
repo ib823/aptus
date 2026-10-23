@@ -84,6 +84,13 @@ export interface CursorPayloadV1 {
   readonly cr: number;
   /** The previous page's last row's key, as lastKeyTag under this cursor's kid. */
   readonly lk: string;
+  /**
+   * The chain's first served row's key: the kid it was tagged under, a dot,
+   * and its lastKeyTag (`t2.xxxxxxxxxxx`). Set on page 0 and copied forward,
+   * so it keeps its own kid across a rotation. A service that ignores $skip
+   * starts every answer with this row, whatever $top asked for.
+   */
+  readonly fk: string;
   /** The mean projected bytes per served row so far. */
   readonly rb: number;
   /** Issued and expiry, seconds. */
@@ -95,12 +102,13 @@ export interface CursorPayloadV1 {
 
 export type OpenedCursor = { readonly ok: true; readonly kid: string; readonly payload: CursorPayloadV1 };
 
-const PAYLOAD_KEYS = ["v", "ch", "pi", "off", "rs", "iv", "pr", "qb", "g", "cn", "cr", "lk", "rb", "iat", "exp", "cx"] as const;
+const PAYLOAD_KEYS = ["v", "ch", "pi", "off", "rs", "iv", "pr", "qb", "g", "cn", "cr", "lk", "fk", "rb", "iat", "exp", "cx"] as const;
 const B64URL = (n: number) => new RegExp(`^[A-Za-z0-9_-]{${n}}$`);
 const CHAIN_ID = B64URL(16);
 const BIND = B64URL(22);
 const GRANT_TAG = B64URL(12);
 const LAST_KEY = B64URL(11);
+const FIRST_KEY = /^(t[0-9]{1,6})\.([A-Za-z0-9_-]{11})$/;
 const POLICY_REV = /^qp1:[A-Za-z0-9_-]{22}$/;
 const CONNECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_SECONDS = 253402300799; // 9999-12-31
@@ -139,6 +147,8 @@ function validPayload(raw: unknown): CursorPayloadV1 | null {
     isInt(p.cr, 0, Number.MAX_SAFE_INTEGER) &&
     typeof p.lk === "string" &&
     LAST_KEY.test(p.lk) &&
+    typeof p.fk === "string" &&
+    FIRST_KEY.test(p.fk) &&
     isInt(p.rb, 0, 4_000_000) &&
     isInt(p.iat, 0, MAX_SECONDS) &&
     isInt(p.exp, 0, MAX_SECONDS) &&
@@ -168,10 +178,47 @@ export function grantTags(grantIds: readonly string[]): string[] {
   return [...new Set(grantIds.map(grantTag))].sort().slice(0, MAX_CURSOR_GRANTS);
 }
 
-/** A row's canonical key, keyed under the ring, for the overlap check: 8 bytes, base64url. */
-export function lastKeyTag(ring: TokenRing, kid: string, keyText: string): string {
+/**
+ * Rows' canonical keys, keyed under the ring's `kid`, for the overlap check:
+ * 8 bytes each, base64url. The key is derived once, so a page tags its rows
+ * for one HKDF, not one per row.
+ */
+export function lastKeyTagger(ring: TokenRing, kid: string): (keyText: string) => string {
   const key = deriveTokenKey(ring, kid, TOKEN_PURPOSES.cursorLastKey);
-  return createHmac("sha256", key).update(keyText, "utf8").digest().subarray(0, 8).toString("base64url");
+  return (keyText) => createHmac("sha256", key).update(keyText, "utf8").digest().subarray(0, 8).toString("base64url");
+}
+
+/** One row's canonical key, keyed under the ring, for the overlap check: 8 bytes, base64url. */
+export function lastKeyTag(ring: TokenRing, kid: string, keyText: string): string {
+  return lastKeyTagger(ring, kid)(keyText);
+}
+
+/** The chain's first served row as `fk` carries it: the active kid, a dot, its tag under that kid. */
+export function firstKeyMark(ring: TokenRing, keyText: string): string {
+  return `${ring.active}.${lastKeyTag(ring, ring.active, keyText)}`;
+}
+
+/**
+ * Whether SAP ignored $skip on a later page: some row is the one that ended
+ * the previous page (`lk`), or the one that began the chain (`fk`).
+ *
+ * `lk` alone is not enough. Adaptive $top can ask a later page for fewer rows
+ * than the page before served, and a service that ignores $skip answers from
+ * offset 0, so the previous page's last row can fall outside the window it
+ * returns while every row in it is a repeat. The chain's first row is in
+ * every such window. `fk` is checked under the kid it names; a kid removed
+ * from the ring since (a compromise) leaves `lk` to check alone.
+ */
+export function repeatsChain(ring: TokenRing, cursor: OpenedCursor, keyTexts: readonly string[]): boolean {
+  const tagLast = lastKeyTagger(ring, cursor.kid);
+  const [, firstKid = "", firstTag = ""] = FIRST_KEY.exec(cursor.payload.fk) ?? [];
+  const sameKid = firstKid === cursor.kid;
+  const tagFirst = sameKid ? tagLast : ring.keys.has(firstKid) ? lastKeyTagger(ring, firstKid) : null;
+  return keyTexts.some((keyText) => {
+    const last = tagLast(keyText);
+    if (last === cursor.payload.lk) return true;
+    return tagFirst !== null && (sameKid ? last : tagFirst(keyText)) === firstTag;
+  });
 }
 
 /** The payload, sealed under the ring's active key. Throws on a payload this module would not open. */

@@ -14,8 +14,14 @@
  *   - more rows than $top asked for: SAP ignored $top. The rows that fit are
  *     served, no cursor is issued (paging on would skip or repeat), and the
  *     page says so (stopped: UPSTREAM_IGNORED_PAGING).
- *   - a later page containing the row that ended the previous one: SAP
- *     ignored $skip. 502, retrying will not help.
+ *   - a later page containing the row that ended the previous one, or the
+ *     row that began the chain: SAP ignored $skip. 502, retrying will not
+ *     help. The first row matters because adaptive $top can ask for fewer
+ *     rows than the previous page served, and an answer from offset 0 then
+ *     stops before the previous page's last row (cursor.ts repeatsChain).
+ *     Only the rows that could be served (the look-ahead row included) are
+ *     checked, so a service that also ignores $top costs a page's worth of
+ *     tags, not one per row of its answer.
  *
  * A BYTE CAP PER PAGE. The body is written here, row by row, and stops before
  * it would pass the policy's byte cap (at most 4,000,000 bytes, below the
@@ -41,10 +47,12 @@ import type { TokenRing } from "@/lib/security/token-ring";
 import {
   CHAIN_TTL_SECONDS,
   CURSOR_TTL_SECONDS,
+  firstKeyMark,
   grantTags,
   lastKeyTag,
   MAX_CHAIN_PAGES,
   newChainId,
+  repeatsChain,
   sealCursor,
   type CursorBinding,
   type CursorPayloadV1,
@@ -188,7 +196,7 @@ export type PageResult =
     }
   | {
       readonly ok: false;
-      /** ROW_TOO_LARGE: 422. UPSTREAM_IGNORED_PAGING: 502, SAP repeated the last page's row. */
+      /** ROW_TOO_LARGE: 422. UPSTREAM_IGNORED_PAGING: 502, SAP repeated the last page's row or the chain's first. */
       readonly rule: "ROW_TOO_LARGE" | "UPSTREAM_IGNORED_PAGING";
       readonly chainId: string;
       readonly flags: readonly QueryFlag[];
@@ -205,8 +213,8 @@ export function assemblePage(ctx: PageContext): PageResult {
   const chainId = cursor?.payload.ch ?? newChainId();
   const rs = cursor?.payload.rs ?? 0;
 
-  // SAP ignored $skip: the row that ended the last page is back.
-  if (cursor !== null && answer.rows.some((r) => lastKeyTag(ctx.ring, cursor.kid, r.keyText) === cursor.payload.lk)) {
+  // SAP ignored $skip: the row that ended the last page, or the chain's first row, is back.
+  if (cursor !== null && repeatsChain(ctx.ring, cursor, answer.rows.slice(0, plan.top + 1).map((r) => r.keyText))) {
     flags.add("SKIP_NOT_HONOURED");
     return { ok: false, rule: "UPSTREAM_IGNORED_PAGING", chainId, flags: [...flags] };
   }
@@ -254,6 +262,7 @@ export function assemblePage(ctx: PageContext): PageResult {
       cn: ctx.connection.id,
       cr: ctx.connection.revision,
       lk: lastKeyTag(ctx.ring, ctx.ring.active, answer.rows[k - 1]!.keyText),
+      fk: cursor?.payload.fk ?? firstKeyMark(ctx.ring, answer.rows[0]!.keyText),
       rb,
       iat: seconds,
       exp: seconds + CURSOR_TTL_SECONDS,

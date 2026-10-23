@@ -467,6 +467,7 @@ function expiredCursor(): string {
       cn: "conn_1",
       cr: 0,
       lk: b64(11),
+      fk: `t1.${b64(11)}`,
       rb: 100,
       iat: now - 2000,
       exp: now - 1000,
