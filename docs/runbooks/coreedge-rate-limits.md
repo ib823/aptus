@@ -59,7 +59,14 @@ For a call that carries `Authorization: Bearer …`:
    route still authenticates the credential and applies its own budget
    (`northbound:<clientId>` 60 reads, `northbound-write:<clientId>` 60 writes a
    minute), with an audit row; the edge ceiling is above both, so it never
-   refuses a call the route would serve.
+   refuses a call the route would serve. `GET …/schema` also spends its
+   organisation's bucket (`northbound-schema:<organizationId>`, 120 a minute
+   across all the organisation's credentials,
+   `RATE_LIMITS.northboundSchemaPerOrg`, P1.3): refused `429 RATE_LIMITED`
+   with a message naming the organisation's credentials together, audited
+   429 with `failureReason: ORG_SCHEMA_RATE`, which the per-credential
+   throttle view and the `throttled` incident leave out (that credential is
+   under its own limit).
 2. `machine-ip:<ip>` — 6,000 a minute (`RATE_LIMITS.machineIpBackstop`),
    checked **only after the credential's own bucket admitted the call**. A
    runaway key is refused at its own ceiling first, so it can spend at most a
@@ -117,7 +124,7 @@ in-memory fallback is no limit at all on serverless:
 | Live SAP console routes | `sap-live:` | 503 — the bucket protects the customer's SAP system |
 | Browser API reads and changes, reports | `api:`, `report:` | 503 |
 | Machine routes (edge) | `machine:cred:`, `machine-ip:` | 503 in the broker's envelope, with a correlation id. The `machine-authfail:` read comes back unknown and refuses nothing; the two buckets after it answer the outage |
-| Northbound routes (in-route) | `northbound:`, `northbound-write:` | 503, audited 503 / `LIMITER_UNAVAILABLE` |
+| Northbound routes (in-route) | `northbound:`, `northbound-write:`, `northbound-schema:` (`/schema` only) | 503, audited 503 / `LIMITER_UNAVAILABLE` |
 | Studio Test Console dry run | `northbound:` | refusal `LIMITER_UNAVAILABLE`, audited 503 dry run |
 | Lane re-check, Probe all | per lane, per tenant | 503 |
 | Ops throttle gauge | `peekRateLimit` | "unknown", never zero (unchanged; it gates nothing) |

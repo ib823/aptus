@@ -37,6 +37,7 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { liveKeyWhere } from "@/lib/northbound/key-policy";
+import { FAILURE_REASON_ORG_SCHEMA_RATE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import { THROTTLE_BUCKETS } from "@/lib/ops/throttle";
 import { peekRateLimit, rateLimitBackend, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -88,7 +89,12 @@ export async function GET(request: NextRequest) {
   const [throttled429, headroom] = await Promise.all([
     prisma.northboundAuditEvent.groupBy({
       by: ["clientTokenId", "operation"],
-      where: opsWhere(guard.actor, { status: 429, at: { gte: since } }),
+      // A credential's own throttling: not a /schema read its organisation's bucket refused (ORG_SCHEMA_RATE).
+      where: opsWhere(guard.actor, {
+        status: 429,
+        at: { gte: since },
+        OR: [{ failureReason: null }, { failureReason: { not: FAILURE_REASON_ORG_SCHEMA_RATE } }],
+      }),
       _count: { _all: true },
     }),
     Promise.all(

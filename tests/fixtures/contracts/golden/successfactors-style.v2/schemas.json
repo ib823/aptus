@@ -1,0 +1,524 @@
+{
+  "json-schema-2020-12": {
+    "create": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+      "properties": {
+        "cust_Amount": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Estimated Cost",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 20,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "cust_Approved": {
+          "title": "Approved",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-odata-type": "Edm.Boolean"
+        },
+        "cust_Destination": {
+          "maxLength": 255,
+          "title": "Destination",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "cust_Nights": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "Nights",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "cust_Traveller": {
+          "maxLength": 100,
+          "title": "Traveller",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "cust_TravellerNav": {
+          "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+          "type": "object",
+          "x-odata-navigation": {
+            "collection": false,
+            "target": "SFOData.User"
+          }
+        },
+        "effectiveStartDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Start Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "externalCode": {
+          "maxLength": 128,
+          "title": "Code",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "externalCode",
+        "effectiveStartDate"
+      ],
+      "title": "Travel Request (create)",
+      "type": "object"
+    },
+    "key": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one cust_TravelRequest record.",
+      "properties": {
+        "effectiveStartDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Start Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "externalCode": {
+          "title": "Code",
+          "type": "string",
+          "x-odata-max-length": 128,
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "externalCode",
+        "effectiveStartDate"
+      ],
+      "title": "Travel Request (key)",
+      "type": "object"
+    },
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A cust_TravelRequest record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "createdBy": {
+          "readOnly": true,
+          "title": "Created By",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 255,
+          "x-odata-type": "Edm.String"
+        },
+        "cust_Amount": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Estimated Cost",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 20,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "cust_Approved": {
+          "title": "Approved",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-odata-type": "Edm.Boolean"
+        },
+        "cust_Destination": {
+          "title": "Destination",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 255,
+          "x-odata-type": "Edm.String"
+        },
+        "cust_Nights": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "Nights",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "cust_Traveller": {
+          "title": "Traveller",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 100,
+          "x-odata-type": "Edm.String"
+        },
+        "effectiveStartDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Start Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "externalCode": {
+          "title": "Code",
+          "type": "string",
+          "x-odata-max-length": 128,
+          "x-odata-type": "Edm.String"
+        },
+        "lastModifiedDateTime": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "readOnly": true,
+          "title": "Last Modified Date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "mdfSystemRecordStatus": {
+          "readOnly": true,
+          "title": "Record Status",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 255,
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "externalCode",
+        "effectiveStartDate"
+      ],
+      "title": "Travel Request",
+      "type": "object",
+      "x-odata-entity-set": "cust_TravelRequest",
+      "x-odata-entity-type": "SFOData.cust_TravelRequest",
+      "x-odata-key": [
+        "externalCode",
+        "effectiveStartDate"
+      ]
+    },
+    "update": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The changes an update sends to one cust_TravelRequest record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+      "properties": {
+        "cust_Amount": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Estimated Cost",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 20,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "cust_Approved": {
+          "title": "Approved",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "x-odata-type": "Edm.Boolean"
+        },
+        "cust_Destination": {
+          "maxLength": 255,
+          "title": "Destination",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "cust_Nights": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "Nights",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "cust_Traveller": {
+          "maxLength": 100,
+          "title": "Traveller",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "title": "Travel Request (update)",
+      "type": "object"
+    }
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": "CustTravelRequest_Create",
+      "key": "CustTravelRequest_Key",
+      "record": "CustTravelRequest",
+      "update": "CustTravelRequest_Update"
+    },
+    "schemas": {
+      "CustTravelRequest": {
+        "additionalProperties": true,
+        "description": "A cust_TravelRequest record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "createdBy": {
+            "nullable": true,
+            "readOnly": true,
+            "title": "Created By",
+            "type": "string",
+            "x-odata-max-length": 255,
+            "x-odata-type": "Edm.String"
+          },
+          "cust_Amount": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Estimated Cost",
+            "type": "string",
+            "x-odata-precision": 20,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "cust_Approved": {
+            "nullable": true,
+            "title": "Approved",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "cust_Destination": {
+            "nullable": true,
+            "title": "Destination",
+            "type": "string",
+            "x-odata-max-length": 255,
+            "x-odata-type": "Edm.String"
+          },
+          "cust_Nights": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "Nights",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "cust_Traveller": {
+            "nullable": true,
+            "title": "Traveller",
+            "type": "string",
+            "x-odata-max-length": 100,
+            "x-odata-type": "Edm.String"
+          },
+          "effectiveStartDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Start Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "externalCode": {
+            "title": "Code",
+            "type": "string",
+            "x-odata-max-length": 128,
+            "x-odata-type": "Edm.String"
+          },
+          "lastModifiedDateTime": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "readOnly": true,
+            "title": "Last Modified Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "mdfSystemRecordStatus": {
+            "nullable": true,
+            "readOnly": true,
+            "title": "Record Status",
+            "type": "string",
+            "x-odata-max-length": 255,
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "externalCode",
+          "effectiveStartDate"
+        ],
+        "title": "Travel Request",
+        "type": "object",
+        "x-odata-entity-set": "cust_TravelRequest",
+        "x-odata-entity-type": "SFOData.cust_TravelRequest",
+        "x-odata-key": [
+          "externalCode",
+          "effectiveStartDate"
+        ]
+      },
+      "CustTravelRequest_Create": {
+        "additionalProperties": false,
+        "description": "The record a create sends to cust_TravelRequest. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+        "properties": {
+          "cust_Amount": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Estimated Cost",
+            "type": "string",
+            "x-odata-precision": 20,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "cust_Approved": {
+            "nullable": true,
+            "title": "Approved",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "cust_Destination": {
+            "maxLength": 255,
+            "nullable": true,
+            "title": "Destination",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "cust_Nights": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "Nights",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "cust_Traveller": {
+            "maxLength": 100,
+            "nullable": true,
+            "title": "Traveller",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "cust_TravellerNav": {
+            "description": "A related SFOData.User record to create with this one, or a link to an existing one.",
+            "type": "object",
+            "x-odata-navigation": {
+              "collection": false,
+              "target": "SFOData.User"
+            }
+          },
+          "effectiveStartDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Start Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "externalCode": {
+            "maxLength": 128,
+            "title": "Code",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "externalCode",
+          "effectiveStartDate"
+        ],
+        "title": "Travel Request (create)",
+        "type": "object"
+      },
+      "CustTravelRequest_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one cust_TravelRequest record.",
+        "properties": {
+          "effectiveStartDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Start Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "externalCode": {
+            "title": "Code",
+            "type": "string",
+            "x-odata-max-length": 128,
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "externalCode",
+          "effectiveStartDate"
+        ],
+        "title": "Travel Request (key)",
+        "type": "object"
+      },
+      "CustTravelRequest_Update": {
+        "additionalProperties": false,
+        "description": "The changes an update sends to one cust_TravelRequest record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+        "properties": {
+          "cust_Amount": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Estimated Cost",
+            "type": "string",
+            "x-odata-precision": 20,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "cust_Approved": {
+            "nullable": true,
+            "title": "Approved",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "cust_Destination": {
+            "maxLength": 255,
+            "nullable": true,
+            "title": "Destination",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "cust_Nights": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "Nights",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "cust_Traveller": {
+            "maxLength": 100,
+            "nullable": true,
+            "title": "Traveller",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "title": "Travel Request (update)",
+        "type": "object"
+      }
+    }
+  }
+}

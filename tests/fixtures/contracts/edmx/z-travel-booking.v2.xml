@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.3 golden set): a customer's own Z* OData V2
+  service as the Gateway Service Builder (SEGW) publishes it under
+  /sap/opu/odata/sap/ZTRAVEL_BOOKING_SRV. Invented end to end.
+-->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+  <edmx:DataServices m:DataServiceVersion="2.0">
+    <Schema Namespace="ZTRAVEL_BOOKING_SRV" xml:lang="en" sap:schema-version="1" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+      <EntityType Name="Booking" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="TravelId"/>
+          <PropertyRef Name="BookingId"/>
+        </Key>
+        <Property Name="TravelId" Type="Edm.String" Nullable="false" MaxLength="8" sap:unicode="false" sap:label="Travel ID"/>
+        <Property Name="BookingId" Type="Edm.String" Nullable="false" MaxLength="4" sap:unicode="false" sap:label="Booking ID" sap:creatable="false"/>
+        <Property Name="CustomerId" Type="Edm.String" Nullable="false" MaxLength="6" sap:unicode="false" sap:label="Customer"/>
+        <Property Name="CarrierId" Type="Edm.String" Nullable="false" MaxLength="3" sap:unicode="false" sap:label="Airline"/>
+        <Property Name="FlightDate" Type="Edm.DateTime" Nullable="false" Precision="7" sap:unicode="false" sap:display-format="Date" sap:label="Flight Date"/>
+        <Property Name="FlightPrice" Type="Edm.Decimal" Precision="16" Scale="3" sap:unicode="false" sap:unit="CurrencyCode" sap:label="Price"/>
+        <Property Name="CurrencyCode" Type="Edm.String" MaxLength="5" sap:unicode="false" sap:label="Currency" sap:semantics="currency-code"/>
+        <Property Name="BookingStatus" Type="Edm.String" MaxLength="1" sap:unicode="false" sap:label="Status" sap:updatable="true"/>
+        <Property Name="SeatCount" Type="Edm.Byte" sap:unicode="false" sap:label="Seats"/>
+        <Property Name="ChangedAt" Type="Edm.DateTimeOffset" Precision="7" sap:unicode="false" sap:label="Changed At" sap:creatable="false" sap:updatable="false"/>
+      </EntityType>
+      <EntityContainer Name="ZTRAVEL_BOOKING_SRV_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json xlsx">
+        <EntitySet Name="BookingSet" EntityType="ZTRAVEL_BOOKING_SRV.Booking" sap:pageable="false" sap:addressable="true" sap:content-version="1"/>
+        <FunctionImport Name="CancelBooking" ReturnType="ZTRAVEL_BOOKING_SRV.Booking" EntitySet="BookingSet" m:HttpMethod="POST">
+          <Parameter Name="TravelId" Type="Edm.String" Mode="In" MaxLength="8"/>
+          <Parameter Name="BookingId" Type="Edm.String" Mode="In" MaxLength="4"/>
+        </FunctionImport>
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

@@ -133,8 +133,8 @@ const EXEMPT: Record<string, { reads: string; recorded: string; moves: string }>
     moves: "P4.1 (the probe moves onto the pipeline's transport); by P3 for A.3 #9",
   },
   "src/app/api/studio/interfaces/[id]/verify-service/route.ts": {
-    reads: "a customer-built service's $metadata before an interface may name it (P1.1)",
-    recorded: "a ConfigAudit row and the service verification",
+    reads: "a customer-built service's $metadata before an interface may name it (P1.1); the Contract Compiler parses that same answer in its worker, with no request of its own (P1.3)",
+    recorded: "a ConfigAudit row and the service verification, and the contract compiled from the answer (a ContractSnapshot, P1.3)",
     moves: "P4.1; by P3 for A.3 #9",
   },
   "src/app/api/coreedge/lanes/recheck/route.ts": {

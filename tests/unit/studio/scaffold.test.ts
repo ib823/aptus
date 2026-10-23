@@ -47,8 +47,10 @@ describe("OpenAPI document", () => {
   it("describes the NORTHBOUND path for this interface, not SAP's own", () => {
     // The whole value is that the developer codes against a stable contract we
     // own, rather than a tenant-specific SAP surface.
+    // The read (a READ interface's one operation) and its contract (P1.3).
+    // And the changelog, served on both paths with no credential (P1.10).
     const paths = doc.paths as Record<string, unknown>;
-    expect(Object.keys(paths)).toEqual([`/interfaces/${IFACE.id}/data`]);
+    expect(Object.keys(paths)).toEqual([`/interfaces/${IFACE.id}/data`, `/interfaces/${IFACE.id}/schema`, "/versions"]);
   });
 
   it("declares bearer auth and applies it globally", () => {
@@ -85,11 +87,23 @@ describe("OpenAPI document", () => {
     expect(schema!.additionalProperties).toBe(true);
   });
 
-  it("uses the base URL it is given", () => {
-    const custom = JSON.parse(buildOpenApi(IFACE, "https://acme.internal/api/northbound")) as {
-      servers: { url: string }[];
-    };
-    expect(custom.servers[0]!.url).toBe("https://acme.internal/api/northbound");
+  it("uses the deployment it is given, both paths, the one every deployment serves first", () => {
+    // Not v1 first yet: the deployment a rollback returns to does not serve
+    // it (P1 wave A review).
+    const servers = (base: string) => (JSON.parse(buildOpenApi(IFACE, base)) as { servers: { url: string }[] }).servers.map((s) => s.url);
+    const both = ["https://acme.internal/api/northbound", "https://acme.internal/api/northbound/v1"];
+    expect(servers("https://acme.internal/api/northbound")).toEqual(both);
+    expect(servers("https://acme.internal/api/northbound/v1")).toEqual(both);
+    expect(servers("https://acme.internal/api/northbound/v1/")).toEqual(both);
+    // Not a CoreEdge path (a local mock, a proxy): listed as given.
+    expect(servers("http://localhost:4010")).toEqual(["http://localhost:4010"]);
+  });
+
+  it("generates for the original path by default, and describes the version header", () => {
+    expect((doc.servers as { url: string }[])[0]!.url).toBe("https://coreedge.example/api/northbound");
+    expect(buildEnvExample()).toContain("COREEDGE_BASE_URL=https://coreedge.example/api/northbound\n");
+    const components = doc.components as { parameters: Record<string, { name: string; in: string; required: boolean }> };
+    expect(components.parameters.CoreEdgeVersion).toMatchObject({ name: "CoreEdge-Version", in: "header", required: false });
   });
 });
 
@@ -189,6 +203,7 @@ describe("the bundle", () => {
       "demo.mjs",
       "fixtures.json",
       "mock.mjs",
+      "openapi-3.0.json",
       "openapi.json",
       "package.json",
     ]);

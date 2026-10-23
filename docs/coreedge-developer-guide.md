@@ -62,6 +62,32 @@ openapi-generator-cli generate -i openapi.json -g java    -o ./client
 Your database, ORM, test framework, and deployment target are not CoreEdge's
 business and it does not try to make them so.
 
+**Verify the service and the contract is compiled from SAP's own description.**
+When an interface's service has been verified in Studio, the kit's record type,
+the create body and the key are compiled from the service's `$metadata` — every
+field with its OData type, length, precision, label and personal-data
+annotation — and carry a semantic version that only moves when the contract
+does (removed or newly required fields are a major version, added optional
+ones a minor, labels and annotations a patch). Before a verify, the shape comes
+from captured rows, and before a capture it is stated as unknown. The kit ships
+the same contract twice: `openapi.json` (OpenAPI 3.1) and `openapi-3.0.json`
+(3.0.3, for generators that do not read 3.1 yet). The whole solution's document
+is under Solutions → Functional → Northbound contract, and
+`GET /interfaces/{id}/schema` adds `contract` (its source, version and JSON
+Schemas) and, for a write interface, `requestSchema`, the body a write sends.
+
+The documents describe the wire format: on an OData V2 service an `Int64`,
+`Decimal` or date arrives as a string (`"/Date(1717171717000)/"`), on V4 as a
+number or an RFC 3339 string. Only the operations CoreEdge serves are drawn as
+paths; `x-coreedge-interfaces[].operations` says which others the service
+allows and when CoreEdge will serve them. Both documents list the original
+`/api/northbound` first in `servers` and `/api/northbound/v1` second (one
+implementation), take the optional `CoreEdge-Version` header on every
+operation, name it on every answer with `Deprecation` and `Sunset`, and
+document `400 UNSUPPORTED_VERSION` and `GET /versions` (see *API versions and
+deprecation*). A kit downloaded from Studio calls the original path; kits and
+documents move to `v1` in a later release.
+
 ### Testing offline
 
 ```bash
@@ -267,6 +293,7 @@ help.
 | Status | `error.code` | Means | Retry? |
 |---|---|---|---|
 | `400` | `VALIDATION_ERROR` | The request is not valid, or the feed's own definition is incomplete (no dataset, no service) | **No.** Fix the request, or the feed in Studio |
+| `400` | `UNSUPPORTED_VERSION` | Your `CoreEdge-Version` header names a version that does not exist or was retired at its Sunset date. `error.supportedVersions` lists what you may send. Refused before anything else: nothing was sent to SAP | **No.** Send a supported version, or omit the header. See *API versions and deprecation* |
 | `401` | `UNAUTHENTICATED` | The token is missing, unknown, revoked or expired | **No.** Fix the token |
 | `403` | `FORBIDDEN` | Not set up: no approved grant for this call; or the customer's SAP connection cannot sign in — a credential is missing, its token endpoint refused it, or its token URL is wrong; or SAP itself refused (401/403) | **No.** Fix access or the connection, then call again |
 | `403` | `CONNECTION_NOT_CONFIGURED` | The customer has not connected that SAP system for your environment | **No.** The customer connects it |
@@ -274,18 +301,101 @@ help.
 | `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
 | `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |
 | `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
-| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it | **Yes, after `Retry-After`.** Slow this key down |
+| `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it. One exception: `GET …/schema` also has a budget for your whole organisation (120 reads a minute across all its credentials); when that is spent the message says *"Your organisation's credentials together have read /schema…"* | **Yes, after `Retry-After`.** Slow this key down; for the organisation's `/schema` budget, read `/schema` less often across your applications (cache it: it changes only when the interface's contract does) |
 | `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
+| `429` | `RATE_LIMIT_EXCEEDED` | **Your address** is over the edge's ordinary per-address limit (300 GET or 120 POST a minute). Only a call that no per-credential limit covers meets it: `GET /versions`, a call with no `Authorization` header, or every call while per-credential limits are switched off | **Yes, after `Retry-After`.** Send your token on every call |
 | `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
 | `503` | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits, so it refused the call for safety. Nothing was sent to SAP, and your budget was not spent | **Yes, after `Retry-After`.** |
+| `503` | `CIRCUIT_OPEN` | The customer's SAP system failed to answer several calls in a row, so CoreEdge is holding calls to it for a short while. Nothing was sent to SAP. Sent only where the deployment enforces its circuit breaker | **Yes, after `Retry-After`;** a write with the same `Idempotency-Key` |
+| `503` | `CONNECTION_NOT_CONFIGURED` | The connection for your environment is served by a Tenant Twin that this deployment does not have. Nothing was sent to SAP | **No.** The customer or the operator changes the connection |
 | `504` | `UPSTREAM_TIMEOUT` | The tenant, or the connection's token endpoint, did not answer in time | **Yes, with backoff.** A write that timed out after it was sent returns the same answer under its key; see *Idempotency is not optional* |
 
 **Branch on `error.code`, not only on the status.** A `429 RATE_LIMITED` is
-about your own credential; a `429 RATE_LIMITED_ADDRESS` is about the address
-you call from. Neither is ever sent for an outage: when the limiter itself is
+about your own credential (or, on `/schema` only, your organisation's
+credentials together, as its message says); a `429 RATE_LIMITED_ADDRESS` or
+`RATE_LIMIT_EXCEEDED` is about the address you call from. Neither is ever sent for an outage: when the limiter itself is
 down you get `503 LIMITER_UNAVAILABLE`, which says nothing about your rate.
 When SAP or its token endpoint throttles, you get `502 UPSTREAM_ERROR`, so back
 off on a `502` as well, not only on a `429`.
+
+---
+
+## API versions and deprecation
+
+The northbound API has dated versions, and a written promise about how they
+change. Every version and every change to it is in the changelog,
+`docs/coreedge/api-changelog.md`, also served as JSON with no credential at
+`GET /api/northbound/versions`.
+
+**Two paths, one API.** `/api/northbound/v1/*` and the original
+`/api/northbound/*` are the same implementation: the same limits, the same
+credential checks, the same grants, the same audit trail. Generated kits and
+documents still point at the original path: the `v1` path is new in this
+release, and a deployment rolled back to the one before would not serve it.
+They switch to `v1` in a later release, and you can call either today. The
+original path is not deprecated, and if it ever is, that follows the policy
+below like any other change.
+
+**The version header.** Every response carries `CoreEdge-Version`, naming the
+version that served it (today `2026-10`). To pin a version, send the same
+header:
+
+```bash
+curl -H "Authorization: Bearer $COREEDGE_TOKEN" \
+     -H "CoreEdge-Version: 2026-10" \
+     "$COREEDGE_BASE_URL/interfaces"
+```
+
+- **No header** (or an empty one): you are served the **oldest** version still
+  supported, so code written before versions existed keeps the behaviour it was
+  written against.
+- **A supported version**: you are served exactly that version.
+- **An unknown or retired version**: `400 UNSUPPORTED_VERSION`, before anything
+  else happens. `error.supportedVersions` lists the versions you may send;
+  `error.requestedVersion` echoes what you sent. This is the one northbound
+  response with no `CoreEdge-Version` header, because no version served it.
+  Every other one carries it, including the edge's refusals that arrive before
+  any route runs: `429 RATE_LIMITED` and `RATE_LIMITED_ADDRESS`, the per-address
+  `429 RATE_LIMIT_EXCEEDED` (a call with no `Authorization` header, or every
+  call while per-credential limits are switched off), and
+  `503 LIMITER_UNAVAILABLE`. When you pinned a version the route would refuse,
+  an edge refusal names none: the `400` is the route's to send once you are
+  within your limits.
+
+**The deprecation policy.**
+
+1. **Additive changes ship into the current version**, listed in the changelog
+   with their date: a new route, a new optional request header or parameter, a
+   new response field or header, a new `error.code` for a situation that could
+   not happen before. Your client must ignore fields, headers and codes it does
+   not know (treat an unknown `error.code` by its HTTP status).
+2. **Breaking changes ship only as a new dated version.** Breaking means:
+   removing or renaming a field, changing a field's type or meaning, a new
+   required header or parameter, a different status or `error.code` for an
+   existing situation, a change to authentication, or a change to a default
+   (such as the default page size).
+3. **The version it replaces stays served for at least 6 months** after the new
+   version is released, and at least 6 months after its own deprecation is
+   announced: the day the change that deprecates it deploys, which is the day
+   you first see `Deprecation` and `Sunset`. CoreEdge's CI refuses a version
+   history whose recorded dates break either rule
+   (`src/lib/northbound/version-policy.ts`, `checkRegistry`). The announcement
+   date is recorded by hand with the change (`announcedOn`, also in the
+   changelog), because nothing CI reads says when a change deployed; CoreEdge's
+   review checks it against the deploy.
+4. **You are told on every response.** From the day a deprecation is announced,
+   every response served as that version carries `Deprecation` (RFC 9745, for
+   example `Deprecation: @1798761600`), `Sunset` (RFC 8594, the HTTP date it
+   stops) and `Link: </api/northbound/versions>; rel="deprecation"`. Log these
+   headers, or alert on them.
+5. **At the Sunset date** a request pinned to that version gets
+   `400 UNSUPPORTED_VERSION`, and an unpinned request is served the next
+   supported version. Pin a version and move it forward deliberately, rather
+   than letting the Sunset date move you.
+
+**Keys across versions.** Your credential is not tied to a version or a path.
+Keys minted before the `ce_live_` and `ce_test_` prefixes (plain `ce_`) keep
+working on both paths and every version until they expire; see *Credentials*.
 
 ---
 

@@ -24,6 +24,11 @@ import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Each compile, diff and record-time render runs in a real worker thread
+// (lib/contracts/envelope.ts), which loads the compiler from source here:
+// seconds per test on a loaded runner, not milliseconds.
+vi.setConfig({ testTimeout: 60_000 });
+
 import type * as Resolver from "@/lib/sap-public/connection-resolver";
 
 const { mocks, BASE } = vi.hoisted(() => ({
@@ -425,6 +430,25 @@ describe("every wrong answer is named, and none is recorded", () => {
     );
   });
 
+  it("a CSDL JSON answer the compiler cannot read is answered as before the compiler, never a 500 (P1 wave A review)", async () => {
+    // "<Edmx>" passes the EDMX sniff; the enum member's value is an object
+    // whose toString is not a function, which String() throws on.
+    mocks.findIface.mockResolvedValue(iface({ odataVersion: "V4" }));
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('{"$Version":"4.0","x":"<Edmx>","ns":{"En":{"$Kind":"EnumType","A":{"toString":1}}}}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    expect(d.verified).toBe(false);
+    expect(d.status).toBe("ENTITY_SET_MISSING");
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
   it("401 → UNAUTHORIZED, audited as 401", async () => {
     fetchMock.mockImplementation(async () => new Response("", { status: 401 }));
     const d = await data(await verify());
@@ -504,6 +528,74 @@ describe("every wrong answer is named, and none is recorded", () => {
       const d = await data(await verify());
       expect(d.detail).not.toContain("erp.example.internal");
     }
+  });
+});
+
+/*
+ * Hostile-input review round 3: text PostgreSQL cannot hold. CSDL JSON can
+ * spell U+0000 and an unpaired surrogate; a dataset so named, beside the
+ * interface's own, was listed, written to text[] and refused there, and the
+ * route answered 500 on every verify. The database is stood in for by a
+ * write that refuses what PostgreSQL refuses (22P05).
+ */
+describe("text no database column can hold", () => {
+  const UNSTORABLE = /\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+  beforeEach(() => {
+    mocks.updateMany.mockImplementation(async (args: { data: { serviceVerifiedEntitySets?: string[] } }) => {
+      if ((args.data.serviceVerifiedEntitySets ?? []).some((n) => UNSTORABLE.test(n))) {
+        throw new Error('PostgresError { code: "22P05", message: "unsupported Unicode escape sequence" }');
+      }
+      return { count: 1 };
+    });
+  });
+
+  const jsonDescription = (bad: string) =>
+    new Response(
+      JSON.stringify({
+        $Version: "4.0",
+        sniff: "<Edmx Version>",
+        ns: {
+          T: { $Kind: "EntityType", $Key: ["k"], k: {} },
+          C: { $Kind: "EntityContainer", Travel: { $Collection: true, $Type: "ns.T" }, [bad]: { $Collection: true, $Type: "ns.T" } },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  it.each([
+    ["U+0000", "x\u0000y"],
+    ["an unpaired surrogate", "x\ud800y"],
+  ])("a CSDL JSON dataset named with %s: an answer, never a 500, and nothing unstorable written", async (_label, bad) => {
+    mocks.findIface.mockResolvedValue(iface({ odataVersion: "V4", entitySet: "Travel" }));
+    fetchMock.mockImplementation(async () => jsonDescription(bad));
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    // The compiler refuses the description (INVALID_CSDL), so it lists no
+    // datasets, as a JSON description did before the compiler.
+    expect(d.verified).toBe(false);
+    expect(d.entitySets.some((n) => UNSTORABLE.test(n))).toBe(false);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("a dataset the older XML reader lists with U+0000 is left out; the verify of the interface's own stands", async () => {
+    // saxes refuses the raw NUL, so the regex reader lists the datasets.
+    fetchMock.mockImplementation(async () => xml(V2_EDMX.replace('<EntitySet Name="A_Booking"', '<EntitySet Name="A_\u0000Booking"')));
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    expect(d).toMatchObject({ status: "OK", verified: true, entitySets: ["A_Travel"] });
+    expect(mocks.updateMany.mock.calls[0]![0].data.serviceVerifiedEntitySets).toEqual(["A_Travel"]);
+  });
+
+  it("a database that refuses the write is an answer: NOT_RECORDED, not verified, audited", async () => {
+    mocks.updateMany.mockRejectedValue(new Error("connection reset"));
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    expect(d).toMatchObject({ status: "NOT_RECORDED", verified: false });
+    expect(d.detail).toMatch(/could not be recorded/);
+    expect(configAuditAfter()).toMatchObject({ status: "NOT_RECORDED", verified: false });
   });
 });
 

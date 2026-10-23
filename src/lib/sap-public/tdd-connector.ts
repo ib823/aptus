@@ -10,6 +10,7 @@ import {
 } from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 import { sanitizeTenantKey } from "./tenant-key";
+import { ENTITY_SET_TAG, parseEntitySets, type SapEntitySet } from "./entity-set-tags";
 
 /**
  * The env tenant's auth types — the SAME four the stored-connection path
@@ -165,10 +166,7 @@ export interface SapOdataProduct {
   addressesClient: boolean;
 }
 
-export interface SapEntitySet {
-  name: string;
-  entityType: string;
-}
+export { ENTITY_SET_TAG, parseEntitySets, type SapEntitySet };
 
 /** How the entity-set capability flags were derived. */
 export type MetadataFlavor = "v2" | "v4-best-effort";
@@ -955,28 +953,8 @@ function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
 
 // Shared with the connection-aware northbound CSRF handshake.
 
-/**
- * An `<EntitySet …>` start tag. LINEAR ON HOSTILE INPUT: the attribute run
- * excludes `<` as well as `>` and is bounded, so a body of `<EntitySet
- * <EntitySet …` with no `>` costs one short scan per tag instead of a scan to
- * the end of the document from every one (quadratic — an 8 MB description
- * held the event loop for hours). `<` cannot appear inside an XML attribute
- * value, so no real tag is lost.
- */
-export const ENTITY_SET_TAG = /<EntitySet\b([^<>]{0,4096})>/g;
-
-export function parseEntitySets(metadataXml: string): SapEntitySet[] {
-  const entitySets: SapEntitySet[] = [];
-  const re = new RegExp(ENTITY_SET_TAG.source, "g");
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(metadataXml)) !== null) {
-    const attrs = match[1] ?? "";
-    const name = attrs.match(/\bName="([^"]+)"/)?.[1];
-    const entityType = attrs.match(/\bEntityType="([^"]+)"/)?.[1];
-    if (name && entityType) entitySets.push({ name, entityType });
-  }
-  return entitySets;
-}
+// ENTITY_SET_TAG and parseEntitySets live in entity-set-tags.ts (pure, so the
+// Contract Compiler's worker runs the same reader), re-exported above.
 
 /**
  * Decide how to read capabilities. SAP TDD OData services are predominantly V2

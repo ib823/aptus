@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.3 golden set): a key-user YY1_* custom CDS
+  view exposed as an OData V2 API (the "Custom CDS Views" app publishes these
+  under /sap/opu/odata/sap/YY1_<NAME>_CDS). Read-only, with the parameterless
+  result shape such views have. Invented end to end.
+-->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Common.xml" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+    <edmx:Include Namespace="com.sap.vocabularies.Common.v1" Alias="Common"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://example.invalid/vocabularies/Capabilities.xml" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+    <edmx:Include Namespace="Org.OData.Capabilities.V1" Alias="Capabilities"/>
+  </edmx:Reference>
+  <edmx:DataServices m:DataServiceVersion="2.0">
+    <Schema Namespace="YY1_SALESBONUS_CDS" xml:lang="en" sap:schema-version="1" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+      <EntityType Name="YY1_SALESBONUSType" sap:label="Sales Bonus" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="SalesEmployee"/>
+          <PropertyRef Name="FiscalYear"/>
+        </Key>
+        <Property Name="SalesEmployee" Type="Edm.String" Nullable="false" MaxLength="10" sap:display-format="UpperCase" sap:label="Sales Employee"/>
+        <Property Name="FiscalYear" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="NonNegative" sap:label="Fiscal Year"/>
+        <Property Name="SalesEmployeeName" Type="Edm.String" MaxLength="80" sap:label="Employee Name"/>
+        <Property Name="BonusAmount" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="Currency" sap:label="Bonus" sap:filterable="false"/>
+        <Property Name="Currency" Type="Edm.String" MaxLength="5" sap:label="Currency" sap:semantics="currency-code"/>
+        <Property Name="BonusRate" Type="Edm.Double" sap:label="Rate"/>
+      </EntityType>
+      <EntityContainer Name="YY1_SALESBONUS_CDS_Entities" m:IsDefaultEntityContainer="true" sap:message-scope-supported="true" sap:supported-formats="atom json xlsx">
+        <EntitySet Name="YY1_SALESBONUS" EntityType="YY1_SALESBONUS_CDS.YY1_SALESBONUSType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:searchable="true" sap:content-version="1"/>
+      </EntityContainer>
+      <Annotations Target="YY1_SALESBONUS_CDS.YY1_SALESBONUS_CDS_Entities/YY1_SALESBONUS" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+        <Annotation Term="Capabilities.FilterRestrictions">
+          <Record>
+            <PropertyValue Property="RequiresFilter" Bool="true"/>
+            <PropertyValue Property="RequiredProperties">
+              <Collection>
+                <PropertyPath>FiscalYear</PropertyPath>
+              </Collection>
+            </PropertyValue>
+          </Record>
+        </Annotation>
+        <Annotation Term="Common.Label" String="Sales Bonus per Employee"/>
+      </Annotations>
+      <Annotations Target="YY1_SALESBONUS_CDS.YY1_SALESBONUSType/SalesEmployeeName" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+        <Annotation Term="com.sap.vocabularies.PersonalData.v1.IsPotentiallyPersonal" Bool="true"/>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

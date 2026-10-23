@@ -1,0 +1,846 @@
+{
+  "json-schema-2020-12": {
+    "create": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+      "properties": {
+        "BirthDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Date of Birth",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTime",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          },
+          "x-sap-display-format": "Date"
+        },
+        "CreditLimit": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Credit Limit",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "Currency": {
+          "maxLength": 5,
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "EmployeeCount": {
+          "format": "int32",
+          "title": "Employees",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int32"
+        },
+        "ExternalRef": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "External Reference",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "FirstName": {
+          "maxLength": 40,
+          "title": "First Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "givenname"
+        },
+        "IsBlocked": {
+          "title": "Central Block",
+          "type": "boolean",
+          "x-odata-type": "Edm.Boolean"
+        },
+        "LastName": {
+          "maxLength": 40,
+          "title": "Last Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "familyname"
+        },
+        "Partner": {
+          "description": "Business Partner Number",
+          "maxLength": 10,
+          "title": "Business Partner",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          },
+          "x-sap-display-format": "UpperCase"
+        },
+        "PartnerCategory": {
+          "maxLength": 1,
+          "title": "BP Category",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "to_Address": {
+          "anyOf": [
+            {
+              "properties": {
+                "results": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "results"
+              ],
+              "type": "object"
+            },
+            {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            }
+          ],
+          "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+          "x-odata-navigation": {
+            "collection": true,
+            "target": "API_PARTNER_DEMO.A_PartnerAddressType"
+          }
+        },
+        "to_Customer": {
+          "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+          "type": "object",
+          "x-odata-navigation": {
+            "collection": false,
+            "target": "API_PARTNER_DEMO.A_CustomerType"
+          }
+        }
+      },
+      "title": "Business Partner (create)",
+      "type": "object"
+    },
+    "key": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one A_Partner record.",
+      "properties": {
+        "Partner": {
+          "description": "Business Partner Number",
+          "title": "Business Partner",
+          "type": "string",
+          "x-odata-max-length": 10,
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          },
+          "x-sap-display-format": "UpperCase"
+        }
+      },
+      "required": [
+        "Partner"
+      ],
+      "title": "Business Partner (key)",
+      "type": "object"
+    },
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A A_Partner record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "BirthDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Date of Birth",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTime",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          },
+          "x-sap-display-format": "Date"
+        },
+        "CreationDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "readOnly": true,
+          "title": "Created On",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "CreationTime": {
+          "pattern": "^PT(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+          "readOnly": true,
+          "title": "Created At",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Time"
+        },
+        "CreditLimit": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Credit Limit",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "Currency": {
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 5,
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "EmployeeCount": {
+          "format": "int32",
+          "title": "Employees",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int32"
+        },
+        "ExternalRef": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "External Reference",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "FirstName": {
+          "title": "First Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 40,
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "givenname"
+        },
+        "IsBlocked": {
+          "title": "Central Block",
+          "type": "boolean",
+          "x-odata-type": "Edm.Boolean"
+        },
+        "LastChangeDateTime": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "readOnly": true,
+          "title": "Changed On",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "LastName": {
+          "title": "Last Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 40,
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "familyname"
+        },
+        "Partner": {
+          "description": "Business Partner Number",
+          "title": "Business Partner",
+          "type": "string",
+          "x-odata-max-length": 10,
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID"
+          },
+          "x-sap-display-format": "UpperCase"
+        },
+        "PartnerCategory": {
+          "title": "BP Category",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 1,
+          "x-odata-type": "Edm.String"
+        },
+        "PartnerFullName": {
+          "readOnly": true,
+          "title": "Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 81,
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "name"
+        },
+        "PartnerUUID": {
+          "format": "uuid",
+          "readOnly": true,
+          "title": "BP GUID",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Guid"
+        }
+      },
+      "required": [
+        "Partner"
+      ],
+      "title": "Business Partner",
+      "type": "object",
+      "x-odata-entity-set": "A_Partner",
+      "x-odata-entity-type": "API_PARTNER_DEMO.A_PartnerType",
+      "x-odata-key": [
+        "Partner"
+      ],
+      "x-personal-data": {
+        "dataSubjectRole": "Business Partner",
+        "entitySemantics": "DataSubject"
+      }
+    },
+    "update": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The changes an update sends to one A_Partner record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+      "properties": {
+        "BirthDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Date of Birth",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTime",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          },
+          "x-sap-display-format": "Date"
+        },
+        "CreditLimit": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Credit Limit",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "Currency": {
+          "maxLength": 5,
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "EmployeeCount": {
+          "format": "int32",
+          "title": "Employees",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int32"
+        },
+        "ExternalRef": {
+          "format": "int64",
+          "pattern": "^-?\\d+$",
+          "title": "External Reference",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Int64"
+        },
+        "FirstName": {
+          "maxLength": 40,
+          "title": "First Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "givenname"
+        },
+        "IsBlocked": {
+          "title": "Central Block",
+          "type": "boolean",
+          "x-odata-type": "Edm.Boolean"
+        },
+        "LastName": {
+          "maxLength": 40,
+          "title": "Last Name",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "isPotentiallyPersonal": true
+          },
+          "x-sap-semantics": "familyname"
+        }
+      },
+      "title": "Business Partner (update)",
+      "type": "object"
+    }
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": "APartner_Create",
+      "key": "APartner_Key",
+      "record": "APartner",
+      "update": "APartner_Update"
+    },
+    "schemas": {
+      "APartner": {
+        "additionalProperties": true,
+        "description": "A A_Partner record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "BirthDate": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Date of Birth",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            },
+            "x-sap-display-format": "Date"
+          },
+          "CreationDate": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "readOnly": true,
+            "title": "Created On",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "CreationTime": {
+            "nullable": true,
+            "pattern": "^PT(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+            "readOnly": true,
+            "title": "Created At",
+            "type": "string",
+            "x-odata-type": "Edm.Time"
+          },
+          "CreditLimit": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Credit Limit",
+            "type": "string",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-max-length": 5,
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "EmployeeCount": {
+            "format": "int32",
+            "nullable": true,
+            "title": "Employees",
+            "type": "integer",
+            "x-odata-type": "Edm.Int32"
+          },
+          "ExternalRef": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "External Reference",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "FirstName": {
+            "nullable": true,
+            "title": "First Name",
+            "type": "string",
+            "x-odata-max-length": 40,
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "givenname"
+          },
+          "IsBlocked": {
+            "title": "Central Block",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "LastChangeDateTime": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "readOnly": true,
+            "title": "Changed On",
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "LastName": {
+            "nullable": true,
+            "title": "Last Name",
+            "type": "string",
+            "x-odata-max-length": 40,
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "familyname"
+          },
+          "Partner": {
+            "description": "Business Partner Number",
+            "title": "Business Partner",
+            "type": "string",
+            "x-odata-max-length": 10,
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            },
+            "x-sap-display-format": "UpperCase"
+          },
+          "PartnerCategory": {
+            "nullable": true,
+            "title": "BP Category",
+            "type": "string",
+            "x-odata-max-length": 1,
+            "x-odata-type": "Edm.String"
+          },
+          "PartnerFullName": {
+            "nullable": true,
+            "readOnly": true,
+            "title": "Name",
+            "type": "string",
+            "x-odata-max-length": 81,
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "name"
+          },
+          "PartnerUUID": {
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "title": "BP GUID",
+            "type": "string",
+            "x-odata-type": "Edm.Guid"
+          }
+        },
+        "required": [
+          "Partner"
+        ],
+        "title": "Business Partner",
+        "type": "object",
+        "x-odata-entity-set": "A_Partner",
+        "x-odata-entity-type": "API_PARTNER_DEMO.A_PartnerType",
+        "x-odata-key": [
+          "Partner"
+        ],
+        "x-personal-data": {
+          "dataSubjectRole": "Business Partner",
+          "entitySemantics": "DataSubject"
+        }
+      },
+      "APartner_Create": {
+        "additionalProperties": false,
+        "description": "The record a create sends to A_Partner. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+        "properties": {
+          "BirthDate": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Date of Birth",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            },
+            "x-sap-display-format": "Date"
+          },
+          "CreditLimit": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Credit Limit",
+            "type": "string",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "maxLength": 5,
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "EmployeeCount": {
+            "format": "int32",
+            "nullable": true,
+            "title": "Employees",
+            "type": "integer",
+            "x-odata-type": "Edm.Int32"
+          },
+          "ExternalRef": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "External Reference",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "FirstName": {
+            "maxLength": 40,
+            "nullable": true,
+            "title": "First Name",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "givenname"
+          },
+          "IsBlocked": {
+            "title": "Central Block",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "LastName": {
+            "maxLength": 40,
+            "nullable": true,
+            "title": "Last Name",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "familyname"
+          },
+          "Partner": {
+            "description": "Business Partner Number",
+            "maxLength": 10,
+            "title": "Business Partner",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            },
+            "x-sap-display-format": "UpperCase"
+          },
+          "PartnerCategory": {
+            "maxLength": 1,
+            "nullable": true,
+            "title": "BP Category",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "to_Address": {
+            "anyOf": [
+              {
+                "properties": {
+                  "results": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "results"
+                ],
+                "type": "object"
+              },
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "Related API_PARTNER_DEMO.A_PartnerAddressType records to create with this one.",
+            "x-odata-navigation": {
+              "collection": true,
+              "target": "API_PARTNER_DEMO.A_PartnerAddressType"
+            }
+          },
+          "to_Customer": {
+            "description": "A related API_PARTNER_DEMO.A_CustomerType record to create with this one, or a link to an existing one.",
+            "type": "object",
+            "x-odata-navigation": {
+              "collection": false,
+              "target": "API_PARTNER_DEMO.A_CustomerType"
+            }
+          }
+        },
+        "title": "Business Partner (create)",
+        "type": "object"
+      },
+      "APartner_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one A_Partner record.",
+        "properties": {
+          "Partner": {
+            "description": "Business Partner Number",
+            "title": "Business Partner",
+            "type": "string",
+            "x-odata-max-length": 10,
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID"
+            },
+            "x-sap-display-format": "UpperCase"
+          }
+        },
+        "required": [
+          "Partner"
+        ],
+        "title": "Business Partner (key)",
+        "type": "object"
+      },
+      "APartner_Update": {
+        "additionalProperties": false,
+        "description": "The changes an update sends to one A_Partner record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+        "properties": {
+          "BirthDate": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Date of Birth",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            },
+            "x-sap-display-format": "Date"
+          },
+          "CreditLimit": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Credit Limit",
+            "type": "string",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "Currency": {
+            "maxLength": 5,
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "EmployeeCount": {
+            "format": "int32",
+            "nullable": true,
+            "title": "Employees",
+            "type": "integer",
+            "x-odata-type": "Edm.Int32"
+          },
+          "ExternalRef": {
+            "format": "int64",
+            "nullable": true,
+            "pattern": "^-?\\d+$",
+            "title": "External Reference",
+            "type": "string",
+            "x-odata-type": "Edm.Int64"
+          },
+          "FirstName": {
+            "maxLength": 40,
+            "nullable": true,
+            "title": "First Name",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "givenname"
+          },
+          "IsBlocked": {
+            "title": "Central Block",
+            "type": "boolean",
+            "x-odata-type": "Edm.Boolean"
+          },
+          "LastName": {
+            "maxLength": 40,
+            "nullable": true,
+            "title": "Last Name",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "isPotentiallyPersonal": true
+            },
+            "x-sap-semantics": "familyname"
+          }
+        },
+        "title": "Business Partner (update)",
+        "type": "object"
+      }
+    }
+  }
+}

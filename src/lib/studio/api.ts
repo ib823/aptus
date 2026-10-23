@@ -17,6 +17,12 @@ export type StudioErrorCode =
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
   | "CONFLICT"
+  /** A generated document that would be larger than its stated budget (doc-inputs.ts). */
+  | "TOO_LARGE"
+  /** The organisation has used an allowance (its Contract Compiler time for today, contract-time.ts). */
+  | "RATE_LIMITED"
+  /** The Contract Compiler could not take the job just now (busy, turned off); a retry may succeed. */
+  | "UNAVAILABLE"
   | "INTERNAL";
 
 const STATUS: Record<StudioErrorCode, number> = {
@@ -25,6 +31,9 @@ const STATUS: Record<StudioErrorCode, number> = {
   NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
   CONFLICT: 409,
+  TOO_LARGE: 422,
+  RATE_LIMITED: 429,
+  UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 
@@ -39,6 +48,22 @@ export function studioError(
   );
 }
 
+/** studioError for a known wait: the message says when, and Retry-After says it to a client. */
+export function studioErrorRetryAfter(code: StudioErrorCode, message: string, retryAfterSeconds: number): NextResponse {
+  const res = studioError(code, message);
+  res.headers.set("retry-after", String(Math.max(1, Math.ceil(retryAfterSeconds))));
+  return res;
+}
+
 export function studioOk<T>(data: T, status = 200): NextResponse {
   return NextResponse.json({ data }, { status });
+}
+
+/**
+ * studioOk for an answer already written as JSON — `{"data":…}`, with
+ * rendered text spliced in (contracts/raw-json.ts): the same status and
+ * content type, and the body as given.
+ */
+export function studioOkJson(text: string | Uint8Array<ArrayBuffer>, status = 200): NextResponse {
+  return new NextResponse(text, { status, headers: { "content-type": "application/json" } });
 }

@@ -268,6 +268,17 @@ export const RATE_LIMITS = {
    */
   northbound: { limit: 60, windowMs: 60 * 1000 },
   /**
+   * GET /schema (and its /v1 alias) per ORGANISATION, beside the
+   * per-credential `northbound` bucket. A read selects and copies up to 1 MiB
+   * of stored texts (about 25 ms of CPU at that size), and an organisation can
+   * mint credentials without bound (four per solution, solutions unlimited),
+   * so the per-credential bucket alone let one organisation keep a 1-vCPU
+   * instance busy and slow every other tenant's reads (consolidated review
+   * round 1). Keyed by organisation, its reads cost at most 120 × 25 ms = 3 s
+   * of CPU a minute whatever its credential count.
+   */
+  northboundSchemaPerOrg: { limit: 120, windowMs: 60 * 1000 },
+  /**
    * The edge bucket for an authenticated MACHINE route, keyed by the credential
    * PRESENTED (a hash of the bearer, see machineCredentialKey) rather than the
    * caller's address (audit A43, P0.5). A ceiling, not the budget: the route's

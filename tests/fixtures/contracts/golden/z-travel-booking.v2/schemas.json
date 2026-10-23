@@ -1,0 +1,516 @@
+{
+  "json-schema-2020-12": {
+    "create": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+      "properties": {
+        "BookingStatus": {
+          "maxLength": 1,
+          "title": "Status",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "CarrierId": {
+          "maxLength": 3,
+          "title": "Airline",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "CurrencyCode": {
+          "maxLength": 5,
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "CustomerId": {
+          "maxLength": 6,
+          "title": "Customer",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "FlightDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Flight Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "FlightPrice": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Price",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "SeatCount": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Seats",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Byte"
+        },
+        "TravelId": {
+          "maxLength": 8,
+          "title": "Travel ID",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "type": "object"
+    },
+    "key": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one BookingSet record.",
+      "properties": {
+        "BookingId": {
+          "title": "Booking ID",
+          "type": "string",
+          "x-odata-max-length": 4,
+          "x-odata-type": "Edm.String"
+        },
+        "TravelId": {
+          "title": "Travel ID",
+          "type": "string",
+          "x-odata-max-length": 8,
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "TravelId",
+        "BookingId"
+      ],
+      "type": "object"
+    },
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A BookingSet record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "BookingId": {
+          "title": "Booking ID",
+          "type": "string",
+          "x-odata-max-length": 4,
+          "x-odata-type": "Edm.String"
+        },
+        "BookingStatus": {
+          "title": "Status",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 1,
+          "x-odata-type": "Edm.String"
+        },
+        "CarrierId": {
+          "title": "Airline",
+          "type": "string",
+          "x-odata-max-length": 3,
+          "x-odata-type": "Edm.String"
+        },
+        "ChangedAt": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "readOnly": true,
+          "title": "Changed At",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "CurrencyCode": {
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-max-length": 5,
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "CustomerId": {
+          "title": "Customer",
+          "type": "string",
+          "x-odata-max-length": 6,
+          "x-odata-type": "Edm.String"
+        },
+        "FlightDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Flight Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "FlightPrice": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Price",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "SeatCount": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Seats",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Byte"
+        },
+        "TravelId": {
+          "title": "Travel ID",
+          "type": "string",
+          "x-odata-max-length": 8,
+          "x-odata-type": "Edm.String"
+        }
+      },
+      "required": [
+        "TravelId",
+        "BookingId"
+      ],
+      "type": "object",
+      "x-odata-entity-set": "BookingSet",
+      "x-odata-entity-type": "ZTRAVEL_BOOKING_SRV.Booking",
+      "x-odata-key": [
+        "TravelId",
+        "BookingId"
+      ]
+    },
+    "update": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The changes an update sends to one BookingSet record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+      "properties": {
+        "BookingStatus": {
+          "maxLength": 1,
+          "title": "Status",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "CarrierId": {
+          "maxLength": 3,
+          "title": "Airline",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "CurrencyCode": {
+          "maxLength": 5,
+          "title": "Currency",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String",
+          "x-sap-semantics": "currency-code"
+        },
+        "CustomerId": {
+          "maxLength": 6,
+          "title": "Customer",
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "FlightDate": {
+          "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+          "title": "Flight Date",
+          "type": "string",
+          "x-odata-type": "Edm.DateTime",
+          "x-sap-display-format": "Date"
+        },
+        "FlightPrice": {
+          "format": "decimal",
+          "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+          "title": "Price",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-precision": 16,
+          "x-odata-scale": 3,
+          "x-odata-type": "Edm.Decimal"
+        },
+        "SeatCount": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Seats",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-odata-type": "Edm.Byte"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": "BookingSet_Create",
+      "key": "BookingSet_Key",
+      "record": "BookingSet",
+      "update": "BookingSet_Update"
+    },
+    "schemas": {
+      "BookingSet": {
+        "additionalProperties": true,
+        "description": "A BookingSet record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "BookingId": {
+            "title": "Booking ID",
+            "type": "string",
+            "x-odata-max-length": 4,
+            "x-odata-type": "Edm.String"
+          },
+          "BookingStatus": {
+            "nullable": true,
+            "title": "Status",
+            "type": "string",
+            "x-odata-max-length": 1,
+            "x-odata-type": "Edm.String"
+          },
+          "CarrierId": {
+            "title": "Airline",
+            "type": "string",
+            "x-odata-max-length": 3,
+            "x-odata-type": "Edm.String"
+          },
+          "ChangedAt": {
+            "nullable": true,
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "readOnly": true,
+            "title": "Changed At",
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "CurrencyCode": {
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-max-length": 5,
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "CustomerId": {
+            "title": "Customer",
+            "type": "string",
+            "x-odata-max-length": 6,
+            "x-odata-type": "Edm.String"
+          },
+          "FlightDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Flight Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "FlightPrice": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Price",
+            "type": "string",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "SeatCount": {
+            "maximum": 255,
+            "minimum": 0,
+            "nullable": true,
+            "title": "Seats",
+            "type": "integer",
+            "x-odata-type": "Edm.Byte"
+          },
+          "TravelId": {
+            "title": "Travel ID",
+            "type": "string",
+            "x-odata-max-length": 8,
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "TravelId",
+          "BookingId"
+        ],
+        "type": "object",
+        "x-odata-entity-set": "BookingSet",
+        "x-odata-entity-type": "ZTRAVEL_BOOKING_SRV.Booking",
+        "x-odata-key": [
+          "TravelId",
+          "BookingId"
+        ]
+      },
+      "BookingSet_Create": {
+        "additionalProperties": false,
+        "description": "The record a create sends to BookingSet. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert).",
+        "properties": {
+          "BookingStatus": {
+            "maxLength": 1,
+            "nullable": true,
+            "title": "Status",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "CarrierId": {
+            "maxLength": 3,
+            "title": "Airline",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "CurrencyCode": {
+            "maxLength": 5,
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "CustomerId": {
+            "maxLength": 6,
+            "title": "Customer",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "FlightDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Flight Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "FlightPrice": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Price",
+            "type": "string",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "SeatCount": {
+            "maximum": 255,
+            "minimum": 0,
+            "nullable": true,
+            "title": "Seats",
+            "type": "integer",
+            "x-odata-type": "Edm.Byte"
+          },
+          "TravelId": {
+            "maxLength": 8,
+            "title": "Travel ID",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "type": "object"
+      },
+      "BookingSet_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one BookingSet record.",
+        "properties": {
+          "BookingId": {
+            "title": "Booking ID",
+            "type": "string",
+            "x-odata-max-length": 4,
+            "x-odata-type": "Edm.String"
+          },
+          "TravelId": {
+            "title": "Travel ID",
+            "type": "string",
+            "x-odata-max-length": 8,
+            "x-odata-type": "Edm.String"
+          }
+        },
+        "required": [
+          "TravelId",
+          "BookingId"
+        ],
+        "type": "object"
+      },
+      "BookingSet_Update": {
+        "additionalProperties": false,
+        "description": "The changes an update sends to one BookingSet record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+        "properties": {
+          "BookingStatus": {
+            "maxLength": 1,
+            "nullable": true,
+            "title": "Status",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "CarrierId": {
+            "maxLength": 3,
+            "title": "Airline",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "CurrencyCode": {
+            "maxLength": 5,
+            "nullable": true,
+            "title": "Currency",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-sap-semantics": "currency-code"
+          },
+          "CustomerId": {
+            "maxLength": 6,
+            "title": "Customer",
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "FlightDate": {
+            "pattern": "^/Date\\(-?\\d+([+-]\\d{4})?\\)/$",
+            "title": "Flight Date",
+            "type": "string",
+            "x-odata-type": "Edm.DateTime",
+            "x-sap-display-format": "Date"
+          },
+          "FlightPrice": {
+            "format": "decimal",
+            "nullable": true,
+            "pattern": "^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][-+]?\\d+)?$",
+            "title": "Price",
+            "type": "string",
+            "x-odata-precision": 16,
+            "x-odata-scale": 3,
+            "x-odata-type": "Edm.Decimal"
+          },
+          "SeatCount": {
+            "maximum": 255,
+            "minimum": 0,
+            "nullable": true,
+            "title": "Seats",
+            "type": "integer",
+            "x-odata-type": "Edm.Byte"
+          }
+        },
+        "type": "object"
+      }
+    }
+  }
+}

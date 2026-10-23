@@ -18,6 +18,7 @@ import {
   TOKEN_REQUEST_TIMEOUT_MS,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
@@ -78,6 +79,18 @@ export interface NorthboundWriteResult {
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_TIMEOUT_MS = 45_000;
+/**
+ * The most of a write's answer that is read, in decoded bytes. Read whole
+ * before, a builder's own host could answer a small compressed body that
+ * inflates past the instance's memory (read.ts, MAX_READ_BODY_BYTES). Past it
+ * the body is not parsed: a 201 is still the create its status line proves
+ * (record null, Location kept); a 200 counts as a body that is not JSON.
+ * 16 MiB, as for reads: an echo holding a base64 upload passed the 1 MiB it
+ * was, and that 201 was stored as ambiguous under the Idempotency-Key
+ * although SAP had created the record (P1 on wave 2 integration review
+ * round 1).
+ */
+export const MAX_WRITE_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 /**
  * Statuses with which SAP, or BTP API Management in front of it, declines to
@@ -315,8 +328,9 @@ export async function writeEntitySet(
 
     let json: unknown = null;
     let text: string;
+    let truncated = false;
     try {
-      text = await res.text();
+      ({ text, truncated } = await bodyPrefix(res, MAX_WRITE_RESPONSE_BYTES));
     } catch (err) {
       /*
        * SAP HAS ALREADY ANSWERED; only the body was lost — the timeout fired
@@ -330,7 +344,10 @@ export async function writeEntitySet(
       if (res.status === 200) throw err;
       text = "";
     }
-    if (text) {
+    // A body past the bound is not parsed. A 201 with it is still CREATED,
+    // with no record (below); a 200 with it is an invalid write response,
+    // anything else its status.
+    if (text && !truncated) {
       try {
         json = JSON.parse(text);
       } catch {
@@ -342,7 +359,8 @@ export async function writeEntitySet(
     const record = status === "CREATED" ? extractRecord(json) : null;
     // A 201 with no representation is valid. A nonempty malformed body, or
     // an empty 200 (often a login proxy), cannot establish the claimed result.
-    if (status === "CREATED" && record === null && (text.trim() !== "" || res.status !== 201)) {
+    const createdUnread = truncated && res.status === 201;
+    if (status === "CREATED" && record === null && !createdUnread && (text.trim() !== "" || res.status !== 201)) {
       return {
         status: "ERROR", httpStatus: res.status, record: null, location: null,
         detail: `The tenant returned an invalid write response, so the write may have been applied. ${AMBIGUOUS_RETRY}`,

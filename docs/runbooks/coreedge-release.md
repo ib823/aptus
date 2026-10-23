@@ -405,6 +405,15 @@ Production's hostnames point at it again. It runs no build:
 no migration runs, and the schema stays as the release left it, which is
 safe because every migration is additive (step 2).
 
+**The API surface must survive the rollback too.** A release that adds a
+route must not also make generated artifacts (starter kits, OpenAPI
+documents, guides that tell callers what to configure) point at it: an app or
+SM59 destination set up against the new route while the release is live gets
+a 404 page on every call once production is rolled back to a deployment that
+does not serve it. Ship the route one release, and point artifacts at it in a
+later one, once a deployment that serves it is the rollback target (P1.10:
+`/api/northbound/v1` ships while kits and documents keep `/api/northbound`).
+
 After a rollback, Vercel stops assigning production to new deployments
 automatically until one is promoted by hand. **It does not stop building
 them, and every production build of `main` runs `migrate deploy` against the

@@ -1,0 +1,12 @@
+-- Backout for 20261026040000_contract_time_reserved_until (P1.3).
+--
+-- In this file, not in migration.sql, because an applied migration is never
+-- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
+--
+-- Run it only after the deployment is rolled back to code that never reads
+-- the column. What it loses: when the reservations in flight expire, so a
+-- reservation that is never settled holds until 00:00 UTC again.
+--
+-- Print it with its _prisma_migrations line:
+--   pnpm migrations:backout-sql 20261026040000_contract_time_reserved_until
+ALTER TABLE "ContractTime" DROP COLUMN "reservedUntil";

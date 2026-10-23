@@ -86,4 +86,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("limiter outages and the inciden
     const upstream = (await incidents()).find((i) => i.id === "upstream-errors");
     expect(upstream?.observed).toBe(5);
   });
+
+  /*
+   * Consolidated review round 2: a /schema read refused by its
+   * organisation's bucket names a credential that is under its own limit, so
+   * it must not raise "a credential is being rate limited repeatedly".
+   */
+  it("429s of the organisation's /schema bucket (ORG_SCHEMA_RATE) do not raise throttled; a credential's own 429s still do", async () => {
+    await prisma.northboundAuditEvent.createMany({ data: Array.from({ length: 20 }, () => row(429, "ORG_SCHEMA_RATE")) });
+    expect((await incidents()).map((i) => i.id)).not.toContain("throttled");
+    await prisma.northboundAuditEvent.createMany({ data: Array.from({ length: 10 }, () => row(429, null)) });
+    expect((await incidents()).find((i) => i.id === "throttled")?.observed).toBe(10);
+  });
 });

@@ -35,6 +35,7 @@ import {
   LIFECYCLE_STAGES,
   PATTERNS,
   readCodeFacts,
+  registeredApiVersions,
   SAP_AUTHS,
   serializeCapabilityRegistry,
   TARGET_PRODUCTS,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/coreedge/capability-registry";
 import { stepUpMode } from "@/lib/auth/step-up";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
+import { NORTHBOUND_API_VERSIONS } from "@/lib/northbound/version-policy";
 import { readEntitySet } from "@/lib/northbound/read";
 import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
 import { getSapProduct, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
@@ -135,10 +137,25 @@ describe("BROKER_FACTS hold against the broker", () => {
     expect(read("src/lib/northbound/write.ts")).toContain(`"Content-Type": "${BROKER_FACTS.writeContentType}"`);
   });
 
-  it("the northbound routes are exactly the ones listed", () => {
+  it("the northbound routes are exactly the ones listed, each on both base paths", () => {
     const dir = path.join(ROOT, "src/app/api/northbound");
     const routes = files(dir).map((f) => path.relative(dir, f).split(path.sep).join("/")).sort();
-    expect(routes).toEqual([...BROKER_FACTS.northboundRoutes].sort());
+    const listed = [...BROKER_FACTS.northboundRoutes, ...BROKER_FACTS.northboundPublicRoutes];
+    expect(routes).toEqual(listed.flatMap((r) => [r, `${BROKER_FACTS.northboundAliasDir}/${r}`]).sort());
+    // An alias re-exports the original handler, so the registry scores the
+    // original (P1.10; versioned-routes.test.ts proves it is the same function).
+    for (const route of listed) {
+      const alias = read(`src/app/api/northbound/${BROKER_FACTS.northboundAliasDir}/${route}`);
+      expect(alias).toContain(`from "@/app/api/northbound/${route.replace(/\.ts$/, "")}"`);
+    }
+  });
+
+  it("the public northbound routes take no credential and serve only the changelog", () => {
+    for (const route of BROKER_FACTS.northboundPublicRoutes) {
+      const src = read(`src/app/api/northbound/${route}`);
+      expect(src).not.toContain("authenticateClientToken");
+      expect(src).not.toMatch(/prisma|fetch\(/);
+    }
   });
 
   it("the reserved machine prefixes listed as unbuilt have no route", () => {
@@ -201,7 +218,6 @@ describe("BROKER_FACTS hold against the broker", () => {
 
   it("the lifecycle claims about missing pieces still hold", () => {
     expect(existsSync(path.join(ROOT, "Dockerfile")), "a Dockerfile exists; re-score SELF_HOST_SETUP").toBe(false);
-    expect(existsSync(path.join(ROOT, "src/app/api/northbound/v1")), "versioned routes exist; re-score API_VERSIONING").toBe(false);
     const perf = files(path.join(ROOT, "tests/performance")).map((f) => readFileSync(f, "utf8")).join("\n");
     expect(perf, "a broker load test exists; re-score PERFORMANCE_TEST").not.toMatch(/northbound/i);
   });
@@ -327,6 +343,21 @@ describe("the scoring follows the code", () => {
     expect(before.note).toContain("no KMS");
     expect(after.note).not.toContain("no KMS");
     expect(after.status).toBe("partial");
+  });
+
+  it("API_VERSIONING follows the version registry (P1.10)", () => {
+    expect(facts.northboundApiVersions).toEqual(NORTHBOUND_API_VERSIONS.map((v) => v.version));
+    expect(facts.northboundApiVersions.length).toBeGreaterThan(0);
+    expect(status(buildCapabilityRegistry(facts).coreedgeToday.lifecycle, "API_VERSIONING")).toBe("full");
+    // No version that keeps the policy: none, as before P1.10.
+    expect(status(buildCapabilityRegistry({ ...facts, northboundApiVersions: [] }).coreedgeToday.lifecycle, "API_VERSIONING")).toBe("none");
+  });
+
+  it("a version registry that breaks the deprecation policy registers no version", () => {
+    // A sunset with no deprecation announced first is one break checkRegistry refuses.
+    const broken = [{ ...NORTHBOUND_API_VERSIONS[0]!, sunsetOn: "2027-01-01" }];
+    expect(registeredApiVersions(broken)).toEqual([]);
+    expect(registeredApiVersions(NORTHBOUND_API_VERSIONS)).toEqual(NORTHBOUND_API_VERSIONS.map((v) => v.version));
   });
 
   it("a starter kit without a TypeScript client takes JS/TS below full", () => {

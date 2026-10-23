@@ -24,6 +24,7 @@
  * refused before any token exchange (parseAribaCallRequest); and a token
  * endpoint that fails says so, with its status, instead of a JSON parse error.
  */
+import { bodyPrefix } from "./body-prefix";
 import { isCredentialRefusal } from "./oauth-saml-bearer";
 import { OAuthTokenRequestError, credentialFailure, publicCredentialFailure } from "./upstream-failure";
 
@@ -334,6 +335,13 @@ export function isAribaRealmAllowlistEnforced(env: EnvLike = process.env): boole
 /** The page size when a caller names none, and the most one call may ask for. */
 export const ARIBA_DEFAULT_LIMIT = 10;
 export const ARIBA_MAX_LIMIT = 50;
+/**
+ * The most of an Ariba answer that is read, in decoded bytes (body-prefix.ts):
+ * 8 MiB for a page (about 160 KiB for each of ARIBA_MAX_LIMIT rows), 64 KiB
+ * for a token. Read whole before, and fetch inflates without a limit.
+ */
+export const ARIBA_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const ARIBA_TOKEN_RESPONSE_BYTES = 64 * 1024;
 
 export type AribaCallRequest =
   | { ok: true; endpointKey: string; realm: string; limit: number }
@@ -476,7 +484,9 @@ async function getAribaToken(): Promise<string> {
     body: new URLSearchParams({ grant_type: grantType }),
   });
   const status = response.status;
-  const text = await response.text();
+  // Past the bound it is an answer without a token, refused below by its status.
+  const { text: read, truncated } = await bodyPrefix(response, ARIBA_TOKEN_RESPONSE_BYTES);
+  const text = truncated ? "" : read;
   if (!response.ok) {
     throw new OAuthTokenRequestError(
       `Ariba OAuth token request failed: HTTP ${status}`,
@@ -604,8 +614,22 @@ export async function callAribaEndpoint(
       },
     });
     const durationMs = Date.now() - startedAt;
-    const text = await response.text();
+    const { text, truncated } = await bodyPrefix(response, ARIBA_MAX_RESPONSE_BYTES);
     const contentType = response.headers.get("content-type") ?? "";
+    if (truncated) {
+      return {
+        endpoint: endpoint.key,
+        ok: false,
+        status: response.status,
+        durationMs,
+        rows: [],
+        fields: [],
+        nextPageToken: null,
+        error: `Endpoint answered HTTP ${response.status} with a body larger than ${ARIBA_MAX_RESPONSE_BYTES / (1024 * 1024)} MB, so it was not read`,
+        stage: "request",
+        failureReason: null,
+      };
+    }
 
     if (!contentType.includes("json")) {
       return {
