@@ -149,7 +149,8 @@ describe("the deploy gate (scripts/check-production-env.js)", () => {
     PRESALES_CSRF_SECRET: "c".repeat(32),
   };
   function run(env: Record<string, string>): { code: number; out: string } {
-    const r = spawnSync("node", [SCRIPT], { env: { PATH: process.env.PATH ?? "", ...env }, encoding: "utf8" });
+    const childEnv: NodeJS.ProcessEnv = { PATH: process.env.PATH ?? "", NODE_ENV: "production", ...env };
+    const r = spawnSync("node", [SCRIPT], { env: childEnv, encoding: "utf8" });
     return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
   }
 
