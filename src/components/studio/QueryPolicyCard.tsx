@@ -33,7 +33,7 @@
  * node:crypto, which has no place in a browser bundle.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
 import type { BasisProperty, QueryBasisV1 } from "@/lib/odata/basis";
@@ -633,6 +633,21 @@ function PolicyEditor({
   onKeepEditing: () => void;
 }) {
   const keyLocked = (n: string) => shape.keys.has(n) && !shape.pinned.has(n) && (draft.keyLookup || shape.paging.possible);
+  // The confirmation replaces the focused Save button: focus moves to it, and
+  // back to Save on "Keep editing", so a keyboard user is not left at the top
+  // of the page with the answer at the end of a long field table.
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const confirming = useRef(false);
+  useEffect(() => {
+    if (confirm) {
+      confirming.current = true;
+      bannerRef.current?.focus();
+    } else if (confirming.current) {
+      confirming.current = false;
+      saveRef.current?.focus();
+    }
+  }, [confirm]);
   const update = (change: (d: Draft) => void) => {
     const next: Draft = {
       read: new Set(draft.read),
@@ -902,7 +917,7 @@ function PolicyEditor({
       </fieldset>
 
       {confirm ? (
-        <div role="alert" style={banner}>
+        <div role="alert" ref={bannerRef} tabIndex={-1} style={banner}>
           <p style={{ ...text, margin: 0 }}>
             This interface is ACTIVE, and this save takes away: <strong>{confirm.narrowed.join(", ")}</strong>. {confirm.message}
           </p>
@@ -917,7 +932,7 @@ function PolicyEditor({
         </div>
       ) : (
         <div style={actions}>
-          <button type="submit" style={btnPrimary} disabled={busy}>
+          <button type="submit" ref={saveRef} style={btnPrimary} disabled={busy}>
             {busy ? "Saving…" : "Save the policy"}
           </button>
           <button type="button" style={btnSmall} disabled={busy} onClick={onCancel}>

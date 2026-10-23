@@ -311,6 +311,19 @@ describe("saving, as the route answers", () => {
     expect(writes("PUT")[0]).not.toHaveProperty("confirmNarrowing");
   });
 
+  it("moves focus to the confirmation it asks, and back to Save on Keep editing", async () => {
+    replies.PUT.push({ status: 200, body: { data: { saved: false, confirm: { narrowed: ["Customer in"], widened: [], message: "Callers using these fields or operators will receive 400 POLICY_FIELD_NOT_GRANTED." } } } });
+    await renderCard(view());
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const save = screen.getByRole("button", { name: "Save the policy" });
+    save.focus();
+    fireEvent.click(save);
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+    fireEvent.click(within(alert).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Save the policy" })));
+  });
+
   it("offers a reload on a 409, and lists each reason of a refusal", async () => {
     replies.PUT.push({ status: 400, body: { error: { message: "A. B.", errors: [{ rule: "X", message: "A." }, { rule: "Y", message: "B." }] } } });
     replies.PUT.push({ status: 409, body: { error: { message: "The query policy or the service's contract changed while you were editing. Reload, then make your change again." } } });
