@@ -261,7 +261,13 @@ async function call(route: Route): Promise<{ status: number; reason: string | nu
       new NextRequest("http://localhost/api/studio/test/broker-run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interfaceId: "if_1", clientId: "client_1", ...((h as unknown as { runEntity?: string }).runEntity ? { entity: (h as unknown as { runEntity?: string }).runEntity } : {}) }),
+        body: JSON.stringify({
+          interfaceId: "if_1",
+          clientId: "client_1",
+          ...((h as unknown as { runEntity?: string }).runEntity ? { entity: (h as unknown as { runEntity?: string }).runEntity } : {}),
+          // The query the app would send (P1.4): the console's query run.
+          ...(h.query ? { query: h.query } : {}),
+        }),
       }),
     );
     const json = (await res.json()) as { data?: { outcome: string; refusal?: { kind: string } } };
@@ -350,11 +356,13 @@ const CASES: readonly Case[] = [
       vi.stubEnv("COREEDGE_ENV_TENANT_HOSTS", "enforce");
     },
   },
-  // The query surface (P1.4), on the data route.
-  { reason: "QUERY_INVALID", routes: ["read"], set: () => (h.query = "filter.NetAmount=1") },
+  // The query surface (P1.4), on the data route and the console's query run.
+  // A cursor is refused by the console as QUERY_INVALID (it runs the first
+  // page only), so the two cursor reasons are the data route's alone.
+  { reason: "QUERY_INVALID", routes: READS, set: () => (h.query = "filter.NetAmount=1") },
   {
     reason: "QUERY_NOT_AVAILABLE",
-    routes: ["read"],
+    routes: READS,
     set: () => {
       // The switch off, whatever this run's environment says.
       vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
@@ -363,7 +371,7 @@ const CASES: readonly Case[] = [
   },
   {
     reason: "QUERY_SURFACE_MISCONFIGURED",
-    routes: ["read"],
+    routes: READS,
     set: () => {
       querySurfaceOn();
       vi.stubEnv("COREEDGE_TOKEN_KEYS", "not-a-ring");
@@ -388,7 +396,7 @@ const CASES: readonly Case[] = [
   },
   {
     reason: "POLICY_FIELD_NOT_GRANTED",
-    routes: ["read"],
+    routes: READS,
     set: () => {
       querySurfaceOn();
       h.queryAccess = { policyRaw: QUERY_POLICY, policySourcePresent: true, authorisingGrantIds: ["grant_1"] };
