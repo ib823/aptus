@@ -734,6 +734,11 @@ function accessVerdict(facts: LaneFacts): HopVerdict | null {
         "noAccess",
         "Access was approved before approvals were bound to one data feed, and this deployment no longer honours it here. It needs approving again for this feed.",
       );
+    case "API_POLICY_SIGN_OFF_REQUIRED":
+      return refused(
+        "noAccess",
+        "This data feed calls a service your team built on SAP S/4HANA Cloud Public Edition, and its SAP API Policy §1.2 sign-off is not recorded, so northbound refuses every call on it.",
+      );
     case "GRANT_REVOKED":
       return refused("noAccess", "Access was withdrawn. Unlike an expiry, there is nothing to renew.");
     case "GRANT_EXPIRED":

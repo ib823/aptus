@@ -1,0 +1,87 @@
+name: OData Conformance (live)
+
+# P1.4 — tier 2 of the query surface's conformance.
+#
+# Tier 1 (tests/conformance/odata-query/) runs on every PR against a
+# strict-replay SAP written for this repository. This job sends the URLs
+# CoreEdge builds to SAP's own services on the SAP Business Accelerator Hub
+# sandbox and compares SAP's answers with what tier 1 asserts
+# (scripts/odata-conformance-live.ts). A4 of the roadmap's P1.4 is met once a
+# tier-2 (or a tier-3 lab) run agrees with tier 1.
+#
+# MANUAL ONLY. It runs when an operator dispatches it, never on a pull
+# request and never on a schedule: it spends the sandbox's quota and depends on
+# a service CoreEdge does not run, so it must never block or fail a PR.
+#
+# VERDICTS ONLY. Statuses, booleans and the protocol's envelope key names are
+# written to the step summary and the run's verdict file; no row, value or
+# description SAP returns is stored, logged or uploaded (decision D17).
+#
+# THE SECRET: SAP_API_HUB_SANDBOX_API_KEY, the one the Contract Corpus job
+# uses. Without it the job skips with a notice. The V4 target's path on the
+# sandbox is unverified, so it is an input rather than an assumption.
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'JSON [{"name","odata":"V2|V4","servicePath","entitySet"}] replacing the default V2 targets (optional; add the V4 service here)'
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live:
+    name: Query the Hub sandbox and compare with tier 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Is the API key configured?
+        id: gate
+        env:
+          KEY: ${{ secrets.SAP_API_HUB_SANDBOX_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::SAP_API_HUB_SANDBOX_API_KEY is not set; tier-2 conformance is skipped."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: pnpm/action-setup@v6
+        if: steps.gate.outputs.enabled == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Send CoreEdge's queries and record the verdicts
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          SAP_API_HUB_SANDBOX_API_KEY: ${{ secrets.SAP_API_HUB_SANDBOX_API_KEY }}
+          ODATA_LIVE_TARGETS: ${{ github.event.inputs.targets }}
+          ODATA_LIVE_VERDICTS: ${{ runner.temp }}/odata-live-verdicts.json
+        run: pnpm exec tsx scripts/odata-conformance-live.ts
+
+      # A verdict that differs from tier 1, on main, is a finding: say so where it is seen.
+      - name: Open an issue when a verdict differs on main
+        if: failure() && steps.gate.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Query surface tier-2 conformance differs from tier 1" \
+            --body "The live OData conformance run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} recorded a verdict that differs from tier 1. Its step summary lists which. See docs/runbooks/coreedge-query-surface.md (Conformance)."

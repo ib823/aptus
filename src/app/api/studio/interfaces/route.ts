@@ -37,13 +37,13 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { servicePathPolicyWarning } from "@/lib/sap-public/tenant-listing";
+import { chooseService, interfaceBodySchema } from "@/lib/studio/interface-input";
 import { idsWithRequestSchema } from "@/lib/contracts/record";
 import { recordJourneyEvent } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
-import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
 import {
   customExternalId,
-  isCustomExternalId,
   MAX_SERVICE_PATH_LENGTH,
   ODATA_VERSIONS,
   validateServicePath,
@@ -54,7 +54,6 @@ import {
   writesDisabledEnvironmentsForCredentials,
 } from "@/lib/sap-public/current-connections";
 import { verifiedEnvironmentsForDisplay } from "@/lib/sap-public/service-verifications";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { responseSchemaStates } from "@/lib/studio/response-schema-states";
@@ -67,37 +66,9 @@ import {
   writeReadinessRefusal,
 } from "@/lib/studio/write-readiness";
 
-const bodySchema = z.object({
-  solutionId: z.string().min(1),
-  /**
-   * Catalogue apiId of the service being consumed. Omitted for your own API:
-   * there it is derived from `servicePath` (see the header).
-   */
-  externalId: z.string().min(1).max(200).optional(),
-  /**
-   * The customer's OWN service root, a path on the connection's host. Bounded
-   * one past the limit here so an over-long path reaches validateServicePath
-   * and gets its own sentence rather than the generic payload refusal.
-   */
-  servicePath: z.string().max(MAX_SERVICE_PATH_LENGTH + 1).optional(),
-  odataVersion: z.enum(ODATA_VERSIONS).optional(),
-  /*
-   * EVERY PRODUCT THE CONNECTOR KNOWS, not a hand-kept three. The literal enum
-   * ["s4hana","successfactors","ariba"] predated the private-cloud/on-prem/ECC
-   * products and was never widened — so the three client-addressing products
-   * could be CONNECTED but no interface (and therefore no grant, credential,
-   * scaffold or broker call) could ever be defined against them: "Add to
-   * interface" on a RISE tenant 400'd with no field-level detail. Validated
-   * against getSapProduct so this list and the product registry cannot drift
-   * apart again.
-   */
-  sapProduct: z.string().min(1).refine((k) => getSapProduct(k) !== null, {
-    message: "Unknown SAP product",
-  }),
-  name: z.string().min(1).max(200),
-  operation: z.enum(["READ", "CREATE", "UPDATE"]).default("READ"),
-  entitySet: z.string().max(200).optional(),
-});
+// The body and the catalogue-or-own-service rule are shared with the
+// description upload (from-description/route.ts), so the two cannot drift.
+const bodySchema = interfaceBodySchema;
 
 const patchSchema = z.object({
   id: z.string().min(1),
@@ -111,6 +82,9 @@ const patchSchema = z.object({
   // `mappingVersion` is deliberately ABSENT from this schema. Mapping is v2, and
   // the surest way to keep it disabled is to give the API no way to set it —
   // a greyed-out card in the UI is a hint, an unaccepted field is a guarantee.
+  // So are the query policy's columns (P1.4): the query-policy route, which
+  // compiles a source against the basis under the row lock, is their only
+  // writer, and a policy edit never bumps the version.
 });
 
 
@@ -141,52 +115,12 @@ export async function POST(request: NextRequest) {
   const input = parsed.data;
 
   /*
-   * CATALOGUE OR YOUR OWN API — decided here, before anything is looked up.
-   * With a service path the id is derived and the version is required; without
-   * one the request is the catalogue request it always was, and the derived
-   * prefix is reserved so a catalogue interface can never pose as a custom one.
+   * CATALOGUE OR YOUR OWN API — decided here, before anything is looked up
+   * (interface-input.ts chooseService, the rule the upload applies too).
    */
-  let externalId: string;
-  let servicePath: string | null = null;
-  let odataVersion: (typeof ODATA_VERSIONS)[number] | null = null;
-  if (input.servicePath !== undefined) {
-    if (!productAcceptsServicePath(input.sapProduct)) {
-      const label = getSapProduct(input.sapProduct)?.label ?? input.sapProduct;
-      return studioError("VALIDATION_ERROR", `${label} is not an OData product, so it has no service path.`);
-    }
-    const check = validateServicePath(input.servicePath);
-    if (!check.ok) return studioError("VALIDATION_ERROR", check.message);
-    if (input.odataVersion === undefined) {
-      return studioError("VALIDATION_ERROR", "Choose the OData version of this service (V2 or V4).");
-    }
-    const derived = customExternalId(check.path);
-    if (input.externalId !== undefined && input.externalId !== derived) {
-      return studioError(
-        "VALIDATION_ERROR",
-        "For your own API the id is derived from the service path, so leave externalId out.",
-      );
-    }
-    externalId = derived;
-    servicePath = check.path;
-    odataVersion = input.odataVersion;
-  } else {
-    if (input.odataVersion !== undefined) {
-      return studioError(
-        "VALIDATION_ERROR",
-        "An OData version belongs to your own service path. Send servicePath with it, or leave both out for a catalogue service.",
-      );
-    }
-    if (input.externalId === undefined) {
-      return studioError("VALIDATION_ERROR", "Invalid interface payload.");
-    }
-    if (isCustomExternalId(input.externalId)) {
-      return studioError(
-        "VALIDATION_ERROR",
-        "Ids starting with custom: are reserved for your own APIs. Send servicePath and odataVersion instead.",
-      );
-    }
-    externalId = input.externalId;
-  }
+  const choice = chooseService(input);
+  if (!choice.ok) return studioError("VALIDATION_ERROR", choice.message);
+  const { externalId, servicePath, odataVersion } = choice;
 
   // Re-scope the attacker-supplied solutionId to this tenant. Never trust it.
   const solution = await prisma.solution.findFirst({
@@ -245,7 +179,19 @@ export async function POST(request: NextRequest) {
     actorUserId: user.id,
   });
 
-  return studioOk(created, 201);
+  /*
+   * SAP API POLICY §1.2, AS A WARNING (P1.2, the product owner's Q7). A path
+   * typed here may name an SAP service that is not a Published API (a Fiori
+   * UI service, C_*_SRV). It is classified as Discover classifies a listed
+   * service, and the answer says so; the registration stands, as it always
+   * has. Never fails the registration either.
+   */
+  const policyWarning =
+    servicePath !== null && odataVersion !== null
+      ? await servicePathPolicyWarning(input.sapProduct, servicePath, odataVersion).catch(() => null)
+      : null;
+
+  return studioOk({ ...created, ...(policyWarning ? { policyWarning } : {}) }, 201);
 }
 
 export async function GET(request: NextRequest) {
@@ -688,11 +634,18 @@ export async function PATCH(request: NextRequest) {
           mode: nextMode,
           // A new contract: the request schema stamp written for the old one
           // goes (P1.3), as the captured response schema does below. Verify
-          // writes it again for the new one.
-          ...(contractChanged ? { version: { increment: 1 }, requestSchemaStamp: Prisma.DbNull } : {}),
+          // writes it again for the new one. So do the query basis and the
+          // compiled query policy (P1.4): both describe the old contract, and
+          // a policy compiled against it must not serve the new one. The
+          // builder's source stays; queries answer QUERY_NOT_AVAILABLE
+          // (NO_CONTRACT) until the next verify compiles it again.
+          ...(contractChanged
+            ? { version: { increment: 1 }, requestSchemaStamp: Prisma.DbNull, queryBasis: Prisma.DbNull, queryPolicyCompiled: Prisma.DbNull }
+            : {}),
           ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
+          // A new service identity is a new §1.2 question (P1.2): its sign-off goes with the old one.
           ...(serviceChanged
-            ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
+            ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId, apiPolicySignOff: Prisma.DbNull }
             : {}),
           ...(verificationReset
             ? {

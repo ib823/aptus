@@ -112,6 +112,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       version: true,
       status: true,
       // Not responseSchema: only the captured schemas the document renders are read (below).
+      // The compiled query policy (P1.4): at most 64 KiB each, held at its one writer.
+      queryPolicyCompiled: true,
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     // 1. One more than a document carries is enough to know it is too many.
@@ -200,6 +202,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
           status: i.status,
           contract,
           grants: plan.grants.get(i.id) ?? [],
+          // Its query parameters are documented when the policy is READY (openapi.ts).
+          queryPolicy: i.queryPolicyCompiled,
         };
       });
 
@@ -207,7 +211,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       const digest = createHash("sha256")
         .update(
           docInterfaces
-            .map((i) => `${i.id}:${i.version}:${i.contract.source === "metadata" ? i.contract.semver : i.contract.source}`)
+            .map(
+              (i) =>
+                `${i.id}:${i.version}:${i.contract.source === "metadata" ? i.contract.semver : i.contract.source}:${policyRevOf(i.queryPolicy)}`,
+            )
             .join("|"),
         )
         .digest("hex")
@@ -221,12 +228,15 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
        * the writer charges every byte written, and stops the same way.
        */
       limit = documentLimit(
-        docInterfaces.map((i) =>
-          i.contract.source === "metadata"
-            ? (compiledById.get(i.id)?.irBytes ?? 0)
-            : i.contract.source === "sampled"
-              ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
-              : 0,
+        docInterfaces.map(
+          (i) =>
+            (i.contract.source === "metadata"
+              ? (compiledById.get(i.id)?.irBytes ?? 0)
+              : i.contract.source === "sampled"
+                ? jsonBytesUpTo(i.contract.schema, LIMITS.document.cap)
+                : 0) +
+            // A query policy's parameters are written from it, so it is charged like a contract.
+            (i.queryPolicy === null ? 0 : jsonBytesUpTo(i.queryPolicy, LIMITS.queryPolicyCompiled.bytes)),
         ),
       );
       return {
@@ -270,4 +280,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       "content-disposition": `attachment; filename="openapi-${version === "3.0.3" ? "3.0" : "3.1"}.json"`,
     },
   });
+}
+
+/** The compiled query policy's content hash, for the document's build metadata; "-" without one. */
+function policyRevOf(policy: unknown): string {
+  return policy !== null && typeof policy === "object" && typeof (policy as { rev?: unknown }).rev === "string"
+    ? (policy as { rev: string }).rev
+    : "-";
 }

@@ -14,6 +14,8 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Workbench console read making one SAP call and nothing else (P0.14b: preview, the entity list without its probe fan-out, operations) on a stored connection of any environment, served or refused | **4** | 4 | the person's session, the connection with the grants its environment ceiling judges (one statement), the organization's console row, the platform-scope row with its outcome in one statement |
 | The same on a deployment tenant | 4 | 3 (by construction) | the session and the two rows; no connection or grant to read |
 | An Ariba call (`/api/sap/ariba/call`) | 4 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
+| Query page (P1.4: a list page with or without its count, a cursor page, a key lookup, an outcome SAP's answer decided, or a refusal after authorisation) | 4 | **3** | the key, the interface with its grants, connections and compiled query policy (one statement), the audit row with its query columns |
+| Query refused before authorisation (a parameter outside the grammar, `COREEDGE_QUERY_SURFACE` off, a cursor that does not open or has expired) | 4 | **2** | the key and the audit row; the interface is never read |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.
@@ -34,8 +36,10 @@ also once per tenant per ten minutes), not by an application's calls.
 |---|---|---|
 | Entity list with its probe fan-out (`/api/sap/tdd/entities?probe=1`) | **6** | two calls (the metadata, then the fan-out), each with its two rows: the session, the connection, 2 + 2 |
 | Capability probe (`/api/sap/tdd/capabilities`) | **6** | the console read's 4, the dynamic catalogue read its probe targets come from, and the decision-log entry the route has always written |
-| Catalogue detail with a live probe (`/api/sap/tdd/hub-content/[id]`) | **5** | the console read's 4 and the catalogue row it shows; a V4 address adds 2 (its verification written, then read back), an item with prerequisites its scope-item reads |
-| Catalogue list with the live overlay (`/api/sap/tdd/hub-content?dataProbe=1`) | the page's own, plus 4 | the console read's 4, beside the catalogue page's counts and rows and the V4 addresses the overlay verified, which vary with the page (measured once, for a one-page search: 7 in all without the overlay, 14 with it); the test asserts the console's 4 and that everything else is the catalogue's |
+| Catalogue detail with a live probe (`/api/sap/tdd/hub-content/[id]`) | **6** | the console read's 4, the catalogue row it shows, and the communication scenarios SAP's table lists it under (P1.2: one statement, with its release); a V4 address adds 2 (its verification written, then read back), an item with prerequisites its scope-item reads |
+| Catalogue list with the live overlay (`/api/sap/tdd/hub-content?dataProbe=1`) | the page's own, plus 4 | the console read's 4, beside the catalogue page's counts and rows, the scenarios its rows are listed under (P1.2: one statement a page, none when no row on it has a joinable address) and the V4 addresses the overlay verified, which vary with the page (measured once before P1.2, for a one-page search: 7 in all without the overlay, 14 with it); the test asserts the console's 4, the one scenario statement, and that everything else is the catalogue's |
+| The tenant's service list, read live (`POST /api/sap/tdd/tenant-services`, P1.2) | **7** | the console read's 4, the catalogue rows the listed names could be, the scenarios SAP's table lists them under, and the listing's one upsert; refused at authorise, bind or contain, the console read's own figure |
+| The tenant's stored service list (`GET /api/studio/tenant-services`, P1.2) | **5** | no SAP call and no audit row: the session, the connection, the listing, who listed it, and the Published entries' scenarios |
 | Probe all (`/api/sap/tdd/hub-content/probe-all`), per run | **6** + **1** per service | the console read's 4, the candidate rows and the decision-log entry; then one stored result per service probed, and one more per V4 address it verifies or withdraws |
 
 **`GET /schema` and its `/v1` alias** (P1.3 on P0.19). Not a governed read:

@@ -6,7 +6,9 @@
  * The detail is four cards: Source (which SAP service: catalogue or your own),
  * Runtime (how it behaves), Contract (what goes in and comes back), Governance
  * (who can see it and how it is recorded) — plus a fifth, Mapping, which is
- * DISABLED.
+ * DISABLED. A read interface has one more, Query policy (P1.4,
+ * QueryPolicyCard.tsx): what its callers may select, filter, sort, look up by
+ * key and page through.
  *
  * YOUR OWN API. "Register your own API" creates an interface for a service the
  * customer built (Z*, YY1_*, an ECC Gateway service), named by its service
@@ -47,6 +49,7 @@ import {
   type VerifiedEnvironment,
   type VerifyTarget,
 } from "@/components/studio/ServiceVerifyPanel";
+import { QueryPolicyCard } from "@/components/studio/QueryPolicyCard";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import {
   inferODataVersion,
@@ -56,6 +59,8 @@ import {
   type ODataVersion,
 } from "@/lib/sap-public/service-path";
 import type { SchemaState } from "@/lib/studio/contract-provenance";
+import { SIGN_OFF_BASIS_LABELS, type SignOffBasis } from "@/lib/studio/api-policy";
+import { PolicySignOffDialog } from "@/components/studio/PolicySignOffDialog";
 import {
   describeWriteReadiness,
   readyEnvironments,
@@ -106,6 +111,10 @@ export interface StudioInterface {
   serviceVerifiedEntitySets?: readonly string[] | null;
   /** Your own API: each environment with a current successful verify (the write gate is per environment). */
   serviceVerifiedEnvironments?: readonly VerifiedEnvironment[];
+  /** The recorded contract and who described it (P1.2): a tenant's verify, an uploaded file, sampled rows. */
+  contract?: { semver: string; describedBy: "tenant" | "upload" | "sample" } | null;
+  /** The SAP API Policy §1.2 sign-off (P1.2), present only where one is needed. */
+  policySignOff?: { signed: { by: string | null; at: string; basis: SignOffBasis; reference: string } | null };
 }
 
 export type { VerifyTarget, RegisterProductOption, RegisterSolutionOption };
@@ -123,12 +132,18 @@ const STATUS_MEANING: Record<StudioInterface["status"], string> = {
   DEPRECATED: "kept for the record, not for new use",
 };
 
-/** Platform defaults — described, not configured. See the file header. */
+/**
+ * Platform defaults — described, not configured. See the file header. Each
+ * line is what the runtime does (P1.4 corrected two): the read's timeout
+ * (northbound/read.ts), the credential's own bucket (rate-limit.ts
+ * RATE_LIMITS.northbound), and the response limit of each kind of read.
+ */
 const RUNTIME_DEFAULTS = [
-  ["Timeout", "10s (or the connection's override)"],
+  ["Timeout", "15 s, or the connection's override (at most 30 s)"],
   ["Retry", "none — a failed read is reported, not retried behind your back"],
   ["Cache", "30s on live catalogue reads"],
-  ["Quota", "shared live-SAP bucket, 20 requests/minute"],
+  ["Quota", "60 calls a minute per credential, shared by data reads, /schema and Test Console runs"],
+  ["Response limit", "4.5 MB on ?limit reads; the query policy's page limit on queries"],
 ] as const;
 
 export function InterfacesClient({
@@ -155,6 +170,9 @@ export function InterfacesClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(openRegister && canAuthor);
+  const [signingOff, setSigningOff] = useState(false);
+  /** Verifies answered on this screen: the Query policy card reads itself again on each. */
+  const [verifies, setVerifies] = useState(0);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
   const selectedIsCustom = selected?.servicePath != null && selected.servicePath !== "";
@@ -270,6 +288,7 @@ export function InterfacesClient({
                     <span style={{ display: "block", ...muted, color: isSelected ? "var(--ink-secondary)" : "var(--ink-muted)" }}>
                       {i.solutionName}
                       {i.servicePath ? " · own API" : ""}
+                      {i.policySignOff && !i.policySignOff.signed ? " · §1.2 sign-off needed" : ""}
                     </span>
                   </Td>
                   <Td>{i.operation}</Td>
@@ -330,6 +349,8 @@ export function InterfacesClient({
             <Row label="Solution">{selected.solutionName}</Row>
             {selectedIsOData && (
               <Row label="Verified">
+                {/* The Query policy card's "Go to Verify" lands here. */}
+                <span id="service-verify" tabIndex={-1} style={{ display: "block" }}>
                 <ServiceVerifyPanel
                   key={selected.id}
                   interfaceId={selected.id}
@@ -345,7 +366,9 @@ export function InterfacesClient({
                   targets={verifyTargets.filter((t) => t.product === selected.sapProduct)}
                   canAuthor={canAuthor}
                   productLabel={products.find((p) => p.key === selected.sapProduct)?.label}
+                  onVerified={() => setVerifies((n) => n + 1)}
                 />
+                </span>
               </Row>
             )}
           </DetailCard>
@@ -394,6 +417,17 @@ export function InterfacesClient({
               </Row>
             )}
             <Row label="Version">v{selected.version}</Row>
+            <Row label="Recorded contract">
+              {selected.contract
+                ? `${selected.contract.semver} (${
+                    selected.contract.describedBy === "upload"
+                      ? "from file, not verified"
+                      : selected.contract.describedBy === "sample"
+                        ? "from sampled rows"
+                        : "from the tenant"
+                  })`
+                : "none yet: verify the service, or register it from its description file"}
+            </Row>
             <Row label="Request schema">
               {selected.hasRequestSchema ? "captured" : "not captured yet"}
             </Row>
@@ -413,6 +447,14 @@ export function InterfacesClient({
             </Row>
           </DetailCard>
 
+          {/* What callers may ask of a read (P1.4). Keyed by the version too:
+              a contract change clears the basis, and the card reloads; and by
+              the verifies on this screen, which write the basis and recompile
+              the policy without bumping the version. */}
+          {selected.operation === "READ" && (
+            <QueryPolicyCard key={`${selected.id}:${selected.version}:${verifies}`} interfaceId={selected.id} canAuthor={canAuthor} />
+          )}
+
           <DetailCard title="Governance">
             <Row label="Access">
               Decided separately in the API Access ledger. Defining an interface grants nothing.
@@ -422,7 +464,38 @@ export function InterfacesClient({
               audited per call — solution, operation, status and which connection answered.
             </Row>
             <Row label="Status">{selected.status}</Row>
+            {selected.policySignOff && (
+              <Row label="SAP API Policy §1.2">
+                {selected.policySignOff.signed ? (
+                  <span>
+                    Signed off by {selected.policySignOff.signed.by ?? "a member of your organization"} on{" "}
+                    {selected.policySignOff.signed.at.slice(0, 10)}: {SIGN_OFF_BASIS_LABELS[selected.policySignOff.signed.basis]}
+                    {selected.policySignOff.signed.reference ? ` (${selected.policySignOff.signed.reference})` : ""}.
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--status-awaiting-fg)" }}>
+                    Sign-off needed before approval: this interface calls a service your team built on SAP S/4HANA Cloud Public Edition.
+                  </span>
+                )}
+                {canAuthor && !selected.policySignOff.signed && (
+                  <button type="button" style={{ ...btnSmall, marginLeft: 8 }} onClick={() => setSigningOff(true)}>
+                    Record the sign-off
+                  </button>
+                )}
+              </Row>
+            )}
           </DetailCard>
+          {signingOff && (
+            <PolicySignOffDialog
+              interfaceId={selected.id}
+              serviceIdentity={selected.externalId}
+              onClose={() => setSigningOff(false)}
+              onSigned={() => {
+                setSigningOff(false);
+                router.refresh();
+              }}
+            />
+          )}
 
           {/* Disabled by design — see the file header. No aria-disabled: nothing
               here is interactive, so the state is carried by the copy ("not in

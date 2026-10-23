@@ -54,6 +54,7 @@ import {
   type GrantedInterface,
 } from "@/lib/studio/grant-binding";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
+import { apiPolicySignOffMode, policySignOffMissing } from "@/lib/studio/api-policy";
 
 // The names this module has always exported, now defined beside the decision.
 export type { AccessibleInterface, AccessRefusal };
@@ -71,10 +72,26 @@ export interface PrefetchedConnections {
 export interface AccessLoadOptions {
   /** Also read the connections that may serve the call (the pipeline does). */
   readonly withConnections?: boolean;
+  /**
+   * Also read the interface's compiled query policy, in the same statement,
+   * and keep the grants that authorised the call (P1.4): a query-surface read.
+   */
+  readonly withQueryPolicy?: boolean;
+}
+
+/**
+ * What a query-surface read needs beside the decision (P1.4): the compiled
+ * policy as stored, whether a policy source exists, and the ids of the grants
+ * that authorised this call, which a paging cursor binds (D7).
+ */
+export interface QueryAccess {
+  readonly policyRaw: unknown;
+  readonly policySourcePresent: boolean;
+  readonly authorisingGrantIds: readonly string[];
 }
 
 export type AccessResult =
-  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections }
+  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections; query?: QueryAccess }
   | { ok: false; reason: AccessRefusal; message: string };
 
 /** What the grant lookup selects: the decision, its end, and its binding. */
@@ -111,6 +128,8 @@ export const READABLE_INTERFACE_SELECT = {
   // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
   createdAt: true,
   grantMatchChangedAt: true,
+  // The §1.2 sign-off (P1.2), judged by authorisesHere where it is enforced.
+  apiPolicySignOff: true,
 } as const;
 
 /** The interface fields the read decision judges. */
@@ -180,7 +199,36 @@ async function resolveAccess(
   const decision = authorisesHere({ iface, solutionId, environment, route, grants, now });
   if (!decision.ok) return decision;
   await noteLegacyAuthority(scope, decision.authorising, iface, now);
-  return { ok: true, iface: decision.iface, ...connectionsOf(loaded) };
+  // Observed, not refused (P1.2): what enforce would refuse, said in the log
+  // the operator reads before switching (docs/runbooks/coreedge-api-policy.md).
+  if (apiPolicySignOffMode() === "observe" && policySignOffMissing(iface)) {
+    console.warn("[api-policy] a call was served on a customer-built S/4 Public service with no §1.2 sign-off; COREEDGE_API_POLICY_SIGNOFF=enforce would refuse it", {
+      organizationId: scope.organizationId,
+      interfaceId: iface.id,
+      policySignOffMissing: true,
+    });
+  }
+  return { ok: true, iface: decision.iface, ...connectionsOf(loaded), ...queryAccessOf(loaded, decision.authorising, options) };
+}
+
+/**
+ * The query surface's part of a result asked for it. The authorising grants
+ * were computed by the decision and used to be dropped here; a cursor needs
+ * their ids. Every grant the access load reads has one (the load selects it).
+ */
+function queryAccessOf(
+  loaded: AccessLoad,
+  authorising: readonly AuthorisingGrant[],
+  options: AccessLoadOptions,
+): { query?: QueryAccess } {
+  if (options.withQueryPolicy !== true) return {};
+  return {
+    query: {
+      policyRaw: loaded.queryPolicy?.compiled ?? null,
+      policySourcePresent: loaded.queryPolicy?.sourcePresent === true,
+      authorisingGrantIds: authorising.flatMap((g) => (g.id === undefined ? [] : [g.id])),
+    },
+  };
 }
 
 /** The prefetched connections, on a result asked for them. */

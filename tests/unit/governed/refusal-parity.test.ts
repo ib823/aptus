@@ -45,6 +45,10 @@ const h = vi.hoisted(() => ({
   writeResult: null as null | Record<string, unknown>,
   idempotency: { completed: 0, released: 0 },
   user: { id: "u1", role: "consultant", organizationId: "org_a", email: "u@a.co", authMethod: "session" },
+  /** The data route's query string (P1.4); empty for a legacy read. */
+  query: "",
+  /** What the grant gate hands the query surface (access.ts QueryAccess); null for none. */
+  queryAccess: null as null | Record<string, unknown>,
 }));
 
 const CONNECTION = () => ({
@@ -117,7 +121,9 @@ vi.mock("@/lib/security/rate-limit", () => ({
 }));
 vi.mock("@/lib/northbound/access", () => {
   const answer = async () =>
-    h.access === null ? { ok: true, iface: IFACE() } : { ok: false, reason: h.access, message: `refused: ${h.access}` };
+    h.access === null
+      ? { ok: true, iface: IFACE(), ...(h.queryAccess === null ? {} : { query: h.queryAccess }) }
+      : { ok: false, reason: h.access, message: `refused: ${h.access}` };
   return { resolveReadableInterface: answer, resolveWritableInterface: answer };
 });
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => ({
@@ -218,13 +224,17 @@ import { attributeAuditRow, type CorrelatedCall } from "@/lib/coreedge/correlati
 import { __setGovernedCircuitStore, governedCircuitBreaker } from "@/lib/governed/containment";
 import { REFUSAL_STATUS, type RefusalReason } from "@/lib/governed/pipeline";
 import { FAILURE_THRESHOLD, MemoryCircuitStore, STORE_DEADLINE_MS } from "@/lib/northbound/circuit-breaker";
+import { sealCursor } from "@/lib/northbound/query/cursor";
+import { defaultVersion } from "@/lib/northbound/version-policy";
+
+import { basisOf, compiled, source } from "../../helpers/odata-query";
 
 type Route = "read" | "write" | "broker-run" | "preview";
 
 async function call(route: Route): Promise<{ status: number; reason: string | null }> {
   if (route === "read") {
     const res = await readRoute(
-      new NextRequest("http://localhost/api/northbound/interfaces/if_1/data", { headers: { authorization: "Bearer k" } }),
+      new NextRequest(`http://localhost/api/northbound/interfaces/if_1/data${h.query ? `?${h.query}` : ""}`, { headers: { authorization: "Bearer k" } }),
       { params: Promise.resolve({ id: "if_1" }) },
     );
     return { status: res.status, reason: null };
@@ -251,7 +261,13 @@ async function call(route: Route): Promise<{ status: number; reason: string | nu
       new NextRequest("http://localhost/api/studio/test/broker-run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interfaceId: "if_1", clientId: "client_1", ...((h as unknown as { runEntity?: string }).runEntity ? { entity: (h as unknown as { runEntity?: string }).runEntity } : {}) }),
+        body: JSON.stringify({
+          interfaceId: "if_1",
+          clientId: "client_1",
+          ...((h as unknown as { runEntity?: string }).runEntity ? { entity: (h as unknown as { runEntity?: string }).runEntity } : {}),
+          // The query the app would send (P1.4): the console's query run.
+          ...(h.query ? { query: h.query } : {}),
+        }),
       }),
     );
     const json = (await res.json()) as { data?: { outcome: string; refusal?: { kind: string } } };
@@ -293,6 +309,8 @@ const CASES: readonly Case[] = [
   { reason: "GRANT_EXPIRED", routes: ALL_BROKER, set: () => (h.access = "GRANT_EXPIRED") },
   { reason: "GRANT_REVOKED", routes: ALL_BROKER, set: () => (h.access = "GRANT_REVOKED") },
   { reason: "GRANT_NEEDS_REAPPROVAL", routes: ALL_BROKER, set: () => (h.access = "GRANT_NEEDS_REAPPROVAL") },
+  // P1.2: the §1.2 sign-off, under COREEDGE_API_POLICY_SIGNOFF=enforce.
+  { reason: "API_POLICY_SIGN_OFF_REQUIRED", routes: ALL_BROKER, set: () => (h.access = "API_POLICY_SIGN_OFF_REQUIRED") },
   { reason: "WRITE_NOT_SERVED", routes: READS, set: () => (h.access = "WRITE_NOT_SERVED") },
   { reason: "INTERFACE_DEPRECATED", routes: READS, set: () => (h.access = "INTERFACE_DEPRECATED") },
   { reason: "READ_ONLY_INTERFACE", routes: ["write"], set: () => (h.access = "READ_ONLY_INTERFACE") },
@@ -340,6 +358,53 @@ const CASES: readonly Case[] = [
       vi.stubEnv("COREEDGE_ENV_TENANT_HOSTS", "enforce");
     },
   },
+  // The query surface (P1.4), on the data route and the console's query run.
+  // A cursor is refused by the console as QUERY_INVALID (it runs the first
+  // page only), so the two cursor reasons are the data route's alone.
+  { reason: "QUERY_INVALID", routes: READS, set: () => (h.query = "filter.NetAmount=1") },
+  {
+    reason: "QUERY_NOT_AVAILABLE",
+    routes: READS,
+    set: () => {
+      // The switch off, whatever this run's environment says.
+      vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
+      h.query = "select=PurchaseOrder";
+    },
+  },
+  {
+    reason: "QUERY_SURFACE_MISCONFIGURED",
+    routes: READS,
+    set: () => {
+      querySurfaceOn();
+      vi.stubEnv("COREEDGE_TOKEN_KEYS", "not-a-ring");
+      h.query = "select=PurchaseOrder";
+    },
+  },
+  {
+    reason: "CURSOR_INVALID",
+    routes: ["read"],
+    set: () => {
+      querySurfaceOn();
+      h.query = "pageSize=10&cursor=cec1.t0.not-a-sealed-cursor-at-all-not-a-sealed-cursor";
+    },
+  },
+  {
+    reason: "CURSOR_STALE",
+    routes: ["read"],
+    set: () => {
+      querySurfaceOn();
+      h.query = `pageSize=10&cursor=${expiredCursor()}`;
+    },
+  },
+  {
+    reason: "POLICY_FIELD_NOT_GRANTED",
+    routes: READS,
+    set: () => {
+      querySurfaceOn();
+      h.queryAccess = { policyRaw: QUERY_POLICY, policySourcePresent: true, authorisingGrantIds: ["grant_1"] };
+      h.query = "filter.NetAmount.gt=1";
+    },
+  },
   // Containment, enforced.
   {
     reason: "CIRCUIT_OPEN",
@@ -370,7 +435,48 @@ function reset(): void {
     runEntity: undefined,
     writeResult: null,
     idempotency: { completed: 0, released: 0 },
+    query: "",
+    queryAccess: null,
   });
+}
+
+/* The query surface's fixtures (P1.4). */
+function querySurfaceOn(): void {
+  vi.stubEnv("COREEDGE_QUERY_SURFACE", "on");
+}
+
+/** A policy over the data route's dataset that filters on its key only. */
+const QUERY_POLICY = compiled(
+  basisOf([{ n: "PurchaseOrder" }, { n: "NetAmount", t: "D", edm: "Edm.Decimal" }], ["PurchaseOrder"], { entitySet: "A_PurchaseOrder" }),
+  source({ filter: [{ field: "PurchaseOrder", ops: ["eq"] }], sort: ["PurchaseOrder"] }),
+);
+
+/** A cursor this client was issued for this interface, sealed under the test ring, whose 15 minutes are up. */
+function expiredCursor(): string {
+  const now = Math.floor(Date.now() / 1000);
+  const b64 = (n: number) => "A".repeat(n);
+  return sealCursor(
+    {
+      v: 1,
+      ch: b64(16),
+      pi: 1,
+      off: 10,
+      rs: 10,
+      iv: 1,
+      pr: QUERY_POLICY.rev,
+      qb: b64(22),
+      g: [b64(12)],
+      cn: "conn_1",
+      cr: 0,
+      lk: b64(11),
+      fk: `t1.${b64(11)}`,
+      rb: 100,
+      iat: now - 2000,
+      exp: now - 1000,
+      cx: now + 3600,
+    },
+    { organizationId: "org_a", clientId: "client_1", interfaceId: "if_1", apiVersion: defaultVersion(new Date())!.version },
+  );
 }
 
 let store: MemoryCircuitStore;
@@ -498,6 +604,7 @@ describe("the correlation search attributes every refusal to the hop that refuse
     GRANT_EXPIRED: "access",
     GRANT_REVOKED: "access",
     GRANT_NEEDS_REAPPROVAL: "access",
+    API_POLICY_SIGN_OFF_REQUIRED: "access",
     WRITE_NOT_SERVED: "access",
     READ_ONLY_INTERFACE: "access",
     INTERFACE_NOT_ACTIVE: "access",
@@ -519,6 +626,14 @@ describe("the correlation search attributes every refusal to the hop that refuse
     HOST_NOT_ALLOWED: "binding",
     IDEMPOTENCY_CONFLICT: "request",
     IDEMPOTENCY_IN_FLIGHT: "request",
+    // The query surface (P1.4): the request's, by its queryRule, whatever
+    // the status; failureReason stays null, so none reads as reaching SAP.
+    QUERY_INVALID: "request",
+    QUERY_NOT_AVAILABLE: "request",
+    CURSOR_INVALID: "request",
+    CURSOR_STALE: "request",
+    POLICY_FIELD_NOT_GRANTED: "request",
+    QUERY_SURFACE_MISCONFIGURED: "request",
   };
 
   const AUDITED = ROWS.filter(([, , c]) => !c.unaudited);
@@ -536,6 +651,7 @@ describe("the correlation search attributes every refusal to the hop that refuse
       durationMs: (row.durationMs as number | null | undefined) ?? null,
       connectionId: (row.connectionId as string | null | undefined) ?? null,
       replayed: (row.replayed as boolean | undefined) ?? false,
+      queryRule: (row.query as { rule?: string } | undefined)?.rule ?? null,
     });
     expect(brokenHop).toBe(HOP[reason]);
     expect(outcome).toContain("Nothing was sent to SAP");

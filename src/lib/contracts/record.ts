@@ -12,6 +12,10 @@
  *      snapshot and interface version the body its write sends is of,
  *      conditional on that version (a PATCH that landed meanwhile wins). A
  *      capture writes its schema on the interface in the same transaction.
+ *   3. For a read interface whose current contract is this verify's, the
+ *      same transaction writes the query basis the job made (P1.4) and
+ *      recompiles the interface's query policy against it, narrowing what
+ *      the contract no longer allows (writeQueryBasis, below).
  *
  * NEVER FAILS THE VERIFY. The verification is already recorded when this
  * runs. A description the compiler refused, a job that did not run, or a
@@ -29,12 +33,29 @@ import type { RequestSchemaStamp } from "@/lib/contracts/request-schema";
 import { contractBodies } from "@/lib/contracts/json-schema";
 import { recordContractSnapshot, type AlsoWrite } from "@/lib/contracts/snapshot";
 import { prisma } from "@/lib/db/prisma";
+import { parseQueryBasis, withSnapshot, type QueryBasisV1Draft } from "@/lib/odata/basis";
+import { parseCompiledPolicy, parseQueryPolicySource } from "@/lib/odata/policy";
+import { compileQueryPolicy } from "@/lib/odata/policy-compiler";
+import { lockQueryPolicyRow, writeCompiledQueryPolicy, writeQueryBasis as storeQueryBasis } from "@/lib/odata/policy-store";
 import { resolveInterfaceService, type InterfaceServiceFields } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
 
 // Pure, and read on every path that serves a write body.
 export { currentRequestSchemaStamp, requestSchemaStamp, type RequestSchemaStamp } from "@/lib/contracts/request-schema";
+
+/**
+ * What a verify did to the interface's query policy (P1.4): recompiled it
+ * against the basis it wrote, and what that narrowed or warned of. Null when
+ * no policy was recompiled: a write interface, an interface with no policy,
+ * or a verify whose contract is not the current one.
+ */
+export interface QueryPolicyOutcome {
+  state: "READY" | "STALE" | "UNREADABLE";
+  revision: number;
+  narrowed: string[];
+  warnings: string[];
+}
 
 export type ContractOutcome =
   | {
@@ -46,6 +67,9 @@ export type ContractOutcome =
       /** Up to ten changes, as plain sentences. */
       changes: string[];
       requestSchemaWritten: boolean;
+      /** A read interface's query basis was written (P1.4). */
+      queryBasisWritten: boolean;
+      queryPolicy: QueryPolicyOutcome | null;
     }
   | {
       status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED";
@@ -73,7 +97,7 @@ export function notCompiled(compiled: { reason: string; detail: string; retryAft
 
 export async function recordVerifiedContract(input: {
   scope: TenantScope;
-  iface: { id: string; version: number; externalId: string; entitySet: string | null; operation: string; mode: string };
+  iface: { id: string; version: number; externalId: string; entitySet: string | null; operation: string; mode: string; odataVersion?: string | null };
   /** The verify's record job (service-verify.ts), with the interface's dataset made ready to record. */
   compiled: CompiledService | undefined;
   /** The rows the job diffed against (snapshot.ts, loadRecordHeads), by id. */
@@ -134,6 +158,67 @@ export async function recordVerifiedContract(input: {
     requestSchemaWritten = written.count > 0;
   };
 
+  let queryBasisWritten = false;
+  let queryPolicy: QueryPolicyOutcome | null = null;
+  /*
+   * THE QUERY BASIS OF THE CURRENT CONTRACT, AND ONLY WHEN IT IS THIS
+   * VERIFY'S (P1.4, 3.5.4). The basis describes the contract /schema serves;
+   * a verify of an environment behind the others (another contract is
+   * current) has nothing true to say about it, and writes nothing.
+   *
+   * The row is locked first, at the version the verify read, so a Studio
+   * save running beside this verify is ordered with it (whichever runs
+   * second compiles against what the first wrote), and a PATCH that changed
+   * the contract meanwhile wins: no row comes back, nothing is written.
+   *
+   * Then the policy, when there is one, is recompiled against the new basis
+   * in VERIFY mode: what the contract no longer allows is dropped with a
+   * warning, and the policy goes STALE only when narrowing cannot keep what
+   * callers rely on (a key change, another dataset or version: D9). The
+   * basis is CoreEdge-made in the job and bounded (LIMITS.queryBasis), so
+   * reading it and compiling here parses no tenant byte on this thread.
+   */
+  const writeQueryBasis: AlsoWrite = async (tx, _outcome, current) => {
+    if (iface.operation !== "READ" || !current || current.contentHash !== prepared.hash) return;
+    const row = await lockQueryPolicyRow(tx, input.scope.organizationId, iface.id, iface.version);
+    if (!row) return;
+    const basis = parseQueryBasis(
+      withSnapshot(JSON.parse(textOf(prepared.queryBasis)) as QueryBasisV1Draft, {
+        id: current.id,
+        semver: current.semver,
+        contentHash: current.contentHash,
+      }),
+    );
+    if (basis === null) return;
+    queryBasisWritten = true;
+    if (row.queryPolicy === null) {
+      await storeQueryBasis(tx, input.scope.organizationId, iface.id, basis);
+      return;
+    }
+    const revision = row.queryPolicyRevision + 1;
+    const source = parseQueryPolicySource(row.queryPolicy);
+    const previous = parseCompiledPolicy(row.queryPolicyCompiled);
+    const odataVersion = iface.odataVersion === "V2" || iface.odataVersion === "V4" ? iface.odataVersion : null;
+    const compiled = source.ok
+      ? compileQueryPolicy(source.source, basis, {
+          mode: "verify",
+          interface: { entitySet: iface.entitySet, odataVersion },
+          revision,
+          now: new Date(),
+          previous: "unreadable" in previous ? null : previous.compiled,
+        })
+      : null;
+    if (compiled === null || !compiled.ok) {
+      // A stored source that no longer validates was not written by the
+      // Studio route: serve no query on it until a builder saves it again.
+      await writeCompiledQueryPolicy(tx, input.scope.organizationId, iface.id, { revision, compiled: null, basis });
+      queryPolicy = { state: "UNREADABLE", revision, narrowed: [], warnings: [] };
+      return;
+    }
+    await writeCompiledQueryPolicy(tx, input.scope.organizationId, iface.id, { revision, compiled: compiled.compiled, basis });
+    queryPolicy = { state: compiled.compiled.state, revision, narrowed: [...compiled.narrowed], warnings: [...compiled.warnings] };
+  };
+
   try {
     const outcome = await recordContractSnapshot({
       scope: input.scope,
@@ -143,7 +228,11 @@ export async function recordVerifiedContract(input: {
       environment: input.environment,
       connectionId: input.connectionId,
       createdById: input.actorId,
-      alsoWrite: writeStamp,
+      origin: "VERIFY",
+      alsoWrite: async (tx, recorded, current) => {
+        await writeStamp(tx, recorded, current);
+        await writeQueryBasis(tx, recorded, current);
+      },
     });
     if (outcome.status === "REFUSED") return { status: "NOT_RECORDED", detail: outcome.detail };
     return {
@@ -153,6 +242,8 @@ export async function recordVerifiedContract(input: {
       bump: outcome.status === "RECORDED" ? (outcome.diff?.bump ?? "initial") : null,
       changes: outcome.status === "RECORDED" ? (outcome.diff?.changes ?? []).slice(0, 10) : [],
       requestSchemaWritten,
+      queryBasisWritten,
+      queryPolicy,
     };
   } catch (err) {
     console.error("[contracts] snapshot not recorded", {
@@ -290,6 +381,7 @@ export async function recordCapture(input: {
     contract: c as Extract<RecordableContract, { ok: true }>,
     heads: input.heads,
     createdById: input.actorId,
+    origin: "CAPTURE",
     alsoWrite: (tx) => writeSchema(tx),
   });
   if (outcome.status === "REFUSED") {

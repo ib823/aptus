@@ -25,6 +25,15 @@
  *
  * Scaffold produces DOWNLOADS. There is no in-browser editor: the solution's code
  * lives in the developer's own repository.
+ *
+ * THE QUERY THE APP WOULD SEND (P1.4). With query parameters, Run is a
+ * query-surface read of the first page, through the same broker: a refusal
+ * carries the same `error.query` rule the app would get, and the result shows
+ * what was sent to SAP as the service path and options (never the host).
+ * Capture schema and Capture fixture are not offered for it: a query's rows
+ * are shaped by its select and filters, so they describe the query, not the
+ * contract or the mock. The builder fills the raw query from the interface's
+ * policy, read from Postgres when it is opened, never on render.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -45,7 +54,7 @@ interface SavedCase {
    * system the recorded outcome came from. Cases saved before this field
    * existed have none, and the replay says so rather than guessing.
    */
-  request: { entity?: string; limit?: number; environment?: string } | null;
+  request: { entity?: string; limit?: number; environment?: string; query?: string } | null;
   lastOutcome: "PASS" | "FAIL" | "NOT_RUN";
   httpStatus: number | null;
   lastRunAt: string | null;
@@ -106,8 +115,8 @@ interface RunState {
   rows?: Record<string, unknown>[];
   entitySets?: string[];
   httpStatus?: number | undefined;
-  /** A governance refusal — the same one the deployed app would receive. */
-  refusal?: { kind: string; message: string } | undefined;
+  /** A governance refusal — the same one the deployed app would receive, with a query refusal's `error.query`. */
+  refusal?: { kind: string; message: string; query?: QueryRefusalDetail | undefined } | undefined;
   /** Which connection the binding chose — the fact the old console lacked. */
   boundTo?:
     | {
@@ -129,9 +138,79 @@ interface RunState {
    * route refuses one from a run of an earlier contract (P0.4, A38).
    */
   contract?: { version: number; entitySet: string | null } | undefined;
+  /** A query run's own outcome and what it sent (P1.4); absent on a ?limit run. */
+  query?: QueryRunInfo | undefined;
+  /** The chip's own words, when a query outcome says more than the status (a record SAP does not have). */
+  statusLabel?: string | undefined;
+  statusMeaning?: string | undefined;
+  /**
+   * What this run sent: the query (trimmed; null for a ?limit run), the
+   * entity and the limit. A saved case records these, never the fields as
+   * they are when Save is clicked, so a refused query is saved as that query
+   * and an edit after the run cannot be stored beside an outcome it never had.
+   */
+  sent?: { readonly query: string | null; readonly entity: string; readonly limit: number } | undefined;
 }
 
 type BrokerReadStatus = "OK" | "EMPTY" | "NEEDS_SETUP" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+
+/** A query run's outcome (odata/query-status.ts QueryReadStatus). */
+type QueryReadStatus = BrokerReadStatus | "NO_RECORD" | "SAP_REJECTED" | "TOO_LARGE";
+
+/** `error.query` on a refusal: the rule, and what is safe to repeat. */
+interface QueryRefusalDetail {
+  rule: string;
+  parameter?: string;
+  field?: string;
+  allowed?: string[];
+}
+
+interface QueryRunInfo {
+  status: QueryReadStatus;
+  kind: string;
+  /** The service path, entity set and options sent: never the host. */
+  sent: string;
+  rule: string | null;
+  page: { index: number; size: number; rowsServed: number; complete: boolean; stopped: string | null } | null;
+  totalCount?: number | null;
+}
+
+/**
+ * A query run's outcome as a chip. A record SAP does not have is an answer
+ * from a working service, said as such; SAP refusing the query, or a page
+ * too large to read, is a failed attempt the caller can change.
+ */
+function queryChip(status: QueryReadStatus): { status: HonestStatus; label?: string; meaning?: string } {
+  switch (status) {
+    case "OK":
+    case "EMPTY":
+      return { status: "ACTIVATED" };
+    case "NO_RECORD":
+      return { status: "ACTIVATED", label: "No record", meaning: "the service answered: no record has this key" };
+    case "NEEDS_SETUP":
+      return { status: "NEEDS_SETUP" };
+    case "NOT_FOUND":
+      return { status: "NOT_FOUND" };
+    case "SAP_REJECTED":
+      return { status: "PROBE_FAILED", label: "Query refused by SAP", meaning: "the service refused this query; change the query" };
+    case "TOO_LARGE":
+      return { status: "PROBE_FAILED", label: "Too large", meaning: "the answer is larger than CoreEdge reads or returns" };
+    default:
+      return { status: "PROBE_FAILED" };
+  }
+}
+
+/** The interface's query policy, as the builder needs it (api/studio/interfaces/[id]/query-policy). */
+interface BuilderPolicy {
+  flagEnabled: boolean;
+  compiled: {
+    state: string;
+    key: string[] | null;
+    fields: { n: string; ops: string[]; sort: boolean }[];
+  } | null;
+}
+
+const OP_LABEL: Record<string, string> = { eq: "equals", in: "any of", gt: "greater than", ge: "at least", lt: "less than", le: "at most" };
 
 /** The contract a run was against, as the capture routes take it — or nothing, for an older broker. */
 function contractOf(run: RunState): { interfaceVersion?: number; entitySet?: string | null } {
@@ -150,7 +229,9 @@ export function TestConsoleClient({
   const [selectedId, setSelectedId] = useState<string | null>(interfaces[0]?.id ?? null);
   const [entity, setEntity] = useState("");
   const [limit, setLimit] = useState(10);
-  const [run, setRun] = useState<RunState>({ phase: "idle" });
+  /** The query the deployed app would send (P1.4); empty runs the ?limit read. */
+  const [queryText, setQueryText] = useState("");
+  const [run, setRunState] = useState<RunState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -240,10 +321,11 @@ export function TestConsoleClient({
             ...(cred.clientId ? { clientId: cred.clientId } : {}),
             ...(c.request?.entity ? { entity: c.request.entity } : {}),
             limit: Math.min(c.request?.limit ?? 10, 50),
+            ...(c.request?.query ? { query: c.request.query } : {}),
           }),
         });
         const json = (await res.json()) as {
-          data?: { outcome: string; status?: string; httpStatus?: number; refusal?: { message: string } };
+          data?: { outcome: string; status?: string; queryStatus?: string; httpStatus?: number; refusal?: { message: string } };
           error?: { message?: string };
         };
         const d = json.data;
@@ -253,7 +335,7 @@ export function TestConsoleClient({
             ? json.error?.message ?? "replay failed"
             : d.outcome === "refused"
               ? `refused — ${d.refusal?.message ?? ""}`
-              : `${d.status} · HTTP ${d.httpStatus}`,
+              : `${d.status ?? d.queryStatus} · HTTP ${d.httpStatus}`,
         }));
       } catch {
         setCaseResult((m) => ({ ...m, [c.id]: "replay failed" }));
@@ -297,6 +379,9 @@ export function TestConsoleClient({
   /** The only place a live SAP read is triggered — through the broker pipeline. */
   const doRun = useCallback(async () => {
     if (!selected) return;
+    const sent = { query: queryText.trim() || null, entity, limit };
+    // Every outcome of this run carries what it sent, for Save as test case.
+    const setRun = (state: RunState) => setRunState(state.phase === "done" ? { ...state, sent } : state);
     setRun({ phase: "running" });
     setSaved(null);
     try {
@@ -306,16 +391,22 @@ export function TestConsoleClient({
         body: JSON.stringify({
           interfaceId: selected.id,
           ...(credential ? { clientId: credential.clientId } : {}),
-          ...(entity ? { entity } : {}),
-          limit: Math.min(limit, 50),
+          ...(sent.entity ? { entity: sent.entity } : {}),
+          limit: Math.min(sent.limit, 50),
+          ...(sent.query ? { query: sent.query } : {}),
         }),
       });
       const json = (await res.json()) as {
         data?:
-          | { outcome: "refused"; refusal: { kind: string; message: string } }
+          | { outcome: "refused"; refusal: { kind: string; message: string; query?: QueryRefusalDetail } }
           | {
               outcome: "ran";
-              status: BrokerReadStatus;
+              /** A ?limit run's outcome; absent on a query run. */
+              status?: BrokerReadStatus;
+              /** A query run's outcome (P1.4). */
+              queryStatus?: QueryReadStatus;
+              query?: Omit<QueryRunInfo, "status" | "totalCount">;
+              totalCount?: number | null;
               httpStatus: number;
               contract?: { version: number; entitySet: string | null };
               records: Record<string, unknown>[];
@@ -345,6 +436,24 @@ export function TestConsoleClient({
         return;
       }
       const d = json.data;
+      if (d.queryStatus !== undefined && d.query) {
+        // A query run: its own outcome, and no readStatus, so no capture.
+        const chip = queryChip(d.queryStatus);
+        setRun({
+          phase: "done",
+          status: chip.status,
+          statusLabel: chip.label,
+          statusMeaning: chip.meaning,
+          rows: d.records,
+          httpStatus: d.httpStatus,
+          detail: d.note,
+          draft: d.draft,
+          boundTo: d.boundTo,
+          contract: d.contract,
+          query: { ...d.query, status: d.queryStatus, ...(d.totalCount === undefined ? {} : { totalCount: d.totalCount }) },
+        });
+        return;
+      }
       // The broker's read statuses ARE tenant facts, mapped to the shared
       // honest-status vocabulary the chip owns.
       const status: HonestStatus =
@@ -374,10 +483,11 @@ export function TestConsoleClient({
     } catch {
       setRun({ phase: "done", detail: "The run could not be completed." });
     }
-  }, [selected, credential, entity, limit]);
+  }, [selected, credential, entity, limit, queryText]);
 
   const saveCase = useCallback(async () => {
-    if (!selected || run.phase !== "done") return;
+    if (!selected || run.phase !== "done" || !run.sent) return;
+    const sent = run.sent;
     setSaving(true);
     try {
       const res = await fetch("/api/studio/test-cases", {
@@ -385,11 +495,15 @@ export function TestConsoleClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interfaceId: selected.id,
-          name: `${selected.name} — ${entity || selected.entitySet || "default"} (${limit})`,
+          name: sent.query
+            ? `${selected.name} — ${sent.query.slice(0, 80)}`
+            : `${selected.name} — ${sent.entity || selected.entitySet || "default"} (${sent.limit})`,
           request: {
-            entity: entity || selected.entitySet,
-            limit,
+            entity: sent.entity || selected.entitySet,
+            limit: sent.limit,
             tenant: tenantKey,
+            // A query run replays as the same query, refused or ran.
+            ...(sent.query ? { query: sent.query } : {}),
             // WHICH system this outcome came from. A replay that ran as a
             // different environment's credential would be comparing a result
             // against a tenant that never produced it.
@@ -411,7 +525,7 @@ export function TestConsoleClient({
     } finally {
       setSaving(false);
     }
-  }, [selected, credential, run, entity, limit, tenantKey, loadCases]);
+  }, [selected, credential, run, tenantKey, loadCases]);
 
   /**
    * Turn the rows we just saw into a described contract.
@@ -543,6 +657,8 @@ export function TestConsoleClient({
               onChange={(e) => {
                 setSelectedId(e.target.value);
                 setChosenClientId(null);
+                // A query names one interface's fields.
+                setQueryText("");
               }}
               style={field}
             >
@@ -628,6 +744,9 @@ export function TestConsoleClient({
           </label>
         )}
         {selected && <BindingPreviewLine binding={credential?.binding ?? { kind: "no-credential" }} />}
+        {selected && selected.operation === "READ" && (
+          <QueryInput key={selected.id} interfaceId={selected.id} value={queryText} onChange={setQueryText} />
+        )}
         <p style={{ ...muted, marginTop: 10 }}>
           Nothing is read until you press Run. The run goes through the broker: the same
           grant check, the same environment binding, the same connection the deployed
@@ -640,7 +759,7 @@ export function TestConsoleClient({
         <section style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
             <h2 style={{ ...h2, margin: 0 }}>{run.refusal ? "Refused by governance" : "Result"}</h2>
-            {run.status && <StudioStatusChip status={run.status} />}
+            {run.status && <StudioStatusChip status={run.status} label={run.statusLabel} meaning={run.statusMeaning} />}
             {run.httpStatus && <span style={muted}>HTTP {run.httpStatus}</span>}
             {run.draft && (
               <span style={{ ...muted, color: "var(--status-awaiting-fg)" }} title="Served with x-coreedge-interface-status: DRAFT">
@@ -649,6 +768,8 @@ export function TestConsoleClient({
             )}
           </div>
           <p style={body}>{run.detail}</p>
+          {run.refusal?.query && <QueryRuleLine detail={run.refusal.query} />}
+          {run.query && <QueryRunLine info={run.query} />}
           {/* WHICH system answered — the binding's own facts, so a green run is
               evidence about the connection the app will actually reach. */}
           {run.boundTo && (
@@ -702,7 +823,7 @@ export function TestConsoleClient({
               and the detail were made outcome-aware. The condition has to read
               the OUTCOME, not the row count: emptiness is a property of a
               successful read, and nothing else may claim it. */}
-          {run.status === "ACTIVATED" && run.rows && run.rows.length === 0 && (
+          {run.status === "ACTIVATED" && run.rows && run.rows.length === 0 && run.query?.status !== "NO_RECORD" && (
             <p style={{ ...muted, marginTop: 8 }}>
               This is an empty resource, not a failure. Your application should treat it as data.
             </p>
@@ -714,8 +835,9 @@ export function TestConsoleClient({
                 {saving ? "Saving…" : "Save as test case"}
               </button>
               {/* Only offered when there are rows to learn from — capturing an
-                  empty result would teach the contract nothing. */}
-              {run.rows && run.rows.length > 0 && (
+                  empty result would teach the contract nothing. Never for a
+                  query run (P1.4): its rows describe the query, not the contract. */}
+              {!run.query && run.rows && run.rows.length > 0 && (
                 <button type="button" onClick={() => void captureSchema()} disabled={capturing} style={btnSmall}>
                   {capturing ? "Capturing…" : "Capture schema"}
                 </button>
@@ -723,9 +845,14 @@ export function TestConsoleClient({
               {/* Offered for EVERY honest outcome, including the failures — a
                   mock that can only serve the happy path lets a test suite prove
                   the easy half. */}
-              <button type="button" onClick={() => void captureFixture()} disabled={capturing} style={btnSmall}>
-                {capturing ? "Capturing…" : "Capture fixture"}
-              </button>
+              {!run.query && (
+                <button type="button" onClick={() => void captureFixture()} disabled={capturing} style={btnSmall}>
+                  {capturing ? "Capturing…" : "Capture fixture"}
+                </button>
+              )}
+              {run.query && (
+                <span style={muted}>Capture is offered for ?limit runs: a query&apos;s rows are shaped by its select and filters.</span>
+              )}
               {saved && <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{saved}</span>}
             </div>
           )}
@@ -847,6 +974,199 @@ function BindingPreviewLine({ binding }: { binding: BindingPreview }) {
         ? " · binding unverified (the connection has not declared its environment)"
         : ""}
     </p>
+  );
+}
+
+/**
+ * The query the deployed app would send, typed or built from the policy
+ * (P1.4). The policy is a Postgres read, made when the builder is opened.
+ */
+function QueryInput({ interfaceId, value, onChange }: { interfaceId: string; value: string; onChange: (next: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [policy, setPolicy] = useState<BuilderPolicy | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [fieldName, setFieldName] = useState("");
+  const [op, setOp] = useState("");
+  const [literal, setLiteral] = useState("");
+  const [keyValues, setKeyValues] = useState<Record<string, string>>({});
+  const inputId = `console-query-${interfaceId}`;
+
+  const openBuilder = async () => {
+    setOpen(true);
+    if (policy) return;
+    try {
+      const res = await fetch(`/api/studio/interfaces/${encodeURIComponent(interfaceId)}/query-policy`);
+      const json = (await res.json()) as { data?: BuilderPolicy; error?: { message?: string } };
+      if (!res.ok || !json.data) throw new Error(json.error?.message ?? "The query policy could not be loaded.");
+      setPolicy(json.data);
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : "The query policy could not be loaded.");
+    }
+  };
+
+  const ready = policy?.compiled?.state === "READY" ? policy.compiled : null;
+  const filterable = ready?.fields.filter((f) => f.ops.length > 0) ?? [];
+  const chosen = filterable.find((f) => f.n === fieldName) ?? null;
+  const params = () => new URLSearchParams(value.trim().replace(/^\?/, ""));
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <label htmlFor={inputId} style={labelText}>
+        Query parameters (optional) — as the deployed app would send them
+      </label>
+      <input
+        id={inputId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="select=Order,Customer&filter.Customer.eq=17100001&pageSize=20"
+        spellCheck={false}
+        maxLength={4096}
+        style={{ ...field, width: "100%", maxWidth: 640, fontFamily: "var(--font-mono, ui-monospace), monospace", fontSize: 13 }}
+      />
+      <p style={{ ...muted, marginTop: 4 }}>
+        Empty runs the ?limit read. With parameters, the run is the first page of that query (at most 50 records), checked
+        against the interface&apos;s query policy as the app&apos;s call is. Send a + in a value as %2B.
+      </p>
+      {!open ? (
+        <button type="button" style={{ ...btnSmall, marginTop: 6 }} onClick={() => void openBuilder()}>
+          Build from the query policy
+        </button>
+      ) : (
+        <fieldset style={{ border: "1px solid var(--border-default)", borderRadius: "var(--radius-input, 8px)", padding: "10px 12px", marginTop: 8 }}>
+          <legend style={{ ...labelText, padding: "0 4px", marginBottom: 0 }}>Build from the query policy</legend>
+          {problem && <p role="alert" style={{ ...muted, color: "var(--status-revoked-fg)" }}>{problem}</p>}
+          {policy && !ready && (
+            <p style={muted}>
+              This interface serves no queries yet: enable them in its Query policy card under Interfaces.
+            </p>
+          )}
+          {policy && !policy.flagEnabled && (
+            <p style={muted}>This deployment does not serve queries yet (COREEDGE_QUERY_SURFACE), so a query run is refused.</p>
+          )}
+          {ready && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <label style={{ display: "block" }}>
+                  <span style={labelText}>Filter on</span>
+                  <select
+                    value={fieldName}
+                    onChange={(e) => {
+                      setFieldName(e.target.value);
+                      setOp(filterable.find((f) => f.n === e.target.value)?.ops[0] ?? "");
+                    }}
+                    style={{ ...field, width: 200 }}
+                  >
+                    <option value="">Choose a field</option>
+                    {filterable.map((f) => (
+                      <option key={f.n} value={f.n}>
+                        {f.n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={labelText}>Operator</span>
+                  <select value={op} onChange={(e) => setOp(e.target.value)} disabled={!chosen} style={{ ...field, width: 160 }}>
+                    {(chosen?.ops ?? []).map((o) => (
+                      <option key={o} value={o}>
+                        {OP_LABEL[o] ?? o}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={labelText}>Value</span>
+                  <input value={literal} onChange={(e) => setLiteral(e.target.value)} disabled={!chosen} style={{ ...field, width: 180 }} />
+                </label>
+                <button
+                  type="button"
+                  style={btnSmall}
+                  disabled={!chosen || !op}
+                  onClick={() => {
+                    const next = params();
+                    next.append(`filter.${fieldName}.${op}`, literal);
+                    onChange(next.toString());
+                    setLiteral("");
+                  }}
+                >
+                  Add filter
+                </button>
+              </div>
+              {ready.key && ready.key.length > 0 && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  {ready.key.map((k) => (
+                    <label key={k} style={{ display: "block" }}>
+                      <span style={labelText}>Key {k}</span>
+                      <input
+                        value={keyValues[k] ?? ""}
+                        onChange={(e) => setKeyValues((v) => ({ ...v, [k]: e.target.value }))}
+                        style={{ ...field, width: 160 }}
+                      />
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    style={btnSmall}
+                    disabled={ready.key.some((k) => !keyValues[k])}
+                    onClick={() => {
+                      // A key lookup carries only select beside the key.
+                      const select = params().get("select");
+                      const next = new URLSearchParams();
+                      if (select) next.set("select", select);
+                      for (const k of ready.key ?? []) next.set(`key.${k}`, keyValues[k] ?? "");
+                      onChange(next.toString());
+                    }}
+                  >
+                    Look up by key
+                  </button>
+                </div>
+              )}
+              <p style={muted}>
+                Readable: {ready.fields.map((f) => f.n).join(", ") || "none"}. Sortable: {ready.fields.filter((f) => f.sort).map((f) => f.n).join(", ") || "none"}.
+              </p>
+            </div>
+          )}
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+/** A query refusal's rule, and what the policy allows instead when it says. */
+function QueryRuleLine({ detail }: { detail: QueryRefusalDetail }) {
+  return (
+    <p style={{ ...muted, marginTop: 6 }} data-testid="query-rule">
+      Rule <code style={code}>{detail.rule}</code>
+      {detail.parameter ? <> on <code style={code}>{detail.parameter}</code></> : null}
+      {detail.allowed && detail.allowed.length > 0 ? ` · allowed: ${detail.allowed.join(", ")}` : ""}
+    </p>
+  );
+}
+
+/** What a query run sent (never the host), and what its first page says. */
+function QueryRunLine({ info }: { info: QueryRunInfo }) {
+  return (
+    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }} data-testid="query-run">
+      <p style={{ ...muted, margin: 0 }}>
+        Sent to SAP ({info.kind === "LIST" ? "a list" : "a key lookup"}): <code style={{ ...code, wordBreak: "break-all" }}>{info.sent}</code>
+      </p>
+      {info.rule && (
+        <p style={{ ...muted, margin: 0 }}>
+          Rule <code style={code}>{info.rule}</code>
+        </p>
+      )}
+      {info.page && (
+        <p style={{ ...muted, margin: 0 }}>
+          First page: {info.page.rowsServed} record{info.page.rowsServed === 1 ? "" : "s"}
+          {info.page.complete
+            ? " · SAP has no more rows for this query"
+            : info.page.stopped
+              ? ` · rows remain, and paging stops here (${info.page.stopped})`
+              : " · more rows remain: the deployed app pages on nextCursor"}
+          {info.totalCount !== undefined ? ` · total count ${info.totalCount ?? "not given by SAP"}` : ""}
+        </p>
+      )}
+    </div>
   );
 }
 

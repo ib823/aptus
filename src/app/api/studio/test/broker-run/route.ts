@@ -18,9 +18,21 @@
  * and a NorthboundAuditEvent with dryRun: true. Every refusal returned here is
  * the refusal the deployed app would see, stated as such — a teaching surface,
  * not a bypass.
+ *
+ * AND THE QUERY THE APP WOULD SEND (P1.4). With `query`, the run is a
+ * query-surface read: the same parser, the same policy check after the grant,
+ * the same compiler, executor and page assembly the data route uses, so a
+ * refusal here is the refusal the app would get, with the same
+ * `error.query` detail. Two differences, both because the console shows one
+ * page to a person: it runs the FIRST page only (a cursor is refused, and
+ * none is issued), at most CONSOLE_MAX_PAGE rows. Its answer carries the
+ * query's own outcome (`queryStatus`) and no `status`, so the screen offers
+ * no schema or fixture capture for it (the capture job refuses a run it does
+ * not know), and shows what was sent as the service path and options only:
+ * never the host.
  */
 
-import type { NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
@@ -29,24 +41,39 @@ import { prisma } from "@/lib/db/prisma";
 import {
   authorise,
   bindConnection,
+  callSapQuery,
   callSapRead,
   contain,
   GovernedAudit,
   prefetchedConnectionsFor,
+  queryContextFor,
+  queryRefusalOf,
   rateLimit,
   refusal,
   resolveReadTarget,
+  type PipelineStep,
+  type RefusalAudit,
 } from "@/lib/governed/pipeline";
 import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth";
+import type { QueryAuditFields } from "@/lib/northbound/audit";
+import { assembleKey, assemblePage, planPage, type PageInfo } from "@/lib/northbound/query/page";
+import { querySurfaceGate } from "@/lib/northbound/query/surface";
 import { RATE_LIMITS } from "@/lib/security/rate-limit";
 import { httpStatusFor } from "@/lib/northbound/read";
 import { newCorrelationId } from "@/lib/northbound/respond";
+import { queryHash, queryShape } from "@/lib/odata/ast";
+import { checkPolicyAvailable, checkQuery } from "@/lib/odata/check";
+import { QueryCompilerInvariantError } from "@/lib/odata/identifiers";
+import { buildQueryUrl, compileQuery, sentLine, type SapQueryKind } from "@/lib/odata/operation-compiler";
+import { parseQueryParams, type ParsedQuery } from "@/lib/odata/params";
+import { httpStatusForQuery, QUERY_OUTCOME_ANSWER, queryRuleForStatus, type QueryReadStatus } from "@/lib/odata/query-status";
+import { joinQueryFlags, queryRefusal, type QueryFlag, type QueryRefusal, type QueryRefusalDetail, type QueryRule } from "@/lib/odata/rules";
 import { LIMITER_UNAVAILABLE_MESSAGE } from "@/lib/security/rate-limit-response";
 import { consoleReadRefusalMessage } from "@/lib/sap-public/console-read-guard";
 import { parseSapEnvironment } from "@/lib/sap-public/environment";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { canAccessStudio, isSandboxDeveloper, lacksStudioTenantScope } from "@/lib/studio/rbac";
-import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
+import { scopedById, scopedWhere, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -75,11 +102,26 @@ const bodySchema = z.object({
    * exactly one.
    */
   clientId: z.string().min(1).optional(),
+  /**
+   * The query string the deployed application would send (P1.4): select,
+   * filter.<Field>.<op>, orderby, key.<Field>, count and pageSize, as on
+   * /data. Absent or empty: the ?limit run, exactly as before.
+   */
+  query: z.string().max(4096).optional(),
 });
 
-/** The console renders refusals as outcomes, so they travel in the data. */
-function refusalOk(kind: string, message: string) {
-  return studioOk({ outcome: "refused" as const, refusal: { kind, message } });
+/** The most rows a console query run shows: one page, read by a person. */
+const CONSOLE_MAX_PAGE = 50;
+
+/** Said after every refusal the deployed application would receive too. */
+const SAME_AS_APP = " (This is the refusal the deployed application would receive.)";
+
+/** Said after the console's own refusals (a cursor, a page over its 50), which the deployed application never meets. */
+const CONSOLE_ONLY = " (This is the Test Console's own limit: the deployed application is not limited this way.)";
+
+/** The console renders refusals as outcomes, so they travel in the data; a query refusal's `error.query` with them. */
+function refusalOk(kind: string, message: string, query?: QueryRefusalDetail) {
+  return studioOk({ outcome: "refused" as const, refusal: query === undefined ? { kind, message } : { kind, message, query } });
 }
 
 export async function POST(request: NextRequest) {
@@ -97,6 +139,17 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid run request.");
   const input = parsed.data;
   const correlationId = newCorrelationId();
+  // The query the app would send, parsed as the data route parses its own
+  // (pure, no statement). A string with no query parameter in it is not a
+  // query run; it is refused here, before anything is spent or audited.
+  const queryText = (input.query ?? "").trim().replace(/^\?/, "");
+  const query = queryText === "" ? null : parseQueryParams(new URLSearchParams(queryText), queryText.length + 1);
+  if (query !== null && !query.surface) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "This query carries no query parameter (select, filter.<Field>.<op>, orderby, key.<Field>, count or pageSize). Leave it empty for a ?limit run.",
+    );
+  }
 
   const iface = await prisma.interface.findFirst({
     where: scopedById(scope, input.interfaceId),
@@ -230,6 +283,10 @@ export async function POST(request: NextRequest) {
    * value, so a run within a minute of the key's last use writes nothing.
    */
   void touchClientLastUsed(client.id, scope.organizationId, client.lastUsedAt);
+
+  if (query !== null) {
+    return consoleQueryRun({ scope, user, iface, client, audit, now, correlationId, entity: input.entity, query });
+  }
 
   // 1 — the grant gate, exactly as the broker evaluates it.
   const access = await authorise("READ", scope, iface.solutionId, iface.id, client.environment, now);
@@ -372,4 +429,302 @@ export async function POST(request: NextRequest) {
     },
     correlationId,
   });
+}
+
+/* ── the query run (P1.4) ─────────────────────────────────────────────── */
+
+interface QueryRunContext {
+  readonly scope: TenantScope;
+  readonly user: { readonly id: string };
+  readonly iface: { readonly id: string; readonly solutionId: string; readonly sapProduct: string };
+  readonly client: { readonly id: string; readonly environment: string; readonly sapClient: string | null };
+  readonly audit: GovernedAudit;
+  readonly now: Date;
+  readonly correlationId: string;
+  readonly entity: string | undefined;
+  readonly query: Extract<ParsedQuery, { surface: true }>;
+}
+
+/**
+ * The query surface's read, as the data route runs it (data/route.ts
+ * queryRead), for page 0 only and at most CONSOLE_MAX_PAGE rows. Every
+ * refusal is audited once, dry-run, with the query's columns, and shown with
+ * its `error.query`.
+ */
+async function consoleQueryRun(c: QueryRunContext): Promise<NextResponse> {
+  const { scope, iface, client, audit, now, correlationId, query } = c;
+  const refused = async (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit, said: string) => {
+    const refusal = queryRefusalOf(step, r, extra);
+    await audit.refused(refusal);
+    return refusalOk(refusal.reason, `${refusal.message}${said}`, r.detail);
+  };
+  const refuse = (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit = {}) => refused(step, r, extra, SAME_AS_APP);
+  /*
+   * THE CONSOLE'S OWN LIMITS ARE NOT THE APP'S REFUSALS. Each is checked
+   * where the data route would have answered on its own, so the app's own
+   * refusal comes first (a pageSize over the policy's maximum is the app's
+   * POLICY_FIELD_NOT_GRANTED), and it is not called the app's refusal.
+   */
+  const refuseConsoleOnly = (step: PipelineStep, r: QueryRefusal, extra: RefusalAudit = {}) => refused(step, r, extra, CONSOLE_ONLY);
+
+  if (!query.ok) {
+    return refuse("resolveInterface", queryRefusal("QUERY_INVALID", query.rule, query.message, query.parameter === undefined ? {} : { parameter: query.parameter }));
+  }
+  // The switch, then the ring, as on the data route: off refuses, never ignores.
+  const gate = querySurfaceGate();
+  if (!gate.ok) return refuse("resolveInterface", gate);
+  const ring = gate.ring;
+  if (query.cursor !== null) {
+    return refuseConsoleOnly(
+      "resolveInterface",
+      queryRefusal("QUERY_INVALID", "PARAMETER_CONFLICT", "The Test Console runs the first page only; send the query without cursor.", { parameter: "cursor" }),
+    );
+  }
+
+  // 1 — the grant gate, with the compiled policy in the same statement.
+  const access = await authorise("READ", scope, iface.solutionId, iface.id, client.environment, now, { withQueryPolicy: true });
+  if (!access.ok) {
+    await audit.refused(access.refusal);
+    return refusalOk(access.refusal.reason, `${access.refusal.message}${SAME_AS_APP}`);
+  }
+  const granted = access.value;
+  const context = queryContextFor(granted);
+  if (!context) throw new QueryCompilerInvariantError("A console query run authorised without its query context.");
+
+  // The policy, then the query against it: after the grant, as on the data route.
+  const available = checkPolicyAvailable(context.policyRaw, { entitySet: granted.entitySet, sourcePresent: context.policySourcePresent });
+  if (!available.ok) return refuse("authorise", available);
+  const { policy } = available;
+  // A list without pageSize shows the policy's default page, within the console's.
+  const asked = query.kind === "LIST" ? { ...query, pageSize: query.pageSize ?? Math.min(policy.compiled.page.defaultSize, CONSOLE_MAX_PAGE) } : query;
+  const checked = checkQuery(asked, policy);
+  if (!checked.ok) return refuse("authorise", checked);
+  const { ast, project } = checked;
+  const base: QueryAuditFields = {
+    kind: ast.kind === "KEY" ? "KEY" : "LIST",
+    shape: queryShape(ast),
+    requestedFields: ast.select === null ? ["*"] : [...project],
+    policyRev: policy.compiled.rev,
+  };
+  // A page the policy allows but the console does not show.
+  if (ast.pageSize !== null && ast.pageSize > CONSOLE_MAX_PAGE) {
+    return refuseConsoleOnly(
+      "authorise",
+      queryRefusal("QUERY_INVALID", "PAGE_SIZE_NOT_ALLOWED", `The Test Console shows at most ${CONSOLE_MAX_PAGE} records; send pageSize=${CONSOLE_MAX_PAGE} or less.`, { parameter: "pageSize" }),
+      { query: base },
+    );
+  }
+
+  // 2 — the connection binding, environment + SAP client, same as the broker.
+  const bound = await bindConnection(scope.organizationId, iface.sapProduct, client.environment, "READ", client.sapClient, prefetchedConnectionsFor(granted));
+  if (!bound.ok) {
+    await audit.refused({ ...bound.refusal, audit: { ...bound.refusal.audit, query: base } });
+    return refusalOk(bound.refusal.reason, `${bound.refusal.message}${SAME_AS_APP}`);
+  }
+  const { connection, bindingUnverified } = bound.value;
+
+  const target = await resolveReadTarget(bound.value.product, granted, connection, (reason) =>
+    reason === "NO_ENTITY_SET"
+      ? "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
+      : reason === "SERVICE_PATH_INVALID"
+        ? "This interface's own service path is not valid for its product. Fix it in Studio."
+        : "The catalogue service for this interface could not be resolved.",
+  );
+  if (c.entity !== undefined && c.entity !== granted.entitySet) {
+    const mismatch = refusal(
+      "resolveInterface",
+      "ENTITY_NOT_YOURS_TO_CHOOSE",
+      `This run asked for "${c.entity}", but this feed serves ${granted.entitySet ? `"${granted.entitySet}"` : "no dataset yet"}. ` +
+        "The dataset is part of the feed's definition — the deployed application cannot choose one either. Re-record this case.",
+      { audit: { connection, query: base } },
+    );
+    await audit.refused(mismatch);
+    return refusalOk(mismatch.reason, mismatch.message);
+  }
+  if (!target.ok) {
+    await audit.refused(target.refusal);
+    return refusalOk("NO_ENTITY_SET", target.refusal.message);
+  }
+  const { service, entitySet } = target.value;
+  if (entitySet !== policy.compiled.entitySet) {
+    return refuse(
+      "authorise",
+      queryRefusal("QUERY_NOT_AVAILABLE", "POLICY_STALE", "This interface's query policy no longer matches its contract; its builder must review it in Studio."),
+      { connection, query: base },
+    );
+  }
+
+  // The OData query, from the checked AST only, measured as fetch sends it.
+  // A broken invariant is CoreEdge's defect, never the run's: nothing is sent
+  // to SAP, and the row says 500, as the data route's does.
+  const defect = async (err: unknown, sentToSap: boolean) => {
+    if (!(err instanceof QueryCompilerInvariantError)) throw err;
+    console.error("[studio] broker-run query defect", { correlationId, error: err.message });
+    await audit.record(500, { connection, query: base });
+    return studioError(
+      "INTERNAL",
+      sentToSap ? "CoreEdge could not assemble SAP's answer. No rows were shown." : "CoreEdge could not build this query. Nothing was sent to SAP.",
+      correlationId,
+    );
+  };
+  let plan: ReturnType<typeof planPage> | null;
+  let built: ReturnType<typeof buildQueryUrl>;
+  try {
+    plan = ast.kind === "LIST" ? planPage(policy, ast, null) : null;
+    built = buildQueryUrl(
+      compileQuery(ast, policy, plan === null ? { skip: 0, top: null, page0: true } : { skip: plan.skip, top: plan.ask, page0: true }, project),
+      { baseUrl: connection.baseUrl, servicePath: service.path, entitySet, client: connection.client },
+    );
+  } catch (err) {
+    return defect(err, false);
+  }
+  if (!built.ok) return refuse("resolveInterface", built, { connection, query: base });
+  const sent = { kind: built.query.kind as SapQueryKind, sent: sentLine(built.query, { servicePath: service.path, entitySet }) };
+
+  // 3 — contain: the same circuit the deployed application's call meets.
+  const circuit = await contain(bound.value, correlationId);
+  if (!circuit.ok) {
+    await audit.refused({ ...circuit.refusal, audit: { ...circuit.refusal.audit, query: base } });
+    return refusalOk(circuit.refusal.reason, `${circuit.refusal.message}${SAME_AS_APP}`);
+  }
+
+  // 4 — the same query read the broker makes, against the BOUND connection.
+  const countAsked = plan !== null && ast.count;
+  const { result, durationMs } = await callSapQuery(bound.value, { built: { url: built.url, query: built.query }, countAsked }, circuit.value);
+  if (result.failureReason) {
+    console.warn("[studio] broker-run query failed", { correlationId, failureReason: result.failureReason, httpStatus: result.httpStatus, durationMs });
+  }
+  const hash = queryHash(ast, { organizationId: scope.organizationId, interfaceId: iface.id }, ring);
+  const sentFlags: readonly QueryFlag[] = built.query.flags;
+
+  /** One dry-run row, the status the app would get, then the first-call note: the data route's order. */
+  const ran = async (
+    queryStatus: QueryReadStatus,
+    status: number,
+    extras: { rows: readonly Record<string, unknown>[]; rule: QueryRule | null; failureReason: string | null; flags: readonly QueryFlag[]; page?: PageInfo; chain?: { id: string; rows: number }; bytes?: number; totalCount?: number | null; note: string },
+  ) => {
+    await audit.record(status, {
+      rowCount: extras.rows.length,
+      durationMs,
+      connection,
+      failureReason: extras.failureReason,
+      query: {
+        ...base,
+        hash,
+        rule: extras.rule,
+        flags: joinQueryFlags([...sentFlags, ...extras.flags]),
+        ...(extras.chain ? { chainId: extras.chain.id, pageIndex: 0, chainRows: extras.chain.rows } : {}),
+        ...(extras.bytes === undefined ? {} : { responseBytes: extras.bytes }),
+      },
+    });
+    await noteFirstCall({
+      organizationId: scope.organizationId,
+      solutionId: iface.solutionId,
+      environment: connection.environment ?? client.environment,
+      channel: "test-console",
+      status,
+      actorUserId: c.user.id,
+    });
+    return studioOk({
+      outcome: "ran" as const,
+      // The query's own outcome; no `status`, so no capture is offered for it.
+      queryStatus,
+      httpStatus: status,
+      records: extras.rows,
+      count: extras.rows.length,
+      empty: queryStatus === "EMPTY",
+      note: extras.note,
+      ...(extras.totalCount === undefined ? {} : { totalCount: extras.totalCount }),
+      // What was sent, as the service path and options: never the host.
+      query: { ...sent, page: extras.page ?? null, rule: extras.rule },
+      durationMs,
+      draft: granted.draft,
+      contract: { version: granted.version, entitySet: granted.entitySet },
+      boundTo: {
+        key: connection.key,
+        label: connection.label,
+        environment: connection.environment,
+        sapClient: connection.client,
+        bindingUnverified,
+      },
+      correlationId,
+    });
+  };
+
+  if (result.answer === null) {
+    return ran(result.status, httpStatusForQuery(result.status), {
+      rows: [],
+      rule: queryRuleForStatus(result.status),
+      failureReason: result.failureReason,
+      flags: [],
+      note: result.detail,
+    });
+  }
+
+  if (plan !== null) {
+    let page: ReturnType<typeof assemblePage>;
+    try {
+      page = assemblePage({
+        policy,
+        ast,
+        plan,
+        cursor: null,
+        answer: result.answer,
+        // Bound to this credential as the app's would be; no cursor is sealed with it.
+        binding: { organizationId: scope.organizationId, clientId: client.id, interfaceId: iface.id, apiVersion: "console" },
+        ring,
+        now,
+        interface: { id: granted.id, name: granted.name, version: granted.version },
+        connection: { id: connection.id, revision: connection.revision ?? 0 },
+        authorisingGrantIds: context.authorisingGrantIds,
+        issueCursor: false,
+      });
+    } catch (err) {
+      return defect(err, true);
+    }
+    if (!page.ok) {
+      const answer = QUERY_OUTCOME_ANSWER[page.rule];
+      return ran(page.rule === "ROW_TOO_LARGE" ? "TOO_LARGE" : "ERROR", answer.status, {
+        rows: [],
+        rule: page.rule,
+        failureReason: answer.failureReason,
+        flags: page.flags,
+        note: answer.message,
+      });
+    }
+    const data = (JSON.parse(page.body) as { data: { records: Record<string, unknown>[]; note: string; totalCount?: number | null } }).data;
+    return ran(page.served === 0 ? "EMPTY" : "OK", 200, {
+      rows: data.records,
+      rule: null,
+      failureReason: null,
+      flags: page.flags,
+      page: page.page,
+      chain: { id: page.chainId, rows: page.chainRows },
+      bytes: page.bytes,
+      ...(data.totalCount === undefined ? {} : { totalCount: data.totalCount }),
+      note: data.note,
+    });
+  }
+
+  const key = assembleKey({
+    policy,
+    kind: built.query.kind === "KEY_VIA_FILTER" ? "KEY_VIA_FILTER" : "KEY",
+    answer: result.answer,
+    interface: { id: granted.id, name: granted.name, version: granted.version },
+  });
+  if (!key.ok) {
+    if (key.outcome === "NO_RECORD") {
+      return ran("NO_RECORD", 404, { rows: [], rule: null, failureReason: null, flags: key.flags, note: "SAP has no record with this key." });
+    }
+    const answer = QUERY_OUTCOME_ANSWER[key.outcome];
+    return ran(key.outcome === "ROW_TOO_LARGE" ? "TOO_LARGE" : "ERROR", answer.status, {
+      rows: [],
+      rule: key.outcome,
+      failureReason: answer.failureReason,
+      flags: key.flags,
+      note: answer.message,
+    });
+  }
+  const record = (JSON.parse(key.body) as { data: { records: Record<string, unknown>[]; note: string } }).data;
+  return ran("OK", 200, { rows: record.records, rule: null, failureReason: null, flags: key.flags, bytes: key.bytes, note: record.note });
 }

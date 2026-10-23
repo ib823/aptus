@@ -24,12 +24,11 @@ import type { ReactNode } from "react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
 import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
-import { OPERATIONS_SECTIONS } from "@/lib/studio/sections";
+import { OPERATIONS_SECTIONS, railSections } from "@/lib/studio/sections";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
-import { isAdminRole } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessOperations, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -83,9 +82,7 @@ export default async function OperationsLayout({ children }: { children: ReactNo
   // Admin-only sections (Catalogue health, deployment-scoped) are removed from
   // the rail rather than rendered-and-refused: an org-scoped operator must not
   // be shown an entry the screen will always turn away.
-  const sections = isAdminRole(user.role)
-    ? OPERATIONS_SECTIONS
-    : OPERATIONS_SECTIONS.filter((s) => !s.adminOnly);
+  const sections = railSections(OPERATIONS_SECTIONS, user.role);
 
   return (
     <StudioShell

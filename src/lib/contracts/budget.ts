@@ -117,6 +117,29 @@ export const LIMITS = {
    * at most `storedTextBytes`, and names the rest as too large.
    */
   fixture: { bytes: 4.5 * MiB, requestBytes: 4.5 * MiB, storedTextBytes: 8 * MiB },
+  /**
+   * The query basis (P1.4, odata/basis.ts): what the current contract lets a
+   * query do, made by the record job beside the contract's facts and stored
+   * on the interface by the verify's transaction. At most `bytes` of compact
+   * JSON; over it, labels go, then the property list is cut and the basis is
+   * marked too large (the query surface is then not offered).
+   *
+   * READ ON THE REQUEST THREAD, AND THAT IS ALLOWED HERE. The verify's
+   * transaction parses it and compiles the interface's query policy against
+   * it (contracts/record.ts), and a Studio save does the same. That is the
+   * standing ContractFacts already has: the input is CoreEdge-made in the
+   * envelope, bounded, flat, and linear to read and compile. No tenant byte
+   * and no IR is parsed on the request thread.
+   */
+  queryBasis: { bytes: 128 * KiB },
+  /**
+   * The compiled query policy (P1.4, odata/policy.ts): the only form a
+   * governed call reads, carried in the access-load statement on
+   * query-surface calls (governed/call-loads.ts). At most `bytes`; a save
+   * past it is refused, a verify past it marks the policy stale. A call
+   * parses it once per revision, by content hash, after checking its size.
+   */
+  queryPolicyCompiled: { bytes: 64 * KiB },
   /** Documents up to this size are indented for the person reading them; larger ones are compact. */
   prettyDocument: 512 * KiB,
   /** Nesting a writer follows before it refuses: no contract, schema or fixture comes near it. */

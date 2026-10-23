@@ -33,6 +33,12 @@
  * alias and must answer and audit exactly as the golden says, its rows naming
  * the /v1 path: the alias runs the same pipeline, refusals included.
  *
+ * P1.4 LIKEWISE. Its eleven query columns are younger than the golden too.
+ * Every scenario here is a legacy read, a write or a console call, none of
+ * which is on the query surface, so every row must leave all eleven null;
+ * they are checked apart and the rest is the golden, unchanged. The query
+ * surface's own rows are asserted in northbound-query-surface.test.ts.
+ *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
 
@@ -170,19 +176,36 @@ interface Observed {
 const STRIPPED = new Set(["id", "at", "correlationId", "durationMs"]);
 /** P1.10's columns, younger than the golden: compared apart from it (see the header). */
 const SERVED_AS = ["apiBasePath", "apiVersion"] as const;
+/** P1.4's columns, likewise: null on every row here. */
+const QUERY_COLUMNS = [
+  "queryKind",
+  "queryShape",
+  "queryHash",
+  "requestedFields",
+  "queryPolicyRev",
+  "cursorChainId",
+  "pageIndex",
+  "chainRows",
+  "responseBytes",
+  "queryRule",
+  "queryFlags",
+] as const;
 let seen = 0;
 /** What each row the last call wrote said about the path and version that served it. */
 let servedAs: string[] = [];
+/** The query columns of each row the last call wrote that were not null. */
+let queryColumnsSet: string[][] = [];
 
 async function newAuditRows(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.northboundAuditEvent.findMany({ where: { organizationId: ORG }, orderBy: { at: "asc" } });
   const fresh = rows.slice(seen);
   seen = rows.length;
   servedAs = fresh.map((row) => `${row.apiBasePath ?? "-"} ${row.apiVersion ?? "-"}`);
+  queryColumnsSet = fresh.map((row) => QUERY_COLUMNS.filter((c) => row[c] !== null));
   return fresh.map((row) =>
     Object.fromEntries(
       Object.entries(row)
-        .filter(([k]) => !STRIPPED.has(k) && !(SERVED_AS as readonly string[]).includes(k))
+        .filter(([k]) => !STRIPPED.has(k) && !(SERVED_AS as readonly string[]).includes(k) && !(QUERY_COLUMNS as readonly string[]).includes(k))
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => [k, typeof v === "string" && names.has(v) ? names.get(v)! : v]),
     ),
@@ -488,6 +511,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed pipeline changes n
       h.user = s.user ? users[s.user] : null;
       observed[s.name] = await observe(await s.call());
       served[s.name] = servedAs;
+      expect(queryColumnsSet, `${s.name}: the query columns`).toEqual(queryColumnsSet.map(() => []));
     }
     for (const [scenario, rows] of Object.entries(served)) {
       const want = isNorthbound(scenario) ? "/api/northbound 2026-10" : "- -";
@@ -518,6 +542,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed pipeline changes n
         h.user = null;
         const got = await observe(await s.call());
         expect(got, `v1 ${s.name}`).toEqual(golden[s.name]);
+        expect(queryColumnsSet, `v1 ${s.name}: the query columns`).toEqual(queryColumnsSet.map(() => []));
         expect(servedAs, `v1 ${s.name}`).toEqual(servedAs.map(() => "/api/northbound/v1 2026-10"));
         ran += 1;
       }

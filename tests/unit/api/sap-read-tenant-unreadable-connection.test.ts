@@ -101,7 +101,11 @@ vi.mock("@/lib/db/prisma", () => ({
     // statement (governed/call-loads.ts), answered here through the queries it
     // replaced, which still see both rows.
     $queryRaw: (first: unknown, ...rest: unknown[]) =>
-      governedQueryRaw(() => ({ sapConnection: { findMany: mocks.connectionFindMany } }))(first, ...rest),
+      governedQueryRaw(
+        () => ({ sapConnection: { findMany: mocks.connectionFindMany } }),
+        // The catalogue's scenario join (P1.2): no scenario rows here.
+        async () => [],
+      )(first, ...rest),
   },
 }));
 

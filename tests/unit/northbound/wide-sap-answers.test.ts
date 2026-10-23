@@ -20,7 +20,9 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 import { circuitOutcomeForRead } from "@/lib/governed/pipeline";
 import { FAILURE_REASON_INVALID_BODY } from "@/lib/northbound/failure-reason";
+import { LEGACY_RESPONSE_CAP, legacyBody } from "@/lib/northbound/query/page";
 import { httpStatusFor, MAX_READ_BODY_BYTES, readEntitySet } from "@/lib/northbound/read";
+import { QUERY_OUTCOME_ANSWER } from "@/lib/odata/query-status";
 import { MAX_WRITE_RESPONSE_BYTES, writeEntitySet } from "@/lib/northbound/write";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { probeRotation } from "@/lib/sap-public/rotation-probe";
@@ -77,6 +79,46 @@ describe("a wide read SAP answered", () => {
   it("the bound sits above anything a Vercel function can return (~4.5 MB)", () => {
     expect(MAX_READ_BODY_BYTES).toBeGreaterThanOrEqual(16 * 1024 * 1024);
     expect(MAX_WRITE_RESPONSE_BYTES).toBeGreaterThanOrEqual(16 * 1024 * 1024);
+  });
+
+  /*
+   * P1.4, the legacy byte guard (3.10.2): two such rows are read whole (under
+   * the 16 MiB bound) and are OK for the breaker, but their answer is larger
+   * than the platform returns. It is refused in CoreEdge's own envelope as
+   * 413 VALIDATION_ERROR, rule RESPONSE_TOO_LARGE, and audited 413, instead of
+   * being audited 200 and failing at the platform. One photo still fits.
+   */
+  it("is refused 413 when the answer is past the legacy cap, and served when it fits", async () => {
+    const two = JSON.stringify({ d: { results: [{ userId: "u1", photo: "A".repeat(3_500_000) }, { userId: "u2", photo: "B".repeat(3_500_000) }] } });
+    const f = vi.fn().mockResolvedValue(new Response(two, { status: 200, headers: { "content-type": "application/json" } }));
+    const r = await readEntitySet({ connection: conn(), servicePath: SERVICE, entitySet: "Photo", limit: 2 }, f as unknown as typeof fetch);
+    expect(r.status).toBe("OK");
+    expect(circuitOutcomeForRead(r.status)).toBe("ok");
+    const over = legacyBody({ records: r.records, count: 2, interface: { id: "if_1", name: "Photos", version: 1 }, empty: false, note: r.detail });
+    expect(over).toEqual({ ok: false, bytes: expect.any(Number) });
+    expect(over.bytes).toBeGreaterThan(LEGACY_RESPONSE_CAP);
+    expect(QUERY_OUTCOME_ANSWER.RESPONSE_TOO_LARGE).toMatchObject({ status: 413, code: "VALIDATION_ERROR" });
+    const one = legacyBody({ records: r.records.slice(0, 1), count: 1, interface: { id: "if_1", name: "Photos", version: 1 }, empty: false, note: "1 record." });
+    expect(one.ok).toBe(true);
+  });
+});
+
+/*
+ * A deeply nested answer overflows the stack in the envelope stripper. Since
+ * the GET was shared with the query surface (sapGet), reading the answer sat
+ * outside its catch: the RangeError escaped the route as a bare 500 with no
+ * audit row, and the breaker never heard of the call. It is ERROR again, as it
+ * was when the read had one catch around everything.
+ */
+describe("a SAP answer too deep to read", () => {
+  const deep = (depth: number) => `{"d":{"results":[{"Order":"1","Deep":${"[".repeat(depth)}${"]".repeat(depth)}}]}}`;
+
+  it("is ERROR on the legacy read, counted against the system, and not thrown", async () => {
+    const f = vi.fn().mockResolvedValue(new Response(deep(20_000), { status: 200, headers: { "content-type": "application/json" } }));
+    const r = await readEntitySet({ connection: conn(), servicePath: SERVICE, entitySet: "A_Order", limit: 10 }, f as unknown as typeof fetch);
+    expect(r).toMatchObject({ status: "ERROR", httpStatus: null, records: [], detail: "The read could not be completed.", failureReason: "FETCH_FAILED" });
+    expect(httpStatusFor(r.status)).toBe(502);
+    expect(circuitOutcomeForRead(r.status)).toBe("upstream-error");
   });
 });
 

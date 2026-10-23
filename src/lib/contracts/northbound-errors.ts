@@ -19,6 +19,7 @@
 import type { AccessRefusal } from "@/lib/northbound/access";
 import type { ClientAuthFailure } from "@/lib/northbound/auth";
 import type { NorthboundErrorCode } from "@/lib/northbound/respond";
+import { QUERY_RULE_MEANING, type QueryRefusalReason, type QueryRule } from "@/lib/odata/rules";
 
 export interface ErrorCodeDoc {
   /** HTTP statuses this code is sent with. */
@@ -54,10 +55,27 @@ export const NORTHBOUND_ERROR_CODES = {
     action: "Fix the interface id or its configuration. Do not retry.",
   },
   VALIDATION_ERROR: {
-    statuses: [400, 422],
+    statuses: [400, 413, 422],
     meaning:
-      "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service). 422: SAP rejected the record itself.",
+      "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service), or a query that cannot be served as sent: a parameter outside the query grammar, a value not of its field's type, a cursor that cannot be used or was sent with other parameters than its first page, an interface that serves no queries (error.query.rule says which). 422: SAP rejected the record itself; also, SAP rejected the query, one record is larger than the page limit, or SAP's page was larger than CoreEdge reads. 413: the answer is larger than CoreEdge can return.",
     action: "Fix the request or the interface. Do not retry unchanged.",
+  },
+  POLICY_FIELD_NOT_GRANTED: {
+    statuses: [400],
+    meaning:
+      "The query asks for what the interface's query policy does not allow: a field it may not read, filter or sort on, an operator, key lookup, a count, a page size above its maximum, or a query without a filter the policy or SAP requires. error.query names the rule, the field and what is allowed. Nothing was sent to SAP (P1.4).",
+    action: "Change the query within the interface's query policy, or ask its builder to allow it. Do not retry unchanged.",
+  },
+  CURSOR_STALE: {
+    statuses: [409],
+    meaning:
+      "The paging cursor has expired (15 minutes per cursor, 2 hours per paging run), or the interface, its query policy, its grant or its connection changed since the first page (P1.4).",
+    action: "Start the read again from the first page.",
+  },
+  RECORD_NOT_FOUND: {
+    statuses: [404],
+    meaning: "A key lookup found no record: SAP has none with this key (P1.4).",
+    action: "SAP has no record with this key. Not an error to retry.",
   },
   CONFLICT: {
     statuses: [409],
@@ -100,7 +118,8 @@ export const NORTHBOUND_ERROR_CODES = {
   },
   UPSTREAM_ERROR: {
     statuses: [502],
-    meaning: "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.",
+    meaning:
+      "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use. With error.query.rule UPSTREAM_IGNORED_PAGING or KEY_NOT_UNIQUE, the service did not honour the paging CoreEdge asked for, or returned two records for one key: retrying does not help.",
     action: "Retry or escalate with the correlation id.",
   },
   UNSUPPORTED_VERSION: {
@@ -108,6 +127,12 @@ export const NORTHBOUND_ERROR_CODES = {
     meaning:
       "The request's CoreEdge-Version header names a version this deployment does not serve: unknown, or retired at its Sunset date. Refused before the route does anything else (no credential check, no idempotency reservation, nothing sent to SAP); `error.supportedVersions` lists what may be sent (P1.10).",
     action: "Send one of error.supportedVersions, or omit the header to be served the default. Do not retry unchanged.",
+  },
+  API_POLICY_SIGN_OFF_REQUIRED: {
+    statuses: [403],
+    meaning:
+      "The interface calls a service the customer built on SAP S/4HANA Cloud Public Edition, and no SAP API Policy §1.2 sign-off is recorded for it, so nothing was sent to SAP (P1.2). Sent only where the deployment enforces the sign-off.",
+    action: "Ask the solution's builder to record the sign-off on the interface in Studio. Do not retry.",
   },
   INTERNAL: {
     statuses: [500],
@@ -151,6 +176,7 @@ const ACCESS_REASONS = {
   INTERFACE_NOT_ACTIVE: { code: "FORBIDDEN", status: 403 },
   OPERATION_NOT_SUPPORTED: { code: "VALIDATION_ERROR", status: 400 },
   WRITE_NOT_SERVED: { code: "FORBIDDEN", status: 403 },
+  API_POLICY_SIGN_OFF_REQUIRED: { code: "API_POLICY_SIGN_OFF_REQUIRED", status: 403, origin: "P1.2" },
 } as const satisfies Record<AccessRefusal, { code: NorthboundErrorCode; status: number; origin?: string }>;
 
 /**
@@ -165,6 +191,68 @@ const CREDENTIAL_STEP_REASONS: readonly RefusalReasonDoc[] = [
   { reason: "TOKEN_<network code>", code: "UPSTREAM_ERROR", status: 502, origin: "P0.5" },
   { reason: "LIMITER_UNAVAILABLE", code: "LIMITER_UNAVAILABLE", status: 503, origin: "P0.5" },
 ];
+
+/**
+ * The query surface's refusal reasons (P1.4). The caller sees the code and
+ * `error.query.rule`; the reason is the pipeline's, recorded on nothing but
+ * the status (the rule is in the audit row's `queryRule`).
+ */
+const QUERY_REASONS = {
+  QUERY_INVALID: { code: "VALIDATION_ERROR", status: 400, origin: "P1.4" },
+  QUERY_NOT_AVAILABLE: { code: "VALIDATION_ERROR", status: 400, origin: "P1.4" },
+  CURSOR_INVALID: { code: "VALIDATION_ERROR", status: 400, origin: "P1.4" },
+  POLICY_FIELD_NOT_GRANTED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400, origin: "P1.4" },
+  CURSOR_STALE: { code: "CURSOR_STALE", status: 409, origin: "P1.4" },
+  QUERY_SURFACE_MISCONFIGURED: { code: "INTERNAL", status: 500, origin: "P1.4" },
+} as const satisfies Record<QueryRefusalReason, { code: NorthboundErrorCode; status: number; origin: string }>;
+
+/**
+ * Every `error.query.rule` (P1.4, odata/rules.ts), with the code and status
+ * it is sent with and what it means, for the OpenAPI document. A Record over
+ * the closed union, so a rule added without its line fails the type-check.
+ */
+export const QUERY_RULES = {
+  UNKNOWN_PARAMETER: { code: "VALIDATION_ERROR", status: 400 },
+  DUPLICATE_PARAMETER: { code: "VALIDATION_ERROR", status: 400 },
+  PARAMETER_CONFLICT: { code: "VALIDATION_ERROR", status: 400 },
+  MALFORMED: { code: "VALIDATION_ERROR", status: 400 },
+  ODATA_SYNTAX_REFUSED: { code: "VALIDATION_ERROR", status: 400 },
+  VALUE_INVALID: { code: "VALIDATION_ERROR", status: 400 },
+  VALUE_TOO_LONG: { code: "VALIDATION_ERROR", status: 400 },
+  TOO_COMPLEX: { code: "VALIDATION_ERROR", status: 400 },
+  NOT_ENABLED: { code: "VALIDATION_ERROR", status: 400 },
+  NO_POLICY: { code: "VALIDATION_ERROR", status: 400 },
+  POLICY_STALE: { code: "VALIDATION_ERROR", status: 400 },
+  NO_CONTRACT: { code: "VALIDATION_ERROR", status: 400 },
+  POLICY_UNREADABLE: { code: "VALIDATION_ERROR", status: 400 },
+  FIELD_NOT_SELECTABLE: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  FIELD_NOT_FILTERABLE: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  OPERATOR_NOT_ALLOWED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  FIELD_NOT_SORTABLE: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  FILTER_REQUIRED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  KEY_LOOKUP_NOT_ALLOWED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  KEY_INCOMPLETE: { code: "VALIDATION_ERROR", status: 400 },
+  KEY_NOT_ADDRESSABLE: { code: "VALIDATION_ERROR", status: 400 },
+  COUNT_NOT_ALLOWED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  PAGE_SIZE_NOT_ALLOWED: { code: "POLICY_FIELD_NOT_GRANTED", status: 400 },
+  SAP_URL_TOO_LONG: { code: "VALIDATION_ERROR", status: 400 },
+  CURSOR_INVALID: { code: "VALIDATION_ERROR", status: 400 },
+  CURSOR_PARAMS_MISMATCH: { code: "VALIDATION_ERROR", status: 400 },
+  EXPIRED: { code: "CURSOR_STALE", status: 409 },
+  CHANGED: { code: "CURSOR_STALE", status: 409 },
+  SAP_REJECTED: { code: "VALIDATION_ERROR", status: 422 },
+  ROW_TOO_LARGE: { code: "VALIDATION_ERROR", status: 422 },
+  UPSTREAM_PAGE_TOO_LARGE: { code: "VALIDATION_ERROR", status: 422 },
+  RESPONSE_TOO_LARGE: { code: "VALIDATION_ERROR", status: 413 },
+  UPSTREAM_IGNORED_PAGING: { code: "UPSTREAM_ERROR", status: 502 },
+  KEY_NOT_UNIQUE: { code: "UPSTREAM_ERROR", status: 502 },
+  TOKEN_RING_UNAVAILABLE: { code: "INTERNAL", status: 500 },
+} as const satisfies Record<QueryRule, { code: NorthboundErrorCode; status: number }>;
+
+/** The rules as the OpenAPI lists them: each with its code, status and meaning. */
+export const QUERY_RULE_DOCS: readonly { rule: QueryRule; code: NorthboundErrorCode; status: number; meaning: string }[] = (
+  Object.keys(QUERY_RULES) as QueryRule[]
+).map((rule) => ({ rule, code: QUERY_RULES[rule].code, status: QUERY_RULES[rule].status, meaning: QUERY_RULE_MEANING[rule] }));
 
 /** The governed pipeline's containment refusal (P0.14), recorded in the audit row's failureReason. */
 const PIPELINE_REASONS: readonly RefusalReasonDoc[] = [
@@ -184,6 +272,7 @@ export const NORTHBOUND_REFUSAL_REASONS: readonly RefusalReasonDoc[] = [
     status: d.status,
     ...("origin" in d ? { origin: d.origin } : {}),
   })),
+  ...Object.entries(QUERY_REASONS).map(([reason, d]) => ({ reason, code: d.code, status: d.status, origin: d.origin })),
   ...CREDENTIAL_STEP_REASONS,
   ...PIPELINE_REASONS,
 ];

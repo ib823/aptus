@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.4 conformance, tier 1): the V4 twin of
+  conformance.v2.xml, with Edm.Date for dates, a property named `value` on
+  Items (a key lookup must not read it as a collection), and a draft-enabled
+  set keyed by Id and IsActiveEntity, as RAP writes one. Every name and value
+  is invented; it is not, and is not copied from, any SAP $metadata document.
+-->
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="com.example.conformance" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="ItemType">
+        <Key>
+          <PropertyRef Name="ItemId"/>
+        </Key>
+        <Property Name="ItemId" Type="Edm.String" Nullable="false" MaxLength="20"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="80"/>
+        <Property Name="Guid" Type="Edm.Guid"/>
+        <Property Name="Count64" Type="Edm.Int64"/>
+        <Property Name="Amount" Type="Edm.Decimal" Precision="15" Scale="2"/>
+        <Property Name="Qty" Type="Edm.Int32"/>
+        <Property Name="Flag" Type="Edm.Boolean"/>
+        <Property Name="Posted" Type="Edm.Date"/>
+        <Property Name="Stamp" Type="Edm.DateTimeOffset" Precision="0"/>
+        <Property Name="Note" Type="Edm.String" MaxLength="5000"/>
+        <Property Name="value" Type="Edm.String" MaxLength="20"/>
+      </EntityType>
+      <EntityType Name="LineType">
+        <Key>
+          <PropertyRef Name="OrderId"/>
+          <PropertyRef Name="LineNo"/>
+        </Key>
+        <Property Name="OrderId" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="LineNo" Type="Edm.Int32" Nullable="false"/>
+        <Property Name="Product" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="ByGuidType">
+        <Key>
+          <PropertyRef Name="Id"/>
+        </Key>
+        <Property Name="Id" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="ByNumberType">
+        <Key>
+          <PropertyRef Name="Num"/>
+        </Key>
+        <Property Name="Num" Type="Edm.Int64" Nullable="false"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityType Name="DraftType">
+        <Key>
+          <PropertyRef Name="Id"/>
+          <PropertyRef Name="IsActiveEntity"/>
+        </Key>
+        <Property Name="Id" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="IsActiveEntity" Type="Edm.Boolean" Nullable="false"/>
+        <Property Name="Name" Type="Edm.String" MaxLength="40"/>
+      </EntityType>
+      <EntityContainer Name="Container">
+        <EntitySet Name="Items" EntityType="com.example.conformance.ItemType"/>
+        <EntitySet Name="Lines" EntityType="com.example.conformance.LineType"/>
+        <EntitySet Name="ByGuid" EntityType="com.example.conformance.ByGuidType"/>
+        <EntitySet Name="ByNumber" EntityType="com.example.conformance.ByNumberType"/>
+        <EntitySet Name="Drafts" EntityType="com.example.conformance.DraftType"/>
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

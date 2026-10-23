@@ -16,8 +16,17 @@
  * path — a path in a contract file is a promise — but every operation is
  * listed under `x-coreedge-operations` with whether CoreEdge serves it,
  * whether SAP's description allows it, and the environments whose approved
- * grants cover it. When P1.4 (get by key, $filter, $select, $skip) and P2.4
- * (update, delete) land, BROKER_OPERATIONS changes and the paths follow.
+ * grants cover it. P2.4 (update, delete) will change BROKER_OPERATIONS, and
+ * the paths will follow.
+ *
+ * AN INTERFACE'S QUERIES, BY THEIR LITERAL NAMES (P1.4). A read interface
+ * whose compiled query policy is READY lists every query parameter it serves
+ * on GET …/data: select (an enum of its readable fields), each
+ * filter.<Field>.<op> with the field's type, orderby, count, pageSize with
+ * its bounds, each key.<Field>, and cursor; its 200 gains `page` and
+ * `totalCount`, and its answers the query surface's codes. A read interface
+ * with no policy lists ?limit only, as before; the 413 of the legacy byte
+ * guard and the query refusals in `error.query` apply to every read.
  *
  * EVERY HEADER AND EVERY ERROR. Bearer auth; the write key and the
  * Idempotency-Key on writes; the correlation id, the request id and the
@@ -44,8 +53,11 @@ import { semverParts } from "@/lib/contracts/diff";
 import type { InterfaceContract } from "@/lib/contracts/ir";
 import { buildContractSchemas, nullableRef30, type JsonSchema, type SchemaDialect } from "@/lib/contracts/json-schema";
 import { nameAllocator, toTypeName } from "@/lib/contracts/names";
-import { ALL_ERROR_CODES, NORTHBOUND_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS } from "@/lib/contracts/northbound-errors";
+import { ALL_ERROR_CODES, NORTHBOUND_ERROR_CODES, NORTHBOUND_REFUSAL_REASONS, QUERY_RULE_DOCS } from "@/lib/contracts/northbound-errors";
 import type { NorthboundErrorCode } from "@/lib/northbound/respond";
+import { MAX_CURSOR_LENGTH } from "@/lib/northbound/query/cursor";
+import { QUERY_RULE_LIST } from "@/lib/odata/rules";
+import { parseCompiledPolicy, type CompiledField, type CompiledQueryPolicyV1 } from "@/lib/odata/policy";
 import {
   CHANGELOG_PATH,
   NORTHBOUND_API_VERSIONS,
@@ -56,10 +68,20 @@ import {
 
 export type OpenApiVersion = "3.1.0" | "3.0.3";
 
-/** What the broker serves today, by operation. The single place a new operation is switched on. */
+/**
+ * What the broker serves today, by operation. The single place a new
+ * operation is switched on. A list takes ?limit everywhere, and the query
+ * parameters where the interface's query policy allows them (P1.4); a key
+ * lookup is served through key.<Field> on the list path, on an interface
+ * whose policy allows it.
+ */
 export const BROKER_OPERATIONS = {
-  list: { served: true, query: ["limit"] as readonly string[] },
-  getByKey: { served: false, roadmap: "P1.4" },
+  list: {
+    served: true,
+    query: ["limit"] as readonly string[],
+    queryWithPolicy: ["select", "filter.<Field>.<op>", "orderby", "key.<Field>", "count", "pageSize", "cursor"] as readonly string[],
+  },
+  getByKey: { served: true, via: "key.<Field> on GET /interfaces/{id}/data" },
   create: { served: true },
   update: { served: false, roadmap: "P2.4" },
   delete: { served: false, roadmap: "P2.4" },
@@ -106,6 +128,12 @@ export interface InterfaceForDoc {
   contract: ContractForDoc;
   /** Approved, live grants on this interface. Omitted: not known to the caller (kit preview). */
   grants?: readonly { operation: string; environment: string }[];
+  /**
+   * The interface's compiled query policy as stored (Interface.queryPolicyCompiled,
+   * at most 64 KiB; P1.4). Read again here; only a READY policy for this
+   * interface's dataset documents query parameters.
+   */
+  queryPolicy?: unknown;
 }
 
 export interface NorthboundDocInput {
@@ -172,6 +200,8 @@ const H = {
   correlation: "CorrelationId",
   request: "RequestId",
   rateRemaining: "RateLimitRemaining",
+  rateLimit: "RateLimitLimit",
+  rateReset: "RateLimitReset",
   retryAfter: "RetryAfter",
   interfaceStatus: "InterfaceStatus",
   replayed: "IdempotencyReplayed",
@@ -183,7 +213,7 @@ const H = {
 } as const;
 
 /** Component schemas every document defines beside its interfaces' own. */
-const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery", "Versions"] as const;
+const DOCUMENT_SCHEMA_NAMES = ["InterfaceRef", "ContractDocument", "Error", "Discovery", "Versions", "QueryPage"] as const;
 
 /**
  * A generated document is indented while it is small enough to be read, and
@@ -265,6 +295,7 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
   // not overwrite the error envelope.
   const stemFor = nameAllocator(DOCUMENT_SCHEMA_NAMES);
   const docInterfaces: Obj[] = [];
+  let anyQueryPolicy = false;
 
   const header = (name: string) => ({ [name]: ref("headers", headerComponent(name)) });
   const headerComponent = (name: string): string =>
@@ -272,6 +303,8 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       "x-correlation-id": H.correlation,
       "X-Request-Id": H.request,
       "X-RateLimit-Remaining": H.rateRemaining,
+      "X-RateLimit-Limit": H.rateLimit,
+      "X-RateLimit-Reset": H.rateReset,
       "Retry-After": H.retryAfter,
       "x-coreedge-interface-status": H.interfaceStatus,
       "Idempotency-Replayed": H.replayed,
@@ -388,6 +421,10 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         ? null
         : [...new Set(iface.grants.filter((g) => ops.includes(g.operation)).map((g) => g.environment))].sort();
 
+    // The interface's query policy (P1.4), when it serves queries on this dataset.
+    const policy = isRead ? readyQueryPolicy(iface) : null;
+    if (policy) anyQueryPolicy = true;
+
     if (isRead) {
       const resultName = `${stem}_ReadResult`;
       own.schemas[resultName] = {
@@ -408,6 +445,15 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
               },
               note: { type: "string", description: "A one-line, human-readable account of what came back." },
               interface: ref("schemas", "InterfaceRef"),
+              ...(policy
+                ? {
+                    page: ref("schemas", "QueryPage"),
+                    totalCount: nullableType("integer", dialect, {
+                      description:
+                        "Only with count=true, on the first page: SAP's own count of the rows the query matches, which may not exactly equal the rows served; null when SAP gave none.",
+                    }),
+                  }
+                : {}),
             },
           },
         },
@@ -419,20 +465,56 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
           summary: `Read ${safe(iface.entitySet ?? iface.name)}`,
           description:
             "Reads records through CoreEdge from the customer's SAP system, through the connection bound to this credential's environment. " +
-            "An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
-          parameters: [ref("parameters", "Limit"), ref("parameters", "CoreEdgeVersion")],
+            "An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx)." +
+            (policy
+              ? " With query parameters, CoreEdge builds the OData query from them within this interface's query policy (select, filters ANDed across fields, orderby, count, pageSize, key lookup) and pages it: page on data.page.nextCursor, never on records.length, and send the same parameters again with cursor. A custom service may not apply a filter; never use a filter as authorisation. ?limit cannot be sent with them."
+              : " This interface serves no query parameters: a call carrying one (select, filter.<Field>.<op>, orderby, key.<Field>, count, pageSize, cursor) is refused with 400 VALIDATION_ERROR, error.query.rule NO_POLICY or NOT_ENABLED, never served with it ignored."),
+          parameters: [
+            ref("parameters", "Limit"),
+            ...(policy ? queryParameters(policy) : []),
+            ref("parameters", "CoreEdgeVersion"),
+          ],
           responses: {
             "200": {
-              description: "Records, or an empty array meaning 'no records' — not an error.",
-              headers: { ...commonHeaders(), ...header("x-coreedge-interface-status") },
+              description: policy
+                ? "Records, or an empty array meaning 'no records' — not an error. A query's answer carries `page` (and `totalCount` when asked) and the X-RateLimit headers; a key lookup answers one record and no `page`."
+                : "Records, or an empty array meaning 'no records' — not an error.",
+              headers: {
+                ...commonHeaders(),
+                ...header("x-coreedge-interface-status"),
+                ...(policy ? { ...header("X-RateLimit-Limit"), ...header("X-RateLimit-Reset") } : {}),
+              },
               content: { "application/json": { schema: ref("schemas", resultName) } },
             },
-            "400": badRequest(["VALIDATION_ERROR"], "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry."),
+            "400": policy
+              ? badRequest(
+                  ["VALIDATION_ERROR", "POLICY_FIELD_NOT_GRANTED"],
+                  "The interface cannot be read as configured (no entity set, an unresolved service), or the query cannot be served as sent: VALIDATION_ERROR for a parameter outside the grammar, a value not of its field's type, or a cursor that cannot be used; POLICY_FIELD_NOT_GRANTED for a field, operator, count, key lookup or page size this interface's query policy does not allow, or a required filter missing. error.query names the rule, the parameter and what is allowed. Do not retry unchanged.",
+                )
+              : badRequest(
+                  ["VALIDATION_ERROR"],
+                  "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Or the call carried a query parameter this interface does not serve (error.query.rule NO_POLICY, or NOT_ENABLED on a deployment that serves none).",
+                ),
             "403": errorResponse(403, ["FORBIDDEN", "CONNECTION_NOT_CONFIGURED"], "Not set up: no approved access grant for this interface in this environment, a deprecated interface, or the customer's connection is not bound yet."),
-            "404": errorResponse(404, ["NOT_FOUND"], "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry."),
+            "404": policy
+              ? errorResponse(404, ["NOT_FOUND", "RECORD_NOT_FOUND"], "NOT_FOUND: no interface with this id belongs to the solution this token was issued for, or the tenant answered that the dataset does not exist (a configuration fault — do not retry). RECORD_NOT_FOUND: a key lookup found no record with this key.")
+              : errorResponse(404, ["NOT_FOUND"], "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry."),
+            ...(policy
+              ? {
+                  "409": errorResponse(409, ["CURSOR_STALE"], "The cursor has expired, or the interface, its query policy, its grant or its connection changed since the first page. Start again from the first page."),
+                  "422": errorResponse(422, ["VALIDATION_ERROR"], "SAP refused this query (error.query.rule SAP_REJECTED), one record is larger than the page limit (ROW_TOO_LARGE), or SAP's page was larger than CoreEdge reads (UPSTREAM_PAGE_TOO_LARGE). Change the query; do not retry unchanged."),
+                }
+              : {}),
+            "413": errorResponse(413, ["VALIDATION_ERROR"], "A ?limit answer larger than CoreEdge can return (error.query.rule RESPONSE_TOO_LARGE). Ask for fewer records with ?limit" + (policy ? ", or use select and pageSize." : ".")),
             ...commonErrors(),
             "503": ref("responses", "SapUnavailable"),
-            "502": errorResponse(502, ["UPSTREAM_ERROR"], "The tenant or the connection's token endpoint failed. Distinct from an empty result; retrying may help."),
+            "502": errorResponse(
+              502,
+              ["UPSTREAM_ERROR"],
+              policy
+                ? "The tenant or the connection's token endpoint failed; retrying may help. With error.query.rule UPSTREAM_IGNORED_PAGING or KEY_NOT_UNIQUE, the service did not honour the paging CoreEdge asked for, or returned two records for one key: retrying will not help."
+                : "The tenant or the connection's token endpoint failed. Distinct from an empty result; retrying may help.",
+            ),
             "504": errorResponse(504, ["UPSTREAM_TIMEOUT"], "The tenant or the connection's token endpoint did not answer in time; retrying may help."),
           },
         },
@@ -554,11 +636,20 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       operations: {
         list: {
           served: BROKER_OPERATIONS.list.served && isRead,
-          query: BROKER_OPERATIONS.list.query,
+          query: policy ? [...BROKER_OPERATIONS.list.query, ...policyQueryNames(policy)] : BROKER_OPERATIONS.list.query,
           ...(isRead ? {} : { note: "A write interface is not read through the data route." }),
           ...(isRead && grantsFor(["READ"]) !== null ? { grantedIn: grantsFor(["READ"]) } : {}),
+          ...(policy ? { queryPolicy: { rev: policy.rev, revision: policy.revision, paging: policy.paging } } : {}),
         },
-        getByKey: { served: false, roadmap: BROKER_OPERATIONS.getByKey.roadmap },
+        getByKey:
+          policy && policy.key !== null
+            ? { served: BROKER_OPERATIONS.getByKey.served, via: BROKER_OPERATIONS.getByKey.via, key: policy.key }
+            : {
+                served: false,
+                note: isRead
+                  ? "This interface's query policy does not allow key lookup; its builder can allow it in Studio."
+                  : "A write interface is not read through the data route.",
+              },
         create: {
           served: isCreate && sapCreatable !== false,
           ...(sapCreatable !== null ? { allowedBySap: sapCreatable } : {}),
@@ -657,6 +748,18 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
             items: { type: "string" },
             description: "UNSUPPORTED_VERSION only: the versions this deployment serves, oldest (the default) first.",
           },
+          query: {
+            type: "object",
+            required: ["rule"],
+            description:
+              "A query parameter's refusal or outcome (P1.4): the rule, the parameter and field it is about when they are safe to repeat, and up to 20 names the interface's query policy allows instead. Never a value, SAP's text or a host.",
+            properties: {
+              rule: { type: "string", enum: [...QUERY_RULE_LIST] },
+              parameter: { type: "string", maxLength: 140 },
+              field: { type: "string", maxLength: 128 },
+              allowed: { type: "array", items: { type: "string" }, maxItems: 20 },
+            },
+          },
         },
       },
     },
@@ -664,7 +767,10 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       ALL_ERROR_CODES.map((code) => [code, { ...NORTHBOUND_ERROR_CODES[code], statuses: [...NORTHBOUND_ERROR_CODES[code].statuses] }]),
     ),
     "x-coreedge-refusal-reasons": NORTHBOUND_REFUSAL_REASONS.map((r) => ({ ...r })),
+    "x-coreedge-query-rules": QUERY_RULE_DOCS.map((r) => ({ ...r })),
   };
+  // Defined only where an interface's answer refers to it, so a document with no query policy is as it was.
+  if (anyQueryPolicy) schemas.QueryPage = queryPageSchema(dialect);
 
   return {
     openapi: input.version,
@@ -724,10 +830,24 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         },
         [H.request]: { description: "The edge's own request id.", schema: { type: "string" } },
         [H.rateRemaining]: {
-          description: "Calls left in this credential's current window (the smaller of its own budget and its address's backstop).",
+          description: anyQueryPolicy
+            ? "Calls left in this credential's current window (the smaller of its own budget and its address's backstop). On a query's answer (P1.4), the smaller of that and the calls left of X-RateLimit-Limit this minute: pace a paging run by it."
+            : "Calls left in this credential's current window (the smaller of its own budget and its address's backstop).",
           schema: { type: "integer", minimum: 0 },
         },
         [H.retryAfter]: { description: "Seconds to wait before retrying.", schema: { type: "integer", minimum: 0 } },
+        ...(anyQueryPolicy
+          ? {
+              [H.rateLimit]: {
+                description: "On a query's answer (P1.4): the calls this credential may make a minute, shared by data reads, /schema and Test Console runs.",
+                schema: { type: "integer", minimum: 0 },
+              },
+              [H.rateReset]: {
+                description: "On a query's answer (P1.4): seconds until this credential's window resets. Pace a paging run by it and X-RateLimit-Remaining.",
+                schema: { type: "integer", minimum: 0 },
+              },
+            }
+          : {}),
         [H.interfaceStatus]: {
           description:
             "Present, with the value DRAFT, when the interface is still a draft in Developer Studio. A draft is served — premature is not wrong — but its contract may still change. Absent once the interface is ACTIVE.",
@@ -759,6 +879,200 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
       schemas,
     },
     "x-coreedge-interfaces": docInterfaces,
+  };
+}
+
+/* ── the query surface's parameters (P1.4) ──────────────────────────────── */
+
+/** The interface's compiled policy, when it is READY and describes its dataset; null otherwise. */
+function readyQueryPolicy(iface: InterfaceForDoc): CompiledQueryPolicyV1 | null {
+  if (iface.queryPolicy === undefined || iface.queryPolicy === null) return null;
+  const parsed = parseCompiledPolicy(iface.queryPolicy);
+  if ("unreadable" in parsed) return null;
+  const c = parsed.compiled;
+  return c.state === "READY" && c.entitySet === iface.entitySet ? c : null;
+}
+
+/** The literal names the interface's query parameters take, for x-coreedge-interfaces. */
+function policyQueryNames(c: CompiledQueryPolicyV1): string[] {
+  const names = ["select"];
+  for (const f of c.fields) for (const op of f.ops ?? []) names.push(`filter.${f.n}.${op}`);
+  if (c.fields.some((f) => f.sort)) names.push("orderby");
+  for (const k of c.key ?? []) names.push(`key.${k}`);
+  if (c.count) names.push("count");
+  names.push("pageSize");
+  if (c.paging === "OFFSET") names.push("cursor");
+  return names;
+}
+
+const INT_RANGE: Record<string, readonly [number, number]> = {
+  U8: [0, 255],
+  I8: [-128, 127],
+  I16: [-32768, 32767],
+  I32: [-2147483648, 2147483647],
+};
+
+/** One value of a field, as a query parameter carries it (odata/literals.ts accepts exactly this). */
+function literalSchema(f: CompiledField): Obj {
+  switch (f.t) {
+    case "S":
+      return { type: "string", maxLength: Math.min(f.ml ?? 256, 256), description: "Sent as it is: no trimming or case folding. Send + as %2B; %XX text is refused." };
+    case "G":
+      return { type: "string", format: "uuid" };
+    case "B":
+      return { type: "boolean" };
+    case "U8":
+    case "I8":
+    case "I16":
+    case "I32":
+      return { type: "integer", minimum: INT_RANGE[f.t]![0], maximum: INT_RANGE[f.t]![1] };
+    case "I64":
+      return { type: "string", pattern: "^-?(0|[1-9][0-9]{0,18})$", description: "A 64-bit integer, as digits." };
+    case "D":
+      return {
+        type: "string",
+        pattern: "^-?(0|[1-9][0-9]{0,33})(\\.[0-9]{1,34})?$",
+        description: `A decimal, as digits${f.p !== undefined ? `, at most ${f.p} in all` : ""}${f.s !== undefined ? `, at most ${f.s} after the point` : ""}; no exponent.`,
+      };
+    case "DT":
+      return f.dateOnly
+        ? { type: "string", format: "date" }
+        : {
+            type: "string",
+            pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,7})?)?$",
+            description: "A date and time with no offset (the service's local time), YYYY-MM-DDThh:mm[:ss[.fffffff]].",
+          };
+    case "DTO":
+      return { type: "string", format: "date-time" };
+    case "DA":
+      return { type: "string", format: "date" };
+    default:
+      return { type: "string" };
+  }
+}
+
+const OP_SENTENCE: Record<string, string> = {
+  eq: "equals",
+  in: "is any of (repeat the parameter once per value, at most 50)",
+  gt: "is greater than",
+  ge: "is at least",
+  lt: "is less than",
+  le: "is at most",
+};
+
+/** The query parameters of a READY policy, by their literal names (3.16). */
+function queryParameters(c: CompiledQueryPolicyV1): Obj[] {
+  const readable = c.fields.map((f) => f.n);
+  const sortable = c.fields.filter((f) => f.sort).map((f) => f.n);
+  const out: Obj[] = [
+    {
+      name: "select",
+      in: "query",
+      required: false,
+      style: "form",
+      explode: false,
+      description: "The fields to return, comma-separated. Omitted: every readable field.",
+      schema: { type: "array", items: { type: "string", enum: readable }, uniqueItems: true, maxItems: Math.min(256, readable.length) },
+    },
+  ];
+  for (const f of c.fields) {
+    for (const op of f.ops ?? []) {
+      const one = literalSchema(f);
+      out.push(
+        op === "in"
+          ? {
+              name: `filter.${f.n}.in`,
+              in: "query",
+              required: false,
+              style: "form",
+              explode: true,
+              description: `${f.n} ${OP_SENTENCE.in}. ANDed with the other filters.`,
+              schema: { type: "array", items: one, minItems: 1, maxItems: 50 },
+            }
+          : {
+              name: `filter.${f.n}.${op}`,
+              in: "query",
+              required: false,
+              description: `${f.n} ${OP_SENTENCE[op]}. ANDed with the other filters${op === "eq" ? "" : "; one lower and one upper bound per field"}.`,
+              schema: one,
+            },
+      );
+    }
+  }
+  if (c.requireFilterOn.length > 0 || c.requiresAnyFilter) {
+    // Said on select, the one parameter every query may send.
+    out[0] = {
+      ...out[0],
+      description: `${out[0]!.description as string} A list query must filter${c.requireFilterOn.length > 0 ? ` on ${c.requireFilterOn.join(", ")} (with eq, in, or both ends of a range)` : ""}${c.requiresAnyFilter ? " on at least one field" : ""}.`,
+    };
+  }
+  if (sortable.length > 0) {
+    out.push({
+      name: "orderby",
+      in: "query",
+      required: false,
+      style: "form",
+      explode: false,
+      description: `Sort order, comma-separated, at most 4; a leading - sorts descending.${c.paging === "OFFSET" ? ` CoreEdge adds ${c.tieBreak.join(", ")} last, so pages are stable.` : ""}`,
+      schema: { type: "array", items: { type: "string", enum: [...sortable, ...sortable.map((n) => `-${n}`)] }, uniqueItems: true, maxItems: 4 },
+    });
+  }
+  for (const k of c.key ?? []) {
+    const f = c.fields.find((x) => x.n === k);
+    out.push({
+      name: `key.${k}`,
+      in: "query",
+      required: false,
+      description: `Key lookup: send every key.<Field> of ${(c.key ?? []).join(", ")}, and only select beside them. Answers one record, or 404 RECORD_NOT_FOUND.`,
+      schema: f ? literalSchema(f) : { type: "string" },
+    });
+  }
+  if (c.count) {
+    out.push({
+      name: "count",
+      in: "query",
+      required: false,
+      description: "true adds data.totalCount, SAP's own count, to the first page.",
+      schema: { type: "boolean" },
+    });
+  }
+  out.push({
+    name: "pageSize",
+    in: "query",
+    required: false,
+    description: `Rows per page. Above ${c.page.maxSize} is refused, not clamped. A paging run serves at most ${c.page.rowCap} rows.`,
+    schema: { type: "integer", minimum: 1, maximum: c.page.maxSize, default: c.page.defaultSize },
+  });
+  if (c.paging === "OFFSET") {
+    out.push({
+      name: "cursor",
+      in: "query",
+      required: false,
+      description:
+        "The previous page's data.page.nextCursor, sent with the same other parameters as the first page. Opaque; it works for this credential and this interface only, for 15 minutes, within a paging run of 2 hours.",
+      schema: { type: "string", maxLength: MAX_CURSOR_LENGTH, pattern: "^cec1\\.t[0-9]{1,6}\\.[A-Za-z0-9_-]{40,1000}$" },
+    });
+  }
+  return out;
+}
+
+/** A query's `page` (northbound/query/page.ts PageInfo). */
+function queryPageSchema(dialect: SchemaDialect): Obj {
+  return {
+    type: "object",
+    required: ["index", "size", "rowsServed", "nextCursor", "complete", "stopped"],
+    description: "Where a paging run stands. Page on nextCursor, never on records.length: a page can be short because of the byte cap or SAP's own page size.",
+    properties: {
+      index: { type: "integer", minimum: 0, description: "This page's index in its paging run; 0 for the first." },
+      size: { type: "integer", minimum: 1, description: "Rows asked of SAP for this page; the pageSize sent is its upper bound." },
+      rowsServed: { type: "integer", minimum: 0, description: "Rows served in the paging run, this page included." },
+      nextCursor: nullableType("string", dialect, { description: "Send it, with the same other parameters, for the next page; null when there is none." }),
+      complete: { type: "boolean", description: "SAP has no more rows for this query." },
+      stopped: nullableType("string", dialect, {
+        enum: ["ROW_CAP", "NOT_PAGEABLE", "UPSTREAM_IGNORED_PAGING", null],
+        description: "Rows remain but no cursor is issued, and why: the run reached the policy's row cap, the dataset cannot be paged, or SAP ignored the page size.",
+      }),
+    },
   };
 }
 
@@ -839,6 +1153,12 @@ function contractDocumentSchema(dialect: SchemaDialect): Obj {
             required: ["source"],
             properties: {
               source: { type: "string", enum: ["metadata", "sampled", "none"] },
+              describedBy: {
+                type: "string",
+                enum: ["tenant", "upload", "sample"],
+                description:
+                  "Who described the contract: `tenant`, a connected SAP system answered a verify; `upload`, a builder uploaded the service's description and no system has served it yet (verify it before relying on it); `sample`, rows a run returned. Absent when there is no contract.",
+              },
               semver: nullableType("string", dialect),
               snapshotId: nullableType("string", dialect),
               contentHash: nullableType("string", dialect),

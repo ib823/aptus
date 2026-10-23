@@ -16,6 +16,7 @@ import { ScopeNote } from "@/components/studio/ScopeNote";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio, isSandboxDeveloper } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants, tenantsVisibleTo } from "@/lib/studio/tenants";
 
@@ -58,7 +59,8 @@ export default async function StudioDiscoverPage() {
         <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: "22px", color: "var(--ink-secondary)", maxWidth: 760 }}>
           What this tenant actually exposes. A capability is shown as Activated only where a
           live probe returned 200 — an empty result, a missing communication arrangement and
-          an error are three different things, and this page keeps them apart.
+          an error are three different things, and this page keeps them apart. The tenant&apos;s
+          own service list and a description file are the other two ways in.
         </p>
       </div>
       {/* A developer workspace (P0.13) lands here first: say what it can reach,
@@ -91,6 +93,7 @@ export default async function StudioDiscoverPage() {
           canAuthor={canMutateStudio(user.role)}
           tenant={tenantKey}
           product={activeTenant.product}
+          products={SAP_ODATA_PRODUCTS.map((p) => ({ key: p.key, label: p.label, addressesClient: p.addressesClient }))}
         />
       ) : (
         /*

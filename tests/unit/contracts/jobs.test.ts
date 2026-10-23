@@ -50,7 +50,7 @@ import { hydrateJsonTexts, inputBytesUpTo, jsonTextRef } from "@/lib/contracts/r
 import { requestSchemaText, type RequestSchemaStamp } from "@/lib/contracts/request-schema";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
-import { safeName } from "@/lib/studio/scaffold";
+import { KIT_QUERY_METHODS, KIT_QUERY_TYPES, MOCK_QUERY_REFUSAL, safeName } from "@/lib/studio/scaffold";
 import { buildFixtureBody } from "@/lib/studio/fixtures";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
 import { MAX_STORED_ENTITY_SETS, VERIFY_REQUEST_BUDGET_MS, VERIFY_RESPONSE_MARGIN_MS, verifyServiceMetadata } from "@/lib/studio/service-verify";
@@ -137,13 +137,110 @@ function withoutWave2Codes(text: string): string {
   codes.CONNECTION_NOT_CONFIGURED!.statuses = [403];
   codes.CONNECTION_NOT_CONFIGURED!.meaning = "The customer's SAP connection cannot be bound for this credential's environment yet.";
   error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { reason: string }[]).filter((r) => r.reason !== "CIRCUIT_OPEN");
+  withoutQuerySurfaceCodes(error);
+  withoutQuerySurface(doc);
   return documentJson(doc);
 }
 
-/** The kit as it was at f54c6f5a: its two OpenAPI files without wave 2's codes. */
+/**
+ * The third deliberate difference (P1.2): /schema's `contract` names who
+ * described it, `describedBy` (a tenant, an upload, a sample), and the error
+ * table names the §1.2 sign-off's refusal, API_POLICY_SIGN_OFF_REQUIRED.
+ * Taken back out and written again by the same writer, the bytes are as they
+ * were.
+ */
+const P12_CODE = "API_POLICY_SIGN_OFF_REQUIRED";
+function withoutP12Additions(text: string): string {
+  const doc = JSON.parse(text) as Json;
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const props = (node as Json).properties as Json | undefined;
+    const describedBy = props?.describedBy as { enum?: string[] } | undefined;
+    if (props && describedBy?.enum?.includes("upload")) delete props.describedBy;
+    for (const v of Object.values(node as Json)) visit(v);
+  };
+  visit(doc);
+  const error = ((doc.components as Json).schemas as Json).Error as Json;
+  const code = (((error.properties as Json).error as Json).properties as Json).code as { enum: string[] };
+  code.enum = code.enum.filter((c) => c !== P12_CODE);
+  delete (error["x-coreedge-codes"] as Json)[P12_CODE];
+  error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { reason: string }[]).filter((r) => r.reason !== P12_CODE);
+  return documentJson(doc);
+}
+
+/** A document as it was at f54c6f5a, but for asAtF54c6f5a's rename: without P1.2's additions, then without wave 2's codes and P1.4's. */
+const documentAsBefore = (text: string) => withoutWave2Codes(withoutP12Additions(text));
+
+/**
+ * The fifth (P1.4, stage 3): what every read now says whatever its policy.
+ * GET …/data names the query parameters a policy-less interface refuses (in
+ * its description and its 400), the legacy byte guard's 413, `error.query`
+ * and the query rules; key lookup is no longer a roadmap item but a policy's
+ * choice. These goldens carry no policy, so nothing else differs.
+ */
+const NO_POLICY_READ =
+  " This interface serves no query parameters: a call carrying one (select, filter.<Field>.<op>, orderby, key.<Field>, count, pageSize, cursor) is refused with 400 VALIDATION_ERROR, error.query.rule NO_POLICY or NOT_ENABLED, never served with it ignored.";
+const NO_POLICY_400 =
+  " Or the call carried a query parameter this interface does not serve (error.query.rule NO_POLICY, or NOT_ENABLED on a deployment that serves none).";
+function withoutQuerySurface(doc: Json): void {
+  for (const [route, ops] of Object.entries(doc.paths as Record<string, Json>)) {
+    if (!route.endsWith("/data")) continue;
+    const get = ops.get as Json;
+    get.description = (get.description as string).replace(NO_POLICY_READ, "");
+    const responses = get.responses as Json;
+    delete responses["413"];
+    const bad = responses["400"] as Json;
+    bad.description = (bad.description as string).replace(NO_POLICY_400, "");
+  }
+  const error = ((doc.components as Json).schemas as Json).Error as Json;
+  delete (((error.properties as Json).error as Json).properties as Json).query;
+  delete error["x-coreedge-query-rules"];
+  for (const entry of doc["x-coreedge-interfaces"] as Json[]) {
+    (entry.operations as Json).getByKey = { served: false, roadmap: "P1.4" };
+  }
+}
+
+/**
+ * The fourth deliberate difference (P1.4): the error table names the query
+ * surface's three codes and its six refusal reasons, VALIDATION_ERROR is also
+ * a 413 and a query's 422, and UPSTREAM_ERROR says when a retry will not
+ * help. Taken back out, as above.
+ */
+const QUERY_SURFACE_CODES = ["POLICY_FIELD_NOT_GRANTED", "CURSOR_STALE", "RECORD_NOT_FOUND"];
+function withoutQuerySurfaceCodes(error: Json): void {
+  const code = (((error.properties as Json).error as Json).properties as Json).code as { enum: string[] };
+  code.enum = code.enum.filter((c) => !QUERY_SURFACE_CODES.includes(c));
+  const codes = error["x-coreedge-codes"] as Record<string, Json>;
+  for (const c of QUERY_SURFACE_CODES) delete codes[c];
+  codes.VALIDATION_ERROR!.statuses = [400, 422];
+  codes.VALIDATION_ERROR!.meaning =
+    "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service). 422: SAP rejected the record itself.";
+  codes.UPSTREAM_ERROR!.meaning = "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.";
+  error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { origin?: string }[]).filter((r) => r.origin !== "P1.4");
+}
+
+/**
+ * The kit as it was at f54c6f5a: its two OpenAPI files as documentAsBefore
+ * has them, and (P1.4) its client without the query helpers and its mock
+ * without the query refusal, each inserted as one whole block.
+ */
 function kitWithoutWave2Codes(text: string): string {
   const files = JSON.parse(text) as { path: string; contents: string }[];
-  return JSON.stringify(files.map((f) => (/^openapi(-3\.0)?\.json$/.test(f.path) ? { ...f, contents: withoutWave2Codes(f.contents) } : f)));
+  const without = (contents: string, block: string) => {
+    expect(contents).toContain(block);
+    return contents.replace(block, "");
+  };
+  return JSON.stringify(
+    files.map((f) =>
+      /^openapi(-3\.0)?\.json$/.test(f.path)
+        ? { ...f, contents: documentAsBefore(f.contents) }
+        : f.path === "client.ts"
+          ? { ...f, contents: without(without(f.contents, `${KIT_QUERY_TYPES}\n`), KIT_QUERY_METHODS) }
+          : f.path === "mock.mjs"
+            ? { ...f, contents: without(f.contents, MOCK_QUERY_REFUSAL) }
+            : f,
+    ),
+  );
 }
 
 describe("byte identity with f54c6f5a", () => {
@@ -243,7 +340,7 @@ describe("byte identity with f54c6f5a", () => {
           limit: documentLimit([digest.bytes, 0, 0]),
         });
         if (!d.ok) throw new Error(`${c.name}: document refused`);
-        expect(sha(asAtF54c6f5a(withoutWave2Codes(textOf(d.text)))), `${c.name} document ${version}`).toBe(want[`doc:${version}`]);
+        expect(sha(asAtF54c6f5a(documentAsBefore(textOf(d.text)))), `${c.name} document ${version}`).toBe(want[`doc:${version}`]);
       }
     }
   });

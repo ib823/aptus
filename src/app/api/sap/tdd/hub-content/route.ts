@@ -57,6 +57,13 @@ import {
   HUB_STATUSES,
 } from "@/lib/sap-public/hub-content";
 import { successorFor } from "@/lib/sap-public/hub-successors";
+import {
+  SCENARIO_SOURCE,
+  SCENARIO_TABLE_PRODUCT,
+  scenariosForServices,
+  scenariosOf,
+  technicalIdsForAddress,
+} from "@/lib/sap-public/comm-scenarios";
 import { probeStorageKey } from "@/lib/sap-public/hub-content";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
@@ -626,6 +633,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }),
   ]);
 
+  /*
+   * P1.2 — WHICH SAP COMMUNICATION SCENARIOS ENABLE EACH ROW ON THIS PAGE, from
+   * SAP's own table (comm-scenarios.ts), on S/4HANA Cloud Public Edition only:
+   * the table is that product's documentation. Joined by the technical id of
+   * the address CoreEdge would call, exactly, never by a guess from the Hub
+   * id: a derived V4 address is a guess, so it is not joined. ONE statement
+   * for the page, and none when no row on it has a joinable address.
+   */
+  const scenarioIdsFor = (r: { contentType: string; apiType: string | null; externalId: string }): string[] => {
+    if (product.key !== SCENARIO_TABLE_PRODUCT) return [];
+    const address = catalogueAddress({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, family);
+    return address && address.basis !== "derived" ? technicalIdsForAddress(address) : [];
+  };
+  const pageScenarioIds = rows.flatMap(scenarioIdsFor);
+  const scenarioJoin =
+    pageScenarioIds.length > 0 ? await scenariosForServices(prisma, pageScenarioIds) : { release: null, byId: new Map() };
+
   const items = rows.map((r) => {
     // source (sap|partner) + domain (AI) are stamped in rawMetadataJson.raw at
     // import time. API/curated rows carry no `raw` → default source "sap".
@@ -646,6 +670,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     source,
     domain,
     communicationScenarios: r.communicationScenarios,
+    // Additive (P1.2): the scenarios SAP's table lists this row's service
+    // under, by its address; empty where the table does not know it.
+    commScenarios: scenariosOf(scenarioJoin, scenarioIdsFor(r)).map((sc) => ({ id: sc.id, name: sc.name, direction: sc.direction })),
     scopeItemCodes: r.scopeItemCodes,
     itemCount: r.itemCount,
     // TRUE = repo-authored placeholder; NULL = provenance unrecorded (row
@@ -749,6 +776,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         dataProbeRefusal,
       },
       catalogueImported: true,
+      // Where `commScenarios` come from, named on screen (P1.2); null when no row on the page was joined.
+      scenarioSource: scenarioJoin.release ? `${SCENARIO_SOURCE}, ${scenarioJoin.release}` : null,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
       isAdmin,

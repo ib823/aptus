@@ -219,6 +219,20 @@ interface Observed {
 }
 
 const STRIPPED = new Set(["id", "at", "correlationId", "durationMs", "eventId"]);
+/** P1.4's query columns on NorthboundAuditEvent: null on every console row, and younger than the goldens. */
+const QUERY_COLUMNS = [
+  "queryKind",
+  "queryShape",
+  "queryHash",
+  "requestedFields",
+  "queryPolicyRev",
+  "cursorChainId",
+  "pageIndex",
+  "chainRows",
+  "responseBytes",
+  "queryRule",
+  "queryFlags",
+] as const;
 
 /** Replace every run-specific string with its name, at any depth; drop the volatile fields. */
 function anonymise(value: unknown): unknown {
@@ -272,7 +286,18 @@ async function newRows(): Promise<{ audits: unknown[]; platform: unknown[]; cons
    * here, then left out of what the goldens compare (P1 onto wave 2).
    */
   for (const r of audits) expect({ apiBasePath: r.apiBasePath, apiVersion: r.apiVersion }, r.externalId).toEqual({ apiBasePath: null, apiVersion: null });
-  const withoutServedAs = audits.map(({ apiBasePath: _path, apiVersion: _version, ...row }) => row);
+  /*
+   * P1.4's eleven query columns likewise: a console read is never on the
+   * query surface, so each is null, and they too are left out of the goldens.
+   */
+  for (const r of audits) {
+    expect(QUERY_COLUMNS.filter((c) => r[c] !== null), r.externalId).toEqual([]);
+  }
+  const withoutServedAs = audits.map(({ apiBasePath: _path, apiVersion: _version, ...row }) => {
+    const rest: Record<string, unknown> = { ...row };
+    for (const c of QUERY_COLUMNS) delete rest[c];
+    return rest;
+  });
   return { audits: withoutServedAs.map(anonymise), platform: platform.map(anonymise), consoleReads: consoleReads.map(anonymise) };
 }
 

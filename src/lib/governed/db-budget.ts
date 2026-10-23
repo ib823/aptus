@@ -22,7 +22,11 @@
  *
  *   read  4  — today 3: the key (one statement for the current, previous
  *              and retired keys and the solution's status), the interface
- *              with its grants and connections, the audit row.
+ *              with its grants and connections, the audit row. Query pages
+ *              (P1.4) are reads, held to 4: the compiled query policy rides
+ *              in the access load's statement, a cursor opens in memory, and
+ *              the query's audit columns go in the same insert
+ *              (NORTHBOUND_QUERY_STATEMENTS, below).
  *   write 5  — today 5: the read's 3, plus the Idempotency-Key claimed
  *              before SAP is called and its outcome stored after. A write
  *              differs because those two must be separate statements on
@@ -152,11 +156,15 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   capabilityProbe: 6,
   /**
    * `/api/sap/tdd/hub-content/[id]` with a live probe of an OData V2 API: the
-   * console read's 4 and the catalogue row it shows. A V4 address adds 2 (its
+   * console read's 4, the catalogue row it shows, and (P1.2, on S/4HANA Cloud
+   * Public Edition) the communication scenarios SAP's table lists the service
+   * under, one statement with its release. A V4 address adds 2 (its
    * verification written, then read back); an item whose prerequisites are
-   * resolved adds the scope-item reads.
+   * resolved adds the scope-item reads. The catalogue LIST adds the same one
+   * scenario statement per page (none when no row on it has a joinable
+   * address); it is not a governed call.
    */
-  catalogueDetailProbe: 5,
+  catalogueDetailProbe: 6,
   /**
    * Probe all (`/api/sap/tdd/hub-content/probe-all`), a run, not a call: the
    * console read's 4, the candidate rows, and the decision-log entry...
@@ -164,6 +172,21 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   probeAllFixed: 6,
   /** ...plus one stored result per service probed (and one more per V4 address it verifies or withdraws). */
   probeAllPerService: 1,
+  /**
+   * P1.2's live tenant service listing (`POST /api/sap/tdd/tenant-services`),
+   * on a stored S/4 Public DEV connection, a listing with entries: the console
+   * read's 4 (the session, the connection with its ceiling's grants, the
+   * console row, the platform row), the catalogue rows the listed names could
+   * be, the scenarios SAP's table lists them under, and the listing's upsert.
+   * Refused at authorise, bind or contain it is the console read's own figure.
+   */
+  tenantServiceList: 7,
+  /**
+   * Its stored read (`GET /api/studio/tenant-services`): no SAP call and no
+   * audit row, since no system is read. The session, the connection, the
+   * listing, who listed it, and the Published entries' scenarios.
+   */
+  tenantServiceListStored: 5,
 } as const;
 
 /**
@@ -215,4 +238,31 @@ export const NORTHBOUND_DISCOVERY_STATEMENTS = {
   stamped: 6,
   /** No interface passes the grant gate (none granted in the key's environment): no connections are read. */
   nothingGranted: 4,
+} as const;
+
+/**
+ * WHAT A QUERY-SURFACE READ SENDS (P1.4), on /data and its /v1 alias, warm.
+ * A read through the pipeline, held to `DB_BUDGET.read`: the interface's
+ * compiled query policy is selected in the access load's own statement (only
+ * on these calls; a legacy read selects it as NULL), the paging cursor is
+ * opened and sealed in memory with no table behind it, and the query's eleven
+ * audit columns are written in the row's one insert. Asserted exactly by
+ * tests/integration/governed-db-budget.test.ts. The key's `lastUsedAt` stamp,
+ * at most once a minute per key, adds 1 to either.
+ */
+export const NORTHBOUND_QUERY_STATEMENTS = {
+  /**
+   * A list page (the first, with or without its count, or a cursor page), a
+   * key lookup (by path or through the filter fallback), an outcome SAP's
+   * answer decided (rejected, too large, no record), or a refusal after
+   * authorisation (the policy, a cursor whose interface, policy, grant or
+   * connection changed): the key, the access load with the policy, the audit row.
+   */
+  page: 3,
+  /**
+   * Refused before authorisation: a parameter outside the grammar, the
+   * switch off, a cursor that does not open or has expired. The key and the
+   * audit row; the interface is never read.
+   */
+  refusedBeforeAccess: 2,
 } as const;

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  // SAP's communication scenario table (P1.2): no rows unless a test gives some.
+  queryRaw: vi.fn(async (..._args: unknown[]) => [] as unknown[]),
   getCurrentUser: vi.fn(),
   getSapProduct: vi.fn(),
   isSapTddPublicAccessEnabled: vi.fn(),
@@ -23,6 +25,7 @@ vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 // and audit write, which the live probe now goes through (audit A24).
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
+    $queryRaw: mocks.queryRaw,
     sapHubContent: { findUnique: mocks.findUnique },
     scopeCatalogVersion: { findFirst: mocks.findFirst },
     scopeItem: { findMany: mocks.findMany },
@@ -354,5 +357,33 @@ describe("the detail and the catalogue's addresses (P0.8)", () => {
     expect(mocks.probeService).not.toHaveBeenCalled();
     expect(body.data.status).toBe("NOT_PROBEABLE");
     expect(body.data.address).toEqual({ path: "/odata/v2", protocol: "ODATAV2", basis: "product-root", verifiedAt: null });
+  });
+});
+
+describe("Ask Basis for the scenario that enables the service (P1.2)", () => {
+  const SCENARIO = { id: "SAP_COM_0053", name: null, direction: "Inbound", interfaceCount: 12, matched: ["API_PO_0001"], release: "2608" };
+
+  it("a service not shown as activated gets the call to action, every scenario named", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([SCENARIO]);
+    const body = await (await GET(req(), ctx("1"))).json();
+    expect(body.data.status).toBe("NOT_FOUND");
+    expect(body.data.askBasis).toMatchObject({
+      action: true,
+      technicalId: "API_PO_0001",
+      release: "2608",
+      scenarios: [{ id: "SAP_COM_0053", name: null, interfaceCount: 12 }],
+    });
+  });
+
+  it("an activated one is told which scenario enables it, as information", async () => {
+    mocks.probeService.mockResolvedValue({ service: "API_PO", exposed: true, status: 200, ladder: "readable", entities: [], metadataFlavor: "v2" });
+    mocks.queryRaw.mockResolvedValueOnce([SCENARIO]);
+    const body = await (await GET(req(), ctx("1"))).json();
+    expect(body.data.askBasis.action).toBe(false);
+  });
+
+  it("a service the table does not name gets no panel, never a guess", async () => {
+    const body = await (await GET(req(), ctx("1"))).json();
+    expect(body.data.askBasis).toBeNull();
   });
 });

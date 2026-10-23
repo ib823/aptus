@@ -89,3 +89,65 @@ sends or receives changed, except the additions marked *Added*.
   the credential's environment is served by a Tenant Twin the deployment does
   not have. Nothing is sent to SAP; a refused write releases its
   `Idempotency-Key`. The generated OpenAPI documents name both.
+- *Added:* `GET /interfaces/{id}/schema` also returns `contract.describedBy`,
+  saying what described the recorded contract: `"tenant"` (the service's own
+  `$metadata`, read from a tenant), `"upload"` (a description file a builder
+  uploaded, not yet verified on any tenant) or `"sample"` (rows CoreEdge
+  sampled, when no description is recorded) (P1.2). `contract.source` keeps
+  its values: an uploaded contract is `"metadata"`, since it was compiled
+  from a description. The generated OpenAPI documents describe the field.
+- *Added:* `GET /interfaces/{id}/data` and `POST /interfaces/{id}/data/write`
+  may answer `403 API_POLICY_SIGN_OFF_REQUIRED` for an interface on SAP
+  S/4HANA Cloud Public Edition that is registered by its own service path, or
+  names a customer-built (`Z*`, `Y*`, `YY1_*`) service, and has no SAP API
+  Policy §1.2 sign-off recorded, when the deployment enforces the sign-off
+  (P1.2; by default it only observes, and sends nothing new).
+  It is refused with the other grant refusals, before anything is sent to SAP
+  and before a write's `Idempotency-Key` is claimed, so the same key can be
+  sent again once the sign-off is recorded. The generated OpenAPI documents
+  name the code.
+- *Added (P1.4):* `GET /interfaces/{id}/data` serves **queries** where the
+  interface's query policy allows them and the deployment serves them
+  (`COREEDGE_QUERY_SURFACE`, off by default). The reserved parameter names
+  are `select`, `filter.<Field>.<op>` (`eq`, `in`, `gt`, `ge`, `lt`, `le`;
+  ANDed across fields), `orderby`, `key.<Field>`, `count`, `pageSize` and
+  `cursor`, and `expand`, `filter` and `key` themselves, which are refused
+  rather than served. A query's 200 keeps the `?limit` envelope's keys, in
+  their order, and adds `page` (`index`, `size`, `rowsServed`,
+  `nextCursor`, `complete`, `stopped`) and, with `count=true` on the first
+  page, `totalCount`; a key lookup answers one record and no `page`. Page on
+  `page.nextCursor`, sent with the same other parameters. A query's answers
+  also carry `x-ratelimit-limit`, `x-ratelimit-remaining` and
+  `x-ratelimit-reset` (seconds); on them `x-ratelimit-remaining` counts the
+  credential's 60 a minute, or the edge's limit when that is nearer, and
+  replaces the edge's figure. The per-solution OpenAPI document lists each
+  interface's own parameters by name.
+- *Added (P1.4):* three codes. `400 POLICY_FIELD_NOT_GRANTED`: the query asks
+  for a field, operator, count, key lookup or page size the interface's
+  query policy does not allow, or leaves out a filter it requires. `409
+  CURSOR_STALE`: the cursor expired (15 minutes, within a paging run of 2
+  hours), or the interface, its policy, its grant or its connection changed
+  since the first page. `404 RECORD_NOT_FOUND`: a key lookup found no record.
+  A refusal and a query outcome carry `error.query` beside `code`, `message`
+  and `correlationId`: the `rule`, and the `parameter`, `field` and up to 20
+  `allowed` names when they are safe to repeat. `VALIDATION_ERROR` is also
+  sent as `422` when SAP refuses a query CoreEdge built (`rule
+  SAP_REJECTED`), when one record is larger than the page limit, or when
+  SAP's page is larger than CoreEdge reads, and as `413` for a `?limit`
+  answer larger than CoreEdge can return (`rule RESPONSE_TOO_LARGE`).
+- *Changed (P1.4), by refusing what was ignored:* a `?limit` read that also
+  carries a reserved name (for example `?select=A&limit=5`, or a cache buster
+  named `filter`) was served with that name ignored; it is now refused with
+  `400 VALIDATION_ERROR` and `error.query.rule` (`NOT_ENABLED` while the
+  deployment serves no queries, `NO_POLICY` on an interface with no query
+  policy, `UNKNOWN_PARAMETER` for `limit` beside query parameters). A filter
+  that is ignored serves every row; a refusal never does. A read with none
+  of these names is unchanged, `$`-prefixed names included, which `2026-10`
+  keeps ignoring on `?limit` reads.
+- *Fixed (P1.4):* a `?limit` read too large for the platform's response
+  limit answered the platform's bare 413 after CoreEdge had audited it as
+  200; it is now refused `413 VALIDATION_ERROR` in CoreEdge's own envelope,
+  with a correlation id, and audited 413. Every other `?limit` answer is the
+  same bytes as before. And OData 4.01 control information (`@id`,
+  `@editLink`, `nav@navigationLink` and any other key containing `@`) is
+  stripped from records like `@odata.*` already was.

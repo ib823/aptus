@@ -247,3 +247,29 @@ describe("every other pair --brand-navy-soft carries, in dark", () => {
     expect(resolve("light", "brand-navy-soft")).toBe("#E6EBF1");
   });
 });
+
+describe("Interfaces · the Query policy card (P1.4), in both themes", () => {
+  /*
+   * The card's own pairs. Its state is a chip with words (StudioStatusChip),
+   * a filter chip that is on carries a tick and aria-pressed as well as the
+   * navy fill, and every disabled control states its reason in text, at
+   * --ink-secondary rather than muted, because the reason is read.
+   */
+  const PAIRS: readonly [string, string, string, number][] = [
+    ["the stale and confirmation banners' text", "ink-primary", "status-awaiting-bg", TEXT_FLOOR],
+    ["a disabled control's reason", "ink-secondary", "surface-paper", TEXT_FLOOR],
+    ["the provenance line and notes", "ink-muted", "surface-paper", TEXT_FLOOR],
+    ["a filter chip that is on", "surface-paper", "brand-navy", TEXT_FLOOR],
+    ["a filter chip that is off", "ink-primary", "surface-paper", TEXT_FLOOR],
+    ["the Remove and Save anyway buttons", "status-revoked-fg", "surface-paper", TEXT_FLOOR],
+    ["the Verify panel's narrowed or stale line", "status-awaiting-fg", "surface-paper", TEXT_FLOOR],
+    // A chip that is on is told from one that is off by more than its fill.
+    ["a filter chip that is on, against the card", "brand-navy", "surface-paper", NON_TEXT_FLOOR],
+  ];
+
+  for (const theme of THEMES) {
+    it.each(PAIRS)(`${theme}: %s (--%s on --%s)`, (_what, fg, bg, floor) => {
+      expect(ratio(theme, fg, bg)).toBeGreaterThanOrEqual(floor);
+    });
+  }
+});

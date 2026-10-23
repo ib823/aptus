@@ -115,14 +115,15 @@ not mean every SAP release has been tested end to end.
 | Sign-in by email magic link | Needs a working SMTP relay. There is no SSO, OIDC or SAML login (`src/lib/auth/auth-options.ts:50-68`). |
 | Solutions, interfaces, grants and runtime credentials in Studio | The two-person rule applies. |
 | Connection to S/4HANA Cloud Public Edition, with Test | The host must be on the SAP domain allow-list and reachable from the CoreEdge host. |
-| Northbound read of an SAP-published service | Returns the first N rows of one entity set, where N is at most 100. There is no filter (section 8). |
-| Test Console | Reads only, with `limit` at most 50 (`src/app/api/studio/test/broker-run/route.ts:62`). |
+| Northbound read of an SAP-published service | With `?limit`, returns the first N rows of one entity set, where N is at most 100, with no filter. Queries are under *Works with conditions* (section 8). |
+| Test Console | Reads only, with `limit` at most 50 (`src/app/api/studio/test/broker-run/route.ts:62`), and the first page of a query, at most 50 records, where the deployment serves queries. |
 | Starter kit download | A TypeScript/Node client, the contract as OpenAPI 3.1 (`openapi.json`) and 3.0.3 (`openapi-3.0.json`), a mock server and fixtures (`src/lib/studio/scaffold.ts:1130-1151`). The OpenAPI files draw `POST …/data/write`, with its body, for a create interface (`src/lib/contracts/openapi.ts:387`); the client, demo and mock cover reads only. |
 
 ### Works with conditions
 
 | Capability | Condition |
 |---|---|
+| Queries on a read: `select`, `filter.<Field>.<op>`, `orderby`, key lookup (`key.<Field>`), `count` and cursor paging | The deployment's operator sets the token ring (`COREEDGE_TOKEN_KEYS`, `COREEDGE_TOKEN_ACTIVE_KEY`) and `COREEDGE_QUERY_SURFACE=on`, and the interface's builder verifies the service and enables queries in its Query policy card. Until both, a call carrying a query parameter is refused 400, never served with the parameter ignored (section 6.2; `docs/runbooks/coreedge-query-surface.md`). AND filters only; no `$expand`. Not run against a live tenant. |
 | Northbound create (POST) | Two of the required steps have no screen yet. Enabling writes on a connection and minting the write key both need a direct API call (Appendix B). |
 | Onboarding developers | The first platform admin is claimed once with a bootstrap token (`COREEDGE_BOOTSTRAP_TOKEN`). After that, an organization's administrators invite people at `/coreedge/members`, which stays reachable when `WORKBENCH_ONLY` is set. Creating an organization on such a host needs a direct API call (section 4.7; `docs/runbooks/developer-onboarding.md`). |
 | SAP services beyond the curated ones | A platform admin must load the SAP API catalogue first (section 4.8). OData V4 service paths are guessed, so they may be wrong (section 6.1). |
@@ -134,7 +135,7 @@ not mean every SAP release has been tested end to end.
 ### Not available yet
 
 - Gateway catalogue discovery (`/IWFND/CATALOGSERVICE`): you must know the service path. Nothing lists the customer's own services for you.
-- `$filter`, `$select`, key lookup, `$expand`, `$orderby` and paging on reads.
+- `$expand` on reads, and OR across fields in a filter (P1.4b). Filters, select, key lookup, ordering and paging are served under a query policy (*Works with conditions*).
 - UPDATE, DELETE, OData actions and function imports.
 - X.509/mTLS client certificates, principal propagation, SAP Cloud Connector, an outbound HTTP proxy, or a custom CA option in code.
 - Field mapping or field selection. The Interfaces screen labels mapping as "v2".
@@ -1014,6 +1015,75 @@ lo_http->close( ).
 " Parse lv_json with your JSON tool of choice, for example /ui2/cl_json on classic ABAP.
 ```
 
+**Query and page: OUTLINE to adapt. Not compiled, not tested against
+CoreEdge.** Where the deployment serves queries and the interface has a query
+policy (section 2), a read may filter, select and page. Send the **same
+parameters on every page**, plus the previous page's `nextCursor`, and stop
+when it is null. Every page is one call against the credential's 60 a minute,
+so pace the loop. URL-encode each value, and send a `+` in a value as `%2B`.
+
+```abap
+" Classic ABAP flavour: lo_http created from ZCOREEDGE as in the read above, and
+" closed only after the loop; lv_iface_id and lv_token as there.
+TYPES: BEGIN OF ty_page,
+         next_cursor TYPE string,
+         complete    TYPE abap_bool,
+       END OF ty_page,
+       BEGIN OF ty_data,
+         records TYPE REF TO data,
+         page    TYPE ty_page,
+       END OF ty_data,
+       BEGIN OF ty_body,
+         data TYPE ty_data,
+       END OF ty_body.
+
+" The same parameters on every page; an `in` repeats its name once per value.
+DATA(lv_params) = `filter.CompanyCode.eq=1010`
+               && `&filter.OverallStatus.in=A&filter.OverallStatus.in=B`
+               && `&orderby=-CreationDate&pageSize=200`.
+DATA lv_cursor TYPE string.
+DATA ls_body   TYPE ty_body.
+
+DO.
+  DATA(lv_uri) = |/interfaces/{ lv_iface_id }/data?{ lv_params }|.
+  IF lv_cursor IS NOT INITIAL.
+    lv_uri = |{ lv_uri }&cursor={ lv_cursor }|.   " a cursor is URL-safe as it is
+  ENDIF.
+  cl_http_utility=>set_request_uri( request = lo_http->request uri = lv_uri ).
+  lo_http->request->set_header_field( name = 'Authorization' value = |Bearer { lv_token }| ).
+  lo_http->send( EXCEPTIONS OTHERS = 1 ).
+  lo_http->receive( EXCEPTIONS OTHERS = 1 ).
+  lo_http->response->get_status( IMPORTING code = lv_code ).
+  IF lv_code = 409.
+    " CURSOR_STALE: the cursor expired or the interface changed. Start again,
+    " without a cursor, rather than retrying this page.
+    CLEAR lv_cursor.
+    CONTINUE.   " VERIFY: bound the restarts in real code
+  ELSEIF lv_code <> 200.
+    " 400 POLICY_FIELD_NOT_GRANTED or VALIDATION_ERROR: read error-query-rule
+    " and do not retry unchanged. 429: wait for Retry-After.
+    EXIT.
+  ENDIF.
+  /ui2/cl_json=>deserialize( EXPORTING json        = lo_http->response->get_cdata( )
+                                       pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+                             CHANGING  data        = ls_body ).
+  " Process ls_body-data-records here, idempotently by the record's key: offset
+  " paging can repeat or skip a row when the data changes between pages.
+  IF ls_body-data-page-next_cursor IS INITIAL.
+    EXIT.   " no more pages (page-complete), or the run stopped (page-stopped)
+  ENDIF.
+  lv_cursor = ls_body-data-page-next_cursor.
+  WAIT UP TO 1 SECONDS.   " pace: about one page a second stays under 60 a minute
+ENDDO.
+lo_http->close( ).
+```
+
+A key lookup is one call: `?key.SalesOrder=1000123&select=SalesOrder,SoldToParty`
+answers one record, or `404 RECORD_NOT_FOUND`. The parameters each interface
+serves are listed, by name and type, in the solution's OpenAPI document
+(Studio, the solution's *OpenAPI* download). Do not rely on a filter to keep
+rows from a user: a custom service may not apply it.
+
 **Create: OUTLINE.** The differences from the read are listed here, for either
 flavour.
 
@@ -1037,7 +1107,7 @@ flavour.
 
 **Payload format.** CoreEdge passes `record` to SAP unchanged
 (`src/lib/northbound/write.ts:304-309`). Reads return SAP's own OData JSON with
-only the `__metadata`, `__deferred` and `@odata.*` envelope removed
+only the `__metadata`, `__deferred` and `@odata.*` envelope removed (and, since P1.4, any other key containing `@`, such as OData 4.01's `@id`)
 (`src/lib/northbound/read.ts:63-72`; `src/lib/sap-public/odata-envelope.ts:72-81`).
 Field names and value formats are therefore those of the SAP service behind the
 interface:
@@ -1336,7 +1406,7 @@ is logged.
 
 | Limit | Detail |
 |---|---|
-| Reads | Only `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100. CoreEdge sends SAP only `$top` and `$format=json`. There is no `$filter`, `$select`, key lookup, `$expand` or paging, and `?entity=` is ignored (`src/app/api/northbound/interfaces/[id]/data/route.ts:87`; `src/lib/northbound/read.ts:56, 149, 177`). |
+| Reads | `?limit=`, with a default of 10, a minimum of 1 and a maximum of 100: CoreEdge sends SAP only `$top` and `$format=json`, and `?entity=` is ignored (`src/lib/northbound/read.ts`). Where the deployment serves queries and the interface has a query policy: `select`, AND filters (`eq`, `in`, `gt`, `ge`, `lt`, `le`), `orderby`, key lookup, `count` and cursor paging, at most the policy's page size (1,000 at most) and row cap per paging run; CoreEdge builds the OData query itself (`src/lib/odata/operation-compiler.ts`). No `$expand` or OR. |
 | Writes | CREATE only. An UPDATE interface cannot be activated, and DELETE does not exist (`src/lib/studio/write-readiness.ts:177-179`). |
 | One entity set per interface | It is fixed in Studio. The caller cannot choose it. |
 | Rate | 60 calls per minute per credential for reads, discovery and schema calls included, and a separate 60 for writes. On `/api/northbound` the middleware also limits each credential (600 a minute) and each calling address (6,000 a minute, and 60 failed key lookups a minute), answered `RATE_LIMITED_ADDRESS` (section 6.2). A call with no `Authorization` header, and every other `/api/*` route, keeps the per-IP limit of 300 GET and 120 POST a minute. |
@@ -1350,7 +1420,7 @@ is logged.
    pick one of the customer's own services instead of typing its path.
 2. On-premise reachability from a hosted instance, through Cloud Connector, a
    proxy or a custom CA.
-3. Filtered and keyed reads, and paging.
+3. `$expand` and OR filters on reads (filtered and keyed reads and paging are served under a query policy, P1.4).
 4. UPDATE with ETag handling.
 5. X.509 client certificates towards SAP.
 6. A CoreEdge authentication scheme that SM59 and communication arrangements can

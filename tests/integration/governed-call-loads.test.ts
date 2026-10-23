@@ -28,6 +28,8 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import { loadConsoleConnection, loadInterfaceAccess, lookupCredential } from "@/lib/governed/call-loads";
 import { hashClientToken } from "@/lib/northbound/auth";
@@ -135,7 +137,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
           },
         })
       ).id;
-    ids.ifaceA = await iface(A, ids.solA, "s4hana", { servicePath: null });
+    // P1.2: the §1.2 sign-off rides in the same statement, read as stored.
+    ids.ifaceA = await iface(A, ids.solA, "s4hana", { servicePath: null, apiPolicySignOff: { policy: "p", serviceIdentity: "purchase-orders" } });
     ids.ifaceOtherProduct = await iface(A, ids.solA, "s4hana-onprem");
     ids.ifaceB = await iface(B, ids.solB, "s4hana");
 
@@ -255,6 +258,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
     // solution's row is left out.
     expect(counts).toEqual({ grants: 3, connections: 2 });
     expect(sql.iface?.serviceVerifications).toEqual({ DEV: [{ at: "2026-10-01T00:00:00.000Z", connectionId: "c" }] });
+    expect(sql.iface?.apiPolicySignOff).toEqual({ policy: "p", serviceIdentity: "purchase-orders" });
   });
 
   it("reads no connection unless asked", async () => {
@@ -267,6 +271,38 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
     const { sql, reference } = await both(A, ids.ifaceB, "DEV", true);
     expect(sql).toEqual(reference);
     expect(sql).toEqual({ iface: null, grants: [], connections: [] });
+  });
+
+  /*
+   * P1.4: with `withQueryPolicy`, the interface's compiled query policy rides
+   * in the same statement, equal to the column Prisma reads, with whether a
+   * source exists; without it, nothing. The interface's own columns and the
+   * grants and connections are the reference's either way, and another
+   * organisation's policy is never read beside the caller's id.
+   */
+  it("reads the compiled query policy only when asked, equal to the column, and never another organisation's", async () => {
+    const compiled = { v: 1, state: "READY", rev: "qp1:AAAAAAAAAAAAAAAAAAAAAA", fields: [{ n: "PurchaseOrder", t: "S", key: true }], nested: { list: [1, "two", null] } };
+    await prisma.interface.update({ where: { id: ids.ifaceA, organizationId: A }, data: { queryPolicy: { v: 1 }, queryPolicyCompiled: compiled } });
+    await prisma.interface.update({ where: { id: ids.ifaceB, organizationId: B }, data: { queryPolicy: { v: 1 }, queryPolicyCompiled: { v: 1, foreign: true } } });
+    try {
+      const column = (await prisma.interface.findFirst({ where: { id: ids.ifaceA, organizationId: A }, select: { queryPolicyCompiled: true } }))!.queryPolicyCompiled;
+      const asked = await loadInterfaceAccess(A, ids.solA, ids.ifaceA, "DEV", { withConnections: true, withQueryPolicy: true });
+      expect(asked.queryPolicy).toEqual({ compiled: column, sourcePresent: true });
+      const notAsked = await loadInterfaceAccess(A, ids.solA, ids.ifaceA, "DEV", { withConnections: true });
+      expect(notAsked.queryPolicy).toBeNull();
+      // The rest of the load is what it always was, asked or not.
+      expect({ ...asked, queryPolicy: null }).toEqual(notAsked);
+      expect(Object.keys(asked.iface!)).not.toContain("queryPolicyLoad");
+      // Another organisation's interface id: nothing, its policy included.
+      expect((await loadInterfaceAccess(A, ids.solA, ids.ifaceB, "DEV", { withQueryPolicy: true })).queryPolicy).toBeNull();
+      // A cleared policy reads as none, its source still present.
+      await prisma.interface.update({ where: { id: ids.ifaceA, organizationId: A }, data: { queryPolicyCompiled: Prisma.DbNull } });
+      expect((await loadInterfaceAccess(A, ids.solA, ids.ifaceA, "DEV", { withQueryPolicy: true })).queryPolicy).toEqual({ compiled: null, sourcePresent: true });
+    } finally {
+      for (const [id, organizationId] of [[ids.ifaceA, A], [ids.ifaceB, B]] as const) {
+        await prisma.interface.update({ where: { id, organizationId }, data: { queryPolicy: Prisma.DbNull, queryPolicyCompiled: Prisma.DbNull } });
+      }
+    }
   });
 
   it("agrees in another environment", async () => {

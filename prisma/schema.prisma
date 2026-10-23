@@ -142,23 +142,23 @@ model SapProcessStep {
 /// and deliverables do not follow the S/4HANA Public Edition model.
 model ProductScopeItem {
   id               String   @id @default(cuid())
-  productKey       String   // SUCCESSFACTORS | ARIBA | ...
-  solutionKey      String   // e.g. RECRUITING or BUYING_INVOICING
-  release          String   // source's own release, never inferred from S/4
+  productKey       String // SUCCESSFACTORS | ARIBA | ...
+  solutionKey      String // e.g. RECRUITING or BUYING_INVOICING
+  release          String // source's own release, never inferred from S/4
   country          String   @default("XX")
   language         String   @default("EN")
-  scopeCode        String   // SAP ID, or stable Aptus process key when SAP has none
-  scopeKind        String   // SCOPE_ITEM | PROCESS
+  scopeCode        String // SAP ID, or stable Aptus process key when SAP has none
+  scopeKind        String // SCOPE_ITEM | PROCESS
   title            String
   description      String?  @db.Text
   sourceUrl        String
-  sourceKind       String   // SAP_HELP | PROCESS_NAVIGATOR | PARTNER_EXPORT
+  sourceKind       String // SAP_HELP | PROCESS_NAVIGATOR | PARTNER_EXPORT
   visibility       String   @default("PUBLIC") // PUBLIC | ABEAM_ADMIN
-  sourceHash       String?  // SHA-256 of the imported source record
-  processSteps     Json     // ordered, sourced steps; [] when not yet imported
-  configQuestions  Json     // sourced questions; [] when not yet imported
-  processSourceUrl String?  // SAP process diagram or test-script URL
-  configSourceUrl  String?  // SAP configuration workbook/guide URL
+  sourceHash       String? // SHA-256 of the imported source record
+  processSteps     Json // ordered, sourced steps; [] when not yet imported
+  configQuestions  Json // sourced questions; [] when not yet imported
+  processSourceUrl String? // SAP process diagram or test-script URL
+  configSourceUrl  String? // SAP configuration workbook/guide URL
   importedAt       DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -629,12 +629,12 @@ model SapHubContent {
   hubUrl          String // canonical link back to api.sap.com
   rawMetadataJson Json?
 
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
   /// ANY write: an import, and also every capability probe (probe-all, the
   /// explorer's own probe), which merges into `rawMetadataJson` and stamps
   /// this. So it is NOT the import time, and catalogue freshness must never
   /// be judged from it (P0.3, A29).
-  updatedAt DateTime @updatedAt
+  updatedAt  DateTime  @updatedAt
   /// When an IMPORT last wrote this row — the seed and its Rebuild, the
   /// harvest import, scripts/import-sap-hub-content.ts and the Hub OAuth
   /// ingest — and nothing else. Catalogue Health judges freshness from this
@@ -722,7 +722,7 @@ model CatalogueAddressVerification {
 /// tenantKey) on SapHubContent.rawMetadataJson.probes — `key` here is that
 /// tenantKey, so one client's activations never surface for another.
 model SapConnection {
-  id                String  @id @default(cuid())
+  id                String          @id @default(cuid())
   organizationId    String
   /// "s4hana" | "successfactors" | "ariba" — mirrors the env product prefixes.
   product           String
@@ -752,7 +752,7 @@ model SapConnection {
   /// OAuth token endpoint — non-secret; null unless authType is oauth.
   oauthTokenUrl     String?
   /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.
-  secretsCiphertext String  @db.Text
+  secretsCiphertext String          @db.Text
   /// The SAP client — "100", "080" — or NULL where the product has none.
   ///
   /// NULL IS THE TRUTH, NOT A GAP. S/4HANA Cloud Public, SuccessFactors and
@@ -768,7 +768,7 @@ model SapConnection {
   /// paid for one fact living in two places.
   client            String?
   /// Gate for guarded writes on this connection (mirrors {PREFIX}_WRITE_ENABLED).
-  writeEnabled      Boolean @default(false)
+  writeEnabled      Boolean         @default(false)
   /// Optional health-probe path + timeout override (fall back to product defaults).
   apiPath           String?
   timeoutMs         Int?
@@ -802,7 +802,10 @@ model SapConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// The services this connection's Gateway catalogue listed when a builder
+  /// last read it (P1.2): at most one row, replaced by each listing.
+  serviceListings TenantServiceListing[]
 
   /// ALSO CONSTRAINED BY A PARTIAL UNIQUE INDEX Prisma cannot express:
   /// SapConnection_active_binding_tuple on (organizationId, product,
@@ -939,19 +942,19 @@ model Interface {
   /// getSapProduct at the API boundary, never a hand-kept enum: the literal
   /// three-product list here once meant no interface could exist for a RISE
   /// or on-premise connection at all.
-  sapProduct String
+  sapProduct                 String
   /// The catalogue apiId, or `custom:<servicePath>` for the customer's own
   /// service (derived from servicePath, never typed).
-  externalId String
+  externalId                 String
   /// READ | CREATE | UPDATE
-  operation  String
-  entitySet  String?
+  operation                  String
+  entitySet                  String?
   /// The customer's OWN OData service root, a path on the connection's host
   /// (e.g. /sap/opu/odata/sap/ZUI_X_O2). Null = a catalogue/curated service
   /// resolved from externalId. Validated by service-path.ts; never a URL.
-  servicePath  String?
+  servicePath                String?
   /// "V2" | "V4". Set iff servicePath is set.
-  odataVersion String?
+  odataVersion               String?
   /// Last SUCCESSFUL live $metadata verification of the current contract.
   /// Cleared by any change to servicePath / odataVersion / entitySet.
   serviceVerifiedAt          DateTime?
@@ -967,18 +970,50 @@ model Interface {
   /// the write uses. Cleared with the fields above.
   serviceVerifications       Json?
   /// READ | WRITE (WRITE implies a stronger review path).
-  mode       String
+  mode                       String
 
   /// Written by nothing; null. Builds before P1.3 serve it raw from /schema.
-  requestSchema  Json?
-  responseSchema Json?
+  requestSchema      Json?
+  responseSchema     Json?
   /// A write interface's `{"x-contract": stamp}` (P1.3, contracts/record.ts):
   /// which snapshot's body /schema serves as requestSchema. Its own column so
   /// that a build before P1.3, which serves requestSchema as stored, never
   /// serves the bare stamp as a schema after an Instant Rollback.
   requestSchemaStamp Json?
   /// ALWAYS null in v1 — the mapping engine is v2.
-  mappingVersion Int?
+  mappingVersion     Int?
+  /// The SAP API Policy §1.2 sign-off for a customer-built service on S/4HANA
+  /// Cloud Public Edition (P1.2, lib/studio/api-policy.ts): who stated that
+  /// the service's use is permitted by SAP's documentation or authorised by
+  /// SAP, on what basis, for which service identity. Written in the same
+  /// transaction as its POLICY_SIGN_OFF ConfigAudit row; cleared when the
+  /// service identity changes, as serviceVerifications is. Null: none.
+  apiPolicySignOff   Json?
+
+  /// The query policy a builder chose (P1.4, src/lib/odata/policy.ts
+  /// QueryPolicySourceV1): which fields a caller may read, filter and sort
+  /// on, key lookup, count and the page limits. Written only by the Studio
+  /// query-policy route; at most 32 KiB. Null: the interface serves no query
+  /// parameters. Never read on a governed call: the compiled form below is.
+  queryPolicy Json?
+  /// What the current METADATA contract lets a query do (P1.4,
+  /// src/lib/odata/basis.ts QueryBasisV1): the properties, keys and SAP's
+  /// capability annotations, derived in the contract worker and written by a
+  /// verify's transaction (contracts/record.ts) when that verify's contract is
+  /// the current one; at most 128 KiB. Outside the contract content hash.
+  /// Cleared by a PATCH that changes the contract. Read by Studio and the
+  /// policy compiler, never on a governed call.
+  queryBasis Json?
+  /// The policy compiled against the basis (P1.4, CompiledQueryPolicyV1): the
+  /// only shape the governed read enforces, read by the access-load statement
+  /// (governed/call-loads.ts) on query-surface calls only; at most 64 KiB.
+  /// Written by the compiler's callers alone: the Studio save, a verify's
+  /// recompile, and the PATCH that nulls it on a contract change.
+  queryPolicyCompiled Json?
+  /// +1 on every policy save, verify recompile and delete: Studio's
+  /// compare-and-set. A policy edit never bumps `version`; cursors bind the
+  /// compiled policy's content hash instead.
+  queryPolicyRevision Int @default(0)
 
   /// DRAFT | ACTIVE | DEPRECATED
   status String @default("DRAFT")
@@ -993,10 +1028,10 @@ model Interface {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  solution  Solution         @relation(fields: [solutionId], references: [id], onDelete: Cascade)
-  testCases TestCase[]
+  solution          Solution           @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  testCases         TestCase[]
   /// The grants bound to this interface (ApiAccessGrant.interfaceId).
-  grants    ApiAccessGrant[]
+  grants            ApiAccessGrant[]
   /// Its compiled contracts (P1.3): ContractSnapshot.interfaceId.
   contractSnapshots ContractSnapshot[]
 
@@ -1140,7 +1175,7 @@ model LaneCheck {
   environment String
 
   /// The connection the check ran against, when one was bound.
-  connectionId String?
+  connectionId     String?
   /// The entity set the read asked for, and the version of the interface it
   /// was asked for (P0.2, A18). Evidence proves something only about the
   /// connection, dataset and feed definition that produced it: the board sets
@@ -1191,8 +1226,8 @@ model SapServiceHealth {
   /// EMPTY is a success and is stored as one: SAP answered and had nothing to
   /// return. Folding it into a failure is the single most common way this
   /// product could lie about a healthy lane.
-  readStatus String?
-  readAt     DateTime?
+  readStatus   String?
+  readAt       DateTime?
   /// How many rows the proving read returned. A count, never the rows.
   readRowCount Int?
 
@@ -1220,7 +1255,7 @@ model CronRunLog {
   /// True for an invocation that found the job's lease held and did no work.
   /// Recorded so a duplicate invocation is visible, and excluded wherever a
   /// screen asks "what did the last run find": a skip found nothing.
-  skipped     Boolean @default(false)
+  skipped     Boolean  @default(false)
 
   @@index([job, startedAt])
 }
@@ -1306,11 +1341,11 @@ model ApiAccessGrant {
   /// COREEDGE_GRANT_BINDING=strict it keeps today's tuple matching, so no call
   /// that worked before the deploy stops; every request and decision since
   /// P0.1 is bound (lib/studio/grant-binding.ts).
-  interfaceId String?
-  sapProduct  String?
+  interfaceId       String?
+  sapProduct        String?
   /// Why a legacy grant is unbound: NO_MATCH | AMBIGUOUS. Null on a bound
   /// grant, and on an unbound one the backfill has not yet looked at.
-  unboundReason String?
+  unboundReason     String?
   /// When an UNBOUND grant last authorised a broker call — the durable signal
   /// that strict binding would refuse traffic. Written at most hourly per
   /// grant. Null: never used since P0.1.
@@ -1472,9 +1507,9 @@ model SolutionClient {
   /// credential beside it.
   solutionId     String
 
-  label       String
+  label               String
   /// SHA-256 of the issued token. The raw value is never persisted.
-  tokenHash   String @unique
+  tokenHash           String    @unique
   /// The non-secret prefix the current token was minted with (P0.11):
   /// `ce_live_` for PROD, `ce_test_` for every other environment. Rows minted
   /// before P0.11 read `ce_`, the legacy prefix, which keeps working until the
@@ -1482,7 +1517,7 @@ model SolutionClient {
   /// without ever holding the key. Display only: authentication never reads
   /// it. After a code rollback the code before P0.11 can re-key a row without
   /// writing it, which leaves it stale (runbook: coreedge-credential-hygiene).
-  tokenPrefix String @default("ce_")
+  tokenPrefix         String    @default("ce_")
   /// ROTATION OVERLAP (P0.11). When a live key is replaced, the hash of the
   /// key it replaced moves here and keeps authenticating until
   /// `previousValidUntil`, so a deployment can switch to the new key without
@@ -1490,9 +1525,9 @@ model SolutionClient {
   /// rotation inside the window ends the first one. Revocation ends both.
   /// `@unique` because authentication looks a row up BY it, exactly as it does
   /// by `tokenHash` (a narrow isUnscopedByDesign entry in tenant-guard.ts).
-  previousTokenHash  String?   @unique
+  previousTokenHash   String?   @unique
   /// When the previous key stops working. Null when there is no previous key.
-  previousValidUntil DateTime?
+  previousValidUntil  DateTime?
   /// The `tokenHash` the overlap was opened FOR — the key that replaced
   /// `previousTokenHash`, written in the same update. The previous key is
   /// accepted only while this still equals `tokenHash`, so any later change of
@@ -1514,9 +1549,9 @@ model SolutionClient {
   /// 20261025040000_token_tail_binding) clears it when an UPDATE changes
   /// `tokenHash` without writing a new tail, as code before P0.3 does after a
   /// rollback. `prisma db push` does not create it; migrate deploy does.
-  tokenTail String?
+  tokenTail           String?
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
-  environment String
+  environment         String
 
   /// The SAP client this credential is bound to — "100", "080" — or NULL.
   ///
@@ -1549,7 +1584,7 @@ model SolutionClient {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// Every key this row has dropped from `tokenHash` and `previousTokenHash`.
   retiredTokens RetiredClientToken[]
 
@@ -1693,7 +1728,7 @@ model NorthboundAuditEvent {
   /// Not a relation: this table is append-only and must outlive the user row it
   /// names. A foreign key with a cascade would delete audit history when an
   /// employee leaves, which is the one edit an audit trail must not permit.
-  actorUserId   String?
+  actorUserId String?
 
   /// Why the broker refused before it reached a connection, or null if it did.
   ///
@@ -1758,6 +1793,45 @@ model NorthboundAuditEvent {
   /// northbound version served (console reads, Test Console dry runs).
   apiVersion  String?
   apiBasePath String?
+
+  /// The query surface (P1.4), written in the same insert as the rest of the
+  /// row (+0 statements; northbound/audit.ts). All null on a legacy ?limit
+  /// read, except responseBytes and queryRule on its byte guard's 413.
+  ///
+  /// queryKind: LIST (a chain's first page), PAGE (a cursor page) or KEY.
+  /// Null on a refusal before the query was checked.
+  queryKind String?
+  /// The query's shape with no literal in it (odata/ast.ts queryShape), at
+  /// most 1,024 characters: which fields, which operators, which order.
+  queryShape String?
+  /// `qh1.<kid>.` + a keyed HMAC of the query, literals included, under a
+  /// per-organisation subkey of the token ring (odata/ast.ts queryHash): the
+  /// same query hashes the same within one organisation, and a reader of this
+  /// table cannot brute-force a filter value from it (roadmap §9.1 #11).
+  queryHash String?
+  /// The effective fields that left CoreEdge (at most 256 names), or ["*"]
+  /// when the caller sent no select (the policy's readable fields at
+  /// queryPolicyRev).
+  requestedFields Json?
+  /// The compiled query policy's content hash the call was checked against.
+  queryPolicyRev String?
+  /// The paging chain, on every page of it, page 0 included; with pageIndex
+  /// and chainRows, what P3.5 groups full-table pagers and restarted chains by.
+  cursorChainId String?
+  pageIndex     Int?
+  /// Rows served in the chain, this page included.
+  chainRows     Int?
+  /// Bytes of the body sent (the query surface), or of the answer refused
+  /// (the legacy byte guard's 413).
+  responseBytes Int?
+  /// The rule of a query refusal or outcome (odata/rules.ts), or the cursor
+  /// check that failed; /^[A-Z][A-Z0-9_]{1,40}$/, checked at the one writer.
+  /// Never in failureReason, which keeps meaning "why the upstream call
+  /// failed" (correlation-lookup.ts reads a failureReason as reaching SAP).
+  queryRule String?
+  /// Comma-joined flags from a closed set (odata/rules.ts QUERY_FLAG_LIST):
+  /// what happened on a page that the status does not say.
+  queryFlags String?
 
   at DateTime @default(now())
 
@@ -2074,26 +2148,26 @@ model ContractSnapshot {
   entitySet        String
 
   /// METADATA | SAMPLED
-  source       String
+  source         String
   /// "V2" | "V4"
-  odataVersion String
+  odataVersion   String
   /// MAJOR.MINOR.PATCH, and its parts for ordering and uniqueness.
-  semver       String
-  semverMajor  Int
-  semverMinor  Int
-  semverPatch  Int
+  semver         String
+  semverMajor    Int
+  semverMinor    Int
+  semverPatch    Int
   /// sha256 (hex) of the canonical, normalised contract (canonical.ts).
-  contentHash  String
+  contentHash    String
   /// The InterfaceContract (src/lib/contracts/ir.ts).
-  ir           Json
-  irVersion    Int
+  ir             Json
+  irVersion      Int
   /// Bytes of the canonical JSON `contentHash` was taken over (≤ MAX_CONTRACT_BYTES),
   /// so a document built from several snapshots is refused before their IRs
   /// are read (doc-inputs.ts). Null on rows recorded before it was kept.
-  irBytes      Int?
+  irBytes        Int?
   /// What changed against the previous snapshot: { bump, changes[], omitted? },
   /// bounded (storedDiff, diff.ts); null on the first.
-  diff         Json?
+  diff           Json?
   /// What GET /schema serves, rendered once when this row was recorded (or
   /// re-attached by a verify that found it unchanged): the four schemas, and
   /// the create and update bodies (null when the contract has none), as compact
@@ -2107,16 +2181,68 @@ model ContractSnapshot {
   updateBodyText String?
 
   /// Where a METADATA contract was read: the environment and connection whose
-  /// binding answered the verify. Null for SAMPLED.
+  /// binding answered the verify. Null for SAMPLED, and null for an UPLOAD
+  /// until a verify of the same description makes the row its own.
   environment  String?
   connectionId String?
   createdById  String?
   createdAt    DateTime @default(now())
+  /// How the description reached CoreEdge (P1.2): VERIFY (a tenant answered a
+  /// verify), CAPTURE (sampled rows from a run) or UPLOAD (a file a builder
+  /// uploaded; no tenant was asked, and it becomes VERIFY when a verify finds
+  /// the same description). Null on rows recorded before P1.2. Kept
+  /// as its own column so an upload is never recognised by "METADATA with no
+  /// environment", a rule a later path could break.
+  origin       String?
 
   interface Interface @relation(fields: [interfaceId], references: [id], onDelete: Cascade)
 
   @@unique([interfaceId, semverMajor, semverMinor, semverPatch])
   @@index([organizationId, interfaceId, createdAt])
+}
+
+/// The services one connection's SAP Gateway catalogue listed, the last time a
+/// builder (or, for a deployment tenant, nobody: those are never stored) read
+/// it from Discover (P1.2, lib/sap-public/tenant-discovery.ts).
+///
+/// WHY STORED. Opening Discover again reads this row, not the tenant: no SAP
+/// call and no sapLive slot. One row per organisation and connection, replaced
+/// by each listing; the connection's own row cascades it away.
+///
+/// WHAT IT HOLDS. Each entry is the service's technical name, version, OData
+/// version, a path only when it passed validateServicePath and the
+/// same-origin rule, a title (≤ 200 characters), its class and the
+/// communication scenarios that name it. Never a credential, a host or a URL.
+/// `connectionRevision` is the connection's revision the listing read
+/// through: a listing of a connection since re-pointed is shown as such.
+model TenantServiceListing {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  connectionId       String
+  connectionRevision Int
+  product            String
+  listedAt           DateTime @default(now()) @db.Timestamptz(3)
+  listedById         String
+  /// Joins the console row and the platform row of the listing's call.
+  correlationId      String
+  /// OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | TRUNCATED | ERROR
+  catalogueStatus    String
+  /// NOT_TRIED | OK | UNAUTHORIZED | NOT_FOUND | ERROR; null when not asked.
+  v4Status           String?
+  /// How many services the listing read; `entries` holds those that fit.
+  entryCount         Int
+  /// The read stopped short of the catalogue (a listing limit, or a page that
+  /// failed after the first). A cut by the stored bound is entryCount beyond
+  /// the stored entries, not this.
+  truncated          Boolean  @default(false)
+  /// At most LISTING_LIMITS.maxEntries entries and 1 MiB, checked before insert;
+  /// past 1 MiB customer-built services are kept first and SAP's unpublished
+  /// ones last (tenant-discovery.ts entriesWithinStoredBound).
+  entries            Json
+
+  connection SapConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, connectionId])
 }
 
 /// The wall time an organisation's Contract Compiler jobs used on one UTC day
@@ -3586,21 +3712,21 @@ model Organization {
 }
 
 model Session {
-  id            String    @id @default(cuid())
-  userId        String
+  id                  String    @id @default(cuid())
+  userId              String
   // SHA-256 hex of the raw session token. The raw token only ever lives in
   // the user's cookie, never in the database. Lookup is by hash of the
   // incoming cookie value.
-  tokenHash     String    @unique
-  expiresAt     DateTime
-  mfaVerified   Boolean   @default(false)
-  mfaVerifiedAt DateTime?
+  tokenHash           String    @unique
+  expiresAt           DateTime
+  mfaVerified         Boolean   @default(false)
+  mfaVerifiedAt       DateTime?
   /// When this session last completed a passkey (WebAuthn) assertion: at
   /// passkey sign-in, or at a step-up before a governance action. The
   /// governance routes accept it only while it is fresh (lib/auth/step-up.ts),
   /// so it is overwritten on every assertion rather than set once like
   /// mfaVerifiedAt. Null means this session has never asserted a passkey.
-  passkeyAssertedAt DateTime?
+  passkeyAssertedAt   DateTime?
   /// SHA-256 hex of the step-up challenge this session was last issued
   /// (/api/auth/webauthn/step-up/options). The verify route consumes it in the
   /// same write that stamps passkeyAssertedAt, so a challenge counts once and

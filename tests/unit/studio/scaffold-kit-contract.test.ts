@@ -120,7 +120,8 @@ describe("R8 — the contract says exactly what the broker sends", () => {
 
   it("documents 400 and 404 beside the states it already documented", () => {
     // 502, 503 and 504 now each say which code they carry; 5XX is the rest.
-    expect(Object.keys(get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "429", "502", "503", "504", "5XX"]);
+    // 413 is the legacy byte guard every ?limit read can meet (P1.4).
+    expect(Object.keys(get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "413", "429", "502", "503", "504", "5XX"]);
     expect(JSON.stringify(get.responses["400"])).toMatch(/no entity set/);
     expect(JSON.stringify(get.responses["404"])).toMatch(/does not belong to the solution|No interface with this id/);
   });

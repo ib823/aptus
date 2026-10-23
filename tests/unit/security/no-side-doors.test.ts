@@ -69,6 +69,7 @@ const SAP_FETCHERS: Record<string, string> = {
   "src/lib/sap-public/tdd-connector.ts#sapFetch": "the Workbench connector: every OData and token request of the console",
   "src/lib/sap-public/ariba-connector.ts#aribaFetch": "the Ariba realm and its OAuth token endpoint",
   "src/lib/northbound/read.ts#readEntitySet": "the broker's read executor (its default fetch)",
+  "src/lib/northbound/read.ts#readQuery": "the query surface's read executor (its default fetch, P1.4)",
   "src/lib/northbound/write.ts#writeEntitySet": "the broker's write executor (its default fetch)",
   "src/lib/governed/transport.ts#directFetch": "the pipeline's DIRECT transport",
   "src/lib/sap-public/connection-resolver.ts#fetchOAuthTokenFromConnection": "a stored connection's OAuth token endpoint",
@@ -285,6 +286,20 @@ describe("every request CoreEdge's server code sends is classified", () => {
   });
 });
 
+/*
+ * P1.4: the query surface's executor has one binding, callSapQuery in the
+ * pipeline, which reports its outcome to the breaker by the query's rule and
+ * is handed a URL compiled from the checked AST. Nothing else in src/ may
+ * mention readQuery, so no route can send a query the pipeline did not build.
+ */
+describe("the query surface's executor is reached only through the pipeline", () => {
+  it("only src/lib/governed/pipeline.ts mentions readQuery", () => {
+    const executor = "src/lib/northbound/read.ts#readQuery";
+    const mentioning = [...graph.modules.keys()].filter((file) => file !== "src/lib/northbound/read.ts" && mentionedTargets(graph, file).has(executor));
+    expect(mentioning).toEqual(["src/lib/governed/pipeline.ts"]);
+  });
+});
+
 describe("A.3 #9: every route that reaches SAP uses the pipeline and writes an audit row", () => {
   const reaching = ROUTES.filter((r) => routeReaches(graph, r)).sort();
 
@@ -403,6 +418,8 @@ describe("A.3 #9: every route that reaches SAP uses the pipeline and writes an a
       "src/app/api/sap/tdd/hub-content/write-test/route.ts",
       "src/app/api/sap/tdd/operations/route.ts",
       "src/app/api/sap/tdd/preview/route.ts",
+      // P1.2: the tenant's own Gateway catalogue, listed inside callSap.
+      "src/app/api/sap/tdd/tenant-services/route.ts",
       "src/app/api/sap/tdd/write/route.ts",
     ]);
   });

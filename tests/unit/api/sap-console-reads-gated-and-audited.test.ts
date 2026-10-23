@@ -64,6 +64,8 @@ const OTHER_LIVE_READS = {
   "hub-content": "src/app/api/sap/tdd/hub-content/route.ts",
   "hub-content/[id]": "src/app/api/sap/tdd/hub-content/[id]/route.ts",
   "hub-content/probe-all": "src/app/api/sap/tdd/hub-content/probe-all/route.ts",
+  // P1.2: the live listing of the tenant's own Gateway catalogue.
+  "tenant-services": "src/app/api/sap/tdd/tenant-services/route.ts",
 } as const;
 
 const ALL = { ...ROUTES, ...OTHER_LIVE_READS };

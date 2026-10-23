@@ -92,3 +92,31 @@ it("does not modify the row it was given", () => {
   stripODataEnvelope(row);
   expect(row).toEqual(V2_ROW);
 });
+
+describe("OData 4.01 control information (P1.4)", () => {
+  it("loses every key carrying @, prefixed or not", () => {
+    const row = {
+      "@context": `${HOST}/sap/opu/odata4/sap/x/$metadata#PurchaseOrder/$entity`,
+      "@id": `${HOST}/sap/opu/odata4/sap/x/PurchaseOrder('4500000123')`,
+      "@editLink": `${HOST}/sap/opu/odata4/sap/x/PurchaseOrder('4500000123')`,
+      "_Item@navigationLink": `${HOST}/sap/opu/odata4/sap/x/PurchaseOrder('4500000123')/_Item`,
+      "_Item@nextLink": `${HOST}/sap/opu/odata4/sap/x/PurchaseOrder('4500000123')/_Item?$skiptoken=1`,
+      PurchaseOrder: "4500000123",
+      Address: { "@type": "#x.Address", "@id": `${HOST}/x`, Street: "Main" },
+    };
+    const out = stripODataEnvelope(row);
+    expect(out).toEqual({ PurchaseOrder: "4500000123", Address: { Street: "Main" } });
+    expect(JSON.stringify(out)).not.toContain("s4hana.cloud.sap");
+  });
+});
+
+describe("a row with a property named __proto__", () => {
+  it("keeps it as a field and leaves the prototype alone", () => {
+    const row = JSON.parse('{"__proto__":{"polluted":true},"Name":"x"}') as Record<string, unknown>;
+    const out = stripODataEnvelope(row);
+    expect(Object.keys(out)).toEqual(["__proto__", "Name"]);
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect((out as { polluted?: boolean }).polluted).toBeUndefined();
+    expect(JSON.stringify(out)).toBe('{"__proto__":{"polluted":true},"Name":"x"}');
+  });
+});

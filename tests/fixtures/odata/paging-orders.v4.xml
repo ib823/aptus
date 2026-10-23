@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.4 query surface tests): the V4 twin of
+  paging-orders.v2.xml, with Edm.Date for the date. Every name and value is
+  invented; it is not, and is not copied from, any SAP $metadata document.
+-->
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="com.example.paging" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="OrderLineType">
+        <Key>
+          <PropertyRef Name="Order"/>
+          <PropertyRef Name="Line"/>
+        </Key>
+        <Property Name="Order" Type="Edm.String" Nullable="false" MaxLength="10"/>
+        <Property Name="Line" Type="Edm.Int32" Nullable="false"/>
+        <Property Name="Customer" Type="Edm.String" MaxLength="10"/>
+        <Property Name="CompanyCode" Type="Edm.String" MaxLength="4"/>
+        <Property Name="Status" Type="Edm.String" MaxLength="1"/>
+        <Property Name="NetAmount" Type="Edm.Decimal" Precision="15" Scale="2"/>
+        <Property Name="CreatedOn" Type="Edm.Date"/>
+        <Property Name="Note" Type="Edm.String" MaxLength="2000"/>
+      </EntityType>
+      <EntityContainer Name="Container">
+        <EntitySet Name="OrderLines" EntityType="com.example.paging.OrderLineType"/>
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

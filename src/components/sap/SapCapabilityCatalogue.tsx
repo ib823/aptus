@@ -41,6 +41,8 @@ interface HubItem {
   source?: "sap" | "partner";
   domain?: string | null;
   communicationScenarios: string[];
+  /** P1.2: the scenarios SAP's own table lists this service under, by its address (S/4 Public). */
+  commScenarios?: { id: string; name: string | null; direction: string | null }[];
   scopeItemCodes: string[];
   itemCount: number | null;
   /** TRUE = repo-authored placeholder, not SAP-published. Null = unrecorded. */
@@ -922,11 +924,22 @@ export function SapCapabilityCatalogue({
                                 capability={probedCapability[item.id] ?? item.capability ?? null}
                                 subscribe={item.availabilityNote === "subscribe"}
                               />
-                              {item.communicationScenarios[0] && (
-                                <code className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-xs" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-primary)" }}>
-                                  {item.communicationScenarios[0]}
-                                </code>
-                              )}
+                              {/* SAP's scenario table first (P1.2), the Hub row's own field otherwise:
+                                  the first scenario and how many more enable the same service. */}
+                              {(() => {
+                                const scenarios = item.commScenarios?.length ? item.commScenarios.map((c) => c.id) : item.communicationScenarios;
+                                if (!scenarios[0]) return null;
+                                return (
+                                  <code
+                                    className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-xs"
+                                    style={{ background: "var(--surface-ink-tint)", color: "var(--ink-primary)" }}
+                                    title={scenarios.length > 1 ? `Any one of: ${scenarios.join(", ")}` : undefined}
+                                  >
+                                    {scenarios[0]}
+                                    {scenarios.length > 1 ? ` +${scenarios.length - 1}` : ""}
+                                  </code>
+                                );
+                              })()}
                               {item.dataConfirmed && (
                                 <span className="text-xs font-medium" style={{ color: "var(--status-signed-fg)" }}>
                                   ✓ data-confirmed

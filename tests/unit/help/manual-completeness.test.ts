@@ -103,6 +103,15 @@ describe("structural facts are derived, not restated", () => {
     expect(tower?.openTo).toContain("Partner Lead");
   });
 
+  it("lists only platform administrators for an admin-only screen", () => {
+    // The rail hides an `adminOnly` screen from every other role and the page
+    // refuses them, so the workspace's roster would name roles it turns away.
+    // Catalogue health listed Support until the roster honoured the flag.
+    for (const slug of ["control-tower/parity", "operations-center/catalogue"]) {
+      expect(manualScreen(slug)?.openTo, slug).toEqual(["Platform Admin"]);
+    }
+  });
+
   it("renders the incident rules from the constants the endpoint scores with", () => {
     // Not a copy: a threshold change must move this page too, which is why the
     // severities are named constants rather than inline comparisons.

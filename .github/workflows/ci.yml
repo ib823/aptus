@@ -83,7 +83,10 @@ jobs:
       # study quotes the simulator. Fails when the generated registry JSON or a
       # generated block in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md is
       # stale, or when its sections 1 and 3 type a coverage figure into prose
-      # outside a block. Plain Node and tsx, no database; a few seconds.
+      # outside a block. P1.9: also fails when docs/coreedge/parity-scorecard.json
+      # (what /control-tower/parity renders) is stale, and prints the two input
+      # digests to the step summary, so this run can be compared with the page
+      # served from the same commit. Plain Node and tsx, no database; a few seconds.
       - name: CoreEdge capability registry and roadmap figures
         run: pnpm coreedge:check
 
@@ -207,6 +210,13 @@ jobs:
       # so the fix cannot quietly bleed into >=900px.
       - name: Run Discover responsive e2e
         run: pnpm test:e2e:discover-responsive
+
+      # P1.2: Discover's "On this tenant" listing (seeded from the synthetic
+      # lab-shape fixture, no SAP call) and "From a file" upload, as the
+      # builder. Both run on the consultant project, which the smoke suite
+      # never touches, so they have their own step.
+      - name: Run Discover tenant and upload e2e
+        run: pnpm test:e2e:discover-tenant
 
       - name: Upload Playwright report
         if: always()

@@ -1,0 +1,875 @@
+{
+  "generatedBy": "scripts/coreedge/render-roadmap-figures.mjs (pnpm coreedge:figures)",
+  "schemaVersion": 1,
+  "inputs": {
+    "matrix": {
+      "path": "docs/coreedge/gap-matrix.json",
+      "sha256": "1c5b56ceb466c2091e11c4077ad1966ab7da796eb75c9dd9b1f7058d5df6b9be",
+      "revisedOn": "2026-10-23"
+    },
+    "registry": {
+      "path": "docs/coreedge/capability-registry.json",
+      "sha256": "e825b54176feaf805a692b301442598c82df84001675eebb941c098a1c210958"
+    }
+  },
+  "model": {
+    "totalPermutations": 1119744,
+    "validScenarios": 497340,
+    "lifecycleStages": 18,
+    "headlineHosting": "SHARED",
+    "networks": [
+      "PUBLIC_INTERNET",
+      "SAP_SIDE_IP_ALLOWLIST",
+      "PRIVATE_NETWORK"
+    ]
+  },
+  "integrationSuite": {
+    "fullySupported": 133875,
+    "atLeastPartial": 466725,
+    "fullPct": 26.9,
+    "partialPct": 93.8,
+    "lifecycleFull": 5
+  },
+  "steps": [
+    {
+      "id": "Today",
+      "name": "CoreEdge today",
+      "fullySupported": 0,
+      "atLeastPartial": 1512,
+      "fullPct": 0,
+      "partialPct": 0.3,
+      "lifecycleFull": 1,
+      "behindIntegrationSuite": {
+        "fullPoints": 26.9,
+        "partialPoints": 93.5
+      },
+      "upgrades": null,
+      "topBlockers": [
+        {
+          "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+          "label": "network SAP_SIDE_IP_ALLOWLIST",
+          "leveragePct": 6.7,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "origin:PARTNER",
+          "label": "origin PARTNER",
+          "leveragePct": 6.6,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "origin:SAP_STANDARD",
+          "label": "origin SAP_STANDARD",
+          "leveragePct": 6.6,
+          "soleBlocker": 0
+        }
+      ]
+    },
+    {
+      "id": "P0",
+      "name": "Phase 0: Harden what exists",
+      "fullySupported": 0,
+      "atLeastPartial": 1512,
+      "fullPct": 0,
+      "partialPct": 0.3,
+      "lifecycleFull": 2,
+      "behindIntegrationSuite": {
+        "fullPoints": 26.9,
+        "partialPoints": 93.5
+      },
+      "upgrades": {
+        "total": 7,
+        "creditedToday": 5
+      },
+      "topBlockers": [
+        {
+          "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+          "label": "network SAP_SIDE_IP_ALLOWLIST",
+          "leveragePct": 6.7,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "origin:PARTNER",
+          "label": "origin PARTNER",
+          "leveragePct": 6.6,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "origin:SAP_STANDARD",
+          "label": "origin SAP_STANDARD",
+          "leveragePct": 6.6,
+          "soleBlocker": 0
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Phase 1: Any SAP OData API, contract-first, with a Tenant Twin",
+      "fullySupported": 36,
+      "atLeastPartial": 1512,
+      "fullPct": 0,
+      "partialPct": 0.3,
+      "lifecycleFull": 3,
+      "behindIntegrationSuite": {
+        "fullPoints": 26.9,
+        "partialPoints": 93.5
+      },
+      "upgrades": {
+        "total": 12,
+        "creditedToday": 1
+      },
+      "topBlockers": [
+        {
+          "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+          "label": "network SAP_SIDE_IP_ALLOWLIST",
+          "leveragePct": 8.6,
+          "soleBlocker": 36
+        },
+        {
+          "cell": "network:PRIVATE_NETWORK",
+          "label": "network PRIVATE_NETWORK",
+          "leveragePct": 5.9,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "targetTech:BTP_SERVICE|REST",
+          "label": "targetTech BTP_SERVICE / REST",
+          "leveragePct": 0.7,
+          "soleBlocker": 0
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Phase 2: Postman before code, full OData writes, every language",
+      "fullySupported": 432,
+      "atLeastPartial": 6384,
+      "fullPct": 0.1,
+      "partialPct": 1.3,
+      "lifecycleFull": 4,
+      "behindIntegrationSuite": {
+        "fullPoints": 26.8,
+        "partialPoints": 92.5
+      },
+      "upgrades": {
+        "total": 20,
+        "creditedToday": 0
+      },
+      "topBlockers": [
+        {
+          "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+          "label": "network SAP_SIDE_IP_ALLOWLIST",
+          "leveragePct": 9.2,
+          "soleBlocker": 432
+        },
+        {
+          "cell": "network:PRIVATE_NETWORK",
+          "label": "network PRIVATE_NETWORK",
+          "leveragePct": 6.3,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "targetTech:BTP_SERVICE|REST",
+          "label": "targetTech BTP_SERVICE / REST",
+          "leveragePct": 0.8,
+          "soleBlocker": 0
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Phase 3: Govern every connected program as code",
+      "fullySupported": 648,
+      "atLeastPartial": 7980,
+      "fullPct": 0.1,
+      "partialPct": 1.6,
+      "lifecycleFull": 12,
+      "behindIntegrationSuite": {
+        "fullPoints": 26.8,
+        "partialPoints": 92.2
+      },
+      "upgrades": {
+        "total": 16,
+        "creditedToday": 1
+      },
+      "topBlockers": [
+        {
+          "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+          "label": "network SAP_SIDE_IP_ALLOWLIST",
+          "leveragePct": 9.5,
+          "soleBlocker": 648
+        },
+        {
+          "cell": "network:PRIVATE_NETWORK",
+          "label": "network PRIVATE_NETWORK",
+          "leveragePct": 6.5,
+          "soleBlocker": 0
+        },
+        {
+          "cell": "targetTech:BTP_SERVICE|REST",
+          "label": "targetTech BTP_SERVICE / REST",
+          "leveragePct": 0.8,
+          "soleBlocker": 0
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Phase 4: Reach any SAP landscape, run anywhere",
+      "fullySupported": 7560,
+      "atLeastPartial": 28500,
+      "fullPct": 1.5,
+      "partialPct": 5.7,
+      "lifecycleFull": 13,
+      "behindIntegrationSuite": {
+        "fullPoints": 25.4,
+        "partialPoints": 88.1
+      },
+      "upgrades": {
+        "total": 17,
+        "creditedToday": 0
+      },
+      "topBlockers": [
+        {
+          "cell": "sapAuth:ECC|OAUTH_SAML_BEARER",
+          "label": "sapAuth ECC / OAUTH_SAML_BEARER",
+          "leveragePct": 1,
+          "soleBlocker": 648
+        },
+        {
+          "cell": "sapAuth:ECC|PRINCIPAL_PROPAGATION",
+          "label": "sapAuth ECC / PRINCIPAL_PROPAGATION",
+          "leveragePct": 1,
+          "soleBlocker": 648
+        },
+        {
+          "cell": "sapAuth:S4_ONPREM|OAUTH_SAML_BEARER",
+          "label": "sapAuth S4_ONPREM / OAUTH_SAML_BEARER",
+          "leveragePct": 1,
+          "soleBlocker": 648
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Phase 5: Every protocol and pattern on one pipeline",
+      "fullySupported": 24288,
+      "atLeastPartial": 164331,
+      "fullPct": 4.9,
+      "partialPct": 33,
+      "lifecycleFull": 14,
+      "behindIntegrationSuite": {
+        "fullPoints": 22,
+        "partialPoints": 60.8
+      },
+      "upgrades": {
+        "total": 79,
+        "creditedToday": 0
+      },
+      "topBlockers": [
+        {
+          "cell": "sapAuth:S4_ONPREM|OAUTH_SAML_BEARER",
+          "label": "sapAuth S4_ONPREM / OAUTH_SAML_BEARER",
+          "leveragePct": 1.4,
+          "soleBlocker": 1728
+        },
+        {
+          "cell": "sapAuth:S4_ONPREM|PRINCIPAL_PROPAGATION",
+          "label": "sapAuth S4_ONPREM / PRINCIPAL_PROPAGATION",
+          "leveragePct": 1.4,
+          "soleBlocker": 1728
+        },
+        {
+          "cell": "sapAuth:S4_PRIVATE_RISE|OAUTH_SAML_BEARER",
+          "label": "sapAuth S4_PRIVATE_RISE / OAUTH_SAML_BEARER",
+          "leveragePct": 1.4,
+          "soleBlocker": 1728
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "Phase 6: AI-native and provable",
+      "fullySupported": 30360,
+      "atLeastPartial": 265599,
+      "fullPct": 6.1,
+      "partialPct": 53.4,
+      "lifecycleFull": 15,
+      "behindIntegrationSuite": {
+        "fullPoints": 20.8,
+        "partialPoints": 40.4
+      },
+      "upgrades": {
+        "total": 15,
+        "creditedToday": 1
+      },
+      "topBlockers": [
+        {
+          "cell": "sapAuth:S4_ONPREM|OAUTH_SAML_BEARER",
+          "label": "sapAuth S4_ONPREM / OAUTH_SAML_BEARER",
+          "leveragePct": 1.4,
+          "soleBlocker": 2160
+        },
+        {
+          "cell": "sapAuth:S4_ONPREM|PRINCIPAL_PROPAGATION",
+          "label": "sapAuth S4_ONPREM / PRINCIPAL_PROPAGATION",
+          "leveragePct": 1.4,
+          "soleBlocker": 2160
+        },
+        {
+          "cell": "sapAuth:S4_PRIVATE_RISE|OAUTH_SAML_BEARER",
+          "label": "sapAuth S4_PRIVATE_RISE / OAUTH_SAML_BEARER",
+          "leveragePct": 1.4,
+          "soleBlocker": 2160
+        }
+      ]
+    }
+  ],
+  "blockersToday": [
+    {
+      "rank": 1,
+      "cell": "network:SAP_SIDE_IP_ALLOWLIST",
+      "label": "network SAP_SIDE_IP_ALLOWLIST",
+      "level": "none",
+      "leverage": 33314,
+      "leveragePct": 6.7,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P4",
+      "note": "The hosted instance has no fixed egress address: no egress setting exists in the code, Vercel egress is dynamic unless Static IPs are bought [E47], and none is recorded for production (P4.4). SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+    },
+    {
+      "rank": 2,
+      "cell": "origin:PARTNER",
+      "label": "origin PARTNER",
+      "level": "partial",
+      "leverage": 32616,
+      "leveragePct": 6.6,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P1",
+      "note": "Partner-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No partner service is recorded against a live tenant."
+    },
+    {
+      "rank": 3,
+      "cell": "origin:SAP_STANDARD",
+      "label": "origin SAP_STANDARD",
+      "level": "partial",
+      "leverage": 32616,
+      "leveragePct": 6.6,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P1",
+      "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4)."
+    },
+    {
+      "rank": 4,
+      "cell": "origin:CUSTOMER_CUSTOM",
+      "label": "origin CUSTOMER_CUSTOM",
+      "level": "partial",
+      "leverage": 32172,
+      "leveragePct": 6.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P1",
+      "note": "Customer-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No Z* or YY1_* call is recorded against a live tenant."
+    },
+    {
+      "rank": 5,
+      "cell": "network:PRIVATE_NETWORK",
+      "label": "network PRIVATE_NETWORK",
+      "level": "none",
+      "leverage": 23294,
+      "leveragePct": 4.7,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P4",
+      "note": "Private hosts are refused: connection-url-guard.ts rejects IP literals, .local and .internal names. SAP calls use the platform fetch with no proxy, tunnel or dispatcher (read.ts, write.ts; P4.1)."
+    },
+    {
+      "rank": 6,
+      "cell": "targetTech:BTP_SERVICE|REST",
+      "label": "targetTech BTP_SERVICE / REST",
+      "level": "none",
+      "leverage": 2986,
+      "leveragePct": 0.6,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P5",
+      "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+    },
+    {
+      "rank": 7,
+      "cell": "targetTech:BTP_SERVICE|SOAP",
+      "label": "targetTech BTP_SERVICE / SOAP",
+      "level": "none",
+      "leverage": 2986,
+      "leveragePct": 0.6,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P5; never full",
+      "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+    },
+    {
+      "rank": 8,
+      "cell": "targetTech:NON_SAP_SAAS|REST",
+      "label": "targetTech NON_SAP_SAAS / REST",
+      "level": "none",
+      "leverage": 2986,
+      "leveragePct": 0.6,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P5",
+      "note": "No REST executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+    },
+    {
+      "rank": 9,
+      "cell": "targetTech:NON_SAP_SAAS|SOAP",
+      "label": "targetTech NON_SAP_SAAS / SOAP",
+      "level": "none",
+      "leverage": 2986,
+      "leveragePct": 0.6,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P5; never full",
+      "note": "No SOAP executor: the broker reads and creates over OData only (service-path.ts ODATA_VERSIONS; read.ts and write.ts)."
+    },
+    {
+      "rank": 10,
+      "cell": "sapAuth:BTP_SERVICE|API_KEY",
+      "label": "sapAuth BTP_SERVICE / API_KEY",
+      "level": "partial",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "API_KEY toward SAP. A header key works (api-key-header.ts) but cannot be combined with OAuth, which Ariba needs (connection-resolver.ts)."
+    },
+    {
+      "rank": 11,
+      "cell": "sapAuth:BTP_SERVICE|OAUTH_SAML_BEARER",
+      "label": "sapAuth BTP_SERVICE / OAUTH_SAML_BEARER",
+      "level": "partial",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "OAUTH_SAML_BEARER toward SAP. The assertion is built for SuccessFactors (saml-assertion.ts) and has not been proven against a live tenant (P0.9)."
+    },
+    {
+      "rank": 12,
+      "cell": "sapAuth:BTP_SERVICE|PRINCIPAL_PROPAGATION",
+      "label": "sapAuth BTP_SERVICE / PRINCIPAL_PROPAGATION",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Never raised",
+      "note": "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type)."
+    },
+    {
+      "rank": 13,
+      "cell": "sapAuth:BTP_SERVICE|X509_MTLS",
+      "label": "sapAuth BTP_SERVICE / X509_MTLS",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P4; never full",
+      "note": "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key)."
+    },
+    {
+      "rank": 14,
+      "cell": "sapAuth:ECC|OAUTH_SAML_BEARER",
+      "label": "sapAuth ECC / OAUTH_SAML_BEARER",
+      "level": "partial",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "OAUTH_SAML_BEARER toward SAP. The assertion is built for SuccessFactors (saml-assertion.ts) and has not been proven against a live tenant (P0.9)."
+    },
+    {
+      "rank": 15,
+      "cell": "sapAuth:ECC|PRINCIPAL_PROPAGATION",
+      "label": "sapAuth ECC / PRINCIPAL_PROPAGATION",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P6; never full",
+      "note": "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type)."
+    },
+    {
+      "rank": 16,
+      "cell": "sapAuth:ECC|X509_MTLS",
+      "label": "sapAuth ECC / X509_MTLS",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P4",
+      "note": "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key)."
+    },
+    {
+      "rank": 17,
+      "cell": "sapAuth:S4_ONPREM|OAUTH_SAML_BEARER",
+      "label": "sapAuth S4_ONPREM / OAUTH_SAML_BEARER",
+      "level": "partial",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "OAUTH_SAML_BEARER toward SAP. The assertion is built for SuccessFactors (saml-assertion.ts) and has not been proven against a live tenant (P0.9)."
+    },
+    {
+      "rank": 18,
+      "cell": "sapAuth:S4_ONPREM|PRINCIPAL_PROPAGATION",
+      "label": "sapAuth S4_ONPREM / PRINCIPAL_PROPAGATION",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P6; never full",
+      "note": "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type)."
+    },
+    {
+      "rank": 19,
+      "cell": "sapAuth:S4_ONPREM|X509_MTLS",
+      "label": "sapAuth S4_ONPREM / X509_MTLS",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P4",
+      "note": "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key)."
+    },
+    {
+      "rank": 20,
+      "cell": "sapAuth:S4_PRIVATE_RISE|OAUTH_SAML_BEARER",
+      "label": "sapAuth S4_PRIVATE_RISE / OAUTH_SAML_BEARER",
+      "level": "partial",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "OAUTH_SAML_BEARER toward SAP. The assertion is built for SuccessFactors (saml-assertion.ts) and has not been proven against a live tenant (P0.9)."
+    },
+    {
+      "rank": 21,
+      "cell": "sapAuth:S4_PRIVATE_RISE|PRINCIPAL_PROPAGATION",
+      "label": "sapAuth S4_PRIVATE_RISE / PRINCIPAL_PROPAGATION",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P6; never full",
+      "note": "Every call runs as the connection's one stored user; no end-user identity reaches SAP (connection-resolver.ts SapAuthType has no such type)."
+    },
+    {
+      "rank": 22,
+      "cell": "sapAuth:S4_PRIVATE_RISE|X509_MTLS",
+      "label": "sapAuth S4_PRIVATE_RISE / X509_MTLS",
+      "level": "none",
+      "leverage": 2724,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P4",
+      "note": "No client-certificate auth type (connection-resolver.ts SapAuthType: basic, bearer, oauth-client-credentials, oauth-saml-bearer, api-key)."
+    },
+    {
+      "rank": 23,
+      "cell": "consumerAuth:ABAP_CLOUD|MTLS",
+      "label": "consumerAuth ABAP_CLOUD / MTLS",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Never raised",
+      "note": "No client-certificate handling on the northbound routes (auth.ts)."
+    },
+    {
+      "rank": 24,
+      "cell": "consumerAuth:ABAP_CLOUD|OAUTH_CLIENT_CREDENTIALS",
+      "label": "consumerAuth ABAP_CLOUD / OAUTH_CLIENT_CREDENTIALS",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P2",
+      "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+    },
+    {
+      "rank": 25,
+      "cell": "consumerAuth:ABAP_CLOUD|STATIC_BEARER",
+      "label": "consumerAuth ABAP_CLOUD / STATIC_BEARER",
+      "level": "partial",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "Static bearer key. Whether a communication arrangement can store a static header is unconfirmed; no ABAP sample."
+    },
+    {
+      "rank": 26,
+      "cell": "consumerAuth:ABAP_CLOUD|USER_DELEGATED_OIDC",
+      "label": "consumerAuth ABAP_CLOUD / USER_DELEGATED_OIDC",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P6; never full",
+      "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+    },
+    {
+      "rank": 27,
+      "cell": "consumerAuth:ABAP_ONPREM|MTLS",
+      "label": "consumerAuth ABAP_ONPREM / MTLS",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Never raised",
+      "note": "No client-certificate handling on the northbound routes (auth.ts)."
+    },
+    {
+      "rank": 28,
+      "cell": "consumerAuth:ABAP_ONPREM|OAUTH_CLIENT_CREDENTIALS",
+      "label": "consumerAuth ABAP_ONPREM / OAUTH_CLIENT_CREDENTIALS",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Full in P2",
+      "note": "No northbound token endpoint (P2.5): the broker accepts a static bearer key only (auth.ts)."
+    },
+    {
+      "rank": 29,
+      "cell": "consumerAuth:ABAP_ONPREM|STATIC_BEARER",
+      "label": "consumerAuth ABAP_ONPREM / STATIC_BEARER",
+      "level": "partial",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial today; never full",
+      "note": "Static bearer key. SM59 stores no static header, so the header is set in code; no ABAP sample."
+    },
+    {
+      "rank": 30,
+      "cell": "consumerAuth:ABAP_ONPREM|USER_DELEGATED_OIDC",
+      "label": "consumerAuth ABAP_ONPREM / USER_DELEGATED_OIDC",
+      "level": "none",
+      "leverage": 2687,
+      "leveragePct": 0.5,
+      "soleBlocker": 0,
+      "raisedIn": "Partial from P6; never full",
+      "note": "No user-delegated login on the northbound routes (auth.ts); console sign-in is a magic link or passkey."
+    }
+  ],
+  "lifecycle": [
+    {
+      "stage": "DISCOVER",
+      "meaning": "Find which APIs exist and which work on *this* system",
+      "integrationSuite": "full",
+      "today": "partial",
+      "reachesFullIn": "P1"
+    },
+    {
+      "stage": "DESIGN_MAP",
+      "meaning": "Define the contract, the fields and the mapping",
+      "integrationSuite": "full",
+      "today": "partial",
+      "reachesFullIn": "P5"
+    },
+    {
+      "stage": "MOCK_TEST_BEFORE_CODE",
+      "meaning": "Try and test an API before writing a program",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P2"
+    },
+    {
+      "stage": "DEVELOP_SDK_CODEGEN",
+      "meaning": "Typed client in the developer's language",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "CI_PRECOMMIT_GOVERNANCE",
+      "meaning": "Checks in the developer's commit and CI pipeline",
+      "integrationSuite": "partial",
+      "today": "none",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "DEPLOY_PROMOTE_ENVIRONMENTS",
+      "meaning": "Move DEV to TEST to PROD with evidence",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "RUN_MONITOR_ALERT",
+      "meaning": "Watch, trace and alert the right people",
+      "integrationSuite": "full",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "GOVERN_AUDIT_COMPLY",
+      "meaning": "Approvals, separation of duties, audit",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "SECRETS_KEYS",
+      "meaning": "Custody and rotation of credentials",
+      "integrationSuite": "full",
+      "today": "partial",
+      "reachesFullIn": "P0"
+    },
+    {
+      "stage": "SAP_UPGRADE_IMPACT",
+      "meaning": "Know what an SAP release breaks before it breaks",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "SELF_HOST_SETUP",
+      "meaning": "Install and run it yourself",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P4"
+    },
+    {
+      "stage": "AI_ASSIST",
+      "meaning": "AI help that is checked against real runs",
+      "integrationSuite": "partial",
+      "today": "none",
+      "reachesFullIn": "P6"
+    },
+    {
+      "stage": "ONBOARDING_TIME_TO_FIRST_CALL",
+      "meaning": "From sign-up to first call",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "PROVIDER_BUILD_TRANSPORT",
+      "meaning": "Build a Z*/YY1_* service, verify it per environment, transport it",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "P3"
+    },
+    {
+      "stage": "API_VERSIONING",
+      "meaning": "CoreEdge's own contract with consumers: versions, deprecation, changelog",
+      "integrationSuite": "full",
+      "today": "full",
+      "reachesFullIn": "Today"
+    },
+    {
+      "stage": "PERFORMANCE_TEST",
+      "meaning": "Load-test before promotion",
+      "integrationSuite": "none",
+      "today": "none",
+      "reachesFullIn": "Never; partial at most (no item delivers the rest)"
+    },
+    {
+      "stage": "SUPPORT_INCIDENT",
+      "meaning": "Who is paged, the status page, consumer tickets",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "Never; partial at most (no item delivers the rest)"
+    },
+    {
+      "stage": "RETIRE",
+      "meaning": "Revoke keys, archive evidence, delete fixtures and twin data",
+      "integrationSuite": "partial",
+      "today": "partial",
+      "reachesFullIn": "Never; partial at most (no item delivers the rest)"
+    }
+  ],
+  "hosting": [
+    {
+      "hosting": "SHARED",
+      "headline": true,
+      "network": {
+        "PUBLIC_INTERNET": "full",
+        "SAP_SIDE_IP_ALLOWLIST": "none",
+        "PRIVATE_NETWORK": "none"
+      },
+      "fullySupported": 0,
+      "atLeastPartial": 1512,
+      "fullPct": 0,
+      "partialPct": 0.3
+    },
+    {
+      "hosting": "DEDICATED",
+      "headline": false,
+      "network": {
+        "PUBLIC_INTERNET": "full",
+        "SAP_SIDE_IP_ALLOWLIST": "partial",
+        "PRIVATE_NETWORK": "none"
+      },
+      "fullySupported": 0,
+      "atLeastPartial": 3024,
+      "fullPct": 0,
+      "partialPct": 0.6
+    },
+    {
+      "hosting": "SELF_HOSTED",
+      "headline": false,
+      "network": {
+        "PUBLIC_INTERNET": "full",
+        "SAP_SIDE_IP_ALLOWLIST": "partial",
+        "PRIVATE_NETWORK": "partial"
+      },
+      "fullySupported": 0,
+      "atLeastPartial": 3996,
+      "fullPct": 0,
+      "partialPct": 0.8
+    },
+    {
+      "hosting": "CONNECTOR",
+      "headline": false,
+      "network": {
+        "PUBLIC_INTERNET": "none",
+        "SAP_SIDE_IP_ALLOWLIST": "none",
+        "PRIVATE_NETWORK": "none"
+      },
+      "fullySupported": 0,
+      "atLeastPartial": 0,
+      "fullPct": 0,
+      "partialPct": 0
+    }
+  ],
+  "fullToday": [
+    {
+      "cell": "targetTech:S4_PUBLIC|ODATA_V2",
+      "label": "targetTech S4_PUBLIC / ODATA_V2",
+      "note": "OData V2 on s4hana. Live: The S/4HANA Cloud Public demo tenant answered V2 reads (roadmap R1 section 7)."
+    },
+    {
+      "cell": "network:PUBLIC_INTERNET",
+      "label": "network PUBLIC_INTERNET",
+      "note": "Internet-facing SAP cloud hosts. Live: Internet-facing SAP cloud hosts answered from the hosted instance (R1 section 7)."
+    },
+    {
+      "cell": "sapAuth:BASIC",
+      "label": "sapAuth BASIC (every target)",
+      "note": "BASIC toward SAP. Live: The demo tenant's communication user (R1 section 7)."
+    },
+    {
+      "cell": "sapAuth:OAUTH_CLIENT_CREDENTIALS",
+      "label": "sapAuth OAUTH_CLIENT_CREDENTIALS (every target)",
+      "note": "OAUTH_CLIENT_CREDENTIALS toward SAP. Tested and documented; no material limit."
+    },
+    {
+      "cell": "consumerAuth:JS_TS|STATIC_BEARER",
+      "label": "consumerAuth JS_TS / STATIC_BEARER",
+      "note": "Static bearer key. Tested and documented; no material limit."
+    },
+    {
+      "cell": "lifecycle:API_VERSIONING",
+      "label": "lifecycle API_VERSIONING",
+      "note": "Dated northbound versions with deprecation headers and a changelog. Tested and documented; no material limit."
+    }
+  ],
+  "problems": []
+}

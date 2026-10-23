@@ -90,6 +90,22 @@ test.describe("Responsive — Discover (Studio shell)", () => {
         expect(layout.railWidth).toBe(220);
       }
 
+      /*
+       * P1.2: Discover's three ways in are tabs. Each panel must fit too: the
+       * tenant's listing carries long technical names (/CPD/SC_PROJ_ENGMT_…)
+       * and the file panel a button row, either of which could push the page
+       * sideways at 375px where the catalogue alone does not.
+       */
+      const tablist = page.getByRole("tablist", { name: "Where to find a service" });
+      await expect(tablist).toBeVisible();
+      for (const name of ["On this tenant", "From a file", "SAP catalogue"]) {
+        const tab = tablist.getByRole("tab", { name });
+        await tab.click();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
+        const panelWidth = await page.evaluate(() => document.body.scrollWidth);
+        expect(panelWidth, `${name} at ${viewport.name}`).toBeLessThanOrEqual(viewport.width + 1);
+      }
+
       if (process.env.E2E_VISUAL_REGRESSION === "true") {
         await expect(page).toHaveScreenshot(`discover-${viewport.name}.png`, {
           maxDiffPixelRatio: 0.05,
