@@ -129,8 +129,12 @@ export class ContractGate {
 
   constructor(private readonly slots: () => number = contractIsolates) {}
 
-  /** A slot within `waitMs` — the function that frees it — or null (BUSY). */
-  acquire(tenant: string | null, waitMs: number): Promise<(() => void) | null> {
+  /**
+   * A slot within `waitMs` — the function that frees it — or null (BUSY).
+   * `onWaitEnded` is called when the null is the wait running out, rather than
+   * a full queue or the organisation's share refusing it at once.
+   */
+  acquire(tenant: string | null, waitMs: number, onWaitEnded?: () => void): Promise<(() => void) | null> {
     if (this.waiting.length === 0 && this.running < this.slots() && this.mayRun(tenant)) return Promise.resolve(this.occupy(tenant));
     if (this.waiting.length >= GATE.maxWaiting) return Promise.resolve(null);
     if (tenant !== null && this.waiting.filter((w) => w.tenant === tenant).length >= GATE.perOrgWaiting) return Promise.resolve(null);
@@ -145,6 +149,7 @@ export class ContractGate {
       const timer = setTimeout(() => {
         const i = this.waiting.indexOf(waiter);
         if (i >= 0) this.waiting.splice(i, 1);
+        onWaitEnded?.();
         resolve(null);
       }, Math.max(0, waitMs));
       this.waiting.push(waiter);
@@ -280,8 +285,16 @@ export async function runContractJob<K extends Job["kind"]>(
   const admission = await contractJobAdmission<JobOutput<K>>(kind, tenant);
   if (admission !== null) return admission;
   const wait = left(GATE.maxWaitMs);
-  const release = wait > 0 ? await gate.acquire(tenant, wait) : null;
-  if (!release) return refuse("BUSY", kind, queuedAt, deadlineAt !== null && deadlineAt <= Date.now() ? REQUEST_DEADLINE_CAUSE : undefined);
+  let waitedOut = false;
+  const release = wait > 0 ? await gate.acquire(tenant, wait, () => (waitedOut = true)) : null;
+  if (!release) {
+    // The caller's deadline ended it when that deadline bounded the wait and the
+    // wait ran out: asked of the gate, not of the clock. The gate's timer runs on
+    // the event loop's cached time, which under load ends the wait some ms before
+    // Date.now() reaches deadlineAt, and the refusal lost its cause.
+    const byCaller = deadlineAt !== null && (wait <= 0 || (waitedOut && wait < GATE.maxWaitMs));
+    return refuse("BUSY", kind, queuedAt, byCaller ? REQUEST_DEADLINE_CAUSE : undefined);
+  }
   let reservation: ContractTimeReservation | null = null;
   let wallMs = 0;
   try {

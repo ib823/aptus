@@ -23,7 +23,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const time = vi.hoisted(() => ({
   check: vi.fn(async () => ({ ok: true as const })),
@@ -47,7 +47,28 @@ import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver
 import { FETCH_GATE, VERIFY_BUSY_DETAIL, VERIFY_BUSY_INSTANCE_DETAIL, verifyServiceMetadata } from "@/lib/studio/service-verify";
 
 vi.setConfig({ testTimeout: 120_000 });
-afterEach(() => {
+
+/*
+ * The gate is one per process, so a test that fails before releasing its
+ * holder used to leave the slot taken, and every later test met a busy gate
+ * (one load-timing failure under the full suite became six). Every holder is
+ * released after each test and the gate drained; the call history of the
+ * allowance mocks is per test.
+ */
+const holders = new Set<() => void>();
+beforeEach(() => {
+  time.check.mockClear();
+  time.reserve.mockClear();
+  time.charge.mockClear();
+});
+afterEach(async () => {
+  for (const release of holders) release();
+  holders.clear();
+  for (let i = 0; i < 250; i++) {
+    const s = contractGateState();
+    if (s.running === 0 && s.waiting === 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
@@ -60,6 +81,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
 function holding() {
   let release!: () => void;
   const released = new Promise<void>((resolve) => (release = resolve));
+  holders.add(() => release());
   const load = vi.fn(async () => {
     await released;
     return null;
@@ -176,6 +198,44 @@ describe("the gate's bounds, before anything is loaded", () => {
     expect(contractGateState()).toMatchObject({ running: 1, waiting: 0 });
     first.release();
     await running;
+  });
+
+  /*
+   * The gate's timer runs on the event loop's cached time, so under load it can
+   * end the wait before Date.now() reaches deadlineAt. The cause was read from
+   * the clock and was lost (BUSY with no cause); it is now the gate's own
+   * account of why it returned nothing. Date.now() frozen is that slip, exactly.
+   */
+  it("a wait the caller's deadline ended is request-deadline even when the clock lags the timer", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const first = holding();
+    const running = runContractJob("render", first.load, { tenant: "org_lag_holder" });
+    await tick();
+    const t0 = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(t0);
+    const late = vi.fn(async () => null);
+    const r = await runContractJob("render", late, { tenant: "org_lag", deadlineAt: t0 + 100 });
+    expect(r).toMatchObject({ ok: false, reason: "BUSY", cause: "request-deadline" });
+    expect(late).not.toHaveBeenCalled();
+    vi.mocked(Date.now).mockRestore();
+    first.release();
+    await running;
+  });
+
+  it("a queue refusal is never blamed on the caller's deadline", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const first = holding();
+    const running = runContractJob("render", first.load, { tenant: "org_q" });
+    await tick();
+    const waiting = Array.from({ length: GATE.perOrgWaiting }, () => holding());
+    const queued = waiting.map((h) => runContractJob("render", h.load, { tenant: "org_q" }));
+    await tick();
+    const r = await runContractJob("render", vi.fn(async () => null), { tenant: "org_q", deadlineAt: Date.now() + 5_000 });
+    expect(r).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(r).not.toMatchObject({ cause: "request-deadline" });
+    first.release();
+    for (const h of waiting) h.release();
+    await Promise.all([running, ...queued]);
   });
 
   it("the caller's deadline bounds the wait and the run together", async () => {
