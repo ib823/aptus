@@ -81,21 +81,54 @@ export type NorthboundErrorCode =
    * runs, with `supportedVersions` beside the message (versioned-route.ts).
    */
   | "UNSUPPORTED_VERSION"
+  /**
+   * The query asks for something the interface's query policy does not allow
+   * (P1.4): a field it may not read, filter or sort on, an operator, key
+   * lookup, a count or a page size. 400, with `error.query` naming the rule,
+   * the field and what is allowed instead. Nothing was sent to SAP.
+   */
+  | "POLICY_FIELD_NOT_GRANTED"
+  /**
+   * The paging cursor was valid when it was issued, but the chain cannot
+   * continue (P1.4): it expired, or the interface, its query policy, its
+   * grant or its connection changed since the first page. 409; start again
+   * from the first page.
+   */
+  | "CURSOR_STALE"
+  /**
+   * A key lookup found no record: SAP answered that nothing has this key
+   * (P1.4). 404, and not NOT_FOUND, which says the interface or its dataset
+   * does not exist; this is an answer, not a fault to retry.
+   */
+  | "RECORD_NOT_FOUND"
   | "INTERNAL";
 
 export function newCorrelationId(): string {
   return randomUUID();
 }
 
+/**
+ * The error envelope. `extraBody` adds fields beside the code and message
+ * (the query surface's `error.query`, P1.4), after them, so a client that
+ * reads only `code`, `message` and `correlationId` sees no change; without
+ * it the body is exactly what it always was.
+ */
 export function northboundError(
   code: NorthboundErrorCode,
   message: string,
   status: number,
   correlationId: string,
   extraHeaders: Record<string, string> = {},
+  extraBody?: Readonly<Record<string, unknown>>,
 ): NextResponse {
   return NextResponse.json(
-    { error: { code, message, correlationId } },
+    {
+      error:
+        extraBody === undefined
+          ? { code, message, correlationId }
+          : // The extras follow the three fields and can never replace one.
+            Object.assign({ code, message, correlationId }, extraBody, { code, message, correlationId }),
+    },
     {
       status,
       headers: {

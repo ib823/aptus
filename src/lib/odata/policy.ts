@@ -28,6 +28,7 @@ import { createHash } from "node:crypto";
 
 import { z } from "zod";
 
+import { LIMITS } from "@/lib/contracts/budget";
 import { canonicalJson } from "@/lib/contracts/canonical";
 import type { Lit } from "@/lib/odata/ast";
 import { IDENTIFIER_PATTERN, isQueryIdentifier } from "@/lib/odata/identifiers";
@@ -38,7 +39,7 @@ export type QueryFilterOp = (typeof QUERY_FILTER_OPS)[number];
 /** The source's JSON text, at most. */
 export const QUERY_POLICY_SOURCE_MAX_BYTES = 32 * 1024;
 /** The compiled policy's JSON text, at most: it rides in a governed call's statement. */
-export const QUERY_POLICY_COMPILED_MAX_BYTES = 64 * 1024;
+export const QUERY_POLICY_COMPILED_MAX_BYTES = LIMITS.queryPolicyCompiled.bytes;
 
 export const MAX_POLICY_SELECT = 512;
 export const MAX_POLICY_FILTER = 128;

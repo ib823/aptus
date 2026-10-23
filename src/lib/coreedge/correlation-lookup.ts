@@ -66,7 +66,21 @@ export interface AttributableRow {
   readonly durationMs: number | null;
   readonly connectionId: string | null;
   readonly replayed: boolean;
+  /**
+   * The query surface's rule (P1.4): why a query was refused, or what
+   * CoreEdge found in SAP's answer. Kept out of failureReason on purpose, so
+   * a query CoreEdge refused is never read as one that reached SAP. Absent on
+   * rows older than the column, as null.
+   */
+  readonly queryRule?: string | null;
 }
+
+/**
+ * Query rules that are CoreEdge's own judgement of an answer SAP gave without
+ * fault: the answer, or one record, too large to return. The request asked
+ * for too much; SAP is not where to look.
+ */
+const QUERY_RULES_OF_THE_REQUEST = new Set(["RESPONSE_TOO_LARGE", "ROW_TOO_LARGE"]);
 
 /** failureReasons CoreEdge itself records for a call it refused before SAP. */
 const REFUSED_BEFORE_SAP = new Set(["LIMITER_UNAVAILABLE", "CIRCUIT_OPEN", "HOST_NOT_ALLOWED"]);
@@ -108,6 +122,11 @@ function hopFor(row: AttributableRow): CorrelatedCall["brokenHop"] {
   // under COREEDGE_ENV_TENANT_HOSTS=enforce (P0.14b): the system it is bound to.
   if (failureReason === "HOST_NOT_ALLOWED") return "binding";
   if (status === 403 && bindingRefusal !== null) return "binding";
+  // The query surface (P1.4): a query CoreEdge refused before SAP was asked
+  // (its parameters, its policy, its cursor), or an answer too large to
+  // return, is the request's; SAP's own refusal of a query reached SAP.
+  const queryRule = row.queryRule ?? null;
+  if (queryRule !== null && (!reachedSap(row) || QUERY_RULES_OF_THE_REQUEST.has(queryRule))) return "request";
 
   // SAP's own answer, or the credential step on the way to it.
   if (reachedSap(row)) return "sapDataRead";
@@ -139,6 +158,11 @@ function describeOutcome(row: AttributableRow, rowCount: number | null): string 
   }
   if (failureReason === "HOST_NOT_ALLOWED") {
     return "This deployment's SAP system is configured at a host that is not on the SAP host allow-list, so the console refused the call. Nothing was sent to SAP.";
+  }
+  if (row.queryRule && QUERY_RULES_OF_THE_REQUEST.has(row.queryRule)) {
+    return row.queryRule === "ROW_TOO_LARGE"
+      ? "SAP answered, but one record is larger than this interface's page limit, so CoreEdge refused to return the page."
+      : "SAP answered, but the answer is larger than CoreEdge can return, so it was refused. Ask for fewer records.";
   }
   if (status >= 200 && status < 300) {
     const succeeded =
@@ -181,6 +205,11 @@ function refusedBeforeSap(row: AttributableRow): string {
     case "key":
       return row.status === 429 ? `Rate limited. ${nothing}` : `The key was not valid. ${nothing}`;
     case "request":
+      if (row.queryRule) {
+        return row.status === 409
+          ? `Refused: the paging cursor can no longer be used (${row.queryRule}); the caller starts again from the first page. ${nothing}`
+          : `Refused: the query cannot be served as sent (${row.queryRule}). ${nothing}`;
+      }
       return row.status === 409
         ? `Refused: this Idempotency-Key was already used for a different write, or that write is still in progress. ${nothing}`
         : `Refused as invalid: the request, or the feed's definition, lacks something the call needs. ${nothing}`;
@@ -238,6 +267,7 @@ export async function lookupCorrelationId(
       failureReason: true,
       connectionId: true,
       replayed: true,
+      queryRule: true,
     },
     orderBy: { at: "desc" },
   });

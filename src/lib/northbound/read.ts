@@ -29,6 +29,9 @@ import {
   failureReasonFromHttp,
 } from "@/lib/northbound/failure-reason";
 import type { NorthboundReadStatus } from "@/lib/northbound/read-status";
+import type { SapQuery } from "@/lib/odata/operation-compiler";
+import { queryOutcomeDetail, queryStatusForHttp, type QueryReadStatus } from "@/lib/odata/query-status";
+import { readQueryAnswer, type ParsedAnswer } from "@/lib/odata/response";
 
 // The status vocabulary and its HTTP/code tables live in a pure module, so the
 // fixture builder can share them without importing the connection resolver.
@@ -149,26 +152,32 @@ export interface ReadEntitySetInput {
   limit: number;
 }
 
-/**
- * Read one entity set through a resolved connection.
- *
- * Bounded by an AbortController: a hung tenant fails the request rather than
- * holding a server thread until something else times out.
- *
- * `fetchImpl` and `authHeadersFor` are the transport (governed/transport.ts):
- * the credential step is network too (a token exchange), so a transport that
- * must not reach the network replaces both.
- */
-export async function readEntitySet(
-  input: ReadEntitySetInput,
-  fetchImpl: typeof fetch = fetch,
-  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>> = buildAuthHeadersFromConnection,
-): Promise<NorthboundReadResult> {
-  const started = Date.now();
-  const { connection } = input;
-  const limit = Math.min(Math.max(input.limit, 1), MAX_LIMIT);
-  const timeoutMs = Math.min(connection.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+/** What one GET to SAP came to, before any reading of what it means. */
+type SapGet =
+  /** The credential step failed: the tenant was never called. */
+  | { readonly kind: "credential"; readonly status: "NEEDS_SETUP" | "TIMEOUT" | "ERROR"; readonly detail: string; readonly failureReason: string }
+  /** SAP answered: its status, and its body as JSON (null when empty or not JSON), or `truncated` past the bound. */
+  | { readonly kind: "answered"; readonly httpStatus: number; readonly truncated: boolean; readonly json: unknown }
+  /** No answer: the timeout, or a failure to reach the tenant. */
+  | { readonly kind: "failed"; readonly aborted: boolean; readonly timeoutMs: number; readonly failureReason: string };
 
+/**
+ * One bounded GET through a resolved connection: the credential step (with
+ * its own catch, audit A08), the timeout (15 s, or the connection's own, at
+ * most 30 s), the body read up to MAX_READ_BODY_BYTES decoded, and JSON.parse.
+ * Shared by the legacy read and the query surface, so the two cannot bound a
+ * tenant's answer differently. `url` is built only once the credential step
+ * passed, as the read always did.
+ */
+async function sapGet(
+  connection: ResolvedSapConnection,
+  url: () => string,
+  headers: Record<string, string>,
+  fetchImpl: typeof fetch,
+  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>>,
+  options: { readonly redirect?: RequestRedirect } = {},
+): Promise<SapGet> {
+  const timeoutMs = Math.min(connection.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -187,36 +196,23 @@ export async function readEntitySet(
     try {
       authHeaders = await authHeadersFor(connection);
     } catch (err) {
-      const { status, detail, failureReason } = credentialStepOutcome(err);
-      return { status, httpStatus: null, records: [], detail, durationMs: Date.now() - started, failureReason };
+      return { kind: "credential", ...credentialStepOutcome(err) };
     }
-    const url = buildSapUrl({
-      baseUrl: connection.baseUrl,
-      path: `${input.servicePath}/${encodeURIComponent(input.entitySet)}`,
-      client: connection.client,
-      query: { $top: limit, $format: "json" },
-    });
 
-    const res = await fetchImpl(url, {
+    const res = await fetchImpl(url(), {
       method: "GET",
-      headers: { ...authHeaders, Accept: "application/json" },
+      headers: { ...authHeaders, ...headers },
       signal: controller.signal,
       cache: "no-store",
+      ...(options.redirect === undefined ? {} : { redirect: options.redirect }),
     });
 
     // Parse defensively: an SAP error page is frequently HTML or XML, and
     // JSON.parse throwing on it would surface as a generic crash rather than as
     // the honest status the response code already told us.
-    let json: unknown = null;
     const { text, truncated } = await bodyPrefix(res, MAX_READ_BODY_BYTES);
-    if (truncated) {
-      return {
-        status: "ERROR", httpStatus: res.status, records: [],
-        detail: `The tenant's response is larger than ${MAX_READ_BODY_BYTES / (1024 * 1024)} MB, so it was not read. Ask for fewer records.`,
-        durationMs: Date.now() - started,
-        failureReason: FAILURE_REASON_INVALID_BODY,
-      };
-    }
+    if (truncated) return { kind: "answered", httpStatus: res.status, truncated: true, json: null };
+    let json: unknown = null;
     if (text) {
       try {
         json = JSON.parse(text);
@@ -224,42 +220,170 @@ export async function readEntitySet(
         json = null;
       }
     }
-
-    const records = res.status === 200 ? extractRecords(json) : [];
-    if (records === null) {
-      return {
-        status: "ERROR", httpStatus: res.status, records: [],
-        detail: "The tenant returned an invalid OData response.",
-        durationMs: Date.now() - started,
-        failureReason: FAILURE_REASON_INVALID_BODY,
-      };
-    }
-    const { status, detail } = classify(res.status, records);
-    return {
-      status,
-      httpStatus: res.status,
-      records,
-      detail,
-      durationMs: Date.now() - started,
-      failureReason: failureReasonFromHttp(res.status),
-    };
+    return { kind: "answered", httpStatus: res.status, truncated: false, json };
   } catch (err) {
-    const aborted = err instanceof Error && err.name === "AbortError";
-    return {
-      status: aborted ? "TIMEOUT" : "ERROR",
-      httpStatus: null,
-      records: [],
-      // Deliberately generic: the caught error commonly carries the host, and on
-      // the OAuth path the request itself. Neither belongs in a client response.
-      detail: aborted
-        ? `The tenant did not respond within ${timeoutMs}ms.`
-        : "The read could not be completed.",
-      durationMs: Date.now() - started,
-      // The cause is NOT thrown away any more — it is reduced to a code that
-      // cannot carry a host, for the audit row and the log. See failure-reason.ts.
-      failureReason: failureReasonFromError(err),
-    };
+    // The cause is NOT thrown away — it is reduced to a code that cannot
+    // carry a host, for the audit row and the log. See failure-reason.ts.
+    return { kind: "failed", aborted: err instanceof Error && err.name === "AbortError", timeoutMs, failureReason: failureReasonFromError(err) };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The detail of a call that got no answer: deliberately generic, as the caught error commonly carries the host. */
+function failedDetail(got: Extract<SapGet, { kind: "failed" }>): string {
+  return got.aborted ? `The tenant did not respond within ${got.timeoutMs}ms.` : "The read could not be completed.";
+}
+
+/**
+ * Read one entity set through a resolved connection.
+ *
+ * Bounded by an AbortController: a hung tenant fails the request rather than
+ * holding a server thread until something else times out.
+ *
+ * `fetchImpl` and `authHeadersFor` are the transport (governed/transport.ts):
+ * the credential step is network too (a token exchange), so a transport that
+ * must not reach the network replaces both.
+ */
+export async function readEntitySet(
+  input: ReadEntitySetInput,
+  fetchImpl: typeof fetch = fetch,
+  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>> = buildAuthHeadersFromConnection,
+): Promise<NorthboundReadResult> {
+  const started = Date.now();
+  const { connection } = input;
+  const limit = Math.min(Math.max(input.limit, 1), MAX_LIMIT);
+  const url = () =>
+    buildSapUrl({
+      baseUrl: connection.baseUrl,
+      path: `${input.servicePath}/${encodeURIComponent(input.entitySet)}`,
+      client: connection.client,
+      query: { $top: limit, $format: "json" },
+    });
+
+  const got = await sapGet(connection, url, { Accept: "application/json" }, fetchImpl, authHeadersFor);
+  if (got.kind === "credential") {
+    return { status: got.status, httpStatus: null, records: [], detail: got.detail, durationMs: Date.now() - started, failureReason: got.failureReason };
+  }
+  if (got.kind === "failed") {
+    return {
+      status: got.aborted ? "TIMEOUT" : "ERROR",
+      httpStatus: null,
+      records: [],
+      detail: failedDetail(got),
+      durationMs: Date.now() - started,
+      failureReason: got.failureReason,
+    };
+  }
+  if (got.truncated) {
+    return {
+      status: "ERROR", httpStatus: got.httpStatus, records: [],
+      detail: `The tenant's response is larger than ${MAX_READ_BODY_BYTES / (1024 * 1024)} MB, so it was not read. Ask for fewer records.`,
+      durationMs: Date.now() - started,
+      failureReason: FAILURE_REASON_INVALID_BODY,
+    };
+  }
+
+  const records = got.httpStatus === 200 ? extractRecords(got.json) : [];
+  if (records === null) {
+    return {
+      status: "ERROR", httpStatus: got.httpStatus, records: [],
+      detail: "The tenant returned an invalid OData response.",
+      durationMs: Date.now() - started,
+      failureReason: FAILURE_REASON_INVALID_BODY,
+    };
+  }
+  const { status, detail } = classify(got.httpStatus, records);
+  return {
+    status,
+    httpStatus: got.httpStatus,
+    records,
+    detail,
+    durationMs: Date.now() - started,
+    failureReason: failureReasonFromHttp(got.httpStatus),
+  };
+}
+
+/* ── the query surface (P1.4) ─────────────────────────────────────────── */
+
+/** A query-surface read: the outcome, SAP's answer parsed by kind, and why it failed. */
+export interface QueryReadResult {
+  status: QueryReadStatus;
+  /** The status SAP answered with; null when it gave none. */
+  httpStatus: number | null;
+  /** SAP's rows, stripped and projected (odata/response.ts), on OK and EMPTY; null otherwise. */
+  answer: Extract<ParsedAnswer, { ok: true }> | null;
+  /** Safe for a client: never a URL, header, credential or upstream body. */
+  detail: string;
+  durationMs: number;
+  /** As on the legacy read: HTTP_<n>, TIMEOUT, INVALID_UPSTREAM_BODY, TOKEN_*; null on success. */
+  failureReason: string | null;
+}
+
+export interface ReadQueryInput {
+  connection: ResolvedSapConnection;
+  /**
+   * The URL and the query it was built from, as buildQueryUrl returned them
+   * (odata/operation-compiler.ts): built from the checked AST through
+   * buildSapUrl and measured within the URL cap. This module adds nothing to it.
+   */
+  built: { readonly url: string; readonly query: SapQuery };
+  /** This page asked SAP for a count (page 0 with count=true). */
+  countAsked: boolean;
+}
+
+/**
+ * Read a query CoreEdge built from the checked AST (P1.4, 3.8.1).
+ *
+ * The same bounded GET as the legacy read (sapGet), with three differences:
+ *   - REDIRECTS ARE NEVER FOLLOWED (`redirect: "manual"`). A 3xx is ERROR, so
+ *     nothing SAP or a host in front of it says can send the query, and the
+ *     connection's credentials with it, anywhere else (D24). The legacy read
+ *     is unchanged.
+ *   - V4 asks for `OData-MaxVersion: 4.0`, which pins the `odata.` prefix on
+ *     control information (JSON 4.01 §3.1), so the envelope is what the
+ *     stripper knows.
+ *   - The answer is read by the kind of query that was sent (response.ts),
+ *     never guessed, and SAP's refusal of a query, a missing record and an
+ *     oversized page have outcomes of their own (query-status.ts).
+ */
+export async function readQuery(
+  input: ReadQueryInput,
+  fetchImpl: typeof fetch = fetch,
+  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>> = buildAuthHeadersFromConnection,
+): Promise<QueryReadResult> {
+  const started = Date.now();
+  const { query } = input.built;
+  const headers = { Accept: "application/json", ...query.headers };
+  const got = await sapGet(input.connection, () => input.built.url, headers, fetchImpl, authHeadersFor, { redirect: "manual" });
+  const done = (status: QueryReadStatus, httpStatus: number | null, detail: string, failureReason: string | null, answer: QueryReadResult["answer"] = null): QueryReadResult => ({
+    status,
+    httpStatus,
+    answer,
+    detail,
+    durationMs: Date.now() - started,
+    failureReason,
+  });
+  if (got.kind === "credential") return done(got.status, null, got.detail, got.failureReason);
+  if (got.kind === "failed") return done(got.aborted ? "TIMEOUT" : "ERROR", null, failedDetail(got), got.failureReason);
+  if (got.truncated) return done("TOO_LARGE", got.httpStatus, queryOutcomeDetail("TOO_LARGE", got.httpStatus), FAILURE_REASON_INVALID_BODY);
+  if (got.httpStatus !== 200) {
+    const status = queryStatusForHttp(got.httpStatus, query.kind);
+    const failureReason = failureReasonFromHttp(got.httpStatus);
+    switch (status) {
+      case "NEEDS_SETUP":
+      case "NOT_FOUND":
+        return done(status, got.httpStatus, classify(got.httpStatus, []).detail, failureReason);
+      case "NO_RECORD":
+      case "SAP_REJECTED":
+        return done(status, got.httpStatus, queryOutcomeDetail(status, got.httpStatus), failureReason);
+      case "ERROR":
+        return done("ERROR", got.httpStatus, `The tenant responded with HTTP ${got.httpStatus}.`, failureReason);
+    }
+  }
+  const answer = readQueryAnswer(got.json, query, input.countAsked);
+  if (!answer.ok) return done("ERROR", got.httpStatus, "The tenant returned an invalid OData response.", FAILURE_REASON_INVALID_BODY);
+  const served = answer.rows.length;
+  const status: QueryReadStatus = query.kind === "KEY" || served > 0 ? "OK" : "EMPTY";
+  return done(status, got.httpStatus, status === "EMPTY" ? classify(200, []).detail : `${served} record${served === 1 ? "" : "s"}.`, null, answer);
 }

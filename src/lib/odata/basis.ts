@@ -27,6 +27,7 @@
  * describe the whole entity cannot say which fields a "*" policy reads.
  */
 
+import { LIMITS } from "@/lib/contracts/budget";
 import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
 import { isQueryIdentifier, MAX_IDENTIFIER_LENGTH } from "@/lib/odata/identifiers";
 import type { EdmScalar } from "@/lib/odata/policy";
@@ -87,7 +88,7 @@ export interface QueryBasisV1 {
 /** The basis before the verify knows which snapshot it describes. */
 export type QueryBasisV1Draft = Omit<QueryBasisV1, "snapshot">;
 
-export const QUERY_BASIS_MAX_BYTES = 128 * 1024;
+export const QUERY_BASIS_MAX_BYTES = LIMITS.queryBasis.bytes;
 export const MAX_BASIS_PROPERTIES = 1000;
 const MAX_LABEL = 80;
 const MAX_EDM = 128;

@@ -201,8 +201,21 @@ export interface StoredConnectionRow {
   readonly createdAt: Date;
 }
 
+/**
+ * The interface's query policy as a query-surface call reads it (P1.4): the
+ * compiled form, unparsed (odata/policy.ts parseCompiledPolicy checks it),
+ * and whether a builder's source exists at all, which tells a policy a
+ * contract change cleared (verify the service) from one never written.
+ */
+export interface QueryPolicyLoad {
+  readonly compiled: unknown;
+  readonly sourcePresent: boolean;
+}
+
 export interface AccessLoad {
   readonly iface: InterfaceAccessRow | null;
+  /** Null unless asked for (`withQueryPolicy`), and without an interface. */
+  readonly queryPolicy: QueryPolicyLoad | null;
   /** The grants that may authorise this interface: grantsForInterfaceWhere, in SQL. Empty without an interface. */
   readonly grants: readonly GrantAccessRow[];
   /**
@@ -223,6 +236,7 @@ export const ACCESS_LOAD_REFERENCE = [
 ] as const;
 
 interface AccessSqlRow {
+  /** The interface's columns, and `queryPolicyLoad` (null unless asked for), which loadInterfaceAccess takes off it. */
   readonly iface: Record<string, unknown> | null;
   readonly grants: Record<string, unknown>[] | null;
   readonly connections: Record<string, unknown>[] | null;
@@ -257,18 +271,29 @@ const connectionRow = (raw: Record<string, unknown>) => withTimestamps<StoredCon
  * the grants by the caller's and the credential's solution and environment,
  * the connections by the caller's. Nothing is read when the interface is not
  * the caller's organisation's: the grants and connections join to it.
+ *
+ * `withQueryPolicy` (P1.4): a query-surface read also takes the interface's
+ * compiled query policy (at most 64 KiB) in the same statement, so a query
+ * page costs no statement more than a legacy read (db-budget.ts). Every other
+ * call selects it as NULL: the statement's shape is the same, and the policy
+ * never rides on a legacy read or a write. The source and the basis are
+ * never read here.
  */
 export async function loadInterfaceAccess(
   organizationId: string,
   solutionId: string,
   interfaceId: string,
   environment: string,
-  options: { readonly withConnections?: boolean } = {},
+  options: { readonly withConnections?: boolean; readonly withQueryPolicy?: boolean } = {},
 ): Promise<AccessLoad> {
   const withConnections = options.withConnections === true;
+  const withQueryPolicy = options.withQueryPolicy === true;
   const rows = await prisma.$queryRaw<AccessSqlRow[]>`/* governed:access-load */
     WITH i AS (
-      SELECT "id", "name", "externalId", "sapProduct", "entitySet", "operation", "mode", "version", "status",
+      SELECT CASE WHEN ${withQueryPolicy}::boolean
+                  THEN json_build_object('compiled', "queryPolicyCompiled", 'sourcePresent', "queryPolicy" IS NOT NULL)
+             END AS "queryPolicyLoad",
+             "id", "name", "externalId", "sapProduct", "entitySet", "operation", "mode", "version", "status",
              "solutionId", "servicePath", "odataVersion", "serviceVerifiedAt", "serviceVerifications",
              "createdAt", "grantMatchChangedAt"
       FROM "Interface"
@@ -303,9 +328,15 @@ export async function loadInterfaceAccess(
           AND c."isActive" = true
       ) AS "connections"`;
   const found = rows[0];
-  const iface = found?.iface ? interfaceRow(found.iface) : null;
+  // The policy is taken off the row, so the interface's columns are exactly
+  // what they were before P1.4, asked for it or not.
+  const { queryPolicyLoad, ...ifaceColumns } = found?.iface ?? {};
+  const iface = found?.iface ? interfaceRow(ifaceColumns) : null;
+  const policy = queryPolicyLoad as { compiled?: unknown; sourcePresent?: unknown } | null | undefined;
   return {
     iface,
+    queryPolicy:
+      withQueryPolicy && iface && policy ? { compiled: policy.compiled ?? null, sourcePresent: policy.sourcePresent === true } : null,
     grants: iface ? (found?.grants ?? []).map(grantRow) : [],
     connections: withConnections ? (iface ? (found?.connections ?? []).map(connectionRow) : []) : null,
   };
