@@ -72,7 +72,7 @@ const share = (count: number, pct: number) => `${formatCount(count)} (${formatPc
 const LEVEL = ["none", "partial", "full"];
 /** The roadmap's wording of a cell (render-roadmap-figures.mjs prettyCell). */
 const label = (cell: string) => {
-  const [t, rest] = cell.split(/:(.*)/s) as [string, string];
+  const [t, rest] = cell.split(/:(.*)/) as [string, string];
   return `${t} ${rest.replace("|", " / ")}`;
 };
 
