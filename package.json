@@ -53,6 +53,7 @@
     "coreedge:doc-claims": "tsx scripts/coreedge/check-doc-claims.ts",
     "coreedge:load-test": "tsx scripts/coreedge/load-test.ts",
     "coreedge:env-tenant-hosts": "tsx scripts/coreedge/env-tenant-hosts.ts",
+    "coreedge:scenario-coverage": "tsx scripts/coreedge/scenario-coverage.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts tests/e2e/accessibility.coreedge.auth.spec.ts --project=unauthenticated --project=authenticated",
     "test:ci": "vitest run && pnpm test:e2e:chromium",
     "test:full": "vitest run && playwright test",
