@@ -74,6 +74,34 @@ interface VerifyOutcome {
     | { status: "RECORDED" | "UNCHANGED"; semver: string; bump: string | null }
     | { status: "NOT_COMPILED" | "NO_DATASET" | "NOT_RECORDED"; detail: string }
     | null;
+  /** The query policy recompiled against the basis this verify wrote (P1.4); null when none was. */
+  queryPolicy?: QueryPolicyOutcome | null;
+}
+
+/** What a verify did to the interface's query policy (lib/contracts/record.ts QueryPolicyOutcome). */
+export interface QueryPolicyOutcome {
+  state: "READY" | "STALE" | "UNREADABLE";
+  revision: number;
+  narrowed: string[];
+  warnings: string[];
+}
+
+/**
+ * One line about the query policy a verify recompiled (P1.4), or null when
+ * there was none. A narrowing is said in full, because a caller using what
+ * it removed now receives 400 POLICY_FIELD_NOT_GRANTED; a stale policy says
+ * why, because every query call is refused until a builder saves it again.
+ */
+export function queryPolicySentence(outcome: QueryPolicyOutcome | null | undefined): string | null {
+  if (!outcome) return null;
+  if (outcome.state === "UNREADABLE") {
+    return "The stored query policy could not be read, so queries are refused until a builder saves it again in the Query policy card.";
+  }
+  if (outcome.state === "STALE") {
+    return `Query policy now stale: ${outcome.warnings[0] ?? "review it in the Query policy card."} Queries are refused until a builder saves it again.`;
+  }
+  if (outcome.narrowed.length === 0) return `Query policy recompiled against this contract (revision ${outcome.revision}).`;
+  return `Query policy recompiled (revision ${outcome.revision}) and narrowed: ${outcome.narrowed.join(" ")}`;
 }
 
 /** One plain sentence about the compiled contract, or null when there is nothing to say. */
@@ -430,6 +458,11 @@ export function ServiceVerifyPanel({
             </span>
             <span style={{ color: "var(--ink-secondary)" }}>{current.detail}</span>
             {contractSentence(current.contract) && <span style={muted}>{contractSentence(current.contract)}</span>}
+            {queryPolicySentence(current.queryPolicy) && (
+              <span style={current.queryPolicy?.state === "READY" && current.queryPolicy.narrowed.length === 0 ? muted : { ...muted, color: "var(--status-awaiting-fg)" }}>
+                {queryPolicySentence(current.queryPolicy)}
+              </span>
+            )}
             {canSwitchVersion && (
               <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
                 <span>

@@ -39,6 +39,12 @@
  * broker call, and never at the verify's expense: a description the compiler
  * cannot read, or a snapshot that cannot be written, is reported in
  * `contract` and the verify's verdict stands (lib/contracts/record.ts).
+ *
+ * AND THE QUERY POLICY IS RECOMPILED HERE (P1.4). For a read interface whose
+ * current contract this verify recorded, the same transaction writes the
+ * query basis and recompiles the builder's policy against it, narrowing what
+ * the contract no longer allows; the answer's `queryPolicy` and the config
+ * audit say what changed, so the Verify panel can say it too.
  */
 
 import { Prisma } from "@prisma/client";
@@ -422,6 +428,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       ? notCompiled(result.compiled)
       : null;
 
+  // The query policy's recompile (P1.4, 3.5.4), when this verify's contract is the current one.
+  const queryPolicy = contract !== null && "queryPolicy" in contract ? contract.queryPolicy : null;
+
   await writeConfigAudit({
     organizationId: scope.organizationId,
     actorId: user.id,
@@ -448,6 +457,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
                 : { status: contract.status },
           }
         : {}),
+      // What the verify did to the query policy (P1.4, D9): recompiled, what
+      // it narrowed away, or STALE. The trail is where a builder finds why a
+      // caller's filter started answering POLICY_FIELD_NOT_GRANTED.
+      ...(queryPolicy ? { queryPolicy } : {}),
     },
   });
 
@@ -481,6 +494,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // Additive (P1.3): what became of the compiled contract; null when the
     // verify did not succeed, so nothing was compiled into one.
     contract,
+    // Additive (P1.4): the query policy recompiled against the basis this
+    // verify wrote — its state, revision, and what it narrowed or warned
+    // of; null when no policy was recompiled.
+    queryPolicy,
     correlationId,
   });
 }
