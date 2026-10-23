@@ -17,10 +17,10 @@ import { UploadDescriptionDialog } from "@/components/studio/UploadDescriptionDi
 afterEach(() => vi.unstubAllGlobals());
 
 const SOLUTIONS = [{ id: "sol_1", name: "Sales" }];
-const PRODUCTS = [{ key: "s4hana", label: "SAP S/4HANA Cloud Public Edition" }];
+const PRODUCTS = [{ key: "s4hana", label: "SAP S/4HANA Cloud Public Edition", addressesClient: false }];
 
 /** A page with the trigger that opens the dialog, as Discover and Interfaces have. */
-function Harness({ which, onClose = () => undefined }: { which: "upload" | "sign-off"; onClose?: () => void }) {
+function Harness({ which, onClose = () => undefined }: { which: "upload" | "sign-off"; onClose?: (() => void) | undefined }) {
   const [open, setOpen] = useState(false);
   const close = () => {
     onClose();
