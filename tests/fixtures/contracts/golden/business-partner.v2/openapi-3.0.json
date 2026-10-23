@@ -38,7 +38,7 @@
           "APartner"
         ],
         "summary": "Read A_Partner",
-        "description": "Reads records through CoreEdge from the customer's SAP system, through the connection bound to this credential's environment. An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx).",
+        "description": "Reads records through CoreEdge from the customer's SAP system, through the connection bound to this credential's environment. An empty result is a 200 with an empty array and MUST be treated as 'no records', which is different from 'not set up' (403) and from an error (5xx). This interface serves no query parameters: a call carrying one (select, filter.<Field>.<op>, orderby, key.<Field>, count, pageSize, cursor) is refused with 400 VALIDATION_ERROR, error.query.rule NO_POLICY or NOT_ENABLED, never served with it ignored.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Limit"
@@ -88,7 +88,7 @@
             }
           },
           "400": {
-            "description": "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Or UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date); error.supportedVersions lists what may be sent, and nothing ran. Codes: VALIDATION_ERROR, UNSUPPORTED_VERSION.",
+            "description": "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry. Or the call carried a query parameter this interface does not serve (error.query.rule NO_POLICY, or NOT_ENABLED on a deployment that serves none). Or UNSUPPORTED_VERSION: the CoreEdge-Version header names a version this deployment does not serve (unknown, or retired at its Sunset date); error.supportedVersions lists what may be sent, and nothing ran. Codes: VALIDATION_ERROR, UNSUPPORTED_VERSION.",
             "headers": {
               "x-correlation-id": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -226,6 +226,49 @@
                 "code": "NOT_FOUND",
                 "status": 404,
                 "action": "Fix the interface id or its configuration. Do not retry."
+              }
+            ]
+          },
+          "413": {
+            "description": "A ?limit answer larger than CoreEdge can return (error.query.rule RESPONSE_TOO_LARGE). Ask for fewer records with ?limit. Codes: VALIDATION_ERROR.",
+            "headers": {
+              "x-correlation-id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "CoreEdge-Version": {
+                "$ref": "#/components/headers/CoreEdgeVersion"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              },
+              "Link": {
+                "$ref": "#/components/headers/Link"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "x-coreedge-error-codes": [
+              {
+                "code": "VALIDATION_ERROR",
+                "status": 413,
+                "action": "Fix the request or the interface. Do not retry unchanged."
               }
             ]
           },
@@ -2774,6 +2817,70 @@
                   "type": "string"
                 },
                 "description": "UNSUPPORTED_VERSION only: the versions this deployment serves, oldest (the default) first."
+              },
+              "query": {
+                "type": "object",
+                "required": [
+                  "rule"
+                ],
+                "description": "A query parameter's refusal or outcome (P1.4): the rule, the parameter and field it is about when they are safe to repeat, and up to 20 names the interface's query policy allows instead. Never a value, SAP's text or a host.",
+                "properties": {
+                  "rule": {
+                    "type": "string",
+                    "enum": [
+                      "UNKNOWN_PARAMETER",
+                      "DUPLICATE_PARAMETER",
+                      "PARAMETER_CONFLICT",
+                      "MALFORMED",
+                      "ODATA_SYNTAX_REFUSED",
+                      "VALUE_INVALID",
+                      "VALUE_TOO_LONG",
+                      "TOO_COMPLEX",
+                      "NOT_ENABLED",
+                      "NO_POLICY",
+                      "POLICY_STALE",
+                      "NO_CONTRACT",
+                      "POLICY_UNREADABLE",
+                      "FIELD_NOT_SELECTABLE",
+                      "FIELD_NOT_FILTERABLE",
+                      "OPERATOR_NOT_ALLOWED",
+                      "FIELD_NOT_SORTABLE",
+                      "FILTER_REQUIRED",
+                      "KEY_LOOKUP_NOT_ALLOWED",
+                      "KEY_INCOMPLETE",
+                      "KEY_NOT_ADDRESSABLE",
+                      "COUNT_NOT_ALLOWED",
+                      "PAGE_SIZE_NOT_ALLOWED",
+                      "SAP_URL_TOO_LONG",
+                      "CURSOR_INVALID",
+                      "CURSOR_PARAMS_MISMATCH",
+                      "EXPIRED",
+                      "CHANGED",
+                      "SAP_REJECTED",
+                      "ROW_TOO_LARGE",
+                      "UPSTREAM_PAGE_TOO_LARGE",
+                      "RESPONSE_TOO_LARGE",
+                      "UPSTREAM_IGNORED_PAGING",
+                      "KEY_NOT_UNIQUE",
+                      "TOKEN_RING_UNAVAILABLE"
+                    ]
+                  },
+                  "parameter": {
+                    "type": "string",
+                    "maxLength": 140
+                  },
+                  "field": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "allowed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 20
+                  }
+                }
               }
             }
           }
@@ -3086,6 +3193,218 @@
             "status": 503,
             "origin": "P0.14"
           }
+        ],
+        "x-coreedge-query-rules": [
+          {
+            "rule": "UNKNOWN_PARAMETER",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A query parameter this interface does not define: not one of select, filter.<Field>.<op>, orderby, key.<Field>, count, pageSize or cursor."
+          },
+          {
+            "rule": "DUPLICATE_PARAMETER",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A parameter was sent more than once. Only filter.<Field>.in repeats."
+          },
+          {
+            "rule": "PARAMETER_CONFLICT",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "Parameters that cannot be combined: key.* with anything but select, cursor with key.*, or two predicates on one field."
+          },
+          {
+            "rule": "MALFORMED",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A parameter name or value does not follow its grammar."
+          },
+          {
+            "rule": "ODATA_SYNTAX_REFUSED",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "Raw OData options ($filter, $top, …) are not accepted on the query surface; CoreEdge builds the OData query itself."
+          },
+          {
+            "rule": "VALUE_INVALID",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A value is not of the form its field's type requires, or contains characters that are not accepted."
+          },
+          {
+            "rule": "VALUE_TOO_LONG",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A value is longer than its field or the query surface allows."
+          },
+          {
+            "rule": "TOO_COMPLEX",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The query has more fields, values or literal text than the query surface allows."
+          },
+          {
+            "rule": "NOT_ENABLED",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "This deployment does not serve query parameters yet."
+          },
+          {
+            "rule": "NO_POLICY",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The interface has no query policy, so it serves no query parameters."
+          },
+          {
+            "rule": "POLICY_STALE",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The interface's query policy no longer matches its contract; its builder must review it."
+          },
+          {
+            "rule": "NO_CONTRACT",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The interface's contract changed and has not been verified since; its builder must verify the service."
+          },
+          {
+            "rule": "POLICY_UNREADABLE",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The interface's compiled query policy cannot be read."
+          },
+          {
+            "rule": "FIELD_NOT_SELECTABLE",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "A selected field is not readable under the query policy."
+          },
+          {
+            "rule": "FIELD_NOT_FILTERABLE",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "A filtered field is not filterable under the query policy."
+          },
+          {
+            "rule": "OPERATOR_NOT_ALLOWED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "A filter operator is not allowed on its field under the query policy."
+          },
+          {
+            "rule": "FIELD_NOT_SORTABLE",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "An orderby field is not sortable under the query policy."
+          },
+          {
+            "rule": "FILTER_REQUIRED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "The query policy, or SAP, requires a filter the query does not have."
+          },
+          {
+            "rule": "KEY_LOOKUP_NOT_ALLOWED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "The query policy does not allow key lookup."
+          },
+          {
+            "rule": "KEY_INCOMPLETE",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A key lookup must name every key field exactly once, and nothing else."
+          },
+          {
+            "rule": "KEY_NOT_ADDRESSABLE",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "This key value cannot be addressed on this service."
+          },
+          {
+            "rule": "COUNT_NOT_ALLOWED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "The query policy does not allow count=true."
+          },
+          {
+            "rule": "PAGE_SIZE_NOT_ALLOWED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "meaning": "pageSize is above the query policy's maximum."
+          },
+          {
+            "rule": "SAP_URL_TOO_LONG",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The OData query CoreEdge would send is longer than SAP accepts; ask for fewer values."
+          },
+          {
+            "rule": "CURSOR_INVALID",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "The cursor cannot be used; start again from the first page."
+          },
+          {
+            "rule": "CURSOR_PARAMS_MISMATCH",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "meaning": "A cursor must be sent with the same other parameters as the first page."
+          },
+          {
+            "rule": "EXPIRED",
+            "code": "CURSOR_STALE",
+            "status": 409,
+            "meaning": "The cursor, or its paging run, has expired; start again from the first page."
+          },
+          {
+            "rule": "CHANGED",
+            "code": "CURSOR_STALE",
+            "status": 409,
+            "meaning": "The interface, its query policy, its grant or its connection changed since the first page; start again."
+          },
+          {
+            "rule": "SAP_REJECTED",
+            "code": "VALIDATION_ERROR",
+            "status": 422,
+            "meaning": "The SAP service refused the query CoreEdge sent; change the query, as retrying it unchanged will not help."
+          },
+          {
+            "rule": "ROW_TOO_LARGE",
+            "code": "VALIDATION_ERROR",
+            "status": 422,
+            "meaning": "One record is larger than the interface's page limit; select fewer fields."
+          },
+          {
+            "rule": "UPSTREAM_PAGE_TOO_LARGE",
+            "code": "VALIDATION_ERROR",
+            "status": 422,
+            "meaning": "SAP's answer to this page was larger than CoreEdge reads; ask for a smaller pageSize or fewer fields."
+          },
+          {
+            "rule": "RESPONSE_TOO_LARGE",
+            "code": "VALIDATION_ERROR",
+            "status": 413,
+            "meaning": "The answer is larger than CoreEdge can return; ask for fewer records."
+          },
+          {
+            "rule": "UPSTREAM_IGNORED_PAGING",
+            "code": "UPSTREAM_ERROR",
+            "status": 502,
+            "meaning": "The SAP service did not honour the paging CoreEdge asked for; retrying will not help."
+          },
+          {
+            "rule": "KEY_NOT_UNIQUE",
+            "code": "UPSTREAM_ERROR",
+            "status": 502,
+            "meaning": "The SAP service returned more than one record for one key; retrying will not help."
+          },
+          {
+            "rule": "TOKEN_RING_UNAVAILABLE",
+            "code": "INTERNAL",
+            "status": 500,
+            "meaning": "This deployment's token keys cannot be read, so it cannot serve queries."
+          }
         ]
       }
     }
@@ -3119,7 +3438,7 @@
         },
         "getByKey": {
           "served": false,
-          "roadmap": "P1.4"
+          "note": "This interface's query policy does not allow key lookup; its builder can allow it in Studio."
         },
         "create": {
           "served": false,
@@ -3162,7 +3481,7 @@
         },
         "getByKey": {
           "served": false,
-          "roadmap": "P1.4"
+          "note": "A write interface is not read through the data route."
         },
         "create": {
           "served": true,

@@ -50,7 +50,7 @@ import { hydrateJsonTexts, inputBytesUpTo, jsonTextRef } from "@/lib/contracts/r
 import { requestSchemaText, type RequestSchemaStamp } from "@/lib/contracts/request-schema";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
-import { safeName } from "@/lib/studio/scaffold";
+import { KIT_QUERY_METHODS, KIT_QUERY_TYPES, MOCK_QUERY_REFUSAL, safeName } from "@/lib/studio/scaffold";
 import { buildFixtureBody } from "@/lib/studio/fixtures";
 import { inferResponseSchema } from "@/lib/studio/schema-capture";
 import { MAX_STORED_ENTITY_SETS, VERIFY_REQUEST_BUDGET_MS, VERIFY_RESPONSE_MARGIN_MS, verifyServiceMetadata } from "@/lib/studio/service-verify";
@@ -138,7 +138,37 @@ function withoutWave2Codes(text: string): string {
   codes.CONNECTION_NOT_CONFIGURED!.meaning = "The customer's SAP connection cannot be bound for this credential's environment yet.";
   error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { reason: string }[]).filter((r) => r.reason !== "CIRCUIT_OPEN");
   withoutQuerySurfaceCodes(error);
+  withoutQuerySurface(doc);
   return documentJson(doc);
+}
+
+/**
+ * The fourth (P1.4, stage 3): what every read now says whatever its policy.
+ * GET …/data names the query parameters a policy-less interface refuses (in
+ * its description and its 400), the legacy byte guard's 413, `error.query`
+ * and the query rules; key lookup is no longer a roadmap item but a policy's
+ * choice. These goldens carry no policy, so nothing else differs.
+ */
+const NO_POLICY_READ =
+  " This interface serves no query parameters: a call carrying one (select, filter.<Field>.<op>, orderby, key.<Field>, count, pageSize, cursor) is refused with 400 VALIDATION_ERROR, error.query.rule NO_POLICY or NOT_ENABLED, never served with it ignored.";
+const NO_POLICY_400 =
+  " Or the call carried a query parameter this interface does not serve (error.query.rule NO_POLICY, or NOT_ENABLED on a deployment that serves none).";
+function withoutQuerySurface(doc: Json): void {
+  for (const [route, ops] of Object.entries(doc.paths as Record<string, Json>)) {
+    if (!route.endsWith("/data")) continue;
+    const get = ops.get as Json;
+    get.description = (get.description as string).replace(NO_POLICY_READ, "");
+    const responses = get.responses as Json;
+    delete responses["413"];
+    const bad = responses["400"] as Json;
+    bad.description = (bad.description as string).replace(NO_POLICY_400, "");
+  }
+  const error = ((doc.components as Json).schemas as Json).Error as Json;
+  delete (((error.properties as Json).error as Json).properties as Json).query;
+  delete error["x-coreedge-query-rules"];
+  for (const entry of doc["x-coreedge-interfaces"] as Json[]) {
+    (entry.operations as Json).getByKey = { served: false, roadmap: "P1.4" };
+  }
 }
 
 /**
@@ -160,10 +190,28 @@ function withoutQuerySurfaceCodes(error: Json): void {
   error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { origin?: string }[]).filter((r) => r.origin !== "P1.4");
 }
 
-/** The kit as it was at f54c6f5a: its two OpenAPI files without wave 2's codes. */
+/**
+ * The kit as it was at f54c6f5a: its two OpenAPI files without wave 2's
+ * codes, and (P1.4) its client without the query helpers and its mock
+ * without the query refusal, each inserted as one whole block.
+ */
 function kitWithoutWave2Codes(text: string): string {
   const files = JSON.parse(text) as { path: string; contents: string }[];
-  return JSON.stringify(files.map((f) => (/^openapi(-3\.0)?\.json$/.test(f.path) ? { ...f, contents: withoutWave2Codes(f.contents) } : f)));
+  const without = (contents: string, block: string) => {
+    expect(contents).toContain(block);
+    return contents.replace(block, "");
+  };
+  return JSON.stringify(
+    files.map((f) =>
+      /^openapi(-3\.0)?\.json$/.test(f.path)
+        ? { ...f, contents: withoutWave2Codes(f.contents) }
+        : f.path === "client.ts"
+          ? { ...f, contents: without(without(f.contents, `${KIT_QUERY_TYPES}\n`), KIT_QUERY_METHODS) }
+          : f.path === "mock.mjs"
+            ? { ...f, contents: without(f.contents, MOCK_QUERY_REFUSAL) }
+            : f,
+    ),
+  );
 }
 
 describe("byte identity with f54c6f5a", () => {
