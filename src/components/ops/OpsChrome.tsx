@@ -34,22 +34,32 @@ const TONE: Record<OpsTone, { bg: string; fg: string }> = {
  * The label is never optional. Status conveyed by colour alone fails AA, and the
  * three states most at risk of it here — unverified, mismatch, not-applicable —
  * are exactly the ones an operator must not confuse.
+ *
+ * A LIVE REGION BY DEFAULT, AND NOT IN A TABLE. A chip that reports a feed's
+ * state is `role="status"`, so a change is announced. A chip that rates a row
+ * is not a state that changes under the reader: a table of eighty ratings as
+ * eighty live regions is eighty announcements of nothing. `asStatus={false}`
+ * renders the same pill as plain text, its meaning (when given) as words a
+ * screen reader reads in place, since an aria-label on an element with no
+ * role is not reliably read at all.
  */
 export function OpsChip({
   tone,
   label,
   meaning,
+  asStatus = true,
 }: {
   tone: OpsTone;
   label: string;
   /** Read to assistive tech, so the colour is never the only carrier. */
   meaning?: string | undefined;
+  /** False for a rating inside a table or a list: no live region. */
+  asStatus?: boolean;
 }) {
   const t = TONE[tone];
   return (
     <span
-      role="status"
-      aria-label={meaning ? `${label} — ${meaning}` : label}
+      {...(asStatus ? { role: "status", "aria-label": meaning ? `${label} — ${meaning}` : label } : {})}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -63,8 +73,9 @@ export function OpsChip({
         color: t.fg,
       }}
     >
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+      <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
       {label}
+      {!asStatus && meaning ? <span className="sr-only"> — {meaning}</span> : null}
     </span>
   );
 }
@@ -287,10 +298,31 @@ export function Unobservable({ label, why }: { label: string; why: string }) {
   );
 }
 
-/** The table shell — header and rows at the console's exact metrics. */
-export function OpsTable({ head, children }: { head: readonly string[]; children: ReactNode }) {
+/**
+ * The table shell — header and rows at the console's exact metrics.
+ *
+ * `label` NAMES THE SCROLL BOX. A table wider than its card scrolls sideways,
+ * and a box that scrolls must take keyboard focus or a keyboard user cannot
+ * reach the columns past its edge (axe scrollable-region-focusable, which the
+ * Test Console's rows failed). With a label the box is a focusable, named
+ * region, as the Test Console's is; the global [tabindex]:focus-visible rule
+ * draws its ring. Without one it is the plain scroller it always was.
+ */
+export function OpsTable({
+  head,
+  children,
+  label,
+}: {
+  head: readonly string[];
+  children: ReactNode;
+  /** What the table holds, for the scroll box's accessible name. */
+  label?: string | undefined;
+}) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div
+      {...(label ? { tabIndex: 0, role: "region", "aria-label": label } : {})}
+      style={{ overflowX: "auto" }}
+    >
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>

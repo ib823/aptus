@@ -21,6 +21,8 @@
  * different door.
  */
 
+import { isAdminRoleName } from "@/lib/auth/role-migration";
+
 export interface StudioSection {
   key: string;
   label: string;
@@ -90,4 +92,27 @@ export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
   { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: true },
   { key: "usage", label: "CoreEdge usage", href: "/control-tower/usage", available: true },
   { key: "journey", label: "Time to first call", href: "/control-tower/journey", available: true },
+  // P1.9. The gap simulator's output for the whole product: deployment-scoped
+  // like Catalogue health, so platform administrators only until the product
+  // owner decides who else should read a gap analysis against SAP Integration
+  // Suite (the default is recorded in the roadmap's P1.9 Status line). The
+  // page gates itself as well.
+  {
+    key: "parity",
+    label: "Parity scorecard",
+    href: "/control-tower/parity",
+    available: true,
+    adminOnly: true,
+  },
 ] as const;
+
+/**
+ * The rail a role sees: every section for a platform administrator, and no
+ * `adminOnly` one for anybody else. One rule for every workspace's layout, so
+ * a screen marked admin-only cannot be filtered in one rail and listed in the
+ * next. The page behind an admin-only entry still gates itself: a layout
+ * renders concurrently with its page and cannot protect the page's payload.
+ */
+export function railSections(sections: readonly StudioSection[], role: string): readonly StudioSection[] {
+  return isAdminRoleName(role) ? sections : sections.filter((s) => !s.adminOnly);
+}

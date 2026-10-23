@@ -22,33 +22,18 @@
  *
  * VALUES COME FROM VERCEL'S OWN DEPLOYMENT ENVIRONMENT, so they describe the
  * build that is answering rather than anything this code computed. Unset
- * locally, where the honest answer is null rather than a guess.
+ * locally, where the honest answer is null rather than a guess. The reading
+ * lives in `@/lib/build-stamp`.
  */
 
 import { NextResponse } from "next/server";
 
+import { readBuildStamp } from "@/lib/build-stamp";
+
 export const dynamic = "force-dynamic";
 
-/** Absent rather than empty: "not set" and "set to nothing" are different. */
-function envOrNull(name: string): string | null {
-  const value = process.env[name]?.trim();
-  return value === undefined || value === "" ? null : value;
-}
-
 export async function GET(): Promise<NextResponse> {
-  return NextResponse.json(
-    {
-      /* The commit this build was made from — the answer to "is it live". */
-      commit: envOrNull("VERCEL_GIT_COMMIT_SHA"),
-      ref: envOrNull("VERCEL_GIT_COMMIT_REF"),
-      /*
-       * The id that appears as `dep=` in Vercel's runtime logs. Returning it
-       * beside the commit is what makes a log line traceable to a revision
-       * without a second tool.
-       */
-      deployment: envOrNull("VERCEL_DEPLOYMENT_ID"),
-      environment: envOrNull("VERCEL_ENV"),
-    },
-    { headers: { "Cache-Control": "no-store, max-age=0" } },
-  );
+  // The same reader Control Tower's parity scorecard prints its commit from,
+  // so the page and this endpoint cannot name different builds.
+  return NextResponse.json(readBuildStamp(), { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

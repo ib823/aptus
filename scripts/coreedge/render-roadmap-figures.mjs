@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Regenerates the simulated figures in the gap study (P0.15).
+ * Regenerates the simulated figures in the gap study (P0.15) and the parity
+ * scorecard Control Tower renders (P1.9).
  *
- *   node scripts/coreedge/render-roadmap-figures.mjs           # rewrite the blocks
- *   node scripts/coreedge/render-roadmap-figures.mjs --check   # exit 1 if any block is stale
+ *   node scripts/coreedge/render-roadmap-figures.mjs                    # rewrite the blocks and the scorecard
+ *   node scripts/coreedge/render-roadmap-figures.mjs --check            # exit 1 if any block or the scorecard is stale
+ *   node scripts/coreedge/render-roadmap-figures.mjs --check-scorecard  # the scorecard only (what the build runs)
  *
  * Every simulated table in docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md
  * (sections 1.1, 1.4, 2.4, 3 and 8.1) sits between two markers:
@@ -39,15 +41,37 @@
  * and is not checked. What a sentence says around a figure is still a
  * person's to keep true; a whole claim that depends on the cells (the
  * supported shape in 3.1, say) is a block of its own.
+ *
+ * THE PARITY SCORECARD (P1.9). The same run also writes
+ * docs/coreedge/parity-scorecard.json, which Control Tower's parity page
+ * renders (/control-tower/parity). It is built from the same results as the
+ * roadmap's blocks and with the same helpers, so the page and this document
+ * cannot word a blocker or a phase differently. It holds no timestamp and no
+ * commit: the figures are a function of the two committed inputs, whose
+ * digests it carries, and the page takes the commit from the deployment.
+ * --check fails when the file is stale, as it does for a block, and prints
+ * the input digests (to the GitHub step summary too, when there is one) so a
+ * CI run can be compared with the page served from the same commit.
+ *
+ *   node scripts/coreedge/render-roadmap-figures.mjs --check-scorecard
+ *
+ * checks the scorecard alone, without the roadmap or its what-if runs. That
+ * is what `vercel-build` runs before anything else: plain Node, the two
+ * committed inputs, no network, no database, no tenant. A prose slip in the
+ * roadmap therefore never blocks a deploy, and a stale scorecard fails the
+ * build before the database is migrated rather than after.
  */
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { loadInputs, simulateAll } from "./simulate-gap-matrix.mjs";
+import { loadInputs, MATRIX_PATH, REGISTRY_PATH, simulateAll } from "./simulate-gap-matrix.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const DOC_PATH = join(here, "..", "..", "docs", "coreedge", "CoreEdge-Gap-Study-and-Roadmap.md");
+const repoRoot = join(here, "..", "..");
+export const DOC_PATH = join(repoRoot, "docs", "coreedge", "CoreEdge-Gap-Study-and-Roadmap.md");
+export const SCORECARD_PATH = join(repoRoot, "docs", "coreedge", "parity-scorecard.json");
 
 const n = (x) => x.toLocaleString("en");
 const p = (x) => `${x.toFixed(1)}%`;
@@ -70,6 +94,14 @@ function raisedIn(levelsByPhase, key) {
     return firstPartial.id === "Today" ? "Partial today; never full" : `Partial from ${firstPartial.id}; never full`;
   }
   return "Never raised";
+}
+
+/** "CoreEdge reaches full in" for a lifecycle stage: the first step that makes it full, else how far it gets. */
+function reachesFullIn(levelsByPhase, key) {
+  const full = firstFull(levelsByPhase, key);
+  if (full) return full;
+  const last = levelsByPhase[levelsByPhase.length - 1].levels[key];
+  return last === 1 ? "Never; partial at most (no item delivers the rest)" : "Never";
 }
 
 function prettyCell(key) {
@@ -183,17 +215,13 @@ export function renderBlocks(results, matrix, registry, { withWhatIf = true } = 
   const levels = R.cellLevelsByPhase;
   blocks.lifecycle = table(
     ["Stage", "What it means", "IS", "CoreEdge today", "CoreEdge reaches full in"],
-    matrix.dimensions.lifecycle.map((s) => {
-      const full = firstFull(levels, `lifecycle:${s}`);
-      const lastLevel = levels[levels.length - 1].levels[`lifecycle:${s}`];
-      return [
-        s,
-        matrix.dimensions.lifecycleMeaning?.[s] ?? "",
-        String(IS.lifecycle[s]),
-        String(CE.lifecycle[s]),
-        full ?? (lastLevel === 1 ? "Never; partial at most (no item delivers the rest)" : "Never"),
-      ];
-    }),
+    matrix.dimensions.lifecycle.map((s) => [
+      s,
+      matrix.dimensions.lifecycleMeaning?.[s] ?? "",
+      String(IS.lifecycle[s]),
+      String(CE.lifecycle[s]),
+      reachesFullIn(levels, `lifecycle:${s}`),
+    ]),
   );
 
   blocks["blockers-today"] = table(
@@ -407,6 +435,201 @@ export function renderBlocks(results, matrix, registry, { withWhatIf = true } = 
   return blocks;
 }
 
+/* ── the parity scorecard (P1.9) ─────────────────────────────────────── */
+
+const RANK = { none: 0, partial: 1, full: 2 };
+
+/**
+ * The registry's own cell for a simulator key, for its note. sapAuth is rated
+ * per target or for every target at once, and a per-target rating wins, as it
+ * does in the simulator.
+ */
+function registryCell(registry, key) {
+  const [table, rest] = key.split(/:(.*)/s);
+  const [row, col = ""] = rest.split("|");
+  const cells = registry.coreedgeToday?.[table] ?? [];
+  return (
+    cells.find((c) => c.row === row && (c.col ?? "") === col) ??
+    (table === "sapAuth" ? cells.find((c) => c.row === col && !c.col) : undefined)
+  );
+}
+
+/**
+ * How many of a phase's matrix upgrades the code already credits: the cells
+ * the registry scores at or above the upgrade's status today. An all-target
+ * sapAuth upgrade counts only when every target meets it. Coverage stays flat
+ * inside a phase (one partial cell holds a scenario at partial, section 8.1),
+ * so this is the within-phase progress the coverage columns cannot show.
+ */
+function upgradesCredited(phase, D, today) {
+  const upgrades = phase?.cellUpgrades ?? [];
+  const credited = upgrades.filter((u) => {
+    const keys =
+      u.table === "sapAuth" && !u.col
+        ? D.target.map((t) => `sapAuth:${t}|${u.row}`)
+        : [`${u.table}:${u.col ? `${u.row}|${u.col}` : u.row}`];
+    return keys.every((k) => (today[k] ?? -1) >= RANK[u.status]);
+  });
+  return { total: upgrades.length, creditedToday: credited.length };
+}
+
+/**
+ * A committed input's fingerprint. Taken over the parsed JSON re-serialised,
+ * so a checkout that rewrote line endings has the same digest as CI.
+ */
+const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+/** The repository-relative path, with forward slashes, for the file's provenance. */
+const repoPath = (file) => relative(repoRoot, file).split("\\").join("/");
+
+/** The number of each step's remaining blockers the scorecard names. */
+const STEP_BLOCKERS = 3;
+
+/**
+ * The scorecard, from one simulation run made with `withCellLevels` and the
+ * inputs it was made from. Everything the page shows is in here, already
+ * computed; the page formats and lays it out and does no arithmetic of its
+ * own, so "the page matches the file" and "the file matches the simulator"
+ * are the whole claim. The extended model (caveat 8) is left out, as it is
+ * from the roadmap's headline (D13).
+ */
+export function buildScorecard(results, { matrix, registry }) {
+  const R = results;
+  const levels = R.cellLevelsByPhase;
+  if (!levels) throw new Error("buildScorecard needs results made with withCellLevels");
+  const D = matrix.dimensions;
+  const today = levels[0].levels;
+  const IS = R.integrationSuite;
+
+  const figures = (s) => ({
+    fullySupported: s.fullySupported,
+    atLeastPartial: s.atLeastPartial,
+    fullPct: s.fullPct,
+    partialPct: s.partialPct,
+    lifecycleFull: s.lifecycleFull,
+  });
+  // One decimal place, like every percentage here; rounding keeps 26.9 - 0.1 from reading 26.799999.
+  const points = (a, b) => Math.round(10 * (a - b)) / 10;
+  const step = (id, name, s, upgrades) => ({
+    id,
+    name,
+    ...figures(s),
+    behindIntegrationSuite: { fullPoints: points(IS.fullPct, s.fullPct), partialPoints: points(IS.partialPct, s.partialPct) },
+    upgrades,
+    topBlockers: s.topBlockers.slice(0, STEP_BLOCKERS).map((b) => ({
+      cell: b.cell,
+      label: prettyCell(b.cell),
+      leveragePct: b.leveragePct,
+      soleBlocker: b.soleBlocker,
+    })),
+  });
+
+  // Cells full today, with a sapAuth method full on every target as one entry
+  // (the registry rates it once), not nine.
+  const fullToday = [];
+  const everyTarget = new Set();
+  for (const key of Object.keys(today).filter((k) => today[k] === 2)) {
+    const note = registryCell(registry, key)?.note ?? null;
+    if (key.startsWith("sapAuth:")) {
+      const auth = key.split("|")[1];
+      if (D.target.every((t) => today[`sapAuth:${t}|${auth}`] === 2)) {
+        if (!everyTarget.has(auth)) {
+          everyTarget.add(auth);
+          fullToday.push({ cell: `sapAuth:${auth}`, label: `sapAuth ${auth} (every target)`, note });
+        }
+        continue;
+      }
+    }
+    fullToday.push({ cell: key, label: prettyCell(key), note });
+  }
+
+  return {
+    generatedBy: "scripts/coreedge/render-roadmap-figures.mjs (pnpm coreedge:figures)",
+    schemaVersion: 1,
+    inputs: {
+      matrix: { path: repoPath(MATRIX_PATH), sha256: digest(matrix), revisedOn: matrix.generatedAt ?? null },
+      registry: { path: repoPath(REGISTRY_PATH), sha256: digest(registry) },
+    },
+    model: {
+      totalPermutations: R.totalPermutations,
+      validScenarios: R.coreedgeToday.validScenarios,
+      lifecycleStages: R.lifecycleStages,
+      headlineHosting: R.headlineHosting,
+      networks: [...D.network],
+    },
+    integrationSuite: figures(IS),
+    steps: [
+      step("Today", "CoreEdge today", R.coreedgeToday, null),
+      ...R.phases.map((ph) =>
+        step(ph.id, ph.name, ph, upgradesCredited(matrix.roadmapPhases.find((x) => x.id === ph.id), D, today)),
+      ),
+    ],
+    blockersToday: R.coreedgeToday.topBlockers.map((b, i) => ({
+      rank: i + 1,
+      cell: b.cell,
+      label: prettyCell(b.cell),
+      level: b.level,
+      leverage: b.leverage,
+      leveragePct: b.leveragePct,
+      soleBlocker: b.soleBlocker,
+      raisedIn: raisedIn(levels, b.cell),
+      note: registryCell(registry, b.cell)?.note ?? null,
+    })),
+    lifecycle: D.lifecycle.map((s) => ({
+      stage: s,
+      meaning: D.lifecycleMeaning?.[s] ?? "",
+      integrationSuite: LEVEL[IS.lifecycle[s]],
+      today: LEVEL[R.coreedgeToday.lifecycle[s]],
+      reachesFullIn: reachesFullIn(levels, `lifecycle:${s}`),
+    })),
+    hosting: Object.entries(R.coreedgeTodayByHosting).map(([h, s]) => ({
+      hosting: h,
+      headline: h === R.headlineHosting,
+      network: Object.fromEntries(D.network.map((net) => [net, s.network[net] ?? "none"])),
+      fullySupported: s.fullySupported,
+      atLeastPartial: s.atLeastPartial,
+      fullPct: s.fullPct,
+      partialPct: s.partialPct,
+    })),
+    fullToday,
+    problems: R.problems,
+  };
+}
+
+/** The scorecard file's exact bytes; --check compares them with the committed file. */
+export const serializeScorecard = (scorecard) => `${JSON.stringify(scorecard, null, 2)}\n`;
+
+/** The two input digests, as a CI log line and the page's provenance both print them. */
+function fingerprintLine(scorecard) {
+  const { matrix, registry } = scorecard.inputs;
+  return (
+    `Scorecard inputs: ${matrix.path} sha256 ${matrix.sha256} (revised ${matrix.revisedOn ?? "undated"}); ` +
+    `${registry.path} sha256 ${registry.sha256}.`
+  );
+}
+
+/** Print the digests, and add them to the GitHub step summary when CI provides one. */
+function reportFingerprints(scorecard) {
+  console.log(fingerprintLine(scorecard));
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (!summary) return;
+  const { matrix, registry } = scorecard.inputs;
+  appendFileSync(
+    summary,
+    [
+      "### Parity scorecard inputs",
+      "",
+      "Compare with the provenance on /control-tower/parity for the same commit.",
+      "",
+      "| Input | sha256 |",
+      "|---|---|",
+      `| \`${matrix.path}\` (revised ${matrix.revisedOn ?? "undated"}) | \`${matrix.sha256}\` |`,
+      `| \`${registry.path}\` | \`${registry.sha256}\` |`,
+      "",
+    ].join("\n"),
+  );
+}
+
 /** Rewrite only the named columns of a markdown table; rows are keyed by the first word of their first cell. */
 function patchColumns(body, columns) {
   const lines = body.split("\n");
@@ -481,13 +704,57 @@ export function bareProseFigures(doc) {
   return problems;
 }
 
+/** Why the committed scorecard is not the simulator's, or null when it is. */
+function scorecardProblem(expected) {
+  if (!existsSync(SCORECARD_PATH)) {
+    return (
+      "docs/coreedge/parity-scorecard.json is missing. Run `pnpm coreedge:figures` and commit it with the roadmap " +
+      "(in a Vercel build, check that .vercelignore keeps it)."
+    );
+  }
+  return readFileSync(SCORECARD_PATH, "utf8") === expected
+    ? null
+    : "docs/coreedge/parity-scorecard.json is stale: it is not what the simulator gives for this commit. " +
+        "Run `pnpm coreedge:figures` and commit it with the roadmap.";
+}
+
 function main() {
+  const checkScorecardOnly = process.argv.includes("--check-scorecard");
+  const check = checkScorecardOnly || process.argv.includes("--check");
+
+  // In a Vercel build these come from the filtered upload, so a .vercelignore
+  // rule that drops one fails here, by name, rather than as a stack trace.
+  const absent = [MATRIX_PATH, REGISTRY_PATH].filter((f) => !existsSync(f));
+  if (absent.length) {
+    console.error(
+      `Missing ${absent.map(repoPath).join(" and ")}. In a Vercel build, check that .vercelignore keeps ` +
+        "docs/coreedge/gap-matrix.json, capability-registry.json and parity-scorecard.json.",
+    );
+    process.exit(1);
+  }
+
   const inputs = loadInputs();
   const results = simulateAll(inputs, { withCellLevels: true });
   if (results.problems.length) {
     console.error(`The matrix has ${results.problems.length} problems; fix them first:\n  ${results.problems.slice(0, 20).join("\n  ")}`);
     process.exit(1);
   }
+  const scorecard = buildScorecard(results, inputs);
+  const scorecardOut = serializeScorecard(scorecard);
+  const scorecardStale = scorecardProblem(scorecardOut);
+
+  // What the build runs: the scorecard alone, so the roadmap's prose rules and
+  // its what-if runs (two more simulations) stay out of every deploy.
+  if (checkScorecardOnly) {
+    if (scorecardStale) {
+      console.error(scorecardStale);
+      process.exit(1);
+    }
+    console.log("The parity scorecard matches the simulator.");
+    reportFingerprints(scorecard);
+    return;
+  }
+
   const doc = readFileSync(DOC_PATH, "utf8");
   const { out, missing } = renderDocument(doc, renderBlocks(results, inputs.matrix, inputs.registry));
   if (missing.length) {
@@ -502,9 +769,11 @@ function main() {
         "\nQuote each through a figures block (a `value-*` block inside a sentence). A figure that is not simulator output, " +
         "or that records a past result, goes inside <!-- figures:not-simulated begin/end --> or <!-- figures:historical begin/end -->.",
     );
-    if (process.argv.includes("--check")) process.exit(1);
+    if (check) process.exit(1);
   }
-  if (process.argv.includes("--check")) {
+  if (check) {
+    // Both artefacts are checked before failing, so one run names everything stale.
+    let stale = false;
     if (out !== doc) {
       const a = doc.split("\n"), b = out.split("\n");
       const at = a.findIndex((l, i) => l !== b[i]);
@@ -512,13 +781,21 @@ function main() {
         `The roadmap's simulated figures are stale (first difference at line ${at + 1}):\n  doc:       ${a[at]}\n  simulator: ${b[at]}\n` +
           "Run `pnpm coreedge:figures`, explain any change in the text around the block, and commit.",
       );
-      process.exit(1);
+      stale = true;
     }
-    console.log("The roadmap's simulated figures match the simulator.");
+    if (scorecardStale) {
+      console.error(scorecardStale);
+      stale = true;
+    }
+    if (stale) process.exit(1);
+    console.log("The roadmap's simulated figures and the parity scorecard match the simulator.");
+    reportFingerprints(scorecard);
     return;
   }
   writeFileSync(DOC_PATH, out);
+  writeFileSync(SCORECARD_PATH, scorecardOut);
   console.log(out === doc ? "Figures already current." : `Rewrote the figures in ${DOC_PATH}`);
+  console.log(scorecardStale ? `Wrote ${SCORECARD_PATH}` : "Parity scorecard already current.");
   if (bare.length) process.exit(1);
 }
 
