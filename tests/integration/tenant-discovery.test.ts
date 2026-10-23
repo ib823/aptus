@@ -165,7 +165,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("tenant service discovery (P1.2,
     h.requests = [];
     const res = await stored(`${RUN}-dev`);
     expect(res.status).toBe(200);
-    const body = (await res.json()).data as { listing: { listedBy: string; groups: Record<string, ListingEntry[]> } };
+    const body = (await res.json()).data as { listing: { listedBy: string; groups: { customerBuilt: ListingEntry[] } } };
     expect(h.requests).toEqual([]);
     expect(body.listing.listedBy).toBe("Dev");
     expect(body.listing.groups.customerBuilt.map((e) => e.technicalName).sort()).toEqual(["YY1_SALESBONUS_CDS", "ZUI_TRAVEL_O2", "Z_BONUS_PLAN"]);
