@@ -10,7 +10,7 @@ describe("Markdown parsing across checkout line endings", () => {
       { kind: "list", items: ["One", "Two"] },
       { kind: "rule" },
       { kind: "pre", text: "const a = 1;" },
-      { kind: "pre", text: "| A | B |\n| - | - |" },
+      { kind: "pre", text: "| A | B |\n| - | - |", table: true },
     ]);
   });
   it("consumes unsupported and malformed block starts without stalling", () => {
