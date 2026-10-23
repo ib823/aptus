@@ -4,7 +4,8 @@
  *
  * The question is the smallest body the platform refuses (Vercel's documented
  * "4.5 MB" is either 4,500,000 bytes or 4.5 MiB, and measured before or after
- * compression [unverified]). A probe asks for one body size and says whether
+ * compression [unverified]), or whether it refuses any at all: Vercel says a
+ * streamed function response has no such limit. A probe asks for one body size and says whether
  * it was served; the search assumes a single threshold (every size below it
  * served, every size at or above it refused) and checks the bounds it is given
  * first, so a probe that never refuses, or always does, is reported rather
@@ -56,4 +57,27 @@ export const CAP_MARGIN_BYTES = 16 * 1024;
 
 export function recommendedCap(largestServed: number): number {
   return largestServed - CAP_MARGIN_BYTES;
+}
+
+/**
+ * The window the measurement searches. Its top is above the largest body a
+ * `?limit` read can produce (SAP's answer is read to 16 MiB, then stripped;
+ * a megabyte more for the envelope and re-escaping), so a platform that
+ * serves the top refuses no legacy answer at all: a streamed function
+ * response has no 4.5 MB limit [Vercel's knowledge base, not measured here].
+ */
+export const SEARCH_WINDOW = { low: 4_000_000, high: 17 * 1024 * 1024 } as const;
+
+/**
+ * What a run on the incompressible body says to do with LEGACY_RESPONSE_CAP:
+ *   cap       set it to the largest body served less the margin;
+ *   no-guard  the window's top was served, so any cap below it would refuse
+ *             an answer the platform serves: set it to Infinity;
+ *   widen     even the window's bottom was refused: nothing to recommend.
+ */
+export type CapAdvice = { readonly kind: "cap"; readonly cap: number } | { readonly kind: "no-guard" } | { readonly kind: "widen" };
+
+export function capAdvice(t: Threshold): CapAdvice {
+  if (t.ok) return { kind: "cap", cap: recommendedCap(t.largestServed) };
+  return t.reason === "HIGH_BOUND_SERVED" ? { kind: "no-guard" } : { kind: "widen" };
 }

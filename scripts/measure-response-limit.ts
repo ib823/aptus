@@ -8,12 +8,15 @@
  * itself, past LEGACY_RESPONSE_CAP (src/lib/northbound/query/page.ts), in its
  * own envelope and audited 413. Vercel documents the limit as "4.5 MB"
  * without saying whether that is 4,500,000 bytes or 4.5 MiB, or whether it
- * is counted before or after compression [unverified]. So the cap starts at
- * 4,718,592 bytes (4.5 MiB), which cannot refuse an answer the platform
- * serves under either reading; this script finds the real figure, and the cap
- * is then set to the largest body served less 16 KiB, in a commit that cites
- * the run. Until then, answers between the real limit and 4.5 MiB still meet
- * the platform's own 413 (the price of never breaking a working call).
+ * is counted before or after compression [unverified]; and its knowledge
+ * base says streaming functions do not have the limit at all, while
+ * streaming is on by default for Node.js functions. So whether the 4.5 MiB
+ * the cap starts at can refuse an answer the platform serves depends on the
+ * deployment. This script finds out, on a preview in the production team's
+ * scope (the same plan), BEFORE the guard deploy reaches production: the cap
+ * is then set to the largest body served less 16 KiB, or, when the platform
+ * serves everything a `?limit` read can produce, to Infinity (no guard), in
+ * a commit that cites the run.
  *
  * HOW. It bisects, to one byte, the body size at which a function's answer
  * stops being served (scripts/lib/response-limit.ts), twice: with a body gzip
@@ -26,8 +29,9 @@
  *   (default) deploy a throwaway function that does, as a Vercel PREVIEW in
  *       your scope, probe it, and remove it. Needs VERCEL_TOKEN, and
  *       VERCEL_SCOPE (the team slug) when the token's default scope is not
- *       the one CoreEdge deploys to. The function is the same platform limit
- *       CoreEdge's routes meet: every Vercel Function has one.
+ *       the one CoreEdge deploys to. It answers through the same Node.js
+ *       runtime, on the same plan, as CoreEdge's routes, streaming as they
+ *       do by default.
  *
  *   VERCEL_CLI   the CLI package to run with npx (default vercel@39.1.0)
  *
@@ -40,11 +44,15 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { findThreshold, recommendedCap, type Probe, type Threshold } from "./lib/response-limit";
+import { capAdvice, findThreshold, SEARCH_WINDOW, type Probe, type Threshold } from "./lib/response-limit";
 
-/** The window searched: the larger reading of "4.5 MB" lies well inside it. */
-const LOW = 4_000_000;
-const HIGH = 5_500_000;
+/**
+ * The window searched: both readings of "4.5 MB" lie well inside it, and its
+ * top is above anything a `?limit` read can produce, so "still served at the
+ * top" means the platform refuses no legacy answer.
+ */
+const LOW = SEARCH_WINDOW.low;
+const HIGH = SEARCH_WINDOW.high;
 const TIMEOUT_MS = 60_000;
 
 /** The throwaway function: a JSON body of exactly ?bytes= bytes, `{"pad":"…"}`. */
@@ -53,9 +61,9 @@ module.exports = (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const bytes = Number(url.searchParams.get("bytes"));
   const zeros = url.searchParams.get("fill") === "zeros";
-  if (!Number.isInteger(bytes) || bytes < 10 || bytes > 8 * 1024 * 1024) {
+  if (!Number.isInteger(bytes) || bytes < 10 || bytes > 32 * 1024 * 1024) {
     res.statusCode = 400;
-    res.end("bytes must be an integer from 10 to 8 MiB");
+    res.end("bytes must be an integer from 10 to 32 MiB");
     return;
   }
   const n = bytes - 10;
@@ -132,7 +140,7 @@ function describe(fill: string, t: Threshold): string {
   if (!t.ok) {
     return t.reason === "LOW_BOUND_REFUSED"
       ? `${fill}: even ${LOW.toLocaleString("en")} bytes was refused (${t.probes} probes); widen the window.`
-      : `${fill}: ${HIGH.toLocaleString("en")} bytes was still served (${t.probes} probes); the limit is above the window.`;
+      : `${fill}: ${HIGH.toLocaleString("en")} bytes was still served (${t.probes} probes), more than a ?limit read can produce: the platform refuses no legacy answer.`;
   }
   return `${fill}: the largest body served is ${t.largestServed.toLocaleString("en")} bytes; ${t.smallestRefused.toLocaleString("en")} is refused (${t.probes} probes).`;
 }
@@ -145,13 +153,20 @@ async function main(): Promise<void> {
     const compressible = await findThreshold(probeOf(probe.template, "zeros"), LOW, HIGH);
     console.log(describe("incompressible", onWire));
     console.log(describe("compressible", compressible));
-    if (onWire.ok) {
-      const cap = recommendedCap(onWire.largestServed);
+    const advice = capAdvice(onWire);
+    if (advice.kind === "cap" && onWire.ok) {
       console.log(
-        `\nSet LEGACY_RESPONSE_CAP in src/lib/northbound/query/page.ts to ${cap} (${onWire.largestServed} less 16 KiB), ` +
+        `\nSet LEGACY_RESPONSE_CAP in src/lib/northbound/query/page.ts to ${advice.cap} (${onWire.largestServed} less 16 KiB), ` +
           `in a commit that cites this run${compressible.ok && compressible.largestServed !== onWire.largestServed ? " and says the platform counts compressed bytes" : ""}.`,
       );
-      console.log(JSON.stringify({ measuredAt: new Date().toISOString(), incompressible: onWire, compressible, recommendedCap: cap }));
+      console.log(JSON.stringify({ measuredAt: new Date().toISOString(), incompressible: onWire, compressible, recommendedCap: advice.cap }));
+    } else if (advice.kind === "no-guard") {
+      // Any cap would refuse an answer this platform serves: the guard must not refuse at all.
+      console.log(
+        "\nSet LEGACY_RESPONSE_CAP in src/lib/northbound/query/page.ts to Number.POSITIVE_INFINITY (no guard), in a commit that cites this run: " +
+          "the platform served a body larger than a ?limit read can produce, so a lower cap would refuse answers it serves.",
+      );
+      console.log(JSON.stringify({ measuredAt: new Date().toISOString(), incompressible: onWire, compressible, recommendedCap: null }));
     } else {
       process.exitCode = 1;
     }

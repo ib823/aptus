@@ -49,12 +49,15 @@ query do) and recompiles the policy against it.
 `COREEDGE_QUERY_SURFACE` is `off` unless it is exactly `on` (trimmed, any
 case). Roll it out in this order:
 
-1. **Merge and deploy with the switch unset.** That first deployment is the
+1. **Measure the legacy cap first,** on a preview in the production team's
+   scope (the same plan), before the guard deploy reaches production (below),
+   and set `LEGACY_RESPONSE_CAP` in a commit that cites the run. The guard
+   refuses a `?limit` answer past the cap whatever the switch says, so it must
+   not reach production with a cap below what the platform serves.
+2. **Merge and deploy with the switch unset.** That first deployment is the
    **guard**: from it on, every rollback target refuses query parameters
    instead of ignoring them (threat N14). The legacy byte guard (413) and the
    `@` envelope fix are live from it.
-2. **Measure the legacy cap** on a preview (below), and lower
-   `LEGACY_RESPONSE_CAP` in a commit that cites the run.
 3. **On Preview:** set the ring, then `COREEDGE_QUERY_SURFACE=on`, and
    redeploy. Run tier 2 if the sandbox key is set, and a 10,000-row paging run
    against the lab (below).
@@ -210,8 +213,12 @@ client that starts a page at most every 1.05 s (or paces by
 ## Measuring the legacy cap
 
 `LEGACY_RESPONSE_CAP` (`src/lib/northbound/query/page.ts`) starts at
-4,718,592 bytes (4.5 MiB), which cannot refuse an answer the platform serves
-under either reading of Vercel's "4.5 MB". To set it to the real figure:
+4,718,592 bytes (4.5 MiB), the larger reading of Vercel's "4.5 MB" for a
+function's response. That refuses nothing the platform serves only where the
+limit applies: Vercel's knowledge base says streaming functions do not have
+it, and streaming is on by default for Node.js functions. Where the platform
+serves larger answers, the cap would refuse `?limit` reads that worked before
+it. So measure, before the guard reaches production:
 
 ```
 VERCEL_TOKEN=… VERCEL_SCOPE=<team> pnpm tsx scripts/measure-response-limit.ts
@@ -219,12 +226,15 @@ VERCEL_TOKEN=… VERCEL_SCOPE=<team> pnpm tsx scripts/measure-response-limit.ts
 
 It deploys a throwaway function as a preview in your scope, bisects the body
 size the platform starts refusing (with an incompressible body and a
-compressible one), removes the deployment, and prints the recommended cap:
-the largest body served less 16 KiB. Or give `--url` an endpoint you already
-have that answers `?bytes=N&fill=random|zeros` with a body of exactly N
-bytes. Set the constant in a commit that cites the run. Until then, a `?limit`
-answer between the real limit and 4.5 MiB still meets the platform's own 413,
-and its audit row says 200.
+compressible one), from 4,000,000 bytes to 17 MiB (above anything a `?limit`
+read can produce), removes the deployment, and prints the recommended cap:
+the largest body served less 16 KiB; or, when the platform still serves
+17 MiB, `Number.POSITIVE_INFINITY` (no guard), since any cap would then refuse
+answers the platform serves. Or give `--url` an endpoint you already have that
+answers `?bytes=N&fill=random|zeros` with a body of exactly N bytes. Set the
+constant in a commit that cites the run. Where the platform's limit is lower
+than the cap, a `?limit` answer between the two still meets the platform's own
+413, and its audit row says 200.
 
 ## Bulk reading
 

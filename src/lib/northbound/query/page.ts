@@ -64,10 +64,14 @@ export const MAX_PAGE_BYTES = 4_000_000;
 /** Kept free for the envelope after the rows: count, interface, note, page (cursor included) and totalCount. */
 export const PAGE_TAIL_RESERVE = 8192;
 /**
- * The legacy read's ceiling: 4.5 MiB. It cannot refuse an answer the platform
- * serves today under either reading of its "4.5 MB", so no working call
- * breaks; it is lowered once the real limit is measured on a preview
- * (scripts/measure-response-limit.ts).
+ * The legacy read's ceiling: 4.5 MiB, the larger reading of the "4.5 MB"
+ * Vercel documents for a function's response. It refuses nothing the platform
+ * serves only where that limit applies, and Vercel says a streamed response
+ * (on by default for Node.js functions) has none. So it is MEASURED on the
+ * production plan before this guard reaches production
+ * (scripts/measure-response-limit.ts), and set from the run: to the largest
+ * body served less 16 KiB, or to Infinity (no guard) when the platform serves
+ * everything a ?limit read can produce.
  */
 export const LEGACY_RESPONSE_CAP = 4_718_592;
 

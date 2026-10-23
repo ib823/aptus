@@ -222,8 +222,9 @@ async function legacyRead(c: {
   const { result, durationMs } = await callSapRead(bound.value, { servicePath: service.path, entitySet, limit }, circuit.value);
 
   /*
-   * THE BODY IS WRITTEN BEFORE THE ROW (P1.4, 3.10.2). The platform returns at
-   * most about 4.5 MB; a larger answer used to be audited 200 and then fail
+   * THE BODY IS WRITTEN BEFORE THE ROW (P1.4, 3.10.2). Where the platform
+   * limits a function's response to about 4.5 MB (measured: see
+   * LEGACY_RESPONSE_CAP), a larger answer used to be audited 200 and then fail
    * with the platform's bare 413. Serialised once here — the same bytes
    * NextResponse.json would send — its size is known before anything is
    * audited, and one past LEGACY_RESPONSE_CAP is refused in CoreEdge's own
