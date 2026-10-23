@@ -7,12 +7,15 @@
  *   DELETE  withdraw it
  *
  * WHO MAY SIGN (the product owner's Q3, answered by default): a builder of the
- * organisation OTHER THAN THE PERSON WHO REGISTERED THE INTERFACE — the
- * segregation a grant decision has — per service, behind a passkey step-up.
- * Who registered it is read from the interface's CREATE audit row; an
- * interface whose row is missing (the trail was best effort before P1.2) is
- * signed with `requesterUnknown` on the record, so the gap is visible rather
- * than blocking.
+ * organisation OTHER THAN THE PERSON WHO CHOSE THE SERVICE — the segregation a
+ * grant decision has — per service, behind a passkey step-up. Who chose it is
+ * read from the audit trail (serviceRequester): the interface's CREATE row,
+ * or the newer edit whose row says it changed the service, since a builder
+ * who re-points an interface asks for the new service as surely as its
+ * registrant asked for the first (P1.2 review round 1). An interface whose
+ * row is missing (the trail was best effort before P1.2) is signed with
+ * `requesterUnknown` on the record, so the gap is visible rather than
+ * blocking.
  *
  * FAIL CLOSED. The field and its POLICY_SIGN_OFF (or _WITHDRAWN) ConfigAudit
  * row are written in ONE transaction; a sign-off with no trail is not
@@ -67,6 +70,34 @@ async function loadInterface(scope: TenantScope, id: string) {
   });
 }
 
+/**
+ * Who asked for the service the interface calls now: the actor of the newest
+ * audit row that set its service identity, its CREATE row or an edit whose
+ * row says serviceChanged (interfaces/route.ts PATCH, as UPDATE or PROMOTE).
+ * Null when that row is missing, or names another service than the interface
+ * has now: a change the best-effort trail did not record, whose author is
+ * not known.
+ */
+async function serviceRequester(
+  organizationId: string,
+  iface: { id: string; externalId: string },
+): Promise<{ actorId: string; registered: boolean } | null> {
+  const row = await prisma.configAudit.findFirst({
+    where: {
+      organizationId,
+      entityType: "Interface",
+      entityId: iface.id,
+      OR: [{ action: "CREATE" }, { action: { in: ["UPDATE", "PROMOTE"] }, after: { path: ["serviceChanged"], equals: true } }],
+    },
+    orderBy: { at: "desc" },
+    select: { actorId: true, action: true, after: true },
+  });
+  if (!row) return null;
+  const named = (row.after as { externalId?: unknown } | null)?.externalId;
+  if (named !== iface.externalId) return null;
+  return { actorId: row.actorId, registered: row.action === "CREATE" };
+}
+
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const gate = await builder();
   if (!gate.ok) return gate.response;
@@ -92,16 +123,12 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
-  // Segregation, as a grant decision has it: not the person who registered the interface.
-  const created = await prisma.configAudit.findFirst({
-    where: { organizationId, entityType: "Interface", entityId: iface.id, action: "CREATE" },
-    orderBy: { at: "asc" },
-    select: { actorId: true },
-  });
-  if (created?.actorId === user.id) {
+  // Segregation, as a grant decision has it: not the person who chose the service the interface calls.
+  const requester = await serviceRequester(organizationId, iface);
+  if (requester?.actorId === user.id) {
     return studioError(
       "FORBIDDEN",
-      "You registered this interface, so someone else in your organization signs off its SAP API Policy §1.2 basis, as a second person decides its access.",
+      `${requester.registered ? "You registered this interface" : "You chose the service this interface calls"}, so someone else in your organization signs off its SAP API Policy §1.2 basis, as a second person decides its access.`,
     );
   }
 
@@ -134,7 +161,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         entityId: iface.id,
         action: "POLICY_SIGN_OFF",
         ...(iface.apiPolicySignOff ? { before: iface.apiPolicySignOff as Prisma.InputJsonValue } : {}),
-        after: { ...signOff, ...(created ? {} : { requesterUnknown: true }) } as unknown as Prisma.InputJsonObject,
+        after: { ...signOff, ...(requester ? {} : { requesterUnknown: true }) } as unknown as Prisma.InputJsonObject,
       },
     });
     return true;

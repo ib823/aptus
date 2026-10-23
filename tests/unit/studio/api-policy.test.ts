@@ -47,7 +47,8 @@ vi.mock("@/lib/db/prisma", () => {
     prisma: {
       interface: { findFirst: vi.fn(async () => db.iface) },
       configAudit: {
-        findFirst: vi.fn(async () => (db.createdBy ? { actorId: db.createdBy } : null)),
+        // The row that set the interface's service: its CREATE row, naming the service it has.
+        findFirst: vi.fn(async () => (db.createdBy ? { actorId: db.createdBy, action: "CREATE", after: { externalId: db.iface?.externalId } } : null)),
         create: vi.fn(async () => ({})),
       },
       platformAuditEvent: { create: vi.fn(async () => ({})) },

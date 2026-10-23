@@ -8,8 +8,8 @@
  * basis — SAP's documentation for the product, an authorisation from SAP, or
  * another, each but the first with its reference — and confirms the statement.
  * The server asks for a fresh passkey (fetchWithStepUp) and refuses the person
- * who registered the interface: someone else signs, as someone else decides
- * its access.
+ * who chose the service, by registering the interface or by changing its
+ * service later: someone else signs, as someone else decides its access.
  */
 
 import { useId, useState } from "react";
@@ -81,7 +81,7 @@ export function PolicySignOffDialog({
         <p style={{ ...hint, marginTop: 0 }}>
           This interface calls a service your team built on SAP S/4HANA Cloud Public Edition. SAP permits custom
           interfaces explicitly only on private cloud and on-premise, so a person in your organization records why
-          calling this one is permitted. Someone other than the person who registered the interface signs.
+          calling this one is permitted. Someone other than the person who chose this service for the interface signs.
         </p>
         <blockquote style={quote}>
           <span style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>{API_POLICY_ID}</span>

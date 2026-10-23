@@ -15,7 +15,7 @@ own services (`Z*`, `Y*`, `YY1_*`) are the ones that question applies to: the
 catalogue cannot say they are published, and a path a builder typed can name
 any service on the system, SAP's unpublished ones included. The sign-off is
 the customer's own record of the answer, made once per service by someone
-other than the person who registered it.
+other than the person who chose that service.
 
 An interface needs one when its product is `s4hana` (S/4HANA Cloud Public
 Edition) and it is registered by its own service path, or names a `Z*`, `Y*`
@@ -35,9 +35,14 @@ with the policy's version and asks for:
 - a passkey step-up (action `policy.signoff`), under `COREEDGE_STEP_UP` like an
   access decision (`docs/runbooks/coreedge-step-up.md`).
 
-The signer must be a builder other than the person who registered the
-interface (its `ConfigAudit` CREATE row). An interface whose CREATE row is
-missing is signed with `requesterUnknown: true` recorded, rather than refused.
+The signer must be a builder other than the person who chose the service the
+interface calls: the actor of the newest `ConfigAudit` row that set it, the
+interface's CREATE row or a later UPDATE or PROMOTE row whose `after` says
+`serviceChanged: true`. A builder who re-points an interface to another
+service is that service's requester, and the registrant may then sign it. An
+interface whose row is missing, or names another service than the one it
+calls now, is signed with `requesterUnknown: true` recorded, rather than
+refused.
 The field and its `ConfigAudit` row (`POLICY_SIGN_OFF`) are written in one
 transaction, compare-and-set on the service it covers, so a sign-off can never
 land on a service changed under it (409). **Withdraw**
@@ -73,7 +78,7 @@ least a working week, then:
 - Calls it would have refused: search the logs for `[api-policy]`.
 
 Each interface listed needs its sign-off recorded (Studio, Interfaces), by a
-builder other than its registrant, or it loses its traffic. When seven
+builder other than the person who chose its service, or it loses its traffic. When seven
 consecutive days show no new row and no log line, set
 `COREEDGE_API_POLICY_SIGNOFF=enforce` and redeploy.
 
