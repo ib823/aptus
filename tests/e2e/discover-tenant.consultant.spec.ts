@@ -81,6 +81,10 @@ async function violationsIn(page: Page, selector: string): Promise<string> {
     .join("\n");
 }
 
+// One worker owns the seeded rows: in parallel, one worker's afterAll would
+// remove them under another's tests (CI runs fully parallel).
+test.describe.configure({ mode: "serial" });
+
 test.describe("Discover · On this tenant (P1.2)", () => {
   let createdHubRow = false;
 
