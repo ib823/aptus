@@ -214,12 +214,30 @@ test.describe("Discover · On this tenant (P1.2)", () => {
     });
   }
 
+  /*
+   * The catalogue cannot be opened in the browser here: the fixture's stored
+   * connection is the only tenant, its secrets never open (global-setup.ts),
+   * and the catalogue refuses a tenant whose stored connection cannot be read
+   * (hub-content route, readTenantRefusalResponse); with no tenant, Discover
+   * shows "No tenant connected" instead. So this asks the detail route the
+   * browser would ask, as the signed-in builder, with no tenant: the join is
+   * the real one, against the scenario table seeded above. The panel that
+   * renders this answer is tested on its own (tests/unit/components/ask-basis-panel.test.tsx).
+   */
   test("the catalogue detail of a service not activated here says which scenario to ask Basis for", async ({ page }) => {
-    await page.goto("/studio/discover");
-    await page.getByRole("button", { name: new RegExp(SUPPLIER_INVOICE) }).first().click();
-    const panel = page.getByTestId("ask-basis");
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText("Ask Basis for SAP_COM_0057");
-    await expect(panel.getByRole("button", { name: "Copy a request to Basis for SAP_COM_0057" })).toBeVisible();
+    const row = await prisma.sapHubContent.findUnique({
+      where: { contentType_externalId: { contentType: "API", externalId: SUPPLIER_INVOICE } },
+      select: { id: true },
+    });
+    expect(row).not.toBeNull();
+    const res = await page.request.get(`/api/sap/tdd/hub-content/${row!.id}?product=s4hana`);
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as {
+      data: { askBasis: { action: boolean; technicalId: string; scenarios: { id: string }[]; release: string | null } | null };
+    };
+    expect(body.data.askBasis).not.toBeNull();
+    expect(body.data.askBasis!.action).toBe(true);
+    expect(body.data.askBasis!.technicalId).toBe(`${SUPPLIER_INVOICE}_0001`);
+    expect(body.data.askBasis!.scenarios.map((s) => s.id)).toContain("SAP_COM_0057");
   });
 });

@@ -75,7 +75,8 @@ test.describe("Discover · From a file (P1.2)", () => {
     await dialog.getByLabel("Name").fill(NAME);
     await dialog.getByLabel("SAP product").selectOption("s4hana");
     await dialog.getByLabel("Your own service path").check();
-    await dialog.getByLabel("Service path").fill("/sap/opu/odata/sap/YY1_SALESBONUS_CDS");
+    // Exact: "Your own service path" (the radio above) also contains the words.
+    await dialog.getByLabel("Service path", { exact: true }).fill("/sap/opu/odata/sap/YY1_SALESBONUS_CDS");
     await dialog.getByRole("button", { name: "Create draft" }).click();
 
     await expect(dialog.getByRole("status")).toContainText("DRAFT created, contract 1.0.0 from your file, not verified on any tenant.", {
