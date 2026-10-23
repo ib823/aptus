@@ -460,9 +460,12 @@ with its parameters ignored.
 
 Filters on different fields are ANDed. Each field takes one of `eq`, `in`, or
 a range (at most one lower and one upper bound). Values are typed by the field:
-dates as `2026-01-01`, timestamps as `2026-01-01T09:30:00`, decimals as digits
-with a point (no exponent), GUIDs as written. **Send `+` as `%2B`**: a bare `+`
-in a query string means a space. Text containing `%XX` sequences is refused.
+dates as `2026-01-01`; timestamps as `2026-01-01T09:30:00` for a V2
+`Edm.DateTime`, and with seconds and an offset for an `Edm.DateTimeOffset`
+(the usual V4 timestamp): `2026-01-01T09:30:00Z` or `2026-01-01T09:30:00+01:00`,
+sent as `2026-01-01T09:30:00%2B01:00`; decimals as digits with a point (no
+exponent); GUIDs as written. **Send `+` as `%2B`**: a bare `+` in a query
+string means a space. Text containing `%XX` sequences is refused.
 `limit` and `$`-prefixed OData options are refused beside query parameters:
 CoreEdge builds the OData query itself.
 

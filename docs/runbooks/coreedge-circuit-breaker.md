@@ -37,13 +37,13 @@ down does not close the circuit the preview counts into.
 
 | Event | What the circuit does |
 |---|---|
-| A call is answered (200, 201, or an empty result) | Closes; the failure count goes back to 0 |
+| A call is answered (200, 201, or an empty result), or a query's key lookup finds no record (SAP's 404 to it) | Closes; the failure count goes back to 0 |
 | A read that times out, gets a 5xx, cannot reach the host, or gets an invalid response | Counts one failure |
 | A write that times out, cannot reach the host, cannot get its credential, or whose CSRF handshake fails | Counts one failure |
 | SAP refuses the call (401, 403, 404, 422) | Nothing: a healthy system said no to one request |
 | SAP answers a write's POST with any other status (a 5xx included), or throttles a write (408, 429) | Nothing: see below |
 | A query read (P1.4) that times out, cannot reach the host, cannot get its credential, or meets a proxy's 502, 503 or 504 | Counts one failure |
-| SAP answers a query with any other status (a 4xx, a 500, a 501, a redirect) or a body it cannot read, or a key lookup finds no record | Nothing: the caller shaped the query (see below) |
+| SAP answers a query with any other status (a 4xx, a 500, a 501, a redirect) or a body it cannot read | Nothing: the caller shaped the query (see below) |
 
 A write's payload is the caller's choice, and SAP answers a bad one with a 500
 (a Gateway technical exception, a RAP short dump on a field value) as readily
