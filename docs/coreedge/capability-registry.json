@@ -1745,9 +1745,11 @@
         "row": "DISCOVER",
         "col": "",
         "status": "partial",
-        "note": "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8). No discovery from the tenant's own Gateway catalogue (P1.2).",
+        "note": "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8). A connection's own Gateway catalogue is listed on the governed console pipeline and stored per connection, each service classed under SAP API Policy §1.2, customer-built apart (tenant-discovery.ts, tenant-listing.ts; P1.2). A service is registered from its description file as a DRAFT with its contract and no tenant call (contracts/upload.ts; P1.2); an S/4 Public service shows the SAP communication scenario that enables it, from SAP's own table (comm-scenarios.ts). The OData V4 service groups are not read on S/4HANA Cloud Public Edition, and a listing needs the communication user to be allowed to read the system's service catalogue. No live lab listing is recorded yet: the classifier is proved on a synthetic fixture until the lab recording replaces it (P1.8).",
         "basis": [
-          "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8)."
+          "Studio Discover and the Workbench catalogue (dynamic-catalog.ts); one address per row, and a V4 address is verified per system by a recorded 200 (hub-content.ts catalogueAddress, catalogue-address-verification.ts; P0.8).",
+          "A connection's own Gateway catalogue is listed on the governed console pipeline and stored per connection, each service classed under SAP API Policy §1.2, customer-built apart (tenant-discovery.ts, tenant-listing.ts; P1.2).",
+          "A service is registered from its description file as a DRAFT with its contract and no tenant call (contracts/upload.ts; P1.2); an S/4 Public service shows the SAP communication scenario that enables it, from SAP's own table (comm-scenarios.ts)."
         ]
       },
       {

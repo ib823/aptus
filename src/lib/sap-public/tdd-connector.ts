@@ -542,8 +542,8 @@ export const SAP_ODATA_PRODUCTS: SapOdataProduct[] = [
    *
    * An empty list means the catalogue reports nothing rather than a list of
    * services that do not exist — "Not found" over a confident wrong answer.
-   * Discovery from the tenant's own Gateway catalogue is the honest source and
-   * is not built yet (spec §3.1).
+   * The tenant's own Gateway catalogue is the honest source: Discover's "On
+   * this tenant" lists it per connection (P1.2, tenant-listing.ts; spec §3.1).
    */
   {
     key: "ecc",

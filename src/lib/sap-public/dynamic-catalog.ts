@@ -107,7 +107,7 @@ export function hubCatalogueScope(product: {
     return {
       kind: "none",
       reason:
-        "ECC has no published service list — its OData surface is whatever the customer activated in their own NetWeaver Gateway. Discovery from the tenant's Gateway catalogue is the honest source, and it is not built yet.",
+        "ECC has no published service list — its OData surface is whatever the customer activated in their own NetWeaver Gateway. The tenant's own Gateway catalogue is the honest source: list it under On this tenant.",
     };
   }
   if (product.edition) {
