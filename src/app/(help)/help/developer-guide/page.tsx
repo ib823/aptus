@@ -49,6 +49,11 @@ export default async function DeveloperGuidePage() {
   }
 
   const blocks = splitMarkdownBlocks(markdown);
+  // Each code block's ordinal, for a label that tells one region from the next.
+  const codeNumber = new Map<number, number>();
+  blocks.forEach((b, idx) => {
+    if (b.kind === "pre") codeNumber.set(idx, codeNumber.size + 1);
+  });
   return (
     <article style={{ maxWidth: 780 }}>
       {blocks.map((b, idx) => {
@@ -76,9 +81,16 @@ export default async function DeveloperGuidePage() {
               </p>
             );
           case "pre":
+            // A code block scrolls sideways, so it must take keyboard focus to
+            // be scrolled without a pointer (axe scrollable-region-focusable).
+            // role + label make the focus stop announce what it is; the global
+            // [tabindex]:focus-visible rule draws its ring.
             return (
               <pre
                 key={idx}
+                tabIndex={0}
+                role="region"
+                aria-label={`Code example ${codeNumber.get(idx)}`}
                 style={{
                   margin: "0 0 12px",
                   padding: 12,

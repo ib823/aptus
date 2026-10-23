@@ -219,6 +219,42 @@ test.describe("Control Tower · time to first call", () => {
 });
 
 /**
+ * The Test Console and the developer guide, in both themes. Each failed one
+ * rule: link-in-text-block (the scope note's guide link, told apart by colour
+ * alone) and scrollable-region-focusable (the guide's sideways-scrolling code
+ * blocks took no keyboard focus).
+ */
+const GUIDE_SCREENS = [
+  { path: "/studio/test", scope: "main[data-studio-main]", ready: (page: Page) => page.getByRole("link", { name: "Developer guide" }) },
+  { path: "/help/developer-guide", scope: "main.manual-main", ready: (page: Page) => page.getByRole("region", { name: "Code example 1" }) },
+] as const;
+
+test.describe("Studio · Test Console and the developer guide", () => {
+  for (const screen of GUIDE_SCREENS) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`${screen.path} has no serious or critical violations in ${theme}`, async ({ page }) => {
+        if (theme === "dark") {
+          await page.addInitScript(() => {
+            window.localStorage.setItem("theme", "dark");
+          });
+        }
+        await page.goto(screen.path);
+        await page.waitForLoadState("load");
+        await expect(screen.ready(page)).toBeVisible();
+        if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+
+        const results = await new AxeBuilder({ page })
+          .include(screen.scope)
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+        expect(report(violations)).toBe("");
+      });
+    }
+  }
+});
+
+/**
  * Studio · Interfaces, POPULATED, in both themes.
  *
  * This screen's contrast defects lived only in the populated state: the
