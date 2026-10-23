@@ -208,6 +208,13 @@ jobs:
       - name: Run Discover responsive e2e
         run: pnpm test:e2e:discover-responsive
 
+      # P1.2: Discover's "On this tenant" listing (seeded from the synthetic
+      # lab-shape fixture, no SAP call) and "From a file" upload, as the
+      # builder. Both run on the consultant project, which the smoke suite
+      # never touches, so they have their own step.
+      - name: Run Discover tenant and upload e2e
+        run: pnpm test:e2e:discover-tenant
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
