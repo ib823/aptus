@@ -352,7 +352,15 @@ const CASES: readonly Case[] = [
   },
   // The query surface (P1.4), on the data route.
   { reason: "QUERY_INVALID", routes: ["read"], set: () => (h.query = "filter.NetAmount=1") },
-  { reason: "QUERY_NOT_AVAILABLE", routes: ["read"], set: () => (h.query = "select=PurchaseOrder") },
+  {
+    reason: "QUERY_NOT_AVAILABLE",
+    routes: ["read"],
+    set: () => {
+      // The switch off, whatever this run's environment says.
+      vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
+      h.query = "select=PurchaseOrder";
+    },
+  },
   {
     reason: "QUERY_SURFACE_MISCONFIGURED",
     routes: ["read"],
