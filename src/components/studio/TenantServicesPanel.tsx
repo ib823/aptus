@@ -35,8 +35,12 @@ interface ListingView {
   catalogueStatus: string;
   v4Status: string | null;
   sentence: string;
+  /** The read stopped short of the catalogue. */
   truncated: boolean;
+  /** How many services the listing read. */
   entryCount: number;
+  /** How many of them the stored bound left out. */
+  storedCut: number;
   connectionChanged?: boolean;
   groups: ListingGroups<ListingEntry>;
   scenarios: Scenarios;
@@ -234,6 +238,13 @@ export function TenantServicesPanel({
             render={() => null}
           />
           {listing.truncated && <p style={muted}>The list is incomplete: CoreEdge reads at most 5,000 services in one listing.</p>}
+          {listing.storedCut > 0 && (
+            <p style={muted}>
+              The list is incomplete: CoreEdge keeps at most 1 MB of a listing, so {listing.storedCut.toLocaleString("en")} of the{" "}
+              {listing.entryCount.toLocaleString("en")} services read are not shown. SAP&apos;s services that are not Published APIs were
+              left out first; customer-built services are kept before any other.
+            </p>
+          )}
           {listing.scenarioRelease && (
             <p style={muted}>Communication scenarios: help.sap.com, Available Interfaces for Your Selected Scope, release {listing.scenarioRelease}.</p>
           )}

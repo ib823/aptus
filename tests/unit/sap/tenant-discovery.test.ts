@@ -267,6 +267,26 @@ describe("what is stored", () => {
     expect(cut).toBeGreaterThan(0);
   });
 
+  it("keeps what a builder can act on when the bound cuts: customer-built, then Published, then unknown, SAP's unpublished last", () => {
+    const of = (cls: ListingEntry["class"], prefix: string, n: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...stored(i), id: `${prefix}${i}_0001`, technicalName: `${prefix}${i}`, class: cls }));
+    // Gateway pages ServiceCollection by key, so Y*, YY1_* and Z* come last.
+    const sap = of("SAP_UNPUBLISHED", "C_SRV", 4_000);
+    const published = of("PUBLISHED", "API_SRV", 100);
+    const unknown = of("UNKNOWN_NAMESPACE", "/ACME/SRV", 50);
+    const keyUser = of("CUSTOMER_KEY_USER", "YY1_SRV", 50);
+    const developer = of("CUSTOMER_DEVELOPER", "ZSRV", 800);
+    const { entries, cut } = entriesWithinStoredBound([...sap, ...published, ...unknown, ...keyUser, ...developer]);
+    expect(cut).toBeGreaterThan(0);
+    expect(new TextEncoder().encode(JSON.stringify(entries)).byteLength).toBeLessThanOrEqual(LISTING_LIMITS.storedBytes);
+    const kept = new Set(entries.map((e) => e.id));
+    for (const e of [...keyUser, ...developer, ...published, ...unknown]) expect(kept.has(e.id), e.id).toBe(true);
+    // Only SAP's unpublished services were cut, from the end of the catalogue's order.
+    const keptSap = entries.filter((e) => e.class === "SAP_UNPUBLISHED");
+    expect(keptSap.length).toBe(sap.length - cut);
+    expect(keptSap.map((e) => e.id)).toEqual(sap.slice(0, keptSap.length).map((e) => e.id));
+  });
+
   it("is read back only as this build understands it", () => {
     expect(readStoredEntries([stored(1), { id: "x", class: "SOMETHING_NEW" }, null])).toEqual([stored(1)]);
     expect(readStoredEntries("not an array")).toEqual([]);

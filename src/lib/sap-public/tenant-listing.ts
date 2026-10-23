@@ -132,8 +132,12 @@ export interface StoredListing {
   readonly correlationId: string;
   readonly catalogueStatus: CatalogueStatus;
   readonly v4Status: V4CatalogueStatus | null;
+  /** How many services the listing read. */
   readonly entryCount: number;
+  /** The read stopped short of the catalogue: one of its limits, or a page that failed after the first. */
   readonly truncated: boolean;
+  /** How many of the services read the stored bound left out (entriesWithinStoredBound). */
+  readonly storedCut: number;
   readonly entries: ListingEntry[];
   /** The connection was saved again since this listing: it may describe another system. */
   readonly connectionChanged: boolean;
@@ -142,7 +146,10 @@ export interface StoredListing {
 /**
  * Replace the connection's stored listing, in ONE statement (an insert that
  * updates on the organisation-and-connection key). The entries are cut to
- * LISTING_LIMITS.storedBytes first; a cut marks the listing truncated.
+ * LISTING_LIMITS.storedBytes first, customer-built kept first. `entryCount` is
+ * how many the listing read and `truncated` whether the read stopped short,
+ * so a cut by the store (`storedCut`, what the count holds beyond the stored
+ * entries) is told apart from a cut by the read.
  */
 export async function storeListing(input: {
   readonly organizationId: string;
@@ -155,23 +162,22 @@ export async function storeListing(input: {
   readonly v4Status: V4CatalogueStatus;
   readonly truncated: boolean;
   readonly entries: readonly ListingEntry[];
-}): Promise<{ entries: ListingEntry[]; truncated: boolean }> {
+}): Promise<{ entries: ListingEntry[]; storedCut: number }> {
   const { entries, cut } = entriesWithinStoredBound(input.entries);
-  const truncated = input.truncated || cut > 0;
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "TenantServiceListing"
       ("id", "organizationId", "connectionId", "connectionRevision", "product", "listedAt", "listedById", "correlationId",
        "catalogueStatus", "v4Status", "entryCount", "truncated", "entries")
     VALUES (${randomUUID()}, ${input.organizationId}, ${input.connectionId}, ${input.connectionRevision}, ${input.product}, now(),
-            ${input.listedById}, ${input.correlationId}, ${input.catalogueStatus}, ${input.v4Status}, ${entries.length},
-            ${truncated}, ${JSON.stringify(entries)}::jsonb)
+            ${input.listedById}, ${input.correlationId}, ${input.catalogueStatus}, ${input.v4Status}, ${input.entries.length},
+            ${input.truncated}, ${JSON.stringify(entries)}::jsonb)
     ON CONFLICT ("organizationId", "connectionId") DO UPDATE SET
       "connectionRevision" = EXCLUDED."connectionRevision", "product" = EXCLUDED."product", "listedAt" = EXCLUDED."listedAt",
       "listedById" = EXCLUDED."listedById", "correlationId" = EXCLUDED."correlationId",
       "catalogueStatus" = EXCLUDED."catalogueStatus", "v4Status" = EXCLUDED."v4Status",
       "entryCount" = EXCLUDED."entryCount", "truncated" = EXCLUDED."truncated", "entries" = EXCLUDED."entries"
   `);
-  return { entries, truncated };
+  return { entries, storedCut: cut };
 }
 
 /** The connection's stored listing, as this build reads it, or null. One statement. */
@@ -183,6 +189,8 @@ export async function readListing(
     where: { organizationId, connectionId: connection.id },
   });
   if (!row) return null;
+  // Counted before this build parses them: an entry it does not understand was stored, not cut.
+  const storedLength = Array.isArray(row.entries) ? row.entries.length : 0;
   return {
     listedAt: row.listedAt,
     listedById: row.listedById,
@@ -191,6 +199,7 @@ export async function readListing(
     v4Status: (row.v4Status as V4CatalogueStatus | null) ?? null,
     entryCount: row.entryCount,
     truncated: row.truncated,
+    storedCut: Math.max(0, row.entryCount - storedLength),
     entries: readStoredEntries(row.entries),
     connectionChanged: row.connectionRevision !== connection.revision,
   };

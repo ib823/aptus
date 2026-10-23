@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
       v4Status: listing.v4Status,
       sentence: catalogueStatusSentence(listing.catalogueStatus),
       truncated: listing.truncated,
+      storedCut: listing.storedCut,
       entryCount: listing.entryCount,
       connectionChanged: listing.connectionChanged,
       groups: groupListing(listing.entries),

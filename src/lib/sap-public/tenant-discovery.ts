@@ -489,8 +489,25 @@ export function readStoredEntries(value: unknown): ListingEntry[] {
 }
 
 /**
- * The entries cut to what may be stored: at most `storedBytes` as JSON. The
- * last ones go first; the caller marks the listing truncated when any did.
+ * The order in which a listing's entries are kept when the stored bound cuts
+ * it: what a builder can act on first. Gateway pages its catalogue by key, so
+ * the customer's own Y*, YY1_* and Z* services come last in its order, and a
+ * cut in that order would drop exactly them and keep thousands of SAP services
+ * that get no action (P1.2 review round 1).
+ */
+const STORED_RANK: Readonly<Record<ServiceClass, number>> = {
+  CUSTOMER_KEY_USER: 0,
+  CUSTOMER_DEVELOPER: 0,
+  PUBLISHED: 1,
+  UNKNOWN_NAMESPACE: 2,
+  SAP_UNPUBLISHED: 3,
+};
+
+/**
+ * The entries cut to what may be stored: at most `storedBytes` as JSON. They
+ * are kept by class (STORED_RANK), in the catalogue's order within each, so
+ * SAP's unpublished services go first and the customer-built ones last;
+ * `cut` says how many went, for the screen to say the store left them out.
  */
 export function entriesWithinStoredBound(
   entries: readonly ListingEntry[],
@@ -499,7 +516,9 @@ export function entriesWithinStoredBound(
   const out: ListingEntry[] = [];
   let bytes = 2;
   const encoder = new TextEncoder();
-  for (const e of entries) {
+  // Array.prototype.sort is stable: the catalogue's order holds within a class.
+  const ranked = [...entries].sort((a, b) => STORED_RANK[a.class] - STORED_RANK[b.class]);
+  for (const e of ranked) {
     const size = encoder.encode(JSON.stringify(e)).byteLength + 1;
     if (bytes + size > maxBytes) break;
     bytes += size;

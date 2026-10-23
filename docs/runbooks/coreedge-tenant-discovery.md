@@ -60,7 +60,7 @@ listing predates the change.
 | bytes a page | 2 MiB, decoded | `bodyPrefix` counts decoded bytes, so a compression bomb stops at the cap |
 | bytes in all | 8 MiB | the instance is small and shared by every organisation |
 | time | 20 s | |
-| stored entries | 1 MiB of JSON | the last entries are dropped first, and the listing is marked cut |
+| stored entries | 1 MiB of JSON | SAP's services that are not Published APIs are dropped first and customer-built ones last; the tab says how many of the services read the store left out |
 
 The listing never requests an address the catalogue gives: paging is
 CoreEdge's own `$skip`, a redirect is not followed (`redirect: "manual"`),

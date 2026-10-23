@@ -207,7 +207,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const listing = run.value;
   const { entries, join } = await classifyListing(product, listing.entries);
   let stored = false;
-  let truncated = listing.truncated;
+  let storedCut = 0;
   let kept = entries;
   if (resolved.source === "connection" && resolved.connection && viewer.organizationId) {
     const saved = await storeListing({
@@ -223,7 +223,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       entries,
     });
     stored = true;
-    truncated = saved.truncated;
+    storedCut = saved.storedCut;
     kept = saved.entries;
   }
 
@@ -239,9 +239,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       catalogueStatus: listing.status,
       v4Status: listing.v4Status,
       sentence: catalogueStatusSentence(listing.status),
-      truncated,
+      // The read stopped short; and, apart from it, what the store left out of what was read.
+      truncated: listing.truncated,
+      storedCut,
       dropped: listing.dropped,
-      entryCount: kept.length,
+      entryCount: entries.length,
       groups: groupListing(kept),
       scenarios,
       scenarioRelease: join.release,

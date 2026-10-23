@@ -2165,9 +2165,15 @@ model TenantServiceListing {
   catalogueStatus    String
   /// NOT_TRIED | OK | UNAUTHORIZED | NOT_FOUND | ERROR; null when not asked.
   v4Status           String?
+  /// How many services the listing read; `entries` holds those that fit.
   entryCount         Int
+  /// The read stopped short of the catalogue (a listing limit, or a page that
+  /// failed after the first). A cut by the stored bound is entryCount beyond
+  /// the stored entries, not this.
   truncated          Boolean  @default(false)
-  /// At most LISTING_LIMITS.maxEntries entries and 1 MiB, checked before insert.
+  /// At most LISTING_LIMITS.maxEntries entries and 1 MiB, checked before insert;
+  /// past 1 MiB customer-built services are kept first and SAP's unpublished
+  /// ones last (tenant-discovery.ts entriesWithinStoredBound).
   entries            Json
 
   connection SapConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)

@@ -17,7 +17,9 @@
  *   - a second listing within two minutes is a 429 that sends nothing and
  *     writes no row;
  *   - a catalogue the user may not read is stored as UNAUTHORIZED;
- *   - a deployment tenant is a platform admin's to list, and never stored.
+ *   - a deployment tenant is a platform admin's to list, and never stored;
+ *   - a listing past the stored bound keeps every customer-built service and
+ *     says the store, not the read, left services out.
  *
  * WHAT IS REAL: the routes, the console pipeline, the connection resolver and
  * sealing, the connector, the classifier's two statements, the audit
@@ -47,6 +49,7 @@ import { POST as listRoute } from "@/app/api/sap/tdd/tenant-services/route";
 import { GET as storedRoute } from "@/app/api/studio/tenant-services/route";
 import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ListingEntry } from "@/lib/sap-public/tenant-discovery";
+import { readListing, storeListing } from "@/lib/sap-public/tenant-listing";
 
 const RUN = `p12td-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -215,6 +218,41 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("tenant service discovery (P1.2,
     expect(res.status).toBe(200);
     expect(((await res.json()).data as { stored: boolean }).stored).toBe(false);
     expect(await prisma.tenantServiceListing.count({ where: { organizationId: ORG, product: "s4hana", connectionId: { notIn: [ids.dev, ids.sandbox] } } })).toBe(0);
+  });
+
+  it("past the stored bound keeps every customer-built service, and says the store, not the read, cut the list", async () => {
+    // A large on-premise catalogue: SAP's services first in key order, the customer's own last.
+    const entry = (i: number, technicalName: string, cls: ListingEntry["class"]): ListingEntry => ({
+      id: `${technicalName}_0001`,
+      technicalName,
+      version: "0001",
+      odataVersion: "V2",
+      path: `/sap/opu/odata/sap/${technicalName}`,
+      title: `Service ${i} `.padEnd(200, "."),
+      class: cls,
+      catalogueExternalId: null,
+      scenarioIds: [],
+    });
+    const sap = Array.from({ length: 4_000 }, (_, i) => entry(i, `C_SRV${i}`, "SAP_UNPUBLISHED"));
+    const own = Array.from({ length: 600 }, (_, i) => entry(i, `ZSRV${i}`, "CUSTOMER_DEVELOPER"));
+    await storeListing({
+      organizationId: ORG,
+      connectionId: ids.prod,
+      connectionRevision: 0,
+      product: "s4hana",
+      listedById: users.dev.id,
+      correlationId: `${RUN}-big`,
+      catalogueStatus: "OK",
+      v4Status: "NOT_TRIED",
+      truncated: false,
+      entries: [...sap, ...own],
+    });
+    const listing = (await readListing(ORG, { id: ids.prod, revision: 0 }))!;
+    expect(listing.truncated).toBe(false);
+    expect(listing.entryCount).toBe(4_600);
+    expect(listing.storedCut).toBeGreaterThan(0);
+    expect(listing.entries).toHaveLength(4_600 - listing.storedCut);
+    expect(listing.entries.filter((e) => e.class === "CUSTOMER_DEVELOPER")).toHaveLength(600);
   });
 
   it("refuses a sandbox developer, whose workspace reads Sandbox systems only through the console it may open", async () => {

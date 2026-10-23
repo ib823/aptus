@@ -39,6 +39,7 @@ const LISTING = {
   sentence: "The service catalogue answered.",
   truncated: false,
   entryCount: 4,
+  storedCut: 0,
   connectionChanged: false,
   groups: {
     customerBuilt: [
@@ -102,6 +103,21 @@ describe("the stored listing", () => {
     await screen.findByText(/cannot read the system's service catalogue/);
     expect(screen.getByText(/From a file/)).toBeTruthy();
     expect(container.textContent).not.toMatch(/SAP_COM_0087|SAP_COM_0370|SAP_COM_0761|SAP_COM_0449/);
+  });
+
+  it("says when the store, not the read, left services out, and the read's limit only when the read stopped", async () => {
+    stub({ ...VIEW, listing: { ...LISTING, truncated: false, entryCount: 4_000, storedCut: 1_200 } });
+    const { container } = render(<TenantServicesPanel tenant="lab" product="s4hana" canAuthor />);
+    await screen.findByText(/keeps at most 1 MB of a listing/);
+    expect(container.textContent).toContain("1,200 of the 4,000 services read");
+    expect(container.textContent).not.toMatch(/reads at most 5,000 services/);
+  });
+
+  it("names the read's limit when the read stopped short", async () => {
+    stub({ ...VIEW, listing: { ...LISTING, truncated: true, storedCut: 0 } });
+    const { container } = render(<TenantServicesPanel tenant="lab" product="s4hana" canAuthor />);
+    await screen.findByText(/reads at most 5,000 services in one listing/);
+    expect(container.textContent).not.toMatch(/keeps at most 1 MB/);
   });
 });
 
