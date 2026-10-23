@@ -326,11 +326,14 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
     }
   }, [interfaceId, load, view]);
 
+  // The state beside the heading, in words (the chip's label), not inside it.
   const heading = (
-    <h3 id={`query-policy-${interfaceId}`} style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      Query policy
+    <div style={{ margin: "0 0 12px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <h3 id={`query-policy-${interfaceId}`} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+        Query policy
+      </h3>
       {view && <StudioStatusChip {...STATE_CHIP[queryCardState(view)]} />}
-    </h3>
+    </div>
   );
 
   if (loadError) {

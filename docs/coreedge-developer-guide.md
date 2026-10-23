@@ -258,6 +258,9 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 - **No discovery of the tenant's own services.** A service outside SAP's published
   catalogue (your `Z*` or `YY1_*`) is registered by its path, not found for you:
   see *Your own services* (P1.2 adds discovery from the tenant's own catalogue).
+- **No `$expand`, and no OR across fields.** A query filters with AND across
+  fields (and `in` within one); navigation properties are not followed
+  (P1.4b). See *Querying data*.
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -292,19 +295,23 @@ help.
 <!-- retry-table: tests/unit/northbound/token-failure-retry-table.test.ts reads this table; keep one row per status and code. -->
 | Status | `error.code` | Means | Retry? |
 |---|---|---|---|
-| `400` | `VALIDATION_ERROR` | The request is not valid, or the feed's own definition is incomplete (no dataset, no service) | **No.** Fix the request, or the feed in Studio |
+| `400` | `VALIDATION_ERROR` | The request is not valid, or the feed's own definition is incomplete (no dataset, no service); or a query cannot be served as sent: a parameter outside the grammar, a value not of its field's type, a cursor that cannot be used, or an interface that serves no queries. `error.query.rule` says which (see *Querying data*) | **No.** Fix the request, or the feed in Studio |
+| `400` | `POLICY_FIELD_NOT_GRANTED` | The query asks for what the interface's query policy does not allow: a field it may not read, filter or sort on, an operator, key lookup, a total count, a page size above its maximum, or a query without a filter it requires. `error.query` names the rule, the field and up to 20 names that are allowed. Nothing was sent to SAP | **No.** Change the query within the policy (this interface's OpenAPI lists it), or ask its builder |
 | `400` | `UNSUPPORTED_VERSION` | Your `CoreEdge-Version` header names a version that does not exist or was retired at its Sunset date. `error.supportedVersions` lists what you may send. Refused before anything else: nothing was sent to SAP | **No.** Send a supported version, or omit the header. See *API versions and deprecation* |
 | `401` | `UNAUTHENTICATED` | The token is missing, unknown, revoked or expired | **No.** Fix the token |
 | `403` | `FORBIDDEN` | Not set up: no approved grant for this call; or the customer's SAP connection cannot sign in — a credential is missing, its token endpoint refused it, or its token URL is wrong; or SAP itself refused (401/403) | **No.** Fix access or the connection, then call again |
 | `403` | `CONNECTION_NOT_CONFIGURED` | The customer has not connected that SAP system for your environment | **No.** The customer connects it |
 | `404` | `NOT_FOUND` | No such interface for your credential, or the dataset does not exist on the tenant | **No.** |
+| `404` | `RECORD_NOT_FOUND` | A key lookup (`key.<Field>`) found no record: SAP has none with this key. An answer, not a failure | **No.** Not an error to retry: the record does not exist |
 | `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
 | `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |
-| `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong | **No.** Fix the payload |
+| `409` | `CURSOR_STALE` | A paging cursor has expired (15 minutes per cursor, 2 hours per paging run), or the interface, its query policy, its grant or its connection changed since the first page | **No.** Not the same call again: start the read again from the first page, without a cursor |
+| `413` | `VALIDATION_ERROR` | A `?limit` answer larger than CoreEdge can return (`error.query.rule RESPONSE_TOO_LARGE`). Nothing was served | **No.** Ask for fewer records with `?limit`, or query with `select` and `pageSize` |
+| `422` | `VALIDATION_ERROR` | A write SAP rejected as invalid: the payload is wrong. On a query: SAP refused the query CoreEdge built (`error.query.rule SAP_REJECTED`; SAP's own text is never forwarded), one record is larger than the page limit (`ROW_TOO_LARGE`), or SAP's page was larger than CoreEdge reads (`UPSTREAM_PAGE_TOO_LARGE`) | **No.** Fix the payload, or change the query (fewer fields, a smaller `pageSize`) |
 | `429` | `RATE_LIMITED` | **Your credential** has used its budget (60 reads and 60 writes a minute). Keys are limited one by one: another key's use does not spend it. One exception: `GET …/schema` also has a budget for your whole organisation (120 reads a minute across all its credentials); when that is spent the message says *"Your organisation's credentials together have read /schema…"* | **Yes, after `Retry-After`.** Slow this key down; for the organisation's `/schema` budget, read `/schema` less often across your applications (cache it: it changes only when the interface's contract does) |
 | `429` | `RATE_LIMITED_ADDRESS` | **Your address**, not your credential, is over a limit: too many calls from it in total, or too many calls from it with an unrecognised credential. Another key, or another caller on a shared egress, may have spent it | **Yes, after `Retry-After`.** Lowering one key's rate does not help: find what else calls from that address, or what is sending a bad key |
 | `429` | `RATE_LIMIT_EXCEEDED` | **Your address** is over the edge's ordinary per-address limit (300 GET or 120 POST a minute). Only a call that no per-credential limit covers meets it: `GET /versions`, a call with no `Authorization` header, or every call while per-credential limits are switched off | **Yes, after `Retry-After`.** Send your token on every call |
-| `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
+| `502` | `UPSTREAM_ERROR` | The tenant, or the connection's token endpoint, failed, throttled (its own 429), or could not be reached. Nothing was refused. With `error.query.rule` `UPSTREAM_IGNORED_PAGING` or `KEY_NOT_UNIQUE`, the service did not honour the paging CoreEdge asked for, or returned two records for one key: retrying will not change that, so escalate | **Yes, with backoff,** then escalate. Back off for real: it may be SAP throttling you. A write that answered `502` before reaching SAP says so and was not applied: retry it with the same key |
 | `503` | `LIMITER_UNAVAILABLE` | CoreEdge could not check its rate limits, so it refused the call for safety. Nothing was sent to SAP, and your budget was not spent | **Yes, after `Retry-After`.** |
 | `503` | `CIRCUIT_OPEN` | The customer's SAP system failed to answer several calls in a row, so CoreEdge is holding calls to it for a short while. Nothing was sent to SAP. Sent only where the deployment enforces its circuit breaker | **Yes, after `Retry-After`;** a write with the same `Idempotency-Key` |
 | `503` | `CONNECTION_NOT_CONFIGURED` | The connection for your environment is served by a Tenant Twin that this deployment does not have. Nothing was sent to SAP | **No.** The customer or the operator changes the connection |
@@ -422,6 +429,103 @@ definition — and says `callable: true` only when all pass. When it is false,
 or `SERVICE_UNRESOLVED`. `callable` cannot promise what the tenant will
 answer, and it cannot see a stored connection whose secrets no longer open
 (the call then answers `403 CONNECTION_NOT_CONFIGURED`).
+
+---
+
+## Querying data
+
+A read interface can serve **queries** as well as `?limit`: select fields,
+filter, sort, look a record up by key, count and page. What it allows is the
+interface's **query policy**, which its builder sets in Studio (Interfaces,
+the Query policy card); the per-solution OpenAPI document lists exactly the
+parameters each interface serves, by name and type. A deployment serves
+queries once its operator turns them on (`COREEDGE_QUERY_SURFACE`); until
+then, and on an interface with no policy, a query is refused, never served
+with its parameters ignored.
+
+**The parameters.** All optional, on `GET …/interfaces/{id}/data`:
+
+| Parameter | Value | Means |
+|---|---|---|
+| `select` | `A,B,C` | Only these fields. Omitted: every readable field |
+| `filter.<Field>.eq` | a value | `Field` equals it |
+| `filter.<Field>.in` | a value, repeated once per value (1 to 50) | `Field` is any of them |
+| `filter.<Field>.gt`, `.ge` | a value | Lower bound, exclusive or inclusive |
+| `filter.<Field>.lt`, `.le` | a value | Upper bound, exclusive or inclusive |
+| `orderby` | `-CreationDate,SalesOrder` | Sort; a leading `-` is descending. CoreEdge adds the key last, so pages are stable |
+| `key.<Field>` | a value | Key lookup: every key field once, with only `select` beside it |
+| `count` | `true` | Adds `totalCount` to the first page |
+| `pageSize` | `1` to the policy's maximum | Rows per page. Above the maximum is refused, not clamped |
+| `cursor` | the previous page's `nextCursor` | The next page |
+
+Filters on different fields are ANDed. Each field takes one of `eq`, `in`, or
+a range (at most one lower and one upper bound). Values are typed by the field:
+dates as `2026-01-01`, timestamps as `2026-01-01T09:30:00`, decimals as digits
+with a point (no exponent), GUIDs as written. **Send `+` as `%2B`**: a bare `+`
+in a query string means a space. Text containing `%XX` sequences is refused.
+`limit` and `$`-prefixed OData options are refused beside query parameters:
+CoreEdge builds the OData query itself.
+
+```
+# Fetch order X
+GET /api/northbound/v1/interfaces/{id}/data?key.SalesOrder=1000123&select=SalesOrder,SoldToParty,TotalNetAmount
+
+# My open items
+GET /api/northbound/v1/interfaces/{id}/data?filter.CompanyCode.eq=1010&filter.Customer.eq=17100001
+      &filter.OverallStatus.in=A&filter.OverallStatus.in=B
+      &filter.CreationDate.ge=2026-01-01&filter.CreationDate.lt=2026-04-01
+      &orderby=-CreationDate&pageSize=200&count=true
+
+# The next page: the same parameters, plus the cursor
+GET /api/northbound/v1/interfaces/{id}/data?<the same parameters>&cursor=cec1.t1.k3N…Q
+```
+
+**The answer** is the `?limit` envelope (`records`, `count`, `interface`,
+`empty`, `note`), plus `page` and, with `count=true` on the first page,
+`totalCount`. `page.nextCursor` is the next page's cursor, or null;
+`page.complete` is true when SAP has no more rows; `page.stopped` says why
+rows remain with no cursor (`ROW_CAP`: the paging run reached its row cap;
+`NOT_PAGEABLE`: the dataset cannot be paged; `UPSTREAM_IGNORED_PAGING`: SAP
+ignored the page size). A key lookup answers one record and no `page`, or
+`404 RECORD_NOT_FOUND`. Records keep SAP's wire shape, as on `?limit`.
+
+**Paging, done right:**
+
+- **Page on `nextCursor`, never on `records.length`.** A page can be short
+  because of the byte limit or SAP's own page size, with more to come.
+- **Send the same parameters with every cursor.** A cursor carries no query;
+  it is checked against the one you send (`400 VALIDATION_ERROR`,
+  `CURSOR_PARAMS_MISMATCH`, when they differ). It works for your credential
+  and this interface only, for 15 minutes, within a paging run of 2 hours.
+- **`409 CURSOR_STALE` means start again** from the first page: the cursor
+  expired, or the interface, its policy, its grant or its connection changed.
+- **Pace the run.** Every page is one call against your credential's 60 a
+  minute, shared with everything else it calls. Start pages at least 1.05 s
+  apart, or pace by `x-ratelimit-remaining` and `x-ratelimit-reset`, which a
+  query's answers carry. 10,000 rows at 100 a page is 100 calls.
+- **Offset paging can skip or repeat a row** when the data changes between
+  pages. Make your processing idempotent by the record's key.
+- **`totalCount` is SAP's figure** and may not exactly equal the rows a run
+  serves.
+
+**A filter is not authorisation.** CoreEdge sends your filter to SAP, but a
+custom service (a `Z*` or `YY1_*` service whose code reads the filter itself)
+may not apply it, and CoreEdge cannot tell. What a caller may see is decided
+by the grant and the query policy (the fields it may read); never rely on a
+filter to keep rows from a user.
+
+**What a refusal says.** A query CoreEdge will not send answers `400`, and
+says why in `error.query`: `rule`, and `parameter`, `field` and `allowed`
+when they are safe to repeat (never a value). `POLICY_FIELD_NOT_GRANTED`
+means the policy does not allow it; `VALIDATION_ERROR` means the request
+itself is malformed, or the interface serves no queries (`NO_POLICY`,
+`NOT_ENABLED`). See *Every status, and whether to retry it*.
+
+The starter kit's client has `query(params)` and `pages(params)`, which
+re-sends the same parameters with each `nextCursor`. The kit's mock serves
+recorded rows and does not evaluate queries, so it refuses them
+(`NOT_ENABLED`); test queries against a deployed CoreEdge, or run them in
+Studio's Test Console, which runs the first page exactly as your app's call.
 
 ---
 

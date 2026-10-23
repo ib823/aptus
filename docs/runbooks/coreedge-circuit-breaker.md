@@ -42,6 +42,8 @@ down does not close the circuit the preview counts into.
 | A write that times out, cannot reach the host, cannot get its credential, or whose CSRF handshake fails | Counts one failure |
 | SAP refuses the call (401, 403, 404, 422) | Nothing: a healthy system said no to one request |
 | SAP answers a write's POST with any other status (a 5xx included), or throttles a write (408, 429) | Nothing: see below |
+| A query read (P1.4) that times out, cannot reach the host, cannot get its credential, or meets a proxy's 502, 503 or 504 | Counts one failure |
+| SAP answers a query with any other status (a 4xx, a 500, a 501, a redirect) or a body it cannot read, or a key lookup finds no record | Nothing: the caller shaped the query (see below) |
 
 A write's payload is the caller's choice, and SAP answers a bad one with a 500
 (a Gateway technical exception, a RAP short dump on a field value) as readily
@@ -52,6 +54,16 @@ solution's reads and writes on the connection for 30 seconds at a time while
 SAP is healthy. So only what SAP did not answer counts for a write. The
 production reads, whose query the interface fixes, still count SAP's 5xx, so a
 system that is really failing still opens the circuit for the writes too.
+
+A query read (P1.4, `circuitOutcomeForQuery` in `src/lib/governed/pipeline.ts`)
+follows the write's rule, for the write's reason: the caller chose its
+filters, select and sort, and a Gateway service answers a filter it cannot
+evaluate with a 400, a 501 or a short dump's 500. Counted, one solution's bad
+queries would open the circuit every solution on the connection shares. So a
+query counts only what SAP did not answer, and a proxy's 502, 503 or 504 in
+front of it; a timeout still counts (decision D14). A `?limit` read keeps the
+read's rule. The audit row's `queryRule` (`SAP_REJECTED`, for example) says
+which answers a query met; see `docs/runbooks/coreedge-query-surface.md`.
 | The fifth failure in a row | Opens for 30 seconds |
 | The 30 seconds have passed | Lets exactly one call through (half-open); its outcome closes or re-opens the circuit |
 
