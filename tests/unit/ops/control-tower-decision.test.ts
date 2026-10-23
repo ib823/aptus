@@ -48,7 +48,11 @@ vi.mock("@/lib/db/prisma", () => {
     },
     solution: { findMany: mocks.solutionFindMany },
     // A pending request matches one interface, so its decision binds it (P0.1).
-    interface: { findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }] },
+    // The §1.2 sign-off check reads the bound interface (P1.2): a catalogue one, which needs none.
+    interface: {
+      findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }],
+      findFirst: async () => ({ sapProduct: "s4hana", externalId: "API_X", servicePath: null, apiPolicySignOff: null }),
+    },
     configAudit: { create: mocks.auditCreate },
     // The Solution row lock a decision takes (lib/studio/owner-lock.ts).
     // Outside a transaction the lock would commit and release at once, so taking

@@ -293,6 +293,8 @@ const CASES: readonly Case[] = [
   { reason: "GRANT_EXPIRED", routes: ALL_BROKER, set: () => (h.access = "GRANT_EXPIRED") },
   { reason: "GRANT_REVOKED", routes: ALL_BROKER, set: () => (h.access = "GRANT_REVOKED") },
   { reason: "GRANT_NEEDS_REAPPROVAL", routes: ALL_BROKER, set: () => (h.access = "GRANT_NEEDS_REAPPROVAL") },
+  // P1.2: the §1.2 sign-off, under COREEDGE_API_POLICY_SIGNOFF=enforce.
+  { reason: "API_POLICY_SIGN_OFF_REQUIRED", routes: ALL_BROKER, set: () => (h.access = "API_POLICY_SIGN_OFF_REQUIRED") },
   { reason: "WRITE_NOT_SERVED", routes: READS, set: () => (h.access = "WRITE_NOT_SERVED") },
   { reason: "INTERFACE_DEPRECATED", routes: READS, set: () => (h.access = "INTERFACE_DEPRECATED") },
   { reason: "READ_ONLY_INTERFACE", routes: ["write"], set: () => (h.access = "READ_ONLY_INTERFACE") },
@@ -498,6 +500,7 @@ describe("the correlation search attributes every refusal to the hop that refuse
     GRANT_EXPIRED: "access",
     GRANT_REVOKED: "access",
     GRANT_NEEDS_REAPPROVAL: "access",
+    API_POLICY_SIGN_OFF_REQUIRED: "access",
     WRITE_NOT_SERVED: "access",
     READ_ONLY_INTERFACE: "access",
     INTERFACE_NOT_ACTIVE: "access",

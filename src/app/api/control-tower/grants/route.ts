@@ -36,6 +36,7 @@ import { opsLimit, opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { bindingForDecision, needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { grantPolicyCheck } from "@/lib/studio/grant-policy";
 import {
   evaluateDecision,
   grantsRead,
@@ -406,6 +407,15 @@ export async function PATCH(request: NextRequest) {
     const bound = await bindingForDecision(tx, grant, input.decision);
     if (!bound.ok) return { refusal: studioError("CONFLICT", bound.message) };
 
+    // SAP API Policy §1.2 (P1.2), as the Studio and CoreEdge doors ask it:
+    // refused where enforced, noted where observed. The row's own tenant.
+    const policy = await grantPolicyCheck(tx, {
+      organizationId: grant.organizationId,
+      interfaceId: bound.binding?.interfaceId ?? grant.interfaceId,
+      decision: input.decision,
+    });
+    if (!policy.ok) return { refusal: studioError("FORBIDDEN", policy.message) };
+
     // The passkey last, once every rule has passed (lib/auth/step-up.ts). The
     // row's own tenant, because a global admin has none of their own. Checked
     // here, recorded after the transaction: the record needs a pooled
@@ -444,11 +454,11 @@ export async function PATCH(request: NextRequest) {
         ),
       };
     }
-    return { grant, decidedAt, binding: bound.binding };
+    return { grant, decidedAt, binding: bound.binding, policySignOffMissing: policy.policySignOffMissing };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt, binding } = decided;
+  const { grant, decidedAt, binding, policySignOffMissing } = decided;
 
   const before = { decision: grant.decision, decidedById: null, decidedAt: null };
 
@@ -477,6 +487,7 @@ export async function PATCH(request: NextRequest) {
     before,
     after: {
       ...updated,
+      ...(policySignOffMissing ? { policySignOffMissing: true } : {}),
       decidedAt: updated.decidedAt.toISOString(),
       expiresAt: updated.expiresAt?.toISOString() ?? null,
       // Recorded so the trail shows WHERE the decision was taken. The same

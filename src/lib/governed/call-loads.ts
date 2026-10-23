@@ -270,7 +270,7 @@ export async function loadInterfaceAccess(
     WITH i AS (
       SELECT "id", "name", "externalId", "sapProduct", "entitySet", "operation", "mode", "version", "status",
              "solutionId", "servicePath", "odataVersion", "serviceVerifiedAt", "serviceVerifications",
-             "createdAt", "grantMatchChangedAt"
+             "createdAt", "grantMatchChangedAt", "apiPolicySignOff"
       FROM "Interface"
       WHERE "id" = ${interfaceId} AND "organizationId" = ${organizationId}
     )

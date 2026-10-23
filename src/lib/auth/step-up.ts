@@ -130,7 +130,9 @@ export type GovernanceAction =
   | "user.role_change"
   | "user.mfa_reset"
   | "org.create"
-  | "platform.bootstrap";
+  | "platform.bootstrap"
+  /** Recording or withdrawing an SAP API Policy §1.2 sign-off on an interface (P1.2). */
+  | "policy.signoff";
 
 /**
  * The audit entity a governance action's `targetId` names, so a warn-mode
@@ -155,6 +157,7 @@ const TARGET_ENTITY: Record<GovernanceAction, AuditEntityType> = {
   "user.mfa_reset": "User",
   "org.create": "Organization",
   "platform.bootstrap": "User",
+  "policy.signoff": "Interface",
 };
 
 /**

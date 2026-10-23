@@ -142,10 +142,13 @@ function withoutWave2Codes(text: string): string {
 
 /**
  * The third deliberate difference (P1.2): /schema's `contract` names who
- * described it, `describedBy` (a tenant, an upload, a sample). Taken back out
- * and written again by the same writer, the bytes are as they were.
+ * described it, `describedBy` (a tenant, an upload, a sample), and the error
+ * table names the §1.2 sign-off's refusal, API_POLICY_SIGN_OFF_REQUIRED.
+ * Taken back out and written again by the same writer, the bytes are as they
+ * were.
  */
-function withoutDescribedBy(text: string): string {
+const P12_CODE = "API_POLICY_SIGN_OFF_REQUIRED";
+function withoutP12Additions(text: string): string {
   const doc = JSON.parse(text) as Json;
   const visit = (node: unknown): void => {
     if (!node || typeof node !== "object") return;
@@ -155,11 +158,16 @@ function withoutDescribedBy(text: string): string {
     for (const v of Object.values(node as Json)) visit(v);
   };
   visit(doc);
+  const error = ((doc.components as Json).schemas as Json).Error as Json;
+  const code = (((error.properties as Json).error as Json).properties as Json).code as { enum: string[] };
+  code.enum = code.enum.filter((c) => c !== P12_CODE);
+  delete (error["x-coreedge-codes"] as Json)[P12_CODE];
+  error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { reason: string }[]).filter((r) => r.reason !== P12_CODE);
   return documentJson(doc);
 }
 
-/** A document as it was at f54c6f5a, but for asAtF54c6f5a's rename: without P1.2's field, then without wave 2's codes. */
-const documentAsBefore = (text: string) => withoutWave2Codes(withoutDescribedBy(text));
+/** A document as it was at f54c6f5a, but for asAtF54c6f5a's rename: without P1.2's additions, then without wave 2's codes. */
+const documentAsBefore = (text: string) => withoutWave2Codes(withoutP12Additions(text));
 
 /** The kit as it was at f54c6f5a: its two OpenAPI files as documentAsBefore has them. */
 function kitWithoutWave2Codes(text: string): string {

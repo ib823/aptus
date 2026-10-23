@@ -37,6 +37,7 @@ import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { bindingForDecision, findBinding } from "@/lib/studio/grant-binding";
+import { grantPolicyCheck } from "@/lib/studio/grant-policy";
 import {
   evaluateDecision,
   type GrantDecision,
@@ -338,6 +339,14 @@ export async function PATCH(request: NextRequest) {
     const bound = await bindingForDecision(tx, grant, input.decision);
     if (!bound.ok) return { refusal: studioError("CONFLICT", bound.message) };
 
+    // SAP API Policy §1.2 (P1.2): refused where enforced, noted where observed.
+    const policy = await grantPolicyCheck(tx, {
+      organizationId,
+      interfaceId: bound.binding?.interfaceId ?? grant.interfaceId,
+      decision: input.decision,
+    });
+    if (!policy.ok) return { refusal: studioError("FORBIDDEN", policy.message) };
+
     // The passkey last, once every rule has passed: it is then the one thing
     // between this person and the decision (lib/auth/step-up.ts). Checked
     // here, recorded after the transaction: the record needs a pooled
@@ -376,11 +385,11 @@ export async function PATCH(request: NextRequest) {
         ),
       };
     }
-    return { grant, decidedAt, binding: bound.binding };
+    return { grant, decidedAt, binding: bound.binding, policySignOffMissing: policy.policySignOffMissing };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt, binding } = decided;
+  const { grant, decidedAt, binding, policySignOffMissing } = decided;
 
   // The row exactly as written: the guard makes this the only write that can
   // settle the grant, so a re-read would return the same values.
@@ -403,10 +412,11 @@ export async function PATCH(request: NextRequest) {
     entityId: grant.id,
     action: "DECISION",
     before: { decision: grant.decision },
-    after: updated,
+    // What COREEDGE_API_POLICY_SIGNOFF=enforce would have refused (P1.2).
+    after: { ...updated, ...(policySignOffMissing ? { policySignOffMissing: true } : {}) },
   });
 
   await recordGrantDecided({ grant, decision: input.decision, decidedAt, deciderId: user.id });
 
-  return studioOk(updated);
+  return studioOk({ ...updated, ...(policySignOffMissing ? { policySignOffMissing: true } : {}) });
 }

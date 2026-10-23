@@ -634,8 +634,9 @@ export async function PATCH(request: NextRequest) {
           // writes it again for the new one.
           ...(contractChanged ? { version: { increment: 1 }, requestSchemaStamp: Prisma.DbNull } : {}),
           ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
+          // A new service identity is a new §1.2 question (P1.2): its sign-off goes with the old one.
           ...(serviceChanged
-            ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }
+            ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId, apiPolicySignOff: Prisma.DbNull }
             : {}),
           ...(verificationReset
             ? {

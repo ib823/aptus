@@ -38,6 +38,7 @@ import { refuseDecision } from "@/lib/coreedge/authz";
 import { recordGrantDecided } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
 import { writeConfigAudit } from "@/lib/studio/audit";
+import { grantPolicyCheck } from "@/lib/studio/grant-policy";
 import { bindingForDecision } from "@/lib/studio/grant-binding";
 import { evaluateDecision, type GrantDecision } from "@/lib/studio/grants";
 import { lockSolutionOwnership } from "@/lib/studio/owner-lock";
@@ -162,6 +163,14 @@ export async function POST(
     const bound = await bindingForDecision(tx, grant, parsed.data.decision);
     if (!bound.ok) return { refusal: refused(bound.message, 409) };
 
+    // SAP API Policy §1.2 (P1.2): refused where enforced, noted where observed.
+    const policy = await grantPolicyCheck(tx, {
+      organizationId,
+      interfaceId: bound.binding?.interfaceId ?? grant.interfaceId,
+      decision: parsed.data.decision,
+    });
+    if (!policy.ok) return { refusal: refused(policy.message, 403) };
+
     /*
      * THE PASSKEY LAST, once every rule above has passed — so a person is
      * asked for it only when it is the one thing between them and the
@@ -211,11 +220,11 @@ export async function POST(
         ),
       };
     }
-    return { grant, decidedAt, binding: bound.binding };
+    return { grant, decidedAt, binding: bound.binding, policySignOffMissing: policy.policySignOffMissing };
   });
   if (stepUpMissing) await recordStepUpMissing(stepUpMissing);
   if ("refusal" in decided) return decided.refusal;
-  const { grant, decidedAt, binding } = decided;
+  const { grant, decidedAt, binding, policySignOffMissing } = decided;
 
   // The row exactly as written. The guard above makes this write the only one
   // that can settle the grant, so these values cannot have been superseded and
@@ -238,7 +247,7 @@ export async function POST(
     action: "DECISION",
     before: { decision: grant.decision },
     // `decidedIn` is what tells an auditor which door a decision came through.
-    after: { ...updated, decidedIn: "coreedge" },
+    after: { ...updated, decidedIn: "coreedge", ...(policySignOffMissing ? { policySignOffMissing: true } : {}) },
   });
 
   // Ends this request's approver wait on the time-to-first-call board (P2.12).
