@@ -143,6 +143,7 @@ export async function recordVerifiedContract(input: {
       environment: input.environment,
       connectionId: input.connectionId,
       createdById: input.actorId,
+      origin: "VERIFY",
       alsoWrite: writeStamp,
     });
     if (outcome.status === "REFUSED") return { status: "NOT_RECORDED", detail: outcome.detail };
@@ -290,6 +291,7 @@ export async function recordCapture(input: {
     contract: c as Extract<RecordableContract, { ok: true }>,
     heads: input.heads,
     createdById: input.actorId,
+    origin: "CAPTURE",
     alsoWrite: (tx) => writeSchema(tx),
   });
   if (outcome.status === "REFUSED") {

@@ -2373,6 +2373,15 @@
                       "none"
                     ]
                   },
+                  "describedBy": {
+                    "type": "string",
+                    "enum": [
+                      "tenant",
+                      "upload",
+                      "sample"
+                    ],
+                    "description": "Who described the contract: `tenant`, a connected SAP system answered a verify; `upload`, a builder uploaded the service's description and no system has served it yet (verify it before relying on it); `sample`, rows a run returned. Absent when there is no contract."
+                  },
                   "semver": {
                     "type": "string",
                     "nullable": true

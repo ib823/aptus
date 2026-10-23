@@ -140,10 +140,31 @@ function withoutWave2Codes(text: string): string {
   return documentJson(doc);
 }
 
-/** The kit as it was at f54c6f5a: its two OpenAPI files without wave 2's codes. */
+/**
+ * The third deliberate difference (P1.2): /schema's `contract` names who
+ * described it, `describedBy` (a tenant, an upload, a sample). Taken back out
+ * and written again by the same writer, the bytes are as they were.
+ */
+function withoutDescribedBy(text: string): string {
+  const doc = JSON.parse(text) as Json;
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const props = (node as Json).properties as Json | undefined;
+    const describedBy = props?.describedBy as { enum?: string[] } | undefined;
+    if (props && describedBy?.enum?.includes("upload")) delete props.describedBy;
+    for (const v of Object.values(node as Json)) visit(v);
+  };
+  visit(doc);
+  return documentJson(doc);
+}
+
+/** A document as it was at f54c6f5a, but for asAtF54c6f5a's rename: without P1.2's field, then without wave 2's codes. */
+const documentAsBefore = (text: string) => withoutWave2Codes(withoutDescribedBy(text));
+
+/** The kit as it was at f54c6f5a: its two OpenAPI files as documentAsBefore has them. */
 function kitWithoutWave2Codes(text: string): string {
   const files = JSON.parse(text) as { path: string; contents: string }[];
-  return JSON.stringify(files.map((f) => (/^openapi(-3\.0)?\.json$/.test(f.path) ? { ...f, contents: withoutWave2Codes(f.contents) } : f)));
+  return JSON.stringify(files.map((f) => (/^openapi(-3\.0)?\.json$/.test(f.path) ? { ...f, contents: documentAsBefore(f.contents) } : f)));
 }
 
 describe("byte identity with f54c6f5a", () => {
@@ -243,7 +264,7 @@ describe("byte identity with f54c6f5a", () => {
           limit: documentLimit([digest.bytes, 0, 0]),
         });
         if (!d.ok) throw new Error(`${c.name}: document refused`);
-        expect(sha(asAtF54c6f5a(withoutWave2Codes(textOf(d.text)))), `${c.name} document ${version}`).toBe(want[`doc:${version}`]);
+        expect(sha(asAtF54c6f5a(documentAsBefore(textOf(d.text)))), `${c.name} document ${version}`).toBe(want[`doc:${version}`]);
       }
     }
   });

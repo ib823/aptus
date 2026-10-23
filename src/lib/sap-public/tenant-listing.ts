@@ -24,9 +24,10 @@ import { prisma } from "@/lib/db/prisma";
 import { SCENARIO_TABLE_PRODUCT, scenariosForServices, technicalIdsForAddress, type ScenarioJoin } from "@/lib/sap-public/comm-scenarios";
 import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { catalogueAddress, KNOWN_V4_SERVICE_PATHS, type HubContentType } from "@/lib/sap-public/hub-content";
-import { getSapServices, type SapOdataProduct } from "@/lib/sap-public/tdd-connector";
+import { getSapProduct, getSapServices, type SapOdataProduct } from "@/lib/sap-public/tdd-connector";
 import {
   classifyService,
+  customerBuilt,
   entriesWithinStoredBound,
   readStoredEntries,
   sourceIdOf,
@@ -34,6 +35,7 @@ import {
   type ClassificationIndex,
   type ListedService,
   type ListingEntry,
+  type ServiceClass,
   type V4CatalogueStatus,
 } from "@/lib/sap-public/tenant-discovery";
 
@@ -193,3 +195,52 @@ export async function readListing(
     connectionChanged: row.connectionRevision !== connection.revision,
   };
 }
+
+/**
+ * The SAP API Policy §1.2 warning for a service path typed into "Register your
+ * own API" (the product owner's Q7: warn, do not refuse), or null when there
+ * is nothing to warn about: a customer-built name, a Published API, or a
+ * product without a Gateway catalogue. Classified exactly as a listed service
+ * is (classifyListing: the same two statements).
+ */
+export async function servicePathPolicyWarning(
+  productKey: string,
+  path: string,
+  odataVersion: "V2" | "V4",
+): Promise<{ class: ServiceClass; message: string } | null> {
+  const product = getSapProduct(productKey);
+  if (!product || !productHasGatewayCatalogue(product.key)) return null;
+  const listed = listedServiceForPath(path, odataVersion);
+  if (!listed || customerBuilt(listed.technicalName) !== null) return null;
+  const [entry] = (await classifyListing(product, [listed])).entries;
+  if (!entry) return null;
+  if (entry.class === "SAP_UNPUBLISHED") {
+    return {
+      class: entry.class,
+      message:
+        `${listed.technicalName} looks like an SAP service that SAP does not publish as an API. SAP API Policy §1.2: ` +
+        "customer and third-party applications must not call SAP APIs that are not Published APIs. Check the Business Accelerator Hub, or use a service your team built (Z*, Y*, YY1_*). The draft is saved.",
+    };
+  }
+  if (entry.class === "UNKNOWN_NAMESPACE") {
+    return {
+      class: entry.class,
+      message: `${listed.technicalName} is in a namespace SAP's sources do not use. Check with your Basis team whether it is a partner's or your own. The draft is saved.`,
+    };
+  }
+  return null;
+}
+
+/** A typed Gateway service path as the entry a catalogue would list for it, or null for any other path. */
+function listedServiceForPath(path: string, odataVersion: "V2" | "V4"): ListedService | null {
+  const [id] = technicalIdsForAddress({ path, protocol: odataVersion === "V4" ? "ODATAV4" : "ODATAV2" });
+  if (!id) return null;
+  if (odataVersion === "V2") {
+    const m = /^(.*)_(\d{4})$/.exec(id);
+    if (!m) return null;
+    return { id, technicalName: m[1]!, version: m[2]!, odataVersion: "V2", title: null, path };
+  }
+  const group = id.replace(/_G4BA$/, "");
+  return { id: `${group}/-/0001`, technicalName: group, version: "0001", odataVersion: "V4", title: null, path };
+}
+

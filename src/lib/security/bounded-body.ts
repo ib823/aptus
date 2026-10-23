@@ -13,8 +13,18 @@
  */
 
 export type BoundedText = { ok: true; text: string } | { ok: false; reason: "TOO_LARGE" | "INVALID" };
+export type BoundedBytes = { ok: true; bytes: Uint8Array<ArrayBuffer> } | { ok: false; reason: "TOO_LARGE" | "INVALID" };
 
 export async function readTextCapped(request: Request, maxBytes: number): Promise<BoundedText> {
+  const read = await readBytesCapped(request, maxBytes);
+  return read.ok ? { ok: true, text: new TextDecoder().decode(read.bytes) } : read;
+}
+
+/**
+ * readTextCapped's bytes, undecoded: for a body that is not text as a whole
+ * (a multipart form, whose file part is decoded strictly on its own, P1.2).
+ */
+export async function readBytesCapped(request: Request, maxBytes: number): Promise<BoundedBytes> {
   const declared = Number(request.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, reason: "TOO_LARGE" };
   const body = request.body;
@@ -42,5 +52,5 @@ export async function readTextCapped(request: Request, maxBytes: number): Promis
     bytes.set(c, at);
     at += c.byteLength;
   }
-  return { ok: true, text: new TextDecoder().decode(bytes) };
+  return { ok: true, bytes };
 }
