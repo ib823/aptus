@@ -314,11 +314,11 @@ describe("saving, as the route answers", () => {
     await renderCard(view());
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("receives 400 QUERY_NOT_AVAILABLE");
+    expect(alert.textContent).toContain("receives 400 VALIDATION_ERROR (error.query.rule NO_POLICY)");
     expect(writes("DELETE")).toHaveLength(0);
     fireEvent.click(within(alert).getByRole("button", { name: "Remove the policy" }));
     await waitFor(() => expect(writes("DELETE")).toEqual([{ expected: { revision: 4 } }]));
-    await screen.findByText(/Queries are off: callers sending query parameters now receive 400 QUERY_NOT_AVAILABLE\./);
+    await screen.findByText(/Queries are off: callers sending query parameters now receive 400 VALIDATION_ERROR \(error\.query\.rule NO_POLICY\)\./);
   });
 });
 

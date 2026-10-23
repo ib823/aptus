@@ -7,7 +7,7 @@
  * ONE OF FIVE STATES, each saying what it means for a caller:
  *   Needs verify  no basis yet (never verified since P1.4, the contract
  *                 changed, or it was only ever sampled): a link to Verify.
- *   Off           no policy: query parameters are refused, QUERY_NOT_AVAILABLE.
+ *   Off           no policy: query parameters are refused, 400 VALIDATION_ERROR, rule NO_POLICY.
  *                 "Enable queries" saves the safe default (studio/query-policy.ts).
  *   Ready         callers are held to the compiled policy shown.
  *   Stale         a verify found a change narrowing cannot absorb; every
@@ -319,7 +319,7 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
       }
       setConfirmRemove(false);
       setEditing(null);
-      setNotice("Queries are off: callers sending query parameters now receive 400 QUERY_NOT_AVAILABLE.");
+      setNotice("Queries are off: callers sending query parameters now receive 400 VALIDATION_ERROR (error.query.rule NO_POLICY).");
       await load();
     } finally {
       setBusy(false);
@@ -375,7 +375,8 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
       {!view.flagEnabled && (
         <p style={{ ...note, marginBottom: 12 }}>
           This deployment does not serve queries yet (<code style={code}>COREEDGE_QUERY_SURFACE</code>): callers sending query
-          parameters receive 400 QUERY_NOT_AVAILABLE whatever this policy says. You can prepare the policy now.
+          parameters receive 400 VALIDATION_ERROR (error.query.rule NOT_ENABLED) whatever this policy says. You can prepare
+          the policy now.
         </p>
       )}
 
@@ -425,7 +426,8 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
         <>
           <p style={text}>
             Queries are off. Callers can read this interface with <code style={code}>?limit</code> only; a call carrying
-            query parameters (select, filter, orderby, key, count, pageSize, cursor) receives 400 QUERY_NOT_AVAILABLE.
+            query parameters (select, filter, orderby, key, count, pageSize, cursor) receives 400 VALIDATION_ERROR
+            (error.query.rule NO_POLICY).
           </p>
           {editable && (
             <div style={actions}>
@@ -499,8 +501,8 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
       {confirmRemove && (
         <div role="alert" style={{ ...banner, marginTop: 12 }}>
           <p style={{ ...text, margin: 0 }}>
-            Remove the query policy? Every query call to this interface then receives 400 QUERY_NOT_AVAILABLE, and open paging
-            runs stop. Reads with ?limit are not affected.
+            Remove the query policy? Every query call to this interface then receives 400 VALIDATION_ERROR (error.query.rule
+            NO_POLICY), and open paging runs stop. Reads with ?limit are not affected.
           </p>
           <div style={{ ...actions, marginTop: 8 }}>
             <button type="button" style={btnDanger} disabled={busy} onClick={() => void remove()}>

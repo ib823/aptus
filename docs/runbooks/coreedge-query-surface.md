@@ -23,7 +23,7 @@ the legacy `?limit` read, unchanged.
    value outside the grammar is refused, `400 VALIDATION_ERROR`, before the
    interface is read.
 2. The switch, then the ring: with `COREEDGE_QUERY_SURFACE` off, the call is
-   refused `QUERY_NOT_AVAILABLE`, rule `NOT_ENABLED`. **Off refuses; it never
+   refused `400 VALIDATION_ERROR`, rule `NOT_ENABLED`. **Off refuses; it never
    ignores** (a filter that is ignored serves every row).
 3. A cursor is opened in memory (AES-256-GCM under the ring, bound to the
    organisation, the credential, the interface and the API version).
@@ -109,10 +109,10 @@ runs from the first page. Nothing else is sealed under it.
 | What happened | What callers get | What to do |
 |---|---|---|
 | A verify found a field or operator the contract no longer allows | It is **narrowed away**: the rest keeps serving; a call using it gets `400 POLICY_FIELD_NOT_GRANTED`. The verify's answer, its config audit (`TEST_CONNECT`, `after.queryPolicy.narrowed`) and the Verify panel say what went | Nothing, or the builder reviews the policy |
-| A verify found the key changed, SAP newly requiring a filter the policy cannot satisfy, another entity set or OData version, a sampled contract, a singleton, or a basis too large | The policy goes **STALE**: every query is refused `QUERY_NOT_AVAILABLE`, rule `POLICY_STALE` | The builder opens the Query policy card (it shows why) and saves the policy again |
-| The interface's contract changed in Studio (dataset, path or version) | The basis and the compiled policy are cleared; the source is kept. Queries get `QUERY_NOT_AVAILABLE`, rule `NO_CONTRACT` | Verify the service: the policy is compiled again |
-| The policy was removed | `QUERY_NOT_AVAILABLE`, rule `NO_POLICY` | The builder enables queries again |
-| A stored policy cannot be read | `QUERY_NOT_AVAILABLE`, rule `POLICY_UNREADABLE` | The builder saves it again |
+| A verify found the key changed, SAP newly requiring a filter the policy cannot satisfy, another entity set or OData version, a sampled contract, a singleton, or a basis too large | The policy goes **STALE**: every query is refused `400 VALIDATION_ERROR`, `error.query.rule` `POLICY_STALE` | The builder opens the Query policy card (it shows why) and saves the policy again |
+| The interface's contract changed in Studio (dataset, path or version) | The basis and the compiled policy are cleared; the source is kept. Queries get `400 VALIDATION_ERROR`, `error.query.rule` `NO_CONTRACT` | Verify the service: the policy is compiled again |
+| The policy was removed | `400 VALIDATION_ERROR`, `error.query.rule` `NO_POLICY` | The builder enables queries again |
+| A stored policy cannot be read | `400 VALIDATION_ERROR`, `error.query.rule` `POLICY_UNREADABLE` | The builder saves it again |
 
 A policy edit never bumps the interface's version (that would clear its
 captured schema and fixtures). Every save is in the config audit: `UPDATE`,
