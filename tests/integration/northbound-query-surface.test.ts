@@ -32,6 +32,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Page from "@/lib/northbound/query/page";
 import type * as RateLimit from "@/lib/security/rate-limit";
 
 vi.mock("@/lib/db/prisma", async () => {
@@ -44,12 +45,19 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof RateLimit>()),
   checkRateLimit: async () => ({ allowed: true, remaining: 42, resetMs: 30_000 }),
 }));
+// The real page assembly, wrapped so one case can break an invariant in it.
+vi.mock("@/lib/northbound/query/page", async (importOriginal) => {
+  const real = await importOriginal<typeof Page>();
+  return { ...real, assemblePage: vi.fn(real.assemblePage) };
+});
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
 import { GET as readRouteV1 } from "@/app/api/northbound/v1/interfaces/[id]/data/route";
 import { prisma } from "@/lib/db/prisma";
 import { openCursor } from "@/lib/northbound/query/cursor";
+import { assemblePage } from "@/lib/northbound/query/page";
 import { defaultVersion } from "@/lib/northbound/version-policy";
+import { QueryCompilerInvariantError } from "@/lib/odata/identifiers";
 import { readTokenRing } from "@/lib/security/token-ring";
 
 import { source } from "../helpers/odata-query";
@@ -282,6 +290,33 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed query surface (P1.
     expect(r.body.error!.message).not.toContain("Failure at");
     expect(hostIn(r.text)).toEqual([]);
     expect(await lastAudit()).toMatchObject({ status: 422, queryRule: "SAP_REJECTED", failureReason: "HTTP_400" });
+  });
+
+  it("an invariant broken while assembling SAP's rows is 500 INTERNAL, audited with what was sent, and none of SAP's rows is served", async () => {
+    vi.mocked(assemblePage).mockImplementationOnce(() => {
+      throw new QueryCompilerInvariantError("A page body is larger than its cap.");
+    });
+    const before = sapCalls();
+    const r = await get(app.iface.V2, "filter.Customer.eq=C1&pageSize=2");
+    expect(r.status).toBe(500);
+    expect(r.body.error).toMatchObject({ code: "INTERNAL" });
+    expect(r.body.error).not.toHaveProperty("query");
+    expect(r.body).not.toHaveProperty("data");
+    expect(r.text).not.toContain("O0001");
+    expect(hostIn(r.text)).toEqual([]);
+    expect(r.headers.get("x-ratelimit-remaining")).toBe("42");
+    // SAP was asked once; the row says so, with nothing served.
+    expect(sapCalls()).toBe(before + 1);
+    expect(await lastAudit()).toMatchObject({
+      status: 500,
+      correlationId: r.body.error!.correlationId,
+      rowCount: 0,
+      queryKind: "LIST",
+      queryRule: null,
+      failureReason: null,
+      cursorChainId: null,
+      responseBytes: null,
+    });
   });
 
   /* ── the switch, and the legacy read ─────────────────────────────────── */

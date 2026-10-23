@@ -421,9 +421,10 @@ async function queryRead(call: QueryCall, parsed: ParsedQueryOk): Promise<NextRe
 
   // 8 (Q) — the OData query, from the checked AST only, through buildSapUrl,
   // measured as fetch sends it.
-  const plan = ast.kind === "LIST" ? planPage(policy, ast, cursor?.payload ?? null) : null;
+  let plan: ReturnType<typeof planPage> | null;
   let built: ReturnType<typeof buildQueryUrl>;
   try {
+    plan = ast.kind === "LIST" ? planPage(policy, ast, cursor?.payload ?? null) : null;
     const sapQuery = compileQuery(ast, policy, plan === null ? { skip: 0, top: null, page0: true } : { skip: plan.skip, top: plan.ask, page0: plan.page0 }, project);
     built = buildQueryUrl(sapQuery, { baseUrl: connection.baseUrl, servicePath: service.path, entitySet, client: connection.client });
   } catch (err) {
@@ -476,21 +477,49 @@ async function queryRead(call: QueryCall, parsed: ParsedQueryOk): Promise<NextRe
     return failed(status, code, result.detail, queryRuleForStatus(result.status), { failureReason: result.failureReason, flags: [] });
   }
 
+  // 12 (Q) — the page or the record, from SAP's rows. An invariant broken here
+  // is CoreEdge's defect, never the caller's: SAP was asked, so the row says
+  // what was sent, and no row of SAP's reaches the caller.
+  let assembled:
+    | { readonly page: ReturnType<typeof assemblePage>; readonly plan: NonNullable<typeof plan> }
+    | { readonly key: ReturnType<typeof assembleKey> };
+  try {
+    assembled =
+      plan !== null
+        ? {
+            plan,
+            page: assemblePage({
+              policy,
+              ast,
+              plan,
+              cursor,
+              answer: result.answer,
+              binding,
+              ring,
+              now,
+              interface: { id: iface.id, name: iface.name, version: iface.version },
+              connection: connectionRef,
+              authorisingGrantIds: context.authorisingGrantIds,
+            }),
+          }
+        : {
+            key: assembleKey({
+              policy,
+              kind: built.query.kind === "KEY_VIA_FILTER" ? "KEY_VIA_FILTER" : "KEY",
+              answer: result.answer,
+              interface: { id: iface.id, name: iface.name, version: iface.version },
+            }),
+          };
+  } catch (err) {
+    if (!(err instanceof QueryCompilerInvariantError)) throw err;
+    console.error("[northbound] query answer not assembled", { correlationId, error: err.message });
+    await finish(500, { rowCount: 0, failureReason: null, query: { flags: joinQueryFlags(sentFlags) } });
+    return northboundError("INTERNAL", "CoreEdge could not assemble SAP's answer. No rows were served.", 500, correlationId, { ...call.rateHeaders });
+  }
+
   let text: string;
-  if (plan !== null) {
-    const page = assemblePage({
-      policy,
-      ast,
-      plan,
-      cursor,
-      answer: result.answer,
-      binding,
-      ring,
-      now,
-      interface: { id: iface.id, name: iface.name, version: iface.version },
-      connection: connectionRef,
-      authorisingGrantIds: context.authorisingGrantIds,
-    });
+  if ("page" in assembled) {
+    const { page, plan } = assembled;
     if (!page.ok) {
       const answer = QUERY_OUTCOME_ANSWER[page.rule];
       return failed(answer.status, answer.code, answer.message, page.rule, { failureReason: answer.failureReason, flags: page.flags, chainId: page.chainId });
@@ -508,12 +537,7 @@ async function queryRead(call: QueryCall, parsed: ParsedQueryOk): Promise<NextRe
     });
     text = page.body;
   } else {
-    const key = assembleKey({
-      policy,
-      kind: built.query.kind === "KEY_VIA_FILTER" ? "KEY_VIA_FILTER" : "KEY",
-      answer: result.answer,
-      interface: { id: iface.id, name: iface.name, version: iface.version },
-    });
+    const { key } = assembled;
     if (!key.ok) {
       if (key.outcome === "NO_RECORD") {
         return failed(404, "RECORD_NOT_FOUND", "SAP has no record with this key.", null, { failureReason: null, flags: key.flags });
