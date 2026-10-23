@@ -101,7 +101,9 @@ sends or receives changed, except the additions marked *Added*.
   page, `totalCount`; a key lookup answers one record and no `page`. Page on
   `page.nextCursor`, sent with the same other parameters. A query's answers
   also carry `x-ratelimit-limit`, `x-ratelimit-remaining` and
-  `x-ratelimit-reset` (seconds). The per-solution OpenAPI document lists each
+  `x-ratelimit-reset` (seconds); on them `x-ratelimit-remaining` counts the
+  credential's 60 a minute, or the edge's limit when that is nearer, and
+  replaces the edge's figure. The per-solution OpenAPI document lists each
   interface's own parameters by name.
 - *Added (P1.4):* three codes. `400 POLICY_FIELD_NOT_GRANTED`: the query asks
   for a field, operator, count, key lookup or page size the interface's

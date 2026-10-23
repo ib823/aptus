@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { machineAuthFailureKey } from "@/lib/northbound/auth-failures";
 import { extractBearer } from "@/lib/northbound/bearer";
+import { EDGE_RATE_REMAINING_HEADER, routeStatesRateRemaining } from "@/lib/northbound/query/rate-headers";
 import { edgeVersionHeaders, isNorthboundPath, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import {
   checkRateLimit,
@@ -230,6 +231,21 @@ function machineRefusal(
 }
 
 
+/**
+ * The pass-through response with the edge's remaining calls: in
+ * X-RateLimit-Remaining, or, on a query-surface data read, handed to the
+ * route, which states the smaller of it and the key's own (D23). Next keeps a
+ * header set here over the route's, so setting both would state the edge's
+ * 600-a-minute figure beside the route's limit of 60.
+ */
+function passWithRemaining(request: NextRequest, requestHeaders: Headers, remaining: number): NextResponse {
+  const routeStates = routeStatesRateRemaining(request.method, request.nextUrl.pathname, request.nextUrl.searchParams);
+  if (routeStates) requestHeaders.set(EDGE_RATE_REMAINING_HEADER, String(Math.max(0, remaining)));
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  if (!routeStates) response.headers.set("X-RateLimit-Remaining", String(remaining));
+  return response;
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Per-request CSP nonce. Placed on the REQUEST headers so Next.js auto-nonces
   // its own framework/hydration scripts on every document path, and echoed as
@@ -240,6 +256,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+  // Only the edge says what it has left (northbound/query/rate-headers.ts).
+  requestHeaders.delete(EDGE_RATE_REMAINING_HEADER);
 
   const response =
     (await handleRequest(request, requestHeaders)) ??
@@ -418,9 +436,7 @@ async function handleRequest(
             requestStart,
           );
         }
-        const response = NextResponse.next({ request: { headers: requestHeaders } });
-        response.headers.set("X-RateLimit-Remaining", String(machine.result.remaining));
-        return withObservabilityHeaders(response, requestId, requestStart);
+        return withObservabilityHeaders(passWithRemaining(request, requestHeaders, machine.result.remaining), requestId, requestStart);
       }
 
       // The governance step-up is not a sign-in: its caller already holds a
@@ -511,12 +527,7 @@ async function handleRequest(
 
       // Non-auth API routes: return immediately with rate limit headers
       if (!isAuthMutation) {
-        const response = NextResponse.next({ request: { headers: requestHeaders } });
-        response.headers.set(
-          "X-RateLimit-Remaining",
-          String(result.remaining),
-        );
-        return withObservabilityHeaders(response, requestId, requestStart);
+        return withObservabilityHeaders(passWithRemaining(request, requestHeaders, result.remaining), requestId, requestStart);
       }
     }
   }

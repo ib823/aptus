@@ -74,6 +74,7 @@ import {
   type OpenedCursor,
 } from "@/lib/northbound/query/cursor";
 import { assembleKey, assemblePage, legacyBody, planPage } from "@/lib/northbound/query/page";
+import { EDGE_RATE_REMAINING_HEADER, rateRemaining } from "@/lib/northbound/query/rate-headers";
 import { querySurfaceGate } from "@/lib/northbound/query/surface";
 import { httpStatusFor } from "@/lib/northbound/read";
 import { northboundErrorCodeFor } from "@/lib/northbound/read-status";
@@ -134,7 +135,7 @@ async function readData(request: NextRequest, ctx: { params: Promise<{ id: strin
   const parsed = parseQueryParams(request.nextUrl.searchParams, request.nextUrl.search.length);
   if (!parsed.surface) return legacyRead({ request, id, client, audit, refuse, correlationId });
 
-  const call: QueryCall = { id, client, audit, refuse, correlationId, rateHeaders: rateLimitHeaders(rate.value) };
+  const call: QueryCall = { id, client, audit, refuse, correlationId, rateHeaders: rateLimitHeaders(rate.value, request.headers.get(EDGE_RATE_REMAINING_HEADER)) };
   if (!parsed.ok) {
     return refuseQuery(
       call,
@@ -319,10 +320,15 @@ interface QueryCall {
   readonly rateHeaders: Readonly<Record<string, string>>;
 }
 
-function rateLimitHeaders(rate: RateLimitResult): Record<string, string> {
+/**
+ * The key's own bucket, and in -remaining the smaller of its calls left and
+ * the edge's, which middleware hands over instead of setting the header
+ * itself (northbound/query/rate-headers.ts).
+ */
+function rateLimitHeaders(rate: RateLimitResult, edgeRemaining: string | null): Record<string, string> {
   return {
     "x-ratelimit-limit": String(RATE_LIMITS.northbound.limit),
-    "x-ratelimit-remaining": String(Math.max(0, rate.remaining)),
+    "x-ratelimit-remaining": String(rateRemaining(rate.remaining, edgeRemaining)),
     "x-ratelimit-reset": String(Math.max(0, Math.ceil(rate.resetMs / 1000))),
   };
 }

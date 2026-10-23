@@ -134,11 +134,11 @@ type Body = {
   error?: { code: string; message: string; correlationId: string; query?: { rule: string; parameter?: string; field?: string; allowed?: string[] } };
 };
 
-async function get(id: string, qs: string, opts: { token?: string; base?: "/api/northbound" | "/api/northbound/v1" } = {}) {
+async function get(id: string, qs: string, opts: { token?: string; base?: "/api/northbound" | "/api/northbound/v1"; headers?: Record<string, string> } = {}) {
   const base = opts.base ?? "/api/northbound";
   const handler = base === "/api/northbound" ? readRoute : readRouteV1;
   const res = await handler(
-    new NextRequest(`http://localhost${base}/interfaces/${id}/data${qs ? `?${qs}` : ""}`, { headers: { authorization: `Bearer ${opts.token ?? app.token}` } }),
+    new NextRequest(`http://localhost${base}/interfaces/${id}/data${qs ? `?${qs}` : ""}`, { headers: { authorization: `Bearer ${opts.token ?? app.token}`, ...opts.headers } }),
     { params: Promise.resolve({ id }) },
   );
   const text = await res.text();
@@ -248,6 +248,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed query surface (P1.
     // The same query restarted hashes the same; the literal is in no column.
     expect(rows[1]!.queryHash).toBe(rows[0]!.queryHash);
     expect(JSON.stringify(rows)).not.toContain("1010");
+  });
+
+  it("x-ratelimit-remaining is the smaller of the key's calls left and the edge's, which middleware hands over", async () => {
+    const fewer = await get(app.iface.V2, "filter.Customer.eq=C1&pageSize=2", { headers: { "x-coreedge-edge-ratelimit-remaining": "7" } });
+    expect(fewer.status).toBe(200);
+    expect(fewer.headers.get("x-ratelimit-limit")).toBe("60");
+    expect(fewer.headers.get("x-ratelimit-remaining")).toBe("7");
+    const more = await get(app.iface.V2, "filter.Customer.eq=C1&pageSize=2", { headers: { "x-coreedge-edge-ratelimit-remaining": "590" } });
+    expect(more.headers.get("x-ratelimit-remaining")).toBe("42");
   });
 
   it.each(["V2", "V4"] as const)("%s: a key lookup by path answers one record and no page", async (v) => {

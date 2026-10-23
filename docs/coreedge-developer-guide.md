@@ -502,7 +502,9 @@ ignored the page size). A key lookup answers one record and no `page`, or
 - **Pace the run.** Every page is one call against your credential's 60 a
   minute, shared with everything else it calls. Start pages at least 1.05 s
   apart, or pace by `x-ratelimit-remaining` and `x-ratelimit-reset`, which a
-  query's answers carry. 10,000 rows at 100 a page is 100 calls.
+  query's answers carry: `x-ratelimit-remaining` is the calls your credential
+  has left this minute, or fewer when the edge's own limit is nearer. 10,000
+  rows at 100 a page is 100 calls.
 - **Offset paging can skip or repeat a row** when the data changes between
   pages. Make your processing idempotent by the record's key.
 - **`totalCount` is SAP's figure** and may not exactly equal the rows a run

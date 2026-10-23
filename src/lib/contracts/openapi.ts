@@ -830,7 +830,9 @@ export function buildNorthboundOpenApi(input: NorthboundDocInput): Obj {
         },
         [H.request]: { description: "The edge's own request id.", schema: { type: "string" } },
         [H.rateRemaining]: {
-          description: "Calls left in this credential's current window (the smaller of its own budget and its address's backstop).",
+          description: anyQueryPolicy
+            ? "Calls left in this credential's current window (the smaller of its own budget and its address's backstop). On a query's answer (P1.4), the smaller of that and the calls left of X-RateLimit-Limit this minute: pace a paging run by it."
+            : "Calls left in this credential's current window (the smaller of its own budget and its address's backstop).",
           schema: { type: "integer", minimum: 0 },
         },
         [H.retryAfter]: { description: "Seconds to wait before retrying.", schema: { type: "integer", minimum: 0 } },
