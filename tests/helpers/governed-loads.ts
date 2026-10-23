@@ -105,7 +105,12 @@ export async function referenceCredentialLookup(db: ReferenceFake, tokenHash: st
   ];
 }
 
-/** The access load: the interface, then its grants and (when asked) its connections. */
+/**
+ * The access load: the interface, then its grants and (when asked) its
+ * connections. With `withQueryPolicy` (P1.4), the interface's compiled query
+ * policy and whether it has a source ride on its row as the SQL carries them
+ * (`queryPolicyLoad`); without it, null.
+ */
 export async function referenceAccessLoad(
   db: ReferenceFake,
   interfaceId: string,
@@ -113,9 +118,16 @@ export async function referenceAccessLoad(
   solutionId: string,
   environment: string,
   withConnections: boolean,
+  withQueryPolicy = false,
 ): Promise<Row[]> {
-  const iface = (await db.interface?.findFirst?.({ where: { id: interfaceId, organizationId } })) as Row | null | undefined;
-  if (!iface) return [{ iface: null, grants: null, connections: null }];
+  const found = (await db.interface?.findFirst?.({ where: { id: interfaceId, organizationId } })) as Row | null | undefined;
+  if (!found) return [{ iface: null, grants: null, connections: null }];
+  const iface: Row = {
+    ...found,
+    queryPolicyLoad: withQueryPolicy
+      ? { compiled: found.queryPolicyCompiled ?? null, sourcePresent: found.queryPolicy !== null && found.queryPolicy !== undefined }
+      : null,
+  };
   const grants = ((await db.apiAccessGrant?.findMany?.({
     where: {
       organizationId,
@@ -200,8 +212,16 @@ export function governedQueryRaw(
       return referenceCredentialLookup(db(), String(values[1]), values[0] === true);
     }
     if (text.includes("governed:access-load")) {
-      // interfaceId, organizationId, organizationId, solutionId, environment, withConnections, organizationId
-      return referenceAccessLoad(db(), String(values[0]), String(values[1]), String(values[3]), String(values[4]), values[5] === true);
+      // withQueryPolicy, interfaceId, organizationId, organizationId, solutionId, environment, withConnections, organizationId
+      return referenceAccessLoad(
+        db(),
+        String(values[1]),
+        String(values[2]),
+        String(values[4]),
+        String(values[5]),
+        values[6] === true,
+        values[0] === true,
+      );
     }
     if (text.includes("governed:console-connection")) {
       // organizationId, product, key, organizationId

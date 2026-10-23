@@ -137,7 +137,27 @@ function withoutWave2Codes(text: string): string {
   codes.CONNECTION_NOT_CONFIGURED!.statuses = [403];
   codes.CONNECTION_NOT_CONFIGURED!.meaning = "The customer's SAP connection cannot be bound for this credential's environment yet.";
   error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { reason: string }[]).filter((r) => r.reason !== "CIRCUIT_OPEN");
+  withoutQuerySurfaceCodes(error);
   return documentJson(doc);
+}
+
+/**
+ * The third deliberate difference (P1.4): the error table names the query
+ * surface's three codes and its six refusal reasons, VALIDATION_ERROR is also
+ * a 413 and a query's 422, and UPSTREAM_ERROR says when a retry will not
+ * help. Taken back out, as above.
+ */
+const QUERY_SURFACE_CODES = ["POLICY_FIELD_NOT_GRANTED", "CURSOR_STALE", "RECORD_NOT_FOUND"];
+function withoutQuerySurfaceCodes(error: Json): void {
+  const code = (((error.properties as Json).error as Json).properties as Json).code as { enum: string[] };
+  code.enum = code.enum.filter((c) => !QUERY_SURFACE_CODES.includes(c));
+  const codes = error["x-coreedge-codes"] as Record<string, Json>;
+  for (const c of QUERY_SURFACE_CODES) delete codes[c];
+  codes.VALIDATION_ERROR!.statuses = [400, 422];
+  codes.VALIDATION_ERROR!.meaning =
+    "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service). 422: SAP rejected the record itself.";
+  codes.UPSTREAM_ERROR!.meaning = "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.";
+  error["x-coreedge-refusal-reasons"] = (error["x-coreedge-refusal-reasons"] as { origin?: string }[]).filter((r) => r.origin !== "P1.4");
 }
 
 /** The kit as it was at f54c6f5a: its two OpenAPI files without wave 2's codes. */

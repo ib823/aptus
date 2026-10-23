@@ -120,7 +120,7 @@ export const NORTHBOUND_ERROR_CODES = {
     statuses: [502],
     meaning:
       "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use. With error.query.rule UPSTREAM_IGNORED_PAGING or KEY_NOT_UNIQUE, the service did not honour the paging CoreEdge asked for, or returned two records for one key: retrying does not help.",
-    action: "Retry or escalate with the correlation id; with error.query.rule set, escalate without retrying.",
+    action: "Retry or escalate with the correlation id.",
   },
   UNSUPPORTED_VERSION: {
     statuses: [400],

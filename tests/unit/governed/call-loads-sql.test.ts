@@ -83,13 +83,35 @@ describe("the access load", () => {
     const orgParams = values.flatMap((v, i) => (v === "org_a" ? [`$${i + 1}`] : []));
     expect(orgParams).toHaveLength(3);
     const [iface, grant, connection] = orgParams;
-    expect(text).toContain(`FROM "Interface" WHERE "id" = $1 AND "organizationId" = ${iface}`);
-    expect(text).toContain(`WHERE g."organizationId" = ${grant} AND g."solutionId" = $4 AND g."environment" = $5`);
+    // $1 is the query surface's flag (P1.4), below.
+    expect(text).toContain(`FROM "Interface" WHERE "id" = $2 AND "organizationId" = ${iface}`);
+    expect(text).toContain(`WHERE g."organizationId" = ${grant} AND g."solutionId" = $5 AND g."environment" = $6`);
     expect(text).toContain(`AND c."organizationId" = ${connection} AND c."product" = i."sapProduct" AND c."isActive" = true`);
-    expect(values.slice(0, 5)).toEqual(["if_1", "org_a", "org_a", "sol_1", "DEV"]);
+    expect(values.slice(0, 6)).toEqual([false, "if_1", "org_a", "org_a", "sol_1", "DEV"]);
     // The grants and connections are read only beside the caller's interface.
     expect(text).toContain('FROM "ApiAccessGrant" g, i');
     expect(text).toContain('FROM "SapConnection" c, i');
+  });
+
+  /*
+   * P1.4: the compiled query policy rides in this statement only on a
+   * query-surface call, and only from the caller's own interface row (the
+   * `i` CTE, scoped above). Every other call selects it as NULL behind the
+   * same flag, so the statement's shape is the same and the policy (up to
+   * 64 KiB) never rides on a legacy read or a write. The source and the basis
+   * are never read here.
+   */
+  it("reads the compiled query policy only behind the query surface's flag, from the caller's interface row", async () => {
+    await loadInterfaceAccess("org_a", "sol_1", "if_1", "DEV");
+    await loadInterfaceAccess("org_a", "sol_1", "if_1", "DEV", { withQueryPolicy: true });
+    const text = flat(seen.calls[0]!.sql);
+    expect(text).toContain(
+      `WITH i AS ( SELECT CASE WHEN $1::boolean THEN json_build_object('compiled', "queryPolicyCompiled", 'sourcePresent', "queryPolicy" IS NOT NULL) END AS "queryPolicyLoad",`,
+    );
+    expect(seen.calls.map((c) => c.values[0])).toEqual([false, true]);
+    expect(flat(seen.calls[1]!.sql)).toBe(text);
+    expect(text).not.toContain('"queryBasis"');
+    expect(text.match(/"queryPolicyCompiled"/g)).toHaveLength(1);
   });
 
   it("keeps grantsForInterfaceWhere's tuple in the SQL", async () => {

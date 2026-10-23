@@ -208,7 +208,7 @@ function refusedBeforeSap(row: AttributableRow): string {
       if (row.queryRule) {
         return row.status === 409
           ? `Refused: the paging cursor can no longer be used (${row.queryRule}); the caller starts again from the first page. ${nothing}`
-          : `Refused: the query cannot be served as sent (${row.queryRule}). ${nothing}`;
+          : `Refused: CoreEdge did not serve this query (${row.queryRule}). ${nothing}`;
       }
       return row.status === 409
         ? `Refused: this Idempotency-Key was already used for a different write, or that write is still in progress. ${nothing}`

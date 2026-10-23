@@ -2743,6 +2743,9 @@
                   "CONNECTION_NOT_CONFIGURED",
                   "NOT_FOUND",
                   "VALIDATION_ERROR",
+                  "POLICY_FIELD_NOT_GRANTED",
+                  "CURSOR_STALE",
+                  "RECORD_NOT_FOUND",
                   "CONFLICT",
                   "RATE_LIMITED",
                   "RATE_LIMITED_ADDRESS",
@@ -2810,10 +2813,32 @@
           "VALIDATION_ERROR": {
             "statuses": [
               400,
+              413,
               422
             ],
-            "meaning": "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service). 422: SAP rejected the record itself.",
+            "meaning": "400: the request or the interface's definition cannot be used as it stands (no dataset, an invalid service path, a missing Idempotency-Key, a body that is not { record }, an unverified own service), or a query that cannot be served as sent: a parameter outside the query grammar, a value not of its field's type, a cursor that cannot be used or was sent with other parameters than its first page, an interface that serves no queries (error.query.rule says which). 422: SAP rejected the record itself; also, SAP rejected the query, one record is larger than the page limit, or SAP's page was larger than CoreEdge reads. 413: the answer is larger than CoreEdge can return.",
             "action": "Fix the request or the interface. Do not retry unchanged."
+          },
+          "POLICY_FIELD_NOT_GRANTED": {
+            "statuses": [
+              400
+            ],
+            "meaning": "The query asks for what the interface's query policy does not allow: a field it may not read, filter or sort on, an operator, key lookup, a count, a page size above its maximum, or a query without a filter the policy or SAP requires. error.query names the rule, the field and what is allowed. Nothing was sent to SAP (P1.4).",
+            "action": "Change the query within the interface's query policy, or ask its builder to allow it. Do not retry unchanged."
+          },
+          "CURSOR_STALE": {
+            "statuses": [
+              409
+            ],
+            "meaning": "The paging cursor has expired (15 minutes per cursor, 2 hours per paging run), or the interface, its query policy, its grant or its connection changed since the first page (P1.4).",
+            "action": "Start the read again from the first page."
+          },
+          "RECORD_NOT_FOUND": {
+            "statuses": [
+              404
+            ],
+            "meaning": "A key lookup found no record: SAP has none with this key (P1.4).",
+            "action": "SAP has no record with this key. Not an error to retry."
           },
           "CONFLICT": {
             "statuses": [
@@ -2868,7 +2893,7 @@
             "statuses": [
               502
             ],
-            "meaning": "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use.",
+            "meaning": "The SAP system, or the connection's token endpoint, failed or answered in a way the broker could not use. With error.query.rule UPSTREAM_IGNORED_PAGING or KEY_NOT_UNIQUE, the service did not honour the paging CoreEdge asked for, or returned two records for one key: retrying does not help.",
             "action": "Retry or escalate with the correlation id."
           },
           "UNSUPPORTED_VERSION": {
@@ -2984,6 +3009,42 @@
             "reason": "WRITE_NOT_SERVED",
             "code": "FORBIDDEN",
             "status": 403
+          },
+          {
+            "reason": "QUERY_INVALID",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "origin": "P1.4"
+          },
+          {
+            "reason": "QUERY_NOT_AVAILABLE",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "origin": "P1.4"
+          },
+          {
+            "reason": "CURSOR_INVALID",
+            "code": "VALIDATION_ERROR",
+            "status": 400,
+            "origin": "P1.4"
+          },
+          {
+            "reason": "POLICY_FIELD_NOT_GRANTED",
+            "code": "POLICY_FIELD_NOT_GRANTED",
+            "status": 400,
+            "origin": "P1.4"
+          },
+          {
+            "reason": "CURSOR_STALE",
+            "code": "CURSOR_STALE",
+            "status": 409,
+            "origin": "P1.4"
+          },
+          {
+            "reason": "QUERY_SURFACE_MISCONFIGURED",
+            "code": "INTERNAL",
+            "status": 500,
+            "origin": "P1.4"
           },
           {
             "reason": "TOKEN_REJECTED",
