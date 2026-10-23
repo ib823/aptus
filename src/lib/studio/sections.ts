@@ -95,7 +95,8 @@ export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
   // P1.9. The gap simulator's output for the whole product: deployment-scoped
   // like Catalogue health, so platform administrators only until the product
   // owner decides who else should read a gap analysis against SAP Integration
-  // Suite (roadmap P1.9, open question 1). The page gates itself as well.
+  // Suite (the default is recorded in the roadmap's P1.9 Status line). The
+  // page gates itself as well.
   {
     key: "parity",
     label: "Parity scorecard",

@@ -478,7 +478,9 @@ function rolesFor(workspace: StudioWorkspace): string[] {
  * the same predicate the rail filter uses (`railSections`). The workspace's
  * roster would list roles the screen turns away.
  */
-const ADMIN_LABELS: readonly string[] = ALL_USER_ROLES.filter((r) => isAdminRoleName(r)).map((r) => ROLE_LABELS[r as UserRole]);
+const ADMIN_LABELS: readonly string[] = ALL_USER_ROLES.filter((r) => isAdminRoleName(r)).map(
+  (r) => ROLE_LABELS[r as UserRole],
+);
 
 /** The Console's screens, assembled from the rail plus the prose above. */
 const CONSOLE_MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
