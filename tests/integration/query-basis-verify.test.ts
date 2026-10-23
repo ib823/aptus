@@ -144,7 +144,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("a verify writes the query basis
     expect(outcome).toMatchObject({ queryPolicy: { state: "READY" } });
     const narrowed = (outcome as { queryPolicy: { narrowed: string[] } }).queryPolicy.narrowed;
     expect(narrowed.some((n) => n.includes("Region"))).toBe(true);
-    const c = (await columns(iface.id))!.queryPolicyCompiled as CompiledQueryPolicyV1;
+    const c = (await columns(iface.id))!.queryPolicyCompiled as unknown as CompiledQueryPolicyV1;
     expect(c.fields.map((f) => f.n)).toEqual(["Customer", "CustomerName"]);
   });
 

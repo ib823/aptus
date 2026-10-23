@@ -81,7 +81,8 @@ describe("what readQuery sends", () => {
 
   it("OData-MaxVersion 4.0 on V4 only", async () => {
     const { f } = await run("V4", "LIST", answer({ value: [] }));
-    expect((f.mock.calls[0]![1] as RequestInit).headers).toEqual({
+    const [, init] = f.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(init.headers).toEqual({
       Authorization: "Basic Q09NTV9VU0VSOnA=",
       Accept: "application/json",
       "OData-MaxVersion": "4.0",
