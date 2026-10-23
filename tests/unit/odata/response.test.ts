@@ -93,6 +93,15 @@ describe("key lookups", () => {
     const r = readQueryAnswer({ d: { __metadata: { uri: `${HOST}/x('1')` }, Id: "1", value: "v" } }, key("V2"), false);
     expect(rows(r)).toEqual([{ Id: "1", value: "v" }]);
     expect(readQueryAnswer({ d: { results: [] } }, key("V2"), false).ok).toBe(false);
+    expect(readQueryAnswer({ d: { results: [{ Id: "1" }] } }, key("V2"), false).ok).toBe(false);
+  });
+
+  it("V2: an entity with a property named results is still the entity; only an array there is a feed", () => {
+    const q: Q = { kind: "KEY", odata: "V2", project: ["Id", "results"], selectSent: null, keyParts: ["Id"] };
+    for (const results of ["PASSED", 3, null, { Code: "A" }]) {
+      const r = readQueryAnswer({ d: { __metadata: { uri: `${HOST}/x('1')` }, Id: "1", results } }, q, false);
+      expect(rows(r)).toEqual([{ Id: "1", results }]);
+    }
   });
 
   it("V4: the top-level object is the entity, whatever properties it has", () => {

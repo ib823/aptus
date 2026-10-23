@@ -8,7 +8,13 @@
  *   LIST rows      V2 `d.results[]`             V4 `value[]`        every element an object
  *   LIST "more"    V2 `d.__next` present        V4 `@odata.nextLink` present
  *   LIST count     V2 `d.__count`, 1-15 digits  V4 `@odata.count`, a safe integer or digit string
- *   KEY row        V2 `d` without `results`     V4 the top-level object, whatever properties it has
+ *   KEY row        V2 `d`, unless it is a feed  V4 the top-level object, whatever properties it has
+ *
+ * A V2 FEED IS `results` AS AN ARRAY. A V2 entry sits directly under `d`, so
+ * an entity with an ordinary property named `results` (a string, a number, a
+ * complex value) is still the entity; V2 has no collection-valued properties,
+ * so only an array there marks a feed, which a key lookup must not get. This
+ * is the V2 counterpart of the V4 `value` property.
  *
  * SAP'S NEXT LINK IS A YES OR A NO. Its presence says SAP has more rows than
  * it sent (a server-side page cap); its text is never read, followed, stored
@@ -71,7 +77,7 @@ function rowsOf(
   if (kind === "KEY") {
     if (odata === "V4") return { rows: [json], more: false, count: undefined };
     const d = json.d;
-    if (!isObject(d) || Object.hasOwn(d, "results")) return null;
+    if (!isObject(d) || Array.isArray(d.results)) return null;
     return { rows: [d], more: false, count: undefined };
   }
   if (odata === "V2") {
