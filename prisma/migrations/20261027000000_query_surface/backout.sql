@@ -3,7 +3,12 @@
 -- In this file, not in migration.sql, because an applied migration is never edited
 -- (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
 --
--- Run it only after the deployment is rolled back to code that never reads these columns.
+-- Run it only after the deployment is rolled back to a build from before this migration merged.
+-- The guard deployment and every later one reference these columns, with COREEDGE_QUERY_SURFACE
+-- on or off: the access-load statement names "queryPolicyCompiled" and "queryPolicy" on every
+-- call, and the audit insert returns every audit column. Run against such a build, every /data,
+-- /schema, write and console call fails with "column does not exist". So a backout also gives up
+-- the N14 guard: on a build from before this migration, query parameters are ignored, not refused.
 -- What it loses: every interface's query policy, basis and compiled form (builders save the policy
 -- again; a re-verify rewrites the basis), and the query metadata of audit rows written since the
 -- deploy (the rows themselves stay).

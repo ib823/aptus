@@ -242,7 +242,15 @@ reading of SAP's API policy on bulk extraction behind this is decision D26.
   guard deployment (or any later one). Cursors are stateless: nothing to clean
   up.
 - **Backout of the migration:** only after the code is rolled back to a build
-  that never reads the columns. `pnpm migrations:backout-sql
+  from before migration `20261027000000_query_surface` merged. The guard
+  deployment and every later one do not qualify, with the switch on or off:
+  the access-load statement names `queryPolicyCompiled` and `queryPolicy` on
+  every call (PostgreSQL resolves them when it parses the statement, whatever
+  the switch), and the audit insert returns every audit column. Backing out
+  on such a build fails every `/data`, `/schema`, write and console call with
+  "column does not exist". A backout therefore also gives up the N14 guard:
+  on a build from before the migration, query parameters are ignored again,
+  not refused. `pnpm migrations:backout-sql
   20261027000000_query_surface` prints `backout.sql` with its
   `_prisma_migrations` line. It drops every interface's query policy, basis
   and compiled form (builders save the policy again; a re-verify rewrites the
