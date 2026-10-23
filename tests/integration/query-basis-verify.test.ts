@@ -30,7 +30,7 @@ vi.mock("@/lib/db/prisma", async () => {
   return { prisma: base.$extends(tenantScopeGuard()) };
 });
 
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { recordJob } from "@/lib/contracts/jobs";
 import { recordVerifiedContract } from "@/lib/contracts/record";
