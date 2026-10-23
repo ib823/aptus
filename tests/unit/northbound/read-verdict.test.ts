@@ -41,8 +41,9 @@ const { mocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", async () => {
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
     interface: {
       findMany: async () => (mocks.iface ? [{ ...mocks.iface }] : []),
       findFirst: async () => (mocks.iface ? { ...mocks.iface } : null),
@@ -50,8 +51,10 @@ vi.mock("@/lib/db/prisma", () => ({
     apiAccessGrant: { findMany: async () => mocks.grants.map((g) => ({ ...g })) },
     sapConnection: { findMany: async () => mocks.connections.map((c) => ({ ...c })) },
     sapHubContent: { findFirst: async () => null },
-  },
-}));
+  };
+  // The access load is one statement since P0.19, answered through the queries it replaced.
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
+});
 vi.mock("@/lib/northbound/auth", () => ({
   authenticateClientToken: async () =>
     mocks.authFailure ? { ok: false, reason: mocks.authFailure } : { ok: true, client: mocks.client },
@@ -85,6 +88,20 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
         mocks.connections
           .filter((c) => c.product === product)
           .map((c) => ({ ...(c as { environment: string | null; client: string | null }), id: c.key, baseUrl: "https://t.example" })),
+        environment,
+        operation,
+        sapClient,
+      ),
+    // The same selection on the rows the access load read with the interface
+    // (P0.19); these rows carry no secrets to open.
+    bindStoredConnections: async (
+      rows: readonly { environment: string | null; client: string | null; key?: string }[],
+      environment: string,
+      operation: "READ" | "WRITE",
+      sapClient?: string | null,
+    ) =>
+      actual.selectConnectionForEnvironment(
+        rows.map((c) => ({ ...c, id: String(c.key), baseUrl: "https://t.example" })) as never,
         environment,
         operation,
         sapClient,

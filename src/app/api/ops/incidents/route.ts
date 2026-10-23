@@ -18,7 +18,9 @@ import type { NextRequest } from "next/server";
 
 import type { $Enums } from "@prisma/client";
 
+import { CONNECTION_NEEDS_ATTENTION, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
+import { FAILURE_REASON_CIRCUIT_OPEN } from "@/lib/governed/containment";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import {
@@ -28,12 +30,15 @@ import {
   INCIDENT_RULES,
   INCIDENT_THRESHOLDS,
 } from "@/lib/ops/incidents";
+import { countedProbeEvents } from "@/lib/ops/probe-event-source";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
 
 /** Probe outcomes that mean the connection is not working, per connections-health. */
-const UNHEALTHY = ["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+// UNREADABLE since P0.2 (A50): the sweep records it when the secret will not open;
+// GROUP_UNREADABLE (P0.2 review) on a sibling the broker refuses with it.
+const UNHEALTHY = [...CONNECTION_NEEDS_ATTENTION, ...CONNECTION_NOT_PROBED_STATUSES];
 
 /** How far ahead a credential expiry is close enough to act on. */
 const EXPIRY_RUNWAY_DAYS = 14;
@@ -102,6 +107,10 @@ export async function GET(request: NextRequest) {
        * connection, so not "the upstream SAP system returning errors". The
        * reason is matched with an explicit null branch: `not` alone would
        * drop every row with no reason, which is most of them.
+       *
+       * Likewise a call the circuit breaker refused (503 CIRCUIT_OPEN, P0.14,
+       * only under COREEDGE_CIRCUIT_BREAKER=enforce): SAP was not called, and
+       * the failures that opened the circuit are already counted.
        */
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, {
@@ -109,7 +118,10 @@ export async function GET(request: NextRequest) {
           status: { gte: 500 },
           dryRun: false,
           replayed: false,
-          OR: [{ failureReason: null }, { failureReason: { not: FAILURE_REASON_LIMITER_UNAVAILABLE } }],
+          OR: [
+            { failureReason: null },
+            { failureReason: { notIn: [FAILURE_REASON_LIMITER_UNAVAILABLE, FAILURE_REASON_CIRCUIT_OPEN] } },
+          ],
         }),
       }),
       prisma.northboundAuditEvent.count({
@@ -181,9 +193,11 @@ export async function GET(request: NextRequest) {
       }),
       // The probe HISTORY, oldest first — the substrate for connection-drift.
       // The standing state (`connection-unhealthy`) reads the summary column;
-      // the transition can only be read from the event sequence.
+      // the transition can only be read from the event sequence. A superseded
+      // probe's trace (probe-event-source.ts) is about replaced settings and
+      // is not part of that sequence.
       prisma.sapConnectionProbeEvent.findMany({
-        where: opsWhere(guard.actor, { at: { gte: since } }),
+        where: opsWhere(guard.actor, { at: { gte: since }, ...countedProbeEvents }),
         select: { connectionId: true, status: true },
         orderBy: { at: "asc" },
       }),
@@ -197,6 +211,7 @@ export async function GET(request: NextRequest) {
       ? await prisma.sapConnectionProbeEvent.findMany({
           where: opsWhere(guard.actor, {
             at: { lt: since },
+            ...countedProbeEvents,
             connectionId: { in: [...new Set(probeEventsInWindow.map((e) => e.connectionId))] },
           }),
           select: { connectionId: true, status: true },

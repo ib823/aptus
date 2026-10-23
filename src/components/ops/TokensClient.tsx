@@ -50,6 +50,12 @@ interface Credential {
   environment: string;
   /** The key's non-secret prefix; absent from an older payload. */
   tokenPrefix?: string;
+  /**
+   * The key's own last four characters (P0.3, A45) — the masked reference the
+   * claim page and the CoreEdge keys screen show — or null for a key minted
+   * before they were recorded; absent from an older payload.
+   */
+  tokenTail?: string | null;
   state: CredentialState;
   lastObservedUseAt: string | null;
   expiresAt: string | null;
@@ -163,9 +169,11 @@ function TokensBody({ data }: { data: TokensPayload }) {
           basis="over every credential in scope"
         />
         <Stat
-          label="With write secret"
+          label="With write key"
           value={count(counts.withWriteCredential)}
-          basis="counted by presence, never read"
+          // Live credentials only (P0.3, A62): a write key on an expired or
+          // revoked credential can never be presented.
+          basis="on live credentials · counted by presence, never read"
         />
         <Stat
           label="Never observed in use"
@@ -192,6 +200,11 @@ function TokensBody({ data }: { data: TokensPayload }) {
                   {c.solutionStatus ? `${c.solutionStatus.toLowerCase()} · ` : ""}
                   issued {sinceLabel(c.createdAt)}
                 </div>
+                {c.tokenPrefix && c.tokenTail !== undefined ? (
+                  <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11.5, color: "var(--ink-muted)" }}>
+                    {c.tokenTail === null ? `${c.tokenPrefix}… · ending not recorded` : `${c.tokenPrefix}…${c.tokenTail}`}
+                  </div>
+                ) : null}
               </td>
               <td style={opsCellStyle}>
                 <OpsChip

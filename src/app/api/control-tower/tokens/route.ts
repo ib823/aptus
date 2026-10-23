@@ -22,6 +22,16 @@
  * expire, so one that does not is reported as `expiryRequired: true` and
  * counted in `noRequiredExpiry` — it predates the rule, still works, and
  * should be rotated. An expired key is `expired`, never `active`.
+ *
+ * WRITE KEYS ARE COUNTED ON LIVE CREDENTIALS ONLY (P0.3 review round 3, A62).
+ * A revocation clears the sealed write key; an expiry does not. Counted over
+ * every row, an expired credential's write key read as a usable write path —
+ * one that can never be presented, because its bearer token is refused
+ * first — and this register disagreed with Operations > Tokens, which counts
+ * with the same predicate authentication uses (`liveKeyWhere`). A retired
+ * app's credentials are left out too (review round 4): retiring does not
+ * revoke them, and authentication refuses them SOLUTION_RETIRED
+ * (ops/write-keys.ts `countPresentableWriteKeys`).
  */
 
 import type { NextRequest } from "next/server";
@@ -29,6 +39,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { keyState, lacksRequiredExpiry, requiresExpiry } from "@/lib/northbound/key-policy";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
+import { countPresentableWriteKeys } from "@/lib/ops/write-keys";
 import { studioOk } from "@/lib/studio/api";
 import { missingOwners } from "@/lib/studio/solutions";
 
@@ -70,7 +81,7 @@ export async function GET(_request: NextRequest) {
         supportOwnerId: true,
       },
     }),
-    prisma.solutionClient.count({ where: { ...where, secretsCiphertext: { not: null } } }),
+    countPresentableWriteKeys(guard.actor, now),
   ]);
 
   const solutionBy = new Map(solutions.map((s) => [s.id, s]));
@@ -127,6 +138,7 @@ export async function GET(_request: NextRequest) {
       active: credentials.filter((c) => c.state === "active").length,
       revoked: credentials.filter((c) => c.state === "revoked").length,
       expired: credentials.filter((c) => c.state === "expired").length,
+      /** Write keys on live credentials: the ones a caller could present now. */
       withWriteSecret,
       /** Should always be zero. A non-zero is a control that did not hold. */
       issuedByAnOwner: credentials.filter((c) => c.segregation?.issuerWasAnOwner === true).length,
@@ -152,6 +164,8 @@ export async function GET(_request: NextRequest) {
         "lastUsedAt is written fire-and-forget and often does not land. It is last OBSERVED use, and is not on its own sufficient to conclude a credential is dormant.",
       secretsAreCountedNeverRead:
         "Neither the token hash nor the sealed write secret is selected by this query.",
+      writeSecrets:
+        "withWriteSecret counts write keys on live credentials only (active, not revoked, not expired, and of an app that is not retired), the predicates authentication uses and the count Operations > Tokens shows. An expired credential, or a retired app's, keeps its sealed write key, but its bearer token is refused first, so that key is not a usable write path.",
       countsAreComplete: "Every credential in scope is listed. There is no sampling and no page.",
     },
     credentials,

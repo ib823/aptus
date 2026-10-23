@@ -1,0 +1,17 @@
+-- Backout for 20261025030000_platform_console_read (P0.14b, wave 2 integration
+-- review round 4).
+--
+-- In this file, not in migration.sql, because an applied migration is never
+-- edited (docs/runbooks/coreedge-release.md). Prisma reads only migration.sql.
+--
+-- Run it only after the deployment is rolled back to code before P0.14b,
+-- which never reads or writes this table. What it loses: the platform-scope
+-- copy of every Workbench console read since the deploy (who read which
+-- system, service and entity set, and how it ended). The organization's own
+-- copy of each OData read stays in NorthboundAuditEvent; an Ariba read has no
+-- other copy. No call path reads the table. Dropping it is never needed for
+-- safety: the code before P0.14b ignores it.
+--
+-- Print it with its _prisma_migrations line:
+--   pnpm migrations:backout-sql 20261025030000_platform_console_read
+DROP TABLE "PlatformConsoleRead";

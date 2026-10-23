@@ -26,19 +26,27 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
   defaultKeyExpiry,
+  keyExpiryMode,
   keyMaxTtlDays,
   keyState,
+  lacksRequiredExpiry,
   overlapIsOpen,
   rotationOverlapHours,
   storedTokenPrefix,
 } from "@/lib/northbound/key-policy";
 import {
   effectiveDecision,
+  grantsWrite,
   highestApprovedEnvironment,
+  isWriteOperation,
+  type GrantDecision,
   type GrantEnvironment,
+  type GrantOperation,
 } from "@/lib/studio/grants";
 import { needsReapproval, unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { liveOwnerships } from "@/lib/studio/owner-liveness";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { missingOwners } from "@/lib/studio/solutions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "API Access" };
@@ -69,6 +77,9 @@ export default async function StudioAccessPage() {
           interfaceId: true,
           sapProduct: true,
           unboundReason: true,
+          // Which app the grant is for: the write-key action is offered per
+          // credential, on that app's own write grants (P0.3).
+          solutionId: true,
           // The owners, so the ledger can say OWN_APP before the click.
           solution: {
             select: { name: true, technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
@@ -111,7 +122,7 @@ export default async function StudioAccessPage() {
 
   // Runtime credentials. Metadata only — tokenHash is never selected, so there
   // is no value here that could become a credential.
-  const [clientRows, solutionRows, interfaceRows, connectionRows] = await Promise.all([
+  const [clientRows, solutionRows, interfaceRows, connectionRows, writeKeyRows] = await Promise.all([
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId },
@@ -126,6 +137,8 @@ export default async function StudioAccessPage() {
             // container a credential addresses was always blank.
             sapClient: true,
             tokenPrefix: true,
+            // The key's own last four (P0.3, A45): its masked reference.
+            tokenTail: true,
             isActive: true,
             lastUsedAt: true,
             // P0.11: the table says when each key stops, and until when the
@@ -155,6 +168,9 @@ export default async function StudioAccessPage() {
              * empty and there was nothing on screen to explain why.
              */
             slug: true,
+            // The write-key route refuses a RETIRED app (gate 2): the row says
+            // so before the click (P0.3 review round 2).
+            status: true,
             technicalOwnerId: true,
             businessOwnerId: true,
             supportOwnerId: true,
@@ -191,6 +207,14 @@ export default async function StudioAccessPage() {
           select: { environment: true },
         })
       : Promise.resolve([]),
+    // Which credentials carry a write key (P0.3): FILTERED on the sealed column,
+    // never selecting it — the ids come back, the key does not.
+    organizationId
+      ? prisma.solutionClient.findMany({
+          where: { organizationId, NOT: { secretsCiphertext: null } },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const connectedEnvironments = Array.from(
@@ -203,6 +227,24 @@ export default async function StudioAccessPage() {
 
   const solutionNames = new Map(solutionRows.map((s) => [s.id, s.name]));
   const solutionSlugs = new Map(solutionRows.map((s) => [s.id, s.slug]));
+  /*
+   * The write-key route's gates 2 and 3, judged here by the same facts (P0.3
+   * review round 2): the app is not RETIRED, and all three owner slots are
+   * held by LIVE members — a slot whose owner was deactivated or left reads
+   * as empty, the predicate `refuseKeyIssuer` applies. Without them the row
+   * offered "Issue write key", enabled, on an app the route always refuses.
+   */
+  const live = organizationId ? await liveOwnerships(prisma, organizationId, solutionRows) : [];
+  const keyIssuerFacts = new Map(
+    solutionRows.map((s, i) => [
+      s.id,
+      {
+        solutionRetired: s.status === "RETIRED",
+        ownersMissing: live[i] ? missingOwners(live[i].live) : missingOwners(s),
+        ownersDeparted: (live[i]?.departed.length ?? 0) > 0,
+      },
+    ]),
+  );
 
   const requestableInterfaces: RequestableInterface[] = interfaceRows.map((i) => ({
     id: i.id,
@@ -213,6 +255,26 @@ export default async function StudioAccessPage() {
     operation: i.operation as RequestableInterface["operation"],
   }));
 
+  /*
+   * Where a write key can be issued (P0.3): a live, approved CREATE or UPDATE
+   * grant covers that environment for that solution — the precondition the
+   * write-key route checks, by the same predicates (grantsWrite, unexpired,
+   * unrevoked). The ledger rows above already carry the effective decision.
+   */
+  const withWriteKey = new Set(writeKeyRows.map((r) => r.id));
+  const writeGrantLanes = new Set(
+    rows
+      .filter(
+        (r) =>
+          isWriteOperation(r.operation as GrantOperation) &&
+          r.revokedAt === null &&
+          (r.expiresAt === null || r.expiresAt.getTime() > now.getTime()) &&
+          grantsWrite(r.decision as GrantDecision, r.environment as GrantEnvironment),
+      )
+      .map((r) => `${r.solutionId}::${r.environment}`),
+  );
+
+  const expiryEnforced = keyExpiryMode() === "enforce";
   const credentials: CredentialSummary[] = clientRows.map((c) => ({
     id: c.id,
     solutionId: c.solutionId,
@@ -233,6 +295,19 @@ export default async function StudioAccessPage() {
       c.revokedAt === null && c.previousValidUntil !== null && overlapIsOpen(c.previousValidUntil, now)
         ? c.previousValidUntil.toISOString()
         : null,
+    tokenTail: c.tokenTail,
+    writeKeyIssued: withWriteKey.has(c.id),
+    writeGrantLive: writeGrantLanes.has(`${c.solutionId}::${c.environment}`),
+    // The write-key route's gate 5b, by its own predicate and mode, so the
+    // row explains the refusal before the click (P0.3 review round 1).
+    writeKeyNeedsExpiry: expiryEnforced && lacksRequiredExpiry(c, now),
+    // The route's gates 2 and 3 (P0.3 review round 2). A credential whose app
+    // row is gone is refused as not found; it reads as unowned here.
+    ...(keyIssuerFacts.get(c.solutionId) ?? {
+      solutionRetired: false,
+      ownersMissing: ["technical owner", "business owner", "support owner"],
+      ownersDeparted: false,
+    }),
   }));
 
   // Marked here so the UI can explain the SoD rule BEFORE it is hit, rather

@@ -630,7 +630,19 @@ model SapHubContent {
   rawMetadataJson Json?
 
   createdAt DateTime @default(now())
+  /// ANY write: an import, and also every capability probe (probe-all, the
+  /// explorer's own probe), which merges into `rawMetadataJson` and stamps
+  /// this. So it is NOT the import time, and catalogue freshness must never
+  /// be judged from it (P0.3, A29).
   updatedAt DateTime @updatedAt
+  /// When an IMPORT last wrote this row — the seed and its Rebuild, the
+  /// harvest import, scripts/import-sap-hub-content.ts and the Hub OAuth
+  /// ingest — and nothing else. Catalogue Health judges freshness from this
+  /// (catalogue-health.ts). Backfilled by migration 20261025010000 from the
+  /// importer's own stamp (`rawMetadataJson.importedAt`), else from
+  /// `updatedAt` on a row no probe has written, else from `createdAt`, which
+  /// can only make a catalogue read older, never fresher, than it is.
+  importedAt DateTime?
 
   // 2608 WS2 — the Hub's own lifecycle fields, persisted verbatim from
   // catalog.svc so "is this deprecated / which version / when did SAP last
@@ -771,6 +783,21 @@ model SapConnection {
   /// different fixes, and collapsing them would hide which one you have.
   lastValidationStatus String?
   isActive             Boolean   @default(true)
+  /// Bumped by every save of the connection's settings (upsertSapConnection):
+  /// what it points at and what it signs in with. NOT `updatedAt`, which every
+  /// probe moves. A lane check records its evidence only while the row still
+  /// carries the revision the check read through (lane-check-sweep.ts), so a
+  /// re-save during a check cannot leave the previous system's proof standing
+  /// under the same id (P0.2, A18).
+  revision             Int       @default(1)
+
+  /// How the governed pipeline reaches this system (P0.14,
+  /// src/lib/governed/transport.ts). DIRECT, the default and the value every
+  /// existing row was given, is the public internet through the platform's own
+  /// fetch: what every connection has always been. TWIN is the Tenant Twin
+  /// (P1.6), refused until a twin engine is registered. Nothing in the product
+  /// writes TWIN yet. P4.1 adds the connector and integration-suite kinds.
+  transport SapTransport @default(DIRECT)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -986,7 +1013,10 @@ model SapConnectionProbeEvent {
   status     String
   httpStatus Int?
   durationMs Int?
-  /// cron | manual | test — who caused this probe.
+  /// cron | manual | test — who caused this probe. A ":superseded" suffix
+  /// marks a probe whose connection was re-saved before it returned: a trace
+  /// that a request reached SAP, not history of the current settings
+  /// (src/lib/ops/probe-event-source.ts).
   source     String
 
   at DateTime @default(now())
@@ -1103,6 +1133,14 @@ model LaneCheck {
 
   /// The connection the check ran against, when one was bound.
   connectionId String?
+  /// The entity set the read asked for, and the version of the interface it
+  /// was asked for (P0.2, A18). Evidence proves something only about the
+  /// connection, dataset and feed definition that produced it: the board sets
+  /// aside a row whose connectionId, entitySet or interfaceVersion differs
+  /// from the lane's binding and feed today. NULL on rows written before
+  /// P0.2, which therefore prove nothing until the next check.
+  entitySet        String?
+  interfaceVersion Int?
 
   /// OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | ERROR — metadata reachability.
   probeStatus String?
@@ -1454,6 +1492,21 @@ model SolutionClient {
   /// before P0.11, after a rollback, knows nothing of these columns) ends the
   /// window instead of inheriting it.
   overlapForTokenHash String?
+  /// The last four characters of the CURRENT token (P0.3, A45), written by
+  /// every path that mints one (issue, rotate, claim link) in the same update
+  /// as `tokenHash`. Non-secret on its own: four base64url characters of a
+  /// 32-byte key. It is what makes the masked reference the claim page shows
+  /// (`ce_live_••••k9Xq`) the one the console shows, so a leaked key can be
+  /// matched to its row. NULL for a key minted before P0.3: the screens say
+  /// "reference not recorded" rather than inventing one; the next rotation
+  /// fills it. Display only: authentication never reads it.
+  ///
+  /// BOUND TO THE KEY BY THE DATABASE (integration review round 4): the
+  /// trigger `SolutionClient_token_tail_binding` (migration
+  /// 20261025040000_token_tail_binding) clears it when an UPDATE changes
+  /// `tokenHash` without writing a new tail, as code before P0.3 does after a
+  /// rollback. `prisma db push` does not create it; migrate deploy does.
+  tokenTail String?
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
   environment String
 
@@ -1757,7 +1810,12 @@ model NorthboundAuditEvent {
 /// two; neither alone is the whole answer.
 model PlatformAuditEvent {
   id     String @id @default(cuid())
-  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST
+  /// SAP_WORKBENCH_WRITE | SAP_WORKBENCH_WRITE_TEST (P0.7, kept at any age).
+  /// A console read is NOT written here (it is a `PlatformConsoleRead`, wave 2
+  /// integration review round 4). Only a database a pre-release P0.14b build
+  /// wrote to can hold SAP_CONSOLE_READ rows here: the write ledger filters
+  /// them out and the retention sweep deletes them by age, as it always has
+  /// (lib/northbound/retention.ts).
   action String
 
   /// The person. Not a relation: an audit row must outlive the user it names
@@ -1808,8 +1866,8 @@ model PlatformAuditOutcome {
   eventId String             @unique
   event   PlatformAuditEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND — see
-  /// PLATFORM_AUDIT_OUTCOMES in lib/audit/platform-audit.ts.
+  /// SUCCEEDED | BLOCKED | SAP_REFUSED | OUTCOME_UNKNOWN | LEFT_BEHIND
+  /// (PLATFORM_AUDIT_OUTCOMES, lib/audit/platform-audit.ts).
   outcome    String
   /// The HTTP status SAP answered the create with, when it answered.
   sapStatus  Int?
@@ -1823,6 +1881,77 @@ model PlatformAuditOutcome {
   at DateTime @default(now())
 
   @@index([outcome, at])
+}
+
+/// A read a person made from the Workbench console (P0.14b): the platform-scope
+/// row of the governed console call (lib/governed/console.ts), one per call,
+/// event and outcome in one row written by one statement after the call
+/// (`recordPlatformConsoleRead`, lib/audit/platform-audit.ts). It names the
+/// reader, the system, the service and the entity set, and fingerprints the
+/// parameters; it never holds a record, a host or a URL. Never billed: the
+/// usage rollup reads only NorthboundAuditEvent.
+///
+/// ITS OWN TABLE, NOT `PlatformAuditEvent` ROWS (wave 2 integration review
+/// round 4). The release protocol's rollback is an Instant Rollback that keeps
+/// the additive migrations (docs/runbooks/coreedge-release.md), and the code
+/// before P0.14b reads every `PlatformAuditEvent` row as a Workbench write:
+/// its Operations > Workbench writes ledger counted and listed each console
+/// read as a write-back into a client's SAP, most of them SUCCEEDED, during
+/// exactly the incident an operator relies on that ledger to answer. No build
+/// before this table reads it, so a rollback leaves the write ledger true.
+///
+/// NOT TENANT-ANCHORED, like `PlatformAuditEvent`: the reader may have no
+/// organization (a platform admin reading the deployment tenant), and the
+/// system read may belong to none. `actorOrganizationId` is context: the
+/// Operations correlation search reads it to find an Ariba call by a member
+/// of the searcher's organization, which leaves no organization row
+/// (lib/coreedge/correlation-lookup.ts). Deleted after
+/// NORTHBOUND_AUDIT_RETENTION_DAYS, with the organization's copy of the same
+/// read (northbound/retention.ts `sweepConsoleReads`).
+model PlatformConsoleRead {
+  id String @id @default(cuid())
+
+  /// The person, copied as they were: an audit row outlives the user it names.
+  actorUserId         String
+  actorEmail          String
+  actorRole           String
+  /// The reader's organization when they read, or NULL for one without.
+  actorOrganizationId String?
+
+  /// What was read. Keys as the configuration names them; `serviceKey` is the
+  /// service, or a fan-out's scope sentinel; `entitySet` is "-" when none.
+  product     String
+  tenantKey   String
+  tenantLabel String?
+  serviceKey  String
+  servicePath String?
+  entitySet   String
+
+  /// SHA-256 of the parameters the person chose, and their names. Never values.
+  payloadSha256 String
+  payloadFields Json
+
+  /// The id the caller was handed: the same one on the organization's row, when there is one.
+  correlationId String
+
+  /// SUCCEEDED | BLOCKED | SAP_REFUSED | FAILED (CONSOLE_READ_OUTCOMES).
+  outcome    String
+  /// The status the read is audited under; NULL when a gate refused it before any request.
+  status     Int?
+  /// A bounded code (HTTP_429, TIMEOUT, HOST_NOT_ALLOWED …): never a host, a URL or a value.
+  reason     String?
+  /// The principal, the route, the binding and the host check.
+  detail     Json
+  /// Wall-clock milliseconds of the call to SAP, when one was made.
+  durationMs Int?
+
+  at DateTime @default(now())
+
+  /// The retention sweep's age scan.
+  @@index([at])
+  @@index([actorUserId, at])
+  /// The correlation search, organization first.
+  @@index([actorOrganizationId, correlationId])
 }
 
 /// Idempotency for northbound writes.
@@ -1959,6 +2088,12 @@ enum SapEnvironment {
   DEV
   TEST
   PROD
+}
+
+/// How a SapConnection is reached (P0.14). See SapConnection.transport.
+enum SapTransport {
+  DIRECT
+  TWIN
 }
 
 enum SolutionKind {

@@ -10,12 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   eventCreate: vi.fn(),
   outcomeCreate: vi.fn(),
+  executeRaw: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     platformAuditEvent: { create: mocks.eventCreate },
     platformAuditOutcome: { create: mocks.outcomeCreate },
+    $executeRaw: mocks.executeRaw,
   },
 }));
 
@@ -28,6 +30,7 @@ import {
   outcomeForThrown,
   outcomeForWriteTest,
   platformAuditUnavailable,
+  recordPlatformConsoleRead,
 } from "@/lib/audit/platform-audit";
 import { TENANT_ANCHORED_MODELS, tenantScopeGuard } from "@/lib/db/tenant-guard";
 
@@ -177,5 +180,76 @@ describe("platform scope and the tenant guard", () => {
       if (before === undefined) delete process.env.TENANT_SCOPE_GUARD;
       else process.env.TENANT_SCOPE_GUARD = before;
     }
+  });
+});
+
+describe("recordPlatformConsoleRead — a console read's row (P0.14b review round 3)", () => {
+  const READ = {
+    actor: { id: "u_dev", email: "dev@abeam.test", role: "consultant", organizationId: "org_1" },
+    target: { product: "s4hana", tenantKey: "x5m-100", tenantLabel: null, serviceKey: "purchase-orders", servicePath: null, entitySet: "A_PurchaseOrder" },
+    request: { entity: "A_PurchaseOrder", limit: 2 },
+    correlationId: "corr-1",
+    outcome: "SUCCEEDED" as const,
+    status: 200,
+    reason: null,
+    durationMs: 12,
+    detail: { principal: "console", route: "/api/sap/tdd/preview" },
+  };
+
+  it("writes the event and its outcome in ONE statement, with no transaction around it", async () => {
+    /*
+     * A nested create was BEGIN, two INSERTs, a SELECT and COMMIT: five round
+     * trips on the response path of every console call (P0.19's budget).
+     */
+    mocks.executeRaw.mockResolvedValue(1);
+    await recordPlatformConsoleRead(READ);
+    expect(mocks.executeRaw).toHaveBeenCalledTimes(1);
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+    const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
+    expect(statement.sql).toMatch(/INSERT INTO "PlatformConsoleRead"/);
+    expect(statement.sql).not.toMatch(/\bBEGIN\b/i);
+    // The payload's values never reach it, only their fingerprint and field names.
+    expect(statement.values).toContain(JSON.stringify(["entity", "limit"]));
+    expect(statement.values).not.toContain(2);
+  });
+
+  it("never writes to the Workbench WRITE tables: code before P0.14b reads every row there as a write (integration review round 4)", async () => {
+    /*
+     * Rolled back to a build before P0.14b (an Instant Rollback keeps the
+     * migrations), the Workbench writes ledger counted and listed every
+     * PlatformAuditEvent row as a write-back into a client's SAP, with no
+     * action filter. A console read on that table read as a write there.
+     */
+    mocks.executeRaw.mockResolvedValue(1);
+    await recordPlatformConsoleRead(READ);
+    const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
+    expect(statement.sql).not.toMatch(/"PlatformAuditEvent"|"PlatformAuditOutcome"/);
+    expect(statement.values).not.toContain("SAP_CONSOLE_READ");
+  });
+
+  it("binds `at` in UTC, whatever the database session's time zone (review round 4)", async () => {
+    /*
+     * Left to the column default, CURRENT_TIMESTAMP was cast into a
+     * `timestamp(3)` (no zone) at the SESSION's wall time: on a non-UTC
+     * session every console row was off by the offset from every row Prisma
+     * writes, and the retention sweep's UTC cutoff deleted them early or late.
+     * tests/integration/console-read-utc.test.ts runs it on PostgreSQL.
+     */
+    mocks.executeRaw.mockResolvedValue(1);
+    await recordPlatformConsoleRead(READ);
+    const statement = mocks.executeRaw.mock.calls[0]![0] as { sql: string; values: unknown[] };
+    const flat = statement.sql.replace(/\s+/g, " ");
+    expect(flat).toMatch(/INSERT INTO "PlatformConsoleRead" \([^)]*"durationMs", "at"\)/);
+    expect(flat.match(/\?::timestamptz AT TIME ZONE 'UTC'/g)).toHaveLength(1);
+    expect(flat).not.toMatch(/CURRENT_TIMESTAMP|now\(\)/i);
+    const stamps = statement.values.filter((v): v is string => typeof v === "string" && /^\d{4}-\d\d-\d\dT.*Z$/.test(v));
+    expect(stamps).toHaveLength(1);
+    expect(Math.abs(Date.parse(stamps[0]!) - Date.now())).toBeLessThan(60_000);
+  });
+
+  it("never throws: the read is answered though the row could not be written", async () => {
+    mocks.executeRaw.mockRejectedValue(new Error("database unavailable"));
+    await expect(recordPlatformConsoleRead(READ)).resolves.toBeUndefined();
+    expect(console.error).toHaveBeenCalled();
   });
 });

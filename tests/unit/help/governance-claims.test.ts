@@ -73,7 +73,8 @@ describe("discovery and the ledger read the same revocation fact", () => {
     expect(read("src/lib/northbound/read-verdict.ts")).toContain("decideReadAccess(");
     const access = read("src/lib/northbound/access.ts");
     expect(access).toMatch(/export const GRANT_SELECT = \{[^}]*revokedAt: true/);
-    expect(access).toContain("g.revokedAt == null");
+    // The decision itself is the one authorisation predicate (P0.2).
+    expect(read("src/lib/northbound/authorisation.ts")).toContain("g.revokedAt == null");
   });
 
   it("the Studio grants GET returns the revocation fields", () => {

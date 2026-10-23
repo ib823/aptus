@@ -3,6 +3,9 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
+import { GRANT_SELECT, READABLE_INTERFACE_SELECT } from "@/lib/northbound/access";
+import { routeOf, type BindingEstate } from "@/lib/northbound/authorisation";
+import { loadBindingEstate } from "@/lib/northbound/binding";
 import {
   keyState,
   overlapIsOpen,
@@ -10,12 +13,23 @@ import {
   type ClientTokenPrefix,
   type KeyState,
 } from "@/lib/northbound/key-policy";
+import { writeKeyOpens } from "@/lib/northbound/write-credential";
 import { laneServiceKey, resolveLaneServicePath } from "@/lib/ops/lane-check-sweep";
+import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { responseSchemaState } from "@/lib/studio/contract-provenance";
-import { unboundGrantLabel } from "@/lib/studio/grant-binding";
+import { grantBindingMode, unboundGrantLabel } from "@/lib/studio/grant-binding";
 import { productName } from "@/lib/studio/product-marks";
-import type { GrantOperation } from "@/lib/studio/grants";
+import {
+  effectiveDecision,
+  grantsRead,
+  grantsWrite,
+  isWriteOperation,
+  type GrantDecision,
+  type GrantEnvironment,
+  type GrantOperation,
+} from "@/lib/studio/grants";
 
+import { laneAuthorisation, laneEvidence } from "./lane-authorisation";
 import {
   deriveLaneStatus,
   laneEnvironmentAliases,
@@ -23,8 +37,6 @@ import {
   parseLaneEnvironment,
   type LaneEnvironment,
   type LaneVerdict,
-  type ProbeFacts,
-  type ReadFacts,
 } from "./lanes";
 import { isLaneCheckedApp, LANE_ENVIRONMENTS } from "./lanes";
 
@@ -40,34 +52,9 @@ import { isLaneCheckedApp, LANE_ENVIRONMENTS } from "./lanes";
  * `deriveLaneStatus`, which is pure and tested; this module's only judgement is
  * which rows count as which fact. Where a fact cannot be established the fields
  * say so (null), and the derivation turns that into `unknown` rather than a
- * guess.
+ * guess. The first three hops are not even that: they are the broker's own
+ * answers (lane-authorisation.ts, P0.2).
  */
-
-
-/* --- narrowing the ledger's free-text columns, honestly ------------------ */
-
-const PROBE_STATUSES = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR", "NO_PROBE_PATH"] as const;
-const READ_OUTCOMES = ["OK", "EMPTY", "FORBIDDEN", "TIMEOUT", "ERROR"] as const;
-
-/**
- * The ledger stores these as `String?`, and the derivation takes a closed union.
- *
- * An unrecognised value becomes null — "we do not know" — rather than being
- * cast into the union. A cast would let a status nobody has defined arrive at
- * `deriveLaneStatus` and fall through to whichever branch happens to catch it,
- * which is how a lane ends up claiming something no check established.
- */
-function narrowProbeStatus(value: string | null): ProbeFacts["status"] {
-  return (PROBE_STATUSES as readonly string[]).includes(value ?? "")
-    ? (value as ProbeFacts["status"])
-    : null;
-}
-
-function narrowReadOutcome(value: string | null): ReadFacts["outcome"] {
-  return (READ_OUTCOMES as readonly string[]).includes(value ?? "")
-    ? (value as ReadFacts["outcome"])
-    : null;
-}
 
 export interface LaneRow {
   readonly appId: string;
@@ -77,7 +64,7 @@ export interface LaneRow {
   readonly feedId: string;
   readonly feedName: string;
   readonly environment: LaneEnvironment;
-  /** The SAP system serving this lane, or null when none is bound. */
+  /** The SAP system a call on this lane would go through, or null when the binding refuses. */
   readonly system: string | null;
   readonly verdict: LaneVerdict;
   readonly rows: number | null;
@@ -89,24 +76,6 @@ const APP_STATUS_BY_SOLUTION: Readonly<Record<string, LaneRow["appStatus"]>> = {
   RESTRICTED: "restricted",
   RETIRED: "retired",
 };
-
-/**
- * Free-text `environment` columns are folded through `parseLaneEnvironment`
- * rather than compared raw — see the note there. A row whose environment nobody
- * can name is counted under no lane at all, which is the honest outcome: we do
- * not know which lane it belongs to, so it cannot support a claim about one.
- */
-function indexByEnvironment<T extends { environment: string | null }>(
-  rows: readonly T[],
-): Map<LaneEnvironment, T[]> {
-  const byEnv = new Map<LaneEnvironment, T[]>();
-  for (const row of rows) {
-    const env = parseLaneEnvironment(row.environment);
-    if (env === null) continue;
-    byEnv.set(env, [...(byEnv.get(env) ?? []), row]);
-  }
-  return byEnv;
-}
 
 export interface LaneQueryOptions {
   /** Restrict to one app, by slug. Omit for every app in the organization. */
@@ -141,20 +110,9 @@ export async function listLanes(
       name: true,
       status: true,
       interfaces: {
-        // `entitySet` is selected for the sweep facts below, not for display:
-        // a feed that names none is one the nightly check cannot target, and
-        // the lane has to be able to say so.
-        select: {
-          id: true,
-          name: true,
-          externalId: true,
-          sapProduct: true,
-          operation: true,
-          status: true,
-          entitySet: true,
-          servicePath: true,
-          odataVersion: true,
-        },
+        // What the broker's access decision selects, so the board judges the
+        // same row (P0.2). `entitySet` and `version` also key the evidence.
+        select: READABLE_INTERFACE_SELECT,
         orderBy: { name: "asc" },
       },
     },
@@ -189,36 +147,53 @@ export async function listLanes(
     }),
   );
 
+  /*
+   * THE BINDING ESTATE, PER PRODUCT — the rows the broker binds from, opened
+   * as it opens them (binding.ts). One open per product the feeds name, not
+   * per lane. Opening is how CONNECTION_UNREADABLE is known: the broker
+   * refuses every call for a product with one row it cannot open, and a board
+   * that never tried called those lanes live. The secrets never leave this
+   * function's scope.
+   */
+  const products = [...new Set(solutions.flatMap((s) => s.interfaces.map((f) => f.sapProduct)))];
+  const estates = new Map<string, BindingEstate<ResolvedSapConnection>>(
+    await Promise.all(
+      products.map(async (product) => [product, await loadBindingEstate(organizationId, product)] as const),
+    ),
+  );
+
   const solutionIds = solutions.map((s) => s.id);
 
-  const [grants, clients, connections, checks] = await Promise.all([
+  const [grants, clients, writeKeyHolders, checks] = await Promise.all([
     prisma.apiAccessGrant.findMany({
       where: { organizationId, solutionId: { in: solutionIds } },
-      select: {
-        solutionId: true,
-        externalId: true,
-        operation: true,
-        environment: true,
-        decision: true,
-        expiresAt: true,
-        revokedAt: true,
-        createdAt: true,
-      },
+      // What the broker's decision selects, plus what a grant is matched on.
+      select: { ...GRANT_SELECT, solutionId: true, externalId: true, environment: true },
+      // Newest first: the current grant words the lane (lane-authorisation.ts).
       orderBy: { createdAt: "desc" },
     }),
     prisma.solutionClient.findMany({
       where: { organizationId, solutionId: { in: solutionIds } },
       select: {
+        id: true,
         solutionId: true,
         environment: true,
+        sapClient: true,
         isActive: true,
         revokedAt: true,
         expiresAt: true,
       },
     }),
-    prisma.sapConnection.findMany({
-      where: { organizationId, isActive: true },
-      select: { id: true, label: true, environment: true },
+    /*
+     * Which credentials hold a write key: the write route refuses every write
+     * from one that does not, or from one whose key will not open. The sealed
+     * blob is read only to be opened below, for apps with a feed that writes,
+     * exactly as the write route opens it; the key itself never leaves
+     * `writeKeyOpens`.
+     */
+    prisma.solutionClient.findMany({
+      where: { organizationId, solutionId: { in: solutionIds }, NOT: { secretsCiphertext: null } },
+      select: { id: true, solutionId: true, secretsCiphertext: true },
     }),
     /*
      * The per-lane check ledger. One row per (solution, interface, environment),
@@ -233,6 +208,9 @@ export async function listLanes(
         solutionId: true,
         interfaceId: true,
         environment: true,
+        connectionId: true,
+        entitySet: true,
+        interfaceVersion: true,
         probeStatus: true,
         probeAt: true,
         readStatus: true,
@@ -242,11 +220,39 @@ export async function listLanes(
     }),
   ]);
 
-  const connectionsByEnv = indexByEnvironment(connections);
-
   /** Keyed exactly as the ledger's unique constraint is, so a lane has one row. */
   const checkByLane = new Map(
     checks.map((c) => [`${c.solutionId}::${c.interfaceId}::${c.environment}`, c]),
+  );
+  const bindingMode = grantBindingMode();
+  const writeKeyIds = new Set(writeKeyHolders.map((c) => c.id));
+  /*
+   * THE KEY HOP OPENS THE WRITE KEY, as the binding hop opens the connection
+   * (P0.2 review). `verifyWriteCredential` opens it on every write and
+   * refuses when it will not open — sealed under a data key that is gone, or
+   * corrupt — so a board that asked only whether one exists drew Live a
+   * write lane whose every write is refused. Opened only for apps with a
+   * feed that writes: no other lane asks.
+   */
+  const writingApps = new Set(
+    solutions.filter((s) => s.interfaces.some((f) => routeOf(f) === "write")).map((s) => s.id),
+  );
+  const unopenableWriteKeys = new Set(
+    (
+      await Promise.all(
+        writeKeyHolders
+          .filter((c) => writingApps.has(c.solutionId) && c.secretsCiphertext !== null)
+          .map(async (c) =>
+            (await writeKeyOpens(organizationId, {
+              id: c.id,
+              solutionId: c.solutionId,
+              secretsCiphertext: c.secretsCiphertext ?? "",
+            }))
+              ? null
+              : c.id,
+          ),
+      )
+    ).filter((id): id is string => id !== null),
   );
 
   const lanes: LaneRow[] = [];
@@ -258,34 +264,41 @@ export async function listLanes(
 
     for (const feed of solution.interfaces) {
       for (const environment of LANE_ENVIRONMENTS) {
-        /*
-         * The MOST RECENT grant for this exact (feed, operation, environment)
-         * decides. Grants accumulate — a renewal is a new row — and an older
-         * REVOKED alongside a newer APPROVED must not make the lane look dead.
-         * The query orders by createdAt desc, so the first match is the current
-         * one.
-         */
-        const grant = solutionGrants.find(
-          (g) =>
-            g.externalId === feed.externalId &&
-            g.operation === feed.operation &&
-            parseLaneEnvironment(g.environment) === environment,
-        );
-
         const client = solutionClients.find(
           (c) => parseLaneEnvironment(c.environment) === environment,
         );
 
-        const envConnections = connectionsByEnv.get(environment) ?? [];
-
-        // This lane's own evidence row, or undefined when it has never been
-        // checked. Keyed by feed id rather than externalId: two feeds can read
-        // the same SAP service with different field lists, and they are
-        // different lanes with different proof.
-        const check = checkByLane.get(`${solution.id}::${feed.id}::${environment}`);
+        /*
+         * THE BROKER'S OWN ANSWERS for access, key and binding (P0.2):
+         * `authorisesHere` over every grant it would fetch, the credential
+         * row, and `bindingFor` on this product's connections with the
+         * credential's SAP client. The newest grant only chooses the words.
+         */
+        const auth = laneAuthorisation({
+          iface: feed,
+          solutionId: solution.id,
+          environment,
+          grants: solutionGrants,
+          credential:
+            client === undefined
+              ? null
+              : {
+                  environment: client.environment,
+                  sapClient: client.sapClient,
+                  isActive: client.isActive,
+                  revokedAt: client.revokedAt,
+                  expiresAt: client.expiresAt,
+                  writeKeyIssued: writeKeyIds.has(client.id),
+                  writeKeyUnopenable: unopenableWriteKeys.has(client.id),
+                },
+          estate: estates.get(feed.sapProduct) ?? { kind: "unknownProduct" },
+          now,
+          bindingMode,
+        });
+        const system = auth.connection?.label ?? null;
 
         // Nothing requested at all: a cell, not a failure.
-        if (grant === undefined && client === undefined) {
+        if (auth.grants.length === 0 && client === undefined) {
           lanes.push({
             appId: solution.id,
             appSlug: solution.slug,
@@ -294,68 +307,48 @@ export async function listLanes(
             feedId: feed.id,
             feedName: feed.name,
             environment,
-            system: envConnections[0]?.label ?? null,
+            system,
             verdict: notStartedVerdict(),
             rows: null,
           });
           continue;
         }
 
+        /*
+         * THE EVIDENCE, PER LANE, AND ONLY ITS OWN. Keyed by feed id rather
+         * than externalId — two feeds can read the same SAP service with
+         * different field lists — and used only while it was made through the
+         * connection the broker binds today, against this entity set, at this
+         * feed version (A18). A connection-level green cannot support the
+         * claim that THIS app can read THIS dataset here.
+         *
+         * Judged against `auth.bound`, the connection the sweep reads
+         * through: a write lane refused at a write gate (writes off, service
+         * unverified) still has a check made through it, and calling that
+         * check superseded said "it changed" when nothing had.
+         */
+        const evidence = laneEvidence(
+          checkByLane.get(`${solution.id}::${feed.id}::${environment}`),
+          auth.bound,
+          feed,
+        );
+
         const verdict = deriveLaneStatus({
-          // The grant above was matched on this operation and environment, and
-          // the Access hop asks whether its decision authorises exactly that.
-          lane: { operation: feed.operation as GrantOperation, environment },
+          lane: { operation: feed.operation as GrantOperation, environment, route: auth.route },
           appRetired: solution.status === "RETIRED",
-          key: {
-            exists: client !== undefined,
-            isActive: client?.isActive ?? false,
-            revokedAt: client?.revokedAt ?? null,
-            expiresAt: client?.expiresAt ?? null,
-          },
-          access: {
-            decision: grant?.decision ?? null,
-            expiresAt: grant?.expiresAt ?? null,
-            revokedAt: grant?.revokedAt ?? null,
-          },
-          binding: {
-            matchingConnections: envConnections.length,
-            /*
-             * NOT KNOWABLE FROM A LIST QUERY. Whether a stored secret decrypts
-             * is only discovered by attempting it, which is a per-connection
-             * operation and not something a board should trigger for every
-             * lane. Reported as false here and established on the SAP system
-             * screen, where someone is actually looking at that connection.
-             */
-            secretUnreadable: false,
-          },
+          key: auth.key,
+          access: auth.access,
+          binding: auth.binding,
+          probe: evidence.probe,
+          read: evidence.read,
+          evidenceSuperseded: evidence.superseded,
+          evidencePredatesKey: evidence.predatesKey,
           /*
-           * THE EVIDENCE, PER LANE. Both outcomes come from this lane's own
-           * ledger row rather than from the connection's health, because a
-           * connection-level green cannot support the claim that THIS app can
-           * read THIS dataset here — the reachable-means-readable overclaim
-           * the lane model exists to prevent.
-           *
-           * No row means no check has ever run, and the nulls below derive to
-           * `unknown` saying exactly that. That is still the honest answer; it
-           * is now the answer for lanes nobody has checked rather than for
-           * every lane.
-           */
-          probe: {
-            status: narrowProbeStatus(check?.probeStatus ?? null),
-            at: check?.probeAt ?? null,
-          },
-          read: {
-            outcome: narrowReadOutcome(check?.readStatus ?? null),
-            at: check?.readAt ?? null,
-            rows: check?.readRowCount ?? null,
-          },
-          /*
-           * WHETHER A CHECK WAS EVER COMING. These two mirror the filters in
-           * `laneTargets()` (src/lib/ops/lane-check-sweep.ts) exactly: ACTIVE
-           * and RESTRICTED apps only (isLaneCheckedApp), feeds that name an
-           * entity set only. They change no status — only the words a lane
-           * uses when it has no age to show, so "never checked" stops meaning
-           * six different things at once.
+           * WHETHER A CHECK WAS EVER COMING. These mirror the sweep's skips
+           * (lane-check-sweep.ts): live apps only (isLaneCheckedApp), feeds
+           * that name an entity set and whose service resolves. They change
+           * no status on their own — only the words a lane uses when it has
+           * no age to show.
            */
           sweep: {
             appIsActive: isLaneCheckedApp(solution.status),
@@ -380,7 +373,7 @@ export async function listLanes(
           feedId: feed.id,
           feedName: feed.name,
           environment,
-          system: envConnections[0]?.label ?? null,
+          system,
           verdict,
           rows: null,
         });
@@ -390,6 +383,7 @@ export async function listLanes(
 
   return lanes;
 }
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * The sweep's own numbers
@@ -411,6 +405,8 @@ export interface LaneSweepRun {
   readonly skippedNoEntitySet: number | null;
   /** Null on every run recorded before the sweep resolved services — not zero. */
   readonly skippedNoService: number | null;
+  /** Null on every run recorded before the sweep asked the broker's access rule (P0.2). */
+  readonly skippedNoAccess: number | null;
   readonly unreadable: number | null;
 }
 
@@ -451,6 +447,7 @@ export async function lastLaneSweep(): Promise<LaneSweepRun | null> {
     skippedNoConnection: summaryCount(row.summaryJson, "skippedNoConnection"),
     skippedNoEntitySet: summaryCount(row.summaryJson, "skippedNoEntitySet"),
     skippedNoService: summaryCount(row.summaryJson, "skippedNoService"),
+    skippedNoAccess: summaryCount(row.summaryJson, "skippedNoAccess"),
     unreadable: summaryCount(row.summaryJson, "unreadable"),
   };
 }
@@ -482,6 +479,29 @@ export async function listApps(organizationId: string): Promise<AppSummary[]> {
     status: APP_STATUS_BY_SOLUTION[s.status] ?? "draft",
     feedCount: s._count.interfaces,
   }));
+}
+
+/**
+ * One app by its slug, in this organization — whether it EXISTS, asked apart
+ * from whether it has lanes (P0.3, A63). The lane board called notFound()
+ * when `listLanes` came back empty, and an app with no feeds has no lanes, so
+ * a new app's owner was told "not found" on the only screen that links to
+ * "Add data feed". Null only when there is no such app here.
+ */
+export async function getApp(organizationId: string, slug: string): Promise<AppSummary | null> {
+  const s = await prisma.solution.findFirst({
+    where: { organizationId, slug },
+    select: { id: true, slug: true, name: true, status: true, _count: { select: { interfaces: true } } },
+  });
+  return s === null
+    ? null
+    : {
+        id: s.id,
+        slug: s.slug,
+        name: s.name,
+        status: APP_STATUS_BY_SOLUTION[s.status] ?? "draft",
+        feedCount: s._count.interfaces,
+      };
 }
 
 export interface RequestRow {
@@ -939,8 +959,15 @@ export interface KeyRow {
   readonly lastUsedAt: Date | null;
   readonly revokedAt: Date | null;
   readonly expiresAt: Date | null;
-  /** Last four of the stored label, for recognition. Never the token. */
-  readonly tail: string;
+  /**
+   * The last four characters of the KEY (`SolutionClient.tokenTail`, P0.3,
+   * A45) — the reference the claim page told its holder to expect, so a
+   * leaked key can be matched to this row. It used to be the last four of
+   * the LABEL ("PROD" from "App · PROD"), which matched no key anyone held.
+   * Null for a key minted before the tail was recorded: the screen says so
+   * rather than inventing one, and the next rotation records it.
+   */
+  readonly tail: string | null;
   /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
   readonly tokenPrefix: ClientTokenPrefix;
   /**
@@ -957,7 +984,8 @@ export interface KeyRow {
  * Keys, for the operations keys screen.
  *
  * `tokenHash` is never selected. The screen recognises a key by its app, its
- * environment and a four-character tail; a console that could show the value
+ * environment and the key's own last four characters (`tokenTail`, stored at
+ * mint for exactly this); a console that could show the value
  * would be a second place the key exists, which is the whole thing the
  * one-time claim link is built to avoid.
  */
@@ -968,9 +996,9 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
       select: {
         id: true,
         solutionId: true,
-        label: true,
         environment: true,
         tokenPrefix: true,
+        tokenTail: true,
         isActive: true,
         createdAt: true,
         lastUsedAt: true,
@@ -1001,7 +1029,7 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
       lastUsedAt: c.lastUsedAt,
       revokedAt: c.revokedAt,
       expiresAt: c.expiresAt,
-      tail: c.label.slice(-4),
+      tail: c.tokenTail,
       tokenPrefix: storedTokenPrefix(c.tokenPrefix),
       state: keyState(c, now),
       previousValidUntil:
@@ -1020,6 +1048,53 @@ export async function listKeys(organizationId: string, now: Date = new Date()): 
  * for historical rows; it does not make it a client-data approval.
  */
 const PASSPORT_DECISIONS = ["APPROVED", "READ_ONLY"] as const;
+
+/**
+ * The grant rows a screen may count as access that is in force NOW (P0.3,
+ * A58): unrevoked and unexpired, by the same clock the broker applies. A
+ * filter on the query, so lapsed rows are not even read; `authorisesReadNow`
+ * below is the decision itself, on the rows that come back.
+ */
+function liveGrantWhere(now: Date) {
+  return {
+    revokedAt: null,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  } satisfies Prisma.ApiAccessGrantWhereInput;
+}
+
+/**
+ * Does this grant authorise a read in its environment right now? The single
+ * display resolver (`effectiveDecision`: revoked, then expired, judged at
+ * read time, since nothing ever stores EXPIRED) and then the broker's own
+ * read predicate (`grantsRead`: SANDBOX_ONLY only in SANDBOX). The passport
+ * selected on the stored decision alone, so a grant that lapsed in February
+ * stayed "approved to read" on the CIO's screen forever.
+ */
+function authorisesReadNow(
+  g: { decision: string; expiresAt: Date | null; revokedAt: Date | null; environment: string },
+  now: Date,
+): boolean {
+  const decision = effectiveDecision(g, now);
+  if (decision === "REVOKED" || decision === "EXPIRED") return false;
+  return grantsRead(decision as GrantDecision, g.environment as GrantEnvironment);
+}
+
+/**
+ * Is this a passport row: a decision the passport lists, still in force, in an
+ * environment that reaches the CLIENT's SAP? SANDBOX is excluded by its
+ * ENVIRONMENT, not only by the SANDBOX_ONLY decision: since D2 the decide
+ * route stores APPROVED for a sandbox request (it never offers SANDBOX_ONLY),
+ * so "SANDBOX NEVER APPEARS" held only for rows decided before D2 and every
+ * new sandbox approval was listed as data leaving the client's system.
+ */
+function isPassportGrant(
+  g: { decision: string; expiresAt: Date | null; revokedAt: Date | null; environment: string },
+  now: Date,
+): boolean {
+  if (g.environment.trim().toUpperCase() === "SANDBOX") return false;
+  if (!(PASSPORT_DECISIONS as readonly string[]).includes(g.decision)) return false;
+  return authorisesReadNow(g, now);
+}
 
 /** One connected SAP system, with what the console can say about it. */
 export interface SapSystemDetailRow {
@@ -1053,6 +1128,7 @@ export interface SapSystemDetailRow {
  */
 export async function listSapSystemDetails(
   organizationId: string,
+  now: Date = new Date(),
 ): Promise<SapSystemDetailRow[]> {
   const [connections, grants] = await Promise.all([
     prisma.sapConnection.findMany({
@@ -1070,13 +1146,14 @@ export async function listSapSystemDetails(
       },
       orderBy: { label: "asc" },
     }),
+    // Live grants only (A58): an expired or revoked approval binds no lane.
     prisma.apiAccessGrant.findMany({
       where: {
         organizationId,
         decision: { in: [...PASSPORT_DECISIONS] },
-        revokedAt: null,
+        ...liveGrantWhere(now),
       },
-      select: { environment: true },
+      select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
     }),
   ]);
 
@@ -1084,6 +1161,7 @@ export async function listSapSystemDetails(
 
   const grantsByEnv = new Map<LaneEnvironment, number>();
   for (const g of grants) {
+    if (!authorisesReadNow(g, now)) continue;
     const env = parseLaneEnvironment(g.environment);
     if (env === null) continue;
     grantsByEnv.set(env, (grantsByEnv.get(env) ?? 0) + 1);
@@ -1159,12 +1237,25 @@ export async function getSapSystemDetail(
 
 /** One approved grant, as the passport shows it to a client CIO. */
 export interface PassportRow {
+  /**
+   * The grant's id: the row's identity. The screen keyed rows by app, feed and
+   * environment, which a READ and a CREATE approval for one feed share, so
+   * React could drop one of the two rows (P0.3).
+   */
+  readonly id: string;
   readonly appName: string;
   readonly feedName: string;
   readonly externalId: string;
   readonly environment: LaneEnvironment | null;
   readonly environmentRaw: string;
   readonly operation: string;
+  /**
+   * This approval lets the app write into SAP: a CREATE or UPDATE approval
+   * whose decision authorises the write (`grantsWrite`, the broker's
+   * predicate). False for a READ, and for a write approval decided
+   * READ_ONLY, which writes nothing (P0.3 review round 1).
+   */
+  readonly writesIntoSap: boolean;
   readonly approvedBy: string | null;
   readonly approvedAt: Date | null;
   readonly accessEnds: Date | null;
@@ -1193,7 +1284,8 @@ export interface PassportRow {
 }
 
 /**
- * The passport: every approved, unrevoked read, for a client CIO.
+ * The passport: every approval IN FORCE that reaches the client's SAP, for a
+ * client CIO — unrevoked, unexpired, and never SANDBOX (`isPassportGrant`).
  *
  * Read-only by construction — there is no revoke path from this query and none
  * on the screen. X06 is explicit that a CIO who wants something stopped says
@@ -1205,12 +1297,16 @@ export async function listPassport(organizationId: string, now: Date = new Date(
       where: {
         organizationId,
         decision: { in: [...PASSPORT_DECISIONS] },
-        revokedAt: null,
+        environment: { not: "SANDBOX" },
+        ...liveGrantWhere(now),
       },
       select: {
+        id: true,
         externalId: true,
         operation: true,
         environment: true,
+        decision: true,
+        revokedAt: true,
         decidedById: true,
         decidedAt: true,
         expiresAt: true,
@@ -1239,13 +1335,19 @@ export async function listPassport(organizationId: string, now: Date = new Date(
   // One key per (app, environment) — AD-11 — so this is a lookup, not a choice.
   const keyByLane = new Map(keys.map((k) => [`${k.solutionId}::${k.environment}`, keyState(k, now)]));
 
-  return grants.map((g) => ({
+  // The decision itself, on the rows the filter let through: the same
+  // resolver and predicate every other screen and the broker use.
+  return grants.filter((g) => isPassportGrant(g, now)).map((g) => ({
+    id: g.id,
     appName: g.solution.name,
     feedName: feedNameByExternalId.get(g.externalId) ?? g.externalId,
     externalId: g.externalId,
     environment: parseLaneEnvironment(g.environment),
     environmentRaw: g.environment,
     operation: g.operation,
+    writesIntoSap:
+      isWriteOperation(g.operation.toUpperCase() as GrantOperation) &&
+      grantsWrite(g.decision as GrantDecision, g.environment as GrantEnvironment),
     approvedBy: g.decidedById === null ? null : (userById.get(g.decidedById) ?? null),
     approvedAt: g.decidedAt,
     accessEnds: g.expiresAt,

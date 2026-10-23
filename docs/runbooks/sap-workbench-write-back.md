@@ -63,9 +63,24 @@ first SAP call (for the write-test, before the `$metadata` read as well):
 | `LEFT_BEHIND` | A write-test created its record and could not delete it | The record is still in SAP. Its address is in `detail.location`; delete it in SAP |
 | *(no outcome row)* | Recorded before SAP was called, outcome never saved | If older than 15 minutes, treat as `OUTCOME_UNKNOWN` |
 
-Both tables are append-only: there is no update or delete in the code
-(`tests/unit/northbound/dod-gaps.test.ts` asserts it), and the database allows
+The write-back's rows (`SAP_WORKBENCH_WRITE`, `SAP_WORKBENCH_WRITE_TEST`) are
+never updated or deleted, at any age: there is no update of either table in
+the code, and the only delete is limited to console read rows
+(`tests/unit/northbound/dod-gaps.test.ts` asserts both). The database allows
 one outcome per event (`eventId` is unique).
+
+The Workbench console's reads (P0.14b) are NOT written to these tables: they
+are `PlatformConsoleRead` rows, a table of their own, because the code before
+P0.14b reads every `PlatformAuditEvent` row as a write, and an Instant Rollback
+to it would have shown each console read on this ledger as a write-back (wave
+2 integration review round 4). Only a database a pre-release P0.14b build
+wrote to holds console reads here, with action `SAP_CONSOLE_READ`; this
+ledger filters them out. Both kinds of console read row are deleted by the
+nightly northbound-retention job (`src/lib/northbound/retention.ts`
+`sweepConsoleReads`) once they are older than
+`NORTHBOUND_AUDIT_RETENTION_DAYS`, with the organization's copy of the same
+read; see `docs/runbooks/coreedge-console-pipeline.md` (including what a
+rollback shows on such a database).
 
 ## If the audit cannot be written
 
@@ -93,8 +108,9 @@ never recorded. The feed is `GET /api/ops/workbench-writes`.
 
 These tables hold SAP writes only. The same admins' passkey enrolments,
 revocations and `STEP_UP_MISSING` admissions are in `PlatformGovernanceAudit`
-(`docs/runbooks/coreedge-step-up.md`), which this screen does not show. To
-answer "what did this admin do", query both.
+(`docs/runbooks/coreedge-step-up.md`), and what they read from the Workbench
+console is in `PlatformConsoleRead`; this screen shows neither. To answer
+"what did this admin do", query all three.
 
 It is not shown to `support` users or to anyone scoped to an organization: the
 rows belong to no organization, and the people in them are platform admins.
@@ -124,3 +140,16 @@ wrapper), for a file that names a helper without importing it from the module
 that defines it, and for a new POST, PUT, PATCH, MERGE or DELETE in the modules
 that talk to SAP, until someone classifies it. Follow
 `src/app/api/sap/tdd/write/route.ts`.
+
+## On the console pipeline (P0.14b)
+
+Both write routes now send to SAP only through a console call in write mode
+(`openConsoleCall(..., mode: "write")`, `src/lib/governed/console.ts`):
+`callSapWrite(handle, fn)` takes the handle `beginPlatformAudit` returned, so
+the write cannot reach SAP before its row exists. After the row is written,
+the deployment tenant's host is checked against the SAP host allow-list; under
+`COREEDGE_ENV_TENANT_HOSTS=enforce` an unlisted host is refused `403
+HOST_NOT_ALLOWED` and the row is completed `BLOCKED` with that reason. The
+default, `observe`, changes nothing here. The A.3 #9 static test
+(`tests/unit/security/no-side-doors.test.ts`) covers both routes; see
+`docs/runbooks/coreedge-console-pipeline.md`.

@@ -97,6 +97,24 @@ export async function liveOwnership(
 }
 
 /**
+ * Several apps' ownership as it stands for accountability, with one user
+ * lookup — what a screen listing many apps needs to say, before the click,
+ * that a key door will refuse for missing owners (P0.3 review round 2).
+ */
+export async function liveOwnerships(
+  db: UserLookupDb,
+  organizationId: string,
+  ownerships: readonly Ownership[],
+): Promise<LiveOwnership[]> {
+  const live = await liveUserIds(
+    db,
+    organizationId,
+    ownerships.flatMap((o) => [o.technicalOwnerId, o.businessOwnerId, o.supportOwnerId]),
+  );
+  return ownerships.map((o) => applyLiveness(o, live));
+}
+
+/**
  * Why this person may not issue this app's runtime credential, or null — the
  * two-human rule every door that mints a key shares (Studio issue and rotate,
  * the write key, the CoreEdge claim link), on LIVE owners.

@@ -19,11 +19,17 @@
  */
 import { createHash } from "crypto";
 
+import { Prisma } from "@prisma/client";
+
+import { CONNECTION_GROUP_UNREADABLE_STATUS, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
+import { loadConsoleConnection, type CeilingGrantRow } from "@/lib/governed/call-loads";
 import {
   DEFAULT_API_KEY_HEADER,
   isAllowedApiKeyHeader,
 } from "@/lib/sap-public/api-key-header";
+import { bindingFor, type BindingEstate } from "@/lib/northbound/authorisation";
+import type { BindableConnection, ConnectionBindingFailure } from "@/lib/sap-public/connection-selection";
 import { parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/environment";
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
 import { connectionAad, type SapConnectionSecrets } from "@/lib/sap-public/connection-crypto";
@@ -96,6 +102,23 @@ export interface ResolvedSapConnection {
    * can share a baseUrl and differ only here.
    */
   client: string | null;
+  /**
+   * The row's settings revision when it was read (SapConnection.revision):
+   * bumped by every save. A lane check made through this object records its
+   * evidence only while the row still carries it (lane-check-sweep.ts
+   * `recordLaneCheck`). Always set by `openConnectionRow` (from a Prisma row
+   * or the governed loads, which read the column too); optional only so a
+   * connection built outside the table (a test fixture) need not invent one —
+   * and a check through such an object records nothing, which fails safe.
+   */
+  revision?: number;
+  /**
+   * How the governed pipeline reaches this system (P0.14,
+   * src/lib/governed/transport.ts). Optional so a connection built by a
+   * caller that predates the column reads as DIRECT, which every stored row
+   * is unless P1.6 marks it TWIN.
+   */
+  transport?: "DIRECT" | "TWIN";
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -156,7 +179,27 @@ export async function resolveSapConnections(
   return Promise.all(rows.map(openConnectionRow));
 }
 
-type SapConnectionRow = Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number];
+/**
+ * The stored columns a connection is opened from: a Prisma row, or the same
+ * columns read by the governed access load (governed/call-loads.ts, P0.19).
+ */
+type SapConnectionRow = Pick<
+  Awaited<ReturnType<typeof prisma.sapConnection.findMany>>[number],
+  | "id"
+  | "organizationId"
+  | "product"
+  | "key"
+  | "label"
+  | "baseUrl"
+  | "authType"
+  | "oauthTokenUrl"
+  | "secretsCiphertext"
+  | "client"
+  | "writeEnabled"
+  | "apiPath"
+  | "timeoutMs"
+  | "revision"
+> & { readonly environment: string | null; readonly transport: string };
 
 /**
  * One stored row, decrypted and normalized. Rejects when the row cannot be opened.
@@ -187,8 +230,11 @@ async function openConnectionRow(r: SapConnectionRow): Promise<ResolvedSapConnec
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
     timeoutMs: r.timeoutMs,
-    environment: r.environment,
+    // The column's own enums: Prisma types them, the access load reads them as text.
+    environment: r.environment as SapEnvironment | null,
     client: r.client,
+    revision: r.revision,
+    transport: r.transport as "DIRECT" | "TWIN",
   };
 }
 
@@ -200,7 +246,21 @@ export async function resolveSapConnection(
   organizationId: string,
   product: string,
   key?: string | null,
-): Promise<ResolvedSapConnection | null> {
+  options: { readonly withCeilingGrants?: boolean } = {},
+): Promise<(ResolvedSapConnection & { readonly ceilingGrants?: readonly CeilingGrantRow[] }) | null> {
+  if (key && options.withCeilingGrants === true) {
+    /*
+     * A CONSOLE READ (P0.14b review round 5): the same named row, and the
+     * grants its environment ceiling judges, in ONE statement
+     * (governed/call-loads.ts loadConsoleConnection), so the console's
+     * authorise step needs no second round trip. The same row is chosen and
+     * opened exactly as below.
+     */
+    if (!organizationId) return null;
+    const load = await loadConsoleConnection(organizationId, product, key);
+    if (!load.connection || load.connection.key !== key) return null;
+    return { ...(await openConnectionRow(load.connection)), ceilingGrants: load.grants };
+  }
   if (key) {
     /*
      * A NAMED KEY OPENS ONLY THAT ROW. This used to open every active row for
@@ -250,108 +310,53 @@ export async function hasActiveSapConnection(
 }
 
 /**
- * Resolve the connection for a CALLER'S DECLARED ENVIRONMENT — the binding the
- * broker must use, and the reason `resolveSapConnection` above is not safe on a
- * runtime path.
+ * The API-key header name sealed in a stored connection, or null: the only
+ * value this returns from the bundle, never a secret (wave 2 rotation probe
+ * review round 2). The Connections form cannot read the header back, so a
+ * re-save that leaves its Header name blank asks the save route to keep the
+ * stored one rather than reset it to `apikey`.
  *
- * THE DEFECT THIS CLOSES. `resolveSapConnection` ends at `all[0]` — the OLDEST
- * active connection for an org+product. The grant check matches an environment,
- * but it matches it against the TOKEN's environment and then stops; nothing ever
- * compared it to the connection actually called. An organization holding a PROD
- * connection created before its SANDBOX one served every call — reads AND writes
- * — from PROD, while the audit row sincerely recorded "SANDBOX". The environment
- * ladder was enforced on paper and not on the wire.
- *
- * THE RULE, and why it is split by operation. `SapConnection.environment` shipped
- * one day before this fix, so an undeclared environment is an UNBACKFILLED estate,
- * not a legacy one. Refusing every undeclared connection would break every
- * deployment on day one over a column nobody has had the chance to fill, and would
- * push operators to type a guessed value purely to clear the error — manufacturing
- * exactly the fabricated environments the console's chip exists to prevent. So:
- *
- *   - A declared connection matching the caller's environment  → use it.
- *   - Two or more matches                                      → refuse. Ambiguity
- *     must never be resolved by creation order; that is the original bug.
- *   - Undeclared, and it is the org's ONLY connection:
- *       READ  → allow, flagged `bindingUnverified` so the audit row and the
- *               operations console can both say the binding was not proven.
- *       WRITE → REFUSE, always. `writeEnabled` is no substitute: it is a
- *               per-connection yes/no that says nothing about WHICH landscape it
- *               enables writes on. A read against an undeclared landscape is a
- *               disclosure risk that already exists; a write is a record created
- *               in a customer's ledger with nobody having declared it production,
- *               and it cannot be taken back.
- *   - Anything else                                            → refuse.
- *
- * The permissive read is a BACKLOG, not a home: `bindingUnverified` is counted in
- * the operations console and is expected to trend to zero as environments are
- * declared.
+ * Read from the row the save judged (`judged`: its id and revision), active
+ * or not, since a re-save may bring a deactivated row back. Null when that
+ * row is gone or changed, is not an API-key connection, will not open,
+ * stores no header (the default) or stores one the header rule refuses; the
+ * save then sends what it sent before, the default.
  */
-export type ConnectionBindingFailure =
-  /** The organization has no active connection at all for this product. */
-  | "NO_CONNECTION"
-  /**
-   * A connection declares this environment, but none carries the SAP client
-   * the caller's credential is bound to. Distinct from NO_MATCH_FOR_ENVIRONMENT
-   * because the fix is different: the landscape is configured, the data
-   * container is not.
-   */
-  | "NO_MATCH_FOR_CLIENT"
-  /** It has connections, but none declares this environment. */
-  | "NO_MATCH_FOR_ENVIRONMENT"
-  /** Several candidates and no way to choose — refuse rather than guess. */
-  | "AMBIGUOUS"
-  /**
-   * NOTHING declares the caller's environment, and more than one connection
-   * has not declared its own — so none can be assumed to be it.
-   *
-   * This used to fall through to AMBIGUOUS, and AMBIGUOUS's sentence says "more
-   * than one SAP connection could serve the SANDBOX environment". With one DEV
-   * row and one undeclared row that is false — zero connections declare
-   * SANDBOX — and it sent the developer hunting for a duplicate that did not
-   * exist, with a suggested fix ("declare a distinct environment on each") that
-   * was not the fix. The situation is different, so it gets its own name and
-   * its own sentence: declare the environment on the undeclared rows.
-   */
-  | "NO_DECLARED_CANDIDATE"
-  /** A write against a connection that has not declared its landscape. */
-  | "UNDECLARED_ENVIRONMENT_WRITE"
-  /**
-   * A stored connection row could not be resolved at all — an authType outside
-   * the vocabulary, or secrets that failed to open (key rotation, AAD
-   * mismatch, corruption). Before this reason existed the resolver's throw
-   * escaped the northbound routes as an unhandled 500 with NO audit row and no
-   * correlation id: an organization whose row went bad lost its whole
-   * northbound surface and the trail showed nothing. A refusal with a name is
-   * the honest shape — the caller gets an actionable sentence, the audit gets
-   * a countable reason.
-   */
-  | "CONNECTION_UNREADABLE"
-  /**
-   * The INTERFACE names a product the connector registry does not know. Not an
-   * estate state at all — an interface-config defect — and it used to be
-   * audited as NO_CONNECTION, which the incident coverage deliberately
-   * excludes as "has not started": a permanently broken interface was
-   * invisible to every rule and its caller was told to configure a connection
-   * that would never have helped.
-   */
-  | "UNKNOWN_PRODUCT";
+export async function storedApiKeyHeader(
+  organizationId: string,
+  product: string,
+  key: string,
+  judged: { readonly id: string; readonly revision: number },
+): Promise<string | null> {
+  if (!organizationId || !key) return null;
+  const row = await prisma.sapConnection.findFirst({ where: { organizationId, product, key } });
+  if (!row || row.id !== judged.id || row.revision !== judged.revision || row.authType !== "api-key") return null;
+  try {
+    const header = (await openConnectionRow(row)).secrets.apiKeyHeader?.trim();
+    return header && isAllowedApiKeyHeader(header) ? header : null;
+  } catch {
+    return null;
+  }
+}
+
+export {
+  selectConnectionForEnvironment,
+  type BindableConnection,
+  type ConnectionBindingFailure,
+  type ConnectionSelection,
+} from "@/lib/sap-public/connection-selection";
 
 export type ConnectionBinding =
   | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
   | { ok: false; reason: ConnectionBindingFailure };
-
-/** The two fields the binding decides on — so the SELECTION can run on rows that were never decrypted. */
-export interface BindableConnection {
-  environment: string | null;
-  client: string | null;
-}
 
 /** A connection as the binding PREVIEW sees it: identity and the two binding fields, no secret. */
 export interface BindableConnectionSummary extends BindableConnection {
   key: string;
   label: string;
   product: string;
+  /** How the broker reaches it (transport.ts): discovery's `callable` asks `transportRefusal` of it. */
+  transport?: string;
 }
 
 /**
@@ -369,100 +374,9 @@ export async function listBindableConnections(
   if (!organizationId) return [];
   return prisma.sapConnection.findMany({
     where: { organizationId, product, isActive: true },
-    select: { key: true, label: true, product: true, environment: true, client: true },
+    select: { key: true, label: true, product: true, environment: true, client: true, transport: true },
     orderBy: { createdAt: "asc" },
   });
-}
-
-function normalizedEnvironmentOf(conn: BindableConnection): string | null {
-  const raw = conn.environment?.trim();
-  return raw ? raw.toUpperCase() : null;
-}
-
-export type ConnectionSelection<T extends BindableConnection> =
-  | { ok: true; connection: T; bindingUnverified: boolean }
-  | { ok: false; reason: Exclude<ConnectionBindingFailure, "CONNECTION_UNREADABLE" | "UNKNOWN_PRODUCT"> };
-
-/**
- * THE DECISION, SEPARATED FROM THE SECRETS. Which connection a credential's
- * environment + SAP client selects depends on nothing but `environment` and
- * `client` across the organization's active rows — so it can be answered from
- * redacted rows, before a run, without opening a single ciphertext. The Test
- * Console uses that to say "this will bind to X5M/100 · TEST" BEFORE Run: a
- * session showed the top bar on X5M/080 DEV while the run reported "Bound to
- * Customizing X5M/100 · TEST", because the picker and the binding never
- * shared a rule. Now they share this function.
- *
- * resolveSapConnectionForEnvironment calls exactly this on the decrypted rows,
- * so the preview and the run cannot disagree.
- */
-export function selectConnectionForEnvironment<T extends BindableConnection>(
-  all: readonly T[],
-  environment: string,
-  operation: "READ" | "WRITE",
-  sapClient?: string | null,
-): ConnectionSelection<T> {
-  if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
-
-  const target = environment.trim().toUpperCase();
-  const envMatches = all.filter((c) => normalizedEnvironmentOf(c) === target);
-
-  /*
-   * THE SECOND HALF OF THE BINDING. Environment names a landscape; on-premise
-   * and RISE put several data containers inside one — X5M/100 and X5M/080
-   * share a baseUrl and differ only here. Before this, such an estate could
-   * only ever get AMBIGUOUS: both rows matched DEV and nothing could choose.
-   *
-   * A credential that names a client is answered ONLY by a connection carrying
-   * that client. It never falls back to a client-less row: "no client" is not
-   * a wildcard, it is a different container, and serving one for the other is
-   * the cross-container read this whole mechanism exists to prevent.
-   */
-  const declaredClient = sapClient?.trim() ? sapClient.trim() : null;
-  const matches = declaredClient
-    ? envMatches.filter((c) => (c.client ?? null) === declaredClient)
-    : envMatches;
-
-  if (matches.length === 1) {
-    return { ok: true, connection: matches[0]!, bindingUnverified: false };
-  }
-  if (matches.length > 1) return { ok: false, reason: "AMBIGUOUS" };
-
-  // The environment matched but the client did not — a distinct failure from
-  // "nothing serves this environment", and a distinct fix (correct the
-  // credential's client, or add the connection for that container).
-  if (declaredClient && envMatches.length > 0) {
-    return { ok: false, reason: "NO_MATCH_FOR_CLIENT" };
-  }
-
-  const undeclared = all.filter((c) => normalizedEnvironmentOf(c) === null);
-  if (undeclared.length === 0) return { ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" };
-
-  // Undeclared candidates exist. A write never proceeds on one.
-  if (operation === "WRITE") return { ok: false, reason: "UNDECLARED_ENVIRONMENT_WRITE" };
-
-  // A read proceeds ONLY when there is nothing to confuse it with. With a
-  // declared PROD row beside an undeclared one we must not assume the undeclared
-  // row is the sandbox the caller asked for.
-  if (all.length === 1) {
-    /*
-     * …and not even then, when the row AFFIRMATIVELY CONTRADICTS the caller.
-     * An undeclared environment is missing information, which the
-     * bindingUnverified flag exists to carry. A row that declares client 080
-     * against a credential bound to 100 is not missing information — it is
-     * the wrong data container, and reading it would be exactly the
-     * cross-container read the client field was added to stop.
-     */
-    const only = all[0]!;
-    if (declaredClient && only.client != null && only.client !== declaredClient) {
-      return { ok: false, reason: "NO_MATCH_FOR_CLIENT" };
-    }
-    return { ok: true, connection: only, bindingUnverified: true };
-  }
-  // Reached only when envMatches is empty and undeclared rows exist beside
-  // others: nothing declares the target, several could be it. Not AMBIGUOUS —
-  // that word claims more than one connection DECLARES the environment.
-  return { ok: false, reason: "NO_DECLARED_CANDIDATE" };
 }
 
 export async function resolveSapConnectionForEnvironment(
@@ -487,13 +401,37 @@ export async function resolveSapConnectionForEnvironment(
    * estate intended, which is the cross-landscape routing this module exists
    * to prevent.
    */
-  let all: ResolvedSapConnection[];
+  // The estate, then the one binding predicate the lane board asks too (P0.2;
+  // binding.ts loadBindingEstate builds the same estate for the board).
+  let estate: BindingEstate<ResolvedSapConnection>;
   try {
-    all = await resolveSapConnections(organizationId, product);
+    estate = { kind: "connections", connections: await resolveSapConnections(organizationId, product) };
   } catch {
-    return { ok: false, reason: "CONNECTION_UNREADABLE" };
+    estate = { kind: "unreadable" };
   }
-  return selectConnectionForEnvironment(all, environment, operation, sapClient);
+  return bindingFor(estate, environment, operation === "WRITE" ? "write" : "read", sapClient);
+}
+
+/**
+ * `resolveSapConnectionForEnvironment` on rows already read: the active
+ * connections of one organisation for one product, oldest first, as the
+ * governed access load reads them in the interface's statement (P0.19). The
+ * same opening, the same fail-closed estate, and the same one binding
+ * predicate (P0.2 authorisation.ts `bindingFor`) the lane board asks.
+ */
+export async function bindStoredConnections(
+  rows: readonly SapConnectionRow[],
+  environment: string,
+  operation: "READ" | "WRITE",
+  sapClient?: string | null,
+): Promise<ConnectionBinding> {
+  let estate: BindingEstate<ResolvedSapConnection>;
+  try {
+    estate = { kind: "connections", connections: await Promise.all(rows.map(openConnectionRow)) };
+  } catch {
+    estate = { kind: "unreadable" };
+  }
+  return bindingFor(estate, environment, operation === "WRITE" ? "write" : "read", sapClient);
 }
 
 /**
@@ -857,6 +795,53 @@ export interface UpsertSapConnectionInput {
    * null.
    */
   client?: string | null;
+  /**
+   * The row as the caller judged it, or null when it judged the key new
+   * (P0.3 review round 3). The write happens only while the row is still
+   * exactly that — locked and compared in the transaction that writes it —
+   * and otherwise throws `SapConnectionChangedError` and changes nothing.
+   * Omitted: an unguarded upsert, as before.
+   */
+  expectedRow?: JudgedSapConnection | null;
+}
+
+/**
+ * What a save decided on: the fields that say whether, and on which system,
+ * the row's writes are live, and its `revision` (bumped by every re-save).
+ */
+export interface JudgedSapConnection {
+  readonly id: string;
+  readonly isActive: boolean;
+  readonly writeEnabled: boolean;
+  readonly environment: SapEnvironment | null;
+  readonly baseUrl: string;
+  readonly client: string | null;
+  readonly revision: number;
+}
+
+/**
+ * The row is no longer the one the save was judged on (P0.3 review round 3):
+ * someone deactivated it, toggled its writes, re-saved it, or created the key,
+ * between the caller's read and this write. Nothing was written.
+ */
+export class SapConnectionChangedError extends Error {
+  constructor() {
+    super("The connection changed between the save's check and its write; nothing was written.");
+    this.name = "SapConnectionChangedError";
+  }
+}
+
+function isJudgedRow(row: JudgedSapConnection | null, judged: JudgedSapConnection | null): boolean {
+  if (row === null || judged === null) return row === judged;
+  return (
+    row.id === judged.id &&
+    row.isActive === judged.isActive &&
+    row.writeEnabled === judged.writeEnabled &&
+    row.environment === judged.environment &&
+    row.baseUrl === judged.baseUrl &&
+    row.client === judged.client &&
+    row.revision === judged.revision
+  );
 }
 
 /**
@@ -886,45 +871,233 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
     input.secrets,
     connectionAad(input.organizationId, input.product, input.key),
   );
-  const row = await prisma.sapConnection.upsert({
-    where: {
-      organizationId_product_key: {
-        organizationId: input.organizationId,
-        product: input.product,
-        key: input.key,
-      },
-    },
-    create: {
-      organizationId: input.organizationId,
-      product: input.product,
-      key: input.key,
-      label: input.label,
-      baseUrl: input.baseUrl,
-      authType: input.authType,
-      oauthTokenUrl: input.oauthTokenUrl ?? null,
-      secretsCiphertext,
-      writeEnabled: input.writeEnabled ?? false,
-      apiPath: input.apiPath ?? null,
-      timeoutMs: input.timeoutMs ?? null,
-      isActive: input.isActive ?? true,
-      environment: normalizeEnvironment(input.environment),
-      client: input.client ?? null,
-    },
-    update: {
-      label: input.label,
-      baseUrl: input.baseUrl,
-      authType: input.authType,
-      oauthTokenUrl: input.oauthTokenUrl ?? null,
-      secretsCiphertext,
-      writeEnabled: input.writeEnabled ?? false,
-      apiPath: input.apiPath ?? null,
-      timeoutMs: input.timeoutMs ?? null,
-      isActive: input.isActive ?? true,
-      environment: normalizeEnvironment(input.environment),
-      client: input.client ?? null,
-    },
-  });
+  /*
+   * A RE-SAVE REPLACES WHAT THE EVIDENCE PROVED (P0.2, A18, A50, A60). The
+   * lane board uses a check only while it was made through the connection the
+   * broker binds — but a re-save keeps the row's id and changes its host,
+   * client or secret in place, so the id alone cannot tell the old proof from
+   * the new system. So, in the same transaction:
+   *
+   *   - the lane checks and the per-service health made through this
+   *     connection are dropped: its lanes read Unknown and its services
+   *     unproven until the next check (the nightly sweep, or Re-check), never
+   *     Live or "readable" on the previous system's proof;
+   *   - its probe status and last success are cleared: it reads "never
+   *     tested" until the next probe, not healthy on the old tenant's 200;
+   *   - its `revision` is bumped, so a lane check already reading through the
+   *     previous settings records nothing when it finishes
+   *     (lane-check-sweep.ts `recordLaneCheck`). Without it, a check that
+   *     started before this save wrote the old system's proof under this id
+   *     after the deletes above.
+   *
+   * All of these are caches of the latest result, not records; the probe
+   * history (SapConnectionProbeEvent) and the call audit are untouched, and
+   * the history is what the next probe's drift alert is judged against: a
+   * failing first probe after a re-save of a connection that last probed OK
+   * is still mailed (connection-probe-sweep.ts `driftBaseline`). A probe
+   * already running against the previous settings records nothing when it
+   * finishes, for the same revision reason as a lane check
+   * (connection-probe-sweep.ts `revisionGuard`).
+   *
+   * EXCEPT GROUP_UNREADABLE (P0.2 review round 6). That status is not about
+   * this row's settings: it says another connection for the product will not
+   * open, so the broker refuses every call through this one. Re-entering this
+   * row's secret — the natural reaction to a refused row, and the wrong row —
+   * changes nothing of that, so the status stays. Clearing it turned the row
+   * neutral ("never tested"), dropped the line naming the row to fix, and took
+   * it out of the unhealthy-connection count while every call was still
+   * refused. The caller's settle (connection-probe-sweep.ts
+   * `settleConnectionGroup`) removes it, to "never tested", once the set
+   * opens — straight away when this save is what fixed the set (for instance
+   * the other row was deactivated meanwhile) — and writes it when the set
+   * still does not open, whatever the row held before (round 7).
+   */
+  const guarded = input.expectedRow !== undefined;
+  // A guarded save reads the status from the row it locks, below.
+  const before = guarded
+    ? null
+    : await prisma.sapConnection.findFirst({
+        where: { organizationId: input.organizationId, product: input.product, key: input.key },
+        select: { lastValidationStatus: true },
+      });
+  const keep = (status: string | null | undefined) =>
+    status === CONNECTION_GROUP_UNREADABLE_STATUS ? CONNECTION_GROUP_UNREADABLE_STATUS : null;
+  const createData = {
+    organizationId: input.organizationId,
+    product: input.product,
+    key: input.key,
+    label: input.label,
+    baseUrl: input.baseUrl,
+    authType: input.authType,
+    oauthTokenUrl: input.oauthTokenUrl ?? null,
+    secretsCiphertext,
+    writeEnabled: input.writeEnabled ?? false,
+    apiPath: input.apiPath ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+    isActive: input.isActive ?? true,
+    environment: normalizeEnvironment(input.environment),
+    client: input.client ?? null,
+  } satisfies Prisma.SapConnectionUncheckedCreateInput;
+  let row: Prisma.SapConnectionGetPayload<object>;
+  try {
+    row = await prisma.$transaction(async (tx) => {
+      let keptStatus = keep(before?.lastValidationStatus);
+      /*
+       * THE CHECK AND THE WRITE ARE ONE STEP (P0.3 review round 3). The caller
+       * decided what this save does — whether it turns writes on, reactivates
+       * the row, moves writes to another system — from a read made before its
+       * passkey check and the sealing above. An operator's Deactivate landing
+       * in that gap was overwritten by `isActive: true`, and the response, the
+       * step-up action and the audit row all described the row as it had
+       * been. So the row is locked here and compared with what the caller
+       * judged; a Deactivate or another save waits for this transaction, or
+       * this one sees it and writes nothing.
+       */
+      if (guarded) {
+        const locked = await tx.$queryRaw<(JudgedSapConnection & { lastValidationStatus: string | null })[]>`
+          SELECT "id", "isActive", "writeEnabled", "environment"::text AS "environment", "baseUrl", "client",
+                 "revision", "lastValidationStatus"
+          FROM "SapConnection"
+          WHERE "organizationId" = ${input.organizationId} AND "product" = ${input.product} AND "key" = ${input.key}
+          FOR UPDATE`;
+        const current = locked[0] ?? null;
+        if (!isJudgedRow(current, input.expectedRow ?? null)) throw new SapConnectionChangedError();
+        // Judged new: create, never update — a row created meanwhile is a change too.
+        if (current === null) return tx.sapConnection.create({ data: createData });
+        keptStatus = keep(current.lastValidationStatus);
+      }
+      const saved = await tx.sapConnection.upsert({
+        where: {
+          organizationId_product_key: {
+            organizationId: input.organizationId,
+            product: input.product,
+            key: input.key,
+          },
+        },
+        create: createData,
+        update: {
+          label: input.label,
+          baseUrl: input.baseUrl,
+          authType: input.authType,
+          oauthTokenUrl: input.oauthTokenUrl ?? null,
+          secretsCiphertext,
+          writeEnabled: input.writeEnabled ?? false,
+          apiPath: input.apiPath ?? null,
+          timeoutMs: input.timeoutMs ?? null,
+          isActive: input.isActive ?? true,
+          environment: normalizeEnvironment(input.environment),
+          client: input.client ?? null,
+          revision: { increment: 1 },
+          lastValidationStatus: keptStatus,
+          lastValidatedAt: null,
+        },
+      });
+      const dropped = { where: { organizationId: input.organizationId, connectionId: saved.id } };
+      await tx.laneCheck.deleteMany(dropped);
+      await tx.sapServiceHealth.deleteMany(dropped);
+      return saved;
+    });
+  } catch (error) {
+    /*
+     * A key judged new and created by someone else meanwhile: the unique
+     * (organization, product, key) index refuses the create. Said as the
+     * change it is; any other refusal (a twin activated meanwhile) is not.
+     */
+    if (
+      guarded &&
+      input.expectedRow === null &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const created = await prisma.sapConnection.findFirst({
+        where: { organizationId: input.organizationId, product: input.product, key: input.key },
+        select: { id: true },
+      });
+      if (created) throw new SapConnectionChangedError();
+    }
+    throw error;
+  }
+  /*
+   * Nothing runs here after the commit (P0.2 review round 7). A re-save
+   * changes which secrets the broker must open for the product, so the
+   * group's statuses are brought in line afterwards — by the caller, after it
+   * has recorded who made the change (Studio's POST calls
+   * connection-probe-sweep.ts `settleConnectionGroup` after its audit row).
+   * Run here, a database fault in that follow-up threw out of a save that had
+   * already committed: the route told the builder "not saved" and wrote no
+   * audit row for new credentials that were live.
+   */
   return redactConnection(row);
+}
+
+/**
+ * THE GROUP OPENS AGAIN: ITS "WILL NOT OPEN" STATUSES STOP STANDING (P0.2
+ * review round 5).
+ *
+ * The broker fails closed on an (organization, product) set whose secrets will
+ * not all open, so the probe writers record UNREADABLE on the row that will
+ * not open and GROUP_UNREADABLE on each sibling that does. The answer they
+ * give says what to do: re-save that connection's secrets, or deactivate it.
+ * Both change that row alone — so after the fix the broker served every call
+ * again while the healthy siblings kept GROUP_UNREADABLE until the next
+ * nightly probe, up to 24 hours: "unreadable" on Operations, Studio and SAP
+ * systems, a MAJOR unhealthy-connection incident, and an operator told their
+ * fix had not worked. The reverse of A.3.
+ *
+ * So the places a row can leave, join or mend the set — Studio's save and its
+ * Deactivate and Activate toggles, through connection-probe-sweep.ts
+ * `settleConnectionGroup` (round 7) — ask the broker's own question
+ * afterwards: does the set open now (`resolveSapConnections`, the read the
+ * binding path fails closed on)? When it does, no active row of it is
+ * unreadable any more, and the statuses that said so are cleared to "never
+ * tested" — not to OK: no probe has run. `lastValidatedAt` (the last time SAP
+ * answered) and the probe history the drift alert is judged against are left
+ * alone. When the set still will not open (another sibling is broken too),
+ * nothing changes: the broker still refuses, and the statuses still say so.
+ *
+ * That leaves a null status beside a last success time, which nothing else
+ * writes. Every reader decides from the status (freshness.ts
+ * `connectionHealthVerdict`), so it reads "never tested" everywhere: the
+ * topology lens once read the time alone and drew such a row green, however
+ * old the success (round 7).
+ *
+ * "Never tested" loses nothing a probe found (P0.2 review round 6):
+ * GROUP_UNREADABLE is never written over a failure SAP reported
+ * (connection-probe-sweep.ts `keepsOverGroupUnreadable`), so a sibling SAP
+ * was refusing keeps that refusal throughout. Activate is a door too (round
+ * 6): a sibling that was inactive while the fix was made held its
+ * GROUP_UNREADABLE, out of reach of an active-rows clear, and brought it back
+ * on reactivation while the broker served. And the probe writers run this
+ * after writing their marks, so a fix that commits while they attribute the
+ * group cannot leave a mark behind (`clearIfFixedMeanwhile`).
+ *
+ * Compare-and-set on the status itself, so a probe that recorded a real
+ * outcome in the meantime is never overwritten. Returns how many rows changed.
+ */
+export async function clearUnreadableOnceGroupOpens(organizationId: string, product: string): Promise<number> {
+  const unopenable = { in: [...CONNECTION_NOT_PROBED_STATUSES] };
+  const marked = await prisma.sapConnection.findMany({
+    where: { organizationId, product, isActive: true, lastValidationStatus: unopenable },
+    select: { id: true },
+  });
+  if (marked.length === 0) return 0;
+  try {
+    await resolveSapConnections(organizationId, product);
+  } catch {
+    // Still will not open: the statuses are still true.
+    return 0;
+  }
+  const cleared = await prisma.sapConnection.updateMany({
+    where: {
+      id: { in: marked.map((m) => m.id) },
+      organizationId,
+      product,
+      isActive: true,
+      lastValidationStatus: unopenable,
+    },
+    data: { lastValidationStatus: null },
+  });
+  return cleared.count;
 }
 
 /** Strip secrets + host for anything that crosses the client boundary. */

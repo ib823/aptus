@@ -22,15 +22,17 @@ const mocks = vi.hoisted(() => ({
 // Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
 vi.mock("@/lib/db/prisma", async () => {
   const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
-  return {
-    prisma: {
-      solutionClient: { findFirst: mocks.findFirstClient, update: mocks.updateClient },
-      interface: { findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
-      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
-    },
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
+    solutionClient: { findFirst: mocks.findFirstClient, update: mocks.updateClient },
+    interface: { findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
+    apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
   };
+  // The access load is one statement since P0.19, answered through the queries it replaced.
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
 });
 
+import { REFUSAL_STATUS } from "@/lib/governed/pipeline";
 import { resolveWritableInterface } from "@/lib/northbound/access";
 import {
   generateWriteCredential,
@@ -212,17 +214,20 @@ describe("only an ACTIVE write interface may write", () => {
      * The executor only POSTs to the entity set — an OData CREATE. An UPDATE
      * interface with an approved UPDATE grant passed every gate here and then
      * created a new record in the client's system, reported as 201. It must
-     * stop before the grant is even looked up: no grant fixes it.
+     * stop before the grant is even judged: no grant fixes it. (Since P0.19
+     * the grants arrive in the interface's own statement, so this is about
+     * the decision, not the query.)
      */
     mocks.findFirstInterface.mockResolvedValue({ ...WRITE_IFACE, operation: "UPDATE" });
-    mocks.findManyGrants.mockResolvedValue([{ decision: "APPROVED", expiresAt: null, operation: "UPDATE" }]);
-    const r = await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.reason).toBe("OPERATION_NOT_SUPPORTED");
-      expect(r.message).toContain("would add a new record");
+    for (const grants of [[{ decision: "APPROVED", expiresAt: null, operation: "UPDATE" }], []]) {
+      mocks.findManyGrants.mockResolvedValue(grants);
+      const r = await resolveWritableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.reason).toBe("OPERATION_NOT_SUPPORTED");
+        expect(r.message).toContain("would add a new record");
+      }
     }
-    expect(mocks.findManyGrants).not.toHaveBeenCalled();
   });
 
   it("refuses a sibling solution's interface with the same message as absent", async () => {
@@ -289,11 +294,14 @@ describe("the write route answers an unsupported operation as a definition gap",
   ).replace(/\/\*[\s\S]*?\*\//g, " ");
 
   it("maps OPERATION_NOT_SUPPORTED to 400, not to the 403 that says 'fix access'", () => {
-    expect(src).toMatch(/access\.reason === "OPERATION_NOT_SUPPORTED"\s*\?\s*400/);
+    // One table for every governed route since P0.14 (pipeline.ts), and the
+    // write route takes its access refusal from it.
+    expect(REFUSAL_STATUS.OPERATION_NOT_SUPPORTED).toBe(400);
+    expect(src).toContain('authorise("WRITE"');
   });
 
   it("decides access before any idempotency key is reserved, so a refused UPDATE leaves none", () => {
-    expect(src.indexOf("resolveWritableInterface(")).toBeGreaterThan(-1);
-    expect(src.indexOf("resolveWritableInterface(")).toBeLessThan(src.indexOf("reserveIdempotencyKey("));
+    expect(src.indexOf('authorise("WRITE"')).toBeGreaterThan(-1);
+    expect(src.indexOf('authorise("WRITE"')).toBeLessThan(src.indexOf("reserveIdempotencyKey("));
   });
 });

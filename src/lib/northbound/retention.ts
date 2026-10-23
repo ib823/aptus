@@ -48,8 +48,16 @@
  * So a run repeats the batch until one comes back short, and stops early only
  * on a time budget under the route's `maxDuration` — the one case it reports
  * as `moreRemaining`.
+ *
+ * AND THE CONSOLE'S PLATFORM-SCOPE COPY (P0.14b). A Workbench console read
+ * also leaves a PlatformConsoleRead row: the same record of the same read, on
+ * the same legal basis, so it expires on the same period, in the same run
+ * (`sweepConsoleReads`). So do the SAP_CONSOLE_READ rows a pre-release P0.14b
+ * build wrote to PlatformAuditEvent; the write-back's rows on that table are
+ * never swept.
  */
 
+import { PLATFORM_CONSOLE_READ_ACTION } from "@/lib/audit/platform-audit";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 
@@ -115,6 +123,8 @@ export function resolveRetentionDays(
 
 export interface RetentionResult {
   deleted: number;
+  /** The console's platform-scope read rows deleted on the same period (sweepConsoleReads, P0.14b). */
+  consoleReadsDeleted: number;
   /**
    * True when the run stopped on its time budget with full batches still coming
    * back — the backlog is not clear and rows past the period remain.
@@ -193,10 +203,88 @@ export async function enforceNorthboundAuditRetention(
     }
   }
 
+  // The console's platform-scope copy of the same reads, on the same period,
+  // in what is left of the budget (see sweepConsoleReads).
+  let consoleReadsDeleted = 0;
+  if (!moreRemaining) {
+    const swept = await sweepConsoleReads(cutoff, limit, startedAt, budgetMs);
+    consoleReadsDeleted = swept.deleted;
+    moreRemaining = swept.moreRemaining;
+  }
+
   return {
     deleted,
+    consoleReadsDeleted,
     moreRemaining,
     retentionDays,
     cutoff: cutoff.toISOString(),
   };
+}
+
+/**
+ * THE CONSOLE'S PLATFORM-SCOPE READ ROWS (P0.14b review). Since the Workbench
+ * console runs on the governed pipeline (lib/governed/console.ts), every
+ * console read leaves, beside the organization's own row swept above, a
+ * platform-scope copy in PlatformConsoleRead naming the reader, their email
+ * and organization, and the client's tenant, service and entity set. It is
+ * the same record of the same read: personal data about the actor and
+ * commercially sensitive data about the client, held for the same necessity,
+ * which ends on the same day. Kept forever, a person's console activity
+ * outlived the organization's trail (and the organization), on a table that
+ * grows by a row per console call.
+ *
+ * So it expires on the same period, the age re-asserted in the delete as the
+ * sweep above re-asserts it.
+ *
+ * AND THE ROWS A PRE-RELEASE BUILD WROTE ELSEWHERE. Before integration review
+ * round 4 a console read was a PlatformAuditEvent row (action
+ * SAP_CONSOLE_READ) with its PlatformAuditOutcome; a database that build wrote
+ * to keeps them, so they expire on the same period too. ONLY that action: the
+ * write-back's rows on the same table (P0.7) record a change made to a
+ * client's SAP system and are not swept at any age. Each outcome row is held
+ * by a RESTRICT foreign key, so an event and its outcome are deleted together,
+ * in one transaction, with the action and the age re-asserted in both deletes.
+ */
+async function sweepConsoleReads(
+  cutoff: Date,
+  limit: number,
+  startedAt: number,
+  budgetMs: number,
+): Promise<{ deleted: number; moreRemaining: boolean }> {
+  let deleted = 0;
+  for (;;) {
+    const doomed = await prisma.platformConsoleRead.findMany({
+      where: { at: { lt: cutoff } },
+      select: { id: true },
+      orderBy: { at: "asc" },
+      take: limit,
+    });
+    if (doomed.length === 0) break;
+    const result = await prisma.platformConsoleRead.deleteMany({
+      where: { id: { in: doomed.map((d) => d.id) }, at: { lt: cutoff } },
+    });
+    deleted += result.count;
+    if (doomed.length < limit) break;
+    if (Date.now() - startedAt >= budgetMs) return { deleted, moreRemaining: true };
+  }
+
+  const consoleRead = { action: PLATFORM_CONSOLE_READ_ACTION, at: { lt: cutoff } };
+  for (;;) {
+    const doomed = await prisma.platformAuditEvent.findMany({
+      where: consoleRead,
+      select: { id: true },
+      orderBy: { at: "asc" },
+      take: limit,
+    });
+    if (doomed.length === 0) break;
+    const ids = doomed.map((d) => d.id);
+    const [, events] = await prisma.$transaction([
+      prisma.platformAuditOutcome.deleteMany({ where: { eventId: { in: ids }, event: { is: consoleRead } } }),
+      prisma.platformAuditEvent.deleteMany({ where: { id: { in: ids }, ...consoleRead } }),
+    ]);
+    deleted += events.count;
+    if (doomed.length < limit) break;
+    if (Date.now() - startedAt >= budgetMs) return { deleted, moreRemaining: true };
+  }
+  return { deleted, moreRemaining: false };
 }

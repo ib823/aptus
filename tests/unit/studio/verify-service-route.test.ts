@@ -519,6 +519,35 @@ describe("a refused binding", () => {
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ status: 403, dryRun: true, actorUserId: "u_builder" }));
     expect(configAuditAfter()).toMatchObject({ event: "service_verify", status: "BINDING_REFUSED" });
   });
+
+  it("a connection served by the Tenant Twin: nothing is sent to its base URL and no verification is recorded (review round 4)", async () => {
+    mocks.binding.mockResolvedValue({ ok: true, connection: { ...CONNECTION, transport: "TWIN" }, bindingUnverified: false });
+    const res = await verify();
+    expect(res.status).toBe(200);
+    const d = await data(res);
+    expect(d).toMatchObject({ status: "BINDING_REFUSED", verified: false, bindingRefusal: "TRANSPORT_UNAVAILABLE", boundTo: null });
+    expect(d.detail).toMatch(/Tenant Twin/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.authHeaders).not.toHaveBeenCalled();
+    // The stamp the write route's custom-service gate accepts is never written.
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(mocks.record).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 503, dryRun: true, actorUserId: "u_builder", connectionId: "conn_dev" }),
+    );
+    expect(configAuditAfter()).toMatchObject({
+      event: "service_verify",
+      status: "BINDING_REFUSED",
+      bindingRefusal: "TRANSPORT_UNAVAILABLE",
+      reachedSap: false,
+      verified: false,
+    });
+  });
+
+  it("a DIRECT connection is verified exactly as before", async () => {
+    mocks.binding.mockResolvedValue({ ok: true, connection: { ...CONNECTION, transport: "DIRECT" }, bindingUnverified: false });
+    expect(await data(await verify())).toMatchObject({ status: "OK", verified: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("guards", () => {

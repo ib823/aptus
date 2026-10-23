@@ -27,6 +27,7 @@ const EXISTING_SF: StudioConnection = {
   baseUrl: "https://api17.sapsf.com",
   authType: "basic",
   environment: "PROD",
+  client: null,
   apiPath: null,
   timeoutMs: null,
   writeEnabled: false,

@@ -429,6 +429,27 @@ even while the rolled-back deployment serves. So:
 Then run the post-deploy check against the rolled-back deployment and record
 it on the original pull request, with what happened.
 
+### The rows the release wrote, read by the old code
+
+An additive schema keeps the old code running, but the old code also READS
+what the release wrote while it served, and it reads it as it understood the
+tables before. A release must not leave rows the old code would misreport,
+nor columns the old code changes without knowing (wave 2 integration review
+round 4). The two cases Phase 0b wave 2 met, and how each is closed:
+
+- **A new kind of row in an old table.** The Workbench console's read rows
+  were going to be `PlatformAuditEvent` rows, which the old Workbench writes
+  ledger lists as writes. They are a table of their own (`PlatformConsoleRead`)
+  instead (`docs/runbooks/coreedge-console-pipeline.md`, "Rolling back the
+  deploy").
+- **A new column the old code leaves stale.** `SolutionClient.tokenTail` names
+  the current key; the old code changes the key without knowing the column.
+  A trigger clears the tail whenever the key changes without it
+  (`docs/runbooks/coreedge-truthful-screens.md`, "Backout").
+
+A release that adds either kind says, in its runbook, what the old code shows
+after a rollback.
+
 ### The schema: backout SQL, rarely
 
 An expand migration left in place is harmless to the old code, and leaving it

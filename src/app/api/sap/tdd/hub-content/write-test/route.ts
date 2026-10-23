@@ -14,6 +14,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
+import { openConsoleCall } from "@/lib/governed/console";
 import {
   getSapProduct,
   getSapService,
@@ -144,11 +145,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const headers = { "x-correlation-id": audit.correlationId };
 
+  /*
+   * ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts), in write mode: the
+   * person as the "console" principal, the console's ceilings, and the
+   * deployment tenant's host against the SAP host allow-list
+   * (COREEDGE_ENV_TENANT_HOSTS). Checked after the row above, so a refusal is
+   * recorded on it as BLOCKED. Both SAP calls below — the $metadata check and
+   * the create-then-delete — are sent only through `callSapWrite`, which takes
+   * that row's handle.
+   */
+  const call = openConsoleCall({
+    viewer: auth.user,
+    target: { kind: "odata", product, resolved: { tenant, source: "deployment", connection: null } },
+    route: "/api/sap/tdd/hub-content/write-test",
+    externalId: service.key,
+    entitySet: entity,
+    mode: "write",
+  });
+  const authorised = await call.authorise();
+  const bound = authorised.ok ? await call.bind() : authorised;
+  if (!bound.ok) {
+    await completePlatformAudit(audit, { outcome: "BLOCKED", reason: bound.refusal.reason });
+    return NextResponse.json(
+      { error: { code: bound.refusal.code, message: bound.refusal.message } },
+      { status: bound.refusal.status, headers },
+    );
+  }
+
   // Metadata gate: only create-then-delete where the set is BOTH creatable and
   // deletable, so nothing is left behind. Never write without this confirmation.
   let cap;
   try {
-    const meta = await inspectSapServiceMetadata(prefix, tenant, service);
+    const meta = await call.callSapWrite(audit, () => inspectSapServiceMetadata(prefix, tenant, service));
     cap = meta.entityCapabilities.find((e) => e.name === entity);
   } catch (err) {
     await completePlatformAudit(audit, { outcome: "BLOCKED", reason: "METADATA_PROBE_FAILED" });
@@ -167,7 +195,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const startedAt = Date.now();
   try {
-    const result = await runCapabilityWriteTest(prefix, tenant, service, entity, body.payload);
+    const sent = body.payload;
+    const result = await call.callSapWrite(audit, () => runCapabilityWriteTest(prefix, tenant, service, entity, sent));
     await completePlatformAudit(audit, { ...outcomeForWriteTest(result), durationMs: Date.now() - startedAt });
     return NextResponse.json({ data: result }, { status: result.created && result.deleted ? 200 : 502, headers });
   } catch (err) {

@@ -29,6 +29,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { keyState, overlapIsOpen, storedTokenPrefix } from "@/lib/northbound/key-policy";
 import { opsWhere, requireOperations } from "@/lib/ops/guard";
+import { countPresentableWriteKeys } from "@/lib/ops/write-keys";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest) {
         label: true,
         environment: true,
         tokenPrefix: true,
+        // The key's own last four (P0.3, A45): its masked reference, not a secret.
+        tokenTail: true,
         isActive: true,
         lastUsedAt: true,
         expiresAt: true,
@@ -68,16 +71,19 @@ export async function GET(request: NextRequest) {
     }),
 
     // Counted, never selected. `secretsCiphertext` holds the write credential,
-    // so a count answers "does one exist" without loading the value into memory
-    // — and it becomes a real number the moment issuance ships, rather than a
-    // hardcoded zero someone has to remember to update.
+    // so a count answers "does one exist" without loading the value into memory.
+    //
+    // OVER LIVE CREDENTIALS ONLY (P0.3, A62), by the predicate authentication
+    // applies: a write key sealed on an expired, revoked or deactivated
+    // credential, or on a retired app's (review round 4), can never be
+    // presented, because the bearer token it travels with is refused first.
+    // Counting it said a write path existed that does not. (A revocation
+    // clears the sealed key anyway; an expiry or a retirement does not.)
     //
     // In `Promise.all` rather than started early and awaited later: the previous
     // shape kicked this off and attached its handler two `await`s further down,
     // so a rejection in the gap was an unhandled rejection rather than a 500.
-    prisma.solutionClient.count({
-      where: opsWhere(guard.actor, { secretsCiphertext: { not: null } }),
-    }),
+    countPresentableWriteKeys(guard.actor, now),
 
     // REVOKED IS COUNTED SEPARATELY, AND THAT IS THE WHOLE POINT.
     //
@@ -163,7 +169,7 @@ export async function GET(request: NextRequest) {
       oneCredentialPerSolution:
         "Issuance upserts on (solutionId, environment) — re-issuing for the same environment replaces the previous token rather than adding one; another environment adds a credential beside it.",
       writeCredentials:
-        "Counted from stored credential presence, never by reading it. No code path issues a write credential yet, so a zero here is by design rather than by absence of activity.",
+        "Write keys are counted over live credentials of apps that are not retired only (the credentials authentication accepts), from their stored presence, never by reading one. A write key is issued in Developer Studio (API Access, Runtime credentials, Issue write key) by someone who does not own the app, after a second person has approved a CREATE or UPDATE grant for that environment. A zero means none has been issued onto a live credential.",
     },
     credentials: rows.map((r) => ({
       id: r.id,
@@ -177,6 +183,8 @@ export async function GET(request: NextRequest) {
       environment: r.environment,
       /** `ce_live_`, `ce_test_`, or `ce_` for a key minted before P0.11. Never the key. */
       tokenPrefix: storedTokenPrefix(r.tokenPrefix),
+      /** The key's own last four (P0.3, A45), or null for a key minted before they were recorded. */
+      tokenTail: r.tokenTail,
       state: stateOf(r),
       lastObservedUseAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
       expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,

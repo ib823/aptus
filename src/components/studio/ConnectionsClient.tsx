@@ -7,6 +7,28 @@
  * secret column is not something this component redacts; it is something it
  * never receives (the endpoint's select does not read it). The "🔒 Sealed"
  * cell is therefore a statement of fact, not a mask over a value in memory.
+ *
+ * WRITES ARE SWITCHED ON HERE (P0.3). The API always accepted `writeEnabled`
+ * on a save, and the form never offered it — so no screen could allow writes
+ * on a connection, and every re-save (how credentials are rotated) sent no
+ * `writeEnabled` and switched a writing connection's writes off. The form now
+ * carries "Allow writes". It asked for a "write secret" too, which nothing
+ * ever read back, so it gated nothing and is gone (wave 2 integration review
+ * round 3): what gates a write is this switch, the passkey and the audit row
+ * on the save, the approved write grant and the app's write key. Re-saving a
+ * connection whose writes are live (active, writes
+ * allowed) starts with the box ticked, so a rotation keeps them on; unticking
+ * it says, before Save, that the save turns them off. A DEACTIVATED
+ * connection starts unticked: a save reactivates the row, so a ticked default
+ * would quietly re-arm writes an operator had stopped (P0.3 review round 1).
+ *
+ * Writes are allowed for a system, not a row (P0.3 review round 2): a save
+ * that points a writing row at another environment, SAP host or base path
+ * (review round 3: a gateway routes by path), or SAP client
+ * starts unticked and says why. The form sends what it showed for the row it
+ * replaces, so a save from a page loaded before the row changed (deactivated
+ * during an incident) is refused with 409 rather than re-arming it; saving a
+ * deactivated row says, before Save, that it makes it active again.
  */
 
 import { useRouter } from "next/navigation";
@@ -15,8 +37,20 @@ import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { fetchWithStepUp } from "@/lib/auth/step-up-client";
+import { CONNECTION_PROOF_TTL_MS, connectionHealthVerdict } from "@/lib/coreedge/freshness";
 import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { sanitizeTenantKey } from "@/lib/sap-public/tenant-key";
+import {
+  changedStoredSettings,
+  connectionSaveBody,
+  formWriteTarget,
+  storedEnvironmentTwin,
+  storedFormSettings,
+  writeTargetChanges,
+  type ConnectionFormFields,
+  type StoredSetting,
+  type WriteTargetField,
+} from "@/lib/studio/connection-form";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -29,9 +63,18 @@ export interface StudioConnection {
   authType: string;
   /** DEV | TEST | PROD | SANDBOX, or null when undeclared (a scored incident). */
   environment: string | null;
+  /**
+   * The SAP client, or null on a one-tenant-per-host product. With the
+   * environment and the host, the system the row's writes are allowed for:
+   * the form unticks Allow writes when a save points the row elsewhere (P0.3
+   * review round 2).
+   */
+  client: string | null;
   /** The probe path — the value that decides NO_PROBE_PATH on the health chip. */
   apiPath: string | null;
   timeoutMs: number | null;
+  /** The OAuth token endpoint (a column, not a secret): a re-save sends it back unless it is edited. */
+  oauthTokenUrl?: string | null;
   writeEnabled: boolean;
   isActive: boolean;
   lastValidatedAt: string | null;
@@ -45,20 +88,45 @@ interface TestOutcome {
   validated: boolean;
 }
 
+/** What the health chip reads: the recorded status and when SAP last answered 200. */
+export interface ConnectionHealthInput {
+  readonly lastValidationStatus: string | null;
+  /** ISO string as the page serialises it, or a Date. */
+  readonly lastValidatedAt: string | Date | null;
+}
+
 /**
  * Health → the honest-status vocabulary already used across the console, so a
  * connection's state reads the same way a capability's does.
- *   OK            → ACTIVATED     (proven by a live 200)
+ *   OK, recent    → ACTIVATED     (proven by a live 200 within CONNECTION_PROOF_TTL_MS)
+ *   OK, aged      → NOT_CHECKED   (stale: our evidence has aged; see `connectionHealthChip`)
  *   UNAUTHORIZED  → NEEDS_SETUP   (401/403 — arrangement/credentials)
  *   NOT_FOUND     → NOT_FOUND     (404 on this tenant)
- *   TIMEOUT/ERROR → NOT_PROBEABLE (unreachable right now)
+ *   TIMEOUT/ERROR → PROBE_FAILED  (unreachable right now)
+ *   UNREADABLE    → NEEDS_SETUP   (the stored secret will not open: re-enter it)
+ *   GROUP_UNREADABLE → NEEDS_SETUP (another connection for the product will not open)
  *   never tested  → NOT_CHECKED
+ *
+ * UNREADABLE is named, not left to the default (P0.2, A50): the probe sweep
+ * records it for a connection it checked and could not open, so "Not
+ * checked" was false, and the broker refuses every call through it.
+ * GROUP_UNREADABLE (P0.2 review) is a row whose own secret opens while a
+ * sibling's will not; `unreadableHint` says which row to fix under the chip.
+ *
+ * AN OK IS ONLY ACTIVATED WHILE IT IS RECENT (P0.2 review round 4). This took
+ * the status alone, so an OK from months ago — the nightly probe stopped —
+ * kept the green "Reachable" chip here while Operations, the topology lens and
+ * the SAP systems screen called the same row stale. The age is now an input,
+ * and the reading is `connectionHealthVerdict`, the one every other screen
+ * uses, so the two cannot disagree. Exported for its test.
  */
-function healthToStatus(status: string | null): HonestStatus {
-  switch (status) {
+export function healthToStatus(c: ConnectionHealthInput, now: Date = new Date()): HonestStatus {
+  switch (c.lastValidationStatus) {
     case "OK":
-      return "ACTIVATED";
+      return verdictOf(c, now) === "healthy" ? "ACTIVATED" : "NOT_CHECKED";
     case "UNAUTHORIZED":
+    case "UNREADABLE":
+    case "GROUP_UNREADABLE":
       return "NEEDS_SETUP";
     case "NOT_FOUND":
       return "NOT_FOUND";
@@ -102,8 +170,54 @@ function healthToStatus(status: string | null): HonestStatus {
  * pairs with "Not probeable", which is already in the vocabulary. Everything
  * else keeps the shared label so the console still reads as one system.
  */
+/**
+ * The line under the chip for a connection the broker refuses because a
+ * secret will not open — saying WHICH secret, so "Needs setup" does not send
+ * a builder to re-save a row whose own secret is fine (P0.2 review). Null for
+ * every other status. Exported for its test.
+ */
+export function unreadableHint(status: string | null): string | null {
+  if (status === "UNREADABLE") return "The stored secret will not open: re-save this connection's secrets.";
+  if (status === "GROUP_UNREADABLE") {
+    return "This secret opens, but another connection for this product will not: re-save or deactivate the one marked unreadable.";
+  }
+  return null;
+}
+
 function healthLabel(status: HonestStatus): string | undefined {
   return status === "ACTIVATED" ? "Reachable" : undefined;
+}
+
+function verdictOf(c: ConnectionHealthInput, now: Date) {
+  const at = c.lastValidatedAt === null ? null : new Date(c.lastValidatedAt);
+  return connectionHealthVerdict(
+    { lastValidationStatus: c.lastValidationStatus, lastValidatedAt: at && !Number.isNaN(at.getTime()) ? at : null },
+    now,
+  );
+}
+
+/**
+ * The chip as drawn: status, visible label and accessible meaning.
+ *
+ * A stale OK is drawn in the muted "not checked" tone and labelled
+ * "OK · stale", the words Operations → Connections and the SAP systems screen
+ * use for the same row; its meaning says the evidence has aged rather than
+ * "not yet probed", which would be false. Exported for its test.
+ */
+export function connectionHealthChip(
+  c: ConnectionHealthInput,
+  now: Date = new Date(),
+): { status: HonestStatus; label: string | undefined; meaning: string | undefined } {
+  const status = healthToStatus(c, now);
+  if (c.lastValidationStatus === "OK" && status !== "ACTIVATED") {
+    const hours = Math.round(CONNECTION_PROOF_TTL_MS / (60 * 60 * 1000));
+    return {
+      status,
+      label: "OK · stale",
+      meaning: `the last 200 was more than ${hours} h ago and no probe has succeeded since — our evidence has aged, which says nothing either way about SAP; test it again`,
+    };
+  }
+  return { status, label: healthLabel(status), meaning: undefined };
 }
 
 export function ConnectionsClient({
@@ -272,9 +386,14 @@ export function ConnectionsClient({
                 <Td>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {(() => {
-                      const health = healthToStatus(c.lastValidationStatus);
-                      return <StudioStatusChip status={health} label={healthLabel(health)} />;
+                      const chip = connectionHealthChip(c);
+                      return <StudioStatusChip status={chip.status} label={chip.label} meaning={chip.meaning} />;
                     })()}
+                    {unreadableHint(c.lastValidationStatus) ? (
+                      <span style={{ fontSize: 11, color: "var(--ink-muted)", maxWidth: 260 }}>
+                        {unreadableHint(c.lastValidationStatus)}
+                      </span>
+                    ) : null}
                     <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>
                       {c.lastValidatedAt
                         ? `last 200 · ${new Date(c.lastValidatedAt).toLocaleString()}`
@@ -359,22 +478,36 @@ function ConnectionForm({
   basicAuthNotices: Readonly<Record<string, string>>;
 }) {
   const [product, setProduct] = useState("s4hana");
-  const [client, setClient] = useState("");
   const [key, setKey] = useState("");
-  const [label, setLabel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [environment, setEnvironment] = useState("");
-  const [authType, setAuthType] = useState<
-    "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer" | "api-key"
-  >("basic");
+  /*
+   * A RE-SAVE KEEPS WHAT IS STORED (wave 2 final review round 3). The route
+   * replaces every column with what the save sends, and this form started
+   * blank, so re-saving a connection to rotate its password silently cleared
+   * its probe path and timeout (and any other setting not typed again): the
+   * Test then probed another service, a slow tenant timed out, and the
+   * rotation probe judged the new secret somewhere it was never proven.
+   *
+   * Each stored setting is null until the person edits it, and until then
+   * the field shows, and the save sends, the stored value of the connection
+   * being replaced (`storedFormSettings`). Clearing a field is a visible
+   * edit, and the form says before Save which stored settings the save
+   * changes. Secrets are sealed and never readable, so they are always typed.
+   */
+  const [clientTyped, setClient] = useState<string | null>(null);
+  const [labelTyped, setLabel] = useState<string | null>(null);
+  const [baseUrlTyped, setBaseUrl] = useState<string | null>(null);
+  const [environmentTyped, setEnvironment] = useState<string | null>(null);
+  const [authTypeTyped, setAuthType] = useState<ConnectionFormFields["authType"] | null>(null);
+  const [oauthTokenUrlTyped, setOauthTokenUrl] = useState<string | null>(null);
+  const [apiPathTyped, setApiPath] = useState<string | null>(null);
+  const [timeoutMsTyped, setTimeoutMs] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [apiKeyHeader, setApiKeyHeader] = useState("apikey");
+  const [apiKeyHeaderTyped, setApiKeyHeader] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [bearerToken, setBearerToken] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const [oauthTokenUrl, setOauthTokenUrl] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [samlAssertion, setSamlAssertion] = useState("");
   /*
@@ -385,10 +518,49 @@ function ConnectionForm({
   const [samlSigning, setSamlSigning] = useState<"key" | "assertion">("key");
   const [samlPrivateKey, setSamlPrivateKey] = useState("");
   const [samlUserId, setSamlUserId] = useState("");
-  const [apiPath, setApiPath] = useState("");
-  const [timeoutMs, setTimeoutMs] = useState("");
+  /*
+   * "Allow writes" (P0.3). Null until the person touches the box, and until
+   * then it follows the connection being replaced: ticked when that one allows
+   * writes, so re-saving to rotate credentials keeps them on.
+   */
+  const [allowWritesChoice, setAllowWritesChoice] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A save that went through with a warning from the probe of its new secret: shown before the page reloads. */
+  const [savedWarning, setSavedWarning] = useState<SavedWarning | null>(null);
+
+  /*
+   * THE ROW THIS SAVE REPLACES, and what is stored on it. The key is
+   * normalized exactly as the server stores it, or "SF-Prod" would read as
+   * new against a stored "sf-prod".
+   */
+  const normalizedKey = sanitizeTenantKey(key);
+  const replacing = connections.find((c) => c.product === product && c.key === normalizedKey) ?? null;
+  const stored = storedFormSettings(replacing);
+  const client = clientTyped ?? stored.client;
+  const label = labelTyped ?? stored.label;
+  const baseUrl = baseUrlTyped ?? stored.baseUrl;
+  /** A deactivated row whose stored environment a live row now holds starts blank, as on main (`storedEnvironmentTwin`). */
+  const environmentTwin = storedEnvironmentTwin(replacing, connections);
+  const environment = environmentTyped ?? (environmentTwin ? "" : stored.environment);
+  const authType = authTypeTyped ?? stored.authType;
+  const oauthTokenUrl = oauthTokenUrlTyped ?? stored.oauthTokenUrl;
+  const apiPath = apiPathTyped ?? stored.apiPath;
+  const timeoutMs = timeoutMsTyped ?? stored.timeoutMs;
+  /*
+   * THE API-KEY HEADER IS KEPT, NOT RESET (wave 2 rotation probe review round
+   * 2). It is sealed with the key, so this form cannot show it. Over a stored
+   * API-key connection the field starts blank and, until the person types
+   * in it, the save asks the route to keep the stored header name: a field
+   * that started at "apikey" reset a custom header on every re-save, and the
+   * rotation probe then judged the right key in the wrong header.
+   */
+  const keepStoredApiKeyHeader = apiKeyHeaderTyped === null && replacing?.authType === "api-key";
+  const apiKeyHeader = apiKeyHeaderTyped ?? (keepStoredApiKeyHeader ? "" : "apikey");
+  /** The stored settings this save changes, said before Save (`changedStoredSettings`). */
+  const changedSettings = replacing
+    ? changedStoredSettings(stored, { product, client, label, baseUrl, environment, authType, oauthTokenUrl, apiPath, timeoutMs })
+    : [];
 
   /*
    * TWO ENVIRONMENT VOCABULARIES, RECONCILED ON SIGHT. The connection's
@@ -410,12 +582,32 @@ function ConnectionForm({
    * A warning, not a disabled button: Basic still authenticates until SAP's
    * (tentative) deletion date, and the server saves it too. A key that matches
    * an existing connection of this product is a re-save — credential rotation
-   * on a connection already running — so it gets no notice. The key is
-   * normalized exactly as the server stores it, or "SF-Prod" would read as new
-   * against a stored "sf-prod".
+   * on a connection already running — so it gets no notice.
    */
-  const normalizedKey = sanitizeTenantKey(key);
-  const isNewConnection = !connections.some((c) => c.product === product && c.key === normalizedKey);
+  const isNewConnection = replacing === null;
+  /**
+   * Writes are live on the row being replaced — active AND allowed, the rule
+   * the route applies. A save always leaves the row active, so defaulting
+   * from `writeEnabled` alone re-armed the writes of a deactivated connection.
+   */
+  const writableToday = Boolean(replacing?.isActive && replacing.writeEnabled);
+  /*
+   * WRITES ARE ALLOWED FOR A SYSTEM, NOT A ROW (P0.3 review round 2). A save
+   * that points a writing row at another environment, SAP host or base path,
+   * or SAP client
+   * would switch writes on there for the first time, so the box does not
+   * carry them over: it starts unticked, and ticking it is enabling writes —
+   * the route's rule, by the same function.
+   */
+  const movedFields: WriteTargetField[] = replacing
+    ? writeTargetChanges(replacing, formWriteTarget({ product, environment, baseUrl, client }))
+    : [];
+  const movesWrites = writableToday && movedFields.length > 0;
+  const allowWrites = allowWritesChoice ?? (writableToday && !movesWrites);
+  /** This save would switch off writes the connection allows today (on the system it points at today). */
+  const turnsWritesOff = writableToday && !allowWrites && !movesWrites;
+  /** The upsert stores the row active, so saving a deactivated row brings it back. */
+  const reactivatesRow = replacing !== null && !replacing.isActive;
   const basicAuthNotice =
     authType === "basic" && isNewConnection ? (basicAuthNotices[product] ?? null) : null;
 
@@ -453,48 +645,19 @@ function ConnectionForm({
       const res = await fetchWithStepUp("/api/studio/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product,
-          key: key.trim(),
-          label: label.trim(),
-          baseUrl: baseUrl.trim(),
-          authType,
-          ...(environment.trim() ? { environment: environment.trim() } : {}),
-          /*
-           * Sent only where the product HAS a client. The API rejects one on a
-           * cloud product, so a stale value left behind by switching the picker
-           * from on-premise back to Cloud ERP would otherwise fail the whole
-           * save with a message about a field the form is no longer showing.
-           */
-          ...(PRODUCT_MARKS[product]?.addressesClient && client.trim()
-            ? { client: client.trim() }
-            : {}),
-          ...(apiPath.trim() ? { apiPath: apiPath.trim() } : {}),
-          ...(timeoutMs.trim() && Number.isFinite(Number(timeoutMs))
-            ? { timeoutMs: Number(timeoutMs) }
-            : {}),
-          ...(authType === "basic" ? { username: username.trim(), password } : {}),
-          ...(authType === "bearer" ? { bearerToken } : {}),
-          ...(authType === "api-key"
-            ? { apiKey, ...(apiKeyHeader.trim() ? { apiKeyHeader: apiKeyHeader.trim() } : {}) }
-            : {}),
-          ...(authType === "oauth-saml-bearer"
-            ? {
-                clientId: clientId.trim(),
-                companyId: companyId.trim(),
-                oauthTokenUrl: oauthTokenUrl.trim(),
-                // One credential source or the other, never both: the route
-                // prefers the key, and sending a stale assertion alongside it
-                // would seal a second credential nobody meant to keep.
-                ...(samlSigning === "key"
-                  ? { samlPrivateKey: samlPrivateKey.trim(), samlUserId: samlUserId.trim() }
-                  : { samlAssertion: samlAssertion.trim() }),
-              }
-            : {}),
-          ...(authType === "oauth-client-credentials"
-            ? { clientId: clientId.trim(), clientSecret, oauthTokenUrl: oauthTokenUrl.trim() }
-            : {}),
-        }),
+        body: JSON.stringify(
+          connectionSaveBody(
+            {
+              product, client, key, label, baseUrl, environment, authType, apiKey, apiKeyHeader, keepStoredApiKeyHeader, username,
+              password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion,
+              samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites,
+            },
+            // What this form showed for the row it replaces: the route refuses
+            // the save (409) when the row has changed since the page loaded —
+            // deactivated by an operator, say (P0.3 review round 2).
+            replacing ? { isActive: replacing.isActive, writeEnabled: replacing.writeEnabled } : null,
+          ),
+        ),
       });
       /*
        * A FAILING RESPONSE MAY HAVE NO BODY, AND `.json()` THROWS ON EMPTY.
@@ -518,7 +681,10 @@ function ConnectionForm({
        */
       const json = (await res
         .json()
-        .catch(() => null)) as { error?: { message?: string; correlationId?: string } } | null;
+        .catch(() => null)) as {
+        error?: { message?: string; correlationId?: string };
+        data?: { rotationProbe?: { outcome?: string; warning?: string | null } };
+      } | null;
 
       if (!res.ok) {
         const stated = json?.error?.message;
@@ -533,6 +699,20 @@ function ConnectionForm({
               `with what you entered — report the status code to whoever operates it.`,
         );
       }
+      /*
+       * SAVED, BUT SAP REFUSED THE NEW SECRET OR COULD NOT CHECK IT (wave 2
+       * final review round 3). Under observe the save goes through and its
+       * response says what the probe found; reloading at once would wipe the
+       * one sentence that says calls are about to fail. The typed secrets are
+       * cleared here instead, and the warning stays until the person reloads.
+       */
+      const warning = json?.data?.rotationProbe?.warning;
+      if (warning) {
+        for (const clear of [setPassword, setBearerToken, setApiKey, setClientSecret, setSamlAssertion, setSamlPrivateKey]) clear("");
+        setSavedWarning({ refused: json?.data?.rotationProbe?.outcome === "rejected", text: warning });
+        setBusy(false);
+        return;
+      }
       // A FULL reload, deliberately: the form holds typed SECRETS, and a
       // router.refresh() keeps client state — leaving a password sitting in a
       // React field after save. Reload is the reset that clears it.
@@ -541,7 +721,7 @@ function ConnectionForm({
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, keepStoredApiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, samlSigning, samlPrivateKey, samlUserId, apiPath, timeoutMs, allowWrites, replacing]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -665,6 +845,13 @@ function ConnectionForm({
         </Label>
         <Label text="Environment" hint="Optional. Blank shows no chip rather than a guess.">
           <input value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="DEV" style={input} />
+          {environmentTwin && environmentTyped === null ? (
+            <span data-testid="environment-twin-notice" style={{ fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)" }}>
+              This connection was {replacing?.environment}, but “{environmentTwin.label}” ({environmentTwin.key}) is now the
+              active {replacing?.environment} connection, so the field starts blank. Give this one another environment, or
+              deactivate that one first.
+            </span>
+          ) : null}
           {envOutsideGrantVocabulary && (
             <span style={{ fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)" }}>
               Grants and runtime credentials use SANDBOX, DEV, TEST or PROD — a credential can
@@ -751,8 +938,21 @@ function ConnectionForm({
             {/* SAP's sandbox reads `apikey`; other API-key gateways name theirs
                 differently. Sent as its own header — no Authorization at all,
                 and never a header the transport sets for itself. */}
-            <input value={apiKeyHeader} onChange={(e) => setApiKeyHeader(e.target.value)} placeholder="apikey" style={input} />
+            <input
+              value={apiKeyHeader}
+              onChange={(e) => setApiKeyHeader(e.target.value)}
+              placeholder={keepStoredApiKeyHeader ? "the stored one" : "apikey"}
+              style={input}
+            />
           </Label>
+          {keepStoredApiKeyHeader && (
+            <p
+              data-testid="api-key-header-kept"
+              style={{ gridColumn: "1 / -1", margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--ink-secondary)" }}
+            >
+              Header name left blank keeps the one this connection stores. It is sealed with the key, so it is not shown.
+            </p>
+          )}
         </div>
       )}
       {authType === "oauth-saml-bearer" && (
@@ -841,9 +1041,82 @@ function ConnectionForm({
         </div>
       )}
 
+      <fieldset
+        style={{ margin: 0, padding: 12, border: "1px solid var(--border-default)", borderRadius: "var(--radius-input, 8px)", display: "flex", flexDirection: "column", gap: 8 }}
+      >
+        <legend style={{ padding: "0 4px", fontSize: 13, fontWeight: 600, color: "var(--ink-primary)" }}>Writes</legend>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--ink-primary)" }}>
+          <input
+            type="checkbox"
+            checked={allowWrites}
+            onChange={(e) => setAllowWritesChoice(e.target.checked)}
+            aria-describedby="connection-writes-hint"
+          />
+          Allow writes through this connection
+        </label>
+        <span id="connection-writes-hint" style={{ fontSize: 11, lineHeight: "16px", color: "var(--ink-muted)" }}>
+          A create interface writes into SAP only through a connection that allows writes, for a declared
+          environment, with an approved write grant and a write key issued under API Access. Allowing writes is a
+          governance action: Save asks for your passkey and the change is recorded.
+        </span>
+        {turnsWritesOff ? (
+          <p role="status" data-testid="writes-off-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+            This connection allows writes today. Saving it without Allow writes turns them off, and every create through
+            it is refused until it is saved again with writes allowed.
+          </p>
+        ) : null}
+        {movesWrites ? (
+          <p role="status" data-testid="writes-moved-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+            This connection allows writes on {describeTarget(replacing)}. This save points it at a different{" "}
+            {movedFields.map((f) => TARGET_FIELD_NAMES[f]).join(", ")}, so Allow writes starts unticked: writes are not
+            carried to another system. Ticking it switches writes on for the new one, which asks for your passkey and is
+            recorded as enabling writes.
+          </p>
+        ) : null}
+      </fieldset>
+
+      {reactivatesRow ? (
+        <p role="status" data-testid="reactivates-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+          This connection is deactivated. Saving it makes it active again
+          {allowWrites ? ", with writes on" : ""}, so it serves calls from then on. If it was stopped on purpose, check
+          with whoever stopped it first.
+        </p>
+      ) : null}
+
+      {changedSettings.length > 0 ? (
+        <p role="status" data-testid="settings-changed-notice" style={{ margin: 0, fontSize: 12, lineHeight: "18px", color: "var(--status-awaiting-fg)" }}>
+          This save changes the stored {changedSettings.map((f) => STORED_SETTING_NAMES[f]).join(", ")} of this connection.
+          Fields left as they were keep what is stored.
+        </p>
+      ) : null}
+
       {error && (
         <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">{error}</p>
       )}
+
+      {savedWarning ? (
+        <div
+          role="alert"
+          data-testid="rotation-probe-warning"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 12,
+            borderRadius: "var(--radius-input, 8px)",
+            background: savedWarning.refused ? "var(--status-revoked-bg)" : "var(--status-awaiting-bg)",
+            color: savedWarning.refused ? "var(--status-revoked-fg)" : "var(--status-awaiting-fg)",
+          }}
+        >
+          <strong style={{ fontSize: 13 }}>Saved, with a warning</strong>
+          <span style={{ fontSize: 13, lineHeight: "20px" }}>{savedWarning.text}</span>
+          <span>
+            <button type="button" style={testBtn} onClick={() => window.location.reload()}>
+              Reload connections
+            </button>
+          </span>
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
@@ -866,6 +1139,49 @@ function ConnectionForm({
       </p>
     </div>
   );
+}
+
+/** What a save that went through says about the probe of its new secret (rotation.ts `rotationProbeWarning`). */
+interface SavedWarning {
+  /** SAP refused the new secret: drawn as an error, not a caution. */
+  readonly refused: boolean;
+  readonly text: string;
+}
+
+/** How the settings-changed notice names each stored setting. */
+const STORED_SETTING_NAMES: Record<StoredSetting, string> = {
+  label: "label",
+  baseUrl: "base URL",
+  environment: "environment",
+  client: "SAP client",
+  authType: "auth type",
+  oauthTokenUrl: "token URL",
+  apiPath: "probe path",
+  timeoutMs: "timeout",
+};
+
+/** How the moved-writes notice names each part of the write target. */
+const TARGET_FIELD_NAMES: Record<WriteTargetField, string> = {
+  environment: "environment",
+  baseUrl: "SAP host or base path",
+  client: "SAP client",
+};
+
+/**
+ * The system a row's writes are allowed for, in words: "DEV at host/path
+ * client 100". The base path is named with the host, because behind a
+ * path-routed gateway it is what tells two systems apart (review round 3).
+ */
+function describeTarget(c: Pick<StudioConnection, "environment" | "baseUrl" | "client"> | null): string {
+  if (!c) return "";
+  let host = c.baseUrl;
+  try {
+    const url = new URL(c.baseUrl);
+    host = `${url.host}${url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    // Shown as stored.
+  }
+  return `${c.environment ?? "an undeclared environment"} at ${host}${c.client ? ` client ${c.client}` : ""}`;
 }
 
 function Label({ text, hint, children }: { text: string; hint?: string; children: React.ReactNode }) {

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
-import { listPassport } from "@/lib/coreedge/queries";
+import { listPassport, type PassportRow } from "@/lib/coreedge/queries";
 import { GATE_GLYPHS, KEY_STATE_GATES } from "@/lib/coreedge/status-vocabulary";
 import { getCurrentUser } from "@/lib/auth/session";
 import { KEY_STATE_LABELS } from "@/lib/northbound/key-policy";
@@ -21,9 +21,21 @@ import { CoreEdgeShell } from "../CoreEdgeShell";
  * would be an action with no author, which is the opposite of what a passport
  * is for. The query behind it has no write path either.
  *
- * SANDBOX NEVER APPEARS. Sandbox reads ABeam's own API Hub, not the client's
- * system — so a sandbox approval moves no client data and listing it here would
- * overstate what leaves SAP. See PASSPORT_DECISIONS.
+ * SANDBOX NEVER APPEARS, AND NEITHER DOES LAPSED ACCESS (P0.3, A58). Sandbox
+ * reads ABeam's own API Hub, not the client's system — so a sandbox approval
+ * moves no client data and listing it here would overstate what leaves SAP.
+ * It is excluded by its ENVIRONMENT: since D2 a sandbox request is approved as
+ * APPROVED, so excluding the SANDBOX_ONLY decision alone listed every new one.
+ * An approval that has expired or been revoked is excluded by the same rule
+ * the broker applies (`isPassportGrant` in queries.ts): the screen used to
+ * list a grant that lapsed in February as current access, for ever.
+ *
+ * EVERY ROW SAYS WHETHER IT IS A READ OR A WRITE (P0.3 review round 1). A
+ * READ and a CREATE approval for one feed are two rows; with no Access column
+ * they rendered identically, so a CIO could not tell which one lets the app
+ * write into SAP, or ask for that one to stop. "Writes into SAP" counts the
+ * approvals that do (`writesIntoSap`, the broker's `grantsWrite`): a write
+ * approval decided READ_ONLY writes nothing, and its row says so.
  *
  * THE FIELDS COLUMN IS BLANK, AND SAYS WHY. X06 shows "12 of 71" on every row
  * and calls it the fact that matters. Nothing in this schema records which
@@ -44,6 +56,17 @@ function dateLine(at: Date | null): string {
   return at === null ? "—" : at.toISOString().slice(0, 10);
 }
 
+/** What the approval lets the app do in SAP, in the CIO's words. */
+function accessLine(r: Pick<PassportRow, "operation" | "writesIntoSap">): string {
+  const operation = r.operation.trim().toUpperCase();
+  if (operation === "READ") return "Read";
+  const verb = operation.toLowerCase();
+  if (r.writesIntoSap) return `Write: ${verb}`;
+  // A write approval decided READ_ONLY: in force, so listed, but the broker
+  // refuses every write it would carry.
+  return `${verb.charAt(0).toUpperCase()}${verb.slice(1)} approved read only: no write`;
+}
+
 export default async function PassportPage(): Promise<ReactNode> {
   const user = await getCurrentUser();
   if (!user) redirect("/presales/login");
@@ -61,13 +84,13 @@ export default async function PassportPage(): Promise<ReactNode> {
   const rows = await listPassport(user.organizationId);
   const apps = new Set(rows.map((r) => r.appName)).size;
   const feeds = new Set(rows.map((r) => r.externalId)).size;
-  const writes = rows.filter((r) => r.operation.toUpperCase() !== "READ").length;
+  const writes = rows.filter((r) => r.writesIntoSap).length;
 
   return (
     <CoreEdgeShell
       current="/coreedge/passport"
       title="Passport"
-      subtitle="Everything ABeam apps are approved to read from this SAP system"
+      subtitle="Every approval in force for your SAP systems: what ABeam apps may read, and write"
     >
       <p className="max-w-prose text-sm text-ink-muted">
         {GATE_GLYPHS["gate-info"]} {SCREEN_NOTES.passportReadOnly}
@@ -75,7 +98,7 @@ export default async function PassportPage(): Promise<ReactNode> {
 
       <dl className="flex flex-wrap gap-8">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-ink-muted">Apps reading</dt>
+          <dt className="text-xs uppercase tracking-wide text-ink-muted">Apps with access</dt>
           <dd className="text-2xl text-ink">{apps}</dd>
         </div>
         <div>
@@ -89,14 +112,22 @@ export default async function PassportPage(): Promise<ReactNode> {
       </dl>
 
       <OpsTable
-        caption="Approved reads, by app and data feed"
-        legend={<span>Every line has a person who approved it and a date it stops.</span>}
+        caption="Approvals in force, by app and data feed"
+        legend={
+          <span>
+            Every line names who approved it, and the date it stops if it has one. Approvals that have
+            ended are not listed, and neither is sandbox access, which never reaches your system.
+          </span>
+        }
         rows={rows}
-        rowKey={(r) => `${r.appName}::${r.externalId}::${r.environmentRaw}`}
+        // The grant's id: app, feed and environment are shared by a READ and a
+        // CREATE approval for one feed, and a shared key drops a row.
+        rowKey={(r) => r.id}
         empty={<p className="text-sm text-ink-soft">{EMPTY_STATES.passportNone.message}</p>}
         columns={[
           { key: "app", header: "App", cell: (r) => r.appName },
           { key: "feed", header: "Data feed", cell: (r) => r.feedName },
+          { key: "access", header: "Access", cell: (r) => accessLine(r) },
           {
             key: "fields",
             header: "Fields",

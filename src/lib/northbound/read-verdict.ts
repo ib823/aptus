@@ -13,7 +13,7 @@
  *
  *   1. the grant gate                  decideReadAccess (access.ts) — the
  *      read path's own decision, P0.1's grant binding included;
- *   2. the connection binding          selectConnectionForEnvironment, the
+ *   2. the connection binding          bindingFor (authorisation.ts), the
  *      function resolveSapConnectionForEnvironment applies, on the
  *      organization's active rows for the product, with the credential's
  *      environment and SAP client;
@@ -47,16 +47,14 @@ import {
   type ReadableInterfaceRow,
 } from "@/lib/northbound/access";
 import { resolveReadDefinition, type ReadDefinitionRefusal } from "@/lib/northbound/read-definition";
-import {
-  listBindableConnections,
-  selectConnectionForEnvironment,
-  type ConnectionBindingFailure,
-} from "@/lib/sap-public/connection-resolver";
+import { transportRefusal, type TransportRefusal } from "@/lib/governed/transport";
+import { bindingFor } from "@/lib/northbound/authorisation";
+import { listBindableConnections, type ConnectionBindingFailure } from "@/lib/sap-public/connection-resolver";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { grantBindingMode, grantFetchedFor } from "@/lib/studio/grant-binding";
 
 /** Why the broker would refuse the read — the reason the data route would audit. */
-export type ReadRefusal = AccessRefusal | ConnectionBindingFailure | ReadDefinitionRefusal;
+export type ReadRefusal = AccessRefusal | ConnectionBindingFailure | TransportRefusal | ReadDefinitionRefusal;
 
 export interface ReadVerdictInput {
   organizationId: string;
@@ -77,14 +75,17 @@ export interface ReadVerdictInput {
 export async function readVerdicts(input: ReadVerdictInput): Promise<Map<string, ReadRefusal | null>> {
   const mode = grantBindingMode();
   const verdicts = new Map<string, ReadRefusal | null>();
-  const bindings = new Map<string, Promise<ConnectionBindingFailure | null>>();
+  const bindings = new Map<string, Promise<ConnectionBindingFailure | TransportRefusal | null>>();
   const definitions = new Map<string, Promise<ReadDefinitionRefusal | null>>();
-  const bindingFor = (product: string) => {
+  const bindingOf = (product: string) => {
     let pending = bindings.get(product);
     if (!pending) {
       pending = listBindableConnections(input.organizationId, product).then((rows) => {
-        const selection = selectConnectionForEnvironment(rows, input.environment, "READ", input.sapClient);
-        return selection.ok ? null : selection.reason;
+        // The broker's binding predicate (P0.2), on rows never opened, then
+        // the bound connection's transport, as the binding step asks it
+        // (wave 2 integration review round 3).
+        const selection = bindingFor({ kind: "connections", connections: rows }, input.environment, "read", input.sapClient);
+        return selection.ok ? transportRefusal(selection.connection) : selection.reason;
       });
       bindings.set(product, pending);
     }
@@ -111,7 +112,7 @@ export async function readVerdicts(input: ReadVerdictInput): Promise<Map<string,
       verdicts.set(iface.id, "UNKNOWN_PRODUCT");
       continue;
     }
-    const binding = await bindingFor(iface.sapProduct);
+    const binding = await bindingOf(iface.sapProduct);
     if (binding) {
       verdicts.set(iface.id, binding);
       continue;

@@ -67,6 +67,8 @@
  */
 import type { $Enums } from "@prisma/client";
 
+import { connectionHealthVerdict } from "@/lib/coreedge/freshness";
+
 export type NodeKind =
   | "caller"
   | "credential"
@@ -408,7 +410,7 @@ export interface ConnectionInput {
  * asking and being answered. Undeclared environment outranks it, because that
  * is a standing defect while a missing probe is only an absence of information.
  */
-export function deriveConnection(c: ConnectionInput): DerivedGrant {
+export function deriveConnection(c: ConnectionInput, now: Date = new Date()): DerivedGrant {
   if (!c.environment) {
     return {
       state: "defect",
@@ -427,10 +429,24 @@ export function deriveConnection(c: ConnectionInput): DerivedGrant {
       incidentId: "connection-unhealthy",
     };
   }
-  if (c.lastValidatedAt == null) {
-    return { state: "never-observed", ended: null, quiet: false, badge: null };
+  /*
+   * GREEN MEANS RECENTLY (P0.2, A50). An OK older than the connection proof
+   * TTL is a claim about our evidence, not about SAP: drawn as not observed,
+   * with a badge saying why, never as observed-good.
+   *
+   * AND GREEN IS THE SHARED VERDICT'S, NOT THE TIMESTAMP'S (P0.2 review round
+   * 7). This read `lastValidatedAt` alone: any success time meant observed.
+   * Clearing a "will not open" status once the set opens leaves a null status
+   * beside the last success, so that row — no probe since, its success 30
+   * days old — was drawn green while every other screen said "never tested".
+   * Only a status the shared reading calls healthy is drawn observed-good.
+   */
+  const verdict = connectionHealthVerdict(c, now);
+  if (verdict === "healthy") return { state: "observed-good", ended: null, quiet: false, badge: null };
+  if (verdict === "stale" && c.lastValidatedAt != null) {
+    return { state: "never-observed", ended: null, quiet: false, badge: "STALE" };
   }
-  return { state: "observed-good", ended: null, quiet: false, badge: null };
+  return { state: "never-observed", ended: null, quiet: false, badge: null };
 }
 
 /** Does this decision confer any access at all? Exported for the PROD test. */

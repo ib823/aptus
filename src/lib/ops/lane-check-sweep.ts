@@ -28,21 +28,45 @@
  * request and had nothing to return — the path works. The handoff is explicit:
  * a 0-row SAP response is gate-info, never an error.
  *
+ * THE METADATA FACT IS THE LANE'S OWN SERVICE'S (P0.3, A30). The probe asks
+ * `$metadata` of the service the lane reads, resolved exactly as the read is.
+ * It used to ask the connection's default probe path (its apiPath, or the
+ * product's first curated service) and record that answer under every
+ * service on the system, so the SAP systems screen showed "Metadata OK" for a
+ * service whose description was never requested, or NOT_FOUND for one that
+ * reads fine. One probe per (connection, service) per run: several lanes on
+ * one service share it (`MetadataMemo`).
+ *
  * THE CONNECTION SWEEP IS UNCHANGED AND STILL RUNS. This one answers a
  * different question and writes different rows; neither replaces the other.
  */
 
+import type { Prisma } from "@prisma/client";
+
+import {
+  laneAuthorisation,
+  type LaneConnection,
+  type LaneCredentialRow,
+  type LaneGrantRow,
+} from "@/lib/coreedge/lane-authorisation";
+import {
+  isLaneCheckedApp,
+  LANE_CHECKED_APP_STATUSES,
+  LANE_ENVIRONMENTS,
+  parseLaneEnvironment,
+  type LaneEnvironment,
+  type LEDGER_READ_STATUSES,
+} from "@/lib/coreedge/lanes";
 import { prisma } from "@/lib/db/prisma";
 import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
-import { LANE_CHECKED_APP_STATUSES, parseLaneEnvironment } from "@/lib/coreedge/lanes";
+import { GRANT_SELECT, READABLE_INTERFACE_SELECT } from "@/lib/northbound/access";
+import type { AuthorisableInterface, BindingEstate } from "@/lib/northbound/authorisation";
+import { loadBindingEstate } from "@/lib/northbound/binding";
 import { readEntitySet } from "@/lib/northbound/read";
-import {
-  resolveSapConnections,
-  type ResolvedSapConnection,
-} from "@/lib/sap-public/connection-resolver";
+import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import { resolveInterfaceService } from "@/lib/sap-public/interface-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { probeConnection, resolveProbePath } from "@/lib/studio/connection-health";
+import { fetchMetadataDocument } from "@/lib/studio/connection-health";
 
 const SWEEP_CONCURRENCY = 4;
 
@@ -65,8 +89,29 @@ export interface LaneSweepResult {
    * and a failure recorded against SAP would blame the client for our config.
    */
   readonly skippedNoService: number;
-  /** Connections whose stored secret would not open. */
+  /**
+   * Lanes the broker refuses on access (authorisesHere, P0.2): no grant
+   * authorises them here, or the feed is deprecated, a draft writer or an
+   * update. Nothing a read could prove would make them callable, and an "OK"
+   * written for one is how the board came to show them Live (A14).
+   */
+  readonly skippedNoAccess: number;
+  /** Lanes whose product's stored connection secret would not open. */
   readonly unreadable: number;
+  /**
+   * Lanes whose connection is served by the Tenant Twin (transport TWIN).
+   * The sweep reads with the platform's own fetch and the stored
+   * credentials, and a TWIN connection is kept off the customer's SAP, so it
+   * is not read (wave 2 integration review round 3).
+   */
+  readonly skippedTwin: number;
+  /**
+   * Lanes read, and their answer discarded, because their connection was
+   * re-saved while the read ran (`recordLaneCheck`): the answer was about the
+   * previous settings. Counted in `checked` and `byReadStatus` too, since SAP
+   * was asked; the next check records the new settings' answer.
+   */
+  readonly discardedConnectionChanged: number;
   readonly byReadStatus: Readonly<Record<string, number>>;
 }
 
@@ -131,7 +176,10 @@ export function laneServiceKey(feed: {
  * second taxonomy. A 403 arrives as ERROR with httpStatus 403, so it is mapped
  * explicitly — FORBIDDEN and ERROR have different owners.
  */
-export function ledgerReadStatus(status: string, httpStatus: number | null): string {
+export function ledgerReadStatus(
+  status: string,
+  httpStatus: number | null,
+): (typeof LEDGER_READ_STATUSES)[number] {
   if (status === "OK" || status === "EMPTY" || status === "NOT_FOUND" || status === "TIMEOUT") {
     return status;
   }
@@ -139,6 +187,7 @@ export function ledgerReadStatus(status: string, httpStatus: number | null): str
   if (httpStatus === 401) return "UNAUTHORIZED";
   return "ERROR";
 }
+
 
 interface LaneTarget {
   readonly organizationId: string;
@@ -152,96 +201,139 @@ interface LaneTarget {
   readonly odataVersion: string | null;
   /**
    * Non-null by construction. A feed with no entity set has nothing to read, so
-   * it is not a checkable lane — see the filter in `laneTargets`.
+   * it is not a checkable lane — see `planLaneCheck`.
    */
   readonly entitySet: string;
+  /** The feed's version when it was checked: the evidence is keyed by it (A18). */
+  readonly interfaceVersion: number;
+}
+
+/** Why the sweep — or a person's Re-check — does not read SAP for a lane. */
+export type LaneCheckSkip = "appNotLive" | "noEntitySet" | "accessRefused" | "unreadable" | "noConnection" | "servedByTwin";
+
+/** The rows `planLaneCheck` judges one lane on. */
+export interface LaneCheckPlanInput<C extends LaneConnection> {
+  readonly solutionStatus: string;
+  readonly feed: AuthorisableInterface;
+  readonly environment: LaneEnvironment;
+  /** The solution's grants, newest first. */
+  readonly grants: readonly LaneGrantRow[];
+  readonly credential: LaneCredentialRow | null;
+  readonly estate: BindingEstate<C>;
+  readonly now: Date;
 }
 
 /**
- * Every lane worth checking: a live (ACTIVE or RESTRICTED) app's feed, in an
- * environment where an active SAP connection claims to serve it.
+ * Should SAP be read for this lane, and through which connection? THE ONE
+ * PLAN the nightly sweep and a person's Re-check both follow, in this order:
  *
- * A lane with no connection is not checked and not recorded as failing. There
- * is nothing to ask, and writing a failure would blame SAP for a binding that
- * nobody has made — the derivation already renders that case from the binding
- * facts it has.
+ *   1. appNotLive     — only apps that carry traffic (ACTIVE, RESTRICTED). A
+ *                       retired or draft app's lane is not read on demand
+ *                       either (A70): retiring an app stops its reads.
+ *   2. noEntitySet    — there is no read to attempt.
+ *   3. accessRefused  — the broker refuses the lane's access (authorisesHere):
+ *                       the sweep used to write fresh "OK" evidence for lanes
+ *                       nobody may call, which is how the board came to show
+ *                       them Live (A14).
+ *   4. unreadable / noConnection — the broker would bind no connection
+ *                       (bindingFor, on the feed's product, with the lane's
+ *                       credential's SAP client). The sweep used to read
+ *                       through whichever connection declared the
+ *                       environment, whatever its product or client (A15).
+ *   5. servedByTwin   — the connection it would bind is not reached DIRECT
+ *                       (transport.ts `reachedDirectly`): its stored
+ *                       credentials are never sent to its base URL from here
+ *                       (wave 2 integration review round 3).
+ *
+ * The service is resolved after, by the caller: it is asynchronous.
  */
-async function laneTargets(): Promise<{
-  readonly targets: readonly LaneTarget[];
-  readonly skippedNoConnection: number;
-  readonly skippedNoEntitySet: number;
-}> {
-  const [solutions, connections] = await Promise.all([
-    prisma.solution.findMany({
-      // ACTIVE and RESTRICTED: both carry traffic (lanes.ts, isLaneCheckedApp).
-      where: { status: { in: [...LANE_CHECKED_APP_STATUSES] } },
-      select: {
-        id: true,
-        organizationId: true,
-        interfaces: {
-          select: {
-            id: true,
-            sapProduct: true,
-            externalId: true,
-            entitySet: true,
-            servicePath: true,
-            odataVersion: true,
-          },
-        },
-      },
-    }),
-    prisma.sapConnection.findMany({
-      where: { isActive: true },
-      select: { id: true, organizationId: true, environment: true },
-    }),
-  ]);
-
-  const environmentsByOrg = new Map<string, Set<string>>();
-  for (const c of connections) {
-    const env = parseLaneEnvironment(c.environment);
-    if (env === null) continue;
-    const set = environmentsByOrg.get(c.organizationId) ?? new Set<string>();
-    set.add(env);
-    environmentsByOrg.set(c.organizationId, set);
+export function planLaneCheck<C extends LaneConnection>(
+  input: LaneCheckPlanInput<C>,
+): { readonly ok: true; readonly connection: C } | { readonly ok: false; readonly skipped: LaneCheckSkip } {
+  if (!isLaneCheckedApp(input.solutionStatus)) return { ok: false, skipped: "appNotLive" };
+  if (input.feed.entitySet === null || input.feed.entitySet === "") return { ok: false, skipped: "noEntitySet" };
+  const auth = laneAuthorisation({
+    iface: input.feed,
+    solutionId: input.feed.solutionId,
+    environment: input.environment,
+    grants: input.grants,
+    credential: input.credential,
+    estate: input.estate,
+    now: input.now,
+  });
+  if (auth.access.refusal !== null) return { ok: false, skipped: "accessRefused" };
+  if (auth.notDirect) return { ok: false, skipped: "servedByTwin" };
+  if (auth.bound === null) {
+    return { ok: false, skipped: auth.binding.refusal === "CONNECTION_UNREADABLE" ? "unreadable" : "noConnection" };
   }
+  return { ok: true, connection: auth.bound };
+}
 
-  const targets: LaneTarget[] = [];
-  let skippedNoConnection = 0;
-  let skippedNoEntitySet = 0;
+/** The interface fields the plan and the ledger need. */
+const FEED_SELECT = { ...READABLE_INTERFACE_SELECT } as const;
 
-  for (const solution of solutions) {
-    const environments = environmentsByOrg.get(solution.organizationId) ?? new Set<string>();
-    for (const feed of solution.interfaces) {
-      const entitySet = feed.entitySet;
-      if (entitySet === null || entitySet === "") {
-        skippedNoEntitySet++;
-        continue;
-      }
-      for (const environment of ["SANDBOX", "DEV", "TEST", "PROD"]) {
-        if (!environments.has(environment)) {
-          skippedNoConnection++;
-          continue;
-        }
-        targets.push({
-          organizationId: solution.organizationId,
-          solutionId: solution.id,
-          interfaceId: feed.id,
-          environment,
-          product: feed.sapProduct,
-          externalId: feed.externalId,
-          servicePath: feed.servicePath ?? null,
-          odataVersion: feed.odataVersion ?? null,
-          entitySet,
-        });
-      }
-    }
-  }
+/**
+ * The credential fields the plan needs: its environment and SAP client, which
+ * the binding is made with. Never the sealed write key — the plan does not
+ * judge keys (a lane with no key is still worth proving for the day it gets
+ * one), and Ops code never names that column in a select.
+ */
+const CREDENTIAL_SELECT = {
+  solutionId: true,
+  environment: true,
+  sapClient: true,
+  isActive: true,
+  revokedAt: true,
+  expiresAt: true,
+} as const;
 
-  return { targets, skippedNoConnection, skippedNoEntitySet };
+function credentialFor(
+  clients: readonly {
+    solutionId: string;
+    environment: string;
+    sapClient: string | null;
+    isActive: boolean;
+    revokedAt: Date | null;
+    expiresAt: Date | null;
+  }[],
+  solutionId: string,
+  environment: LaneEnvironment,
+): LaneCredentialRow | null {
+  const c = clients.find((x) => x.solutionId === solutionId && parseLaneEnvironment(x.environment) === environment);
+  return c === undefined
+    ? null
+    : {
+        environment: c.environment,
+        sapClient: c.sapClient,
+        isActive: c.isActive,
+        revokedAt: c.revokedAt,
+        expiresAt: c.expiresAt,
+        // Not read here, and not judged by the plan (see above).
+        writeKeyIssued: false,
+      };
+}
+
+function targetOf(
+  organizationId: string,
+  feed: AuthorisableInterface,
+  environment: LaneEnvironment,
+): LaneTarget {
+  return {
+    organizationId,
+    solutionId: feed.solutionId,
+    interfaceId: feed.id,
+    environment,
+    product: feed.sapProduct,
+    externalId: feed.externalId,
+    servicePath: feed.servicePath ?? null,
+    odataVersion: feed.odataVersion ?? null,
+    entitySet: feed.entitySet ?? "",
+    interfaceVersion: feed.version,
+  };
 }
 
 /**
- * Probe and read every active lane, recording both outcomes.
+ * Probe and read every lane the broker would serve, recording both outcomes.
  *
  * Writes the per-lane ledger AND SapServiceHealth. The two are not redundant:
  * the ledger answers "can this app read this dataset here", the matrix answers
@@ -252,16 +344,38 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
   // Fleet-wide by design, like the connection sweep it runs beside.
   permitCrossTenantReads("lane-check-sweep: fleet-wide scheduled lane probe");
 
-  const { targets, skippedNoConnection, skippedNoEntitySet } = await laneTargets();
+  const solutions = await prisma.solution.findMany({
+    // ACTIVE and RESTRICTED: both carry traffic (lanes.ts, isLaneCheckedApp).
+    where: { status: { in: [...LANE_CHECKED_APP_STATUSES] } },
+    select: { id: true, organizationId: true, status: true, interfaces: { select: FEED_SELECT } },
+  });
+  const solutionIds = solutions.map((s) => s.id);
+  const [grants, clients] = await Promise.all([
+    prisma.apiAccessGrant.findMany({
+      where: { solutionId: { in: solutionIds } },
+      select: { ...GRANT_SELECT, organizationId: true, solutionId: true, externalId: true, environment: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.solutionClient.findMany({
+      where: { solutionId: { in: solutionIds } },
+      select: { ...CREDENTIAL_SELECT, organizationId: true },
+    }),
+  ]);
 
   const result = {
     checked: 0,
-    skippedNoConnection,
-    skippedNoEntitySet,
+    skippedNoConnection: 0,
+    skippedNoEntitySet: 0,
     skippedNoService: 0,
+    skippedNoAccess: 0,
     unreadable: 0,
+    skippedTwin: 0,
+    discardedConnectionChanged: 0,
     byReadStatus: {} as Record<string, number>,
   };
+
+  // One $metadata request per (connection, service) per run (A30).
+  const metadata: MetadataMemo = new Map();
 
   // One lookup per distinct service per run: a feed is checked in up to four
   // environments, and the service it names is the same in all of them. Keyed
@@ -277,126 +391,161 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
     return path;
   };
 
-  // Grouped by (org, product) so secrets open through the same resolver every
-  // other read path uses, and resolved once per group rather than per lane.
-  const groups = new Map<string, LaneTarget[]>();
-  for (const t of targets) {
-    const key = `${t.organizationId}::${t.product}`;
-    groups.set(key, [...(groups.get(key) ?? []), t]);
+  // Grouped by (org, product) so secrets open through the same resolver the
+  // broker uses, once per group rather than per lane.
+  const groups = new Map<string, { solution: (typeof solutions)[number]; feed: AuthorisableInterface }[]>();
+  for (const solution of solutions) {
+    for (const feed of solution.interfaces) {
+      const key = `${solution.organizationId}::${feed.sapProduct}`;
+      groups.set(key, [...(groups.get(key) ?? []), { solution, feed }]);
+    }
   }
 
-  for (const [groupKey, groupTargets] of groups) {
+  for (const [groupKey, members] of groups) {
     const [organizationId, product] = groupKey.split("::") as [string, string];
-    let resolved: ResolvedSapConnection[];
-    try {
-      resolved = await resolveSapConnections(organizationId, product);
-    } catch {
-      // The secret would not open. No probe ran, so there is no tenant fact to
-      // record — the same rule probeOneConnection follows.
-      result.unreadable += groupTargets.length;
-      continue;
-    }
+    const estate = await loadBindingEstate(organizationId, product);
+    const orgGrants = grants.filter((g) => g.organizationId === organizationId);
+    const orgClients = clients.filter((c) => c.organizationId === organizationId);
 
-    const byEnvironment = new Map<string, ResolvedSapConnection>();
-    for (const c of resolved) {
-      const env = parseLaneEnvironment(c.environment ?? null);
-      if (env !== null) byEnvironment.set(env, c);
+    const work: { target: LaneTarget; connection: ResolvedSapConnection }[] = [];
+    for (const { solution, feed } of members) {
+      for (const environment of LANE_ENVIRONMENTS) {
+        const plan = planLaneCheck({
+          solutionStatus: solution.status,
+          feed,
+          environment,
+          grants: orgGrants.filter((g) => g.solutionId === solution.id),
+          credential: credentialFor(orgClients, solution.id, environment),
+          estate,
+          now,
+        });
+        if (!plan.ok) {
+          countSkip(result, plan.skipped);
+          continue;
+        }
+        work.push({ target: targetOf(organizationId, feed, environment), connection: plan.connection });
+      }
     }
 
     let cursor = 0;
     async function worker(): Promise<void> {
-      while (cursor < groupTargets.length) {
-        const target = groupTargets[cursor++];
-        if (!target) continue;
-        const connection = byEnvironment.get(target.environment);
-        if (!connection) {
-          result.skippedNoConnection++;
-          continue;
-        }
-        const servicePath = await servicePathFor(target);
+      while (cursor < work.length) {
+        const item = work[cursor++];
+        if (!item) continue;
+        const servicePath = await servicePathFor(item.target);
         if (servicePath === null) {
           result.skippedNoService++;
           continue;
         }
-        await checkOneLane(target, servicePath, connection, now, result);
+        await checkOneLane(item.target, servicePath, item.connection, now, result, metadata);
       }
     }
-    await Promise.all(
-      Array.from({ length: Math.min(SWEEP_CONCURRENCY, groupTargets.length) }, worker),
-    );
+    await Promise.all(Array.from({ length: Math.min(SWEEP_CONCURRENCY, work.length) }, worker));
   }
 
   return result;
 }
 
+function countSkip(
+  result: {
+    skippedNoConnection: number;
+    skippedNoEntitySet: number;
+    skippedNoAccess: number;
+    unreadable: number;
+    skippedTwin: number;
+  },
+  skipped: LaneCheckSkip,
+): void {
+  switch (skipped) {
+    case "appNotLive":
+      // Not fetched at all: the query takes live apps only.
+      return;
+    case "noEntitySet":
+      result.skippedNoEntitySet++;
+      return;
+    case "accessRefused":
+      result.skippedNoAccess++;
+      return;
+    case "unreadable":
+      result.unreadable++;
+      return;
+    case "noConnection":
+      result.skippedNoConnection++;
+      return;
+    case "servedByTwin":
+      result.skippedTwin++;
+      return;
+  }
+}
+
 /**
  * Re-check ONE lane, now, because a person asked.
  *
- * THE SAME WORK THE SWEEP DOES, not a second implementation of it. It resolves
- * the connection through the same resolver and calls the same `checkOneLane`,
- * so a lane re-checked by hand and a lane re-checked at 04:30 write the same
- * two rows and produce the same status. A "quick" variant that probed without
- * reading would re-introduce the reachable-means-readable overclaim this whole
- * module exists to remove.
+ * THE SAME WORK THE SWEEP DOES, not a second implementation of it. It plans
+ * the lane with the same `planLaneCheck`, binds the same connection and calls
+ * the same `checkOneLane`, so a lane re-checked by hand and a lane re-checked
+ * at 04:30 write the same two rows and produce the same status. A "quick"
+ * variant that probed without reading would re-introduce the
+ * reachable-means-readable overclaim this whole module exists to remove.
  *
  * THE REFUSALS ARE THE SWEEP'S OWN SKIPS, named. A caller gets back which of
  * them applied rather than a bare failure, because the screen already has words
  * for each: a feed with no dataset has nothing to read, and no amount of
- * re-checking will change that.
+ * re-checking will change that. A retired or draft app is one of them (A70): it
+ * used to be read on demand although the sweep never reads it.
  */
 export type LaneRecheckOutcome =
   | { readonly ok: true; readonly readStatus: string; readonly checkedAt: Date }
-  | {
-      readonly ok: false;
-      readonly skipped: "noEntitySet" | "noConnection" | "noService" | "unreadable";
-    };
+  /**
+   * `connectionChanged`: SAP was read, and the connection was re-saved while
+   * it was, so the answer described the previous settings and was not
+   * recorded (`recordLaneCheck`).
+   */
+  | { readonly ok: false; readonly skipped: LaneCheckSkip | "noService" | "connectionChanged" };
 
 export async function recheckOneLane(
   organizationId: string,
   solutionId: string,
   interfaceId: string,
-  environment: string,
+  environment: LaneEnvironment,
   now: Date = new Date(),
 ): Promise<LaneRecheckOutcome> {
   // Scoped to one lane, so no cross-tenant permit is taken out: unlike the
   // fleet sweep, this read belongs to the caller's own organization.
   const feed = await prisma.interface.findFirst({
     where: { id: interfaceId, solutionId, organizationId },
-    select: {
-      id: true,
-      sapProduct: true,
-      externalId: true,
-      entitySet: true,
-      servicePath: true,
-      odataVersion: true,
-    },
+    select: { ...FEED_SELECT, solution: { select: { status: true } } },
   });
-  if (feed === null || feed.entitySet === null || feed.entitySet === "") {
-    return { ok: false, skipped: "noEntitySet" };
-  }
+  if (feed === null) return { ok: false, skipped: "noEntitySet" };
 
-  let resolved: ResolvedSapConnection[];
-  try {
-    resolved = await resolveSapConnections(organizationId, feed.sapProduct);
-  } catch {
-    return { ok: false, skipped: "unreadable" };
-  }
+  const [grants, clients] = await Promise.all([
+    prisma.apiAccessGrant.findMany({
+      where: { organizationId, solutionId },
+      select: { ...GRANT_SELECT, externalId: true, environment: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.solutionClient.findMany({ where: { organizationId, solutionId }, select: CREDENTIAL_SELECT }),
+  ]);
 
-  const target: LaneTarget = {
-    organizationId,
-    solutionId,
-    interfaceId: feed.id,
-    environment,
-    product: feed.sapProduct,
-    externalId: feed.externalId,
-    servicePath: feed.servicePath ?? null,
-    odataVersion: feed.odataVersion ?? null,
-    entitySet: feed.entitySet,
-  };
+  const planWith = (estate: BindingEstate<ResolvedSapConnection>) =>
+    planLaneCheck({
+      solutionStatus: feed.solution.status,
+      feed,
+      environment,
+      grants,
+      credential: credentialFor(clients, solutionId, environment),
+      estate,
+      now,
+    });
+  // Planned first on no connections, so a lane refused before the binding —
+  // a retired app's above all (A70) — reaches nobody's SAP system and has no
+  // secret opened for it. Only a lane that got as far as the binding loads it.
+  const before = planWith({ kind: "connections", connections: [] });
+  if (!before.ok && before.skipped !== "noConnection") return { ok: false, skipped: before.skipped };
+  const plan = planWith(await loadBindingEstate(organizationId, feed.sapProduct));
+  if (!plan.ok) return { ok: false, skipped: plan.skipped };
 
-  const connection = resolved.find((c) => parseLaneEnvironment(c.environment ?? null) === environment);
-  if (connection === undefined) return { ok: false, skipped: "noConnection" };
-
+  const target = targetOf(organizationId, feed, environment);
   const servicePath = await resolveLaneServicePath(
     target.product,
     target.externalId,
@@ -405,13 +554,68 @@ export async function recheckOneLane(
   );
   if (servicePath === null) return { ok: false, skipped: "noService" };
 
-  const tally = { checked: 0, byReadStatus: {} as Record<string, number> };
-  await checkOneLane(target, servicePath, connection, now, tally);
+  const tally = { checked: 0, discardedConnectionChanged: 0, byReadStatus: {} as Record<string, number> };
+  await checkOneLane(target, servicePath, plan.connection, now, tally);
+  if (tally.discardedConnectionChanged > 0) return { ok: false, skipped: "connectionChanged" };
 
   // `checkOneLane` records exactly one read status; naming it back to the
   // caller is what lets the screen say what changed without a second query.
   const readStatus = Object.keys(tally.byReadStatus)[0] ?? "ERROR";
   return { ok: true, readStatus, checkedAt: now };
+}
+
+/**
+ * The `$metadata` answers one sweep run has already had, by connection,
+ * settings revision and service path. Several lanes (apps, environments) read
+ * one service through one connection; SAP is asked once.
+ */
+type MetadataMemo = Map<string, Promise<string>>;
+
+/**
+ * Does THIS service describe itself, through this connection? The request the
+ * Studio test makes (`fetchMetadataDocument`, which `probeConnection` wraps:
+ * credentials, SAP client, redirect rule and EDMX test), pointed at the lane's
+ * own service rather than the connection's default probe path (A30). Called
+ * directly because the wrapper drops `signedIn`, which the 403 rule below
+ * needs.
+ *
+ * A 403 FROM THE TENANT is recorded as FORBIDDEN, apart from a 401. The
+ * connection probe classifies both as UNAUTHORIZED — for the connection's own
+ * probe path that means "the credential or the communication arrangement is
+ * not set up" — but asked of one service, a 403 means we signed in and SAP
+ * refused THIS service: one lane stops and the client's SAP admin fixes it.
+ * Recorded as UNAUTHORIZED, the board and the SAP systems screen would say
+ * "every lane on this system stops" and call the platform admin.
+ *
+ * ONLY WHEN THE TENANT ANSWERED (`signedIn`). A token endpoint, or the
+ * gateway in front of it, that answers 403 arrives as UNAUTHORIZED with
+ * httpStatus 403 too — but then no `$metadata` request was sent at all: the
+ * credential failed, every lane on the system stops, and the platform admin
+ * fixes it. Mapping that 403 to FORBIDDEN sent the client's SAP admin after
+ * an authorisation SAP never got to judge (P0.3 review round 1).
+ */
+async function serviceMetadataStatus(
+  connection: ResolvedSapConnection,
+  servicePath: string,
+): Promise<string> {
+  const probe = await fetchMetadataDocument(connection, servicePath);
+  return probe.signedIn && probe.httpStatus === 403 ? "FORBIDDEN" : probe.status;
+}
+
+function probeServiceMetadata(
+  connection: ResolvedSapConnection,
+  servicePath: string,
+  memo: MetadataMemo | undefined,
+): Promise<string> {
+  const run = () => serviceMetadataStatus(connection, servicePath);
+  if (memo === undefined) return run();
+  const key = `${connection.id}::${connection.revision ?? ""}::${servicePath}`;
+  let pending = memo.get(key);
+  if (pending === undefined) {
+    pending = run();
+    memo.set(key, pending);
+  }
+  return pending;
 }
 
 async function checkOneLane(
@@ -420,12 +624,12 @@ async function checkOneLane(
   servicePath: string,
   connection: ResolvedSapConnection,
   now: Date,
-  result: { checked: number; byReadStatus: Record<string, number> },
+  result: { checked: number; discardedConnectionChanged: number; byReadStatus: Record<string, number> },
+  metadata?: MetadataMemo,
 ): Promise<void> {
-  // 1 · Metadata reachability, through the same probe the Studio test uses.
-  const probeStatus = resolveProbePath(connection)
-    ? (await probeConnection(connection)).status
-    : null;
+  // 1 · Metadata reachability OF THIS LANE'S SERVICE (A30), through the same
+  // probe the Studio test uses. Never null: the lane always has a service.
+  const probeStatus: string | null = await probeServiceMetadata(connection, servicePath, metadata);
 
   // 2 · Data readability — a real read, bounded to one row. Attempted even when
   // the probe failed, because the two facts are independent and a lane whose
@@ -447,7 +651,11 @@ async function checkOneLane(
     solutionId: target.solutionId,
     interfaceId: target.interfaceId,
     environment: target.environment,
+    // What this evidence was gathered against (A18): the board uses the row
+    // only while all three still describe the lane.
     connectionId: connection.id,
+    entitySet: target.entitySet,
+    interfaceVersion: target.interfaceVersion,
     probeStatus,
     probeAt: probeStatus === null ? null : now,
     readStatus,
@@ -455,45 +663,92 @@ async function checkOneLane(
     readRowCount: read.records.length,
   };
 
-  await prisma.laneCheck.upsert({
-    where: {
-      solutionId_interfaceId_environment: {
-        solutionId: target.solutionId,
-        interfaceId: target.interfaceId,
-        environment: target.environment,
+  const recorded = await recordLaneCheck(connection, async (tx) => {
+    await tx.laneCheck.upsert({
+      where: {
+        solutionId_interfaceId_environment: {
+          solutionId: target.solutionId,
+          interfaceId: target.interfaceId,
+          environment: target.environment,
+        },
       },
-    },
-    create: ledger,
-    update: ledger,
-  });
+      create: ledger,
+      update: ledger,
+    });
 
-  // The per-service matrix the SAP systems screen reads. Keyed by service, not
-  // by lane: several apps can read the same service through one system.
-  await prisma.sapServiceHealth.upsert({
-    where: {
-      connectionId_serviceName_entitySet: {
+    // The per-service matrix the SAP systems screen reads. Keyed by service,
+    // not by lane: several apps can read the same service through one system.
+    await tx.sapServiceHealth.upsert({
+      where: {
+        connectionId_serviceName_entitySet: {
+          connectionId: connection.id,
+          serviceName: target.externalId,
+          entitySet: target.entitySet,
+        },
+      },
+      create: {
+        organizationId: target.organizationId,
         connectionId: connection.id,
         serviceName: target.externalId,
         entitySet: target.entitySet,
+        metadataStatus: probeStatus,
+        metadataAt: probeStatus === null ? null : now,
+        readStatus,
+        readAt: now,
+        readRowCount: read.records.length,
       },
-    },
-    create: {
-      organizationId: target.organizationId,
-      connectionId: connection.id,
-      serviceName: target.externalId,
-      entitySet: target.entitySet,
-      metadataStatus: probeStatus,
-      metadataAt: probeStatus === null ? null : now,
-      readStatus,
-      readAt: now,
-      readRowCount: read.records.length,
-    },
-    update: {
-      metadataStatus: probeStatus,
-      metadataAt: probeStatus === null ? null : now,
-      readStatus,
-      readAt: now,
-      readRowCount: read.records.length,
-    },
+      update: {
+        metadataStatus: probeStatus,
+        metadataAt: probeStatus === null ? null : now,
+        readStatus,
+        readAt: now,
+        readRowCount: read.records.length,
+      },
+    });
+  });
+  if (!recorded) result.discardedConnectionChanged++;
+}
+
+/**
+ * Write a check's evidence ONLY while its connection still holds the settings
+ * the check read through (P0.2, A18).
+ *
+ * THE RACE THIS CLOSES. The sweep opens a product's connections once, then
+ * reads SAP lane by lane for seconds to minutes. A re-save in the meantime
+ * (`upsertSapConnection`) keeps the row's id, points it somewhere else and
+ * drops the checks made through it — and the reads still running then wrote
+ * the OLD system's answer under that same id, after the drop. The board took
+ * it as proof for the new system: Live for up to a day while the broker,
+ * bound to the new host, might refuse every call. A Re-check pressed just
+ * before a save did the same.
+ *
+ * HOW. In one transaction: lock the connection row FOR SHARE and compare its
+ * `revision` with the one this check loaded, then write. A re-save's UPDATE
+ * waits for the lock, so the two serialise: either this commits first and the
+ * re-save's deletes (in its own transaction, after its UPDATE) remove what was
+ * written, or the re-save commits first and the revision no longer matches,
+ * so nothing is written. A deleted connection matches no row and writes
+ * nothing too. FOR SHARE, not FOR UPDATE: two lanes recorded through one
+ * connection never wait on each other.
+ *
+ * Returns whether the evidence was recorded. Exported for its test against a
+ * real database (tests/integration/lane-check-resave.test.ts).
+ */
+export async function recordLaneCheck(
+  connection: Pick<ResolvedSapConnection, "id" | "organizationId" | "revision">,
+  write: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<boolean> {
+  // A connection not read from the table carries no revision: nothing proves
+  // what it read through, so nothing is recorded.
+  const loaded = connection.revision;
+  if (loaded === undefined) return false;
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ revision: number }[]>`
+      SELECT "revision" FROM "SapConnection"
+      WHERE "id" = ${connection.id} AND "organizationId" = ${connection.organizationId}
+      FOR SHARE`;
+    if (rows[0]?.revision !== loaded) return false;
+    await write(tx);
+    return true;
   });
 }

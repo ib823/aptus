@@ -31,6 +31,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import {
   NO_OUTCOME_RECORDED,
   PENDING_UNRESOLVED_AFTER_MINUTES,
+  PLATFORM_AUDIT_ACTIONS,
   PLATFORM_AUDIT_OUTCOMES,
   type PlatformAuditOutcomeKind,
 } from "@/lib/audit/platform-audit";
@@ -53,7 +54,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const now = new Date();
   const since = new Date(now.getTime() - hours * 60 * 60 * 1000);
   const unresolvedBefore = new Date(now.getTime() - PENDING_UNRESOLVED_AFTER_MINUTES * 60 * 1000);
-  const where = { at: { gte: since } };
+  /*
+   * WRITES ONLY. The console's reads are PlatformConsoleRead rows, a table
+   * this ledger never reads (and neither did any build before P0.14b, so a
+   * rollback leaves it true: integration review round 4). A database a
+   * pre-release P0.14b build wrote to also holds console reads HERE (action
+   * SAP_CONSOLE_READ). Counted, every preview would be a "write" — and one
+   * whose outcome row failed to insert would read as UNRESOLVED, "check SAP
+   * before repeating it", about a read that changed nothing.
+   */
+  const actions = { in: [...PLATFORM_AUDIT_ACTIONS] };
+  const where = { at: { gte: since }, action: actions };
 
   // COUNTED OVER THE WINDOW, NOT OVER THE PAGE — the lesson the write ledger
   // learned: a tally of the returned rows sums to the page size.
@@ -66,7 +77,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
     prisma.platformAuditEvent.count({ where: { ...where, result: { is: null } } }),
     prisma.platformAuditEvent.count({
-      where: { at: { gte: since, lte: unresolvedBefore }, result: { is: null } },
+      where: { at: { gte: since, lte: unresolvedBefore }, action: actions, result: { is: null } },
     }),
     prisma.platformAuditEvent.findMany({
       where,

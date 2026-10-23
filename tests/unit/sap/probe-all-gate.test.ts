@@ -51,6 +51,8 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     sapHubContent: { findMany: mocks.findMany, update: mocks.update },
     northboundAuditEvent: { create: vi.fn() },
+    // persistStoredProbe's merge, for the one test below that probes a row.
+    $executeRaw: vi.fn(),
   },
 }));
 
@@ -204,6 +206,144 @@ describe("the fleet probe is rate limited, per tenant", () => {
     const key = String(mocks.checkRateLimit.mock.calls[0]?.[0]);
     expect(key).toContain("org-a");
     expect(key).toContain("x5m-100");
+  });
+
+  it("an open console circuit refuses BEFORE the window is spent (P0.14b review)", async () => {
+    /*
+     * Enforcing, a run the circuit refuses never reaches the tenant. It must
+     * not cost the tenant its ten-minute window either: the person retrying
+     * after Retry-After would be told "a fleet probe ran moments ago" when
+     * none did.
+     */
+    const { __setGovernedCircuitStore, circuitKeyForConnection, circuitKeyForConsoleRead, governedCircuitBreaker } =
+      await import("@/lib/governed/containment");
+    const { FAILURE_THRESHOLD, MemoryCircuitStore } = await import("@/lib/northbound/circuit-breaker");
+    vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+    __setGovernedCircuitStore(new MemoryCircuitStore({ shared: true }));
+    try {
+      const consoleCircuit = circuitKeyForConsoleRead("org-a", circuitKeyForConnection("c1"));
+      for (let i = 0; i < FAILURE_THRESHOLD; i++) await governedCircuitBreaker().recordOutcome(consoleCircuit, "upstream-error");
+      mocks.requireAuthenticated.mockResolvedValue({ user: CONSULTANT });
+      mocks.resolveReadTenant.mockResolvedValue(OWN_CONNECTION);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const res = await POST(req(BODY) as never);
+
+      expect(res.status).toBe(503);
+      expect((await res.json()).error.code).toBe("CIRCUIT_OPEN");
+      expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+      expect(mocks.findMany).not.toHaveBeenCalled();
+      expect(mocks.probeService).not.toHaveBeenCalled();
+    } finally {
+      __setGovernedCircuitStore(null);
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe("a Probe all that never calls SAP gives the circuit's half-open trial back (P0.14b review round 3)", () => {
+  /*
+   * contain() runs before the rate limit, so an open circuit refuses without
+   * spending the tenant's window. Past the cooldown, contain() takes the
+   * circuit's ONE half-open trial. A run the limiter then refuses (429), a
+   * limiter outage (503) or a catalogue query that throws never reached SAP:
+   * holding the trial for PROBE_LEASE_MS refused every other console read of
+   * that system by the organization (enforce), or inflated the "would refuse"
+   * lines the runbook decides on (observe), although nothing tested it.
+   */
+  async function halfOpenConsoleCircuit() {
+    const { __setGovernedCircuitStore, circuitKeyForConnection, circuitKeyForConsoleRead, governedCircuitBreaker } =
+      await import("@/lib/governed/containment");
+    const { COOLDOWN_MS, FAILURE_THRESHOLD, MemoryCircuitStore } = await import("@/lib/northbound/circuit-breaker");
+    vi.stubEnv("COREEDGE_CIRCUIT_BREAKER", "enforce");
+    __setGovernedCircuitStore(new MemoryCircuitStore({ shared: true }));
+    const t0 = Date.parse("2026-10-21T09:00:00Z");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(t0);
+    const key = circuitKeyForConsoleRead("org-a", circuitKeyForConnection("c1"));
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await governedCircuitBreaker().recordOutcome(key, "upstream-error");
+    // The cooldown is served: the next console call may take the trial.
+    vi.setSystemTime(t0 + COOLDOWN_MS + 1_000);
+    mocks.requireAuthenticated.mockResolvedValue({ user: CONSULTANT });
+    mocks.resolveReadTenant.mockResolvedValue(OWN_CONNECTION);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    return {
+      /** Whether another console read of the same system, a second later, is let through. */
+      nextReadAllowed: async () => {
+        vi.setSystemTime(t0 + COOLDOWN_MS + 2_000);
+        return (await governedCircuitBreaker().beforeCall(key)).allowed;
+      },
+      restore: () => {
+        __setGovernedCircuitStore(null);
+        vi.useRealTimers();
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+      },
+    };
+  }
+
+  it("a rate-limited run (429)", async () => {
+    const circuit = await halfOpenConsoleCircuit();
+    try {
+      mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, resetMs: 120_000 });
+
+      const res = await POST(req(BODY) as never);
+
+      expect(res.status).toBe(429);
+      expect(mocks.probeService).not.toHaveBeenCalled();
+      expect(await circuit.nextReadAllowed()).toBe(true);
+    } finally {
+      circuit.restore();
+    }
+  });
+
+  it("a limiter outage (503)", async () => {
+    const circuit = await halfOpenConsoleCircuit();
+    try {
+      mocks.checkRateLimit.mockResolvedValue({ allowed: false, remaining: 0, resetMs: 0, reason: "unavailable" });
+
+      const res = await POST(req(BODY) as never);
+
+      expect(res.status).toBe(503);
+      expect(mocks.probeService).not.toHaveBeenCalled();
+      expect(await circuit.nextReadAllowed()).toBe(true);
+    } finally {
+      circuit.restore();
+    }
+  });
+
+  it("a catalogue query that throws", async () => {
+    const circuit = await halfOpenConsoleCircuit();
+    try {
+      mocks.findMany.mockRejectedValue(new Error("database unavailable"));
+
+      await expect(POST(req(BODY) as never)).rejects.toThrow(/database unavailable/);
+      expect(mocks.probeService).not.toHaveBeenCalled();
+      expect(await circuit.nextReadAllowed()).toBe(true);
+    } finally {
+      circuit.restore();
+    }
+  });
+
+  it("a run that did call SAP still settles the trial by what SAP answered", async () => {
+    // The release is for runs that sent nothing; one that probed a failing
+    // system re-opens the circuit, as before.
+    const circuit = await halfOpenConsoleCircuit();
+    try {
+      mocks.findMany.mockResolvedValue([
+        { id: "r1", externalId: "API_X", contentType: "API", apiType: "ODATAV2", title: "X", packageId: null, communicationScenarios: [] },
+      ]);
+      mocks.probeService.mockResolvedValue({ status: 503, entities: [] });
+
+      await POST(req(BODY) as never);
+
+      expect(mocks.probeService).toHaveBeenCalled();
+      expect(await circuit.nextReadAllowed()).toBe(false);
+    } finally {
+      circuit.restore();
+    }
   });
 });
 

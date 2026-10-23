@@ -33,8 +33,8 @@ const mocks = vi.hoisted(() => ({
 // Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
 vi.mock("@/lib/db/prisma", async () => {
   const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
-  return {
-    prisma: {
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
       interface: { findMany: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findManyInterfaces(...a)), findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
       apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
       // The organization's connection, which discovery's binding step reads
@@ -43,8 +43,9 @@ vi.mock("@/lib/db/prisma", async () => {
       sapConnection: {
         findMany: async () => [{ key: "c1", label: "Tenant", product: "s4hana", environment: null, client: null }],
       },
-    },
   };
+  // The access load is one statement since P0.19, answered through the queries it replaced.
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
 });
 
 // The catalogue resolves the service, as the data route's definition step asks.

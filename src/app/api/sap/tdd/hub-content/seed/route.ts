@@ -116,6 +116,10 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
   let imported = 0;
   let apiTypeBackfilled = 0;
   const byLob: Record<string, number> = {};
+  // The Rebuild is an import: every row it projects or injects is stamped
+  // with when (P0.3, A29). Catalogue Health reads this, never `updatedAt`,
+  // which every capability probe moves too.
+  const importedAt = new Date();
   for (const a of apis) {
     if (a.apiType == null && classifyApiTypeById(a.apiId) != null) apiTypeBackfilled++;
     const fas = a.scopeItemCodes.map((c) => codeToFA.get(c)).filter((f): f is string => Boolean(f));
@@ -137,6 +141,7 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       communicationScenarios: a.communicationScenarios,
       scopeItemCodes: a.scopeItemCodes,
       itemCount: null,
+      importedAt,
       // Projected from real SapApiReference rows — SAP-published, not seed.
       illustrative: false,
       hubUrl: a.apiHubUrl,
@@ -199,8 +204,9 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
         illustrative: false,
         hubUrl: `https://api.sap.com/api/${apiId}`,
         rawMetadataJson: { source: "curated", key: svc.key } as Prisma.InputJsonValue,
+        importedAt,
       },
-      update: { apiType, packageId: lob },
+      update: { apiType, packageId: lob, importedAt },
     });
     injected++;
   }
@@ -246,6 +252,8 @@ async function importBundledType(type: HubContentType, importedAt: string): Prom
       illustrative: norm.illustrative,
       hubUrl: norm.hubUrl,
       ...hubLifecycleFields(norm),
+      // The import time Catalogue Health judges freshness from (P0.3, A29).
+      importedAt: new Date(importedAt),
       // Provenance; release = the Hub package release when the row carries it.
       rawMetadataJson: { source: `bundled:${type}`, release: norm.catalogueRelease, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
     };

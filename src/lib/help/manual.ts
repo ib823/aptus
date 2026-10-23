@@ -173,7 +173,7 @@ const PROSE: Record<string, ScreenProse> = {
   "operations-center/connections": {
     answers: "Whether each SAP connection is answering, and whether its landscape is known.",
     cannotTell: [
-      "The health of a deployment fallback tenant. Probe outcomes are stored per connection; a shared tenant has no row to record one against.",
+      "The health of the deployment's own tenant. Probe outcomes are stored per connection; a shared tenant has no row to record one against.",
       "Anything about deactivated connections — they serve no traffic, so their last probe would be a stale claim.",
     ],
     misreadings: [
@@ -181,6 +181,11 @@ const PROSE: Record<string, ScreenProse> = {
         seeing: "A healthy connection marked binding unverified",
         means:
           "Two independent questions. It answers perfectly; what is unknown is which landscape it is. Fixing the second does not involve touching the first.",
+      },
+      {
+        seeing: "The deployment's tenant listed beside this organization's connections",
+        means:
+          "It serves console and explorer reads (Explore, preview, these screens) for every organization. It never serves the broker: an app reaches SAP only through a connection its own organization declares, and with none every app call is refused with CONNECTION_NOT_CONFIGURED.",
       },
       {
         seeing: "TIMEOUT beside a three-week-old last-succeeded date",
@@ -265,7 +270,7 @@ const PROSE: Record<string, ScreenProse> = {
       {
         seeing: '"Stale"',
         means:
-          "The newest row write is older than the printed staleness constant — one SAP half-yearly release cycle — so the snapshot is at least one release behind by construction. It says nothing about whether the rows it does hold are wrong.",
+          "The type's newest IMPORT is older than the printed staleness constant — one SAP half-yearly release cycle — so the snapshot is at least one release behind by construction. Probing a tenant writes the same rows and never moves this. It says nothing about whether the rows it does hold are wrong.",
       },
     ],
   },

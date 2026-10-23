@@ -26,21 +26,24 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { noteFirstCall } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
-import { resolveReadableInterface } from "@/lib/northbound/access";
-import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { recordNorthboundCall } from "@/lib/northbound/audit";
-import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
-import { resolveReadDefinition } from "@/lib/northbound/read-definition";
-import { FAILURE_REASON_LIMITER_UNAVAILABLE, newCorrelationId } from "@/lib/northbound/respond";
-import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE } from "@/lib/security/rate-limit-response";
 import {
-  connectionRefusalMessage,
-  resolveSapConnectionForEnvironment,
-} from "@/lib/sap-public/connection-resolver";
+  authorise,
+  bindConnection,
+  callSapRead,
+  contain,
+  GovernedAudit,
+  prefetchedConnectionsFor,
+  rateLimit,
+  refusal,
+  resolveReadTarget,
+} from "@/lib/governed/pipeline";
+import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth";
+import { RATE_LIMITS } from "@/lib/security/rate-limit";
+import { httpStatusFor } from "@/lib/northbound/read";
+import { newCorrelationId } from "@/lib/northbound/respond";
+import { LIMITER_UNAVAILABLE_MESSAGE } from "@/lib/security/rate-limit-response";
 import { consoleReadRefusalMessage } from "@/lib/sap-public/console-read-guard";
 import { parseSapEnvironment } from "@/lib/sap-public/environment";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { canAccessStudio, isSandboxDeveloper, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-scope";
@@ -183,30 +186,34 @@ export async function POST(request: NextRequest) {
    * console session that would exhaust the application's budget exhausts it here
    * too and the builder finds out in Studio rather than in production.
    */
-  const rate = await checkRateLimit(`northbound:${client.id}`, RATE_LIMITS.northbound);
-  if (!rate.allowed) {
-    // A limiter outage is not this credential's budget (audit A44): audited
-    // 503 with its reason, and said as the outage it is.
-    const outage = isLimiterOutage(rate);
-    await recordNorthboundCall({
+  const rate = await rateLimit(`northbound:${client.id}`, "Too many requests for this client credential.");
+
+  /*
+   * One dry-run row per run, about this interface and credential (pipeline.ts
+   * GovernedAudit), written whether the run was refused or ran.
+   */
+  const audit = new GovernedAudit(
+    {
       organizationId: scope.organizationId,
       solutionId: iface.solutionId,
-      interfaceId: iface.id,
       operation: "READ",
-      externalId: iface.externalId,
       environment: client.environment,
-      status: outage ? 503 : 429,
-      rowCount: null,
       correlationId,
       clientTokenId: client.id,
       dryRun: true,
-      failureReason: outage ? FAILURE_REASON_LIMITER_UNAVAILABLE : null,
-    });
-    if (outage) return refusalOk("LIMITER_UNAVAILABLE", LIMITER_UNAVAILABLE_MESSAGE);
+    },
+    { interfaceId: iface.id, externalId: iface.externalId },
+  );
+
+  if (!rate.ok) {
+    // A limiter outage is not this credential's budget (audit A44): audited
+    // 503 with its reason, and said as the outage it is.
+    await audit.refused(rate.refusal);
+    if (rate.refusal.reason === "LIMITER_UNAVAILABLE") return refusalOk("LIMITER_UNAVAILABLE", LIMITER_UNAVAILABLE_MESSAGE);
     return refusalOk(
       "RATE_LIMITED",
       `This credential has spent its budget of ${RATE_LIMITS.northbound.limit} calls a minute — the same budget the deployed application shares. ` +
-        `Wait ${Math.ceil(rate.resetMs / 1000)}s and run again.`,
+        `Wait ${Math.ceil((rate.refusal.resetMs ?? 0) / 1000)}s and run again.`,
     );
   }
 
@@ -221,112 +228,90 @@ export async function POST(request: NextRequest) {
    */
   void touchClientLastUsed(client.id, scope.organizationId);
 
-  const audit = (
-    status: number,
-    rowCount: number | null,
-    extras: {
-      connectionId?: string | null;
-      connectionEnvironment?: string | null;
-      durationMs?: number | null;
-      bindingRefusal?: string | null;
-      /** Why the read failed (failure-reason.ts), as the data route records it (A56). */
-      failureReason?: string | null;
-    } = {},
-  ) =>
-    recordNorthboundCall({
-      organizationId: scope.organizationId,
-      solutionId: iface.solutionId,
-      interfaceId: iface.id,
-      operation: "READ",
-      externalId: iface.externalId,
-      environment: client.environment,
-      status,
-      rowCount,
-      correlationId,
-      clientTokenId: client.id,
-      dryRun: true,
-      ...extras,
-    });
-
   // 1 — the grant gate, exactly as the broker evaluates it.
-  const access = await resolveReadableInterface(
-    scope,
-    iface.solutionId,
-    iface.id,
-    client.environment,
-    now,
-  );
+  const access = await authorise("READ", scope, iface.solutionId, iface.id, client.environment, now);
   if (!access.ok) {
-    await audit(403, null);
+    await audit.refused(access.refusal);
     return refusalOk(
-      access.reason,
-      `${access.message} (This is the refusal the deployed application would receive.)`,
+      access.refusal.reason,
+      `${access.refusal.message} (This is the refusal the deployed application would receive.)`,
     );
   }
+  const granted = access.value;
 
   // 2 — the connection binding, environment + SAP client, same as the broker.
-  const product = getSapProduct(iface.sapProduct);
-  const binding = product
-    ? await resolveSapConnectionForEnvironment(
-        scope.organizationId,
-        iface.sapProduct,
-        client.environment,
-        "READ",
-        client.sapClient,
-      )
-    : ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
-  if (!binding.ok) {
-    await audit(403, null, { bindingRefusal: binding.reason });
+  const bound = await bindConnection(
+    scope.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "READ",
+    client.sapClient,
+    prefetchedConnectionsFor(granted),
+  );
+  if (!bound.ok) {
+    await audit.refused(bound.refusal);
     return refusalOk(
-      binding.reason,
-      `${connectionRefusalMessage(binding.reason, client.environment)} (This is the refusal the deployed application would receive.)`,
+      bound.refusal.reason,
+      `${bound.refusal.message} (This is the refusal the deployed application would receive.)`,
     );
   }
-  const connection = binding.connection;
+  const { connection, bindingUnverified } = bound.value;
 
   // The same resolution the broker makes: the interface's own service, or the
   // catalogue's — never a fallback from one to the other (read-definition.ts).
-  const definition = await resolveReadDefinition(product!, iface);
   const entitySet = iface.entitySet;
+  const target = await resolveReadTarget(bound.value.product, iface, connection, (reason) =>
+    reason === "NO_ENTITY_SET"
+      ? granted.draft
+        ? "This feed is still a draft and names no dataset yet. Set its entity set in Studio — the deployed application reads that value and nothing else."
+        : "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
+      : reason === "SERVICE_PATH_INVALID"
+        ? "This interface's own service path is not valid for its product. Fix it in Studio."
+        : "The catalogue service for this interface could not be resolved.",
+  );
   if (input.entity !== undefined && input.entity !== entitySet) {
-    await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
-    return refusalOk(
+    const mismatch = refusal(
+      "resolveInterface",
       "ENTITY_NOT_YOURS_TO_CHOOSE",
       `This run asked for "${input.entity}", but this feed serves ${entitySet ? `"${entitySet}"` : "no dataset yet"}. ` +
         "The dataset is part of the feed's definition — the deployed application cannot choose one either, " +
         "so a run against a different dataset would not tell you anything about the real call. " +
         "Change the feed's dataset in Studio, or re-record this case.",
+      { audit: { connection } },
     );
+    await audit.refused(mismatch);
+    return refusalOk(mismatch.reason, mismatch.message);
   }
-  if (!definition.ok) {
-    await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
-    return refusalOk(
-      "NO_ENTITY_SET",
-      definition.reason === "NO_ENTITY_SET"
-        ? access.iface.draft
-          ? "This feed is still a draft and names no dataset yet. Set its entity set in Studio — the deployed application reads that value and nothing else."
-          : "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
-        : definition.reason === "SERVICE_PATH_INVALID"
-          ? "This interface's own service path is not valid for its product. Fix it in Studio."
-          : "The catalogue service for this interface could not be resolved.",
-    );
+  if (!target.ok) {
+    await audit.refused(target.refusal);
+    // One kind for all three: the console has always shown them as "no dataset to run".
+    return refusalOk("NO_ENTITY_SET", target.refusal.message);
   }
-  const { service } = definition;
+  const { service } = target.value;
 
-  // 3 — the same read function the broker calls, against the BOUND connection.
-  const result = await readEntitySet({
-    connection,
-    servicePath: service.path,
-    entitySet: definition.entitySet,
-    limit: input.limit ?? 10,
-  });
+  // 3 — contain: the same circuit the deployed application's call meets.
+  const circuit = await contain(bound.value, correlationId);
+  if (!circuit.ok) {
+    await audit.refused(circuit.refusal);
+    return refusalOk(
+      circuit.refusal.reason,
+      `${circuit.refusal.message} (This is the refusal the deployed application would receive.)`,
+    );
+  }
+
+  // 4 — the same read function the broker calls, against the BOUND connection.
+  const { result } = await callSapRead(
+    bound.value,
+    { servicePath: service.path, entitySet: target.value.entitySet, limit: input.limit ?? 10 },
+    circuit.value,
+  );
   const durationMs = result.durationMs;
   // The broker's own mapping — one fact, one function.
   const httpStatus = httpStatusFor(result.status);
 
-  await audit(httpStatus, result.records.length, {
-    connectionId: connection.id,
-    connectionEnvironment: connection.environment,
+  await audit.record(httpStatus, {
+    rowCount: result.records.length,
+    connection,
     durationMs,
     /*
      * THE CAUSE, ON THE ROW THE QUOTED ID LEADS TO (A56). The console shows a
@@ -365,14 +350,14 @@ export async function POST(request: NextRequest) {
     empty: result.status === "EMPTY",
     note: result.detail,
     durationMs,
-    draft: access.iface.draft,
+    draft: granted.draft,
     /*
      * THE CONTRACT THIS RUN WAS AGAINST (P0.4, A38). The console sends it back
      * with Capture schema and Capture fixture, and the capture is refused when
      * the interface has moved on since — a run of the old entity set must not
      * be recorded as the new contract's shape or mock.
      */
-    contract: { version: access.iface.version, entitySet: access.iface.entitySet },
+    contract: { version: granted.version, entitySet: granted.entitySet },
     // WHICH system answered — the fact the old console could not state. The
     // caller's own connection metadata, never another org's.
     boundTo: {
@@ -380,7 +365,7 @@ export async function POST(request: NextRequest) {
       label: connection.label,
       environment: connection.environment,
       sapClient: connection.client,
-      bindingUnverified: binding.bindingUnverified,
+      bindingUnverified,
     },
     correlationId,
   });

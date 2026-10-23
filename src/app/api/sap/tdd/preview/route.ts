@@ -14,21 +14,34 @@
  *
  * THE ENTITY SET IS NO LONGER THE CALLER'S TO CHOOSE on the governed path (audit
  * E16) — see the comment on `entity` below for the one case that remains and why.
+ *
+ * ON THE GOVERNED PIPELINE (P0.14). The two ceilings are the pipeline's
+ * `authorise` step and its typed refusals (src/lib/governed/pipeline.ts), and
+ * the read passes a `contain` step of its own: the console's circuit breaker
+ * for this SAP system and this organization, which observes unless
+ * COREEDGE_CIRCUIT_BREAKER=enforce. Not the broker's circuit: the builder
+ * chooses this read's query, so it must not be able to refuse production
+ * calls or another organization's previews (containment.ts
+ * circuitKeyForConsoleRead), and SAP's 4xx answer to it is not counted as a
+ * failure (pipeline.ts circuitOutcomeForConsoleRead).
+ * The read itself still goes through the Workbench connector (`sapFetch`),
+ * which P4.1 moves onto the pipeline's Transport.
+ *
+ * THE CONSOLE CALL (P0.14b). The gates above, the deployment tenant's host
+ * check, the circuit and both audit rows are now one object,
+ * `openConsoleCall` (src/lib/governed/console.ts), shared by every console
+ * route; the read is made only inside its `callSap`, which audits it.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import type { Refusal } from "@/lib/governed/pipeline";
+import { SapHttpError } from "@/lib/sap-public/upstream-failure";
 import {
   getSapProduct,
   previewSapEntitySet,
 } from "@/lib/sap-public/tdd-connector";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
 import {
   readTenantRefusalResponse,
   resolveReadTenant,
@@ -53,11 +66,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // A preview is a LIVE READ of a customer tenant, not a catalogue lookup, so
   // the gate is a role and not merely a session. See refuseUnlessMayProbeTenant.
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
-  if (refusal) return refusal;
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const viewer = await getCurrentUser();
+  const roleRefusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer });
+  if (roleRefusal) return roleRefusal;
 
   const tenantKey = request.nextUrl.searchParams.get("tenant") ?? "";
-  const viewer = await getCurrentUser();
   // `refuseUnlessMayProbeTenant` has already established a session, so a null
   // viewer here is unreachable; the check is kept because the audit row cannot
   // be written without an actor, and a read we cannot attribute must not run.
@@ -95,7 +109,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const entity = request.nextUrl.searchParams.get("entity") ?? "";
   const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
 
-  if (!tenant || !service || !entity) {
+  if (!resolved || !tenant || !service || !entity) {
     // Three different mistakes, three different sentences. "A valid service
     // and entity are required" covered all of them and named none, so a
     // service absent from the catalogue was indistinguishable from a missing
@@ -113,90 +127,63 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const correlationId = newCorrelationId();
-  const conn = resolved?.connection ?? null;
-  // A deployment tenant is the deployment's own demo system and belongs to no
-  // organization. Its rows carry the tenant key as their environment rather than
-  // a landscape: there is none to name, and inventing one would be the guess this
-  // whole change exists to stop. See DEPLOYMENT_AUDIT_SCOPE for the organization.
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-  const audit = (
-    status: number,
-    rowCount: number | null,
-    extra: { durationMs?: number; failureReason?: string | null } = {},
-  ) =>
-    recordConsoleRead({
-      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: viewer.id,
-      externalId: service.key,
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
-
-  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-  // (P0.13). Every other role passes straight through it.
-  const sandboxOnly = decideSandboxDeveloperRead(viewer.role, { tenant, connection: conn });
-  if (!sandboxOnly.allowed) {
-    await audit(403, null);
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
-      { status: 403 },
-    );
-  }
-
   /*
-   * THE ENVIRONMENT CEILING. Only a stored connection has a landscape to cap —
-   * a deployment tenant has no organization and therefore no grant that could
-   * ever be written for it, so requiring one would close the catalogue to
-   * everybody while protecting a system no customer owns.
+   * THE GOVERNED CONSOLE CALL (P0.14b, governed/console.ts). The person the
+   * role gate let through, as the "console" principal: the sandbox developer's
+   * ceiling and the environment ceiling (authorise), the deployment tenant's
+   * host against the allow-list (bind), the console's own circuit for this
+   * system in this organization (contain), then the read itself (callSap).
+   * Every refusal and the read are audited by the pipeline on both trails: the
+   * organization's console row (filed under DEPLOYMENT_AUDIT_SCOPE for a
+   * reader with no organization) and the platform-scope row.
    */
-  if (conn && viewer.organizationId) {
-    /*
-     * BOTH CONDITIONS, AND THE SECOND IS NOT DEFENSIVE PADDING. `conn` is only
-     * ever set when `resolveReadTenant` matched a stored connection, and it will
-     * not look for one without an organization — so a connection implies an
-     * organization. Naming it here is what lets the guard take a real
-     * organization id rather than a fallback: a grant query against a sentinel
-     * would return nothing and refuse, which looks like a policy decision and is
-     * actually a missing value.
-     */
-    const decision = await decideConsoleRead({
-      organizationId: viewer.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        {
-          error: {
-            code: ERROR_CODES.FORBIDDEN,
-            message: decision.message,
-            correlationId,
-          },
-        },
-        { status: 403 },
-      );
-    }
-  }
+  const call = openConsoleCall({
+    viewer,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/preview",
+    externalId: service.key,
+    entitySet: entity,
+    servicePath: service.path,
+    request: { entity, limit },
+  });
+  const correlationId = call.correlationId;
+  // A refusal of the governed pipeline, already audited: answered in this
+  // route's envelope with the correlation id.
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
 
-  const startedAt = Date.now();
-  try {
-    const preview = await previewSapEntitySet(product.envPrefix, tenant, service, entity, limit);
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
+
+  const conn = call.connection;
+  const read = await call.callSap(() => previewSapEntitySet(product.envPrefix, tenant, service, entity, limit), {
     // The status SAP actually gave (audit A26). A 403 for an entity set the
     // arrangement does not release is SAP answering correctly, and recording
     // it as 502 raised the tenant-errors incident against a healthy tenant.
     // Only its refusals, though: SAP's 429 recorded as 429 raised the
     // 'throttled' incident instead — see answeredReadAuditStatus.
-    const auditStatus = answeredReadAuditStatus(preview.ok, preview.status);
-    await audit(auditStatus, preview.rows.length, {
-      durationMs: Date.now() - startedAt,
+    answered: (preview) => ({
+      status: answeredReadAuditStatus(preview.ok, preview.status),
+      rowCount: preview.rows.length,
       failureReason: failureReasonFromHttp(preview.status),
-    });
+      sapStatus: preview.status,
+    }),
+    failed: (error) => {
+      const failure = consoleReadFailure(error, "SAP preview request failed");
+      return {
+        status: failure.auditStatus,
+        rowCount: null,
+        failureReason: failure.failureReason,
+        sapStatus: error instanceof SapHttpError ? error.status : null,
+      };
+    },
+  });
+
+  if (read.ok) {
+    const preview = read.value;
     /*
      * A SANDBOX READ IS A FIRST CALL (P2.12): it is the first call a sandbox
      * developer can make at all, so time to first call ends here for them. A
@@ -210,32 +197,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         solutionId: null,
         environment: readEnvironment,
         channel: "console",
-        status: auditStatus,
+        status: answeredReadAuditStatus(preview.ok, preview.status),
         actorUserId: viewer.id,
       });
     }
     return NextResponse.json({ data: { ...preview, correlationId } });
-  } catch (error) {
-    // Do not reflect the raw connector error to the client — it can carry SAP
-    // tenant labels, upstream HTTP status, and topology detail useful for recon.
-    // Log server-side; return a generic message — or, for a refusal SAP gave
-    // or a credential CoreEdge could not use, the fixed sentence that says
-    // which (see consoleReadFailure).
-    console.error("[sap/tdd/preview] request failed:", error);
-    const failure = consoleReadFailure(error, "SAP preview request failed");
-    await audit(failure.auditStatus, null, {
-      durationMs: Date.now() - startedAt,
-      failureReason: failure.failureReason,
-    });
-    return NextResponse.json(
-      {
-        error: {
-          code: failure.code,
-          message: failure.message,
-          correlationId,
-        },
-      },
-      { status: failure.status },
-    );
   }
+  // Do not reflect the raw connector error to the client — it can carry SAP
+  // tenant labels, upstream HTTP status, and topology detail useful for recon.
+  // Log server-side; return a generic message — or, for a refusal SAP gave
+  // or a credential CoreEdge could not use, the fixed sentence that says
+  // which (see consoleReadFailure).
+  console.error("[sap/tdd/preview] request failed:", read.error);
+  const failure = consoleReadFailure(read.error, "SAP preview request failed");
+  return NextResponse.json(
+    { error: { code: failure.code, message: failure.message, correlationId } },
+    { status: failure.status },
+  );
 }

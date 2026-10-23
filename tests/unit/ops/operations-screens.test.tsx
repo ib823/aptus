@@ -178,14 +178,16 @@ describe("connections — health and binding are separate questions", () => {
   const HEALTHY_BUT_UNDECLARED = {
     counts: { total: 1, healthy: 1, needsAttention: 0, unknown: 0, neverTested: 0 },
     // Mirrors the real payload: this organization has its own connection, so
-    // the deployment fallback is not in use.
-    deploymentFallback: { inUse: false, tenants: [] },
+    // the broker can reach SAP; this deployment has no env tenant (P0.3, A59).
+    brokerReachable: true,
+    deploymentTenant: { configured: false, servesBroker: false, tenants: [] },
     provenance: {
       activeOnly: true,
       excludedInactive: 2,
       why: "A deactivated connection serves no traffic.",
-      fallbackIsShared: null,
-      noHealthForFallback: null,
+      deploymentTenantScope: null,
+      brokerReachability: null,
+      noHealthForDeploymentTenant: null,
     },
     bindingBacklog: {
       undeclaredEnvironment: 1,
@@ -272,6 +274,71 @@ describe("connections — health and binding are separate questions", () => {
     const chip = await screen.findByLabelText(/NO_PROBE_PATH/);
     // The accessible description carries the framing, so it is not colour-only.
     expect(chip.getAttribute("aria-label")).toContain("our gap");
+  });
+
+  it("gives a stale OK its own tile and draws its row stale, not green (P0.2, A50)", async () => {
+    // The route counted it under `stale`; the screen had no tile for it, so
+    // the tiles did not add up to the total, and the row still read a live 200.
+    const aged = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    serve({
+      "/api/ops/connections-health": {
+        ...HEALTHY_BUT_UNDECLARED,
+        counts: { total: 2, healthy: 1, stale: 1, needsAttention: 0, unknown: 0, neverTested: 0 },
+        provenance: { ...HEALTHY_BUT_UNDECLARED.provenance, healthyWithinHours: 48 },
+        connections: [
+          { ...HEALTHY_BUT_UNDECLARED.connections[0], verdict: "healthy" },
+          {
+            ...HEALTHY_BUT_UNDECLARED.connections[0],
+            id: "c2",
+            label: "Acme aged",
+            verdict: "stale",
+            lastValidatedAt: aged,
+          },
+        ],
+      },
+    });
+    render(<ConnectionsHealthClient />);
+
+    await screen.findByText("Stale");
+    expect(screen.getByText(/OK older than 48 h/)).toBeTruthy();
+    // One chip says OK (the fresh row); the aged row's chip says it is stale.
+    const stale = screen.getByLabelText(/OK · stale/);
+    expect(stale.getAttribute("aria-label")).toContain("our evidence has aged");
+    expect(screen.getAllByLabelText(/a live probe returned 200/)).toHaveLength(1);
+  });
+
+  it("names UNREADABLE as ours to fix, and counts it as needing attention", async () => {
+    serve({
+      "/api/ops/connections-health": {
+        ...HEALTHY_BUT_UNDECLARED,
+        counts: { total: 1, healthy: 0, stale: 0, needsAttention: 1, unknown: 0, neverTested: 0 },
+        connections: [{ ...HEALTHY_BUT_UNDECLARED.connections[0], status: "UNREADABLE", verdict: "unreadable" }],
+      },
+    });
+    render(<ConnectionsHealthClient />);
+
+    const chip = await screen.findByLabelText(/UNREADABLE/);
+    expect(chip.getAttribute("aria-label")).toContain("ours to fix");
+    expect(chip.getAttribute("aria-label")).not.toContain("unrecognised");
+    expect(screen.getByText(/ERROR · UNREADABLE/)).toBeTruthy();
+  });
+
+  it("sends the operator to the row that will not open, not to a sibling whose secret is fine (P0.2 review)", async () => {
+    serve({
+      "/api/ops/connections-health": {
+        ...HEALTHY_BUT_UNDECLARED,
+        counts: { total: 1, healthy: 0, stale: 0, needsAttention: 1, unknown: 0, neverTested: 0 },
+        connections: [{ ...HEALTHY_BUT_UNDECLARED.connections[0], status: "GROUP_UNREADABLE", verdict: "unreadable" }],
+      },
+    });
+    render(<ConnectionsHealthClient />);
+
+    const chip = await screen.findByLabelText(/GROUP_UNREADABLE/);
+    const meaning = chip.getAttribute("aria-label") ?? "";
+    expect(meaning).toContain("another connection for this product will not");
+    expect(meaning).toContain("the row marked UNREADABLE");
+    expect(meaning).not.toContain("the stored secret would not open");
+    expect(meaning).not.toContain("unrecognised");
   });
 
   it("distinguishes no connections from a feed it could not read", async () => {

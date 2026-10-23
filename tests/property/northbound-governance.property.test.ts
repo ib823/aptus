@@ -57,6 +57,8 @@ interface World {
   interfaces: Row[];
   grants: Row[];
   connections: Row[];
+  /** The lane's check ledger row(s) — read by the lane board, never by the broker. */
+  checks: Row[];
 }
 
 const h = vi.hoisted(() => ({
@@ -86,6 +88,11 @@ function matches(row: Row, where: Row | undefined): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, value]) => {
     if (key === "OR") return (value as Row[]).some((w) => matches(row, w));
+    // The lane board's shapes (P0.2): NOT, and `in` over a list.
+    if (key === "NOT") return !matches(row, value as Row);
+    if (value !== null && typeof value === "object" && Array.isArray((value as Row).in)) {
+      return ((value as Row).in as unknown[]).includes(row[key] ?? null);
+    }
     if (value !== null && typeof value === "object" && !(value instanceof Date)) {
       throw new Error(`fake prisma: unsupported where on ${key}: ${JSON.stringify(value)}`);
     }
@@ -93,12 +100,21 @@ function matches(row: Row, where: Row | undefined): boolean {
   });
 }
 
-vi.mock("@/lib/db/prisma", () => {
+vi.mock("@/lib/db/prisma", async () => {
   const w = () => h.world;
-  return {
-    prisma: {
+  /*
+   * The credential lookup and the access load are one SQL statement each
+   * since P0.19 (src/lib/governed/call-loads.ts). They are answered through
+   * the queries they replaced, evaluated by this fake as before
+   * (tests/helpers/governed-loads.ts); governed-call-loads.test.ts proves the
+   * SQL returns the same rows on PostgreSQL, another organisation's included.
+   */
+  const { governedQueryRaw } = await import("../helpers/governed-loads");
+  const models = {
       solutionClient: {
         findUnique: async ({ where }: { where: Row }) => w().clients.find((c) => matches(c, where)) ?? null,
+        // The lane board's read of the app's credentials (P0.2).
+        findMany: async ({ where }: { where: Row }) => w().clients.filter((c) => matches(c, where)),
         update: async () => ({}),
       },
       retiredClientToken: {
@@ -107,19 +123,38 @@ vi.mock("@/lib/db/prisma", () => {
           return r ? { client: r.client } : null;
         },
       },
-      solution: { findFirst: async ({ where }: { where: Row }) => w().solutions.find((s) => matches(s, where)) ?? null },
+      solution: {
+        findFirst: async ({ where }: { where: Row }) => w().solutions.find((s) => matches(s, where)) ?? null,
+        // The lane board's read: the organisation's apps, each with its interfaces.
+        findMany: async ({ where }: { where: Row }) =>
+          w()
+            .solutions.filter((s) => matches(s, where))
+            .map((s) => ({
+              ...s,
+              slug: String(s.id),
+              name: String(s.id),
+              interfaces: w().interfaces.filter((i) => i.solutionId === s.id && i.organizationId === s.organizationId),
+            })),
+      },
+      laneCheck: { findMany: async ({ where }: { where: Row }) => w().checks.filter((c) => matches(c, where)) },
       interface: { findFirst: async ({ where }: { where: Row }) => w().interfaces.find((i) => matches(i, where)) ?? null },
       apiAccessGrant: {
         findMany: async ({ where }: { where: Row }) => w().grants.filter((g) => matches(g, where)),
         updateMany: async () => ({ count: 0 }),
       },
       sapConnection: { findMany: async ({ where }: { where: Row }) => w().connections.filter((c) => matches(c, where)) },
-    },
   };
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
 });
 
 vi.mock("@/lib/sap-public/secret-envelope", () => ({
-  openSecretsForOrg: async () => ({ username: "comm_user", password: "secret" }),
+  // A connection's blob opens to its sign-in; a credential's write-key blob
+  // opens to its key, or will not open at all (the lane board opens it, P0.2).
+  openSecretsForOrg: async (_org: string, blob: string) => {
+    if (blob === "unopenable-write-key") throw new Error("sealed under a data key that is gone");
+    if (blob === "sealed-write-key") return { writeSecret: "cew_property" };
+    return { username: "comm_user", password: "secret" };
+  },
   sealSecretsForOrg: async () => "sealed",
 }));
 vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
@@ -129,7 +164,11 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => ({
     return h.rate;
   },
 }));
-vi.mock("@/lib/northbound/write-credential", () => ({ verifyWriteCredential: async () => h.writeKeyValid }));
+// The broker's write-key check is stubbed; the board's `writeKeyOpens` is real, on the world's blob.
+vi.mock("@/lib/northbound/write-credential", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  verifyWriteCredential: async () => h.writeKeyValid,
+}));
 vi.mock("@/lib/northbound/auth-failures", () => ({
   noteFailedCredential: async (_headers: unknown, _bearer: unknown, reason: string) => {
     h.observed.authReason = reason;
@@ -198,11 +237,19 @@ vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
       if (!result.ok) h.observed.bindingReason = result.reason;
       return result;
     },
+    // The same binding on the rows the access load read with the interface (P0.19).
+    bindStoredConnections: async (...args: Parameters<typeof real.bindStoredConnections>) => {
+      h.observed.bindingCalled = true;
+      const result = await real.bindStoredConnections(...args);
+      if (!result.ok) h.observed.bindingReason = result.reason;
+      return result;
+    },
   };
 });
 
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
+import { listLanes, type LaneRow } from "@/lib/coreedge/queries";
 
 /* ── the factors ──────────────────────────────────────────────────────── */
 
@@ -282,12 +329,23 @@ interface Connection {
   active: boolean;
   /** What the interface's service verification holds under this connection's key. */
   verification: Verification;
+  /**
+   * SapConnection.transport (P0.14). Absent is DIRECT. No twin engine is
+   * registered here, so the broker refuses a TWIN connection it binds, and
+   * the lane board must draw that refusal (wave 2 integration review round 3).
+   */
+  transport?: "DIRECT" | "TWIN";
 }
 interface Case {
   route: "read" | "write";
   cred: Credential;
   solution: (typeof SOLUTION_STATES)[number];
-  writeKey: boolean;
+  /**
+   * The credential's write key: presented and valid, absent, or sealed on the
+   * row but unopenable (a data key gone, a corrupt blob), which the write
+   * route refuses exactly as an absent one (P0.2 review).
+   */
+  writeKey: boolean | "unopenable";
   rate: (typeof RATES)[number];
   idempotencyKey: boolean;
   iface: Iface;
@@ -296,6 +354,14 @@ interface Case {
   connections: Connection[];
   /** Another organisation's rows sit beside this one's (see the header). */
   foreign: boolean;
+  /**
+   * The lane's evidence (P0.2): a fresh, passing check made through
+   * `connections[via]` against this feed's dataset and version — or against
+   * another `version` of the feed, or none at all. The broker never reads it;
+   * the lane board may use it only when it was made through the connection
+   * the broker binds.
+   */
+  evidence?: { via: number; version: "current" | "earlier" } | null;
 }
 
 /* ── the oracle, from the decision-table runbook ──────────────────────── */
@@ -324,7 +390,7 @@ function expected(c: Case): Decision_ {
 
   const write = c.route === "write";
   // Stage 2: the write key.
-  if (write && !c.writeKey) return refuse(403, "WRITE_KEY_INVALID");
+  if (write && c.writeKey !== true) return refuse(403, "WRITE_KEY_INVALID");
   // Stage 3: the credential's own limit.
   if (c.rate === "limited") return refuse(429, "RATE_LIMITED");
   if (c.rate === "unavailable") return refuse(503, "LIMITER_UNAVAILABLE");
@@ -398,6 +464,10 @@ function expected(c: Case): Decision_ {
     bound = only;
   }
 
+  // Stage 7b: the bound connection's transport. A TWIN connection with no
+  // twin engine on the deployment is refused before anything is called.
+  if (bound.transport === "TWIN") return refuse(503, "TRANSPORT_UNAVAILABLE");
+
   // Stage 8: the write switches. Verified means a verify made in this
   // environment through this very connection, SAP client and host.
   if (write) {
@@ -443,6 +513,11 @@ function buildWorld(c: Case): World {
     tokenHash: k.lookup === "current" ? TOKEN_HASH : "hash_of_the_current_key",
     previousTokenHash: k.lookup === "previous" ? TOKEN_HASH : null,
     overlapForTokenHash: null,
+    // A write key is sealed on the row when the case has one, valid or not
+    // (the broker's write-key check is stubbed to the case); the lane board
+    // opens it, as the write route does.
+    secretsCiphertext:
+      c.writeKey === true ? "sealed-write-key" : c.writeKey === "unopenable" ? "unopenable-write-key" : null,
   };
   client.overlapForTokenHash = k.overlapBound ? client.tokenHash : "hash_of_some_other_key";
 
@@ -559,6 +634,7 @@ function buildWorld(c: Case): World {
     environment: x.env,
     client: x.client,
     isActive: x.active,
+    transport: x.transport ?? "DIRECT",
     createdAt: at(n),
   }));
   if (c.foreign) {
@@ -586,6 +662,29 @@ function buildWorld(c: Case): World {
 
   const solutions: Row[] = c.solution === "MISSING" ? [] : [{ id: SOLUTION, organizationId: ORG, status: c.solution }];
   if (c.foreign) solutions.push({ id: "sol_b", organizationId: ORG_B, status: "ACTIVE" });
+
+  // The lane's check ledger row: fresh and passing, made through the named
+  // connection, against this dataset at the named version of the feed.
+  const evidence = c.evidence === undefined ? { via: 0, version: "current" as const } : c.evidence;
+  const checks: Row[] =
+    evidence === null
+      ? []
+      : [
+          {
+            organizationId: ORG,
+            solutionId: SOLUTION,
+            interfaceId: IFACE,
+            environment: k.env,
+            connectionId: `conn_${evidence.via}`,
+            entitySet: "A_SupplierInvoice",
+            interfaceVersion: evidence.version === "current" ? 1 : 0,
+            probeStatus: "OK",
+            probeAt: new Date(NOW - HOUR),
+            readStatus: "OK",
+            readAt: new Date(NOW - HOUR),
+            readRowCount: 1,
+          },
+        ];
   return {
     clients: k.lookup === "current" || k.lookup === "previous" ? [client] : [],
     retired: k.lookup === "dropped" ? [{ tokenHash: TOKEN_HASH, client }] : [],
@@ -593,6 +692,7 @@ function buildWorld(c: Case): World {
     interfaces,
     grants,
     connections,
+    checks,
   };
 }
 
@@ -614,7 +714,7 @@ async function runBroker(c: Case): Promise<Observed> {
     c.rate === "allowed"
       ? { allowed: true, remaining: 59, resetMs: 0 }
       : { allowed: false, remaining: 0, resetMs: 9_000, reason: c.rate === "limited" ? "limited" : "unavailable" };
-  h.writeKeyValid = c.writeKey;
+  h.writeKeyValid = c.writeKey === true;
   h.observed = {
     authReason: null,
     accessReason: null,
@@ -672,6 +772,9 @@ async function runBroker(c: Case): Promise<Observed> {
   else if (c.route === "write" && o.rateCalled && !o.accessCalled && res.status === 400) reason = "IDEMPOTENCY_KEY_REQUIRED";
   else if (o.accessReason) reason = o.accessReason;
   else if (auditedBinding) reason = auditedBinding;
+  // The bound connection's transport (a TWIN connection, no twin engine): the
+  // only 503 after the binding, the circuit breaker observing by default.
+  else if (!allow && o.bindingCalled && res.status === 503) reason = "TRANSPORT_UNAVAILABLE";
   else if (!allow && o.bindingCalled && res.status === 403) reason = "WRITES_DISABLED";
   else if (!allow && o.bindingCalled && res.status === 400) reason = "CUSTOM_SERVICE_UNVERIFIED";
   else if (!allow) reason = `UNEXPLAINED_${res.status}`;
@@ -684,6 +787,49 @@ async function runBroker(c: Case): Promise<Observed> {
     connectionId: o.connectionId,
   };
 }
+
+/* ── the lane board, on the same world (P0.2) ─────────────────────────── */
+
+/*
+ * THE BOARD IS A PREVIEW OF THE BROKER. For every case, the lane for this
+ * app's feed in the credential's environment is drawn by the real
+ * `listLanes` on the very world the broker just ran in, and two things must
+ * hold in 100% of cases:
+ *
+ *   - a lane drawn Live (or No data, the other "every hop proved") is a lane
+ *     the broker serves;
+ *   - a call the broker serves is never drawn refused at a gate the board
+ *     claims to know — access, key or binding.
+ *
+ * A case speaks for its lane only when the call it makes is the one the lane
+ * is about: the app's CURRENT key (the board holds no token, so a previous,
+ * dropped or unknown one is about the caller, not the lane), its own
+ * interface on the route that interface's mode takes, within its rate limit,
+ * with an idempotency key on a write (a caller's mistake, not the lane's).
+ */
+const GATE_HOPS: ReadonlySet<string> = new Set(["access", "key", "binding"]);
+
+function laneComparable(c: Case): boolean {
+  return (
+    c.cred.lookup === "current" &&
+    c.rate === "allowed" &&
+    c.solution !== "MISSING" &&
+    c.iface.where === "mine" &&
+    (c.route === "write") === (c.iface.mode === "WRITE") &&
+    (c.route === "read" || c.idempotencyKey)
+  );
+}
+
+async function runLane(c: Case): Promise<LaneRow | undefined> {
+  // The same world the broker runs in (buildWorld is deterministic per case).
+  h.world = buildWorld(c);
+  vi.stubEnv("COREEDGE_GRANT_BINDING", c.mode);
+  const lanes = await listLanes(ORG, { now: new Date(NOW) });
+  return lanes.find((l) => l.feedId === IFACE && l.environment === c.cred.env);
+}
+
+/** What the lane comparisons reached, across every grid — so the property is not vacuous. */
+const laneTally = { compared: 0, live: 0, refusedAtGate: 0, servedAndLive: 0, liveCases: [] as string[] };
 
 /* ── generating the cases ─────────────────────────────────────────────── */
 
@@ -833,12 +979,15 @@ function interfaceGrid(): Case[] {
  * Grid D: the write switches, the write key and the idempotency key; and the
  * verification of a custom service through the bound connection, beside an
  * inactive connection for the same environment and client that may hold the
- * entry instead.
+ * entry instead; and the bound connection's transport (DIRECT, or TWIN with
+ * no twin engine: wave 2 integration review round 3).
  */
+const TRANSPORTS = ["DIRECT", "TWIN"] as const;
 function writeSwitchGrid(): Case[] {
   const out: Case[] = [];
+  for (const transport of TRANSPORTS)
   for (const route of ROUTES)
-    for (const writeKey of bools)
+    for (const writeKey of [false, true, "unopenable"] as const)
       for (const idempotencyKey of bools)
         for (const writeEnabled of bools)
           for (const custom of bools)
@@ -846,7 +995,7 @@ function writeSwitchGrid(): Case[] {
               for (const inactiveBeside of [null, ...VERIFICATIONS])
                 for (const rate of RATES) {
                   const c = baseCase(route);
-                  const bound: Connection = { ...GOOD_CONNECTION("TEST"), writeEnabled, verification };
+                  const bound: Connection = { ...GOOD_CONNECTION("TEST"), writeEnabled, verification, transport };
                   out.push({
                     ...c,
                     writeKey,
@@ -927,6 +1076,7 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       readable: flip(0.95),
       active: flip(0.9),
       verification: flip(0.6) ? "matching" : pick(VERIFICATIONS),
+      transport: flip(0.08) ? "TWIN" : "DIRECT",
     }));
     out.push({
       route: pick(ROUTES),
@@ -941,7 +1091,7 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
         sapClient,
       },
       solution: flip(0.8) ? "ACTIVE" : pick(SOLUTION_STATES),
-      writeKey: flip(0.9),
+      writeKey: flip(0.9) ? true : flip() ? "unopenable" : false,
       rate: flip(0.9) ? "allowed" : pick(RATES),
       idempotencyKey: flip(0.9),
       iface: {
@@ -957,6 +1107,11 @@ function randomCases(count: number, seed = 0x0015_c0de): Case[] {
       mode: pick(["legacy", "strict"] as const),
       connections,
       foreign: flip(0.3),
+      // Through any of the case's connections, or none; rarely an earlier
+      // version of the feed (P0.2, A18).
+      evidence: flip(0.1)
+        ? null
+        : { via: Math.floor(rnd() * Math.max(1, connections.length)), version: flip(0.15) ? "earlier" : "current" },
     });
   }
   return out;
@@ -1012,6 +1167,24 @@ describe("the broker's governance decision agrees with the decision-table oracle
       // organisation's.
       const wantConnection = want.allow ? `conn_${want.connection}` : null;
       if (got.connectionId !== wantConnection) problems.push(`called SAP through ${got.connectionId}, oracle ${wantConnection}`);
+      // The lane board, on the same world (P0.2): Live ⇒ served; served ⇒ not refused at a gate.
+      if (laneComparable(c)) {
+        const lane = await runLane(c);
+        laneTally.compared++;
+        if (lane === undefined) {
+          problems.push("the board drew no lane for this feed and environment");
+        } else {
+          const { status, brokenHop } = lane.verdict;
+          const live = status === "live" || status === "noData";
+          if (live) laneTally.live++;
+          if (live && got.allow) laneTally.servedAndLive++;
+          if (live && laneTally.liveCases.length < 3) laneTally.liveCases.push(JSON.stringify(c));
+          const refusedAtGate = brokenHop !== null && GATE_HOPS.has(brokenHop);
+          if (refusedAtGate) laneTally.refusedAtGate++;
+          if (live && !got.allow) problems.push(`lane drawn ${status}, but the broker refused it (${got.reason})`);
+          if (got.allow && refusedAtGate) problems.push(`the broker served it, but the lane is drawn ${status} at ${brokenHop}`);
+        }
+      }
       if (problems.length > 0 && failures.length < 5) failures.push(`${problems.join("; ")}\n  case: ${JSON.stringify(c)}`);
       else if (problems.length > 0) failures.push("");
     }
@@ -1019,6 +1192,62 @@ describe("the broker's governance decision agrees with the decision-table oracle
     // Not vacuous: the grid reaches both answers.
     expect(reasons.get("ALLOWED") ?? 0).toBeGreaterThan(0);
     expect(reasons.size).toBeGreaterThan(2);
+    // Each grid also draws a lane per case (P0.2), so the largest takes a few
+    // seconds on a loaded machine: the default 5 s is a scheduler's limit, not
+    // the property's.
+  }, 60_000);
+
+  it("replacing a connection demotes the lane (P0.2 acceptance, A18)", async () => {
+    // Connection 0 served the lane and its check proves the lane Live. Then it
+    // is deactivated and connection 1 replaces it for the same environment:
+    // the broker binds 1 at once, and the check made through 0 proves nothing
+    // about 1. The lane must not stay Live on it.
+    const base = baseCase("read");
+    const served: Case = { ...base, connections: [GOOD_CONNECTION("TEST")], evidence: { via: 0, version: "current" } };
+    expect((await runBroker(served)).allow).toBe(true);
+    expect((await runLane(served))?.verdict.status).toBe("live");
+
+    const replaced: Case = {
+      ...base,
+      connections: [{ ...GOOD_CONNECTION("TEST"), active: false }, GOOD_CONNECTION("TEST")],
+      evidence: { via: 0, version: "current" },
+    };
+    const broker = await runBroker(replaced);
+    expect(broker.allow).toBe(true);
+    expect(broker.connectionId).toBe("conn_1");
+    const lane = (await runLane(replaced))!;
+    expect(lane.verdict.status).not.toBe("live");
+    expect(lane.verdict.status).toBe("unknown");
+    expect(lane.verdict.unchecked).toBe("changedSinceCheck");
+    // Once the new connection is checked, the lane is Live again.
+    expect((await runLane({ ...replaced, evidence: { via: 1, version: "current" } }))?.verdict.status).toBe("live");
+  });
+
+  it("an edited feed does not inherit its old proof (A18)", async () => {
+    const c: Case = { ...baseCase("read"), evidence: { via: 0, version: "earlier" } };
+    expect((await runBroker(c)).allow).toBe(true);
+    expect((await runLane(c))?.verdict.status).toBe("unknown");
+  });
+
+  it("a write key that will not open is drawn refused at the key, never Live (P0.2 review)", async () => {
+    // The write route opens the sealed key on every write and refuses when it
+    // will not open; the board used to ask only whether a blob existed.
+    const c: Case = { ...baseCase("write"), writeKey: "unopenable" };
+    const broker = await runBroker(c);
+    expect(broker).toMatchObject({ allow: false, reason: "WRITE_KEY_INVALID" });
+    expect((await runLane(c))?.verdict).toMatchObject({ status: "keyNotValid", brokenHop: "key" });
+    // The same lane with a key that opens is Live and served.
+    expect((await runBroker({ ...c, writeKey: true })).allow).toBe(true);
+    expect((await runLane({ ...c, writeKey: true }))?.verdict.status).toBe("live");
+  });
+
+  it("compared the lane board with the broker on most cases, reaching Live and refusals alike (P0.2)", () => {
+    // Runs after the grids above (a file's tests run in order). Not vacuous:
+    // thousands of comparisons, lanes drawn Live that the broker served, and
+    // lanes refused at a gate.
+    expect(laneTally.compared).toBeGreaterThan(10_000);
+    expect(laneTally.servedAndLive).toBeGreaterThan(100);
+    expect(laneTally.refusedAtGate).toBeGreaterThan(1_000);
   });
 
   it("exercises the second organisation, the grant-match edit and every verification shape", () => {
@@ -1081,6 +1310,7 @@ describe("the broker's governance decision agrees with the decision-table oracle
       "NO_MATCH_FOR_ENVIRONMENT",
       "UNDECLARED_ENVIRONMENT_WRITE",
       "NO_DECLARED_CANDIDATE",
+      "TRANSPORT_UNAVAILABLE",
       "WRITES_DISABLED",
       "CUSTOM_SERVICE_UNVERIFIED",
       "ALLOWED",

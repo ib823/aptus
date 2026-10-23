@@ -26,10 +26,10 @@
  * hubVersion, hubModifiedAt, hubSubType, catalogueRelease, successorExternalId)
  * on rows that ALREADY EXIST, matched by id. It never creates or deletes a row,
  * never touches titles, editions, apiType, `status`, `rawMetadataJson` (where
- * every tenant's stored probe lives) or `updatedAt` (which Catalogue Health
- * reads as "when the catalogue was last imported" — a lifecycle stamp from a
- * dated snapshot is not a re-import, and bumping it would report a stale
- * catalogue CURRENT, the A29 defect).
+ * every tenant's stored probe lives), `updatedAt` or `importedAt` (which
+ * Catalogue Health reads as "when the catalogue was last imported" since P0.3
+ * — a lifecycle stamp from a dated snapshot is not a re-import, and moving it
+ * would report a stale catalogue CURRENT, the A29 defect).
  *
  * SAFE TO RUN ON EVERY DEPLOY.
  *   - Idempotent: a row whose values already match is not written, so the

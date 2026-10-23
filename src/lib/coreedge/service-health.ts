@@ -9,15 +9,31 @@
  *     lane on that system stops.
  *   · read 403      → the client's SAP admin. We signed in; ONE entity set is
  *     unauthorised, and one lane stops.
+ *   · metadata 403  → the client's SAP admin too (P0.3, A30). The metadata
+ *     fact is now this service's own, so a 403 on it is THIS service refused,
+ *     recorded as FORBIDDEN — not a sign-in failure across the system.
  *
  * Same colour on a dashboard, opposite phone calls.
  */
 
 import type { LaneStatus } from "./status-vocabulary";
 import { freshnessOf, LANE_PROOF_TTL_MS } from "./freshness";
+import { LEDGER_READ_STATUSES } from "./lanes";
 
-export type MetadataStatus = "OK" | "UNAUTHORIZED" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
-export type ReadStatus = "OK" | "EMPTY" | "FORBIDDEN" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+/**
+ * What the lane check recorded for THIS service's `$metadata` (P0.3, A30: it
+ * used to be the connection's default probe path, observed on another
+ * service). FORBIDDEN is a 403 on this service: signed in, refused here.
+ */
+export type MetadataStatus = "OK" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+/**
+ * THE WRITER'S VOCABULARY, NOT A COPY OF IT (P0.2 review round 3). The lane
+ * sweep writes `SapServiceHealth.readStatus` from `ledgerReadStatus`, whose
+ * values are `LEDGER_READ_STATUSES`. A private list here left out UNAUTHORIZED,
+ * so an observed 401 on a read narrowed to null and the "Services readable"
+ * tile counted it as "not proven" — the A17 drop, back in the A60 reader.
+ */
+export type ReadStatus = (typeof LEDGER_READ_STATUSES)[number];
 
 export interface ServiceHealthFacts {
   readonly metadataStatus: MetadataStatus | null;
@@ -25,6 +41,67 @@ export interface ServiceHealthFacts {
   readonly readStatus: ReadStatus | null;
   readonly readAt: Date | null;
   readonly readRowCount: number | null;
+}
+
+const METADATA_STATUSES: readonly MetadataStatus[] = ["OK", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "TIMEOUT", "ERROR"];
+const READ_STATUSES: readonly ReadStatus[] = LEDGER_READ_STATUSES;
+
+/**
+ * A stored SapServiceHealth row as facts. The columns are free text; a value
+ * nobody defined becomes null — "we do not know" — never a cast. A metadata
+ * status outside the vocabulary (the probe's NO_PROBE_PATH) is therefore
+ * "never checked", and a read answered 401 stays the read hop's observed
+ * sign-in refusal. The one reader for the "Services readable" tile and the SAP
+ * system screen's per-service verdict and owner (P0.14).
+ */
+export function serviceHealthFactsOf(row: {
+  readonly metadataStatus: string | null;
+  readonly metadataAt: Date | null;
+  readonly readStatus: string | null;
+  readonly readAt: Date | null;
+  readonly readRowCount: number | null;
+}): ServiceHealthFacts {
+  return {
+    metadataStatus: (METADATA_STATUSES as readonly string[]).includes(row.metadataStatus ?? "")
+      ? (row.metadataStatus as MetadataStatus)
+      : null,
+    metadataAt: row.metadataAt,
+    readStatus: (READ_STATUSES as readonly string[]).includes(row.readStatus ?? "") ? (row.readStatus as ReadStatus) : null,
+    readAt: row.readAt,
+    readRowCount: row.readRowCount,
+  };
+}
+
+/**
+ * "Services readable N of M" (A60): a service counts as readable only when
+ * its verdict is Live or No data — a fresh metadata check AND a fresh read.
+ * The screen counted every OK or EMPTY read of any age, so a service last read
+ * months ago for a since-retired app stayed "readable" forever. `unproven` is
+ * the rest that are not failing: no fresh proof either way.
+ *
+ * An OBSERVED failure is never "unproven" (P0.2 review round 3). A fresh 404
+ * on the read is drawn Unknown by `verdictForService` (the vocabulary has no
+ * chip for it), but the read ran and failed — the per-service row draws it
+ * failed — so the tile does not count it as "not proven in 24 h" either.
+ */
+export function readableServices(
+  rows: readonly Parameters<typeof serviceHealthFactsOf>[0][],
+  now: Date = new Date(),
+): { readonly readable: number; readonly unproven: number } {
+  let readable = 0;
+  let unproven = 0;
+  for (const row of rows) {
+    const facts = serviceHealthFactsOf(row);
+    const { status } = verdictForService(facts, now);
+    if (status === "live" || status === "noData") readable++;
+    else if (status === "unknown" && !isFreshNotFoundRead(facts, now)) unproven++;
+  }
+  return { readable, unproven };
+}
+
+/** A read that ran within the proof window and found no dataset (HTTP 404). */
+function isFreshNotFoundRead(facts: ServiceHealthFacts, now: Date): boolean {
+  return facts.readStatus === "NOT_FOUND" && freshnessOf(facts.readAt, LANE_PROOF_TTL_MS, now) === "fresh";
 }
 
 export interface ServiceVerdict {
@@ -47,6 +124,15 @@ export function verdictForService(facts: ServiceHealthFacts, now: Date = new Dat
     return {
       status: "signInRefused",
       because: "SAP rejected our sign-in. Every lane on this system stops until the credential is fixed.",
+      provenAt: facts.metadataAt,
+    };
+  }
+  if (facts.metadataStatus === "FORBIDDEN") {
+    // Signed in; SAP refused THIS service's description (A30). One service,
+    // one owner: the client's SAP admin — never "every lane stops".
+    return {
+      status: "sapRefused",
+      because: "We signed in and SAP refused this service. The fix is in SAP authorisation, not in CoreEdge.",
       provenAt: facts.metadataAt,
     };
   }
@@ -74,6 +160,19 @@ export function verdictForService(facts: ServiceHealthFacts, now: Date = new Dat
       status: "sapRefused",
       because:
         "We signed in and SAP refused this dataset. The fix is in SAP authorisation, not in CoreEdge.",
+      provenAt: facts.readAt,
+    };
+  }
+  if (facts.readStatus === "UNAUTHORIZED") {
+    /*
+     * An observed failure, as the lane board reads it (lanes.ts
+     * `deriveHopVerdict`, A17): the metadata hop signed in, but SAP rejected
+     * the sign-in on this service's read — the read can ask a different
+     * service from the connection's metadata probe. Never "not proven".
+     */
+    return {
+      status: "signInRefused",
+      because: "SAP rejected CoreEdge's sign-in when it read this dataset (HTTP 401).",
       provenAt: facts.readAt,
     };
   }

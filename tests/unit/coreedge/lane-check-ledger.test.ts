@@ -48,11 +48,12 @@ describe("one TTL, not two", () => {
 describe("a stored check becomes a lane status", () => {
   const now = new Date("2026-09-13T12:00:00Z");
   const healthy = {
-    lane: { operation: "READ" as const, environment: "TEST" as const },
+    lane: { operation: "READ" as const, environment: "TEST" as const, route: "read" as const },
     appRetired: false,
-    key: { exists: true, revokedAt: null, expiresAt: null, isActive: true },
-    access: { decision: "APPROVED" as const, expiresAt: null, revokedAt: null },
-    binding: { matchingConnections: 1, secretUnreadable: false },
+    key: { exists: true, revokedAt: null, expiresAt: null, isActive: true, writeKeyIssued: false },
+    access: { decision: "APPROVED" as const, expiresAt: null, revokedAt: null, refusal: null },
+    evidenceSuperseded: false,
+    binding: { refusal: null },
     sweep: { appIsActive: true, feedHasDataset: true, feedServiceResolves: true },
     now,
   };

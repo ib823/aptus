@@ -267,7 +267,7 @@ export const BROKER_FACTS = {
   /** read.ts: MAX_LIMIT, and the only query options a read sends. */
   readMaxRows: 100,
   readQueryOptions: ["$top", "$format"],
-  /** access.ts refuses every other write operation (OPERATION_NOT_SUPPORTED). */
+  /** access.ts (authorisation.ts interfaceRefusal) refuses every other write operation (OPERATION_NOT_SUPPORTED). */
   writeOperations: ["CREATE"],
   /** Neither executor sends $batch. */
   batch: false,
@@ -762,13 +762,17 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
     },
     RUN_MONITOR_ALERT: {
       implemented: true,
-      basis: ["Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts)."],
+      basis: [
+        "Operations Center, Control Tower and incidents (ops/incidents.ts); a daily probe emails org admins (connection-probe-sweep.ts).",
+        "A correlation-id search in Operations (correlation-lookup.ts), per-service verdicts and owners on the SAP system screen (service-health.ts), and a circuit breaker per SAP system on every governed call that observes until COREEDGE_CIRCUIT_BREAKER=enforce (governed/containment.ts; P0.14).",
+      ],
       limits: ["No real-time alerts and no owner paging (P3.7)."],
     },
     GOVERN_AUDIT_COMPLY: {
       implemented: true,
       basis: [
         "Two-person approval, mandatory grant expiry checked per call, grants bound to one interface (grant-binding.ts), revoke, per-key rate limits, audit retention.",
+        "One governed pipeline with named steps and one refusal table for the northbound read and write, the Test Console run and the Workbench preview (governed/pipeline.ts; P0.14).",
       ],
       limits: [
         `Holes still open by default: COREEDGE_GRANT_BINDING defaults to ${facts.grantBindingDefault}, COREEDGE_STEP_UP to ${BROKER_FACTS.stepUpDefault}, and a failed broker audit insert is logged and swallowed (audit.ts; P3.10).`,
@@ -778,6 +782,7 @@ function lifecycleCells(facts: CodeFacts): CapabilityCell[] {
       implemented: true,
       basis: [
         "SAP secrets sealed under per-organisation data keys (secret-envelope.ts); consumer keys expire and rotate with an overlap (key-policy.ts).",
+        "A re-saved SAP connection secret is sent to SAP once (sign-in and $metadata) before it replaces a working one: COREEDGE_ROTATION_PROBE=observe (default) reports what SAP answered, enforce refuses a secret SAP refused the sign-in for (rotation-probe.ts; P0.14).",
       ],
       limits:
         kms.length > 0

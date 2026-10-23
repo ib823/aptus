@@ -54,6 +54,24 @@ export function tokenPrefixFor(environment: string): typeof LIVE_TOKEN_PREFIX | 
   return environment.toUpperCase() === "PROD" ? LIVE_TOKEN_PREFIX : TEST_TOKEN_PREFIX;
 }
 
+/**
+ * The four characters a masked key reference ends in (P0.3, A45): the last
+ * four of the TOKEN, stored beside its hash as `SolutionClient.tokenTail` by
+ * every path that mints one. The claim page shows the same four, so the
+ * reference the recipient is told to expect is the one every console shows.
+ * Four base64url characters of a 32-byte key are not a secret.
+ *
+ * Written in the SAME update as the new `tokenHash`: a database trigger
+ * clears the tail of any key change that does not write one
+ * (migration 20261025040000_token_tail_binding), so a key changed by code
+ * that predates the column never keeps the previous key's ending.
+ */
+export const TOKEN_TAIL_LENGTH = 4;
+
+export function tokenTailOf(rawToken: string): string {
+  return rawToken.slice(-TOKEN_TAIL_LENGTH);
+}
+
 /** The stored prefix, read defensively: anything unrecognised reads as legacy. */
 export function storedTokenPrefix(value: string | null | undefined): ClientTokenPrefix {
   return value === LIVE_TOKEN_PREFIX || value === TEST_TOKEN_PREFIX ? value : LEGACY_TOKEN_PREFIX;
@@ -434,6 +452,40 @@ export function isKeyLive(key: KeyLiveness, now: Date): boolean {
   // `== null`: a row read without the column has no expiry to judge, which
   // is what an absent value means — never a reason to crash a screen.
   return key.expiresAt == null || key.expiresAt.getTime() > now.getTime();
+}
+
+/** Why a key that resolved to its row does not authenticate, most specific first. */
+export type KeyRefusal = "REVOKED" | "INACTIVE" | "ROTATED_OUT" | "EXPIRED";
+
+/** How the presented key matched its row: as the current key, or as one the row replaced. */
+export interface PresentedKey {
+  /** The key matched the row's previous key, or one the row has dropped. */
+  readonly viaPreviousKey: boolean;
+  /** The overlap still belongs to the row's current key (`overlapStillBound`). */
+  readonly previousKeyBound: boolean;
+}
+
+/** The row's CURRENT key: what the lane board asks about, since it holds no token. */
+export const CURRENT_KEY: PresentedKey = { viaPreviousKey: false, previousKeyBound: false };
+
+/**
+ * THE KEY HOP, as authentication applies it and the lane board previews it
+ * (P0.2): revoked before inactive (a revoked token is a security event worth
+ * seeing as exactly that), then the rotation overlap, then the row's expiry.
+ * `isKeyLive` is this rule for the current key, as a yes or no.
+ */
+export function keyRefusal(
+  row: KeyLiveness & { readonly previousValidUntil?: Date | null },
+  now: Date,
+  presented: PresentedKey = CURRENT_KEY,
+): KeyRefusal | null {
+  if (row.revokedAt != null) return "REVOKED";
+  if (!row.isActive) return "INACTIVE";
+  if (presented.viaPreviousKey && (!presented.previousKeyBound || !overlapIsOpen(row.previousValidUntil, now))) {
+    return "ROTATED_OUT";
+  }
+  if (row.expiresAt != null && row.expiresAt.getTime() <= now.getTime()) return "EXPIRED";
+  return null;
 }
 
 /** The same rule as a Prisma filter, for counts and lists. */

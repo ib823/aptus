@@ -75,6 +75,22 @@ export interface ReservationInput {
     entitySet: string;
     interfaceVersion: number;
   };
+  /**
+   * The credential's `lastUsedAt` stamp, when it is due (pipeline.ts
+   * carryLastUsedStamp): written by the claim's own statement rather than as
+   * a statement of its own, so the minute's first write of a key stays within
+   * the write budget (P0.19 review round 1).
+   */
+  stamp?: ClaimStamp | null;
+}
+
+/** A credential's `lastUsedAt` stamp, carried by the claim. */
+export interface ClaimStamp {
+  readonly clientId: string;
+  /** The value written. */
+  readonly at: Date;
+  /** Written only over a stamp older than this (or none): the once-a-minute throttle, in SQL. */
+  readonly staleBefore: Date;
 }
 
 export type Reservation =
@@ -102,6 +118,37 @@ export async function reserveIdempotencyKey(
   // reservation that could already represent a committed SAP write.
   const requestHash = hashRequest({ version: 2, destination: input.destination, payload: input.payload });
 
+  /*
+   * CLAIM FIRST, LOOK SECOND (P0.19). One statement claims a fresh key (the
+   * INSERT) or renews an expired one (the ON CONFLICT arm, whose WHERE admits
+   * only a row past its expiry) and returns the claim's id. A key that is
+   * already held returns nothing, and only then is the row read and judged
+   * as before. The unique constraint is still the guarantee: two concurrent
+   * requests carrying one key cannot both claim it, and of two renewing one
+   * expired key the second re-reads the row the first renewed, finds it
+   * live, and claims nothing.
+   *
+   * WHY NOT A PRISMA create THAT CATCHES P2002 (review round 1). Prisma logs
+   * every refused query at `error`, caught or not, so every replay or
+   * conflict printed a "Unique constraint failed" block to the function's
+   * log; and an expired key's renewal was a further BEGIN, UPDATE, COMMIT.
+   * ON CONFLICT refuses nothing and renews in the same round trip.
+   */
+  const claimed = await prisma.$queryRaw<{ id: string }[]>(
+    claimStatement({
+      recordId: randomUUID(),
+      organizationId,
+      solutionId: input.solutionId,
+      interfaceId: input.interfaceId,
+      key: input.key,
+      requestHash,
+      now,
+      stamp: input.stamp ?? null,
+    }),
+  );
+  const own = claimed[0]?.id;
+  if (own !== undefined) return { outcome: "proceed", recordId: own };
+
   const existing = await prisma.northboundIdempotencyKey.findUnique({
     where: {
       organizationId_solutionId_key: {
@@ -113,88 +160,96 @@ export async function reserveIdempotencyKey(
     select: { id: true, interfaceId: true, requestHash: true, status: true, responseBody: true, expiresAt: true },
   });
 
-  if (existing) {
-    // An expired record is not a retry of anything — the client has come back
-    // long after any reasonable retry window, so treat the key as fresh.
-    if (existing.expiresAt.getTime() <= now.getTime()) {
-      const recordId = randomUUID();
-      const renewed = await prisma.northboundIdempotencyKey.updateMany({
-        // organizationId alongside the id: the model is tenant-anchored and the
-        // scope guard requires every mutation's where to carry the tenant.
-        where: { id: existing.id, organizationId, expiresAt: existing.expiresAt },
-        data: {
-          // A new ownership token also fences off a late completion/release
-          // from the old reservation. Only one conditional update can win.
-          id: recordId,
-          requestHash,
-          // The interface too — the reset re-opens the key for THIS request,
-          // and leaving the old interfaceId stranded the row's attribution on
-          // whatever interface used the key last time.
-          interfaceId: input.interfaceId,
-          status: null,
-          // Prisma.DbNull, not `undefined` — `undefined` means "leave the column
-          // alone", which would strand the OLD response on a key we have just
-          // reopened, and a later retry would replay a result from a different
-          // request entirely.
-          responseBody: Prisma.DbNull,
-          createdAt: now,
-          expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
-        },
-      });
-      return renewed.count === 1
-        ? { outcome: "proceed", recordId }
-        : { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
+  // Gone between the claim and this read: released or reaped by the attempt
+  // that held it. Still in flight, as a lost claim race was.
+  if (!existing) return { outcome: "conflict", reason: "IN_FLIGHT" };
 
-    /*
-     * THE INTERFACE IS PART OF THE IDENTITY. The key is unique per
-     * (organization, solution, key) and this comparison used to check only the
-     * payload hash — so an IDENTICAL {entity, record} posted with one key to
-     * interface A and then to interface B replayed A's stored response and
-     * NEVER WROTE B. Same bytes, different destination, silently swallowed:
-     * exactly the "second write disappears without a trace" failure the
-     * PAYLOAD_MISMATCH arm below exists to prevent, arriving through the field
-     * the comparison forgot. A different interface is a different request,
-     * whatever the payload says.
-     */
-    if (existing.interfaceId !== input.interfaceId) {
-      return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
-    }
+  // The claim renews an expired row, so one still expired here was renewed
+  // under a clock behind ours. Never proceed without a claim: in flight, as
+  // a lost renewal race was.
+  if (existing.expiresAt.getTime() <= now.getTime()) return { outcome: "conflict", reason: "IN_FLIGHT" };
 
-    if (existing.requestHash !== requestHash) {
-      // Replaying the stored response here would make the caller's SECOND,
-      // different write disappear without a trace.
-      return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
-    }
-
-    if (existing.status === null) {
-      return { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
-
-    return { outcome: "replay", status: existing.status, body: existing.responseBody };
+  /*
+   * THE INTERFACE IS PART OF THE IDENTITY. The key is unique per
+   * (organization, solution, key) and this comparison used to check only the
+   * payload hash — so an IDENTICAL {entity, record} posted with one key to
+   * interface A and then to interface B replayed A's stored response and
+   * NEVER WROTE B. Same bytes, different destination, silently swallowed:
+   * exactly the "second write disappears without a trace" failure the
+   * PAYLOAD_MISMATCH arm below exists to prevent, arriving through the field
+   * the comparison forgot. A different interface is a different request,
+   * whatever the payload says.
+   */
+  if (existing.interfaceId !== input.interfaceId) {
+    return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
   }
 
-  try {
-    const created = await prisma.northboundIdempotencyKey.create({
-      data: {
-        organizationId,
-        solutionId: input.solutionId,
-        interfaceId: input.interfaceId,
-        key: input.key,
-        requestHash,
-        expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
-      },
-      select: { id: true },
-    });
-    return { outcome: "proceed", recordId: created.id };
-  } catch (err) {
-    // Lost the race against a concurrent request carrying the same key. The
-    // unique constraint is the real guarantee; this is where it pays off.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return { outcome: "conflict", reason: "IN_FLIGHT" };
-    }
-    throw err;
+  if (existing.requestHash !== requestHash) {
+    // Replaying the stored response here would make the caller's SECOND,
+    // different write disappear without a trace.
+    return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
   }
+
+  if (existing.status === null) {
+    return { outcome: "conflict", reason: "IN_FLIGHT" };
+  }
+
+  return { outcome: "replay", status: existing.status, body: existing.responseBody };
+}
+
+/** A JS instant as a `timestamp(3)` column holds it: UTC wall time, whatever the session's zone. */
+const utc = (at: Date) => Prisma.sql`(${at.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+
+/**
+ * The claim: one statement (see reserveIdempotencyKey). Returns the claimed
+ * row's id, or no row when the key is held and live.
+ *
+ * NOT SEEN BY THE TENANT GUARD, which inspects Prisma model operations only.
+ * So the scoping it would demand is in the SQL, bound as parameters: the row
+ * is inserted for the caller's organisation, the conflict target leads with
+ * it, and the stamp updates only the credential's row in that organisation
+ * (pinned by tests/unit/northbound/idempotency.test.ts).
+ *
+ * An expired record is not a retry of anything: the client has come back
+ * long after any reasonable retry window, so the key is treated as fresh.
+ * The renewal sets every column a fresh claim sets: a new id (the ownership
+ * token that fences off a late completion or release from the old
+ * reservation), this request's fingerprint and interface, no outcome (NULL,
+ * not left alone, or a later retry would replay the old request's result)
+ * and a fresh lifetime.
+ */
+export function claimStatement(c: {
+  recordId: string;
+  organizationId: string;
+  solutionId: string;
+  interfaceId: string;
+  key: string;
+  requestHash: string;
+  now: Date;
+  stamp: ClaimStamp | null;
+}): Prisma.Sql {
+  const expiresAt = new Date(c.now.getTime() + IDEMPOTENCY_TTL_MS);
+  const stamp = c.stamp
+    ? Prisma.sql`WITH "stamp" AS (
+        UPDATE "SolutionClient" SET "lastUsedAt" = ${utc(c.stamp.at)}, "updatedAt" = ${utc(c.stamp.at)}
+        WHERE "id" = ${c.stamp.clientId} AND "organizationId" = ${c.organizationId}
+          AND ("lastUsedAt" IS NULL OR "lastUsedAt" < ${utc(c.stamp.staleBefore)})
+      )`
+    : Prisma.empty;
+  return Prisma.sql`/* governed:idempotency-claim */ ${stamp}
+    INSERT INTO "NorthboundIdempotencyKey"
+      ("id", "organizationId", "solutionId", "interfaceId", "key", "requestHash", "status", "responseBody", "createdAt", "expiresAt")
+    VALUES (${c.recordId}, ${c.organizationId}, ${c.solutionId}, ${c.interfaceId}, ${c.key}, ${c.requestHash}, NULL, NULL, ${utc(c.now)}, ${utc(expiresAt)})
+    ON CONFLICT ("organizationId", "solutionId", "key") DO UPDATE SET
+      "id" = EXCLUDED."id",
+      "requestHash" = EXCLUDED."requestHash",
+      "interfaceId" = EXCLUDED."interfaceId",
+      "status" = NULL,
+      "responseBody" = NULL,
+      "createdAt" = EXCLUDED."createdAt",
+      "expiresAt" = EXCLUDED."expiresAt"
+    WHERE "NorthboundIdempotencyKey"."expiresAt" <= ${utc(c.now)}
+    RETURNING "id"`;
 }
 
 /**

@@ -395,6 +395,33 @@ describe("connection health uses the real status vocabulary", () => {
     expect(body.data.counts.needsAttention).toBe(0);
   });
 
+  it("puts every connection in exactly one count, and gives each row the verdict its count used (P0.2, A50)", async () => {
+    // A stale OK and an UNREADABLE used to leave the tiles short of the
+    // total on the screen, and the row still sent a bare "OK" to be drawn green.
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    const days = (n: number) => new Date(Date.now() - n * 86_400_000);
+    mocks.connectionFindMany.mockResolvedValue([
+      conn({ id: "fresh", lastValidationStatus: "OK", lastValidatedAt: new Date() }),
+      conn({ id: "aged", lastValidationStatus: "OK", lastValidatedAt: days(3) }),
+      conn({ id: "sealed", lastValidationStatus: "UNREADABLE", lastValidatedAt: days(3) }),
+      conn({ id: "none", lastValidationStatus: null, lastValidatedAt: null }),
+      conn({ id: "path", lastValidationStatus: "NO_PROBE_PATH" }),
+    ]);
+    const body = await (await connectionsHealth()).json();
+    const { total, healthy, stale, needsAttention, unknown, neverTested } = body.data.counts;
+    expect(healthy + stale + needsAttention + unknown + neverTested).toBe(total);
+    const verdicts = Object.fromEntries(
+      (body.data.connections as { id: string; verdict: string }[]).map((c) => [c.id, c.verdict]),
+    );
+    expect(verdicts).toEqual({
+      fresh: "healthy",
+      aged: "stale",
+      sealed: "unreadable",
+      none: "neverTested",
+      path: "unknown",
+    });
+  });
+
   it("counts undeclared environments as a backlog with a remediation", async () => {
     mocks.getCurrentUser.mockResolvedValue(SUPPORT);
     mocks.connectionFindMany.mockResolvedValue([
@@ -532,48 +559,49 @@ function conn(over: Record<string, unknown> = {}) {
 }
 
 
-describe("connection health knows the deployment falls back to an env tenant", () => {
+describe("connection health reports the deployment's env tenant whatever the organization holds (A59)", () => {
   /**
-   * THE ENDPOINT HALF of the fallback fix, and it was missing.
+   * THE ENDPOINT HALF, kept from the fallback fix and corrected by P0.3.
    *
-   * The screen tests feed a payload straight in, so they prove the component
-   * renders a fallback it is given — and pass unchanged if the endpoint stops
-   * resolving one. Reverting the route to rows-only was caught by nothing until
-   * this block existed. A component test is not an endpoint test.
+   * The env tenant was resolved only when the organization had no stored row,
+   * and described as the broker's fallback. The broker never uses it; console
+   * reads use it for everyone. So it is now listed whenever it exists, with
+   * what it serves, and whether the broker can reach SAP is its own field.
+   * tests/unit/ops/deployment-tenant-registers.test.ts holds the A59 cases for
+   * both registers; this keeps the route resolving the tenants at all.
    */
   beforeEach(() => mocks.getCurrentUser.mockResolvedValue(SUPPORT));
 
   const TDD = { key: "s4_tdd", label: "ABeam S/4 TDD", product: "s4hana", source: "environment", environment: null };
 
-  it("reports the fallback as in use when the organization has no stored row", async () => {
+  it("lists the env tenant when the organization has no stored row, and says its apps are refused", async () => {
     mocks.connectionFindMany.mockResolvedValue([]);
     mocks.fallbackTenants.mockReturnValue([TDD]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(true);
-    expect(body.data.deploymentFallback.tenants[0].key).toBe("s4_tdd");
-    expect(body.data.provenance.fallbackIsShared).toContain("shared by every organization");
+    expect(body.data.deploymentTenant).toMatchObject({ configured: true, servesBroker: false });
+    expect(body.data.deploymentTenant.tenants[0].key).toBe("s4_tdd");
+    expect(body.data.provenance.deploymentTenantScope).toContain("shared by every organization");
+    expect(body.data.brokerReachable).toBe(false);
   });
 
-  it("does NOT resolve a fallback when the organization has its own connection", async () => {
-    // The broker prefers a stored row, so listing the shared tenant beside one
-    // would show something that is not serving anything.
+  it("lists it beside the organization's own connection too: console reads still reach it", async () => {
     mocks.connectionFindMany.mockResolvedValue([conn()]);
     mocks.fallbackTenants.mockReturnValue([TDD]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(false);
-    expect(mocks.fallbackTenants).not.toHaveBeenCalled();
-    expect(body.data.provenance.fallbackIsShared).toBeNull();
+    expect(body.data.deploymentTenant.configured).toBe(true);
+    expect(body.data.brokerReachable).toBe(true);
+    expect(body.data.provenance.brokerReachability).toBeNull();
   });
 
-  it("says nothing falls back when the deployment has no env tenant either", async () => {
+  it("says there is none when the deployment has no env tenant", async () => {
     mocks.connectionFindMany.mockResolvedValue([]);
     mocks.fallbackTenants.mockReturnValue([]);
 
     const body = await (await connectionsHealth()).json();
-    expect(body.data.deploymentFallback.inUse).toBe(false);
-    expect(body.data.provenance.noHealthForFallback).toBeNull();
+    expect(body.data.deploymentTenant.configured).toBe(false);
+    expect(body.data.provenance.noHealthForDeploymentTenant).toBeNull();
   });
 });
 
@@ -602,5 +630,38 @@ describe("the upstream-errors incident counts live traffic, not console explorat
     );
     const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
     expect(body.data.incidents.map((i: { id: string }) => i.id)).toContain("upstream-errors");
+  });
+});
+
+describe("the connection-drift incident reads probe history, not superseded traces (P0.2 review round 3)", () => {
+  /*
+   * A probe whose connection was re-saved before it returned still writes its
+   * SapConnectionProbeEvent — the trace that a request reached SAP — but it is
+   * about settings that no longer exist. The mock filters as Postgres would,
+   * so the assertion is about what the route asks for.
+   */
+  type ProbeEventQuery = { where: { at?: { gte?: Date }; source?: { not?: { endsWith?: string } } } };
+  const ok = { connectionId: "conn_1", status: "OK", source: "cron" };
+
+  function stored(events: { connectionId: string; status: string; source: string }[]) {
+    mocks.probeEventFindMany.mockImplementation((args: ProbeEventQuery) => {
+      if (!args.where.at?.gte) return Promise.resolve([]);
+      const suffix = args.where.source?.not?.endsWith;
+      return Promise.resolve(events.filter((e) => suffix === undefined || !e.source.endsWith(suffix)));
+    });
+  }
+
+  it("a superseded probe's failure is not a healthy-to-failing transition", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    stored([ok, { connectionId: "conn_1", status: "UNAUTHORIZED", source: "manual:superseded" }]);
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).not.toContain("connection-drift");
+  });
+
+  it("the same failure, recorded as history, still raises it", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    stored([ok, { connectionId: "conn_1", status: "UNAUTHORIZED", source: "manual" }]);
+    const body = await (await incidents(req("https://x.test/api/ops/incidents"))).json();
+    expect(body.data.incidents.map((i: { id: string }) => i.id)).toContain("connection-drift");
   });
 });

@@ -16,16 +16,18 @@ import type * as ResolverModule from "@/lib/sap-public/connection-resolver";
 
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
-  update: vi.fn(),
+  findMany: vi.fn(),
+  updateMany: vi.fn(),
   createEvent: vi.fn(),
   resolveSapConnections: vi.fn(),
+  resolveSapConnection: vi.fn(),
   probeConnection: vi.fn(),
   requireOperations: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    sapConnection: { findFirst: mocks.findFirst, update: mocks.update, findUnique: vi.fn() },
+    sapConnection: { findFirst: mocks.findFirst, findMany: mocks.findMany, updateMany: mocks.updateMany, findUnique: vi.fn() },
     sapConnectionProbeEvent: { create: mocks.createEvent },
     user: { findMany: vi.fn().mockResolvedValue([]) },
   },
@@ -36,7 +38,11 @@ vi.mock("@sentry/nextjs", () => ({ captureMessage: vi.fn() }));
 vi.mock("@/lib/sap-public/connection-resolver", async (importOriginal) => {
   const actual = await importOriginal<typeof ResolverModule>();
   // The sentence stays real — it is the thing the operator reads.
-  return { ...actual, resolveSapConnections: mocks.resolveSapConnections };
+  return {
+    ...actual,
+    resolveSapConnections: mocks.resolveSapConnections,
+    resolveSapConnection: mocks.resolveSapConnection,
+  };
 });
 vi.mock("@/lib/studio/connection-health", () => ({
   probeConnection: mocks.probeConnection,
@@ -48,7 +54,9 @@ import { probeOneConnection } from "@/lib/ops/connection-probe-sweep";
 import { POST } from "@/app/api/ops/connections-health/probe/route";
 
 const ROW = { id: "conn_1", key: "cust", product: "s4hana", environment: "TEST" };
-const RESOLVED = { id: "conn_1", key: "cust", product: "s4hana", environment: "TEST", client: null };
+const RESOLVED = { id: "conn_1", key: "cust", product: "s4hana", environment: "TEST", client: null, revision: 2 };
+/** The product group as "Probe now" lists it when the group will not open. */
+const GROUP_ROW = { id: "conn_1", key: "cust", label: "Acme S/4 TEST", lastValidationStatus: "OK", revision: 2 };
 
 function req(body: unknown) {
   return new Request("http://localhost:3003/api/ops/connections-health/probe", {
@@ -63,7 +71,10 @@ beforeEach(() => {
   mocks.findFirst.mockResolvedValue(ROW);
   mocks.resolveSapConnections.mockResolvedValue([RESOLVED]);
   mocks.probeConnection.mockResolvedValue({ status: "OK", httpStatus: 200, detail: "ok", durationMs: 12 });
-  mocks.update.mockResolvedValue({});
+  mocks.updateMany.mockResolvedValue({ count: 1 });
+  mocks.findMany.mockResolvedValue([GROUP_ROW]);
+  // Opened on its own, the row itself will not open either.
+  mocks.resolveSapConnection.mockRejectedValue(new Error("Unsupported state or unable to authenticate data"));
   mocks.createEvent.mockResolvedValue({});
   mocks.requireOperations.mockResolvedValue({ ok: true, actor: { kind: "scoped", organizationId: "org_a" } });
 });
@@ -72,7 +83,9 @@ describe("probeOneConnection tells its three outcomes apart", () => {
   it("probes a readable connection and records the result", async () => {
     const out = await probeOneConnection("org_a", "conn_1", "manual");
     expect(out).toEqual({ outcome: "probed", status: "OK", detail: "ok" });
-    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.updateMany).toHaveBeenCalledTimes(1);
+    // Only onto the settings that were probed (P0.2 review).
+    expect(mocks.updateMany.mock.calls[0]![0].where).toEqual({ id: "conn_1", organizationId: "org_a", revision: 2 });
     expect(mocks.createEvent).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ connectionId: "conn_1", status: "OK", source: "manual" }) }),
     );
@@ -98,14 +111,42 @@ describe("probeOneConnection tells its three outcomes apart", () => {
     }
   });
 
-  it("writes NO health status and NO probe event when nothing was probed", async () => {
-    // No probe ran, so there is no tenant fact to record — the same rule the
-    // Studio test route (R5) applies. A written status here would be a verdict
-    // about a tenant nobody reached.
+  it("records UNREADABLE, and NO probe event, when the secret would not open (P0.2, A50)", async () => {
+    // No probe ran, so there is no tenant fact to record: no probe event, and
+    // lastValidatedAt — the last time SAP answered — untouched. But the row's
+    // status says UNREADABLE: leaving its last "OK" standing called a
+    // connection healthy that the broker refuses on every call.
     mocks.resolveSapConnections.mockRejectedValue(new Error("boom"));
     await probeOneConnection("org_a", "conn_1", "manual");
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.updateMany).toHaveBeenCalledTimes(1);
+    expect(mocks.updateMany.mock.calls[0]![0].data).toEqual({ lastValidationStatus: "UNREADABLE" });
     expect(mocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("says 'superseded', and records no history, when the connection was re-saved mid-probe (P0.2 review)", async () => {
+    // The guarded write matches no row: the revision moved under the probe.
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    const out = await probeOneConnection("org_a", "conn_1", "manual");
+    expect(out.outcome).toBe("superseded");
+    expect(mocks.createEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ source: "manual" }) }),
+    );
+  });
+
+  it("still leaves a trace, marked superseded, that the probe reached SAP (round 3)", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    await probeOneConnection("org_a", "conn_1", "manual");
+    expect(mocks.createEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvent).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org_a",
+        connectionId: "conn_1",
+        status: "OK",
+        httpStatus: 200,
+        durationMs: 12,
+        source: "manual:superseded",
+      },
+    });
   });
 
   it("treats a row the resolver does not return as unreadable, not as missing", async () => {
@@ -133,6 +174,14 @@ describe("the route renders each outcome as itself", () => {
     const body = await res.json();
     expect(body.error.code).toBe("CONFLICT");
     expect(body.error.message).toMatch(/Re-save the connection's secrets in Studio, or deactivate the broken row/);
+  });
+
+  it("409 when the connection was re-saved while the probe ran (P0.2 review)", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    const res = await POST(req({ connectionId: "conn_1" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/changed while it was being probed/);
   });
 
   it("200 with the probe result when it ran", async () => {

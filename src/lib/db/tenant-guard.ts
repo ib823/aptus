@@ -42,6 +42,10 @@ import type { Prisma } from "@prisma/client";
  * owns, made by platform admins who may have none. There is no tenant to scope
  * it to, so its reads are gated to `platform_admin` instead
  * (/api/ops/workbench-writes). tenant-guard.test.ts pins this.
+ * `PlatformConsoleRead` (P0.14b, the console's platform-scope read rows) is
+ * absent for the same reason: the reader may have no organization, and the
+ * system read may belong to none. Its one organization-facing read, the
+ * correlation search, names the organization in its own `where`.
  */
 export const TENANT_ANCHORED_MODELS = [
   "Solution",
@@ -153,6 +157,12 @@ function whereHasOrganization(args: unknown): boolean {
  * review) is the third lookup of the same kind, by its `@id` hash, on a miss
  * of both: it finds only the record of the key presented, and that record
  * only ever refuses.
+ *
+ * Since P0.19 the governed call makes these three lookups as ONE raw
+ * statement (lib/governed/call-loads.ts lookupCredential), which this guard
+ * does not see. Its predicates are exactly these three equalities, pinned by
+ * tests/unit/governed/call-loads-sql.test.ts; these entries still sanction
+ * the Prisma form, for any other caller.
  */
 const UNSCOPED_BY_DESIGN: readonly {
   readonly model: string;

@@ -256,7 +256,10 @@ interface FallbackTenant {
 }
 
 interface ConnectionsPayload {
-  deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
+  /** Apps reach SAP through the broker only when this is true: an ACTIVE connection exists (P0.3, A59). */
+  brokerReachable: boolean;
+  /** The deployment's env tenant: console and explorer reads for everyone, never the broker. */
+  deploymentTenant: { configured: boolean; servesBroker: false; tenants: FallbackTenant[] };
   counts: {
     total: number;
     active: number;
@@ -269,7 +272,8 @@ interface ConnectionsPayload {
   };
   delegatedActions: DelegatedActionSpec[];
   provenance: {
-    fallbackIsShared: string | null;
+    deploymentTenantScope: string | null;
+    brokerReachability: string | null;
     includesInactive: string;
     everyConnectionIsSealed: string;
     secretsAreNeverRead: string;
@@ -343,7 +347,18 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
         />
       </div>
 
-      {data.deploymentFallback.inUse ? (
+      {/* Two facts, neither derived from the other (P0.3, A59): whether the
+          broker can reach SAP for this organization's apps, and what the
+          deployment's env tenant serves — console reads only. */}
+      {!data.brokerReachable && data.provenance.brokerReachability ? (
+        <p
+          role="status"
+          style={{ margin: 0, padding: "12px 16px", borderBottom: "1px solid var(--border-default)", fontSize: 12.5, lineHeight: 1.55, color: "var(--status-awaiting-fg)" }}
+        >
+          {data.provenance.brokerReachability}
+        </p>
+      ) : null}
+      {data.deploymentTenant.configured ? (
         <div
           style={{
             padding: "12px 16px",
@@ -356,16 +371,16 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
           <span style={{ flex: "none", paddingTop: 1 }}>
             <OpsChip
               tone="info"
-              label="deployment tenant in use"
-              meaning="this organization has stored no connection, so traffic falls back to a shared tenant"
+              label="deployment tenant: console reads only"
+              meaning="serves console and explorer reads for every organization; the broker never uses it"
             />
           </span>
           <div style={{ minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
-              {data.provenance.fallbackIsShared}
+              {data.provenance.deploymentTenantScope}
             </p>
             <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {data.deploymentFallback.tenants.map((t) => (
+              {data.deploymentTenant.tenants.map((t) => (
                 <span
                   key={`${t.product}:${t.key}`}
                   style={{ fontSize: 11.5, color: "var(--ink-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}
@@ -385,13 +400,13 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
       {connections.length === 0 ? (
         <OpsPlaceholder
           kind="empty"
-          // Precise about WHOSE estate is empty. Whether anything reaches SAP is
-          // answered by the fallback note above, not by this sentence.
+          // Precise about WHOSE estate is empty. What the deployment's tenant
+          // serves is answered by the note above, not by this sentence.
           title="This organization has registered no SAP connection"
           detail={
-            data.deploymentFallback.inUse
-              ? "Its traffic runs on the deployment's shared tenant, which is governed at the deployment level rather than here. Connections are registered in Developer Studio."
-              : "Nothing is registered, and the deployment has no fallback tenant either. Connections are added in Developer Studio."
+            data.deploymentTenant.configured
+              ? "Its apps' calls through the broker are refused until a connection is registered in Developer Studio. The deployment's tenant serves console reads only and never stands in for one."
+              : "Its apps' calls through the broker are refused until a connection is registered in Developer Studio, and the deployment has no tenant of its own either."
           }
         />
       ) : (

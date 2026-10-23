@@ -17,12 +17,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
+  findMany: vi.fn(),
   update: vi.fn(),
   getCurrentUser: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { sapConnection: { findFirst: mocks.findFirst, update: mocks.update } },
+  // findMany: deactivating asks whether the product's other rows still read
+  // "will not open" (P0.2 review round 5); none do here.
+  prisma: { sapConnection: { findFirst: mocks.findFirst, findMany: mocks.findMany, updateMany: mocks.update } },
 }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: vi.fn() }));
@@ -52,10 +55,11 @@ const activate = (id = B.id) =>
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("COREEDGE_STEP_UP", "off");
+  mocks.findMany.mockResolvedValue([]);
   mocks.getCurrentUser.mockResolvedValue({ id: "u1", role: "consultant", organizationId: "org1", authMethod: "session" });
-  mocks.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-    Promise.resolve({ id: B.id, isActive: data.isActive ?? false, writeEnabled: false }),
-  );
+  // The route's update is conditional on the state it judged (review round 4):
+  // one row matched.
+  mocks.update.mockResolvedValue({ count: 1 });
 });
 
 describe("activating a connection the binding could not tell apart from an active one", () => {

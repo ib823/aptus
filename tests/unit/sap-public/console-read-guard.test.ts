@@ -27,7 +27,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { decideConsoleRead, recordConsoleRead } from "@/lib/sap-public/console-read-guard";
+import { consoleGrantMode, decideConsoleRead, recordConsoleRead } from "@/lib/sap-public/console-read-guard";
 
 const ORG = "org_a";
 const NOW = new Date("2026-09-12T12:00:00Z");
@@ -139,12 +139,91 @@ describe("what opens TEST and PROD", () => {
     expect(prod.allowed).toBe(false);
   });
 
+  /*
+   * P0.14b review round 5: the grants read in the connection's own statement
+   * are judged exactly as the rows this function would have read, and no
+   * second lookup is sent.
+   */
+  it("judges grants read with the connection by the same rules, and reads none itself", async () => {
+    const judge = (grants: { decision: string; expiresAt: Date | null; revokedAt: Date | null }[]) =>
+      decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, grants });
+    expect((await judge([{ decision: "APPROVED", expiresAt: FUTURE, revokedAt: null }])).allowed).toBe(true);
+    expect((await judge([{ decision: "APPROVED", expiresAt: FUTURE, revokedAt: PAST }])).allowed).toBe(false);
+    expect((await judge([{ decision: "APPROVED", expiresAt: PAST, revokedAt: null }])).allowed).toBe(false);
+    expect((await judge([{ decision: "SANDBOX_ONLY", expiresAt: FUTURE, revokedAt: null }])).allowed).toBe(false);
+    expect((await judge([])).refusal).toBe("NO_APPROVED_GRANT");
+    expect(mocks.findManyGrants).not.toHaveBeenCalled();
+  });
+
   it("a null expiry is open-ended, not expired", async () => {
     mocks.findManyGrants.mockResolvedValue([
       { decision: "READ_ONLY", expiresAt: null, revokedAt: null },
     ]);
     const decision = await decideConsoleRead({ organizationId: ORG, environment: "TEST", now: NOW });
     expect(decision.allowed).toBe(true);
+  });
+});
+
+/*
+ * Wave 2 integration review round 3. The ceiling is coarser than the broker
+ * on WHICH service, on purpose; it was coarser on WHETHER a grant still
+ * counts by accident: a RETIRED app's grant, or an unbound one under strict
+ * grant binding, authorises nothing at the broker, the lane board or
+ * discovery, and still opened PROD here. Counting only the grants the
+ * broker's rules honour is a new refusal, so COREEDGE_CONSOLE_GRANTS=observe
+ * (the default) allows and reports, and enforce refuses.
+ */
+describe("grants the broker's rules no longer honour", () => {
+  const live = { decision: "APPROVED", expiresAt: FUTURE, revokedAt: null } as const;
+  const retired = { ...live, interfaceId: "if_1", solutionStatus: "RETIRED" };
+  const unbound = { ...live, interfaceId: null, solutionStatus: "ACTIVE" };
+  const honoured = { ...live, interfaceId: "if_2", solutionStatus: "ACTIVE" };
+  const judge = (grants: object[], mode: "observe" | "enforce", bindingMode: "legacy" | "strict" = "legacy") =>
+    decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, grants: grants as never, mode, bindingMode });
+
+  it("a RETIRED app's grant: allowed and reported under observe, refused under enforce", async () => {
+    expect(await judge([retired], "observe")).toEqual({ allowed: true, refusal: null, message: null, observed: "SOLUTION_RETIRED" });
+    const refused = await judge([retired], "enforce");
+    expect(refused).toMatchObject({ allowed: false, refusal: "NO_APPROVED_GRANT" });
+    expect(refused.message).toMatch(/retired/);
+  });
+
+  it("an unbound grant under strict binding: reported under observe, refused under enforce; legacy honours it", async () => {
+    expect((await judge([unbound], "observe", "strict")).observed).toBe("GRANT_NEEDS_REAPPROVAL");
+    expect(await judge([unbound], "enforce", "strict")).toMatchObject({ allowed: false, refusal: "NO_APPROVED_GRANT" });
+    expect(await judge([unbound], "enforce", "legacy")).toEqual({ allowed: true, refusal: null, message: null });
+  });
+
+  it("one honoured grant opens the landscape, whatever else is set aside", async () => {
+    expect(await judge([retired, unbound, honoured], "enforce", "strict")).toEqual({ allowed: true, refusal: null, message: null });
+  });
+
+  it("a grant that is not live is not reported as set aside: it never opened anything", async () => {
+    expect(await judge([{ ...retired, revokedAt: PAST }], "observe")).toMatchObject({ allowed: false, refusal: "NO_APPROVED_GRANT" });
+  });
+
+  it("reads each grant's interface and its app's status when it reads the grants itself", async () => {
+    mocks.findManyGrants.mockResolvedValue([{ ...live, interfaceId: "if_1", solution: { status: "RETIRED", organizationId: ORG } }]);
+    const decision = await decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, mode: "enforce" });
+    expect(decision.allowed).toBe(false);
+    expect(mocks.findManyGrants).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ interfaceId: true, solution: { select: { status: true, organizationId: true } } }),
+      }),
+    );
+    // An ACTIVE app of this organization opens it.
+    mocks.findManyGrants.mockResolvedValue([{ ...live, interfaceId: "if_1", solution: { status: "ACTIVE", organizationId: ORG } }]);
+    expect((await decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, mode: "enforce" })).allowed).toBe(true);
+    // Another organization's app, under this organization's grant, is not this organization's.
+    mocks.findManyGrants.mockResolvedValue([{ ...live, interfaceId: "if_1", solution: { status: "ACTIVE", organizationId: "org_b" } }]);
+    expect((await decideConsoleRead({ organizationId: ORG, environment: "PROD", now: NOW, mode: "enforce" })).allowed).toBe(false);
+  });
+
+  it("COREEDGE_CONSOLE_GRANTS: enforce only when it says so", () => {
+    expect(consoleGrantMode({})).toBe("observe");
+    expect(consoleGrantMode({ COREEDGE_CONSOLE_GRANTS: "enforce" })).toBe("enforce");
+    expect(consoleGrantMode({ COREEDGE_CONSOLE_GRANTS: "ENFORCE " })).toBe("enforce");
+    expect(consoleGrantMode({ COREEDGE_CONSOLE_GRANTS: "enforced" })).toBe("observe");
   });
 });
 

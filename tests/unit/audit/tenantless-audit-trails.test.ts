@@ -26,7 +26,9 @@ const MODELS = [...SCHEMA.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]!);
 
 const SAP_WRITE_TABLES = ["PlatformAuditEvent", "PlatformAuditOutcome"] as const;
 const GOVERNANCE_TABLE = "PlatformGovernanceAudit";
-const TENANTLESS_AUDIT_TABLES = [...SAP_WRITE_TABLES, GOVERNANCE_TABLE] as const;
+// P0.14b: what a person read from the Workbench console (integration review round 4: off the write tables).
+const CONSOLE_READ_TABLE = "PlatformConsoleRead";
+const TENANTLESS_AUDIT_TABLES = [...SAP_WRITE_TABLES, GOVERNANCE_TABLE, CONSOLE_READ_TABLE] as const;
 
 const RUNBOOKS = ["docs/runbooks/coreedge-step-up.md", "docs/runbooks/sap-workbench-write-back.md"] as const;
 
@@ -40,7 +42,7 @@ function modelBlock(name: string): string {
 }
 
 describe("tenantless audit trails", () => {
-  it("all three tables exist", () => {
+  it("all four tables exist", () => {
     for (const t of TENANTLESS_AUDIT_TABLES) expect(MODELS).toContain(t);
   });
 

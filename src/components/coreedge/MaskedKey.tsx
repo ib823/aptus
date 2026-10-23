@@ -23,8 +23,14 @@ import { useState, type ReactNode } from "react";
 export interface MaskedKeyProps {
   /** The non-secret prefix, e.g. "ce_live". */
   readonly prefix: string;
-  /** The last four characters, and only ever four. */
-  readonly tail: string;
+  /**
+   * The last four characters, and only ever four — or null for a key minted
+   * before its tail was recorded (P0.3, A45). The reference then says so,
+   * rather than ending in four characters that belong to something else: the
+   * consoles used to show the last four of the key's LABEL, which matched no
+   * key anyone held.
+   */
+  readonly tail: string | null;
   /** Copies the masked reference — never the key, which we do not hold. */
   readonly copyable?: boolean;
   readonly label?: string;
@@ -41,8 +47,26 @@ export function MaskedKey({ prefix, tail, copyable = false, label }: MaskedKeyPr
    * and silently trimming would hide that; taking the last four is the same
    * rendering either way, and the test asserts nothing longer ever appears.
    */
-  const shown = tail.slice(-4);
-  const reference = `${prefix}…${shown}`;
+  const shown = tail === null ? null : tail.slice(-4);
+  const reference = shown === null ? `${prefix}… (ending not recorded)` : `${prefix}…${shown}`;
+
+  if (shown === null) {
+    return (
+      <span className="inline-flex items-center gap-2 font-mono text-sm">
+        {label === undefined ? null : <span className="font-sans text-ink-muted">{label}</span>}
+        <span className="rounded-[var(--radius-input)] border border-[color:var(--border-strong)] bg-ink-tint px-2 py-[0.125em] text-ink">
+          <span aria-hidden="true">
+            {prefix}
+            {MASK}
+          </span>
+          <span className="sr-only">Key {prefix}, ending not recorded</span>
+        </span>
+        <span className="font-sans text-xs text-ink-muted">
+          ending not recorded: issued before references were kept; the next rotation records it
+        </span>
+      </span>
+    );
+  }
 
   return (
     <span className="inline-flex items-center gap-2 font-mono text-sm">

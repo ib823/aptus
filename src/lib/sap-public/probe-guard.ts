@@ -39,6 +39,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { canAccessStudio, isSandboxDeveloper } from "@/lib/studio/rbac";
 import { ERROR_CODES } from "@/types/api";
+import type { SessionUser } from "@/types/assessment";
 
 /**
  * Returns null when the caller may probe, or the refusal to return when not.
@@ -74,6 +75,15 @@ export interface ProbeGuardOptions {
    * the role through. Leave it unset everywhere else.
    */
   readonly appliesSandboxDeveloperCeiling?: boolean;
+  /**
+   * The caller, when the route has already resolved it (`getCurrentUser()`,
+   * null when there is no session). A route that needs the viewer as well
+   * passes it, so the session is validated ONCE per request (P0.14b review
+   * round 4): React's `cache()` memoises only inside a render, not in a route
+   * handler, so the guard's own lookup was a second full session validation
+   * on every console read. Omitted, the guard resolves it itself.
+   */
+  readonly viewer?: SessionUser | null;
 }
 
 /**
@@ -97,7 +107,7 @@ export async function refuseUnlessMayProbeTenant(options: ProbeGuardOptions = {}
   // both carried one — so the single path most likely to be debugged under
   // pressure, a live SAP read, was the one with nothing to quote. The status
   // code was reviewed and shipped; the envelope contract was not.
-  const user = await getCurrentUser();
+  const user = options.viewer !== undefined ? options.viewer : await getCurrentUser();
   if (!user) {
     return NextResponse.json(
       {

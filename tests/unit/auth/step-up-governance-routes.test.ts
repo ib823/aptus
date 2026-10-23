@@ -426,6 +426,32 @@ const ROUTES: readonly RouteCase[] = [
       (await prisma.sapConnection.findFirst({ where: { id: ctx.connectionId!, organizationId: ORG } }))?.isActive === true,
   },
   {
+    // P0.3: the Connections form's "Allow writes" — a save that turns writes
+    // on is the governance action it is, not a secret save.
+    name: "POST /api/studio/connections (a save that allows writes)",
+    action: "connection.enable_writes",
+    person: BUILDER,
+    okStatus: 200,
+    seed: async () => ({ key: `aw${randomUUID().slice(0, 8)}` }),
+    call: (ctx) =>
+      studioConnectionsPost(
+        post("http://localhost/x", {
+          product: "s4hana",
+          key: ctx.key,
+          label: "Client DEV, writing",
+          baseUrl: "https://sandbox.api.sap.com/s4hanacloud",
+          authType: "basic",
+          username: "COREEDGE_USER",
+          password: "a-password-nobody-reads",
+          // No environment: every case in this table seeds its own row, and
+          // two active rows may not both claim one environment for a product.
+          writeEnabled: true,
+        }),
+      ),
+    wrote: async (ctx) =>
+      (await prisma.sapConnection.findFirst({ where: { organizationId: ORG, key: ctx.key! } }))?.writeEnabled === true,
+  },
+  {
     // P0.13: creating a tenant is a platform-level governance act.
     name: "POST /api/admin/organizations",
     action: "org.create",

@@ -57,9 +57,11 @@ beforeEach(() => {
       label: LABEL,
       environment: "DEV",
       lastValidationStatus: "OK",
+      revision: 1,
     },
   ]);
-  mocks.resolveSapConnections.mockResolvedValue([{ id: "conn_1", key: "zvcsf" }]);
+  // The revision the probe reads through: the status write names it (P0.2).
+  mocks.resolveSapConnections.mockResolvedValue([{ id: "conn_1", key: "zvcsf", revision: 1 }]);
   mocks.probeConnection.mockResolvedValue({
     status: "UNAUTHORIZED",
     httpStatus: 401,

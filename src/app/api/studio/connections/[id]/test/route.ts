@@ -22,7 +22,10 @@ import type { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { noteConnectionProbe } from "@/lib/coreedge/journey";
 import { prisma } from "@/lib/db/prisma";
-import { connectionRefusalMessage, resolveSapConnection } from "@/lib/sap-public/connection-resolver";
+import { reachedDirectly } from "@/lib/governed/transport";
+import { recordUnreadableOne, TWIN_NOT_PROBED } from "@/lib/ops/connection-probe-sweep";
+import { probeEventSource } from "@/lib/ops/probe-event-source";
+import { resolveSapConnections } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { probeConnection } from "@/lib/studio/connection-health";
@@ -66,33 +69,83 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   // trace, on the one screen an operator would open to diagnose exactly that.
   // The northbound binding path already catches the same throw and answers
   // CONNECTION_UNREADABLE with an actionable sentence; this is the same
-  // treatment one caller over. No probe ran, so no health status is written —
-  // "could not even try" must not be recorded as a probe outcome.
+  // treatment one caller over. No probe ran, so no probe OUTCOME is written —
+  // "could not even try" is recorded only as UNREADABLE / GROUP_UNREADABLE,
+  // the statuses that say no request reached SAP (as the sweep records them).
+  //
+  // THE WHOLE PRODUCT GROUP IS OPENED, NOT ONLY THIS ROW (P0.2 review round 4).
+  // The broker fails closed on the (organization, product) set: one sibling
+  // whose secrets will not open refuses every call for the product. Opening
+  // only the named row let this test probe SAP, get a 200 and write a fresh
+  // OK — and end the SAP set-up wait — over the GROUP_UNREADABLE the sweep had
+  // recorded, so every screen said healthy while the broker refused every
+  // call. So the group is judged as "Probe now" and the sweep judge it: when
+  // it will not open, the row is recorded UNREADABLE (its own secret fails)
+  // or GROUP_UNREADABLE (a sibling's does, named in the answer), through the
+  // same revision guard; no probe runs, so no probe event, no success time
+  // and no journey milestone.
   let resolved;
   try {
-    resolved = await resolveSapConnection(organizationId, row.product, row.key);
+    const group = await resolveSapConnections(organizationId, row.product);
+    resolved = group.find((c) => c.key === row.key) ?? null;
   } catch (err) {
     console.warn("[studio] connection secrets could not be opened", {
       connectionId: row.id,
       reason: err instanceof Error ? err.name : "unknown",
     });
-    return studioError(
-      "CONFLICT",
-      connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? ""),
-    );
+    const refused = await recordUnreadableOne(organizationId, row);
+    if (refused.outcome === "not-found") return studioError("NOT_FOUND", "Connection not found.");
+    // THE STATUS IT RECORDED HAS AN AUTHOR (P0.2 review round 5). Writing
+    // UNREADABLE / GROUP_UNREADABLE flips the row on every screen and raises
+    // the unhealthy-connection incident; like every other path of this route,
+    // the change is audited under the builder who pressed Test, marked as
+    // never having reached SAP. Nothing written, nothing to attribute.
+    if (refused.outcome === "unreadable" && refused.recorded) {
+      await writeConfigAudit({
+        organizationId,
+        actorId: user.id,
+        entityType: "Connection",
+        entityId: row.id,
+        action: "TEST_CONNECT",
+        after: { status: refused.recorded, reachedSap: false },
+      });
+    }
+    return studioError("CONFLICT", refused.detail);
   }
   if (!resolved) return studioError("NOT_FOUND", "Connection not found.");
+  // A connection served by the Tenant Twin is kept off the client's SAP
+  // (transport.ts `reachedDirectly`): nothing is sent, nothing recorded.
+  if (!reachedDirectly(resolved)) return studioError("CONFLICT", TWIN_NOT_PROBED);
 
   const result = await probeConnection(resolved);
 
-  await prisma.sapConnection.update({
-    where: { id: row.id, organizationId },
-    data: {
-      lastValidationStatus: result.status,
-      // Only a real 200 updates the timestamp (see rule 1).
-      ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
-    },
-  });
+  /*
+   * ONLY ONTO THE SETTINGS THAT WERE PROBED (P0.2 review). A re-save while
+   * this test waited on SAP keeps the row's id, points it somewhere else,
+   * bumps `revision` and clears the status to "never tested". Writing this
+   * answer then would call the NEW settings healthy on the OLD tenant's 200.
+   * So the write names the revision the probe read through, and a write that
+   * matches nothing records no status and no history for the new settings.
+   *
+   * BUT THE REQUEST STILL REACHED SAP, AND SOMEONE CAUSED IT (P0.2 review
+   * round 3). The probe went to the old host with the old credentials; when
+   * someone asks why their estate saw traffic at 14:07 the answer has to name
+   * a person. So a superseded test still writes its audit row, marked
+   * `superseded`, and its probe event, under a source the history readers
+   * skip (`probeEventSource`): a trace, not the new settings' health.
+   */
+  const written =
+    resolved.revision === undefined
+      ? { count: 0 }
+      : await prisma.sapConnection.updateMany({
+          where: { id: row.id, organizationId, revision: resolved.revision },
+          data: {
+            lastValidationStatus: result.status,
+            // Only a real 200 updates the timestamp (see rule 1).
+            ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
+          },
+        });
+  const superseded = written.count === 0;
 
   // THE MANUAL TEST LEAVES A TRACE. Only the cron sweep and the Ops "Probe now"
   // wrote a SapConnectionProbeEvent; the one probe a human runs while actively
@@ -106,9 +159,29 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
       status: result.status,
       httpStatus: result.httpStatus,
       durationMs: result.durationMs,
-      source: "test",
+      source: probeEventSource("test", superseded),
     },
   });
+
+  if (superseded) {
+    await writeConfigAudit({
+      organizationId,
+      actorId: user.id,
+      entityType: "Connection",
+      entityId: row.id,
+      action: "TEST_CONNECT",
+      after: {
+        status: result.status,
+        httpStatus: result.httpStatus,
+        durationMs: result.durationMs,
+        superseded: true,
+      },
+    });
+    return studioError(
+      "CONFLICT",
+      "The connection changed while it was being tested, so the result was about its previous settings and was not recorded as its health. Test it again.",
+    );
+  }
   // A connection's first good probe ends its SAP set-up wait (P2.12).
   await noteConnectionProbe({
     organizationId,

@@ -20,12 +20,13 @@ const mocks = vi.hoisted(() => ({
 // Rows as the P0.1 deploy leaves them: these fixtures predate grant binding.
 vi.mock("@/lib/db/prisma", async () => {
   const { deployedGrantRows, preDeployInterfaceRows } = await import("../../helpers/legacy-grants");
-  return {
-    prisma: {
-      interface: { findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
-      apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
-    },
+  const { governedQueryRaw } = await import("../../helpers/governed-loads");
+  const models = {
+    interface: { findFirst: async (...a: unknown[]) => preDeployInterfaceRows(await mocks.findFirstInterface(...a)) },
+    apiAccessGrant: { findMany: async (...a: unknown[]) => deployedGrantRows(await mocks.findManyGrants(...a)) },
   };
+  // One statement since P0.19, answered through the queries it replaced.
+  return { prisma: { ...models, $queryRaw: governedQueryRaw(() => models) } };
 });
 
 import { resolveReadableInterface } from "@/lib/northbound/access";
@@ -220,9 +221,15 @@ describe("v1 serves reads only", () => {
     if (!r.ok) expect(r.reason).toBe("WRITE_NOT_SERVED");
   });
 
+  // Since P0.19 the grants arrive in the interface's own statement, so "before
+  // consulting" is about the decision, not the query: whatever the grants
+  // say, the mode refuses.
   it("refuses the write BEFORE consulting grants — mode is the harder gate", async () => {
     mocks.findFirstInterface.mockResolvedValue({ ...IFACE, mode: "WRITE" });
-    await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
-    expect(mocks.findManyGrants).not.toHaveBeenCalled();
+    for (const grants of [APPROVED, [], [{ decision: "REJECTED", expiresAt: null }]]) {
+      mocks.findManyGrants.mockResolvedValue(grants);
+      const r = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+      expect(r.ok === false && r.reason).toBe("WRITE_NOT_SERVED");
+    }
   });
 });

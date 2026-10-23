@@ -25,6 +25,7 @@
  *   claim_link.send          POST  /api/coreedge/keys/claim-link
  *   connection.save_secrets  POST  /api/studio/connections
  *   connection.enable_writes PATCH /api/studio/connections      (when it turns writes on)
+ *                            POST  /api/studio/connections      (a save that turns writes on, P0.3)
  *
  *   passkey.add              GET    /api/auth/webauthn/register/options (beside one)
  *                            POST   /api/auth/webauthn/register/verify  (beside one)

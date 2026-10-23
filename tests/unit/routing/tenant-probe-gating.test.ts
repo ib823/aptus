@@ -232,12 +232,17 @@ describe("the guard and the sandbox developer", () => {
       const src = stripSource(readFileSync(file, "utf8"), "comments");
       if (!src.includes("appliesSandboxDeveloperCeiling")) continue;
       claims.push(relative(ROOT, file));
+      // Since P0.14b a console route caps the role through its console call:
+      // authorise() runs decideSandboxDeveloperRead (src/lib/governed/console.ts,
+      // asserted below), before anything is read.
       expect(
-        src.includes("decideSandboxDeveloperRead"),
+        src.includes("decideSandboxDeveloperRead") || (src.includes("openConsoleCall(") && src.includes(".authorise()")),
         `${relative(ROOT, file)} tells the probe guard it caps a sandbox developer at SANDBOX, ` +
           "but never calls decideSandboxDeveloperRead",
       ).toBe(true);
     }
+    const consoleModule = stripSource(readFileSync(join(ROOT, "src/lib/governed/console.ts"), "utf8"), "comments");
+    expect(consoleModule).toMatch(/async authorise\(\)[\s\S]*?decideSandboxDeveloperRead\(/);
     // The six TDD read routes; Ariba is deliberately not among them.
     expect(claims.length).toBeGreaterThanOrEqual(6);
     expect(claims.some((f) => f.includes("ariba"))).toBe(false);

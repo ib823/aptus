@@ -216,10 +216,14 @@ export interface WriteEntitySetInput {
  * retry cannot reach this function twice for an intent SAP may have acted on.
  * It can after a call that returned `attempted: false`, because the caller
  * releases the key for exactly those — nothing was written to protect.
+ *
+ * `fetchImpl` and `authHeadersFor` are the transport, as on the read
+ * (read.ts readEntitySet).
  */
 export async function writeEntitySet(
   input: WriteEntitySetInput,
   fetchImpl: typeof fetch = fetch,
+  authHeadersFor: (connection: ResolvedSapConnection) => Promise<Record<string, string>> = buildAuthHeadersFromConnection,
 ): Promise<NorthboundWriteResult> {
   const started = Date.now();
   const { connection } = input;
@@ -258,7 +262,7 @@ export async function writeEntitySet(
      */
     let authHeaders: Record<string, string>;
     try {
-      authHeaders = await buildAuthHeadersFromConnection(connection);
+      authHeaders = await authHeadersFor(connection);
     } catch (err) {
       return credentialFailure(err, started);
     }

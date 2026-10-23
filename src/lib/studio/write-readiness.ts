@@ -178,16 +178,17 @@ export function writeReadinessRefusal(operation: string, rows: readonly WriteRea
     started.length === 0
       ? "No environment has a credential or a write grant yet."
       : started.map(describeWriteReadiness).join("; ") + ".";
-  // The one half no developer action fixes: say who can.
+  // The one half no developer action fixes: say who can, and where (P0.3:
+  // the Connections form is where writes are switched on).
   const vetoed = rows.some((r) => r.writesDisabled)
-    ? " An administrator enables writes on the connection under Connections."
+    ? " A builder enables writes on the connection under Connections: save it with Allow writes ticked."
     : "";
   return (
     `A ${operation} interface cannot be activated until some environment holds the full write chain — ` +
     "a live credential for that environment carrying a write key, AND a live approved write grant for this capability in it" +
     (custom ? ", AND a verification of this interface's own SAP service through that environment's connection. " : ". ") +
     `The broker refuses every write that lacks any of them, so activating now would build toward a call that cannot succeed. ${detail}${vetoed} ` +
-    "Get the write grant approved for an environment, issue the write credential for that environment under API Access" +
+    "Get the write grant approved for an environment, issue the write key for that environment under API Access (Runtime credentials, Issue write key)" +
     (custom ? ", verify the service in that same environment" : "") +
     ", then activate."
   );

@@ -144,3 +144,20 @@ describe("what the feed says", () => {
     expect(body.data.truncated).toBe(true);
   });
 });
+
+describe("the console's reads are not writes (P0.14b)", () => {
+  it("every query, the counts and the page, is limited to the two write actions", async () => {
+    // The console's SAP_CONSOLE_READ rows share the table. Counted here, a
+    // preview would be a write, and one whose outcome insert failed would read
+    // as UNRESOLVED — "check SAP before repeating it" — about a read.
+    await GET(req());
+    const wheres = [
+      ...mocks.count.mock.calls.map((c) => (c[0] as { where: Record<string, unknown> }).where),
+      (mocks.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where,
+    ];
+    expect(wheres.length).toBeGreaterThan(1);
+    for (const where of wheres) {
+      expect(where.action).toEqual({ in: ["SAP_WORKBENCH_WRITE", "SAP_WORKBENCH_WRITE_TEST"] });
+    }
+  });
+});

@@ -19,6 +19,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
+import { BROKER_UNREACHABLE, DEPLOYMENT_TENANT_SCOPE } from "@/lib/ops/deployment-tenant";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 import { deploymentFallbackTenants } from "@/lib/studio/tenants";
@@ -50,13 +51,18 @@ export async function GET(_request: NextRequest) {
       orderBy: [{ isActive: "desc" }, { product: "asc" }, { key: "asc" }],
   });
 
-  // The deployment's shared tenants are in use exactly when this organization
-  // has stored none — the broker's own fallback rule. A governance register that
-  // said "no connection in the estate" while the deployment was reaching SAP
-  // would be recording a fiction about the thing it exists to record.
-  const fallback = rows.filter((r) => r.isActive).length === 0 ? deploymentFallbackTenants() : [];
-
+  /*
+   * TWO FACTS, NOT ONE DERIVED FROM THE OTHER (P0.3, A59). The deployment's
+   * env tenant serves console reads for every organization whether or not it
+   * has connections; the broker never uses it, so an organization with no
+   * active connection has apps whose every call is refused. This used to say
+   * the deployment tenant was "in use" exactly when the organization had no
+   * connection, as "the broker's own fallback rule" — the rule the broker does
+   * not have. See lib/ops/deployment-tenant.ts.
+   */
+  const tenants = deploymentFallbackTenants();
   const active = rows.filter((r) => r.isActive);
+  const brokerReachable = active.length > 0;
   const writeEnabled = active.filter((r) => r.writeEnabled);
   const isUndeclared = (r: { environment: string | null }) =>
     !r.environment || r.environment.trim().length === 0;
@@ -121,9 +127,16 @@ export async function GET(_request: NextRequest) {
         why: "Write-enablement is a builder's action on their own solution's connection. Control Tower observes it; it does not perform it.",
       },
     ],
-    deploymentFallback: {
-      inUse: fallback.length > 0,
-      tenants: fallback.map((t2) => ({
+    /** Apps can reach SAP through the broker only when this is true. */
+    brokerReachable,
+    /**
+     * The deployment's env tenant: console and explorer reads only, for every
+     * organization. Never the broker's (A59).
+     */
+    deploymentTenant: {
+      configured: tenants.length > 0,
+      servesBroker: false,
+      tenants: tenants.map((t2) => ({
         key: t2.key,
         label: t2.label,
         product: t2.product,
@@ -132,10 +145,8 @@ export async function GET(_request: NextRequest) {
       })),
     },
     provenance: {
-      fallbackIsShared:
-        fallback.length > 0
-          ? "This organization has stored no SAP connection, so traffic falls back to the deployment's configured tenant. That tenant is shared by every organization on this deployment — it is governed at the deployment level, not here, and it has no per-connection owner, write flag or sealed secret."
-          : null,
+      deploymentTenantScope: tenants.length > 0 ? DEPLOYMENT_TENANT_SCOPE : null,
+      brokerReachability: brokerReachable ? null : BROKER_UNREACHABLE,
       includesInactive:
         "Unlike the Operations Center's health view, deactivated connections ARE listed here. They serve no traffic, so they have no health worth reporting — but they remain part of the estate someone is accountable for.",
       everyConnectionIsSealed:

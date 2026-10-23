@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { DecisionBar } from "@/components/coreedge/DecisionBar";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { DISABLED_REASONS, EMPTY_STATES, SCREEN_NOTES } from "@/lib/coreedge/copy";
-import { describeAge } from "@/lib/coreedge/freshness";
+import { describeLastProbe } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { listSapSystemDetails } from "@/lib/coreedge/queries";
 import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
@@ -118,17 +118,22 @@ export default async function SapSystemsPage(): Promise<ReactNode> {
           },
           {
             key: "checked",
-            header: "Last checked",
+            header: "Last probe",
+            /*
+             * "NEVER" IS DECIDED BY THE STATUS (A19). `lastValidatedAt` moves
+             * only on a 200, so a connection probed and failing every night
+             * read "Never" with its status hidden, and one that last worked
+             * weeks ago read "checked 21 d ago". The status is what the last
+             * probe found; the age under it is when it last succeeded.
+             */
             cell: (s) => {
-              const age = describeAge(s.lastValidatedAt, now);
-              return age === null ? (
-                <span className="text-ink-muted">Never</span>
+              const probe = describeLastProbe(s, now);
+              return probe.detail === null ? (
+                <span className="text-ink-muted">{probe.headline}</span>
               ) : (
                 <span className="flex flex-col">
-                  <span>{age}</span>
-                  <span className="text-xs text-ink-muted">
-                    {s.lastValidationStatus ?? "no status recorded"}
-                  </span>
+                  <span>{probe.headline}</span>
+                  <span className="text-xs text-ink-muted">{probe.detail}</span>
                 </span>
               );
             },

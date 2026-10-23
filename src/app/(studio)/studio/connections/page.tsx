@@ -42,11 +42,18 @@ export default async function StudioConnectionsPage() {
           authType: true,
           // The binding-mismatch rule's left operand — see the Connections table.
           environment: true,
+          // With the environment and host, the system the row's writes are
+          // allowed for: the form unticks Allow writes when a save points the
+          // row elsewhere (P0.3 review round 2).
+          client: true,
           // The value that decides NO_PROBE_PATH. The health chip rendered its
           // consequence while the projection hid the cause — an operator saw
           // "Not probeable" with no way to see WHY from the same screen.
           apiPath: true,
           timeoutMs: true,
+          // Non-secret, like the host: the form sends it back on a re-save
+          // unless it is edited (wave 2 final review round 3).
+          oauthTokenUrl: true,
           writeEnabled: true,
           isActive: true,
           lastValidatedAt: true,

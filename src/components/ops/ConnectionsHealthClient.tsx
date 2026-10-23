@@ -40,6 +40,7 @@ import {
 } from "@/components/ops/OpsChrome";
 import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { ProductLabel } from "@/components/sap/ProductLabel";
+import { CONNECTION_PROOF_TTL_MS, type ConnectionHealthVerdict } from "@/lib/coreedge/freshness";
 
 interface Connection {
   id: string;
@@ -49,6 +50,11 @@ interface Connection {
   environment: string | null;
   writeEnabled: boolean;
   status: string;
+  /**
+   * The route's `connectionHealthVerdict` for this row (P0.2, A50): the same
+   * reading its count tile used. An OK whose proof has aged is `stale`.
+   */
+  verdict?: ConnectionHealthVerdict;
   lastValidatedAt: string | null;
   neverTested: boolean;
 }
@@ -67,14 +73,22 @@ interface ConnectionsPayload {
     needsAttention: number;
     unknown: number;
     neverTested: number;
+    /** An OK older than `provenance.healthyWithinHours`: counted here, not as healthy (P0.2, A50). */
+    stale?: number;
   };
-  deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
+  /** Apps reach SAP through the broker only when this is true: an active connection exists (P0.3, A59). */
+  brokerReachable: boolean;
+  /** The deployment's env tenant: console and explorer reads for everyone, never the broker. */
+  deploymentTenant: { configured: boolean; servesBroker: false; tenants: FallbackTenant[] };
   provenance: {
     activeOnly: boolean;
+    /** How old an OK may be and still count as healthy. */
+    healthyWithinHours?: number;
     excludedInactive: number;
     why: string;
-    fallbackIsShared: string | null;
-    noHealthForFallback: string | null;
+    deploymentTenantScope: string | null;
+    brokerReachability: string | null;
+    noHealthForDeploymentTenant: string | null;
   };
   bindingBacklog: { undeclaredEnvironment: number; remediation: string; consequence: string };
   prodConnections: number;
@@ -103,7 +117,40 @@ const PROBE: Record<string, { tone: OpsTone; label: string; meaning: string }> =
     // Framed as ours, never as a tenant failure.
     meaning: "no probe path is configured — our gap, not the tenant's",
   },
+  /*
+   * Recorded by the probe sweep and "Probe now" since P0.2 (A50), when the
+   * stored secret will not open. No request reached SAP: it is ours to fix,
+   * and the broker refuses every call through this connection meanwhile.
+   */
+  UNREADABLE: {
+    tone: "bad",
+    label: "UNREADABLE",
+    meaning: "the stored secret would not open — ours to fix, and every call through it is refused",
+  },
+  /*
+   * P0.2 review: this row's own secret opens, but a sibling for the same
+   * product will not, and the broker refuses the whole product meanwhile.
+   * Worded so the operator fixes the row marked UNREADABLE, not this one.
+   */
+  GROUP_UNREADABLE: {
+    tone: "bad",
+    label: "GROUP_UNREADABLE",
+    meaning:
+      "this secret opens, but another connection for this product will not — every call for the product is refused until the row marked UNREADABLE is re-saved or deactivated",
+  },
 };
+
+/** The chip for one row: its verdict first, so an aged OK is never drawn as a live 200. */
+function healthChip(c: Connection, hours: number): { tone: OpsTone; label: string; meaning: string } {
+  if (c.verdict === "stale") {
+    return {
+      tone: "muted",
+      label: `${c.status} · stale`,
+      meaning: `the last probe said ${c.status} more than ${hours} h ago and none has succeeded since — our evidence has aged, which says nothing either way about SAP`,
+    };
+  }
+  return PROBE[c.status] ?? { tone: "muted", label: c.status, meaning: "an unrecognised probe outcome" };
+}
 
 export function ConnectionsHealthClient() {
   const { feed, reload, fetchedAt } = useOpsFeed<ConnectionsPayload>("/api/ops/connections-health");
@@ -183,23 +230,31 @@ function ConnectionsBody({
 }) {
   const { counts, connections, provenance, bindingBacklog } = data;
   const declared = counts.total - bindingBacklog.undeclaredEnvironment;
+  const hours = provenance.healthyWithinHours ?? CONNECTION_PROOF_TTL_MS / 3_600_000;
 
   return (
     <>
       {/* THE FLEET, ROLLED UP — the counts the endpoint always computed and no
-          screen rendered. Four buckets plus the total; NEVER_TESTED stays its
-          own tile because it is the absence of a result, not a member of the
-          scale of outcomes. */}
+          screen rendered. Five buckets plus the total, and every connection
+          sits in exactly one of them; NEVER_TESTED stays its own tile because
+          it is the absence of a result, not a member of the scale of
+          outcomes. STALE is its own tile since P0.2 (A50): an OK whose proof
+          has aged is not healthy, and it was in no tile at all. */}
       {counts.total > 0 ? (
         <OpsCard>
           <div style={{ display: "flex", gap: 30, padding: "15px 16px", flexWrap: "wrap" }}>
             <Stat label="Active connections" value={count(counts.total)} />
-            <Stat label="Healthy" value={count(counts.healthy)} basis="last probe returned 200" />
+            <Stat label="Healthy" value={count(counts.healthy)} basis={`last probe returned 200 within ${hours} h`} />
+            <Stat
+              label="Stale"
+              value={count(counts.stale ?? 0)}
+              basis={`OK older than ${hours} h — our evidence has aged, not SAP`}
+            />
             <Stat
               label="Needs attention"
               value={count(counts.needsAttention)}
               tone={counts.needsAttention > 0 ? "attention" : "default"}
-              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR"
+              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR · UNREADABLE · GROUP_UNREADABLE"
             />
             <Stat
               label="Unknown"
@@ -225,15 +280,22 @@ function ConnectionsBody({
         />
       ) : null}
 
-      {/* WHAT IS ACTUALLY SERVING TRAFFIC. This panel exists because the screen
-          previously said "No active SAP connection" on a deployment that was
-          reaching SAP perfectly well through its env tenant — true about the
-          table, false about the world. */}
-      {data.deploymentFallback.inUse ? (
-        <DeploymentFallback
-          tenants={data.deploymentFallback.tenants}
-          shared={data.provenance.fallbackIsShared}
-          noHealth={data.provenance.noHealthForFallback}
+      {/* WHAT REACHES SAP, AS TWO FACTS (P0.3, A59). The panel used to say the
+          deployment's tenant served this organization's traffic whenever it
+          had no connection; the broker never uses that tenant, so the apps'
+          calls were refused while the screen called them served. Whether the
+          broker can reach SAP is said on its own; the env tenant is listed
+          whenever it exists, for what it does serve: console reads. */}
+      {!data.brokerReachable && data.provenance.brokerReachability ? (
+        <p role="status" style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--status-awaiting-fg)" }}>
+          {data.provenance.brokerReachability}
+        </p>
+      ) : null}
+      {data.deploymentTenant.configured ? (
+        <DeploymentTenant
+          tenants={data.deploymentTenant.tenants}
+          scope={data.provenance.deploymentTenantScope}
+          noHealth={data.provenance.noHealthForDeploymentTenant}
         />
       ) : null}
 
@@ -245,9 +307,9 @@ function ConnectionsBody({
             // reaching SAP is answered by the panel above, not here.
             title="This organization has no stored SAP connection"
             detail={
-              data.deploymentFallback.inUse
-                ? "Traffic falls back to the deployment's shared tenant, listed above. Add a connection in Developer Studio to give this organization its own."
-                : "Nothing is configured for this organization, and the deployment has no fallback tenant either — so the broker has nothing to reach."
+              data.deploymentTenant.configured
+                ? "Its apps' calls through the broker are refused until a connection is added in Developer Studio. The deployment's tenant listed above serves console reads only; it never stands in for one."
+                : "Its apps' calls through the broker are refused until a connection is added in Developer Studio, and the deployment has no tenant of its own for console reads either."
             }
           />
         ) : (
@@ -287,11 +349,7 @@ function ConnectionsBody({
                       meaning="no probe has run — the absence of a result, not a result"
                     />
                   ) : (
-                    <OpsChip
-                      tone={PROBE[c.status]?.tone ?? "muted"}
-                      label={PROBE[c.status]?.label ?? c.status}
-                      meaning={PROBE[c.status]?.meaning ?? "an unrecognised probe outcome"}
-                    />
+                    <OpsChip {...healthChip(c, hours)} />
                   )}
                 </td>
                 <td style={opsMonoStyle}>{sinceLabel(c.lastValidatedAt)}</td>
@@ -452,35 +510,39 @@ function BindingBacklog({
 }
 
 /**
- * The deployment's shared tenant, when it is the thing actually serving traffic.
+ * The deployment's shared tenant: what it serves (console and explorer reads,
+ * for every organization) and what it never does (the broker's calls) — P0.3,
+ * A59. It used to be titled "Serving through the deployment's tenant" and shown
+ * only when the organization had no connection, as if it stood in for one.
  *
  * SHOWN AS ITS OWN PANEL, never merged into the connections table. A row in that
  * table implies a stored connection with an owner, a write flag, a sealed secret
- * and a probe history — a fallback tenant has none of those, and borrowing the
- * table's shape would imply all four.
+ * and a probe history — the deployment's tenant has none of those, and
+ * borrowing the table's shape would imply all four.
  *
- * NO HEALTH IS CLAIMED. Probe outcomes are recorded per stored connection; a
- * fallback tenant has no row to record one against. That is an absence, not a
- * pass and not a failure, so it renders as an absence.
+ * NO HEALTH IS CLAIMED. Probe outcomes are recorded per stored connection; the
+ * deployment's tenant has no row to record one against. That is an absence,
+ * not a pass and not a failure, so it renders as an absence.
  */
-function DeploymentFallback({
+function DeploymentTenant({
   tenants,
-  shared,
+  scope,
   noHealth,
 }: {
   tenants: FallbackTenant[];
-  shared: string | null;
+  scope: string | null;
   noHealth: string | null;
 }) {
   return (
     <OpsCard>
       <div style={{ padding: "13px 16px 4px", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Serving through the deployment&apos;s tenant</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>The deployment&apos;s tenant: console reads only</span>
         <OpsChip
           tone="info"
           label="shared"
           meaning="configured for the whole deployment, not for this organization"
         />
+        <OpsChip tone="muted" label="not used by the broker" meaning="apps reach SAP only through their own organization's connections" />
       </div>
       <OpsTable head={["Tenant", "Product", "Environment", "Health"]}>
         {tenants.map((t) => (
@@ -510,14 +572,14 @@ function DeploymentFallback({
             <td style={opsCellStyle}>
               <AbsencePill
                 label="no health record"
-                meaning="probe outcomes are stored per connection; a fallback tenant has no row to record one against"
+                meaning="probe outcomes are stored per connection; the deployment's tenant has no row to record one against"
               />
             </td>
           </tr>
         ))}
       </OpsTable>
       <ProvenanceStrip claim="Shared across the deployment">
-        {shared}
+        {scope}
         {noHealth ? <div style={{ marginTop: 6 }}>{noHealth}</div> : null}
       </ProvenanceStrip>
     </OpsCard>

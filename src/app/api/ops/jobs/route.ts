@@ -16,25 +16,11 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requireOperations } from "@/lib/ops/guard";
+import { SCHEDULED_JOBS } from "@/lib/ops/scheduled-jobs";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
 
-/**
- * The jobs vercel.json schedules, with their cadence — mirrored here so the
- * screen can render "never run" for a job that SHOULD have run, rather than
- * only listing jobs that happen to have rows.
- */
-const SCHEDULED_JOBS = [
-  { job: "trials", schedule: "daily 02:00 UTC" },
-  { job: "analytics", schedule: "daily 03:00 UTC" },
-  // Rides the analytics slot (daily-only cron plan); records its own runs.
-  { job: "coreedge-usage", schedule: "daily 03:00 UTC, after analytics" },
-  { job: "northbound-reap", schedule: "daily 03:30 UTC" },
-  // Rides the reap slot and its lease (P0.1); records its own runs.
-  { job: "owner-liveness", schedule: "daily 03:30 UTC, after northbound-reap" },
-  { job: "connection-probes", schedule: "daily 04:00 UTC" },
-] as const;
 
 const HISTORY_PER_JOB = 10;
 
@@ -42,8 +28,9 @@ export async function GET() {
   const guard = await requireOperations();
   if (!guard.ok) return guard.response;
 
-  // Newest rows per job. One bounded query, split in memory — with four jobs
-  // and a ten-row history each, this reads at most a few dozen rows.
+  // Newest rows per job. One bounded query, split in memory — with every
+  // scheduled job (lib/ops/scheduled-jobs.ts, P0.3) and a ten-row history
+  // each, this reads at most a couple of hundred rows.
   const rows = await prisma.cronRunLog.findMany({
     orderBy: { startedAt: "desc" },
     take: SCHEDULED_JOBS.length * HISTORY_PER_JOB * 2,

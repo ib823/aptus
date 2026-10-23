@@ -124,7 +124,7 @@ describe("BROKER_FACTS hold against the broker", () => {
   });
 
   it("the write executor performs CREATE only and neither executor sends $batch", () => {
-    const access = read("src/lib/northbound/access.ts");
+    const access = read("src/lib/northbound/authorisation.ts");
     expect(BROKER_FACTS.writeOperations).toEqual(["CREATE"]);
     expect(access).toMatch(/if \(iface\.operation !== "CREATE"\) \{\s*return \{\s*ok: false,\s*reason: "OPERATION_NOT_SUPPORTED"/);
     expect(BROKER_FACTS.batch).toBe(false);
@@ -160,9 +160,15 @@ describe("BROKER_FACTS hold against the broker", () => {
     const sources = [
       ...files(path.join(ROOT, "src/app/api/northbound")),
       ...files(path.join(ROOT, "src/lib/northbound")),
+      ...files(path.join(ROOT, "src/lib/governed")),
     ].map((f) => readFileSync(f, "utf8"));
+    // Since P0.14 the data and write routes authenticate through the governed
+    // pipeline's step, which is the same bearer lookup.
+    expect(read("src/lib/governed/pipeline.ts")).toContain("authenticateClientToken(bearer)");
     for (const route of BROKER_FACTS.northboundRoutes) {
-      expect(read(`src/app/api/northbound/${route}`)).toContain('authenticateClientToken(bearer)');
+      expect(read(`src/app/api/northbound/${route}`)).toMatch(
+        /authenticateClientToken\(bearer\)|await authenticate\(request\.headers, correlationId/,
+      );
     }
     for (const text of sources) {
       expect(text).not.toMatch(/client_credentials|grant_type|x-forwarded-client-cert|getPeerCertificate|id_token/);

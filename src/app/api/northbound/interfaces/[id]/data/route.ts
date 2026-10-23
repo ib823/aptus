@@ -12,7 +12,11 @@
  *         → an ApiAccessGrant must be approved for this capability, operation
  *           and the client's environment, and not expired
  *           → resolve the client's OWN SapConnection
- *             → read → honest status → audit
+ *             → contain → read → honest status → audit
+ *
+ * Each arrow is a step of the governed pipeline (src/lib/governed/pipeline.ts,
+ * P0.14), shared with the write, the Test Console run and the Workbench
+ * preview; this file is the order the read runs them in.
  *
  * RATE LIMITED PER TOKEN, here and at the edge. An IP key is wrong for this
  * route twice over: a deployed application calls from a handful of server
@@ -29,152 +33,87 @@
 import type { NextRequest } from "next/server";
 
 import { noteFirstCall } from "@/lib/coreedge/journey";
-import { resolveReadableInterface } from "@/lib/northbound/access";
-import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
-import { noteFailedCredential } from "@/lib/northbound/auth-failures";
-import { recordNorthboundCall } from "@/lib/northbound/audit";
-import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
+import { afterResponse } from "@/lib/governed/after-response";
+import {
+  authenticate,
+  authorise,
+  bindConnection,
+  callSapRead,
+  contain,
+  GovernedAudit,
+  northboundRefusalResponse,
+  prefetchedConnectionsFor,
+  rateLimit,
+  resolveReadTarget,
+  type Refusal,
+} from "@/lib/governed/pipeline";
+import { httpStatusFor } from "@/lib/northbound/read";
 import { northboundErrorCodeFor } from "@/lib/northbound/read-status";
-import { resolveReadDefinition } from "@/lib/northbound/read-definition";
-import {
-  newCorrelationId,
-  northboundError,
-  northboundOk,
-  northboundThrottleRefusal,
-  unauthenticated,
-} from "@/lib/northbound/respond";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import {
-  connectionRefusalMessage,
-  resolveSapConnectionForEnvironment,
-} from "@/lib/sap-public/connection-resolver";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
+import { newCorrelationId, northboundError, northboundOk } from "@/lib/northbound/respond";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const correlationId = newCorrelationId();
 
-  // 1 — authenticate. Every failure mode collapses to one 401 for the caller.
-  const bearer = extractBearer(request.headers.get("authorization"));
-  const auth = await authenticateClientToken(bearer);
-  if (!auth.ok) {
-    console.warn("[northbound] auth rejected", { reason: auth.reason, correlationId });
-    // A key matching no row spends the address's failed-lookup budget, which
-    // the edge reads first; a real key that refuses is bounded by its own.
-    await noteFailedCredential(request.headers, bearer, auth.reason);
-    return unauthenticated(correlationId);
-  }
-  const client = auth.client;
-  void touchClientLastUsed(client.clientId, client.organizationId);
+  // 1 — authenticate. Every failure mode collapses to one 401 for the caller,
+  // and writes no audit row: there is no tenant to write it under.
+  const auth = await authenticate(request.headers, correlationId, "northbound");
+  if (!auth.ok) return northboundRefusalResponse(auth.refusal, correlationId);
+  const client = auth.value;
+
+  const audit = new GovernedAudit({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    operation: "READ",
+    environment: client.environment,
+    correlationId,
+    clientTokenId: client.clientId,
+  });
+  const refuse = async (r: Refusal) => {
+    await audit.refused(r);
+    return northboundRefusalResponse(r, correlationId);
+  };
 
   // 1b — throttle THIS credential. Checked after auth so the key is the client,
-  // not an address a dozen customers might share.
-  const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
-  if (!rate.allowed) {
-    // 429 for this credential's own use, 503 when the limiter is down (A44).
-    const refusal = northboundThrottleRefusal(rate, correlationId, "Too many requests for this client credential.");
-    await recordNorthboundCall({
-      organizationId: client.organizationId,
-      solutionId: client.solutionId,
-      interfaceId: null,
-      operation: "READ",
-      externalId: "-",
-      environment: client.environment,
-      status: refusal.status,
-      rowCount: null,
-      correlationId,
-      clientTokenId: client.clientId,
-      failureReason: refusal.failureReason,
-    });
-    return refusal.response;
-  }
+  // not an address a dozen customers might share. 429 for this credential's
+  // own use, 503 when the limiter is down (A44).
+  const rate = await rateLimit(`northbound:${client.clientId}`, "Too many requests for this client credential.");
+  if (!rate.ok) return refuse(rate.refusal);
 
   const { id } = await ctx.params;
   const limitParam = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
   const limit = Number.isFinite(limitParam) ? limitParam : 10;
+  audit.about(id, "-");
 
   // 2 — authorize: the interface is this solution's, and a live grant covers it.
-  const access = await resolveReadableInterface(
-    client.scope,
-    client.solutionId,
-    id,
-    client.environment,
-  );
-  if (!access.ok) {
-    const status = access.reason === "INTERFACE_NOT_FOUND" || access.reason === "NOT_THIS_SOLUTION" ? 404 : 403;
-    await recordNorthboundCall({
-      organizationId: client.organizationId,
-      solutionId: client.solutionId,
-      interfaceId: id,
-      operation: "READ",
-      externalId: "-",
-      environment: client.environment,
-      status,
-      rowCount: null,
-      correlationId,
-      clientTokenId: client.clientId,
-    });
-    return northboundError(
-      status === 404 ? "NOT_FOUND" : "FORBIDDEN",
-      access.message,
-      status,
-      correlationId,
-    );
-  }
-  const iface = access.iface;
+  const access = await authorise("READ", client.scope, client.solutionId, id, client.environment);
+  if (!access.ok) return refuse(access.refusal);
+  const iface = access.value;
+  audit.about(iface.id, iface.externalId);
 
   // 3 — resolve the client's OWN SAP connection, BOUND TO THIS CREDENTIAL'S
   // ENVIRONMENT. Never the shared env tenant, and never simply the oldest row:
   // picking by creation order is how a sandbox credential reached production.
-  const product = getSapProduct(iface.sapProduct);
-  const binding = product
-    ? await resolveSapConnectionForEnvironment(
-        client.organizationId,
-        iface.sapProduct,
-        client.environment,
-        "READ",
-        client.sapClient,
-      )
-    : // Its own reason, not NO_CONNECTION: an unknown product is an
-      // interface-config defect with a different fix, and NO_CONNECTION is
-      // excluded from the incident rule — this must not be.
-      ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
+  // The binding refusal's reason goes on the row, so the incident engine can
+  // tell it apart from a grant-gate 403.
+  const bound = await bindConnection(
+    client.organizationId,
+    iface.sapProduct,
+    client.environment,
+    "READ",
+    client.sapClient,
+    prefetchedConnectionsFor(iface),
+  );
+  if (!bound.ok) return refuse(bound.refusal);
+  const { connection } = bound.value;
 
-  if (!binding.ok) {
-    await recordNorthboundCall({
-      organizationId: client.organizationId,
-      solutionId: client.solutionId,
-      interfaceId: iface.id,
-      operation: "READ",
-      externalId: iface.externalId,
-      environment: client.environment,
-      status: 403,
-      rowCount: null,
-      correlationId,
-      clientTokenId: client.clientId,
-      // The reason, so the incident engine can tell this apart from a
-      // grant-gate 403 — they are otherwise identical in the trail.
-      bindingRefusal: binding.reason,
-    });
-    return northboundError(
-      "CONNECTION_NOT_CONFIGURED",
-      connectionRefusalMessage(binding.reason, client.environment),
-      403,
-      correlationId,
-    );
-  }
-
-  const connection = binding.connection;
-
-  // `product!` is sound: a null product forces the binding to fail above, so we
-  // cannot reach here without one. Same idiom as the write route.
-  // The interface's OWN service when it carries one, the catalogue's otherwise —
-  // never a fallback from one to the other (see interface-service.ts). The
-  // same function decides discovery's `callable` (read-definition.ts, A42).
-  const definition = await resolveReadDefinition(product!, iface);
   /*
    * THE GOVERNED ENTITY SET IS THE ONLY SOURCE (audit E16).
+   *
+   * The interface's OWN service when it carries one, the catalogue's otherwise
+   * — never a fallback from one to the other (see interface-service.ts). The
+   * same function decides discovery's `callable` (read-definition.ts, A42).
    *
    * This read `iface.entitySet ?? request.nextUrl.searchParams.get("entity")`.
    * The fallback was there so an interface whose set had not been configured
@@ -185,85 +124,59 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
    * broker would fetch it, because nothing downstream re-checks.
    *
    * `?entity=` is no longer read here at all. An interface with no entity set is
-   * a configuration gap and is refused as one, below, rather than being papered
-   * over with whatever the caller happened to ask for. The discovery console
+   * a configuration gap and is refused as one, rather than being papered over
+   * with whatever the caller happened to ask for. The discovery console
    * (`/api/sap/tdd/preview`) is where a builder chooses a set; that is a
    * different surface, with its own environment ceiling and its own audit row.
    */
-  if (!definition.ok) {
-    await recordNorthboundCall({
-      organizationId: client.organizationId,
-      solutionId: client.solutionId,
-      interfaceId: iface.id,
-      operation: "READ",
-      externalId: iface.externalId,
-      environment: client.environment,
-      status: 400,
-      rowCount: null,
-      correlationId,
-      clientTokenId: client.clientId,
-      connectionId: connection.id,
-      connectionEnvironment: connection.environment,
-    });
-    return northboundError(
-      "VALIDATION_ERROR",
-      definition.reason === "NO_ENTITY_SET"
-        ? iface.draft
-          ? "This data feed is still a draft and names no dataset yet. Set its entity set in Studio and publish it — the dataset is part of the feed's definition, not something a caller may choose."
-          : "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose."
-        : definition.reason === "SERVICE_PATH_INVALID"
-          ? "This interface's own service path is not valid for its product. Fix it in Studio."
-          : "The catalogue service for this interface could not be resolved.",
-      400,
-      correlationId,
-    );
-  }
-  const { service, entitySet } = definition;
+  const target = await resolveReadTarget(bound.value.product, iface, connection, (reason) =>
+    reason === "NO_ENTITY_SET"
+      ? iface.draft
+        ? "This data feed is still a draft and names no dataset yet. Set its entity set in Studio and publish it — the dataset is part of the feed's definition, not something a caller may choose."
+        : "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose."
+      : reason === "SERVICE_PATH_INVALID"
+        ? "This interface's own service path is not valid for its product. Fix it in Studio."
+        : "The catalogue service for this interface could not be resolved.",
+  );
+  if (!target.ok) return refuse(target.refusal);
+  const { service, entitySet } = target.value;
 
-  // 4 — read, and report exactly what came back.
+  // 4 — contain: the circuit breaker for this SAP system. Observes only,
+  // unless COREEDGE_CIRCUIT_BREAKER=enforce (lib/governed/containment.ts).
+  const circuit = await contain(bound.value, correlationId);
+  if (!circuit.ok) return refuse(circuit.refusal);
+
+  // 5 — read, and report exactly what came back.
   //
   // Timed around the UPSTREAM call only. Measuring from the top of the handler
   // would fold our own auth, grant and binding work into a number the operations
   // console labels "how slow is this tenant", which would be a quietly wrong
-  // answer to the question actually being asked.
-  const startedAt = Date.now();
-  const result = await readEntitySet({
-    connection,
-    servicePath: service.path,
-    entitySet,
-    limit,
-  });
-  const durationMs = Date.now() - startedAt;
+  // answer to the question actually being asked. Nor the breaker's own store:
+  // callSapRead times the executor, before it reports to the breaker.
+  const { result, durationMs } = await callSapRead(bound.value, { servicePath: service.path, entitySet, limit }, circuit.value);
   const status = httpStatusFor(result.status);
 
-  await recordNorthboundCall({
-    organizationId: client.organizationId,
-    solutionId: client.solutionId,
-    interfaceId: iface.id,
-    operation: "READ",
-    externalId: iface.externalId,
-    environment: client.environment,
-    status,
+  await audit.record(status, {
     rowCount: result.records.length,
-    correlationId,
-    clientTokenId: client.clientId,
     durationMs,
-    connectionId: connection.id,
-    // Null here on a served read is the honest record of a permitted-but-
-    // unverified binding: the connection never declared its landscape.
-    connectionEnvironment: connection.environment,
+    // Null connectionEnvironment on a served read is the honest record of a
+    // permitted-but-unverified binding: the connection never declared its
+    // landscape.
+    connection,
     failureReason: result.failureReason,
   });
   // The app's first successful call in this environment (P2.12). A set
-  // lookup in memory on every call after this instance's first: no database
-  // round trip is added to the broker's hot path.
-  await noteFirstCall({
-    organizationId: client.organizationId,
-    solutionId: client.solutionId,
-    environment: connection.environment ?? client.environment,
-    channel: "broker",
-    status,
-  });
+  // lookup in memory on every call after this instance's first; the one
+  // insert it makes runs after the response is sent (P0.19).
+  await afterResponse(() =>
+    noteFirstCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      environment: connection.environment ?? client.environment,
+      channel: "broker",
+      status,
+    }),
+  );
 
   // The one place the cause and the correlation id meet. The client keeps the
   // generic sentence; whoever is quoted that id can now find out what happened.

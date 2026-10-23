@@ -1,0 +1,810 @@
+{
+  "preview: DEV connection served": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "preview: deployment tenant, reader with an organization": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "preview: deployment tenant, platform admin without one": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:platform_admin>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "-deployment-",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "preview: deployment tenant on an unlisted host": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-unlisted",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "preview: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "preview: sandbox developer on a DEV connection": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This system is declared DEV. Pick a Sandbox tenant, or ask an administrator of your organization for a role that can request access.",
+    "audits": [
+      {
+        "actorUserId": "<user:sandbox_developer>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "preview: SAP 500": {
+    "status": 502,
+    "answer": "INTERNAL_ERROR",
+    "message": "SAP preview request failed",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_500",
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 502
+      }
+    ],
+    "platform": []
+  },
+  "entities: DEV connection metadata": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "entities: DEV connection probe fan-out": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      },
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-probe-fanout-purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "entities: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "entities: sandbox developer on the SANDBOX deployment tenant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:sandbox_developer>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "purchase-orders",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "entities: SAP 401": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "SAP rejected the connection's credentials (HTTP 401): the communication user's password or token is wrong or expired.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "purchase-orders",
+        "failureReason": "HTTP_401",
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 401
+      }
+    ],
+    "platform": []
+  },
+  "operations: DEV connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-operations-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 4,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "operations: the default deployment tenant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:platform_admin>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "-operations-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "-deployment-",
+        "replayed": false,
+        "rowCount": 4,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "operations: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "-operations-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "capabilities: SuccessFactors DEV connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:successfactors:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-capabilities-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "capabilities: sandbox developer on a DEV connection": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This system is declared DEV. Pick a Sandbox tenant, or ask an administrator of your organization for a role that can request access.",
+    "audits": [
+      {
+        "actorUserId": "<user:sandbox_developer>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:successfactors:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-capabilities-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "capabilities: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "-capabilities-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "hub-content: live overlay on a DEV connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:successfactors:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-hub-overlay-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 2,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "hub-content: overlay refused on a PROD connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "-hub-overlay-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "hub-content/[id]: live probe on a DEV connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "API_<tag>_SRV",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "hub-content/[id]: PROD connection without a grant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "API_<tag>_SRV",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "hub-content/[id]: sandbox developer on the SANDBOX deployment tenant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:sandbox_developer>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "API_<tag>_SRV",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "probe-all: PROD connection without a grant": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "This SAP system is declared PROD. Reading it from the console needs an approved access grant for PROD, the same one a deployed application would need. Sandbox and Dev systems can be read without one — request access under API Access, or point this read at a Dev system.",
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "PROD",
+        "connectionId": "<connection:s4hana:PROD>",
+        "dryRun": true,
+        "environment": "PROD",
+        "externalId": "-probe-all-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": null,
+        "solutionId": null,
+        "status": 403
+      }
+    ],
+    "platform": []
+  },
+  "probe-all: DEV connection": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:consultant>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": "DEV",
+        "connectionId": "<connection:s4hana:DEV>",
+        "dryRun": true,
+        "environment": "DEV",
+        "externalId": "-probe-all-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "<org>",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "probe-all: deployment tenant by a platform admin": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [
+      {
+        "actorUserId": "<user:platform_admin>",
+        "bindingRefusal": null,
+        "clientTokenId": null,
+        "connectionEnvironment": null,
+        "connectionId": null,
+        "dryRun": true,
+        "environment": "deployment:<run>-env",
+        "externalId": "-probe-all-",
+        "failureReason": null,
+        "interfaceId": null,
+        "operation": "READ",
+        "organizationId": "-deployment-",
+        "replayed": false,
+        "rowCount": 1,
+        "solutionId": null,
+        "status": 200
+      }
+    ],
+    "platform": []
+  },
+  "ariba: a call to the configured realm": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [],
+    "platform": []
+  },
+  "ariba: refused to a sandbox developer": {
+    "status": 403,
+    "answer": "FORBIDDEN",
+    "message": "A developer workspace reads Sandbox systems only, such as the SAP API Hub sandbox this host provides. This read has no Sandbox system behind it.",
+    "audits": [],
+    "platform": []
+  },
+  "write: the deployment tenant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [],
+    "platform": [
+      {
+        "action": "SAP_WORKBENCH_WRITE",
+        "actorEmail": "<user:platform_admin>@abeam.com",
+        "actorOrganizationId": null,
+        "actorRole": "platform_admin",
+        "actorUserId": "<user:platform_admin>",
+        "entitySet": "A_PurchaseOrder",
+        "payloadFields": [
+          "CompanyCode",
+          "PurchaseOrderType"
+        ],
+        "payloadSha256": "ad4e98347fb8aff23bfcb7a9fd3f144bee5b2916aabdf941eaac14e1bc7ddda7",
+        "product": "s4hana",
+        "result": {
+          "detail": null,
+          "outcome": "SUCCEEDED",
+          "reason": null,
+          "sapStatus": 201
+        },
+        "serviceKey": "purchase-orders",
+        "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "tenantKey": "<run>-env",
+        "tenantLabel": "Env sandbox"
+      }
+    ]
+  },
+  "write: SAP 500": {
+    "status": 502,
+    "answer": "INTERNAL_ERROR",
+    "message": "SAP write-back request failed",
+    "audits": [],
+    "platform": [
+      {
+        "action": "SAP_WORKBENCH_WRITE",
+        "actorEmail": "<user:platform_admin>@abeam.com",
+        "actorOrganizationId": null,
+        "actorRole": "platform_admin",
+        "actorUserId": "<user:platform_admin>",
+        "entitySet": "A_PurchaseOrder",
+        "payloadFields": [
+          "CompanyCode",
+          "PurchaseOrderType"
+        ],
+        "payloadSha256": "ad4e98347fb8aff23bfcb7a9fd3f144bee5b2916aabdf941eaac14e1bc7ddda7",
+        "product": "s4hana",
+        "result": {
+          "detail": null,
+          "outcome": "OUTCOME_UNKNOWN",
+          "reason": "FETCH_FAILED",
+          "sapStatus": null
+        },
+        "serviceKey": "purchase-orders",
+        "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "tenantKey": "<run>-env",
+        "tenantLabel": "Env sandbox"
+      }
+    ]
+  },
+  "write-test: the deployment tenant": {
+    "status": 200,
+    "answer": "ok",
+    "message": null,
+    "audits": [],
+    "platform": [
+      {
+        "action": "SAP_WORKBENCH_WRITE_TEST",
+        "actorEmail": "<user:platform_admin>@abeam.com",
+        "actorOrganizationId": null,
+        "actorRole": "platform_admin",
+        "actorUserId": "<user:platform_admin>",
+        "entitySet": "A_PurchaseOrder",
+        "payloadFields": [
+          "CompanyCode"
+        ],
+        "payloadSha256": "3b2e48407bd3ff4485861704f4bd40f82c549f98d36665e13546384cf93be0c6",
+        "product": "s4hana",
+        "result": {
+          "detail": {
+            "created": true,
+            "deleted": true,
+            "deleteStatus": 204,
+            "location": "https://my000002-api.s4hana.cloud.sap/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV/A_PurchaseOrder('4500000009')"
+          },
+          "outcome": "SUCCEEDED",
+          "reason": null,
+          "sapStatus": 201
+        },
+        "serviceKey": "purchase-orders",
+        "servicePath": "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+        "tenantKey": "<run>-env",
+        "tenantLabel": "Env sandbox"
+      }
+    ]
+  }
+}

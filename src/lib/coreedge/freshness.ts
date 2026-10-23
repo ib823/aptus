@@ -125,3 +125,117 @@ export function stalenessReason(at: Date | null | undefined, ttlMs: number, now:
 export function proofAge(at: Date | null | undefined, now: Date = new Date()): string {
   return describeAge(at, now) ?? "never checked";
 }
+
+/* ── connection health (P0.2, A19, A50) ──────────────────────────────────── */
+
+/**
+ * A connection's probe proof expires at 48 hours: comfortably more than the
+ * nightly probe's interval, so one missed run does not turn the fleet amber,
+ * and short enough that a connection nobody has probed since March cannot read
+ * green in September (A50). `lastValidatedAt` moves only on a real 200, so an
+ * "OK" older than this means no probe has succeeded — or run — since.
+ */
+export const CONNECTION_PROOF_TTL_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * The status the probe sweep and "Probe now" record when a connection's
+ * stored secret will not open (A50). No request reached SAP, so it is not a
+ * probe outcome; it is recorded anyway, because leaving the previous "OK"
+ * standing called a connection healthy that the broker refuses on every call
+ * (CONNECTION_UNREADABLE). `lastValidatedAt` is left alone: it is the last
+ * time SAP answered.
+ */
+export const CONNECTION_UNREADABLE_STATUS = "UNREADABLE";
+
+/**
+ * The status recorded on a connection whose OWN secret opens, when another
+ * active connection for the same product will not (P0.2 review). The broker
+ * fails closed on the whole (organization, product) set, so every call through
+ * this connection is refused too — but re-entering THIS row's secret fixes
+ * nothing, and saying "the secret would not open" here sent the operator to
+ * re-save the wrong row. The fix is on the row marked UNREADABLE.
+ */
+export const CONNECTION_GROUP_UNREADABLE_STATUS = "GROUP_UNREADABLE";
+
+/**
+ * Statuses a connection can hold that no probe produced: no request reached
+ * SAP. The drift rule never treats one as "was healthy" (incidents.ts
+ * `isDriftTransition`), and the probe sweep judges a transition against the
+ * last probe that actually ran instead.
+ */
+export const CONNECTION_NOT_PROBED_STATUSES: readonly string[] = [
+  CONNECTION_UNREADABLE_STATUS,
+  CONNECTION_GROUP_UNREADABLE_STATUS,
+];
+
+/** Probe outcomes that mean SAP is not answering this connection as it should. */
+export const CONNECTION_NEEDS_ATTENTION: readonly string[] = ["UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR"];
+
+export type ConnectionHealthVerdict =
+  | "healthy"
+  /** The last probe said OK, longer ago than CONNECTION_PROOF_TTL_MS: a claim about our evidence, not SAP. */
+  | "stale"
+  | "needsAttention"
+  /**
+   * CoreEdge cannot open a stored secret — this row's (UNREADABLE) or a
+   * sibling's for the same product (GROUP_UNREADABLE): ours to fix, and every
+   * call is refused.
+   */
+  | "unreadable"
+  /** NO_PROBE_PATH, or a value nobody defined: never assumed healthy. */
+  | "unknown"
+  | "neverTested";
+
+/**
+ * THE ONE READING of a connection's health, for every screen and count that
+ * states one (the connections-health route, the topology lens, the SAP systems
+ * screen, the Studio connections screen). "OK" alone is not healthy: it must
+ * be recent.
+ */
+export function connectionHealthVerdict(
+  c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },
+  now: Date = new Date(),
+): ConnectionHealthVerdict {
+  const status = c.lastValidationStatus;
+  if (status === null) return "neverTested";
+  if (CONNECTION_NOT_PROBED_STATUSES.includes(status)) return "unreadable";
+  if (CONNECTION_NEEDS_ATTENTION.includes(status)) return "needsAttention";
+  if (status === "OK") {
+    return freshnessOf(c.lastValidatedAt, CONNECTION_PROOF_TTL_MS, now) === "fresh" ? "healthy" : "stale";
+  }
+  return "unknown";
+}
+
+/**
+ * The SAP systems screen's "Last probe" cell (A19). Whether a connection was
+ * ever checked is decided by its STATUS, not by `lastValidatedAt`: that moves
+ * only on a 200, so a connection the sweep probes and finds failing every
+ * night read "Never", with its failing status hidden.
+ */
+export function describeLastProbe(
+  c: { readonly lastValidationStatus: string | null; readonly lastValidatedAt: Date | null },
+  now: Date = new Date(),
+): { readonly headline: string; readonly detail: string | null } {
+  if (c.lastValidationStatus === null) {
+    /*
+     * No status, but a last success (P0.2 review round 7): a "will not open"
+     * status was cleared once the product's set opened again, and no probe
+     * has run since. Not checked since — but checked before, and the cell
+     * says when it last succeeded rather than "Never checked" (A19).
+     */
+    const age = describeAge(c.lastValidatedAt, now);
+    return age === null
+      ? { headline: "Never checked", detail: null }
+      : { headline: "Awaiting a probe", detail: `last succeeded ${age}` };
+  }
+  const verdict = connectionHealthVerdict(c, now);
+  const headline =
+    verdict === "stale"
+      ? `${c.lastValidationStatus} · stale`
+      : c.lastValidationStatus === CONNECTION_GROUP_UNREADABLE_STATUS
+        ? `${c.lastValidationStatus} · another connection for this product will not open`
+        : verdict === "unreadable"
+          ? `${c.lastValidationStatus} · the secret would not open`
+          : c.lastValidationStatus;
+  return { headline, detail: `last succeeded ${describeAge(c.lastValidatedAt, now) ?? "never"}` };
+}

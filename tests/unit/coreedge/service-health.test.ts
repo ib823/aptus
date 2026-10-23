@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ownerForService,
+  readableServices,
+  serviceHealthFactsOf,
   verdictForService,
   type ServiceHealthFacts,
 } from "@/lib/coreedge/service-health";
@@ -113,6 +115,32 @@ describe("metadata is consulted before the read", () => {
       NOW,
     );
     expect(v.status).toBe("signInRefused");
+  });
+});
+
+describe("an observed read failure is never 'not proven' (P0.2 review round 3)", () => {
+  it("reads as sign-in refused, as the lane board reads it — never 'no read has been proven'", () => {
+    // The sweep writes UNAUTHORIZED for a read answered 401; the reader's own
+    // copy of the vocabulary dropped it to null, i.e. "not proven".
+    const stored = { metadataStatus: "OK", metadataAt: RECENT, readStatus: "UNAUTHORIZED", readAt: RECENT, readRowCount: null };
+    const v = verdictForService(serviceHealthFactsOf(stored), NOW);
+    expect(v.status).toBe("signInRefused");
+    expect(v.because).not.toMatch(/not been proven|no read has been proven/i);
+    expect(v.provenAt).toEqual(RECENT);
+    expect(readableServices([stored], NOW)).toEqual({ readable: 0, unproven: 0 });
+  });
+
+  it("a fresh 404 on the read is failing in the tile too, never 'not proven in 24 h'", () => {
+    // The verdict stays Unknown (no chip for a 404 yet, below), but the read
+    // ran and failed, and the per-service row draws it failed.
+    const notFound = { metadataStatus: "OK", metadataAt: RECENT, readStatus: "NOT_FOUND", readAt: RECENT, readRowCount: null };
+    expect(verdictForService(serviceHealthFactsOf(notFound), NOW).status).toBe("unknown");
+    expect(readableServices([notFound], NOW)).toEqual({ readable: 0, unproven: 0 });
+    // An aged 404 is old evidence like any other: not proven in the window.
+    expect(readableServices([{ ...notFound, metadataAt: ANCIENT, readAt: ANCIENT }], NOW)).toEqual({
+      readable: 0,
+      unproven: 1,
+    });
   });
 });
 

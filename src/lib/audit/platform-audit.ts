@@ -27,8 +27,9 @@
  *      a real change from the person who made it. The event is then left with
  *      no outcome, which is itself the signal — see below.
  *
- * APPEND-ONLY, BY CONSTRUCTION AND BY CONSTRAINT. This module exposes two
- * inserts and nothing else: no update, no delete. The outcome is its own row
+ * APPEND-ONLY, BY CONSTRUCTION AND BY CONSTRAINT. This module exposes
+ * inserts and nothing else (the write's two, and the console read's one,
+ * below): no update, no delete. The outcome is its own row
  * rather than a column stamped later, and `PlatformAuditOutcome.eventId` is
  * unique, so the database refuses a second outcome for the same event instead
  * of letting it replace the first. An audit trail that can be edited is not
@@ -42,20 +43,50 @@
  *
  * WHY DEDICATED TABLES rather than a nullable `organizationId` on an existing
  * one: see the `PlatformAuditEvent` model comment in schema.prisma.
+ *
+ * AND WHAT A PERSON READ, SINCE P0.14b. Every Workbench console call that
+ * reaches SAP (preview, entities, operations, capabilities, the catalogue
+ * probes, Probe all, the Ariba explorer) runs on the governed pipeline as the
+ * named "console" principal (lib/governed/console.ts) and leaves one
+ * `PlatformConsoleRead` row, event and outcome together, written in one
+ * statement (`recordPlatformConsoleRead`) after the call, because a read
+ * changes nothing in SAP and is not held to the write's fail-closed rule —
+ * exactly as the organization's own console row (NorthboundAuditEvent,
+ * `dryRun: true`) is not. It is never billed: the usage rollup reads only
+ * NorthboundAuditEvent. A console read row expires with the organization's
+ * copy of the same read (northbound/retention.ts `sweepConsoleReads`, the one
+ * module allowed to delete audit rows); a write's rows never do.
+ *
+ * NOT ON THE WRITE TABLES (wave 2 integration review round 4). Console reads
+ * were `PlatformAuditEvent` rows (action SAP_CONSOLE_READ), and the code
+ * before P0.14b reads every row of that table as a Workbench write: rolled
+ * back to it (the release protocol's Instant Rollback keeps the migrations),
+ * the Operations write ledger listed each console read as a write-back into a
+ * client's SAP, most of them SUCCEEDED. No build before P0.14b reads
+ * `PlatformConsoleRead`. Readers of the write trail still filter on
+ * `PLATFORM_AUDIT_ACTIONS`, for the rows a pre-release build wrote there.
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { failureReasonFromError, failureReasonFromHttp } from "@/lib/northbound/failure-reason";
 import { newCorrelationId } from "@/lib/northbound/respond";
 import { ERROR_CODES } from "@/types/api";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /** What a person did. One value per route that changes SAP data. */
 export const PLATFORM_AUDIT_ACTIONS = ["SAP_WORKBENCH_WRITE", "SAP_WORKBENCH_WRITE_TEST"] as const;
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];
+
+/**
+ * The action a PRE-RELEASE P0.14b build gave a console read on `PlatformAuditEvent`.
+ * Nothing writes it now (console reads are `PlatformConsoleRead` rows); the
+ * retention sweep still deletes such rows by age, and the write ledger never
+ * lists them.
+ */
+export const PLATFORM_CONSOLE_READ_ACTION = "SAP_CONSOLE_READ" as const;
 
 /**
  * What happened. Named after the write ledger's kinds on purpose, so an
@@ -291,4 +322,102 @@ export function outcomeForWriteTest(result: {
 /** The outcome when the SAP call threw: it may or may not have landed. */
 export function outcomeForThrown(err: unknown): PlatformAuditCompletion {
   return { outcome: "OUTCOME_UNKNOWN", reason: failureReasonFromError(err) };
+}
+
+/* ── console reads (P0.14b) ───────────────────────────────────────────── */
+
+/** How a console read ended. Its own vocabulary: "the write may have been applied" means nothing for a read. */
+export const CONSOLE_READ_OUTCOMES = {
+  /** SAP (or Ariba) answered the read. */
+  SUCCEEDED: "SAP answered the read",
+  /** Refused by the console's own gates (the ceilings, the host allow-list, the circuit) before any request was sent. */
+  BLOCKED: "refused by the console before any request was sent to SAP",
+  /** SAP answered and refused it (4xx), or refused the credential. */
+  SAP_REFUSED: "SAP answered and refused the read",
+  /** SAP failed (5xx), did not answer, or could not be authenticated to. */
+  FAILED: "SAP failed, did not answer, or could not be authenticated to",
+} as const;
+export type ConsoleReadOutcomeKind = keyof typeof CONSOLE_READ_OUTCOMES;
+
+/** The outcome kind for a console read audited at `status`, refused by a gate or not. */
+export function consoleReadOutcome(status: number, blocked: boolean): ConsoleReadOutcomeKind {
+  if (blocked) return "BLOCKED";
+  if (status >= 200 && status < 300) return "SUCCEEDED";
+  if (status >= 400 && status < 500) return "SAP_REFUSED";
+  return "FAILED";
+}
+
+export interface PlatformConsoleReadInput {
+  actor: PlatformAuditActor;
+  /** What was read: a service key, or the fan-out's scope sentinel, as `serviceKey`; the entity set or "-". */
+  target: SapWriteTarget;
+  /** The parameters the person chose (entity, limit, endpoint …): fingerprinted, never stored. */
+  request: Record<string, unknown>;
+  /** The call's correlation id: the same one on the organization's console row, when there is one. */
+  correlationId: string;
+  outcome: ConsoleReadOutcomeKind;
+  /** The status the read is audited under (null when it was refused before any request). */
+  status: number | null;
+  /** A bounded code (HTTP_429, TIMEOUT, HOST_NOT_ALLOWED …), never free text. */
+  reason?: string | null;
+  durationMs?: number | null;
+  detail: Prisma.InputJsonValue;
+}
+
+/**
+ * The statement that writes one console read: ONE row, event and outcome
+ * together, in ONE round trip (P0.14b review round 3), with no transaction on
+ * the response path of a console call (governed/db-budget.ts).
+ *
+ * The id is made here (the model's `cuid()` default is Prisma's, not the
+ * database's), and so is `at` (review round 4): left to the column's DEFAULT
+ * CURRENT_TIMESTAMP, a `timestamp(3)` without a zone takes the SESSION's wall
+ * time, so on a database or role set to any other zone every console row was
+ * off by the offset from the organization's copy of the same read, and the
+ * retention sweep's UTC cutoff deleted it early or late. It is bound as UTC
+ * wall time, whatever the session's zone, as idempotency.ts and
+ * grant-binding.ts do.
+ *
+ * Into `PlatformConsoleRead`, never `PlatformAuditEvent` (integration review
+ * round 4): see this file's header.
+ */
+export function consoleReadInsert(
+  input: PlatformConsoleReadInput,
+  id: string = randomUUID(),
+  now: Date = new Date(),
+): Prisma.Sql {
+  const { payloadSha256, payloadFields } = fingerprintPayload(input.request);
+  const reason = input.reason ? input.reason.slice(0, MAX_REASON_LENGTH) : null;
+  const at = Prisma.sql`(${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
+  return Prisma.sql`/* governed:console-read-audit */
+    INSERT INTO "PlatformConsoleRead"
+      ("id", "actorUserId", "actorEmail", "actorRole", "actorOrganizationId", "product", "tenantKey", "tenantLabel",
+       "serviceKey", "servicePath", "entitySet", "payloadSha256", "payloadFields", "correlationId",
+       "outcome", "status", "reason", "detail", "durationMs", "at")
+    VALUES (${id}, ${input.actor.id}, ${input.actor.email}, ${input.actor.role}, ${input.actor.organizationId},
+      ${input.target.product}, ${input.target.tenantKey}, ${input.target.tenantLabel ?? null},
+      ${input.target.serviceKey}, ${input.target.servicePath ?? null}, ${input.target.entitySet}, ${payloadSha256},
+      ${JSON.stringify(payloadFields)}::jsonb, ${input.correlationId},
+      ${input.outcome}, ${input.status}::integer, ${reason}, ${JSON.stringify(input.detail)}::jsonb,
+      ${input.durationMs ?? null}::integer, ${at})`;
+}
+
+/**
+ * Record one console read: the event and its outcome in ONE statement
+ * (`consoleReadInsert`), after the call. Never throws: a read is not refused,
+ * nor its answer lost, because the trail could not be written — the
+ * organization's console row follows the same rule (northbound/audit.ts).
+ * Logged loudly.
+ */
+export async function recordPlatformConsoleRead(input: PlatformConsoleReadInput): Promise<void> {
+  try {
+    await prisma.$executeRaw(consoleReadInsert(input));
+  } catch (err) {
+    console.error("[platform-audit] could not record a console read", {
+      actorUserId: input.actor.id,
+      correlationId: input.correlationId,
+      outcome: input.outcome,
+      err,
+    });
+  }
 }

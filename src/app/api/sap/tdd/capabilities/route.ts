@@ -19,13 +19,8 @@ import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
-import {
-  decideConsoleRead,
-  decideSandboxDeveloperRead,
-  DEPLOYMENT_AUDIT_SCOPE,
-  newCorrelationId,
-  recordConsoleRead,
-} from "@/lib/sap-public/console-read-guard";
+import { circuitOutcomeForProbes, consoleRefusalBody, consoleRefusalInit, openConsoleCall } from "@/lib/governed/console";
+import type { Refusal } from "@/lib/governed/pipeline";
 import { readTenantRefusalResponse, resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -62,10 +57,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * Found by an unauthenticated curl during a browser-agent audit — the same
    * way the earlier incident in that file was found.
    */
-  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true });
+  // The session is validated once and handed to the guard (P0.19's budget).
+  const user = await getCurrentUser();
+  const refusal = await refuseUnlessMayProbeTenant({ appliesSandboxDeveloperCeiling: true, viewer: user });
   if (refusal) return refusal;
 
-  const user = await getCurrentUser();
   if (!user) {
     // Unreachable: the guard above already 401s without a session. Kept so the
     // narrowing below is a fact rather than an assumption.
@@ -83,7 +79,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     : null;
   if (resolved && "refused" in resolved) return readTenantRefusalResponse(resolved, tenantKey ?? "");
   const tenant = resolved?.tenant ?? null;
-  if (!tenant) {
+  if (!resolved || !tenant) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No configured tenant" } },
       { status: 400 },
@@ -103,47 +99,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * undeclared landscape only under a live grant for it. A deployment tenant
    * has no connection and so no landscape to cap; it is still recorded.
    */
-  const correlationId = newCorrelationId();
-  const conn = resolved?.connection ?? null;
-  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
-  const audit = (status: number, rowCount: number | null, extra: { durationMs?: number } = {}) =>
-    recordConsoleRead({
-      organizationId: user.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
-      actorUserId: user.id,
-      // One row for the fan-out, rowCount carrying how many probes were made —
-      // the -probe-fanout- convention /entities uses.
-      externalId: "-capabilities-",
-      environment: auditEnvironment,
-      status,
-      rowCount,
-      correlationId,
-      connectionId: conn?.id ?? null,
-      connectionEnvironment: conn?.environment ?? null,
-      ...extra,
-    });
-  // A sandbox developer's ceiling is SANDBOX, the deployment tenant included
-  // (P0.13). Every other role passes straight through it.
-  const sandboxOnly = decideSandboxDeveloperRead(user.role, { tenant, connection: conn });
-  if (!sandboxOnly.allowed) {
-    await audit(403, null);
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: sandboxOnly.message, correlationId } },
-      { status: 403 },
-    );
-  }
-  if (conn && user.organizationId) {
-    const decision = await decideConsoleRead({
-      organizationId: user.organizationId,
-      environment: conn.environment,
-    });
-    if (!decision.allowed) {
-      await audit(403, null);
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
-        { status: 403 },
-      );
-    }
-  }
+  // ON THE GOVERNED PIPELINE (P0.14b, governed/console.ts): the ceilings and
+  // the deployment tenant's host check are its steps, each refusal audited by
+  // it under the -capabilities- scope sentinel; the probe runs inside its
+  // `callSap` below, which writes the one row for the fan-out, rowCount
+  // carrying how many probes were made — the -probe-fanout- convention
+  // /entities uses.
+  const call = openConsoleCall({
+    viewer: user,
+    target: { kind: "odata", product, resolved },
+    route: "/api/sap/tdd/capabilities",
+    externalId: "-capabilities-",
+  });
+  const correlationId = call.correlationId;
+  const refuse = (r: Refusal) => NextResponse.json(consoleRefusalBody(r, correlationId), consoleRefusalInit(r));
+  const authorised = await call.authorise();
+  if (!authorised.ok) return refuse(authorised.refusal);
+  const bound = await call.bind();
+  if (!bound.ok) return refuse(bound.refusal);
 
   // Probe the curated (known-configured) services first — the ones this product
   // has wired up and the tenant is most likely to have activated — then top up
@@ -170,9 +143,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const startedAt = Date.now();
-  const rows = await probeTenantCapabilities(product.envPrefix, tenant, services);
-  await audit(200, rows.length, { durationMs: Date.now() - startedAt });
+  const contained = await call.contain();
+  if (!contained.ok) return refuse(contained.refusal);
+  // probeTenantCapabilities reports each service's outcome rather than
+  // throwing; a throw here is a defect, recorded as a 502 and rethrown. The
+  // row says the probe ran; the console circuit hears what each service was
+  // answered, so a probe of a system that is down is not an "ok" (P0.14b review).
+  const probed = await call.callSap(() => probeTenantCapabilities(product.envPrefix, tenant, services), {
+    answered: (made) => ({ status: 200, rowCount: made.length, circuit: circuitOutcomeForProbes(made) }),
+    failed: () => ({ status: 502, rowCount: null }),
+  });
+  if (!probed.ok) throw probed.error;
+  const rows = probed.value;
   const summary = { ...summarize(tenant.label, rows), catalogueImported: dynamic.length > 0 };
 
   // Append-only audit of the probe (tenant label + counts, never secrets).

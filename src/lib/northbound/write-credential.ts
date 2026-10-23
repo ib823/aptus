@@ -26,6 +26,7 @@
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
+import type { PrefetchedWriteKey } from "@/lib/northbound/auth";
 import { KeyIssuerRefused, refuseKeyIssuer } from "@/lib/northbound/issue";
 import { isKeyLive } from "@/lib/northbound/key-policy";
 import { solutionClientAad, solutionClientRowAad } from "@/lib/sap-public/connection-crypto";
@@ -125,20 +126,29 @@ export async function verifyWriteCredential(
   clientId: string,
   presented: string | null,
   now: Date = new Date(),
+  /**
+   * The same row's write-key fields, read by authentication in the statement
+   * that found the key (auth.ts `withWriteKey`, P0.19), so the write route
+   * does not read the row twice. The caller passes them for `clientId`'s own
+   * row only; without them the row is read here, scoped as before.
+   */
+  prefetched?: { readonly solutionId: string } & PrefetchedWriteKey,
 ): Promise<boolean> {
   if (!presented) return false;
 
-  const client = await prisma.solutionClient.findFirst({
-    where: scopedById(scope, clientId),
-    select: {
-      id: true,
-      solutionId: true,
-      secretsCiphertext: true,
-      isActive: true,
-      revokedAt: true,
-      expiresAt: true,
-    },
-  });
+  const client = prefetched
+    ? { id: clientId, ...prefetched }
+    : await prisma.solutionClient.findFirst({
+        where: scopedById(scope, clientId),
+        select: {
+          id: true,
+          solutionId: true,
+          secretsCiphertext: true,
+          isActive: true,
+          revokedAt: true,
+          expiresAt: true,
+        },
+      });
   if (!client?.secretsCiphertext) return false;
   /*
    * THE WRITE KEY ENDS WHEN ITS CREDENTIAL DOES (P0.11). It is sealed on the
@@ -151,13 +161,7 @@ export async function verifyWriteCredential(
 
   let stored: string | undefined;
   try {
-    stored = (
-      await openSecretsForOrg(
-        scope.organizationId,
-        client.secretsCiphertext,
-        solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
-      )
-    ).writeSecret;
+    stored = await openWriteKey(scope.organizationId, { ...client, secretsCiphertext: client.secretsCiphertext });
   } catch {
     /*
      * A blob that will not open under this row's AAD is corrupt, was sealed for
@@ -187,6 +191,41 @@ export async function verifyWriteCredential(
   // Length is compared first because timingSafeEqual throws on a mismatch; the
   // length of a secret is not the part worth protecting.
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Open a credential row's sealed write key under the row's own binding. Throws when it will not open. */
+async function openWriteKey(
+  organizationId: string,
+  row: { readonly id: string; readonly solutionId: string; readonly secretsCiphertext: string },
+): Promise<string | undefined> {
+  return (
+    await openSecretsForOrg(
+      organizationId,
+      row.secretsCiphertext,
+      solutionClientRowAad(organizationId, row.solutionId, row.id),
+    )
+  ).writeSecret;
+}
+
+/**
+ * Would `verifyWriteCredential` find a key to compare against on this row?
+ * The same open, under the same binding: false when the blob will not open or
+ * holds no write key, which is when the write route refuses every write from
+ * this credential whatever key is presented.
+ *
+ * FOR THE LANE BOARD (P0.2), which used to ask only whether a blob exists and
+ * so drew Live a write lane whose every write is refused. The key is opened
+ * and dropped here; it never leaves this function.
+ */
+export async function writeKeyOpens(
+  organizationId: string,
+  row: { readonly id: string; readonly solutionId: string; readonly secretsCiphertext: string },
+): Promise<boolean> {
+  try {
+    return Boolean(await openWriteKey(organizationId, row));
+  } catch {
+    return false;
+  }
 }
 
 /**

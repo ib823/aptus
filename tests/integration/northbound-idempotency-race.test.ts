@@ -120,6 +120,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("idempotency with real PostgreSQ
     }
   });
 
+  // P0.19 review round 1: the renewal is the claim's own ON CONFLICT arm.
+  it("renews an expired key in one claim, clearing the old request's outcome", async () => {
+    const old = await reserveIdempotencyKey(
+      { ...input, interfaceId: "old-interface", payload: { record: { Name: "Old" } } },
+      new Date(now.getTime() - IDEMPOTENCY_TTL_MS - 1000),
+    );
+    if (old.outcome !== "proceed") throw new Error("Reservation failed");
+    await completeIdempotencyKey(scope, old.recordId, 201, { old: true });
+    const fresh = await reserveIdempotencyKey(input, now);
+    if (fresh.outcome !== "proceed") throw new Error("Renewal failed");
+    const row = await prisma.northboundIdempotencyKey.findFirst({ where: { organizationId: scope.organizationId, key: input.key } });
+    expect(row).toMatchObject({ id: fresh.recordId, interfaceId: input.interfaceId, status: null, responseBody: null });
+    expect(row!.expiresAt.getTime()).toBe(now.getTime() + IDEMPOTENCY_TTL_MS);
+    expect(row!.createdAt.getTime()).toBe(now.getTime());
+    // A live key is not renewed: the same call is now in flight.
+    expect(await reserveIdempotencyKey(input, now)).toEqual({ outcome: "conflict", reason: "IN_FLIGHT" });
+  });
+
   it.each(["environment", "sapClient", "connection"] as const)("a credential rebound to another %s cannot replay an old write", async (changed) => {
     expect((await request()).status).toBe(201);
     routeMocks.auth.mockResolvedValue({ ok: true, client: {

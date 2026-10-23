@@ -94,7 +94,8 @@ describe("the sentences", () => {
     expect(msg).toContain("DEV: credential with write key · no write grant requested");
     expect(msg).toContain("PROD: no live credential · write grant approved");
     expect(msg).not.toMatch(/SANDBOX:|TEST:/);
-    expect(msg).toMatch(/issue the write credential for that environment under API Access, then activate\.$/);
+    // P0.3: the action exists under that name now, and the copy says where.
+    expect(msg).toMatch(/issue the write key for that environment under API Access \(Runtime credentials, Issue write key\), then activate\.$/);
   });
 
   it("…and says so plainly when nothing has been started anywhere", () => {
@@ -163,7 +164,8 @@ describe("your own API: verification is a third half, per environment (review ro
       "PROD: credential with write key · write grant approved · service verified here · writes disabled on the connection",
     );
     const msg = writeReadinessRefusal("CREATE", rows);
-    expect(msg).toContain("An administrator enables writes on the connection under Connections.");
+    // P0.3: who (any builder, not only an administrator) and how, now the form offers it.
+    expect(msg).toContain("A builder enables writes on the connection under Connections: save it with Allow writes ticked.");
     expect(rows.filter((r) => r.environment !== "PROD").every((r) => !("writesDisabled" in r))).toBe(true);
   });
 });

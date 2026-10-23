@@ -41,8 +41,10 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
+import { solutionRefusal, type SolutionRefusal } from "@/lib/northbound/authorisation";
 import { newCorrelationId } from "@/lib/northbound/respond";
 import { allowsUngrantedRead, parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/environment";
+import { grantBindingMode, type GrantBindingMode } from "@/lib/studio/grant-binding";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { isSandboxDeveloper } from "@/lib/studio/rbac";
 
@@ -82,7 +84,79 @@ export interface ConsoleReadDecision {
   refusal: ConsoleReadRefusal | null;
   /** Safe, actionable sentence for the caller. Never names a host or another org. */
   message: string | null;
+  /**
+   * Allowed only on a grant the broker's own rules no longer honour, under
+   * `COREEDGE_CONSOLE_GRANTS=observe` (the default): why enforce would refuse
+   * the read (`consoleCeilingSetAside`). The console logs it and records it
+   * on the platform row (governed/console.ts).
+   */
+  observed?: ConsoleCeilingSetAside;
 }
+
+/**
+ * WHICH GRANTS OPEN THE CONSOLE (wave 2 integration review round 3).
+ *
+ * The ceiling asks "is this organization cleared for this landscape at all",
+ * deliberately coarser than the broker on WHICH service (see
+ * decideConsoleRead). It is not meant to be coarser on WHETHER a grant still
+ * counts: a grant whose app is RETIRED, or an unbound legacy grant once
+ * COREEDGE_GRANT_BINDING=strict, authorises nothing at the broker, the lane
+ * board or discovery (authorisation.ts `solutionRefusal`, grant-binding.ts
+ * `isUsableUnder`), and kept opening PROD reads here.
+ *
+ * Counting only those grants is a new refusal on a console read that works
+ * today, so it is a setting (docs/runbooks/coreedge-governed-pipeline.md):
+ *
+ *   COREEDGE_CONSOLE_GRANTS=observe (default) — the ceiling answers as before;
+ *     a read that only such a grant opens is allowed, logged and recorded as
+ *     what enforce would refuse.
+ *   COREEDGE_CONSOLE_GRANTS=enforce — such a grant does not count.
+ */
+export type ConsoleGrantMode = "observe" | "enforce";
+
+export function consoleGrantMode(env: Record<string, string | undefined> = process.env): ConsoleGrantMode {
+  return env.COREEDGE_CONSOLE_GRANTS?.trim().toLowerCase() === "enforce" ? "enforce" : "observe";
+}
+
+/** Why the shared rules no longer honour a live grant. */
+export type ConsoleCeilingSetAside = SolutionRefusal | "GRANT_NEEDS_REAPPROVAL";
+
+/** The grant columns the ceiling judges. */
+export interface CeilingGrant {
+  readonly decision: string;
+  readonly expiresAt: Date | null;
+  readonly revokedAt: Date | null;
+  /**
+   * The interface the grant is bound to, or null for a legacy unbound one.
+   * Absent reads as unbound, as grant-binding.ts `isBoundTo` reads a row
+   * that did not select it: the safe reading under strict.
+   */
+  readonly interfaceId?: string | null;
+  /** The owning app's status; null when it is gone. Absent reads as gone. */
+  readonly solutionStatus?: string | null;
+}
+
+/**
+ * Does the broker's rule set still honour this grant at all, whatever the
+ * service? Its app is not RETIRED (or gone), and under strict grant binding
+ * it is bound to an interface. Null when it does.
+ */
+export function consoleCeilingSetAside(
+  grant: CeilingGrant,
+  bindingMode: GrantBindingMode = grantBindingMode(),
+): ConsoleCeilingSetAside | null {
+  const app = solutionRefusal(grant.solutionStatus ?? null);
+  if (app !== null) return app;
+  if (bindingMode === "strict" && (grant.interfaceId ?? null) === null) return "GRANT_NEEDS_REAPPROVAL";
+  return null;
+}
+
+const SET_ASIDE_SENTENCE: Readonly<Record<ConsoleCeilingSetAside, string>> = {
+  SOLUTION_RETIRED: "The only approval for it belongs to an app that has been retired, which authorises nothing.",
+  SOLUTION_MISSING: "The only approval for it belongs to an app that no longer exists.",
+  GRANT_NEEDS_REAPPROVAL:
+    "The only approval for it is a legacy one that is not bound to an interface, which this deployment no longer honours: ask for it to be approved again.",
+};
 
 /**
  * The message for each refusal.
@@ -167,9 +241,21 @@ export async function decideConsoleRead(input: {
   organizationId: string;
   environment: SapEnvironment | null;
   now?: Date;
+  /**
+   * The organization's grants for `environment`, when they were read already
+   * in the connection's own statement (governed/call-loads.ts
+   * loadConsoleConnection, P0.14b review round 5): judged here exactly as the
+   * rows this function would have read, and not read again.
+   */
+  grants?: readonly CeilingGrant[];
+  /** Defaults to the deployment's settings (consoleGrantMode, grantBindingMode). */
+  mode?: ConsoleGrantMode;
+  bindingMode?: GrantBindingMode;
 }): Promise<ConsoleReadDecision> {
   const { organizationId, environment } = input;
   const now = input.now ?? new Date();
+  const mode = input.mode ?? consoleGrantMode();
+  const bindingMode = input.bindingMode ?? grantBindingMode();
 
   if (allowsUngrantedRead(environment)) {
     return { allowed: true, refusal: null, message: null };
@@ -202,12 +288,29 @@ export async function decideConsoleRead(input: {
    * outside SANDBOX. The northbound discovery route has been wrong on exactly
    * this twice; one function, one answer.
    */
-  const grants = await prisma.apiAccessGrant.findMany({
-    where: { organizationId, environment },
-    select: { decision: true, expiresAt: true, revokedAt: true },
-  });
+  const grants: readonly CeilingGrant[] =
+    input.grants ??
+    (
+      await prisma.apiAccessGrant.findMany({
+        where: { organizationId, environment },
+        select: {
+          decision: true,
+          expiresAt: true,
+          revokedAt: true,
+          interfaceId: true,
+          solution: { select: { status: true, organizationId: true } },
+        },
+      })
+    ).map((g) => ({
+      decision: g.decision,
+      expiresAt: g.expiresAt,
+      revokedAt: g.revokedAt,
+      interfaceId: g.interfaceId,
+      // The grant's app in this organization, as the console load reads it.
+      solutionStatus: g.solution?.organizationId === organizationId ? g.solution.status : null,
+    }));
 
-  const live = grants.some(
+  const live = grants.filter(
     (g) =>
       grantsRead(g.decision as GrantDecision, environment as GrantEnvironment) &&
       // `== null` matches null and undefined alike, exactly as access.ts does.
@@ -215,7 +318,18 @@ export async function decideConsoleRead(input: {
       (g.expiresAt === null || g.expiresAt.getTime() > now.getTime()),
   );
 
-  if (live) return { allowed: true, refusal: null, message: null };
+  // Only grants the broker's rules still honour count (consoleCeilingSetAside).
+  const setAside = live.map((g) => consoleCeilingSetAside(g, bindingMode));
+  if (setAside.some((reason) => reason === null)) return { allowed: true, refusal: null, message: null };
+  const observed = setAside[0];
+  if (observed !== undefined && observed !== null) {
+    if (mode === "observe") return { allowed: true, refusal: null, message: null, observed };
+    return {
+      allowed: false,
+      refusal: "NO_APPROVED_GRANT",
+      message: `${consoleReadRefusalMessage("NO_APPROVED_GRANT", environment)} ${SET_ASIDE_SENTENCE[observed]}`,
+    };
+  }
 
   return {
     allowed: false,

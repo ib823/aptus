@@ -214,3 +214,24 @@ describe("nothing is bundled", () => {
     expect(src).not.toMatch(/import\(\s*["'][^"']*sap-references/);
   });
 });
+
+describe("an import stamps the import time Catalogue Health reads (P0.3, A29)", () => {
+  it("writes importedAt on every row it creates and every row it updates", async () => {
+    mocks.findMany.mockResolvedValue([{ id: "row-1", externalId: "EVT_2", illustrative: false }]);
+    mocks.createMany.mockResolvedValue({ count: 4 });
+    const before = Date.now();
+    await POST(makeRequest({ confirmation: CONFIRM, contentType: "EVENT" }));
+
+    const stamped = [
+      ...mocks.createMany.mock.calls[0]![0].data,
+      mocks.update.mock.calls[0]![0].data,
+    ] as { importedAt?: unknown; rawMetadataJson: { importedAt: string } }[];
+    expect(stamped).toHaveLength(5);
+    for (const row of stamped) {
+      expect(row.importedAt).toBeInstanceOf(Date);
+      expect((row.importedAt as Date).getTime()).toBeGreaterThanOrEqual(before - 1000);
+      // The same instant the row's own provenance carries.
+      expect((row.importedAt as Date).toISOString()).toBe(row.rawMetadataJson.importedAt);
+    }
+  });
+});
