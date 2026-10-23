@@ -81,6 +81,10 @@ export const TENANT_ANCHORED_MODELS = [
   // organization (lib/contracts/snapshot.ts); no lookup is by credential, so
   // nothing here is unscoped by design.
   "ContractSnapshot",
+  // P1.2: a connection's listed Gateway services. Keyed by organisation and
+  // connection; every read and the upsert name the organisation
+  // (lib/sap-public/tenant-listing.ts).
+  "TenantServiceListing",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];

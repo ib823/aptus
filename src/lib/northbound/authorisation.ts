@@ -41,6 +41,7 @@ import {
   type GrantedInterface,
 } from "@/lib/studio/grant-binding";
 import { grantsRead, grantsWrite, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
+import { apiPolicySignOffMode, policySignOffMissing, SIGN_OFF_REQUIRED_MESSAGE } from "@/lib/studio/api-policy";
 
 /* ── the route a lane's calls take ─────────────────────────────────────── */
 
@@ -124,7 +125,13 @@ export type AccessRefusal =
    * no interface, and COREEDGE_GRANT_BINDING is strict (P0.1, A47). It needs
    * re-approval against the interface it is for.
    */
-  | "GRANT_NEEDS_REAPPROVAL";
+  | "GRANT_NEEDS_REAPPROVAL"
+  /**
+   * A customer-built service on SAP S/4HANA Cloud Public Edition with no SAP
+   * API Policy §1.2 sign-off recorded, while COREEDGE_API_POLICY_SIGNOFF is
+   * enforce (P1.2, studio/api-policy.ts). Never sent in observe or off.
+   */
+  | "API_POLICY_SIGN_OFF_REQUIRED";
 
 /** The interface fields the decision judges. */
 export interface AuthorisableInterface extends GrantedInterface {
@@ -138,6 +145,8 @@ export interface AuthorisableInterface extends GrantedInterface {
   odataVersion?: string | null;
   serviceVerifiedAt?: Date | null;
   serviceVerifications?: unknown;
+  /** The §1.2 sign-off as stored (P1.2): read in the same statement as the row. */
+  apiPolicySignOff?: unknown;
 }
 
 /** The grant fields the decision judges; access.ts GRANT_SELECT selects them. */
@@ -289,6 +298,12 @@ export function authorisesHere(input: AuthorisesHereInput): AccessDecision {
 
   const refused = interfaceRefusal(iface, solutionId, route);
   if (refused) return refused;
+
+  // SAP API Policy §1.2 (P1.2): refused only where the switch enforces it, so
+  // the lane board and the broker refuse the same calls.
+  if (apiPolicySignOffMode() === "enforce" && policySignOffMissing(iface)) {
+    return { ok: false, reason: "API_POLICY_SIGN_OFF_REQUIRED", message: SIGN_OFF_REQUIRED_MESSAGE };
+  }
 
   const authorises = (g: AuthorisingGrant) => grantAuthorises(g, route, environment);
   const what = route === "write" ? "WRITE grant" : "access grant";

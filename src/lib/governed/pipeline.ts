@@ -130,6 +130,8 @@ const ACCESS_REFUSAL_STATUS: Readonly<Record<AccessRefusal, 400 | 403 | 404>> = 
   READ_ONLY_INTERFACE: 403,
   INTERFACE_NOT_ACTIVE: 403,
   INTERFACE_DEPRECATED: 403,
+  // P1.2: a customer-built service on S/4 Public with no §1.2 sign-off, while enforced.
+  API_POLICY_SIGN_OFF_REQUIRED: 403,
   // Nothing about access is wrong: it is a gap in the interface's definition.
   OPERATION_NOT_SUPPORTED: 400,
 };
@@ -206,6 +208,7 @@ function codeFor(reason: RefusalReason, status: number): NorthboundErrorCode {
   if (reason === "RATE_LIMITED") return "RATE_LIMITED";
   if (reason === "LIMITER_UNAVAILABLE") return "LIMITER_UNAVAILABLE";
   if (reason === "CIRCUIT_OPEN") return "CIRCUIT_OPEN";
+  if (reason === "API_POLICY_SIGN_OFF_REQUIRED") return "API_POLICY_SIGN_OFF_REQUIRED";
   if (reason === "IDEMPOTENCY_CONFLICT" || reason === "IDEMPOTENCY_IN_FLIGHT") return "CONFLICT";
   if (reason in BINDING_REFUSAL_STATUS || reason === "TRANSPORT_UNAVAILABLE") return "CONNECTION_NOT_CONFIGURED";
   if (status === 404) return "NOT_FOUND";

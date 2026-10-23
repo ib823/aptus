@@ -92,6 +92,13 @@ export type AuditAction =
    */
   | "STEP_UP_MISSING"
   /**
+   * An SAP API Policy §1.2 sign-off recorded on an interface (P1.2), and its
+   * withdrawal. Written in the same transaction as the interface's field, never
+   * through writeConfigAudit's best effort: a sign-off with no trail is not one.
+   */
+  | "POLICY_SIGN_OFF"
+  | "POLICY_SIGN_OFF_WITHDRAWN"
+  /**
    * The instance's first platform admin, claimed with the one-time bootstrap
    * token (lib/auth/bootstrap.ts). Platform-level trail; `after.tokenSha256`
    * is what makes the token single-use.

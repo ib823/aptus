@@ -37,7 +37,11 @@ vi.mock("@/lib/db/prisma", () => {
     solution: { findFirst: mocks.solutionFindFirst },
     solutionClient: { findFirst: mocks.clientFindFirst },
     // A pending request matches one interface, so its decision binds it (P0.1).
-    interface: { findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }] },
+    // The §1.2 sign-off check reads the bound interface (P1.2): a catalogue one, which needs none.
+    interface: {
+      findMany: async () => [{ id: "if_1", sapProduct: "s4hana" }],
+      findFirst: async () => ({ sapProduct: "s4hana", externalId: "API_X", servicePath: null, apiPolicySignOff: null }),
+    },
     // Owners are live members unless named departed (A69, owner-liveness.ts).
     user: {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) =>

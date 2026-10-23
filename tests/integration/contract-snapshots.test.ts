@@ -99,7 +99,7 @@ async function record(input: {
   const heads = await loadRecordHeads(input.scope, input.iface, input.environment ?? null);
   const prepared = recordableContract(input.contract, undefined, input.iface.entitySet, heads);
   if (!prepared.ok) return { status: "TOO_LARGE" };
-  return recordContractSnapshot({ ...input, contract: prepared, heads });
+  return recordContractSnapshot({ ...input, contract: prepared, heads, origin: "VERIFY" });
 }
 
 /** What a verify's record job answers for a description (or a contract), with the heads it was diffed against. */
@@ -724,13 +724,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("ContractSnapshot, against real 
       contract: prod,
       heads: prodHeads,
       environment: "PROD",
+      origin: "VERIFY",
       alsoWrite: async () => {
         inside();
         await held;
       },
     });
     await isInside;
-    const devRecord = recordContractSnapshot({ scope, iface, contract: dev, heads: devHeads, environment: "DEV" });
+    const devRecord = recordContractSnapshot({ scope, iface, contract: dev, heads: devHeads, environment: "DEV", origin: "VERIFY" });
     // Until the DEV record waits on a lock (the interface's row now; X's row, which PROD nulled, before).
     for (let i = 0; i < 150; i++) {
       const [waiting] = await prisma.$queryRaw<{ n: number }[]>`

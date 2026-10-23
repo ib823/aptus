@@ -75,6 +75,11 @@ the same contract twice: `openapi.json` (OpenAPI 3.1) and `openapi-3.0.json`
 is under Solutions → Functional → Northbound contract, and
 `GET /interfaces/{id}/schema` adds `contract` (its source, version and JSON
 Schemas) and, for a write interface, `requestSchema`, the body a write sends.
+`contract.describedBy` says what described it: `"tenant"` (the service's own
+`$metadata`, read from a tenant), `"upload"` (a description file a builder
+uploaded, not yet checked against any tenant) or `"sample"` (rows CoreEdge
+sampled). Treat an `"upload"` contract as a draft's: it becomes `"tenant"` the
+first time the service is verified.
 
 The documents describe the wire format: on an OData V2 service an `Int64`,
 `Decimal` or date arrives as a string (`"/Date(1717171717000)/"`), on V4 as a
@@ -241,6 +246,81 @@ Evidence level: traced in code and covered by unit tests
 `tests/unit/studio/verify-service-route.test.ts`); not yet run against a live
 tenant.
 
+### Finding your services on the tenant
+
+Discover → **On this tenant** lists the services your connection's own SAP
+Gateway catalogue reports (`/sap/opu/odata/IWFND/CATALOGSERVICE;v=2`), so you
+do not have to type a path you can read off the system. **Read the service
+list** reads it live, through the same governed console path as every other
+live read in Studio: your organisation's connection, its environment's rules
+(TEST, PROD and an undeclared environment need a live grant), the audit trail,
+and at most one listing per connection every two minutes. The answer is stored
+per connection, so the tab opens on the last listing, with who read it and
+when, without calling SAP again.
+
+The list is grouped:
+
+- **Customer-built**: `Z*` and `Y*` (developer extensibility) and `YY1_*` (key
+  user). **Register** opens *Register your own API* with the path the system
+  gave. A service whose address is on another host than your connection's is
+  listed without a path and cannot be registered from here.
+- **Published by SAP**: on the Business Accelerator Hub, curated in CoreEdge,
+  or in SAP's own communication scenario documentation, with the scenario
+  that enables it.
+- **Other SAP services, not Published APIs**: SAP's own services that SAP has
+  not published for customers. They have no action: SAP API Policy §1.2 does
+  not allow calling them.
+- **Unknown namespace**: a `/NAMESPACE/` SAP's sources do not use, so a
+  partner's or your own. Ask your Basis team which.
+
+What it does not do: it never requests an address the catalogue lists (paging
+is CoreEdge's own, and redirects are not followed), and it reads at most 5,000
+services, 10 pages and 8 MB in 20 seconds. On S/4HANA Cloud Public Edition it
+reads only the OData V2 catalogue: the V4 service groups are offered as an
+option on the other products. If the connection's user may not read the
+catalogue, the tab says so and offers the next section instead; it does not
+name a communication scenario to activate for it, because none is documented
+for that. Operator notes: `docs/runbooks/coreedge-tenant-discovery.md`.
+
+### Registering from a description file
+
+Discover → **From a file** registers an interface from the service's
+`$metadata` (EDMX, or CSDL JSON for V4), up to 4 MB, saved as UTF-8: export it
+from ADT or `/IWFND/MAINT_SERVICE`. CoreEdge compiles it in its contract
+worker and creates a **DRAFT** interface with contract 1.0.0, without
+contacting any SAP system and without a communication arrangement. The
+dataset picker is filled from the file; the server checks it again. The same
+fields and rules apply as for *Register your own API* (or name a catalogue
+service by its Hub id instead of a path).
+
+The interface is a draft until the service is verified on a tenant:
+Interfaces shows its contract as *from file, not verified*, and `/schema`
+answers `contract.describedBy: "upload"`. The first verify reads the tenant's
+own description; if it matches the file the contract is unchanged, and if it
+differs the tenant's is recorded under a new version. Writes need a
+verification, as for any service of your own.
+
+### SAP API Policy §1.2 sign-off (S/4HANA Cloud Public Edition)
+
+SAP's API Policy (§1.2) lets a customer call, on S/4HANA Cloud Public Edition,
+the APIs SAP publishes and the ones the customer built, and not SAP's other
+services. For an interface registered by its own path, or naming a `Z*`, `Y*`
+or `YY1_*` service, on that product, a builder records on the interface
+(Interfaces → *SAP API Policy §1.2* → **Record**) which basis applies: the
+service is permitted by SAP's documentation for the product, SAP authorised it
+(with the reference), or another basis (with the reference). It asks for a
+passkey confirmation, as an access decision does (enforced where the
+deployment enforces step-up), and it must be someone other than the person
+who registered the interface. A change of the service clears it.
+
+What happens without one depends on the deployment
+(`COREEDGE_API_POLICY_SIGNOFF`). By default (`observe`) nothing is refused:
+a grant decision's audit row records the missing sign-off, and a call through
+the interface is logged for the operator. Under
+`enforce`, approving access is refused and the data routes answer
+`403 API_POLICY_SIGN_OFF_REQUIRED`. Operator notes:
+`docs/runbooks/coreedge-api-policy.md`.
+
 So the rule stands — **CoreEdge governs the OData your ABAP exposes; it does not
 build your ABAP.** If a service is not probeable (no OData endpoint — SOAP, async,
 RFC-only), it shows as *Not probeable* rather than being silently marked
@@ -255,9 +335,11 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 - **No in-browser editing.** The scaffold produces downloads; there is no
   workspace, no terminal, no deploy button.
 - **No updates to existing records.** Writes create; see *Writing to SAP*.
-- **No discovery of the tenant's own services.** A service outside SAP's published
-  catalogue (your `Z*` or `YY1_*`) is registered by its path, not found for you:
-  see *Your own services* (P1.2 adds discovery from the tenant's own catalogue).
+- **No listing beyond what the catalogue grants.** Discover lists the tenant's
+  own services only when the connection's user may read its Gateway catalogue,
+  and never the V4 service groups on S/4HANA Cloud Public Edition; otherwise
+  register a service by its path or from its description file. See *Finding
+  your services on the tenant*.
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -297,6 +379,7 @@ help.
 | `401` | `UNAUTHENTICATED` | The token is missing, unknown, revoked or expired | **No.** Fix the token |
 | `403` | `FORBIDDEN` | Not set up: no approved grant for this call; or the customer's SAP connection cannot sign in — a credential is missing, its token endpoint refused it, or its token URL is wrong; or SAP itself refused (401/403) | **No.** Fix access or the connection, then call again |
 | `403` | `CONNECTION_NOT_CONFIGURED` | The customer has not connected that SAP system for your environment | **No.** The customer connects it |
+| `403` | `API_POLICY_SIGN_OFF_REQUIRED` | The interface is one of the customer's own services on S/4HANA Cloud Public Edition and nobody has recorded the SAP API Policy §1.2 sign-off for it. Sent only where the deployment enforces the sign-off. Nothing was sent to SAP | **No.** A builder records the sign-off on the interface in Studio, then call again |
 | `404` | `NOT_FOUND` | No such interface for your credential, or the dataset does not exist on the tenant | **No.** |
 | `409` | `CONFLICT` (still in progress) | A write's `Idempotency-Key` is still being processed: your retry arrived while the first attempt was running. The response carries `Retry-After` | **Yes, after `Retry-After`, with the same key.** That returns the first attempt's outcome. Never re-send under a new key: the first attempt may still create the record. If it is still in progress after a few minutes, escalate with the `correlationId` |
 | `409` | `CONFLICT` (different write) | The `Idempotency-Key` was already used for a different payload or destination. No `Retry-After` | **No.** A different write takes a new key. See *Idempotency is not optional* |

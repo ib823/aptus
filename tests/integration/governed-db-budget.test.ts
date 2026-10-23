@@ -118,6 +118,8 @@ import { GET as consoleEntitiesRoute } from "@/app/api/sap/tdd/entities/route";
 import { GET as consoleHubItemRoute } from "@/app/api/sap/tdd/hub-content/[id]/route";
 import { GET as consoleHubListRoute } from "@/app/api/sap/tdd/hub-content/route";
 import { POST as consoleProbeAllRoute } from "@/app/api/sap/tdd/hub-content/probe-all/route";
+import { POST as consoleTenantServicesRoute } from "@/app/api/sap/tdd/tenant-services/route";
+import { GET as storedTenantServicesRoute } from "@/app/api/studio/tenant-services/route";
 import { GET as consoleOperationsRoute } from "@/app/api/sap/tdd/operations/route";
 import { GET as consolePreviewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
@@ -166,6 +168,12 @@ async function fakeSap(_input: string | URL | Request, init?: RequestInit): Prom
   sapSaw.push({ openInLog: q.open, idleInTransaction: Number(rows[0]?.n ?? 0) });
   const method = (init?.method ?? "GET").toUpperCase();
   const url = String(_input instanceof Request ? _input.url : _input);
+  if (url.includes("CATALOGSERVICE")) {
+    // P1.2: a tenant's own Gateway catalogue, one short page: a customer-built
+    // service and one this run's catalogue publishes.
+    const results = [{ ID: "ZUI_BUDGET_O2_0001" }, { ID: `API_${hub.tag}_A_SRV_0001` }];
+    return new Response(JSON.stringify({ d: { results } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
   if (url.includes("ariba.com")) {
     const body = url.includes("oauth/token") ? { access_token: "ariba-token" } : { content: [{ EventId: "Doc1" }] };
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -717,18 +725,27 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.status, report("console catalogue detail", c)).toBe(200);
       expect(c.total, report("console catalogue detail", c)).toBe(CONSOLE_ROUTE_STATEMENTS.catalogueDetailProbe);
       expect(consoleOwn(c), report("console catalogue detail", c)).toHaveLength(DB_BUDGET.consoleRead);
-      expect(routeOwn(c).every((s) => s.includes('"SapHubContent"')), report("console catalogue detail", c)).toBe(true);
+      // The catalogue row, and (P1.2) the scenarios SAP's table lists the service under.
+      expect(routeOwn(c).filter((s) => s.includes("sap:comm-scenarios")), report("console catalogue detail", c)).toHaveLength(1);
+      expect(
+        routeOwn(c).every((s) => s.includes('"SapHubContent"') || s.includes("sap:comm-scenarios")),
+        report("console catalogue detail", c),
+      ).toBe(true);
     });
 
     it("the catalogue list's live overlay adds one console read to the page's own catalogue statements", async () => {
       const c = await count(consoleGet(consoleHubListRoute, `/api/sap/tdd/hub-content?${S4}&tenant=${RUN}-dev&dataProbe=1&q=${hub.tag}`));
       expect(c.status, report("console catalogue overlay", c)).toBe(200);
       expect(consoleOwn(c), report("console catalogue overlay", c)).toHaveLength(DB_BUDGET.consoleRead);
-      // Everything else is the catalogue page: its rows, counts and the V4 addresses the overlay verified.
+      // Everything else is the catalogue page: its rows, counts, the V4 addresses the overlay verified,
+      // and (P1.2) one statement for the scenarios SAP's table lists the page's services under.
       expect(
-        routeOwn(c).every((s) => s.includes('"SapHubContent"') || s.includes('"CatalogueAddressVerification"')),
+        routeOwn(c).every(
+          (s) => s.includes('"SapHubContent"') || s.includes('"CatalogueAddressVerification"') || s.includes("sap:comm-scenarios"),
+        ),
         report("console catalogue overlay", c),
       ).toBe(true);
+      expect(routeOwn(c).filter((s) => s.includes("sap:comm-scenarios")), report("console catalogue overlay", c)).toHaveLength(1);
     });
 
     it("Probe all sends a fixed number of statements plus one per service it probed", async () => {
@@ -748,6 +765,31 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
         CONSOLE_ROUTE_STATEMENTS.probeAllFixed + CONSOLE_ROUTE_STATEMENTS.probeAllPerService * services,
       );
       expect(consoleOwn(c), report("console probe all", c)).toHaveLength(DB_BUDGET.consoleRead);
+    });
+
+    it("the live tenant service listing sends the console read's 4, its two classification reads and its upsert (P1.2)", async () => {
+      const c = await count(() =>
+        consoleTenantServicesRoute(
+          new NextRequest("http://localhost/api/sap/tdd/tenant-services", {
+            method: "POST",
+            body: JSON.stringify({ product: "s4hana", tenant: `${RUN}-dev` }),
+          }),
+        ),
+      );
+      expect(c.status, report("console tenant services", c)).toBe(200);
+      expect(c.total, report("console tenant services", c)).toBe(CONSOLE_ROUTE_STATEMENTS.tenantServiceList);
+      expect(consoleOwn(c), report("console tenant services", c)).toHaveLength(DB_BUDGET.consoleRead);
+      const own = routeOwn(c);
+      expect(own.filter((s) => s.includes('"SapHubContent"')), report("console tenant services", c)).toHaveLength(1);
+      expect(own.filter((s) => s.includes("sap:comm-scenarios")), report("console tenant services", c)).toHaveLength(1);
+      expect(own.filter((s) => s.includes('"TenantServiceListing"')), report("console tenant services", c)).toHaveLength(1);
+    });
+
+    it("the stored tenant service listing reads the database only: no SAP request, no audit row (P1.2)", async () => {
+      const c = await count(consoleGet(storedTenantServicesRoute, `/api/studio/tenant-services?${S4}&tenant=${RUN}-dev`));
+      expect(c.status, report("stored tenant services", c)).toBe(200);
+      expect(c.total, report("stored tenant services", c)).toBe(CONSOLE_ROUTE_STATEMENTS.tenantServiceListStored);
+      expect(c.response.some((s) => s.includes('"NorthboundAuditEvent"') || s.includes("governed:console-read-audit"))).toBe(false);
     });
 
     it("an Ariba call reads no connection and writes no organization row", async () => {

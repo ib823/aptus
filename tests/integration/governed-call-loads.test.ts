@@ -135,7 +135,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
           },
         })
       ).id;
-    ids.ifaceA = await iface(A, ids.solA, "s4hana", { servicePath: null });
+    // P1.2: the §1.2 sign-off rides in the same statement, read as stored.
+    ids.ifaceA = await iface(A, ids.solA, "s4hana", { servicePath: null, apiPolicySignOff: { policy: "p", serviceIdentity: "purchase-orders" } });
     ids.ifaceOtherProduct = await iface(A, ids.solA, "s4hana-onprem");
     ids.ifaceB = await iface(B, ids.solB, "s4hana");
 
@@ -255,6 +256,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed call loads agree w
     // solution's row is left out.
     expect(counts).toEqual({ grants: 3, connections: 2 });
     expect(sql.iface?.serviceVerifications).toEqual({ DEV: [{ at: "2026-10-01T00:00:00.000Z", connectionId: "c" }] });
+    expect(sql.iface?.apiPolicySignOff).toEqual({ policy: "p", serviceIdentity: "purchase-orders" });
   });
 
   it("reads no connection unless asked", async () => {

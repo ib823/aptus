@@ -23,6 +23,10 @@ export type StudioErrorCode =
   | "RATE_LIMITED"
   /** The Contract Compiler could not take the job just now (busy, turned off); a retry may succeed. */
   | "UNAVAILABLE"
+  /** A request body past its stated size, refused before it was read in full (P1.2's description upload). */
+  | "PAYLOAD_TOO_LARGE"
+  /** Well formed, and refused for what it says: a description the Contract Compiler would not compile (P1.2). */
+  | "UNPROCESSABLE"
   | "INTERNAL";
 
 const STATUS: Record<StudioErrorCode, number> = {
@@ -34,6 +38,8 @@ const STATUS: Record<StudioErrorCode, number> = {
   TOO_LARGE: 422,
   RATE_LIMITED: 429,
   UNAVAILABLE: 503,
+  PAYLOAD_TOO_LARGE: 413,
+  UNPROCESSABLE: 422,
   INTERNAL: 500,
 };
 

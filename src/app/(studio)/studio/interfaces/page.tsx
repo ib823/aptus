@@ -22,6 +22,9 @@ import {
 } from "@/components/studio/InterfacesClient";
 import { getCurrentUser } from "@/lib/auth/session";
 import { idsWithRequestSchema } from "@/lib/contracts/record";
+import { currentSnapshotSummaries, type CurrentSnapshotSummary } from "@/lib/contracts/snapshot";
+import { currentSignOff, policySignOffRequired } from "@/lib/studio/api-policy";
+import { tenantScopeFor } from "@/lib/studio/tenant-scope";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeEnvironment } from "@/lib/sap-public/connection-resolver";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
@@ -40,6 +43,26 @@ import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studi
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Interfaces" };
+
+/** The recorded contract, as the screen says it: its version and who described it (P1.2). */
+function contractOf(s: CurrentSnapshotSummary | undefined): NonNullable<StudioInterface["contract"]> | null {
+  if (!s) return null;
+  return { semver: s.semver, describedBy: s.source === "SAMPLED" ? "sample" : s.origin === "UPLOAD" ? "upload" : "tenant" };
+}
+
+/** The §1.2 sign-off's state, for an interface that needs one (P1.2); nothing for one that does not. */
+function policySignOffOf(
+  r: { sapProduct: string; externalId: string; servicePath: string | null; apiPolicySignOff: unknown },
+  names: ReadonlyMap<string, string>,
+): Pick<StudioInterface, "policySignOff"> {
+  if (!policySignOffRequired(r)) return {};
+  const signed = currentSignOff(r);
+  return {
+    policySignOff: signed
+      ? { signed: { by: names.get(signed.signedById) ?? null, at: signed.signedAt, basis: signed.basis, reference: signed.reference } }
+      : { signed: null },
+  };
+}
 
 export default async function StudioInterfacesPage({
   searchParams,
@@ -77,6 +100,8 @@ export default async function StudioInterfacesPage({
             serviceVerifiedEnvironment: true,
             serviceVerifiedEntitySets: true,
             serviceVerifications: true,
+            // The §1.2 sign-off (P1.2): shown, and signed, on the interface.
+            apiPolicySignOff: true,
             solution: { select: { name: true } },
           },
           orderBy: [{ updatedAt: "desc" }],
@@ -215,6 +240,19 @@ export default async function StudioInterfacesPage({
 
   // Where each stored response schema stands, read from its stamp in the database.
   const schemaStates = organizationId ? await responseSchemaStates(organizationId, rows) : new Map<string, SchemaState>();
+  /*
+   * P1.2: each interface's recorded contract and who described it (a tenant,
+   * an uploaded file, a sample), one statement without any IR; and the names
+   * of the people who signed a §1.2 sign-off, one more.
+   */
+  const scoped = tenantScopeFor(user);
+  const contracts = scoped.ok ? await currentSnapshotSummaries(scoped.scope, rows) : new Map<string, CurrentSnapshotSummary>();
+  const signers = [...new Set(rows.map((r) => currentSignOff(r)?.signedById).filter((id): id is string => !!id))];
+  const signerNames = new Map(
+    (signers.length > 0 ? await prisma.user.findMany({ where: { id: { in: signers } }, select: { id: true, name: true, email: true } }) : []).map(
+      (u) => [u.id, u.name ?? u.email],
+    ),
+  );
 
   const interfaces: StudioInterface[] = rows.map((r) => ({
     id: r.id,
@@ -241,6 +279,8 @@ export default async function StudioInterfacesPage({
     serviceVerifiedEntitySets: Array.isArray(r.serviceVerifiedEntitySets)
       ? r.serviceVerifiedEntitySets.filter((n): n is string => typeof n === "string")
       : null,
+    contract: contractOf(contracts.get(r.id)),
+    ...policySignOffOf(r, signerNames),
     ...(r.operation === "READ"
       ? {}
       : {

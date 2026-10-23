@@ -34,6 +34,14 @@ import {
   recordAddressProbe,
 } from "@/lib/sap-public/catalogue-address-verification";
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
+import {
+  askBasisApplies,
+  SCENARIO_SOURCE,
+  SCENARIO_TABLE_PRODUCT,
+  scenariosForServices,
+  technicalIdsForAddress,
+  type AskBasis,
+} from "@/lib/sap-public/comm-scenarios";
 import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { openConsoleCall } from "@/lib/governed/console";
@@ -276,6 +284,30 @@ export async function GET(
     family,
   );
 
+  /*
+   * P1.2 — ASK BASIS. The SAP communication scenarios SAP's own table lists
+   * this service under (comm-scenarios.ts), on S/4HANA Cloud Public Edition,
+   * joined by the technical id of the exact address CoreEdge calls (never a
+   * derived V4 guess). A call to action while the service is not shown as
+   * activated here; information once it is. One statement, only for a row
+   * with a joinable address.
+   */
+  let askBasis: (AskBasis & { technicalId: string }) | null = null;
+  if (product.key === SCENARIO_TABLE_PRODUCT && address && address.basis !== "derived") {
+    const ids = technicalIdsForAddress(address);
+    const join = ids.length > 0 ? await scenariosForServices(prisma, ids) : null;
+    const technicalId = join ? ids.find((i) => (join.byId.get(i)?.length ?? 0) > 0) : undefined;
+    if (join && technicalId) {
+      askBasis = {
+        action: askBasisApplies(status),
+        scenarios: join.byId.get(technicalId)!,
+        release: join.release,
+        source: SCENARIO_SOURCE,
+        technicalId,
+      };
+    }
+  }
+
   // P0.8 — whether this V4 address has answered 200 on THIS system (read after
   // the live probe above, so its own 200 counts).
   let verifiedAt: string | null = null;
@@ -323,6 +355,8 @@ export async function GET(
       metadataFlavor,
       probeStatus,
       dependencies,
+      // Additive (P1.2): the scenarios that enable this service, and whether asking Basis is the next step.
+      askBasis,
       steps,
       tenant: tenant?.label ?? null,
     },

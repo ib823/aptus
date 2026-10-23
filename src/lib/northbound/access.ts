@@ -54,6 +54,7 @@ import {
   type GrantedInterface,
 } from "@/lib/studio/grant-binding";
 import type { TenantScope } from "@/lib/studio/tenant-scope";
+import { apiPolicySignOffMode, policySignOffMissing } from "@/lib/studio/api-policy";
 
 // The names this module has always exported, now defined beside the decision.
 export type { AccessibleInterface, AccessRefusal };
@@ -111,6 +112,8 @@ export const READABLE_INTERFACE_SELECT = {
   // Judged against an unbound grant's legacy cut-off (grant-binding.ts).
   createdAt: true,
   grantMatchChangedAt: true,
+  // The §1.2 sign-off (P1.2), judged by authorisesHere where it is enforced.
+  apiPolicySignOff: true,
 } as const;
 
 /** The interface fields the read decision judges. */
@@ -180,6 +183,15 @@ async function resolveAccess(
   const decision = authorisesHere({ iface, solutionId, environment, route, grants, now });
   if (!decision.ok) return decision;
   await noteLegacyAuthority(scope, decision.authorising, iface, now);
+  // Observed, not refused (P1.2): what enforce would refuse, said in the log
+  // the operator reads before switching (docs/runbooks/coreedge-api-policy.md).
+  if (apiPolicySignOffMode() === "observe" && policySignOffMissing(iface)) {
+    console.warn("[api-policy] a call was served on a customer-built S/4 Public service with no §1.2 sign-off; COREEDGE_API_POLICY_SIGNOFF=enforce would refuse it", {
+      organizationId: scope.organizationId,
+      interfaceId: iface.id,
+      policySignOffMissing: true,
+    });
+  }
   return { ok: true, iface: decision.iface, ...connectionsOf(loaded) };
 }
 

@@ -109,6 +109,12 @@ export const NORTHBOUND_ERROR_CODES = {
       "The request's CoreEdge-Version header names a version this deployment does not serve: unknown, or retired at its Sunset date. Refused before the route does anything else (no credential check, no idempotency reservation, nothing sent to SAP); `error.supportedVersions` lists what may be sent (P1.10).",
     action: "Send one of error.supportedVersions, or omit the header to be served the default. Do not retry unchanged.",
   },
+  API_POLICY_SIGN_OFF_REQUIRED: {
+    statuses: [403],
+    meaning:
+      "The interface calls a service the customer built on SAP S/4HANA Cloud Public Edition, and no SAP API Policy §1.2 sign-off is recorded for it, so nothing was sent to SAP (P1.2). Sent only where the deployment enforces the sign-off.",
+    action: "Ask the solution's builder to record the sign-off on the interface in Studio. Do not retry.",
+  },
   INTERNAL: {
     statuses: [500],
     meaning: "CoreEdge itself failed.",
@@ -151,6 +157,7 @@ const ACCESS_REASONS = {
   INTERFACE_NOT_ACTIVE: { code: "FORBIDDEN", status: 403 },
   OPERATION_NOT_SUPPORTED: { code: "VALIDATION_ERROR", status: 400 },
   WRITE_NOT_SERVED: { code: "FORBIDDEN", status: 403 },
+  API_POLICY_SIGN_OFF_REQUIRED: { code: "API_POLICY_SIGN_OFF_REQUIRED", status: 403, origin: "P1.2" },
 } as const satisfies Record<AccessRefusal, { code: NorthboundErrorCode; status: number; origin?: string }>;
 
 /**

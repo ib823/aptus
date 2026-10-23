@@ -279,6 +279,13 @@ export const RATE_LIMITS = {
    */
   northboundSchemaPerOrg: { limit: 120, windowMs: 60 * 1000 },
   /**
+   * P1.2's description upload, per ORGANISATION: each one reads up to 4 MiB
+   * and runs a Contract Compiler job, which the organisation's daily compiler
+   * time bounds as well. Twenty an hour [estimate] is a team registering
+   * services by hand, not a script.
+   */
+  descriptionUpload: { limit: 20, windowMs: 60 * 60 * 1000 },
+  /**
    * The edge bucket for an authenticated MACHINE route, keyed by the credential
    * PRESENTED (a hash of the bearer, see machineCredentialKey) rather than the
    * caller's address (audit A43, P0.5). A ceiling, not the budget: the route's
@@ -426,6 +433,10 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
     (/^\/api\/sap\/tdd\/hub-content\/[^/]+$/.test(pathname) &&
       !/\/(seed|harvest-import|api-reference-import|probe-all)$/.test(pathname)) ||
     pathname === "/api/sap/tdd/capabilities" ||
+    // P1.2's live service listing: up to ten catalogue pages from a client's
+    // system. Its stored read is a Studio route (/api/studio/tenant-services),
+    // so opening Discover spends no slot here.
+    pathname === "/api/sap/tdd/tenant-services" ||
     // The guarded write-back: a CSRF handshake plus a POST against the tenant.
     // Its GET returns feature flags only and is cheap, but the predicate is
     // pathname-only by design, so the whole path takes the bucket.

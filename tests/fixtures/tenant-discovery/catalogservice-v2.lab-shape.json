@@ -1,0 +1,59 @@
+{
+  "_synthetic": "SYNTHETIC, NOT RECORDED FROM A SYSTEM. The shape of an OData V2 Gateway ServiceCollection page ($format=json) as SAP Help's Catalog Service page describes it, with the services the lab is expected to list. Replace it with the redacted recording of the first live listing (docs/runbooks/coreedge-tenant-discovery.md). Host lab.example.invalid stands for the connection's own host.",
+  "d": {
+    "results": [
+      {
+        "__metadata": { "id": "https://lab.example.invalid/sap/opu/odata/IWFND/CATALOGSERVICE;v=2/ServiceCollection('ZUI_TRAVEL_O2_0001')", "type": "CATALOGSERVICE.Service" },
+        "ID": "ZUI_TRAVEL_O2_0001",
+        "Title": "Travel bookings (RAP)",
+        "TechnicalServiceName": "ZUI_TRAVEL_O2",
+        "TechnicalServiceVersion": 1,
+        "ServiceUrl": "https://lab.example.invalid/sap/opu/odata/sap/ZUI_TRAVEL_O2/?sap-client=100"
+      },
+      {
+        "ID": "Z_BONUS_PLAN_0001",
+        "Title": "Bonus plans",
+        "TechnicalServiceName": "Z_BONUS_PLAN",
+        "TechnicalServiceVersion": 1,
+        "ServiceUrl": "https://elsewhere.example.invalid/sap/opu/odata/sap/Z_BONUS_PLAN/"
+      },
+      {
+        "ID": "YY1_SALESBONUS_CDS_0001",
+        "Title": "Sales bonus (custom CDS view)",
+        "TechnicalServiceName": "YY1_SALESBONUS_CDS",
+        "TechnicalServiceVersion": "1",
+        "ServiceUrl": "/sap/opu/odata/sap/YY1_SALESBONUS_CDS/"
+      },
+      {
+        "ID": "API_BUSINESS_PARTNER_0001",
+        "Title": "Business Partner (A2X)",
+        "TechnicalServiceName": "API_BUSINESS_PARTNER",
+        "TechnicalServiceVersion": 1
+      },
+      {
+        "ID": "C_PURCHASEORDER_FS_SRV_0001",
+        "Title": "Purchase order (Fiori app service)",
+        "TechnicalServiceName": "C_PURCHASEORDER_FS_SRV",
+        "TechnicalServiceVersion": 1
+      },
+      {
+        "ID": "/CPD/SC_PROJ_ENGMT_CREATE_UPD_SRV_0001",
+        "Title": "Commercial project",
+        "TechnicalServiceName": "/CPD/SC_PROJ_ENGMT_CREATE_UPD_SRV",
+        "TechnicalServiceVersion": 1
+      },
+      {
+        "ID": "/ACME/ORDERS_SRV_0001",
+        "Title": "Orders (partner add-on)",
+        "TechnicalServiceName": "/ACME/ORDERS_SRV",
+        "TechnicalServiceVersion": 1
+      },
+      {
+        "ID": "/IWFND/SG_MED_CATALOG_0002",
+        "Title": "Catalog service",
+        "TechnicalServiceName": "/IWFND/SG_MED_CATALOG",
+        "TechnicalServiceVersion": 2
+      }
+    ]
+  }
+}

@@ -70,6 +70,14 @@ import { JSON_TEXT_PLACEHOLDER, setJsonText, type RawExecutor } from "@/lib/db/j
 import { prisma } from "@/lib/db/prisma";
 import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
+/**
+ * How a snapshot's description reached CoreEdge (P1.2): a tenant answered a
+ * verify, sampled rows of a run, or a file a builder uploaded with no tenant
+ * asked. Null on a row recorded before P1.2.
+ */
+export const SNAPSHOT_ORIGINS = ["VERIFY", "CAPTURE", "UPLOAD"] as const;
+export type SnapshotOrigin = (typeof SNAPSHOT_ORIGINS)[number];
+
 export interface SnapshotSummary {
   id: string;
   semver: string;
@@ -80,6 +88,7 @@ export interface SnapshotSummary {
   externalId: string;
   interfaceVersion: number;
   createdAt: Date;
+  origin: SnapshotOrigin | null;
 }
 
 /** What a recorded version's diff says to the verify: its bump and its first changes, as sentences. */
@@ -113,6 +122,7 @@ const SUMMARY_SELECT = {
   externalId: true,
   interfaceVersion: true,
   createdAt: true,
+  origin: true,
 } as const;
 
 const NEWEST_FIRST = [{ semverMajor: "desc" }, { semverMinor: "desc" }, { semverPatch: "desc" }] as const;
@@ -134,6 +144,7 @@ function summary(row: {
   externalId: string;
   interfaceVersion: number;
   createdAt: Date;
+  origin?: string | null;
 }): SnapshotSummary {
   return {
     id: row.id,
@@ -145,6 +156,7 @@ function summary(row: {
     externalId: row.externalId,
     interfaceVersion: row.interfaceVersion,
     createdAt: row.createdAt,
+    origin: (SNAPSHOT_ORIGINS as readonly string[]).includes(row.origin ?? "") ? (row.origin as SnapshotOrigin) : null,
   };
 }
 
@@ -271,6 +283,8 @@ export async function recordContractSnapshot(input: {
   environment?: string | null;
   connectionId?: string | null;
   createdById?: string | null;
+  /** How the description reached CoreEdge (P1.2); every recorder names it. */
+  origin: SnapshotOrigin;
   alsoWrite?: AlsoWrite;
 }): Promise<RecordOutcome> {
   const { scope, iface, contract } = input;
@@ -346,34 +360,34 @@ export async function recordContractSnapshot(input: {
         await tx.$executeRaw(Prisma.sql`SELECT 1 FROM "Interface" WHERE "id" = ${iface.id} AND "organizationId" = ${scope.organizationId} FOR NO KEY UPDATE`);
         let result: Extract<RecordOutcome, { status: "RECORDED" | "UNCHANGED" }> | null = outcome;
         if (result === null) {
-          const [semverMajor, semverMinor, semverPatch] = semverParts(next!.semver);
-          const row = await tx.contractSnapshot.create({
-            data: {
-              organizationId: scope.organizationId,
-              interfaceId: iface.id,
-              interfaceVersion: iface.version,
-              externalId: iface.externalId,
-              entitySet: iface.entitySet,
-              source: contract.facts.source,
-              odataVersion: contract.facts.odataVersion,
-              semver: next!.semver,
-              semverMajor,
-              semverMinor,
-              semverPatch,
-              contentHash: hash,
-              ir: JSON_TEXT_PLACEHOLDER,
-              irVersion: contract.facts.irVersion,
-              diff: Prisma.DbNull,
-              irBytes: contract.bytes,
-              environment,
-              connectionId: input.connectionId ?? null,
-              createdById: input.createdById ?? null,
-            },
-            select: SUMMARY_SELECT,
+          const row = await insertSnapshotRow(tx, {
+            scope,
+            iface,
+            contract,
+            semver: next!.semver,
+            diffText: next!.diffText,
+            environment,
+            connectionId: input.connectionId ?? null,
+            createdById: input.createdById ?? null,
+            origin: input.origin,
           });
-          // The IR and the diff from their text (json-text.ts): PostgreSQL parses them, this thread copies a string.
-          await setJsonText(tx, "ContractSnapshot", { id: row.id, organizationId: scope.organizationId }, { ir: textOf(contract.ir), diff: next!.diffText });
-          result = { status: "RECORDED", snapshot: summary(row), diff: next!.diff };
+          result = { status: "RECORDED", snapshot: row, diff: next!.diff };
+        } else if (input.origin === "VERIFY" && result.snapshot.origin === "UPLOAD") {
+          /*
+           * A TENANT CONFIRMS AN UPLOAD (P1.2, review round 1). A verify that
+           * finds the uploaded description unchanged is the first time a
+           * system served it, so the row becomes what this verify would have
+           * recorded: its origin, environment and connection. /schema and
+           * Studio then say a tenant described it, as the developer guide
+           * promises; the CREATE audit row keeps the upload's sha256 as its
+           * provenance. Guarded by origin: a verify the interface lock queued
+           * behind another one changes nothing the first did not.
+           */
+          await tx.contractSnapshot.updateMany({
+            where: { id: result.snapshot.id, organizationId: scope.organizationId, origin: "UPLOAD" },
+            data: { origin: "VERIFY", environment, connectionId: input.connectionId ?? null },
+          });
+          result = { ...result, snapshot: { ...result.snapshot, origin: "VERIFY" } };
         }
         const current = await currentIn(tx, scope, iface);
         /*
@@ -404,8 +418,60 @@ export async function recordContractSnapshot(input: {
   return { status: "REFUSED", detail: HISTORY_MOVED };
 }
 
+/**
+ * Write one snapshot row, its IR and its diff, in the caller's transaction:
+ * the create, then the IR and diff from their text (json-text.ts: PostgreSQL
+ * parses them, this thread copies a string). What recordContractSnapshot
+ * writes for a new version, and what an upload writes for an interface's
+ * first (contracts/upload.ts), so the two cannot write different rows.
+ */
+export async function insertSnapshotRow(
+  tx: Prisma.TransactionClient,
+  input: {
+    scope: TenantScope;
+    iface: { id: string; version: number; externalId: string; entitySet: string };
+    contract: Extract<RecordableContract, { ok: true }>;
+    semver: string;
+    diffText: string | null;
+    environment: string | null;
+    connectionId: string | null;
+    createdById: string | null;
+    origin: SnapshotOrigin;
+  },
+): Promise<SnapshotSummary> {
+  const { scope, iface, contract } = input;
+  const [semverMajor, semverMinor, semverPatch] = semverParts(input.semver);
+  const row = await tx.contractSnapshot.create({
+    data: {
+      organizationId: scope.organizationId,
+      interfaceId: iface.id,
+      interfaceVersion: iface.version,
+      externalId: iface.externalId,
+      entitySet: iface.entitySet,
+      source: contract.facts.source,
+      odataVersion: contract.facts.odataVersion,
+      semver: input.semver,
+      semverMajor,
+      semverMinor,
+      semverPatch,
+      contentHash: contract.hash,
+      ir: JSON_TEXT_PLACEHOLDER,
+      irVersion: contract.facts.irVersion,
+      diff: Prisma.DbNull,
+      irBytes: contract.bytes,
+      environment: input.environment,
+      connectionId: input.connectionId,
+      createdById: input.createdById,
+      origin: input.origin,
+    },
+    select: SUMMARY_SELECT,
+  });
+  await setJsonText(tx, "ContractSnapshot", { id: row.id, organizationId: scope.organizationId }, { ir: textOf(contract.ir), diff: input.diffText });
+  return summary(row);
+}
+
 /** Put the /schema texts on one row of the interface, and take them off every other. */
-async function setSchemaTexts(
+export async function setSchemaTexts(
   tx: RawExecutor,
   scope: TenantScope,
   interfaceId: string,
@@ -493,7 +559,7 @@ export async function currentSnapshotSummaries(
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT DISTINCT ON (s."interfaceId")
       s."interfaceId", s."id", s."semver", s."contentHash", s."source", s."odataVersion", s."entitySet", s."externalId",
-      s."interfaceVersion", s."createdAt", s."irBytes",
+      s."interfaceVersion", s."createdAt", s."origin", s."irBytes",
       octet_length(s."schemasText") AS "schemasBytes", octet_length(s."createBodyText") AS "createBodyBytes",
       octet_length(s."updateBodyText") AS "updateBodyBytes"
     FROM "ContractSnapshot" s

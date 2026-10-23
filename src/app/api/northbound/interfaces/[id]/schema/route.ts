@@ -26,6 +26,8 @@
  * here. `requestSchema`, null until now because nothing wrote it, is the
  * compiled body of a write interface's write, served while it describes the
  * current contract. Every field that was here before means what it meant.
+ * `contract.describedBy` (P1.2) says who described it: a tenant, a builder's
+ * upload that no tenant has served yet, or a sample.
  *
  * NEVER RENDERED HERE (P1.3, the Contract Compiler's containment). This is
  * the one high-frequency, consumer-facing read of a contract, so it renders
@@ -253,6 +255,9 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
   const contract = servable
     ? {
         source: servable.source === "METADATA" ? ("metadata" as const) : ("sampled" as const),
+        // Additive (P1.2): who described it. An uploaded description is a
+        // service description ("metadata"), but no tenant has served it yet.
+        describedBy: servable.source === "SAMPLED" ? ("sample" as const) : servable.origin === "UPLOAD" ? ("upload" as const) : ("tenant" as const),
         semver: servable.semver,
         snapshotId: servable.id,
         contentHash: servable.contentHash,
@@ -282,6 +287,7 @@ async function readSchema(request: NextRequest, ctx: { params: Promise<{ id: str
         // No snapshot to serve: the captured schema (responseSchema, above)
         // is all there is, or nothing is.
         source: schemaState === "current" ? ("sampled" as const) : ("none" as const),
+        ...(schemaState === "current" ? { describedBy: "sample" as const } : {}),
         semver: null,
         snapshotId: null,
         contentHash: null,

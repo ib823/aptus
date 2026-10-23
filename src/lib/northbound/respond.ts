@@ -81,6 +81,13 @@ export type NorthboundErrorCode =
    * runs, with `supportedVersions` beside the message (versioned-route.ts).
    */
   | "UNSUPPORTED_VERSION"
+  /**
+   * The interface calls a customer-built service on SAP S/4HANA Cloud Public
+   * Edition and no SAP API Policy §1.2 sign-off is recorded for it (P1.2): 403,
+   * nothing sent to SAP. Answered only when COREEDGE_API_POLICY_SIGNOFF=enforce;
+   * the default observes and never refuses (studio/api-policy.ts).
+   */
+  | "API_POLICY_SIGN_OFF_REQUIRED"
   | "INTERNAL";
 
 export function newCorrelationId(): string {

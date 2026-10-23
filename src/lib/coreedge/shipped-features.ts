@@ -434,6 +434,22 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
     terms: [/\bContract Compiler\b/i, /\bContractSnapshot\b/, /\bcontract snapshots?\b/i, /\bopenapi-3\.0\.json\b/],
   },
   {
+    id: "tenant-discovery",
+    name: "The tenant's own services listed from its Gateway catalogue, and registration from a description file",
+    roadmap: "P1.2",
+    cells: ["lifecycle:DISCOVER"],
+    code: {
+      file: "src/lib/sap-public/tenant-discovery.ts",
+      exports: ["parseServiceCollectionPage", "servicePathFromEntry", "classifyService"],
+    },
+    terms: [
+      /\bTenantServiceListing\b/,
+      /\btenant service discovery\b/i,
+      /\bdiscovery from the tenant'?s (?:own )?(?:Gateway )?catalogue\b/i,
+      /\b(?:register(?:ed|ing)?|registration) from (?:an )?(?:uploaded )?(?:EDMX|description file)\b/i,
+    ],
+  },
+  {
     id: "api-versioning",
     name: "Northbound API versions, deprecation headers and the changelog",
     roadmap: "P1.10",

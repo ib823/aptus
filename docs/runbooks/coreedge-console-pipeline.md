@@ -11,8 +11,10 @@ side doors (A.3 #9).
 routes under `/api/sap/tdd/*` and `/api/sap/ariba/*` that call SAP or Ariba
 (preview, entities, operations, capabilities, the catalogue's live overlay and
 detail probe, Probe all, the Ariba explorer call, the write-back and the
-write-test) open a console call (`openConsoleCall`,
-`src/lib/governed/console.ts`) and run its steps in order:
+write-test), and since P1.2 the tenant's service list
+(`/api/sap/tdd/tenant-services`, `docs/runbooks/coreedge-tenant-discovery.md`),
+open a console call (`openConsoleCall`, `src/lib/governed/console.ts`) and run
+its steps in order:
 
 | Step | What it decides | Refusal (HTTP status) |
 |---|---|---|
