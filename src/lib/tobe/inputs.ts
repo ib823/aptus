@@ -198,7 +198,10 @@ export async function loadTobeInputs(
 
   const scenarioIds = Array.from(new Set(linkRows.map((l) => l.commScenarioId)));
   const scenarios = await db.sapCommScenario.findMany({
-    where: { commScenarioId: { in: scenarioIds } },
+    // THIS RELEASE'S ROWS ONLY (P1.2). Scenarios are loaded per content
+    // release and two may be; without the release a scenario loaded for both
+    // came back twice and the map below kept whichever was read last.
+    where: { commScenarioId: { in: scenarioIds }, contentRelease: { release } },
     select: {
       commScenarioId: true,
       name: true,

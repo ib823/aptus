@@ -11,6 +11,7 @@ import { deprecationTooltip, type HubContentType, type HubStatus } from "@/lib/s
 import { formatDate } from "@/lib/format/date";
 import { ProcessBlueprintView, type BlueprintStep } from "./ProcessBlueprintView";
 import { CapabilityChips } from "./CapabilityChips";
+import { AskBasisPanel, type AskBasisData } from "./AskBasisPanel";
 
 interface EntityCap {
   name: string;
@@ -56,6 +57,10 @@ interface DetailData {
     debugHint: string;
   };
   steps: BlueprintStep[];
+  /** P1.2: the SAP communication scenarios that enable the service (S/4 Public), or null. */
+  askBasis?: AskBasisData | null;
+  /** The tenant's display label the detail was read for. */
+  tenant?: string | null;
 }
 
 const LADDER = ["reachable", "readable", "writable"] as const;
@@ -428,6 +433,9 @@ export function CapabilityDetail({
                 ))}
               </div>
             )}
+            {data.askBasis ? (
+              <AskBasisPanel data={data.askBasis} serviceLabel={data.item.title} connectionLabel={data.tenant ?? null} />
+            ) : null}
             {data.dependencies.prerequisiteScopeItems.map((si) => (
               <div key={si.scopeCode} className="text-xs" style={{ color: "var(--ink-secondary)" }}>
                 <strong style={{ color: "var(--ink-primary)" }}>{si.scopeCode}</strong> — {si.nameClean}

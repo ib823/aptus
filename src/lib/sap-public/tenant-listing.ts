@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import { scenariosForServices, technicalIdsForAddress, type ScenarioJoin } from "@/lib/sap-public/comm-scenarios";
+import { SCENARIO_TABLE_PRODUCT, scenariosForServices, technicalIdsForAddress, type ScenarioJoin } from "@/lib/sap-public/comm-scenarios";
 import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { catalogueAddress, KNOWN_V4_SERVICE_PATHS, type HubContentType } from "@/lib/sap-public/hub-content";
 import { getSapServices, type SapOdataProduct } from "@/lib/sap-public/tdd-connector";
@@ -46,8 +46,8 @@ import {
  */
 export const TENANT_SERVICES_LIMIT = { limit: 1, windowMs: 2 * 60_000 } as const;
 
-/** The product whose documentation SAP's communication scenario table is. */
-export const SCENARIO_TABLE_PRODUCT = "s4hana";
+// The product whose documentation SAP's communication scenario table is.
+export { SCENARIO_TABLE_PRODUCT };
 
 /** Products whose systems serve an SAP Gateway catalogue: S/4HANA in every edition, and ECC with Gateway. */
 const GATEWAY_PRODUCTS = new Set(["s4hana", "cloud-erp-private", "s4hana-onprem", "ecc"]);

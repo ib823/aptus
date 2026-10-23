@@ -27,6 +27,7 @@ import {
   type CatalogueEntry,
   type ClassificationIndex,
   type ListingEntry,
+  type ListingLimits,
 } from "@/lib/sap-public/tenant-discovery";
 
 const ROOT = path.resolve(__dirname, "../../..");
@@ -284,9 +285,9 @@ describe("listGatewayCatalogue: the connector's listing (no live lab)", () => {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  const limits = { ...LISTING_LIMITS, pageSize: 2 };
+  const limits: ListingLimits = { ...LISTING_LIMITS, pageSize: 2 };
 
-  async function list(fetchImpl: (url: string, init: RequestInit) => Response | Promise<Response>, options: { v4?: boolean; limits?: typeof limits } = {}) {
+  async function list(fetchImpl: (url: string, init: RequestInit) => Response | Promise<Response>, options: { v4?: boolean; limits?: ListingLimits } = {}) {
     const calls: { url: string; init: RequestInit }[] = [];
     vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
       calls.push({ url, init });

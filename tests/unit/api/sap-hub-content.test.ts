@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HUB_CONTENT_TYPES, PROBE_MAX_AGE_DAYS } from "@/lib/sap-public/hub-content";
 
 const mocks = vi.hoisted(() => ({
+  // SAP's communication scenario table (P1.2): no rows unless a test gives some.
+  queryRaw: vi.fn(async (..._args: unknown[]) => [] as unknown[]),
   getCurrentUser: vi.fn(),
   getSapProduct: vi.fn(),
   isSapTddPublicAccessEnabled: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 // and audit write, which the live overlay now goes through (audit A24).
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
+    $queryRaw: mocks.queryRaw,
     sapHubContent: { count: mocks.count, findMany: mocks.findMany, groupBy: mocks.groupBy },
     apiAccessGrant: { findMany: mocks.grantFindMany },
     northboundAuditEvent: { create: mocks.auditCreate },
@@ -562,5 +565,27 @@ describe("catalogue addresses and lifecycle on the list (P0.8)", () => {
     await GET(makeRequest("product=s4hana&status=DEPRECATED"));
     const paged = (mocks.findMany.mock.calls as Array<[Where]>).map((c) => c[0]).find((a) => a.where?.AND);
     expect(paged?.where?.AND).toContainEqual({ externalId: { in: ["API_OLD_SRV"] } });
+  });
+});
+
+describe("the scenarios SAP's table lists each row under (P1.2)", () => {
+  it("joins the page's rows by their address, in one statement, and names the source", async () => {
+    mocks.queryRaw.mockResolvedValueOnce([
+      { id: "SAP_COM_0053", name: "Purchase Order Integration", direction: "Inbound", interfaceCount: 12, matched: ["API_PO_0001"], release: "2608" },
+    ]);
+    const body = await (await GET(makeRequest())).json();
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.commScenarios).toEqual([{ id: "SAP_COM_0053", name: "Purchase Order Integration", direction: "Inbound" }]);
+    // A row the table does not name carries none, never a guess.
+    expect(body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X").commScenarios).toEqual([]);
+    expect(body.data.scenarioSource).toContain("2608");
+  });
+
+  it("asks nothing of the table off S/4HANA Cloud Public Edition", async () => {
+    mocks.getSapProduct.mockReturnValue({ ...PRODUCT, key: "cloud-erp-private", edition: "PRIVATE" });
+    const body = await (await GET(makeRequest("product=cloud-erp-private"))).json();
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+    expect(body.data.items.every((i: { commScenarios: unknown[] }) => i.commScenarios.length === 0)).toBe(true);
   });
 });

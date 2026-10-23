@@ -33,6 +33,9 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+/** The product whose documentation SAP's communication scenario table is: S/4HANA Cloud Public Edition. */
+export const SCENARIO_TABLE_PRODUCT = "s4hana";
+
 /** Where the scenarios come from, as the screen names it. */
 export const SCENARIO_SOURCE = "help.sap.com, Available Interfaces for Your Selected Scope";
 
