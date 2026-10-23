@@ -322,6 +322,20 @@ describe("saving, as the route answers", () => {
   });
 });
 
+describe("a Remove that gets no answer", () => {
+  it("says it failed, as a failed save does, and leaves the policy as it was", async () => {
+    await renderCard(view());
+    fetchMock.mockImplementationOnce(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Remove the policy" }));
+    await screen.findByText("The query policy could not be removed. Try again.");
+    expect(screen.getByRole("button", { name: "Remove the policy" })).toBeTruthy();
+    expect(screen.queryByText(/Queries are off/)).toBeNull();
+  });
+});
+
 describe("the Interfaces screen around it", () => {
   const BASE: StudioInterface = {
     id: "if_1",

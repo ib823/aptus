@@ -321,6 +321,9 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
       setEditing(null);
       setNotice("Queries are off: callers sending query parameters now receive 400 VALIDATION_ERROR (error.query.rule NO_POLICY).");
       await load();
+    } catch {
+      // No answer, or one that is not JSON: say so, as a failed save does.
+      setProblem({ message: "The query policy could not be removed. Try again.", errors: [], conflict: false });
     } finally {
       setBusy(false);
     }
