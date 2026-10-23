@@ -261,6 +261,7 @@ export function ServiceVerifyPanel({
   targets,
   canAuthor,
   productLabel,
+  onVerified,
 }: {
   interfaceId: string;
   /**
@@ -288,6 +289,12 @@ export function ServiceVerifyPanel({
   canAuthor: boolean;
   /** The interface's product, named when no connection for it can be asked. */
   productLabel?: string | undefined;
+  /**
+   * Called once a verify has answered. A verify writes the query basis and
+   * recompiles the policy without bumping the interface's version, so the
+   * Query policy card beside this panel reads itself again on it.
+   */
+  onVerified?: (() => void) | undefined;
 }) {
   const router = useRouter();
   const ids = useId();
@@ -318,13 +325,14 @@ export function ServiceVerifyPanel({
       const out = await verify();
       setOutcome(out);
       if (out) setPick(initialDatasetPick(out, entitySet));
+      if (out) onVerified?.();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verify could not run.");
     } finally {
       setBusy(false);
     }
-  }, [verify, router, entitySet]);
+  }, [verify, router, entitySet, onVerified]);
 
   /** Save a contract change (which clears verification), then verify the same target again. */
   const saveAndVerify = useCallback(
@@ -339,7 +347,9 @@ export function ServiceVerifyPanel({
         });
         const json = (await res.json()) as { error?: { message?: string } };
         if (!res.ok) throw new Error(json.error?.message ?? failure);
-        setOutcome(await verify());
+        const out = await verify();
+        setOutcome(out);
+        if (out) onVerified?.();
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : failure);
@@ -347,7 +357,7 @@ export function ServiceVerifyPanel({
         setBusy(false);
       }
     },
-    [interfaceId, verify, router],
+    [interfaceId, verify, router, onVerified],
   );
 
   const chooseDataset = useCallback(

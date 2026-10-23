@@ -394,6 +394,30 @@ describe("the Interfaces screen around it", () => {
     expect(screen.queryByRole("heading", { name: /Query policy/ })).toBeNull();
   });
 
+  it("reads the Query policy card again once a verify on the same screen has answered", async () => {
+    // A verify writes the basis and recompiles the policy without bumping the version.
+    current = view({ basis: null, basisHash: null, source: null, compiled: null, revision: 0, suggested: null });
+    const answered = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (!url.includes("/verify-service")) return answered(url, init);
+      current = view({ source: null, compiled: null, revision: 0 });
+      const data = { status: "VERIFIED", verified: true, detail: "The service answered.", entitySets: ["OrderLines"], contract: { status: "RECORDED", semver: "2.1.0", bump: "initial" }, queryPolicy: null, correlationId: "c" };
+      return { ok: true, status: 200, json: async () => ({ data }) };
+    });
+    render(
+      <InterfacesClient
+        interfaces={[BASE]}
+        canAuthor={true}
+        products={[{ key: "s4hana", label: "S/4HANA", addressesClient: true } as never]}
+        verifyTargets={[{ product: "s4hana", environment: "DEV", sapClient: null, label: "DEV" } as never]}
+      />,
+    );
+    expect(await screen.findByRole("link", { name: "Go to Verify" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(await screen.findByRole("button", { name: "Enable queries" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Go to Verify" })).toBeNull();
+  });
+
   it("states the runtime's real timeout, quota and response limit", async () => {
     render(<InterfacesClient interfaces={[BASE]} canAuthor={true} />);
     expect(screen.getByText("15 s, or the connection's override (at most 30 s)")).toBeTruthy();

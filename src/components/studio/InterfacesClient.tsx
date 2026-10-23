@@ -164,6 +164,8 @@ export function InterfacesClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(openRegister && canAuthor);
+  /** Verifies answered on this screen: the Query policy card reads itself again on each. */
+  const [verifies, setVerifies] = useState(0);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
   const selectedIsCustom = selected?.servicePath != null && selected.servicePath !== "";
@@ -356,6 +358,7 @@ export function InterfacesClient({
                   targets={verifyTargets.filter((t) => t.product === selected.sapProduct)}
                   canAuthor={canAuthor}
                   productLabel={products.find((p) => p.key === selected.sapProduct)?.label}
+                  onVerified={() => setVerifies((n) => n + 1)}
                 />
                 </span>
               </Row>
@@ -426,9 +429,11 @@ export function InterfacesClient({
           </DetailCard>
 
           {/* What callers may ask of a read (P1.4). Keyed by the version too:
-              a contract change clears the basis, and the card reloads. */}
+              a contract change clears the basis, and the card reloads; and by
+              the verifies on this screen, which write the basis and recompile
+              the policy without bumping the version. */}
           {selected.operation === "READ" && (
-            <QueryPolicyCard key={`${selected.id}:${selected.version}`} interfaceId={selected.id} canAuthor={canAuthor} />
+            <QueryPolicyCard key={`${selected.id}:${selected.version}:${verifies}`} interfaceId={selected.id} canAuthor={canAuthor} />
           )}
 
           <DetailCard title="Governance">
