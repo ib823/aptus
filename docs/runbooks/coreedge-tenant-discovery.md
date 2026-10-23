@@ -59,7 +59,7 @@ listing predates the change.
 | services | 5,000 | larger than any catalogue measured; a hostile one stops here |
 | bytes a page | 2 MiB, decoded | `bodyPrefix` counts decoded bytes, so a compression bomb stops at the cap |
 | bytes in all | 8 MiB | the instance is small and shared by every organisation |
-| time | 20 s | |
+| time | 20 s | the whole listing, each page's body included: a host that trickles a body is cut off there |
 | stored entries | 1 MiB of JSON | SAP's services that are not Published APIs are dropped first and customer-built ones last; the tab says how many of the services read the store left out |
 
 The listing never requests an address the catalogue gives: paging is
