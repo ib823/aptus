@@ -23,7 +23,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
-import { CONTROL_TOWER_SECTIONS } from "@/lib/studio/sections";
+import { CONTROL_TOWER_SECTIONS, railSections } from "@/lib/studio/sections";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
@@ -80,10 +80,12 @@ export default async function ControlTowerLayout({ children }: { children: React
   const remembered = cookieStore.get(STUDIO_TENANT_COOKIE)?.value ?? null;
   const activeTenantKey = pickActiveTenant(resolved, remembered);
 
+  // Admin-only sections (the parity scorecard, deployment-scoped) are removed
+  // from the rail rather than rendered-and-refused, as in the Operations Center.
   return (
     <StudioShell
       accessibleWorkspaces={accessibleWorkspaces(user.role)}
-      sections={CONTROL_TOWER_SECTIONS}
+      sections={railSections(CONTROL_TOWER_SECTIONS, user.role)}
       activeWorkspace="control-tower"
       tenants={tenants}
       activeTenantKey={activeTenantKey}

@@ -37,6 +37,7 @@ import {
   canMutateStudio,
   type StudioWorkspace,
 } from "@/lib/studio/rbac";
+import { isAdminRoleName } from "@/lib/auth/role-migration";
 import { ALL_USER_ROLES, ROLE_LABELS, type UserRole } from "@/types/assessment";
 import {
   WORKBENCH_PROSE_KEYS,
@@ -393,6 +394,28 @@ const PROSE: Record<string, ScreenProse> = {
       },
     ],
   },
+
+  "control-tower/parity": {
+    answers:
+      "How SAP Integration Suite and CoreEdge compare on every scenario SAP makes possible, today and after each roadmap phase, which cells hold CoreEdge back most, and which build the figures belong to.",
+    cannotTell: [
+      "Whether a scenario works on a given tenant. The figures are simulated from the code and the gap matrix, not measured against a system.",
+      "When a cell was last proved live. The capability registry records that a live run exists, not when it happened, so the page says \"not recorded\" (decision D15; dated live runs come with P1.8).",
+      "The extended model: the targets, technologies and consumer types the roadmap keeps out of its headline until decision D13.",
+    ],
+    misreadings: [
+      {
+        seeing: "Full barely moves after a phase",
+        means:
+          "A scenario is full only when all six of its cells are, so one partial cell holds it at partial. The upgrades column, the phase's matrix upgrades the code already credits, is the progress inside a phase; the roadmap's acceptance criteria are the finer measure.",
+      },
+      {
+        seeing: "Sole 0 on every blocker",
+        means:
+          "No scenario is one cell from full today, so no single cell alone turns any scenario full. Leverage, which shares each scenario between its cells below full, is the ranking.",
+      },
+    ],
+  },
 };
 
 export type ManualWorkspace = StudioWorkspace | WorkbenchWorkspace;
@@ -450,7 +473,14 @@ function rolesFor(workspace: StudioWorkspace): string[] {
   return ALL_USER_ROLES.filter((r) => predicate(r)).map((r) => ROLE_LABELS[r as UserRole]);
 }
 
-/** The Console's twenty screens, assembled from the rail plus the prose above. */
+/**
+ * Who may open an `adminOnly` screen: platform administrators, computed from
+ * the same predicate the rail filter uses (`railSections`). The workspace's
+ * roster would list roles the screen turns away.
+ */
+const ADMIN_LABELS: readonly string[] = ALL_USER_ROLES.filter((r) => isAdminRoleName(r)).map((r) => ROLE_LABELS[r as UserRole]);
+
+/** The Console's screens, assembled from the rail plus the prose above. */
 const CONSOLE_MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
   SECTION_LISTS[w.key].map((section): ManualScreen => {
     const slug = `${w.key}/${section.key}`;
@@ -470,7 +500,7 @@ const CONSOLE_MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
       answers: prose?.answers ?? "",
       cannotTell: prose?.cannotTell ?? [],
       misreadings: prose?.misreadings ?? [],
-      openTo: rolesFor(w.key),
+      openTo: section.adminOnly ? ADMIN_LABELS : rolesFor(w.key),
       accessBasis: "role",
     };
   }),
