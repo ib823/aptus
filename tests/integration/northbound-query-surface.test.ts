@@ -321,6 +321,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed query surface (P1.
 
   /* ── the switch, and the legacy read ─────────────────────────────────── */
 
+  it("a refusal after the checker (no connection to bind) is audited with the checked query's kind, shape, fields and policy rev", async () => {
+    await prisma.sapConnection.updateMany({ where: { organizationId: world.organizationId }, data: { isActive: false } });
+    try {
+      const before = sapCalls();
+      const r = await get(app.iface.V2, "filter.Customer.eq=C1&pageSize=2");
+      expect(r.status).toBe(403);
+      expect(r.body.error).toMatchObject({ code: "CONNECTION_NOT_CONFIGURED" });
+      expect(sapCalls()).toBe(before);
+      const row = await lastAudit();
+      expect(row).toMatchObject({ status: 403, bindingRefusal: "NO_CONNECTION", queryKind: "LIST", requestedFields: expect.any(Array) });
+      expect(row.queryShape).toMatch(/^L\|/);
+      expect(row.queryPolicyRev).toMatch(/^qp1:/);
+    } finally {
+      await prisma.sapConnection.updateMany({ where: { organizationId: world.organizationId }, data: { isActive: true } });
+    }
+  });
+
   it("with the switch off, a reserved name is refused NOT_ENABLED, never ignored", async () => {
     vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
     const before = sapCalls();

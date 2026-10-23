@@ -397,8 +397,10 @@ async function queryRead(call: QueryCall, parsed: ParsedQueryOk): Promise<NextRe
   }
 
   // 6 — the client's OWN connection, as on the legacy read; then the cursor's.
+  // Every refusal from here on is after the checker, so its audit row carries
+  // the checked query's kind, shape, fields and policy rev (3.12).
   const bound = await bindConnection(client.organizationId, iface.sapProduct, client.environment, "READ", client.sapClient, prefetchedConnectionsFor(iface));
-  if (!bound.ok) return call.refuse(bound.refusal, { ...call.rateHeaders });
+  if (!bound.ok) return call.refuse({ ...bound.refusal, audit: { ...bound.refusal.audit, query: base } }, { ...call.rateHeaders });
   const { connection } = bound.value;
   const connectionRef = { id: connection.id, revision: connection.revision ?? 0 };
   if (cursor !== null) {
@@ -408,7 +410,7 @@ async function queryRead(call: QueryCall, parsed: ParsedQueryOk): Promise<NextRe
 
   // 7 — the governed entity set, as on the legacy read; it must be the one the policy describes.
   const target = await resolveReadTarget(bound.value.product, iface, connection, (reason) => definitionMessage(reason, iface.draft));
-  if (!target.ok) return call.refuse(target.refusal, { ...call.rateHeaders });
+  if (!target.ok) return call.refuse({ ...target.refusal, audit: { ...target.refusal.audit, query: base } }, { ...call.rateHeaders });
   const { service, entitySet } = target.value;
   if (entitySet !== policy.compiled.entitySet) {
     return refuseQuery(
