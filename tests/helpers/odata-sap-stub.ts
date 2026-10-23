@@ -11,9 +11,12 @@
  * and reads the URL as fetch sends it, so a mistake in CoreEdge's compiler
  * cannot be shared by the service that checks it. It answers as SAP's stacks
  * do in the cases the tests name: V2 `d.results` with `__metadata`, `__count`
- * as a string and `__next`; V4 `value` with `@odata.context`, `@odata.id`,
- * `@odata.count` and `@odata.nextLink`; every envelope link absolute, on the
- * service's own host, which is what the tests must never see leave CoreEdge.
+ * as a string and `__next`, and, with no `$select`, a deferred navigation
+ * (`to_Header: { __deferred: { uri } }`) on every row; V4 `value` with
+ * `@odata.context`, `@odata.id`, `@odata.count` and `@odata.nextLink`, and
+ * on every row 4.01's `@id` and a `to_Header@navigationLink`; every envelope
+ * link absolute, on the service's own host, which is what the tests must
+ * never see leave CoreEdge (spec 3.21 item 8).
  *
  * STRICT. An option it does not know, a `$filter` it cannot parse, a field
  * the entity does not have or a literal of the wrong form answers 400, as a
@@ -273,7 +276,11 @@ function wireRow(row: StubRow, opts: OdataStubOptions, select: readonly string[]
   const fields = select ?? Object.keys(opts.types);
   const self = `${opts.origin}${opts.servicePath}/${opts.entitySet}${keyText(row, opts)}`;
   const out: Record<string, unknown> =
-    opts.odata === "V2" ? { __metadata: { id: self, uri: self, type: `ZSRV.${opts.entitySet}Type` } } : { "@odata.id": self, "@odata.etag": 'W/"1"' };
+    opts.odata === "V2"
+      ? { __metadata: { id: self, uri: self, type: `ZSRV.${opts.entitySet}Type` } }
+      : { "@odata.id": self, "@id": self, "@odata.etag": 'W/"1"', "to_Header@navigationLink": `${self}/to_Header` };
+  // A V2 Gateway writes each navigation it did not expand as a deferred link, unless $select leaves it out.
+  if (opts.odata === "V2" && select === null) out.to_Header = { __deferred: { uri: `${self}/to_Header` } };
   for (const f of fields) {
     const v = row[f] ?? null;
     const t = opts.types[f];

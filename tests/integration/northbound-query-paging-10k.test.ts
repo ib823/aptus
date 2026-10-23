@@ -141,7 +141,13 @@ async function pageAll(s: Scenario): Promise<{ pages: Page[]; elapsed: number; i
     advance: (ms) => vi.setSystemTime(Date.now() + ms),
     ...(s.serverPageCap ? { serverPageCap: s.serverPageCap } : {}),
   });
-  vi.stubGlobal("fetch", stub.fetch);
+  // What SAP answered, as it answered it: the no-host check must meet every link the spec names (3.21 item 8).
+  const answered: string[] = [];
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    const res = await stub.fetch(input, init);
+    answered.push(await res.clone().text());
+    return res;
+  });
 
   const qs = `filter.CompanyCode.eq=1010&pageSize=${s.pageSize}`;
   const pages: Page[] = [];
@@ -169,7 +175,7 @@ async function pageAll(s: Scenario): Promise<{ pages: Page[]; elapsed: number; i
     if (page.complete || page.nextCursor === null) break;
     cursor = page.nextCursor;
   }
-  return { pages, elapsed: Date.now() - started, interfaceId, clientId: app.clientId };
+  return { pages, elapsed: Date.now() - started, interfaceId, clientId: app.clientId, answered };
 }
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("A3: 10,000 rows, paged under the key's 60 a minute, in under N, with no host anywhere", () => {
@@ -208,7 +214,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("A3: 10,000 rows, paged under th
   ];
 
   it.each(scenarios)("$name", async (s) => {
-    const { pages, elapsed, interfaceId, clientId } = await pageAll(s);
+    const { pages, elapsed, interfaceId, clientId, answered } = await pageAll(s);
 
     // 2 — zero 429s, and every page served.
     expect(pages.map((p) => p.status).filter((st) => st !== 200)).toEqual([]);
@@ -257,6 +263,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("A3: 10,000 rows, paged under th
     const audits = await prisma.northboundAuditEvent.findMany({ where: { organizationId: world.organizationId, interfaceId }, orderBy: { at: "asc" } });
     text.push(JSON.stringify(audits), ...logs);
     expect(hostIn(text.join("\n"))).toEqual([]);
+    // And it met every link SAP writes on the host: the check is not vacuous.
+    const sap = answered.join("\n");
+    const links = s.odata === "V2" ? ["__metadata", "__deferred", "__next"] : ["@odata.context", "@odata.id", "@id", "@navigationLink", "@odata.nextLink"];
+    for (const link of links.filter((l) => (l === "__next" || l === "@odata.nextLink" ? s.serverPageCap !== undefined : true))) {
+      expect(sap, link).toContain(link);
+    }
+    expect(hostIn(sap).length).toBeGreaterThan(0);
 
     // 7 — one chain in the audit trail: LIST then PAGE, pages 0..P-1, ending at 10,000 rows.
     const chain = audits.filter((a) => a.queryKind === "LIST" || a.queryKind === "PAGE");
