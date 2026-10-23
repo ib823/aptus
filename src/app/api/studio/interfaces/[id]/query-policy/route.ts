@@ -58,7 +58,7 @@ import { lockQueryPolicyRow, writeCompiledQueryPolicy } from "@/lib/odata/policy
 import { newCorrelationId } from "@/lib/northbound/respond";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
-import { compiledSummary, suggestedQueryPolicy } from "@/lib/studio/query-policy";
+import { compiledSummary, queryNotOffered, suggestedQueryPolicy } from "@/lib/studio/query-policy";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
@@ -224,6 +224,8 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
     if (!compiled.ok) {
       // A contract no query can be offered on is not the builder's choice to fix here.
       const stale = compiled.errors.find((e) => (STALE_REASONS as readonly string[]).includes(e.rule));
+      // A dataset no query can be offered on is refused as it is: a verify would not change it.
+      if (stale && queryNotOffered(basis) !== null) return { kind: "refused", errors: [stale] };
       if (stale) return { kind: "conflict", message: `${stale.message} ${VERIFY_FIRST}` };
       return { kind: "refused", errors: compiled.errors };
     }

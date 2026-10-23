@@ -184,6 +184,23 @@ describe("the card's states, in words", () => {
     expect(screen.getByRole("form", { name: "Edit the query policy" })).toBeTruthy();
   });
 
+  it.each([
+    ["cut for size", { ...BASIS, tooLarge: true as const }, "the dataset has more fields than CoreEdge describes for queries"],
+    ["that is a singleton", { ...BASIS, set: { singleton: true as const } }, "the dataset is a singleton"],
+  ])("says queries are not offered on a dataset %s, and offers nothing that cannot succeed", async (_name, basis, why) => {
+    const compiled = { ...COMPILED, state: "STALE" as const, stale: { reason: "BASIS_TOO_LARGE" as const, at: "2026-10-30T09:00:00.000Z", sentence: "x" }, fields: [] };
+    for (const v of [view({ basis, source: null, compiled: null, revision: 0 }), view({ basis, compiled })]) {
+      expect(queryCardState(v)).toBe("NOT_OFFERED");
+    }
+    await renderCard(view({ basis, source: null, compiled: null, revision: 0 }));
+    expect(screen.getByText(new RegExp(`Queries are not offered on this dataset: ${why}`))).toBeTruthy();
+    expect(screen.getByText("not offered")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Enable queries" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Choose fields first" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review and save" })).toBeNull();
+    expect(screen.queryByText(/make fewer fields readable/i)).toBeNull();
+  });
+
   it("treats a policy CoreEdge cannot read as needing a save", () => {
     expect(queryCardState(view({ sourceUnreadable: true, source: null }))).toBe("UNREADABLE");
     expect(queryCardState(view({ compiled: { ...COMPILED, state: "UNREADABLE" } }))).toBe("UNREADABLE");

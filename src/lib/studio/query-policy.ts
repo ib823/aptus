@@ -40,8 +40,21 @@ export const STALE_SENTENCE: Record<StaleReason, string> = {
   VERSION_CHANGED: "The service's OData version changed since the policy was saved. Review it and save it again.",
   NOT_METADATA: "The contract was inferred from sampled rows, not read from the service's $metadata. Verify the service.",
   SINGLETON: "The dataset is a singleton: one record, nothing to query.",
-  BASIS_TOO_LARGE: "The dataset has more fields than CoreEdge describes for queries. Make fewer fields readable.",
+  // Shown only when the basis was not cut for size: the card says a cut basis is not offered queries at all (queryNotOffered).
+  BASIS_TOO_LARGE: "The policy compiled for this dataset is larger than CoreEdge carries (64 KiB). Make fewer fields readable, then save it.",
 };
+
+/**
+ * Why queries cannot be offered on this dataset whatever a builder chooses,
+ * or null when they can: a singleton, or a basis cut for size. The compiler
+ * refuses every source on either, so the card offers no Enable or Review,
+ * and no advice that cannot help.
+ */
+export function queryNotOffered(basis: Pick<QueryBasisV1, "set" | "tooLarge">): string | null {
+  if (basis.set.singleton === true) return "the dataset is a singleton: one record, nothing to query";
+  if (basis.tooLarge === true) return "the dataset has more fields than CoreEdge describes for queries";
+  return null;
+}
 
 /**
  * What "Enable queries" saves: every field the legacy read returns, key

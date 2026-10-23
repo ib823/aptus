@@ -54,12 +54,25 @@ export interface QueryPolicyView {
   suggested: QueryPolicySourceV1 | null;
 }
 
-type CardState = "NEEDS_VERIFY" | "OFF" | "READY" | "STALE" | "UNREADABLE";
+type CardState = "NEEDS_VERIFY" | "NOT_OFFERED" | "OFF" | "READY" | "STALE" | "UNREADABLE";
+
+/**
+ * Why no query can be offered on this dataset whatever the builder chooses,
+ * or null (lib/studio/query-policy.ts queryNotOffered, which the route
+ * refuses a save by; the card keeps its own copy of the compiler's rules).
+ */
+function notOfferedReason(basis: QueryBasisV1): string | null {
+  if (basis.set.singleton === true) return "the dataset is a singleton: one record, nothing to query";
+  if (basis.tooLarge === true) return "the dataset has more fields than CoreEdge describes for queries";
+  return null;
+}
 
 /** Which state the card is in: the basis first (nothing can be saved without one), then the policy. */
 export function queryCardState(view: QueryPolicyView): CardState {
   // Falsy rather than null: an answer missing a field is read as the safe state, never as ready.
   if (!view.basis || view.basis.source !== "METADATA") return "NEEDS_VERIFY";
+  // The compiler refuses every source on such a dataset: nothing to enable, review or save.
+  if (notOfferedReason(view.basis) !== null) return "NOT_OFFERED";
   if (!view.source && !view.sourceUnreadable) return "OFF";
   if (view.sourceUnreadable || !view.compiled || view.compiled.state === "UNREADABLE") return "UNREADABLE";
   return view.compiled.state === "STALE" ? "STALE" : "READY";
@@ -67,6 +80,7 @@ export function queryCardState(view: QueryPolicyView): CardState {
 
 const STATE_CHIP = {
   NEEDS_VERIFY: { status: "NEEDS_SETUP", label: "needs verify", meaning: "the service's fields have not been described for queries yet" },
+  NOT_OFFERED: { status: "NOT_PROBEABLE", label: "not offered", meaning: "queries cannot be offered on this dataset" },
   OFF: { status: "NOT_CHECKED", label: "queries off", meaning: "callers sending query parameters are refused" },
   READY: { status: "ACTIVATED", label: "queries on", meaning: "callers may query within this policy" },
   STALE: { status: "NEEDS_SETUP", label: "stale", meaning: "every query is refused until a builder saves the policy again" },
@@ -422,6 +436,14 @@ export function QueryPolicyCard({ interfaceId, canAuthor }: { interfaceId: strin
             Go to Verify
           </a>
           {view.source ? " The saved policy is kept and is compiled again by the next verify." : null}
+        </p>
+      )}
+
+      {state === "NOT_OFFERED" && view.basis && (
+        <p style={text}>
+          Queries are not offered on this dataset: {notOfferedReason(view.basis)}. Callers can read it with{" "}
+          <code style={code}>?limit</code> only; a call carrying query parameters receives 400 VALIDATION_ERROR.
+          {view.source ? " The saved policy is kept, and is compiled again by a verify that finds the dataset can be queried." : null}
         </p>
       )}
 

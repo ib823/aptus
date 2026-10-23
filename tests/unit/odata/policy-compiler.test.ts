@@ -405,6 +405,20 @@ describe("bounds and the revision", () => {
     expect(s.ok).toBe(false);
     if (!s.ok) expect(s.errors[0]?.message).toContain("make fewer fields readable");
     expect(verify(src, wide).compiled.stale?.reason).toBe("BASIS_TOO_LARGE");
+    // Fewer readable fields fix this cause, and the warning says so.
+    expect(verify(src, wide).compiled.warnings[0]).toContain("make fewer fields readable");
+  });
+
+  it("a basis cut for size refuses every source, and gives no advice that cannot help", () => {
+    const cut = { ...basisOf([{ n: "Id" }, { n: "Name" }], ["Id"]), tooLarge: true as const };
+    const one = source({ select: ["Id"], filter: [], sort: [], keyLookup: false });
+    const s = save(one, cut);
+    expect(s.ok).toBe(false);
+    if (!s.ok) {
+      expect(s.errors[0]?.rule).toBe("BASIS_TOO_LARGE");
+      expect(s.errors[0]?.message).not.toContain("make fewer fields readable");
+    }
+    expect(verify(one, cut).compiled.warnings[0]).not.toContain("make fewer fields readable");
   });
 
   it("rev is stable across a no-op recompile and changes with an effective change", () => {

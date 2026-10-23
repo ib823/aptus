@@ -310,6 +310,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Studio's query-policy route (P1
     expect((await save(id, bulk)).body.data).toMatchObject({ saved: true, widened: [] });
   });
 
+  it("refuses a save on a dataset cut for size as it is, with no advice to verify or to read fewer fields", async () => {
+    const id = await freshInterface();
+    const stored = (await row(id)).queryBasis as Record<string, unknown>;
+    await prisma.interface.updateMany({ where: { id, organizationId: world.organizationId }, data: { queryBasis: { ...stored, tooLarge: true } } });
+    const r = await save(id, source({ select: ["Order", "Line"], filter: [], sort: [], keyLookup: false }));
+    expect(r.status).toBe(400);
+    expect(r.body.error?.errors?.[0]).toMatchObject({ rule: "BASIS_TOO_LARGE" });
+    expect(JSON.stringify(r.body)).not.toMatch(/fewer fields|Verify the service/);
+  });
+
   it("writes a save that narrows an ACTIVE interface only once the builder confirms it", async () => {
     const id = await freshInterface();
     expect((await row(id)).status).toBe("ACTIVE");

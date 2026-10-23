@@ -75,8 +75,16 @@ const STALE_TEXT: Record<StaleReason, string> = {
   VERSION_CHANGED: "The service's OData version changed since the policy was saved.",
   NOT_METADATA: "The contract was inferred from sampled rows, not read from the service's $metadata; queries need a verified contract.",
   SINGLETON: "The dataset is a singleton: one record, nothing to query.",
-  BASIS_TOO_LARGE: "The dataset has more fields than CoreEdge describes for queries; make fewer fields readable.",
+  BASIS_TOO_LARGE: "The dataset has more fields than CoreEdge describes for queries, so queries are not offered on it.",
 };
+
+/**
+ * BASIS_TOO_LARGE has two causes, and only one is the builder's to fix. A
+ * basis cut for size (`tooLarge`) refuses every source, whatever is
+ * readable, so its text gives no advice that cannot help. A compiled policy
+ * over 64 KiB is the readable fields' doing: that text says so.
+ */
+const COMPILED_TOO_LARGE_TEXT = "The compiled policy is larger than 64 KiB; make fewer fields readable.";
 
 const cap = (s: string) => (s.length <= MAX_POLICY_WARNING_LENGTH ? s : `${s.slice(0, MAX_POLICY_WARNING_LENGTH - 1)}…`);
 
@@ -358,8 +366,8 @@ export function compileQueryPolicy(source: QueryPolicySourceV1, basis: QueryBasi
 
   // 12 — the size the access-load statement carries.
   if (Buffer.byteLength(JSON.stringify(compiled), "utf8") > QUERY_POLICY_COMPILED_MAX_BYTES) {
-    if (save) return { ok: false, errors: [{ rule: "TOO_LARGE", message: "The compiled policy is larger than 64 KiB; make fewer fields readable." }] };
-    return stale("BASIS_TOO_LARGE");
+    if (save) return { ok: false, errors: [{ rule: "TOO_LARGE", message: COMPILED_TOO_LARGE_TEXT }] };
+    return stale("BASIS_TOO_LARGE", COMPILED_TOO_LARGE_TEXT);
   }
   return { ok: true, compiled, narrowed, warnings: compiled.warnings };
 }
