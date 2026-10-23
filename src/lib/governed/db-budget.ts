@@ -22,7 +22,11 @@
  *
  *   read  4  — today 3: the key (one statement for the current, previous
  *              and retired keys and the solution's status), the interface
- *              with its grants and connections, the audit row.
+ *              with its grants and connections, the audit row. Query pages
+ *              (P1.4) are reads, held to 4: the compiled query policy rides
+ *              in the access load's statement, a cursor opens in memory, and
+ *              the query's audit columns go in the same insert
+ *              (NORTHBOUND_QUERY_STATEMENTS, below).
  *   write 5  — today 5: the read's 3, plus the Idempotency-Key claimed
  *              before SAP is called and its outcome stored after. A write
  *              differs because those two must be separate statements on
@@ -215,4 +219,31 @@ export const NORTHBOUND_DISCOVERY_STATEMENTS = {
   stamped: 6,
   /** No interface passes the grant gate (none granted in the key's environment): no connections are read. */
   nothingGranted: 4,
+} as const;
+
+/**
+ * WHAT A QUERY-SURFACE READ SENDS (P1.4), on /data and its /v1 alias, warm.
+ * A read through the pipeline, held to `DB_BUDGET.read`: the interface's
+ * compiled query policy is selected in the access load's own statement (only
+ * on these calls; a legacy read selects it as NULL), the paging cursor is
+ * opened and sealed in memory with no table behind it, and the query's eleven
+ * audit columns are written in the row's one insert. Asserted exactly by
+ * tests/integration/governed-db-budget.test.ts. The key's `lastUsedAt` stamp,
+ * at most once a minute per key, adds 1 to either.
+ */
+export const NORTHBOUND_QUERY_STATEMENTS = {
+  /**
+   * A list page (the first, with or without its count, or a cursor page), a
+   * key lookup (by path or through the filter fallback), an outcome SAP's
+   * answer decided (rejected, too large, no record), or a refusal after
+   * authorisation (the policy, a cursor whose interface, policy, grant or
+   * connection changed): the key, the access load with the policy, the audit row.
+   */
+  page: 3,
+  /**
+   * Refused before authorisation: a parameter outside the grammar, the
+   * switch off, a cursor that does not open or has expired. The key and the
+   * audit row; the interface is never read.
+   */
+  refusedBeforeAccess: 2,
 } as const;

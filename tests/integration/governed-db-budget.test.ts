@@ -124,7 +124,13 @@ import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/wr
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import { generateSessionToken, hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_DISCOVERY_STATEMENTS, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import {
+  CONSOLE_ROUTE_STATEMENTS,
+  DB_BUDGET,
+  NORTHBOUND_DISCOVERY_STATEMENTS,
+  NORTHBOUND_QUERY_STATEMENTS,
+  NORTHBOUND_SCHEMA_STATEMENTS,
+} from "@/lib/governed/db-budget";
 import { GET as discoveryRoute } from "@/app/api/northbound/interfaces/route";
 import { GET as discoveryRouteV1 } from "@/app/api/northbound/v1/interfaces/route";
 import { GET as schemaRoute } from "@/app/api/northbound/interfaces/[id]/schema/route";
@@ -134,9 +140,13 @@ import { recordVerifiedContract } from "@/lib/contracts/record";
 import { loadRecordHeads } from "@/lib/contracts/snapshot";
 import { hashClientToken } from "@/lib/northbound/auth";
 import { generateClientToken } from "@/lib/northbound/issue";
+import { sealCursor } from "@/lib/northbound/query/cursor";
+import { defaultVersion } from "@/lib/northbound/version-policy";
 import { setWriteCredential } from "@/lib/northbound/write-credential";
 import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
+
+import { basisOf, compiled as compiledPolicy, source as querySource } from "../helpers/odata-query";
 
 const RUN = `p019-${randomUUID().slice(0, 8)}`;
 const ORG = `${RUN}-org`;
@@ -176,10 +186,36 @@ async function fakeSap(_input: string | URL | Request, init?: RequestInit): Prom
   if (method === "POST") {
     return new Response(JSON.stringify({ d: { SupplierInvoice: "1" } }), { status: 201, headers: { "content-type": "application/json" } });
   }
+  const query = queryAnswer(url);
+  if (query) return query;
   return new Response(JSON.stringify({ d: { results: [{ PurchaseOrder: "1" }] } }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
+}
+
+/**
+ * The query surface's reads (P1.4): a V2 service over five purchase orders
+ * that honours $skip and $top, a key by path (404 for the key "404"), a key
+ * read through $filter, SAP refusing a filter on the supplier REJECT, and an
+ * answer past the 16 MiB bound for the supplier HUGE. Null for any other
+ * request, which the default answer serves.
+ */
+function queryAnswer(url: string): Response | null {
+  const u = new URL(url);
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const key = /\/A_PurchaseOrder\('([^']*)'\)$/.exec(decodeURIComponent(u.pathname));
+  if (key) return key[1] === "404" ? new Response("", { status: 404 }) : json({ d: { PurchaseOrder: key[1], Supplier: "S1" } });
+  const filter = u.searchParams.get("$filter") ?? "";
+  if (!u.searchParams.has("$orderby") && !filter) return null;
+  if (filter.includes("'REJECT'")) return json({ error: { message: { value: "Invalid filter" } } }, 400);
+  if (filter.includes("'HUGE'")) return new Response(`{"d":{"results":[{"Supplier":"${"x".repeat(17 * 1024 * 1024)}"}]}}`, { status: 200 });
+  const byKey = /PurchaseOrder eq '([^']*)'/.exec(filter);
+  if (byKey) return json({ d: { results: [{ PurchaseOrder: byKey[1], Supplier: "S1" }] } });
+  const all = [1, 2, 3, 4, 5].map((n) => ({ __metadata: { uri: `${u.origin}/A_PurchaseOrder('${n}')` }, PurchaseOrder: String(n), Supplier: `S${n}` }));
+  const skip = Number(u.searchParams.get("$skip") ?? 0);
+  const top = Number(u.searchParams.get("$top") ?? all.length);
+  return json({ d: { ...(u.searchParams.has("$inlinecount") ? { __count: "5" } : {}), results: all.slice(skip, skip + top) } });
 }
 
 interface Counted {
@@ -901,6 +937,172 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.status).toBe(200);
       expect(c.total, report(`discovery nothing granted ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.nothingGranted);
       expect(c.response.filter(connectionsRead), report(`discovery nothing granted ${path}`, c)).toHaveLength(0);
+    });
+  });
+
+  /*
+   * THE QUERY SURFACE (P1.4). A query page is a read, held to the read's 4:
+   * the compiled policy rides in the access load's own statement, the cursor
+   * opens and is sealed in memory, and the query's audit columns are written
+   * in the row's one insert. So every page — the first, with or without its
+   * count, a cursor page, a key lookup by path or through the filter — and
+   * every outcome SAP's answer decides, or refusal after authorisation, is
+   * the legacy read's 3; a refusal before authorisation is 2, the interface
+   * never read; and the key's minute stamp adds 1 at most.
+   */
+  describe("the query surface (P1.4)", () => {
+    let noPolicy = "";
+    const query = (qs: string, id = ids.read) =>
+      readRoute(new NextRequest(`http://localhost/api/northbound/interfaces/${id}/data?${qs}`, { headers: { authorization: `Bearer ${tokens.live}` } }), {
+        params: Promise.resolve({ id }),
+      });
+    const POLICY = compiledPolicy(
+      basisOf([{ n: "PurchaseOrder" }, { n: "Supplier" }, { n: "NetAmount", t: "D", edm: "Edm.Decimal" }], ["PurchaseOrder"], { entitySet: "A_PurchaseOrder" }),
+      querySource({
+        filter: [
+          { field: "PurchaseOrder", ops: ["eq", "in"] },
+          { field: "Supplier", ops: ["eq", "in"] },
+        ],
+        sort: ["PurchaseOrder"],
+        count: true,
+      }),
+    );
+    /** A cursor sealed for this key and interface, as the route would seal it, with what a test changes. */
+    const cursorFor = (over: Record<string, unknown>) => {
+      const now = Math.floor(Date.now() / 1000);
+      return sealCursor(
+        {
+          v: 1,
+          ch: "A".repeat(16),
+          pi: 1,
+          off: 2,
+          rs: 2,
+          iv: 1,
+          pr: POLICY.rev,
+          qb: "A".repeat(22),
+          g: ["A".repeat(12)],
+          cn: "x",
+          cr: 0,
+          lk: "A".repeat(11),
+          rb: 50,
+          iat: now,
+          exp: now + 600,
+          cx: now + 3600,
+          ...over,
+        } as never,
+        { organizationId: ORG, clientId: ids.client, interfaceId: ids.read, apiVersion: defaultVersion(new Date())!.version },
+      );
+    };
+
+    beforeAll(async () => {
+      vi.stubEnv("COREEDGE_QUERY_SURFACE", "on");
+      await prisma.interface.update({
+        where: { id: ids.read, organizationId: ORG },
+        data: { queryPolicy: querySource() as never, queryPolicyCompiled: POLICY as never, queryPolicyRevision: 1 },
+      });
+      noPolicy = (
+        await prisma.interface.create({
+          data: { organizationId: ORG, solutionId: ids.solution, name: "pr", sapProduct: "s4hana", externalId: "purchase-requisitions", operation: "READ", mode: "READ", entitySet: "A_PurchaseRequisition", status: "ACTIVE" },
+        })
+      ).id;
+      await prisma.apiAccessGrant.create({
+        data: {
+          organizationId: ORG,
+          solutionId: ids.solution,
+          interfaceId: noPolicy,
+          sapProduct: "s4hana",
+          externalId: "purchase-requisitions",
+          operation: "READ",
+          environment: "DEV",
+          justification: "Budget, no policy.",
+          decision: "APPROVED",
+          decidedAt: new Date(),
+          expiresAt: new Date(Date.now() + DAY),
+        },
+      });
+      // Warm: the first query of the run.
+      await count(() => query("pageSize=2"));
+    });
+
+    afterAll(() => {
+      vi.stubEnv("COREEDGE_QUERY_SURFACE", "");
+    });
+
+    it.each([
+      ["a first page", "pageSize=2", 200],
+      ["a first page with its count", "pageSize=2&count=true", 200],
+      ["a filtered, selected first page", "select=Supplier&filter.Supplier.in=S1&filter.Supplier.in=S2&orderby=-PurchaseOrder", 200],
+      ["a key lookup by path", "key.PurchaseOrder=1", 200],
+      ["a key read through the filter", "key.PurchaseOrder=A%2FB", 200],
+      ["SAP refusing the query", "filter.Supplier.eq=REJECT", 422],
+      ["SAP's page past the bound", "filter.Supplier.eq=HUGE", 422],
+      ["a key SAP does not have", "key.PurchaseOrder=404", 404],
+      ["a field the policy does not allow", "filter.NetAmount.gt=1", 400],
+      ["a query SAP cannot take in one URL", Array.from({ length: 50 }, (_, i) => `filter.Supplier.in=${encodeURIComponent("é".repeat(19) + String(i).padStart(2, "0"))}`).join("&"), 400],
+      ["a cursor whose policy changed", () => `pageSize=2&cursor=${cursorFor({ pr: "qp1:" + "B".repeat(22) })}`, 409],
+    ] as const)("%s: the key, the access load with the policy, the audit row", async (label, qs, status) => {
+      await stampNow();
+      const c = await count(() => query(typeof qs === "function" ? qs() : qs));
+      expect(c.status, report(label, c)).toBe(status);
+      expect(c.total, report(label, c)).toBe(NORTHBOUND_QUERY_STATEMENTS.page);
+    });
+
+    it("an interface with no policy: refused after the access load, in the same 3", async () => {
+      await stampNow();
+      const c = await count(() => query("pageSize=2", noPolicy));
+      expect(c.status).toBe(400);
+      expect(c.total, report("no policy", c)).toBe(NORTHBOUND_QUERY_STATEMENTS.page);
+    });
+
+    it("a cursor page is the same 3: the cursor opens and is sealed in memory", async () => {
+      await stampNow();
+      const first = await query("pageSize=2");
+      const { data } = (await first.json()) as { data: { page: { nextCursor: string | null } } };
+      expect(data.page.nextCursor).not.toBeNull();
+      const c = await count(() => query(`pageSize=2&cursor=${data.page.nextCursor}`));
+      expect(c.status, report("cursor page", c)).toBe(200);
+      expect(c.total, report("cursor page", c)).toBe(NORTHBOUND_QUERY_STATEMENTS.page);
+    });
+
+    it.each([
+      // Raw OData beside a reserved name: on the surface, so refused (alone it is a legacy read, which ignores it, D16).
+      ["raw OData", "select=PurchaseOrder&$filter=PurchaseOrder%20eq%20'1'"],
+      ["a cursor that does not open", "pageSize=2&cursor=cec1.t0.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+      ["an expired cursor", () => `pageSize=2&cursor=${cursorFor({ iat: 1, exp: 2 })}`],
+    ] as const)("refused before authorisation (%s): the key and the audit row", async (label, qs) => {
+      await stampNow();
+      const c = await count(() => query(typeof qs === "function" ? qs() : qs));
+      expect([400, 409]).toContain(c.status);
+      expect(c.total, report(label, c)).toBe(NORTHBOUND_QUERY_STATEMENTS.refusedBeforeAccess);
+      expect(c.response.some((sql) => sql.includes("governed:access-load")), report(label, c)).toBe(false);
+    });
+
+    it("the switch off refuses before authorisation too", async () => {
+      vi.stubEnv("COREEDGE_QUERY_SURFACE", "off");
+      try {
+        await stampNow();
+        const c = await count(() => query("pageSize=2"));
+        expect(c.status).toBe(400);
+        expect(c.total, report("switch off", c)).toBe(NORTHBOUND_QUERY_STATEMENTS.refusedBeforeAccess);
+      } finally {
+        vi.stubEnv("COREEDGE_QUERY_SURFACE", "on");
+      }
+    });
+
+    it("the minute's first call of a key adds its stamp, after the response, within budget", async () => {
+      await stampStale();
+      const c = await count(() => query("pageSize=2&count=true"));
+      expect(c.status).toBe(200);
+      expect(c.after.filter((sql) => sql.includes('"lastUsedAt"')), report("stamped query", c)).toHaveLength(1);
+      expect(c.total, report("stamped query", c)).toBe(NORTHBOUND_QUERY_STATEMENTS.page + 1);
+      expect(c.total).toBeLessThanOrEqual(DB_BUDGET.read);
+    });
+
+    it("a legacy read of the same interface carries no policy in its statement", async () => {
+      await stampNow();
+      const c = await count(() => read(tokens.live, ids.read));
+      expect(c.status).toBe(200);
+      expect(c.total, report("legacy read beside a policy", c)).toBe(3);
     });
   });
 
