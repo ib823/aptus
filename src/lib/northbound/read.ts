@@ -19,6 +19,7 @@ import {
   buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { bodyPrefix } from "@/lib/sap-public/body-prefix";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { stripODataEnvelope } from "@/lib/sap-public/odata-envelope";
 import {
@@ -51,6 +52,23 @@ export interface NorthboundReadResult {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 100;
+/**
+ * The most of a read's body that is read, in DECODED bytes. The body was read
+ * whole before, and fetch inflates before reading, so a builder's own host
+ * answering ~0.4 MB of gzip that expands to hundreds of MB could take a shared
+ * instance down with two reads at once (consolidated review round 1). Past it
+ * the stream is cancelled and the read is an invalid body, said as too large.
+ *
+ * 16 MiB, NOT a per-row allowance. It was 100 x 32 KiB = 3.125 MiB, and wide
+ * rows (a SuccessFactors Photo or Attachment, any binary or long-text
+ * property: the broker sends no $select) pass that at a high limit. Such a
+ * read was served before the bound, and cut at it the ERROR counted against
+ * SAP: a circuit upstream-error, a refused rotation probe, a failing lane
+ * proof (P1 on wave 2 integration review round 1). 16 MiB is above the
+ * ~4.5 MB a Vercel function can return, so nothing a deployment serves is
+ * cut, and it still caps a bomb far below a 2 GB instance.
+ */
+export const MAX_READ_BODY_BYTES = 16 * 1024 * 1024;
 
 /** OData v2 nests rows under `d.results`; v4 puts them in `value`. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -190,7 +208,15 @@ export async function readEntitySet(
     // JSON.parse throwing on it would surface as a generic crash rather than as
     // the honest status the response code already told us.
     let json: unknown = null;
-    const text = await res.text();
+    const { text, truncated } = await bodyPrefix(res, MAX_READ_BODY_BYTES);
+    if (truncated) {
+      return {
+        status: "ERROR", httpStatus: res.status, records: [],
+        detail: `The tenant's response is larger than ${MAX_READ_BODY_BYTES / (1024 * 1024)} MB, so it was not read. Ask for fewer records.`,
+        durationMs: Date.now() - started,
+        failureReason: FAILURE_REASON_INVALID_BODY,
+      };
+    }
     if (text) {
       try {
         json = JSON.parse(text);

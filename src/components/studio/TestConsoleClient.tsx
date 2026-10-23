@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
 import { formatDate } from "@/lib/format/date";
 import { type HonestStatus } from "@/lib/studio/honest-status";
+import { refusalMessage } from "@/lib/studio/refusal-message";
 
 /** A saved run, as the test-cases API returns it. */
 interface SavedCase {
@@ -154,6 +155,7 @@ export function TestConsoleClient({
   const [capturing, setCapturing] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [files, setFiles] = useState<{ path: string; contents: string }[] | null>(null);
+  const [scaffoldError, setScaffoldError] = useState<string | null>(null);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
 
@@ -430,7 +432,7 @@ export function TestConsoleClient({
         data?: { fields: number; required: number; sampleSize: number };
         error?: { message?: string };
       };
-      if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Could not capture the schema.");
+      if (!res.ok || !json.data) throw new Error(refusalMessage(res, json, "Could not capture the schema."));
       setSaved(
         `Captured ${json.data.fields} field${json.data.fields === 1 ? "" : "s"} ` +
           `(${json.data.required} always present) from ${json.data.sampleSize} rows. ` +
@@ -475,7 +477,7 @@ export function TestConsoleClient({
         data?: { scenario: string; rows: number; replaced: boolean };
         error?: { message?: string };
       };
-      if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Could not capture the fixture.");
+      if (!res.ok || !json.data) throw new Error(refusalMessage(res, json, "Could not capture the fixture."));
       setSaved(
         `${json.data.replaced ? "Replaced" : "Captured"} the "${json.data.scenario}" fixture` +
           `${json.data.rows > 0 ? ` (${json.data.rows} rows)` : ""}. ` +
@@ -488,12 +490,23 @@ export function TestConsoleClient({
     }
   }, [selected, run]);
 
+  /*
+   * A refused kit is said, not dropped: the route refuses by design (the
+   * organisation's compile time spent, the compiler busy or off, a kit past
+   * its budget), and only `data` used to be read, so the panel stayed empty.
+   */
   const loadScaffold = useCallback(async () => {
     if (!selected) return;
     setFiles(null);
-    const res = await fetch(`/api/studio/interfaces/${selected.id}/scaffold`);
-    const json = (await res.json()) as { data?: { files: { path: string; contents: string }[] } };
-    if (json.data) setFiles(json.data.files);
+    setScaffoldError(null);
+    try {
+      const res = await fetch(`/api/studio/interfaces/${selected.id}/scaffold`);
+      const json = (await res.json().catch(() => null)) as { data?: { files: { path: string; contents: string }[] } } | null;
+      if (res.ok && json?.data) setFiles(json.data.files);
+      else setScaffoldError(`Failed: ${refusalMessage(res, json, "The starter kit could not be generated.")}`);
+    } catch {
+      setScaffoldError("Failed: the starter kit could not be generated.");
+    }
   }, [selected]);
 
   function download(file: { path: string; contents: string }) {
@@ -649,8 +662,12 @@ export function TestConsoleClient({
             </p>
           )}
 
+          {/* The rows scroll sideways (eight unwrapped columns), so the box must
+              take keyboard focus to be scrolled without a pointer (axe
+              scrollable-region-focusable); the global [tabindex]:focus-visible
+              rule draws its ring. */}
           {run.rows && run.rows.length > 0 && (
-            <div style={{ overflowX: "auto", marginTop: 12 }}>
+            <div tabIndex={0} role="region" aria-label="Rows read" style={{ overflowX: "auto", marginTop: 12 }}>
               <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "var(--surface-ink-tint)", textAlign: "left" }}>
@@ -787,6 +804,11 @@ export function TestConsoleClient({
             </button>
           ))}
         </div>
+        {scaffoldError && (
+          <p role="alert" style={{ ...muted, marginTop: 10, color: "var(--status-awaiting-fg)" }} data-testid="scaffold-error">
+            {scaffoldError}
+          </p>
+        )}
         {files && (
           <p style={{ ...muted, marginTop: 10 }}>
             The OpenAPI document is the portable artifact — generate a client in any language

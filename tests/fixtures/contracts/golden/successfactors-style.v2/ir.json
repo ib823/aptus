@@ -1,0 +1,259 @@
+{
+  "complexTypes": [
+    {
+      "name": "UpsertResult",
+      "navigations": [],
+      "properties": [
+        {
+          "name": "key",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "name": "status",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "name": "message",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "name": "httpCode",
+          "nullable": true,
+          "type": "Edm.Int32"
+        }
+      ],
+      "qualifiedName": "SFOData.UpsertResult"
+    }
+  ],
+  "container": "SFOData.EntityContainer",
+  "dataServiceVersion": "2.0",
+  "edmxVersion": "1.0",
+  "entitySets": [
+    {
+      "capabilities": {
+        "creatable": true,
+        "deletable": true,
+        "updatable": true
+      },
+      "entityType": "SFOData.cust_TravelRequest",
+      "label": "Travel Request",
+      "name": "cust_TravelRequest"
+    },
+    {
+      "capabilities": {
+        "creatable": false,
+        "deletable": false,
+        "updatable": true
+      },
+      "entityType": "SFOData.User",
+      "label": "User",
+      "name": "User"
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": [
+        "externalCode",
+        "effectiveStartDate"
+      ],
+      "label": "Travel Request",
+      "name": "cust_TravelRequest",
+      "navigations": [
+        {
+          "collection": false,
+          "name": "cust_TravellerNav",
+          "nullable": true,
+          "target": "SFOData.User"
+        }
+      ],
+      "properties": [
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "mandatory": true,
+            "sortable": true,
+            "updatable": false
+          },
+          "label": "Code",
+          "maxLength": 128,
+          "name": "externalCode",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "mandatory": true,
+            "sortable": true,
+            "updatable": false
+          },
+          "displayFormat": "Date",
+          "label": "Start Date",
+          "name": "effectiveStartDate",
+          "nullable": false,
+          "type": "Edm.DateTime"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "mandatory": false,
+            "sortable": true,
+            "updatable": true
+          },
+          "label": "Destination",
+          "maxLength": 255,
+          "name": "cust_Destination",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "sortable": true,
+            "updatable": true
+          },
+          "label": "Estimated Cost",
+          "name": "cust_Amount",
+          "nullable": true,
+          "precision": 20,
+          "scale": 3,
+          "type": "Edm.Decimal"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "sortable": true,
+            "updatable": true
+          },
+          "label": "Nights",
+          "name": "cust_Nights",
+          "nullable": true,
+          "type": "Edm.Int64"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "sortable": true,
+            "updatable": true
+          },
+          "label": "Approved",
+          "name": "cust_Approved",
+          "nullable": true,
+          "type": "Edm.Boolean"
+        },
+        {
+          "capabilities": {
+            "creatable": true,
+            "filterable": true,
+            "sortable": true,
+            "updatable": true
+          },
+          "label": "Traveller",
+          "maxLength": 100,
+          "name": "cust_Traveller",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "filterable": true,
+            "sortable": true,
+            "updatable": false
+          },
+          "label": "Last Modified Date",
+          "name": "lastModifiedDateTime",
+          "nullable": true,
+          "type": "Edm.DateTimeOffset"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "filterable": true,
+            "sortable": true,
+            "updatable": false
+          },
+          "label": "Created By",
+          "maxLength": 255,
+          "name": "createdBy",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "capabilities": {
+            "creatable": false,
+            "filterable": true,
+            "sortable": false,
+            "updatable": false
+          },
+          "label": "Record Status",
+          "maxLength": 255,
+          "name": "mdfSystemRecordStatus",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "qualifiedName": "SFOData.cust_TravelRequest"
+    },
+    {
+      "key": [
+        "userId"
+      ],
+      "label": "User",
+      "name": "User",
+      "navigations": [],
+      "properties": [
+        {
+          "label": "User ID",
+          "maxLength": 100,
+          "name": "userId",
+          "nullable": false,
+          "type": "Edm.String"
+        },
+        {
+          "label": "Email",
+          "maxLength": 100,
+          "name": "email",
+          "nullable": true,
+          "type": "Edm.String"
+        },
+        {
+          "label": "First Name",
+          "maxLength": 128,
+          "name": "firstName",
+          "nullable": true,
+          "type": "Edm.String"
+        }
+      ],
+      "qualifiedName": "SFOData.User"
+    }
+  ],
+  "enumTypes": [],
+  "irVersion": 1,
+  "namespaces": [
+    "SFOData"
+  ],
+  "odataVersion": "V2",
+  "operations": [
+    {
+      "httpMethod": "POST",
+      "kind": "action",
+      "label": "Upsert",
+      "name": "upsert",
+      "parameters": [],
+      "returnType": {
+        "collection": true,
+        "type": "SFOData.UpsertResult"
+      }
+    }
+  ]
+}

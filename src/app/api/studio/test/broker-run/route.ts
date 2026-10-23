@@ -141,7 +141,8 @@ export async function POST(request: NextRequest) {
         revokedAt: null,
         ...(input.clientId ? { id: input.clientId } : {}),
       }),
-      select: { id: true, environment: true, sapClient: true, expiresAt: true },
+      // lastUsedAt: the stamp below is written at most once a minute (P0.19).
+      select: { id: true, environment: true, sapClient: true, expiresAt: true, lastUsedAt: true },
       orderBy: { createdAt: "asc" },
     })
   ).filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime());
@@ -224,9 +225,11 @@ export async function POST(request: NextRequest) {
    * credential against the same tenant and left it untouched, so a credential
    * used daily from Studio looked dormant on the operations board. Fire-and-
    * forget, exactly as the northbound routes do it: failing to stamp a timestamp
-   * must never fail the run.
+   * must never fail the run. And at most once a minute per key, as they stamp
+   * it (P0.19, auth.ts LAST_USED_STAMP_INTERVAL_MS): passed the row's own
+   * value, so a run within a minute of the key's last use writes nothing.
    */
-  void touchClientLastUsed(client.id, scope.organizationId);
+  void touchClientLastUsed(client.id, scope.organizationId, client.lastUsedAt);
 
   // 1 — the grant gate, exactly as the broker evaluates it.
   const access = await authorise("READ", scope, iface.solutionId, iface.id, client.environment, now);

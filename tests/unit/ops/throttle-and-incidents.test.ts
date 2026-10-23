@@ -238,6 +238,11 @@ describe("the throttle endpoint is honest about which buckets it can see", () =>
     const data = await body();
     expect(data.credentials[0].throttledInWindow).toBe(6);
     expect(data.provenance.throttleCountsAreAFloor).toContain("edge bucket");
+    // Not a /schema read its organisation's bucket refused: that credential is under its own limit (review round 2).
+    expect(mocks.auditGroupBy.mock.calls[0]?.[0]?.where).toMatchObject({
+      status: 429,
+      OR: [{ failureReason: null }, { failureReason: { not: "ORG_SCHEMA_RATE" } }],
+    });
   });
 
   it("scopes the credential query to the caller's organization", async () => {

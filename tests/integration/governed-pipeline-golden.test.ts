@@ -24,6 +24,15 @@
  * PostgreSQL. WHAT IS STOOD IN: the session, SAP itself (`fetch`), and the
  * limiter's answer where a scenario needs a refusal from it.
  *
+ * P1.10 ON THE PIPELINE (P1 onto Phase 0b wave 2). The golden predates
+ * API versioning, whose two audit columns (apiVersion, apiBasePath) every
+ * northbound row now carries. They are compared apart from the golden: every
+ * northbound row names the path and version that served it, every console
+ * row (broker run, preview) names neither, and everything else is the golden.
+ * Then every northbound scenario runs again through its /api/northbound/v1
+ * alias and must answer and audit exactly as the golden says, its rows naming
+ * the /v1 path: the alias runs the same pipeline, refusals included.
+ *
  * Opt-in like the other integration tests: skipped without TEST_DATABASE_URL.
  */
 
@@ -66,6 +75,8 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => {
 import { prisma } from "@/lib/db/prisma";
 import { GET as readRoute } from "@/app/api/northbound/interfaces/[id]/data/route";
 import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/write/route";
+import { GET as readRouteV1 } from "@/app/api/northbound/v1/interfaces/[id]/data/route";
+import { POST as writeRouteV1 } from "@/app/api/northbound/v1/interfaces/[id]/data/write/route";
 import { GET as previewRoute } from "@/app/api/sap/tdd/preview/route";
 import { POST as brokerRun } from "@/app/api/studio/test/broker-run/route";
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
@@ -157,16 +168,21 @@ interface Observed {
 }
 
 const STRIPPED = new Set(["id", "at", "correlationId", "durationMs"]);
+/** P1.10's columns, younger than the golden: compared apart from it (see the header). */
+const SERVED_AS = ["apiBasePath", "apiVersion"] as const;
 let seen = 0;
+/** What each row the last call wrote said about the path and version that served it. */
+let servedAs: string[] = [];
 
 async function newAuditRows(): Promise<Record<string, unknown>[]> {
   const rows = await prisma.northboundAuditEvent.findMany({ where: { organizationId: ORG }, orderBy: { at: "asc" } });
   const fresh = rows.slice(seen);
   seen = rows.length;
+  servedAs = fresh.map((row) => `${row.apiBasePath ?? "-"} ${row.apiVersion ?? "-"}`);
   return fresh.map((row) =>
     Object.fromEntries(
       Object.entries(row)
-        .filter(([k]) => !STRIPPED.has(k))
+        .filter(([k]) => !STRIPPED.has(k) && !(SERVED_AS as readonly string[]).includes(k))
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => [k, typeof v === "string" && names.has(v) ? names.get(v)! : v]),
     ),
@@ -190,9 +206,12 @@ async function observe(res: Response): Promise<Observed> {
   };
 }
 
+/** The northbound base path the read and write helpers call: the original, or its /v1 alias (P1.10). */
+let base: "/api/northbound" | "/api/northbound/v1" = "/api/northbound";
+
 const read = (token: string | null, id: string) =>
-  readRoute(
-    new NextRequest(`http://localhost/api/northbound/interfaces/${id}/data`, {
+  (base === "/api/northbound/v1" ? readRouteV1 : readRoute)(
+    new NextRequest(`http://localhost${base}/interfaces/${id}/data`, {
       headers: token ? { authorization: `Bearer ${token}` } : {},
     }),
     { params: Promise.resolve({ id }) },
@@ -207,8 +226,8 @@ const write = (
   if (token) headers.authorization = `Bearer ${token}`;
   if (opts.writeKey) headers["x-coreedge-write-key"] = opts.writeKey;
   if (opts.key) headers["idempotency-key"] = opts.key;
-  return writeRoute(
-    new NextRequest(`http://localhost/api/northbound/interfaces/${id}/data/write`, {
+  return (base === "/api/northbound/v1" ? writeRouteV1 : writeRoute)(
+    new NextRequest(`http://localhost${base}/interfaces/${id}/data/write`, {
       method: "POST",
       headers,
       body: JSON.stringify(opts.body ?? { record: { BusinessPartnerCategory: "1" } }),
@@ -457,13 +476,22 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed pipeline changes n
     await prisma.user.deleteMany({ where: { id: { in: Object.values(users).map((u) => u.id) } } });
   });
 
+  /** Northbound scenarios: their rows name the path and the version (P1.10); the console's name neither. */
+  const isNorthbound = (scenario: string) => scenario.startsWith("read:") || scenario.startsWith("write:");
+
   it("answers and audits every scenario exactly as the routes did before the port", async () => {
     const observed: Record<string, Observed> = {};
+    const served: Record<string, string[]> = {};
     for (const s of SCENARIOS) {
       h.rate = s.rate ?? "real";
       h.sap = s.sap ?? "ok";
       h.user = s.user ? users[s.user] : null;
       observed[s.name] = await observe(await s.call());
+      served[s.name] = servedAs;
+    }
+    for (const [scenario, rows] of Object.entries(served)) {
+      const want = isNorthbound(scenario) ? "/api/northbound 2026-10" : "- -";
+      expect(rows, scenario).toEqual(rows.map(() => want));
     }
 
     if (UPDATE) {
@@ -474,6 +502,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the governed pipeline changes n
     expect(Object.keys(observed)).toEqual(Object.keys(golden));
     for (const key of Object.keys(golden)) {
       expect(observed[key], key).toEqual(golden[key]);
+    }
+  });
+
+  it("every northbound scenario answers and audits the same through its /v1 alias", async () => {
+    // The write scenarios replay and conflict on their own keys: start them afresh.
+    await prisma.northboundIdempotencyKey.deleteMany({ where: { organizationId: ORG } });
+    const golden = JSON.parse(readFileSync(GOLDEN, "utf8")) as Record<string, Observed>;
+    base = "/api/northbound/v1";
+    try {
+      let ran = 0;
+      for (const s of SCENARIOS.filter((x) => isNorthbound(x.name))) {
+        h.rate = s.rate ?? "real";
+        h.sap = s.sap ?? "ok";
+        h.user = null;
+        const got = await observe(await s.call());
+        expect(got, `v1 ${s.name}`).toEqual(golden[s.name]);
+        expect(servedAs, `v1 ${s.name}`).toEqual(servedAs.map(() => "/api/northbound/v1 2026-10"));
+        ran += 1;
+      }
+      expect(ran).toBe(31);
+    } finally {
+      base = "/api/northbound";
     }
   });
 });

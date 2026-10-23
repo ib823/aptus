@@ -165,3 +165,54 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   /** ...plus one stored result per service probed (and one more per V4 address it verifies or withdraws). */
   probeAllPerService: 1,
 } as const;
+
+/**
+ * WHAT GET /schema SENDS (P1.3 on P0.19), and its /v1 alias, which is the
+ * same handler. NOT a governed read: it reaches no SAP system, so it is not on
+ * the pipeline and not held to `DB_BUDGET.read`. It serves the texts a verify
+ * stored (P1.3, lib/contracts/snapshot.ts) and renders nothing. Measured warm
+ * (a key stamped in the last minute), and asserted exactly by
+ * tests/integration/governed-db-budget.test.ts, so a change in either is seen.
+ */
+export const NORTHBOUND_SCHEMA_STATEMENTS = {
+  /**
+   * A contract a verify recorded: the key (the governed read's one-statement
+   * lookup), the interface, the captured schema's stamp and size, the current
+   * snapshot's summary, its stored texts, and the audit row. A captured
+   * schema of this contract adds its read (+1); texts a record moved between
+   * the summary and the texts read the new head once more (+1, rare). The
+   * key's `lastUsedAt` stamp, at most once a minute per key: +1.
+   */
+  compiled: 6,
+  /** No contract recorded yet: the same, without the texts. */
+  none: 5,
+} as const;
+
+/**
+ * WHAT DISCOVERY SENDS (GET /api/northbound/interfaces, and its /v1 alias,
+ * which is the same handler). NOT a governed read either: it lists the
+ * solution's interfaces and reaches no SAP system. Measured warm (a key
+ * stamped in the last minute) and asserted exactly by
+ * tests/integration/governed-db-budget.test.ts. Its key's `lastUsedAt` stamp
+ * follows the governed calls' rule, at most once a minute per key (+1); it
+ * was written on every call before.
+ *
+ * The verdicts' part varies with the solution (northbound/read-verdict.ts,
+ * COST): one connections query per SAP product among the interfaces that
+ * pass the grant gate, and one catalogue lookup per distinct service among
+ * those that also bind and that is not in the curated list. The figures below
+ * are for one product whose granted services are curated, the measured case;
+ * each further product adds 1, each such catalogue service 1.
+ */
+export const NORTHBOUND_DISCOVERY_STATEMENTS = {
+  /**
+   * Warm: the key (the governed read's one-statement lookup), the solution's
+   * interfaces, their grants, the connections their verdicts are read
+   * against, and the audit row.
+   */
+  warm: 5,
+  /** A key last stamped over a minute ago: the same, plus the stamp. */
+  stamped: 6,
+  /** No interface passes the grant gate (none granted in the key's environment): no connections are read. */
+  nothingGranted: 4,
+} as const;

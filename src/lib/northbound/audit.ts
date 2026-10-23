@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { currentNorthboundCall } from "@/lib/northbound/versioned-route";
 
 export interface NorthboundAuditInput {
   organizationId: string;
@@ -107,9 +108,23 @@ export interface NorthboundAuditInput {
    * sentence could be said.
    */
   failureReason?: string | null;
+  /**
+   * Which dated version of the northbound API served the call ("2026-10"),
+   * and which base path it came in on ("/api/northbound/v1" or the original
+   * "/api/northbound"). P1.10.
+   *
+   * Omitted by every route: inside a northbound call they come from the
+   * context the version wrapper opens (versioned-route.ts), so the rows the
+   * many call sites write are stamped without one of them changing, and
+   * without a query. Null outside one — a console read, a Test Console dry
+   * run — because no northbound version served those.
+   */
+  apiVersion?: string | null;
+  apiBasePath?: string | null;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
+  const served = currentNorthboundCall();
   try {
     await prisma.northboundAuditEvent.create({
       data: {
@@ -131,6 +146,8 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         connectionEnvironment: input.connectionEnvironment ?? null,
         durationMs: input.durationMs ?? null,
         failureReason: input.failureReason ?? null,
+        apiVersion: input.apiVersion ?? served?.apiVersion ?? null,
+        apiBasePath: input.apiBasePath ?? served?.apiBasePath ?? null,
       },
     });
   } catch (err) {

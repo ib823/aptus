@@ -22,13 +22,22 @@ import {
   northboundThrottleRefusal,
   unauthenticated,
 } from "@/lib/northbound/respond";
+import { withNorthboundVersion } from "@/lib/northbound/versioned-route";
 import { prisma } from "@/lib/db/prisma";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+/**
+ * Served as every supported version of the northbound API, at
+ * /api/northbound/* and at /api/northbound/v1/* (which re-exports this):
+ * versioned-route.ts resolves CoreEdge-Version, stamps it on the response,
+ * and names the version and path on every audit row this call writes (P1.10).
+ */
+export const GET = withNorthboundVersion(listInterfaces);
+
+async function listInterfaces(request: NextRequest) {
   const correlationId = newCorrelationId();
 
   const bearer = extractBearer(request.headers.get("authorization"));
@@ -41,7 +50,11 @@ export async function GET(request: NextRequest) {
     return unauthenticated(correlationId);
   }
   const client = auth.client;
-  void touchClientLastUsed(client.clientId, client.organizationId);
+  // At most once a minute per key, as the governed calls and GET /schema stamp
+  // it (P0.19, auth.ts LAST_USED_STAMP_INTERVAL_MS): an UPDATE of the key's row
+  // on every discovery call was a statement of its own on every call
+  // (governed-db-budget.test.ts, discovery).
+  void touchClientLastUsed(client.clientId, client.organizationId, auth.lastUsedAt);
 
   /*
    * PER-CREDENTIAL THROTTLE AND AN AUDIT ROW — the two things the data routes

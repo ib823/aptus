@@ -28,6 +28,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -122,7 +124,14 @@ import { POST as writeRoute } from "@/app/api/northbound/interfaces/[id]/data/wr
 import { forgetRecordedJourneyMilestones } from "@/lib/coreedge/journey";
 import { generateSessionToken, hashSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET } from "@/lib/governed/db-budget";
+import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_DISCOVERY_STATEMENTS, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import { GET as discoveryRoute } from "@/app/api/northbound/interfaces/route";
+import { GET as discoveryRouteV1 } from "@/app/api/northbound/v1/interfaces/route";
+import { GET as schemaRoute } from "@/app/api/northbound/interfaces/[id]/schema/route";
+import { GET as schemaRouteV1 } from "@/app/api/northbound/v1/interfaces/[id]/schema/route";
+import { recordJob } from "@/lib/contracts/jobs";
+import { recordVerifiedContract } from "@/lib/contracts/record";
+import { loadRecordHeads } from "@/lib/contracts/snapshot";
 import { hashClientToken } from "@/lib/northbound/auth";
 import { generateClientToken } from "@/lib/northbound/issue";
 import { setWriteCredential } from "@/lib/northbound/write-credential";
@@ -755,6 +764,143 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.total, report("console ariba", c)).toBe(3);
       expect(sessionLookups(c), report("console ariba", c)).toHaveLength(1);
       expect(c.response.filter((s) => s.includes("PlatformConsoleRead")), report("console ariba", c)).toHaveLength(1);
+    });
+  });
+
+  /*
+   * GET /schema AND ITS /v1 ALIAS (P1.3 on P0.19). Not a governed read: it
+   * reaches no SAP system, so it is not on the pipeline and is not held to
+   * DB_BUDGET.read. It serves the texts a verify stored (P1.3), and what it
+   * sends is stated in NORTHBOUND_SCHEMA_STATEMENTS and asserted exactly
+   * here, so a change is seen. The two paths are one handler.
+   */
+  describe("GET /schema", () => {
+    const schemaIds = { compiled: "", bare: "" };
+    const schema = (path: "/api/northbound" | "/api/northbound/v1", token: string, id: string) =>
+      (path === "/api/northbound" ? schemaRoute : schemaRouteV1)(
+        new NextRequest(`http://localhost${path}/interfaces/${id}/schema`, { headers: { authorization: `Bearer ${token}` } }),
+        { params: Promise.resolve({ id }) },
+      );
+
+    beforeAll(async () => {
+      const make = async (externalId: string) =>
+        prisma.interface.create({
+          data: { organizationId: ORG, solutionId: ids.solution, name: externalId, sapProduct: "s4hana", externalId, operation: "READ", mode: "READ", entitySet: "A_Customer", status: "ACTIVE" },
+          select: { id: true, version: true, externalId: true, entitySet: true, operation: true, mode: true },
+        });
+      const compiled = await make(`${RUN}-schema-compiled`);
+      schemaIds.compiled = compiled.id;
+      schemaIds.bare = (await make(`${RUN}-schema-bare`)).id;
+      // The contract a verify records: the record job in process (jobs.ts is pure), then the record.
+      const scope = tenantScopeOf(ORG);
+      const iface = { ...compiled, entitySet: "A_Customer" };
+      const heads = await loadRecordHeads(scope, iface, "DEV");
+      const description = readFileSync(join(process.cwd(), "tests/fixtures/contracts/edmx/business-partner.v2.xml"), "utf8");
+      const outcome = await recordVerifiedContract({
+        scope,
+        iface,
+        compiled: recordJob({ description, entitySet: "A_Customer", ...heads }),
+        heads,
+        environment: "DEV",
+        connectionId: "conn_budget",
+        actorId: ids.user,
+      });
+      expect(outcome).toMatchObject({ status: "RECORDED" });
+    });
+
+    afterAll(async () => {
+      await prisma.contractSnapshot.deleteMany({ where: { organizationId: ORG } });
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: a compiled contract's stored texts, in the stated statements", async (path) => {
+      await stampNow();
+      const c = await count(() => schema(path, tokens.live, schemaIds.compiled));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`schema ${path}`, c)).toBe(NORTHBOUND_SCHEMA_STATEMENTS.compiled);
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: an interface with no contract yet, in the stated statements", async (path) => {
+      await stampNow();
+      const c = await count(() => schema(path, tokens.live, schemaIds.bare));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`schema bare ${path}`, c)).toBe(NORTHBOUND_SCHEMA_STATEMENTS.none);
+    });
+  });
+
+  /*
+   * DISCOVERY AND ITS /v1 ALIAS. Not a governed read: it lists the solution's
+   * interfaces and reaches no SAP system. It stamped the key's lastUsedAt on
+   * every call; it now follows the governed calls' once-a-minute rule, so a
+   * warm call sends no UPDATE and a stale key sends exactly one.
+   */
+  describe("GET /interfaces (discovery)", () => {
+    const discover = (path: "/api/northbound" | "/api/northbound/v1", token: string) =>
+      (path === "/api/northbound" ? discoveryRoute : discoveryRouteV1)(
+        new NextRequest(`http://localhost${path}/interfaces`, { headers: { authorization: `Bearer ${token}` } }),
+      );
+    const stampUpdates = (c: Counted) => [...c.response, ...c.after].filter((s) => /UPDATE\s+"public"\."SolutionClient"/i.test(s) && s.includes("lastUsedAt"));
+    const connectionsRead = (s: string) => /^SELECT\s+"public"\."SapConnection"\./.test(s);
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: warm, in the stated statements, with no key stamp", async (path) => {
+      await stampNow();
+      const c = await count(() => discover(path, tokens.live));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.warm);
+      expect(stampUpdates(c), report(`discovery ${path}`, c)).toHaveLength(0);
+      // One product among the granted interfaces: its connections, read once.
+      expect(c.response.filter(connectionsRead), report(`discovery ${path}`, c)).toHaveLength(1);
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: a key last stamped over a minute ago is stamped once", async (path) => {
+      await prisma.solutionClient.update({ where: { id: ids.client, organizationId: ORG }, data: { lastUsedAt: new Date(Date.now() - 5 * 60_000) } });
+      const c = await count(() => discover(path, tokens.live));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery stale ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.stamped);
+      expect(stampUpdates(c), report(`discovery stale ${path}`, c)).toHaveLength(1);
+    });
+
+    // The verdicts read connections only for interfaces that pass the grant
+    // gate: a solution with nothing granted in the key's environment reads
+    // none. Its own solution, so no other test's grants reach it.
+    let ungrantedKey = "";
+    beforeAll(async () => {
+      const solutionId = (
+        await prisma.solution.create({
+          data: {
+            organizationId: ORG,
+            name: "Budget, nothing granted",
+            slug: `${RUN}-nothing-granted`,
+            classification: "CLIENT_APP",
+            businessProblem: "Discovery with nothing granted.",
+            dataClass: "INTERNAL",
+            status: "ACTIVE",
+          },
+        })
+      ).id;
+      await prisma.interface.create({
+        data: { organizationId: ORG, solutionId, name: "purchase-orders", sapProduct: "s4hana", externalId: "purchase-orders", operation: "READ", mode: "READ", entitySet: "A_PurchaseOrder", status: "ACTIVE" },
+      });
+      ungrantedKey = generateClientToken("DEV");
+      await prisma.solutionClient.create({
+        data: {
+          organizationId: ORG,
+          solutionId,
+          label: "DEV key, nothing granted",
+          createdById: ids.user,
+          tokenHash: hashClientToken(ungrantedKey),
+          environment: "DEV",
+          isActive: true,
+          expiresAt: new Date(Date.now() + DAY),
+          lastUsedAt: new Date(),
+        },
+      });
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: nothing granted in the key's environment reads no connections", async (path) => {
+      const c = await count(() => discover(path, ungrantedKey));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery nothing granted ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.nothingGranted);
+      expect(c.response.filter(connectionsRead), report(`discovery nothing granted ${path}`, c)).toHaveLength(0);
     });
   });
 

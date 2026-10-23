@@ -196,7 +196,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
   }, [confirmation, enabled, entity, parsedPayload, serviceKey, tenantKey, writeSecret, product]);
 
   return (
-    <section className="rounded-[var(--radius-card-warm)] border" style={{ background: "var(--surface-paper)", borderColor: "var(--border-default)" }}>
+    <section data-sap-write-panel className="rounded-[var(--radius-card-warm)] border" style={{ background: "var(--surface-paper)", borderColor: "var(--border-default)" }}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-default)" }}>
         <div>
           <h2 className="font-serif text-lg tracking-tight" style={{ color: "var(--brand-navy)" }}>Write Mode</h2>
@@ -344,7 +344,11 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
               <span className="text-sm font-medium" style={{ color: "var(--ink-primary)" }}>Result</span>
               <HttpStatusPill tone={httpTone(result.data.ok)} label={`HTTP ${result.data.status}`} />
             </div>
-            <pre className="max-h-[360px] overflow-auto p-3 text-xs">
+            {/* A created record's answer runs past the box's 360px, so the box
+                must take keyboard focus to be scrolled without a pointer (axe
+                scrollable-region-focusable); the global [tabindex]:focus-visible
+                rule draws its ring. */}
+            <pre tabIndex={0} role="region" aria-label="Write result" className="max-h-[360px] overflow-auto p-3 text-xs">
               {prettyJson({
                 ok: result.data.ok,
                 status: result.data.status,

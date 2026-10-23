@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { developerSignupMode } from "@/lib/auth/developer-signup-mode";
 import { machineAuthFailureKey } from "@/lib/northbound/auth-failures";
 import { extractBearer } from "@/lib/northbound/bearer";
+import { edgeVersionHeaders, isNorthboundPath, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import {
   checkRateLimit,
   getClientIp,
@@ -150,14 +151,34 @@ async function machineRouteLimit(
   return { result: { ...own, remaining: Math.min(own.remaining, backstop.remaining) }, by: "credential" };
 }
 
-/** Whose limit refused a machine call at the edge. */
-type MachineRefusalBy = "credential" | "address" | "failed-credentials";
+/**
+ * Whose limit refused a machine call at the edge. "per-ip" is the ordinary
+ * per-IP API bucket, which a northbound call meets when machineRouteLimit
+ * does not apply: GET /versions (no credential needed), a call with no
+ * bearer, or every call with COREEDGE_MACHINE_RATE_LIMIT=ip.
+ */
+type MachineRefusalBy = "credential" | "address" | "failed-credentials" | "per-ip";
 
 const MACHINE_REFUSAL_MESSAGES: Record<MachineRefusalBy, string> = {
   credential: "Too many requests for this client credential.",
   address: "Too many requests from this address.",
   "failed-credentials":
     "Too many requests with an unrecognised client credential from this address. Calls from this address are refused until the window frees room.",
+  "per-ip": "Too many requests. Please try again later.",
+};
+
+/**
+ * The code each refusal is sent with. The per-IP bucket keeps the code it
+ * has always sent on every /api/* route, RATE_LIMIT_EXCEEDED, because ABAP
+ * programs and SDKs written against the lab guide branch on it; on a
+ * northbound path it now arrives in the northbound envelope (a correlation
+ * id, no-store), as the generated OpenAPI documents it (P1 wave A review).
+ */
+const MACHINE_REFUSAL_CODES: Record<MachineRefusalBy, string> = {
+  credential: "RATE_LIMITED",
+  address: "RATE_LIMITED_ADDRESS",
+  "failed-credentials": "RATE_LIMITED_ADDRESS",
+  "per-ip": "RATE_LIMIT_EXCEEDED",
 };
 
 /**
@@ -172,8 +193,17 @@ const MACHINE_REFUSAL_MESSAGES: Record<MachineRefusalBy, string> = {
  * ADDRESS — the backstop, or the failed-lookup bucket — which another key, or
  * another tenant on a shared egress, may have spent; backing off a key that
  * never used its budget does not help, and the developer guide says so.
+ *
+ * A NORTHBOUND REFUSAL STATES ITS VERSION (P1.10), as every route response
+ * does, so a client reading `CoreEdge-Version` meets no gap at the edge. When
+ * the requested version would itself be refused, none is stated: that 400 is
+ * the route's to send once the caller is within its limits.
  */
-function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResponse {
+function machineRefusal(
+  result: RateLimitResult,
+  by: MachineRefusalBy,
+  versionHeaders: Record<string, string> = {},
+): NextResponse {
   const correlationId = crypto.randomUUID();
   const outage = isLimiterOutage(result);
   return NextResponse.json(
@@ -181,7 +211,7 @@ function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResp
       error: outage
         ? { code: "LIMITER_UNAVAILABLE", message: LIMITER_UNAVAILABLE_MESSAGE, correlationId }
         : {
-            code: by === "credential" ? "RATE_LIMITED" : "RATE_LIMITED_ADDRESS",
+            code: MACHINE_REFUSAL_CODES[by],
             message: MACHINE_REFUSAL_MESSAGES[by],
             correlationId,
           },
@@ -193,6 +223,7 @@ function machineRefusal(result: RateLimitResult, by: MachineRefusalBy): NextResp
         "cache-control": "no-store",
         "Retry-After": retryAfterSeconds(result),
         "X-RateLimit-Remaining": "0",
+        ...versionHeaders,
       },
     },
   );
@@ -370,11 +401,22 @@ async function handleRequest(
 
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
+      // Every edge refusal on a northbound path states the version it would
+      // have been served (P1.10): the machine refusals below, and the per-IP
+      // 429 and limiter 503 that a call with no bearer — or every call, with
+      // COREEDGE_MACHINE_RATE_LIMIT=ip — meets instead.
+      const versionHeaders = isNorthboundPath(pathname)
+        ? edgeVersionHeaders(request.headers.get(VERSION_HEADER))
+        : {};
 
       const machine = await machineRouteLimit(request, pathname, clientIp);
       if (machine) {
         if (!machine.result.allowed) {
-          return withObservabilityHeaders(machineRefusal(machine.result, machine.by), requestId, requestStart);
+          return withObservabilityHeaders(
+            machineRefusal(machine.result, machine.by, versionHeaders),
+            requestId,
+            requestStart,
+          );
         }
         const response = NextResponse.next({ request: { headers: requestHeaders } });
         response.headers.set("X-RateLimit-Remaining", String(machine.result.remaining));
@@ -430,10 +472,20 @@ async function handleRequest(
 
       const result = await checkRateLimit(key, config);
 
+      // A northbound caller is an application that quotes a correlation id,
+      // and the generated OpenAPI documents every refusal in the northbound
+      // envelope: the per-IP 429 and 503 on its paths answer in it too, with
+      // the same codes (P1 wave A review).
+      if (!result.allowed && isNorthboundPath(pathname)) {
+        return withObservabilityHeaders(machineRefusal(result, "per-ip", versionHeaders), requestId, requestStart);
+      }
+
       // An outage is not throttling (audit A44): the limiter fails closed in
       // production, and the refusal says why — 503, never 429.
       if (isLimiterOutage(result)) {
-        return withObservabilityHeaders(limiterUnavailableResponse(result), requestId, requestStart);
+        const unavailable = limiterUnavailableResponse(result);
+        for (const [name, value] of Object.entries(versionHeaders)) unavailable.headers.set(name, value);
+        return withObservabilityHeaders(unavailable, requestId, requestStart);
       }
 
       if (!result.allowed) {
@@ -450,6 +502,7 @@ async function handleRequest(
               "Content-Type": "application/json",
               "Retry-After": String(Math.ceil(result.resetMs / 1000)),
               "X-RateLimit-Remaining": "0",
+              ...versionHeaders,
             },
           },
         );

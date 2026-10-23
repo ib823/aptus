@@ -6,17 +6,52 @@
  * integration edge and hands over a contract. There is no in-browser editor and
  * there never should be.
  *
- * v1 renders TEMPLATES from the interface's stored config. It is deliberately not
- * a codegen engine: real generation from a live $metadata document is a later
- * phase, and the honest thing is to produce something small and accurate rather
- * than something elaborate and approximately right. Every artifact says which it
- * is, in the file itself, so nobody mistakes a template for a guarantee.
+ * THE CONTRACT IS COMPILED, WHEN IT CAN BE (P1.3). openapi.json (3.1) and
+ * openapi-3.0.json (3.0.3) come from the Contract Compiler
+ * (lib/contracts/openapi.ts): the record, request and key schemas are
+ * compiled from the service's own description when a verify has recorded one
+ * (a ContractSnapshot), inferred from captured rows when only those exist,
+ * and stated as unknown otherwise. The interface's operation decides the
+ * paths: a read interface gets the read, a create interface the write with
+ * its body. Every artifact says which source it came from, in the file
+ * itself, so nobody mistakes a template for a guarantee.
  *
  * Pure functions: no I/O, no framework, fully testable.
  */
 
+import { jsonText, UNLIMITED, utf8Length, type OutputBudget } from "@/lib/contracts/budget";
+import type { InterfaceContract, IrProperty } from "@/lib/contracts/ir";
+import { nameAllocator, toTypeName } from "@/lib/contracts/names";
+import {
+  buildNorthboundOpenApi,
+  documentJson,
+  type ContractForDoc,
+  type OpenApiVersion,
+  type SampledSchema,
+} from "@/lib/contracts/openapi";
+import { supportedVersions, UNVERSIONED_BASE_PATH, VERSION_HEADER } from "@/lib/northbound/version-policy";
 import { isCapturedSchema, servedResponseSchema } from "@/lib/studio/schema-capture";
 import { FIXTURE_SCENARIOS, stripFixtureEnvelope } from "@/lib/studio/fixtures";
+
+export { toTypeName };
+
+/**
+ * The base URL a kit is generated for when the caller names none: the
+ * original path, which Studio's download also uses with its own origin.
+ *
+ * NOT YET THE VERSIONED PATH (P1 wave A review). /api/northbound/v1 ships in
+ * this release; the deployment a Vercel Instant Rollback returns to does not
+ * serve it, so a kit that called it would get a 404 page on every call after
+ * a rollback. Kits move to v1 in a later release, once a deployment that
+ * serves it is the rollback target; the kit's OpenAPI lists v1 as the second
+ * server meanwhile. One implementation serves both.
+ */
+export const DEFAULT_KIT_BASE_URL = `https://coreedge.example${UNVERSIONED_BASE_PATH}`;
+
+/** The version an unpinned call is served today, as the kit's examples name it. */
+function defaultVersionName(): string {
+  return supportedVersions(new Date())[0]?.version ?? "";
+}
 
 export interface ScaffoldInterface {
   id: string;
@@ -40,226 +75,228 @@ export interface ScaffoldInterface {
    * files, so "not captured" is not mistaken for "nobody ever ran it".
    */
   withheldSchemaNote?: string;
+  /**
+   * READ | WRITE. Omitted, it follows the operation as the interfaces route
+   * derives it: READ reads, anything else writes.
+   */
+  mode?: string;
+  status?: string;
+  /**
+   * The interface's CURRENT compiled contract (P1.3) — a snapshot whose
+   * service and dataset match the interface now (contracts/snapshot.ts).
+   * A METADATA one describes the record precisely and gives a write its
+   * body; a SAMPLED one is the captured schema again, with a version.
+   */
+  compiled?: {
+    semver: string;
+    snapshotId: string;
+    contentHash: string;
+    compiledAt: string;
+    contract: InterfaceContract;
+  };
+  /** Approved, live grants on this interface, for the document's grant notes. */
+  grants?: readonly { operation: string; environment: string }[];
 }
 
-/** A conservative identifier for generated TypeScript. */
-export function toTypeName(raw: string): string {
-  const cleaned = raw
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join("");
-  const safe = /^[0-9]/.test(cleaned) ? `X${cleaned}` : cleaned;
-  return safe.length > 0 ? safe : "CoreEdgeResource";
+/** The mode the interfaces route derives from the operation, when none is given. */
+function modeOf(iface: ScaffoldInterface): string {
+  return iface.mode ?? (iface.operation === "READ" ? "READ" : "WRITE");
+}
+
+/** Which of the three sources the record's shape comes from. */
+function contractForDoc(iface: ScaffoldInterface): ContractForDoc {
+  if (iface.compiled && iface.compiled.contract.source === "METADATA") {
+    return {
+      source: "metadata",
+      contract: iface.compiled.contract,
+      semver: iface.compiled.semver,
+      snapshotId: iface.compiled.snapshotId,
+      contentHash: iface.compiled.contentHash,
+      compiledAt: iface.compiled.compiledAt,
+    };
+  }
+  // A captured schema is emitted as the served rows can satisfy it (it carries
+  // its own provenance in `x-captured`; one captured before the envelope was
+  // stripped is reconciled first — see servedResponseSchema).
+  const served = servedResponseSchema(iface.responseSchema);
+  if (isCapturedSchema(served)) return { source: "sampled", schema: served as unknown as SampledSchema };
+  return iface.withheldSchemaNote ? { source: "none", note: iface.withheldSchemaNote } : { source: "none" };
 }
 
 /**
- * OpenAPI 3.1 for this interface as the NORTHBOUND API exposes it.
+ * The kit document's info.version. A compiled contract's own semantic version,
+ * with the interface's version as build metadata ("2.0.0+iface.3"): the
+ * document follows the contract, so a contract that lost a field by a major
+ * version is a new major document, as the solution document's digest already
+ * says. It read "1.<interface version>.0" whatever the contract did, so a
+ * client cache or a diff gate keyed on it saw no change (hostile-input
+ * review round 1). Without a compiled contract there is no contract version
+ * to follow, and the interface's version is all there is.
+ */
+function kitInfoVersion(iface: ScaffoldInterface, contract: ContractForDoc): string {
+  return contract.source === "metadata" ? `${contract.semver}+iface.${iface.version}` : `1.${iface.version}.0`;
+}
+
+/**
+ * OpenAPI for this interface as the NORTHBOUND API exposes it — 3.1.0 by
+ * default (openapi.json), 3.0.3 on request (openapi-3.0.json, for generators
+ * that do not read 3.1 yet).
  *
  * It describes the CoreEdge endpoint the developer's app will call — not SAP's
  * own API. That is the whole value: they code against a stable contract we own,
  * rather than against a tenant-specific SAP surface.
  *
- * All four honest states are documented as responses. An OpenAPI that only
- * describes the happy path teaches consumers to treat everything else as a
- * crash, which is exactly the confusion the honest-status contract exists to
- * prevent.
+ * Every honest state is documented as a response, with every error code the
+ * broker can send at it. An OpenAPI that only describes the happy path teaches
+ * consumers to treat everything else as a crash, which is exactly the
+ * confusion the honest-status contract exists to prevent.
  */
-export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreedge.example/api/northbound"): string {
-  const typeName = toTypeName(iface.entitySet ?? iface.name);
-  const doc = {
-    openapi: "3.1.0",
-    info: {
-      title: `${safeName(iface.name)} — CoreEdge northbound`,
-      version: `1.${iface.version}.0`,
-      description: [
-        `Contract for the CoreEdge interface "${safeName(iface.name)}" (${iface.externalId}) of solution "${safeName(iface.solutionName)}".`,
-        "",
-        "Generated by CoreEdge Developer Studio from the interface's governed configuration.",
-        "This describes the CoreEdge northbound endpoint your application calls — not SAP's own API.",
-        "",
-        "Honest status: an empty result is a 200 with an empty array and MUST be treated as",
-        "'no records', which is different from 'not set up' (403) and from an error (5xx).",
-      ].join("\n"),
-    },
-    servers: [{ url: baseUrl }],
-    security: [{ bearerAuth: [] }],
-    paths: {
-      [`/interfaces/${iface.id}/data`]: {
-        get: {
-          operationId: `read${typeName}`,
-          summary: `Read ${safeName(iface.entitySet ?? iface.name)}`,
-          parameters: [
-            {
-              name: "limit",
-              in: "query",
-              required: false,
-              schema: { type: "integer", minimum: 1, maximum: 100, default: 10 },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Records, or an empty array meaning 'no records' — not an error.",
-              headers: {
-                "x-correlation-id": {
-                  description: "Quote this when raising a support request; it identifies the audit row for this call.",
-                  schema: { type: "string" },
-                },
-                "x-coreedge-interface-status": {
-                  description:
-                    "Present, with the value DRAFT, when the interface is still a draft in Developer Studio. A draft is served — premature is not wrong — but its contract may still change. Absent once the interface is ACTIVE.",
-                  schema: { type: "string", enum: ["DRAFT"] },
-                },
-              },
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["data"],
-                    properties: {
-                      data: {
-                        type: "object",
-                        // Every field the broker sends on a 200, named. `empty`
-                        // is the one that tells a successful read of nothing
-                        // apart from a failure, and it was not in the contract.
-                        required: ["records", "count", "empty", "note", "interface"],
-                        properties: {
-                          records: { type: "array", items: { $ref: `#/components/schemas/${typeName}` } },
-                          count: { type: "integer", description: "records.length." },
-                          empty: {
-                            type: "boolean",
-                            description: "True when the service answered successfully and had nothing to return. This is data, not a failure.",
-                          },
-                          note: { type: "string", description: "A one-line, human-readable account of what came back." },
-                          interface: {
-                            type: "object",
-                            required: ["id", "name", "version"],
-                            properties: {
-                              id: { type: "string" },
-                              name: { type: "string" },
-                              version: { type: "integer", description: "The governed contract version that served this call." },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description:
-                "The interface cannot be read as configured: it names no entity set, or its service could not be resolved. Fix the configuration in Studio — do not retry.",
-              content: errorContent(),
-            },
-            "401": { description: "Missing, revoked or expired client token.", content: errorContent() },
-            "403": {
-              description:
-                "Not set up: no approved access grant for this interface in this environment, or the communication arrangement is missing.",
-              content: errorContent(),
-            },
-            "404": {
-              description:
-                "NOT_FOUND. No interface with this id belongs to the solution this token was issued for, or the tenant answered that the interface's entity set does not exist. A configuration fault — do not retry.",
-              content: errorContent(),
-            },
-            "429": { description: "Rate limited — this endpoint reaches a live SAP tenant.", content: errorContent() },
-            "5XX": {
-              description:
-                "The tenant or the broker failed: 502 UPSTREAM_ERROR, 504 UPSTREAM_TIMEOUT, or 503 when the broker's rate limiter is unavailable. Distinct from an empty result; retrying may help.",
-              content: errorContent(),
-            },
-          },
-        },
+export function buildOpenApi(
+  iface: ScaffoldInterface,
+  baseUrl = DEFAULT_KIT_BASE_URL,
+  version: OpenApiVersion = "3.1.0",
+  budget: OutputBudget = UNLIMITED(),
+): string {
+  const contract = contractForDoc(iface);
+  const source =
+    contract.source === "metadata"
+      ? `The record shape is COMPILED from the service's own description ($metadata), contract version ${contract.semver}.`
+      : contract.source === "sampled"
+        ? "The record shape is INFERRED from rows this tenant returned (the service's description has not been compiled)."
+        : "The record shape is not described yet: verify the service, or capture a schema in the Test Console, and regenerate.";
+  const doc = buildNorthboundOpenApi({
+    version,
+    baseUrl,
+    title: `${safeName(iface.name)} — CoreEdge northbound`,
+    infoVersion: kitInfoVersion(iface, contract),
+    description: [
+      `Contract for the CoreEdge interface "${safeName(iface.name)}" (${iface.externalId}) of solution "${safeName(iface.solutionName)}".`,
+      "",
+      "Generated by CoreEdge Developer Studio from the interface's governed configuration.",
+      "This describes the CoreEdge northbound endpoint your application calls — not SAP's own API.",
+      source,
+      "",
+      "Honest status: an empty result is a 200 with an empty array and MUST be treated as",
+      "'no records', which is different from 'not set up' (403) and from an error (5xx).",
+    ].join("\n"),
+    interfaces: [
+      {
+        id: iface.id,
+        name: iface.name,
+        externalId: iface.externalId,
+        sapProduct: iface.sapProduct,
+        operation: iface.operation,
+        mode: modeOf(iface),
+        entitySet: iface.entitySet,
+        version: iface.version,
+        ...(iface.status ? { status: iface.status } : {}),
+        contract,
+        ...(iface.grants ? { grants: iface.grants } : {}),
       },
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          description: "Per-solution client token issued in Developer Studio.",
-        },
-      },
-      schemas: {
-        // Precise WHEN WE HAVE SEEN THE DATA, open when we have not. A captured
-        // schema describes fields this tenant actually returned; without one the
-        // document says so rather than describing fields nobody has observed,
-        // because a confident lie inside a contract file is worse than a gap.
-        [typeName]: describeRecord(iface.responseSchema, iface.withheldSchemaNote),
-        Error: {
-          type: "object",
-          required: ["error"],
-          properties: {
-            error: {
-              type: "object",
-              required: ["code", "message", "correlationId"],
-              properties: {
-                code: { type: "string" },
-                message: { type: "string" },
-                correlationId: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    },
-  };
-  return JSON.stringify(doc, null, 2);
-}
-
-function errorContent() {
-  return { "application/json": { schema: { $ref: "#/components/schemas/Error" } } };
+    ],
+    safe: safeName,
+  });
+  // Every byte charged as it is written (budget.ts).
+  return documentJson(doc, budget);
 }
 
 /**
- * The record schema: what this tenant actually returned, or an honest blank.
- *
- * A captured schema is emitted as the served rows can satisfy it (it already
- * carries its own provenance in `x-captured`; one captured before the envelope
- * was stripped is reconciled first — see servedResponseSchema). Without one,
- * the document keeps `additionalProperties: true` and states plainly that no
- * run has happened — a reader can then tell the difference between "this
- * entity has no fields" and "nobody has looked yet".
+ * A contract's complex and enum types by qualified name, built once per
+ * contract: looked up per property, a scan of either list made the kit
+ * quadratic in a description with many types.
  */
-function describeRecord(stored: unknown, withheldNote?: string): Record<string, unknown> {
-  const responseSchema = servedResponseSchema(stored);
-  if (isCapturedSchema(responseSchema)) {
-    return {
-      ...responseSchema,
-      properties: Object.fromEntries(
-        Object.entries(responseSchema.properties).map(([name, prop]) => [name, toOpenApi31Property(prop)]),
-      ),
-      description:
-        "Fields observed in a live response from this tenant. Additional fields may exist on records outside the sample.",
-    };
-  }
+interface CompiledTypeIndex {
+  complex: ReadonlySet<string>;
+  enums: ReadonlyMap<string, InterfaceContract["enumTypes"][number]>;
+  /**
+   * The type alias each enum is declared once as, by qualified name, in the
+   * order the record first uses it. A property names its enum's alias: the
+   * member union written out per property made client.ts M×P — 156 MB from a
+   * 313 KB contract, and past V8's string limit a 500 on every kit download
+   * (hostile-input review round 1).
+   */
+  aliases: Map<string, string>;
+  /** Gives an alias a name of its own: the enum's, suffixed Enum, never the record's. */
+  allocate: (base: string) => string;
+}
+
+function compiledTypeIndex(contract: InterfaceContract, recordTypeName: string): CompiledTypeIndex {
+  const enums = new Map<string, InterfaceContract["enumTypes"][number]>();
+  for (const t of contract.enumTypes) if (!enums.has(t.qualifiedName)) enums.set(t.qualifiedName, t);
   return {
-    type: "object",
-    description: withheldNote
-      ? `No captured response describes this contract, so its fields are not described. ${withheldNote}`
-      : "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
-    additionalProperties: true,
+    complex: new Set(contract.complexTypes.map((t) => t.qualifiedName)),
+    enums,
+    aliases: new Map(),
+    allocate: nameAllocator([recordTypeName]),
   };
 }
 
+/** The alias of a (non-flags, non-empty) enum, named the first time a property uses it. */
+function enumAlias(en: InterfaceContract["enumTypes"][number], types: CompiledTypeIndex): string {
+  const known = types.aliases.get(en.qualifiedName);
+  if (known) return known;
+  // Every alias ends in "Enum": no identifier the client declares, and no
+  // global type it uses (Record, Promise, Error, …), does.
+  const base = toTypeName(en.name);
+  const alias = types.allocate(base.endsWith("Enum") ? base : `${base}Enum`);
+  types.aliases.set(en.qualifiedName, alias);
+  return alias;
+}
+
+/** `export type XEnum = "A" | "B";` once per enum a property used. */
+function enumAliasDeclarations(types: CompiledTypeIndex, budget: OutputBudget): string {
+  const out: string[] = [];
+  const line = (s: string) => {
+    budget.chargeText(s);
+    out.push(s);
+  };
+  for (const [qualifiedName, alias] of types.aliases) {
+    const en = types.enums.get(qualifiedName)!;
+    line(`/** ${safeComment(qualifiedName)} */`);
+    line(`export type ${alias} = ${en.members.map((m) => JSON.stringify(m.name)).join(" | ")};`);
+    line("");
+  }
+  return out.join("\n");
+}
+
 /**
- * THE DOCUMENT SAYS 3.1.0, SO IT MUST SPEAK 3.1. The captured schema records a
- * null it saw as `nullable: true` — the OpenAPI 3.0 keyword, which 3.1 dropped
- * for JSON Schema's `type: [T, "null"]`. Generators reading a 3.1 document
- * ignore `nullable` silently, so every nullable date came out untyped in the
- * developer's client. The stored form is unchanged (the TypeScript emitter
- * reads it); the translation happens here, at the sink that claims 3.1.
+ * A compiled property as TypeScript: the WIRE type (see json-schema.ts — a V2
+ * Int64, Decimal or date arrives as a string).
  */
-function toOpenApi31Property(prop: { type?: string; format?: string; nullable?: boolean }): Record<string, unknown> {
-  const { nullable, type, ...rest } = prop;
-  if (!nullable) return type ? { ...rest, type } : rest;
-  // No consistent type observed AND a null: the value may be anything or null.
-  // JSON Schema has no way to say "unknown-or-null" narrower than no type at
-  // all, so the null is recorded in the description rather than invented.
-  if (!type) return { ...rest, description: "Observed as null in the sample; no consistent type otherwise." };
-  return { ...rest, type: [type, "null"] };
+function tsTypeOfCompiled(p: IrProperty, contract: InterfaceContract, types: CompiledTypeIndex): string {
+  const v = contract.odataVersion;
+  let base: string;
+  const en = types.enums.get(p.type);
+  if (types.complex.has(p.type)) base = "Record<string, unknown>";
+  else if (en) {
+    base = en.isFlags || en.members.length === 0 ? "string" : enumAlias(en, types);
+  } else {
+    switch (p.type) {
+      case "Edm.Boolean":
+        base = "boolean";
+        break;
+      case "Edm.Byte":
+      case "Edm.SByte":
+      case "Edm.Int16":
+      case "Edm.Int32":
+        base = "number";
+        break;
+      case "Edm.Int64":
+      case "Edm.Decimal":
+      case "Edm.Double":
+      case "Edm.Single":
+        base = v === "V2" ? "string" : "number";
+        break;
+      case "Edm.Untyped":
+      case "Edm.PrimitiveType":
+        base = "unknown";
+        break;
+      default:
+        base = p.type.startsWith("Edm.Geo") ? "Record<string, unknown>" : p.type.startsWith("Edm.") ? "string" : "unknown";
+    }
+  }
+  if (p.collection) return `${base.includes("|") ? `(${base})` : base}[]`;
+  return p.nullable ? `${base} | null` : base;
 }
 
 /** Map a captured JSON-schema type to its TypeScript equivalent. */
@@ -290,7 +327,29 @@ function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
  * field should get a value, not a type error. Optional markers follow the
  * schema as served, as openapi.json does (see servedResponseSchema).
  */
-function buildRecordBody(stored: unknown): string {
+function buildRecordBody(
+  stored: unknown,
+  compiled: InterfaceContract | undefined,
+  types: CompiledTypeIndex | undefined,
+  budget: OutputBudget,
+): string {
+  if (compiled && compiled.source === "METADATA" && types) {
+    // Compiled: every property the service declares. The key is always sent;
+    // anything else may be left out by a $select, so it is optional. The
+    // index signature stays for a customer's extension fields, which arrive
+    // before the next compile does. Each line charged as it is made (budget.ts).
+    const key = new Set(compiled.entityType.key);
+    const lines = compiled.entityType.properties.map((p) => {
+      const name = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.name) ? p.name : JSON.stringify(p.name);
+      const doc = p.label ? `  /** ${safeComment(p.label.replace(/\s+/g, " "))} */\n` : "";
+      const line = `${doc}  ${name}${key.has(p.name) ? "" : "?"}: ${tsTypeOfCompiled(p, compiled, types)};`;
+      budget.chargeText(line);
+      return line;
+    });
+    lines.push("  /** Fields the compiled description does not name (extension fields added since). */");
+    lines.push("  [field: string]: unknown;");
+    return lines.join("\n");
+  }
   const responseSchema = servedResponseSchema(stored);
   if (!isCapturedSchema(responseSchema)) {
     return "  [field: string]: unknown;";
@@ -301,7 +360,9 @@ function buildRecordBody(stored: unknown): string {
     // Quote anything that is not a plain identifier (SAP emits names like
     // `to_Partner` — fine — but also `@odata.x` on occasion).
     const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
-    return `  ${key}${optional}: ${tsTypeOf(prop)};`;
+    const line = `  ${key}${optional}: ${tsTypeOf(prop)};`;
+    budget.chargeText(line);
+    return line;
   });
   // Always keep the index signature — see the doc comment above.
   lines.push("  /** Fields outside the captured sample. */");
@@ -323,7 +384,8 @@ function buildRecordBody(stored: unknown): string {
  */
 export function buildTypeScriptClient(
   iface: ScaffoldInterface,
-  baseUrl = "https://coreedge.example/api/northbound",
+  baseUrl = DEFAULT_KIT_BASE_URL,
+  budget: OutputBudget = UNLIMITED(),
 ): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
   /*
@@ -332,7 +394,17 @@ export function buildTypeScriptClient(
    * fields, once a schema had been captured. The sentence was true the day it
    * was written and the capture feature did not update it.
    */
-  const shapeNote = isCapturedSchema(iface.responseSchema)
+  const compiled = iface.compiled?.contract.source === "METADATA" ? iface.compiled : undefined;
+  const types = compiled ? compiledTypeIndex(compiled.contract, typeName) : undefined;
+  const recordBody = buildRecordBody(iface.responseSchema, compiled?.contract, types, budget);
+  const aliases = types ? enumAliasDeclarations(types, budget) : "";
+  const shapeNote = compiled
+    ? ` * The record type below was COMPILED from the service's own description
+ * ($metadata), contract version ${safeComment(compiled.semver)} (${safeComment(compiled.compiledAt)}). Its
+ * types are the wire types: an OData V2 Int64, Decimal or date arrives as a
+ * string. The key fields are always present; every other field is optional,
+ * because a query may leave it out.`
+    : isCapturedSchema(iface.responseSchema)
     ? ` * The record type below was CAPTURED from ${iface.responseSchema["x-captured"].sampleSize} live row${
         iface.responseSchema["x-captured"].sampleSize === 1 ? "" : "s"
       } this tenant returned
@@ -361,16 +433,16 @@ ${shapeNote}
 
 /** A record as this tenant exposes it. */
 export interface ${typeName} {
-${buildRecordBody(iface.responseSchema)}
+${recordBody}
 }
-
+${aliases ? `\n${aliases}` : ""}
 /** The error envelope every CoreEdge endpoint returns. */
 export interface CoreEdgeErrorBody {
   error: { code: string; message: string; correlationId: string };
 }
 
 /** What a read response body may parse to: the data envelope, the error envelope, or neither. */
-type ReadEnvelope = { data?: Omit<ReadResult, "draft"> } & Partial<CoreEdgeErrorBody>;
+type ReadEnvelope = { data?: Omit<ReadResult, "draft" | "apiVersion"> } & Partial<CoreEdgeErrorBody>;
 
 /** What a 200 carries — every field the broker sends, not only the records. */
 export interface ReadResult {
@@ -393,6 +465,11 @@ export interface ReadResult {
    * contract may still change.
    */
   draft: boolean;
+  /**
+   * The northbound API version that served the call (the CoreEdge-Version
+   * response header), or null when the answer named none.
+   */
+  apiVersion: string | null;
 }
 
 export interface CoreEdgeClientOptions {
@@ -400,6 +477,12 @@ export interface CoreEdgeClientOptions {
   baseUrl: string;
   /** Per-solution client token issued in Developer Studio. Keep it server-side. */
   token: string;
+  /**
+   * Pin a northbound API version, sent as CoreEdge-Version (e.g. "${defaultVersionName()}").
+   * Omitted, the call is served the oldest version still supported. A version
+   * the deployment does not serve fails with code UNSUPPORTED_VERSION.
+   */
+  apiVersion?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -432,7 +515,13 @@ export function createClient(options: CoreEdgeClientOptions) {
     async read(limit = 10): Promise<ReadResult> {
       const res = await doFetch(
         \`\${options.baseUrl}/interfaces/\${interfaceId}/data?limit=\${limit}\`,
-        { headers: { Authorization: \`Bearer \${options.token}\`, Accept: "application/json" } },
+        {
+          headers: {
+            Authorization: \`Bearer \${options.token}\`,
+            Accept: "application/json",
+            ...(options.apiVersion ? { "${VERSION_HEADER}": options.apiVersion } : {}),
+          },
+        },
       );
       /*
        * PARSE DEFENSIVELY, AND LET THE STATUS DECIDE.
@@ -469,7 +558,11 @@ export function createClient(options: CoreEdgeClientOptions) {
           res.headers.get("x-correlation-id") ?? "",
         );
       }
-      return { ...json.data, draft: res.headers.get("x-coreedge-interface-status") === "DRAFT" };
+      return {
+        ...json.data,
+        draft: res.headers.get("x-coreedge-interface-status") === "DRAFT",
+        apiVersion: res.headers.get("${VERSION_HEADER}"),
+      };
     },
   };
 }
@@ -480,18 +573,25 @@ export function createClient(options: CoreEdgeClientOptions) {
 export function buildReadme(
   iface: ScaffoldInterface,
   fixtures: readonly ScaffoldFixture[] = [],
-  baseUrl = "https://coreedge.example/api/northbound",
+  baseUrl = DEFAULT_KIT_BASE_URL,
   withheld: readonly WithheldFixture[] = [],
 ): string {
   const captured = fixtures.map((f) => f.scenario);
   const missing = FIXTURE_SCENARIOS.filter((s) => !captured.includes(s));
+  const ofAnotherContract = withheld.filter((w) => !w.tooLarge);
+  const tooLarge = withheld.filter((w) => w.tooLarge);
   const withheldSection =
-    withheld.length === 0
+    (ofAnotherContract.length === 0
       ? ""
-      : `\n\nWithheld: **${withheld.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
+      : `\n\nWithheld: **${ofAnotherContract.map((w) => w.scenario).join(", ")}** — recorded under an earlier contract of
 this interface, or with no record of which contract it belongs to.
 A mock of another contract would test code against rows the live route will
-never return, so they are not shipped. Capture them again from the Test Console.`;
+never return, so they are not shipped. Capture them again from the Test Console.`) +
+    (tooLarge.length === 0
+      ? ""
+      : `\n\nWithheld: **${tooLarge.map((w) => w.scenario).join(", ")}** — larger than the recorded fixtures a
+starter kit carries, so not shipped. Capture them again from the Test Console,
+from a run with fewer or narrower rows.`);
   const fixtureSection =
     captured.length === 0
       ? `## Offline mock — nothing captured yet
@@ -536,6 +636,7 @@ Your database, your framework, your language: untouched by any of this.
 | File | What it is |
 |---|---|
 | \`openapi.json\` | OpenAPI 3.1 for the northbound endpoint. **This is the portable artifact** — generate a client in any language from it. |
+| \`openapi-3.0.json\` | The same contract in OpenAPI 3.0.3, for generators that do not read 3.1 yet. |
 | \`client.ts\` | A small typed TypeScript client, if that is your stack. |
 | \`demo.mjs\` | A runnable read. Proves the loop end to end. |
 | \`mock.mjs\` + \`fixtures.json\` | An offline CoreEdge, serving responses recorded from real runs. No dependencies. |
@@ -593,16 +694,38 @@ openapi-generator-cli generate -i openapi.json -g python -o ./client
 | \`200\` with \`records: []\` | **No records** | Treat as data, not failure |
 | \`403\` | Not set up, or no approved grant | Fix access — do not retry |
 | \`404\` | No such interface, or its dataset does not exist on the tenant | Fix the configuration — do not retry |
+| \`400\` \`UNSUPPORTED_VERSION\` | Your \`CoreEdge-Version\` header names a version this deployment does not serve | Send one of \`error.supportedVersions\`, or omit the header |
 | \`5xx\` | Tenant or broker failed (\`502\`, \`504\` timeout) | Retry or escalate |
 
 An empty result is **not** an error. Conflating the two is the single most common
 way an integration lies to its users.
 
+## API versions
+
+This kit calls \`/api/northbound\`. The versioned path, \`/api/northbound/v1\`,
+is the same implementation (the same versions, credentials and limits); kits
+switch to it in a later release, and this one keeps working.
+
+Every answer names the API version that served it in the \`CoreEdge-Version\`
+header (\`apiVersion\` in the client's read result). Send the same header to pin
+one (\`createClient({ ..., apiVersion: "${defaultVersionName()}" })\`); without it you
+are served the oldest version still supported. A version that is unknown or past
+its Sunset date is refused with \`400 UNSUPPORTED_VERSION\`. From the day a
+version's deprecation is announced, its answers carry \`Deprecation\` and
+\`Sunset\` headers: log them. The versions and the policy are served at
+\`$COREEDGE_BASE_URL/versions\` (no token needed) and described in \`openapi.json\`.
+
 ## Interface
 
 - Service: ${inlineCode(iface.externalId)} (${safeName(iface.sapProduct)})
 - Operation: ${safeName(iface.operation)}${iface.entitySet ? `\n- Entity set: ${inlineCode(iface.entitySet)}` : ""}
-- Contract version: v${iface.version}
+- Contract version: v${iface.version}${
+    iface.compiled?.contract.source === "METADATA"
+      ? `\n- Record shape: compiled from the service's own description, contract ${inlineCode(iface.compiled.semver)}`
+      : isCapturedSchema(iface.responseSchema)
+        ? "\n- Record shape: inferred from captured rows (verify the service to compile it from its description)"
+        : "\n- Record shape: not described yet (verify the service, or capture a schema in the Test Console)"
+  }
 `;
 }
 
@@ -617,7 +740,7 @@ way an integration lies to its users.
  * is a parameter here for the same reason it is one in buildOpenApi: the kit is
  * generated per request and knows where it came from.
  */
-export function buildEnvExample(baseUrl = "https://coreedge.example/api/northbound"): string {
+export function buildEnvExample(baseUrl = DEFAULT_KIT_BASE_URL): string {
   return `# The CoreEdge northbound base URL, pre-filled for the deployment that
 # generated this kit. Point it at your local mock to develop offline.
 COREEDGE_BASE_URL=${baseUrl}
@@ -647,11 +770,15 @@ function buildFixturesJson(
   iface: { id: string; name: string },
   fixtures: readonly ScaffoldFixture[],
   withheld: readonly WithheldFixture[] = [],
+  budget: OutputBudget = UNLIMITED(),
 ): string {
   const unproven = fixtures.filter((f) => f.sourceStatus === null || f.sourceStatus === undefined);
   const dataFixtures = fixtures.filter((f) => f.scenario === "data");
 
-  return JSON.stringify(
+  // Indented as JSON.stringify(…, null, 2) wrote it, each byte charged as it
+  // is written (budget.ts): indentation of a deeply nested recorded body is
+  // what grows fastest here.
+  return jsonText(
     {
       interfaceId: iface.id,
       interfaceName: safeName(iface.name),
@@ -687,8 +814,8 @@ function buildFixturesJson(
       // nobody can establish (A38). No body — it describes the wrong rows.
       ...(withheld.length > 0 ? { withheld: withheld.map((w) => ({ scenario: w.scenario, reason: w.reason })) } : {}),
     },
-    null,
-    2,
+    budget,
+    { indent: 2 },
   );
 }
 
@@ -718,7 +845,7 @@ function buildFixturesJson(
  * Angle brackets and ampersand only: this must stay readable. A name is still a
  * name after it goes through here.
  */
-function safeName(value: string): string {
+export function safeName(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -763,6 +890,8 @@ function inlineCode(value: string): string {
 export interface WithheldFixture {
   scenario: string;
   reason: string;
+  /** Withheld for its size (LIMITS.fixture), not for the contract it was recorded under. */
+  tooLarge?: boolean;
 }
 
 /** A recorded response, as captured from a real run. */
@@ -829,6 +958,10 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 const INTERFACE_ID = ${JSON.stringify(iface.id)};
 const INTERFACE = ${JSON.stringify({ id: iface.id, name: safeName(iface.name), version: iface.version })};
+// The northbound API versions the deployment served when this kit was
+// generated, oldest (the default) first: the mock names the version that
+// served each answer, as the broker does, and refuses one the broker would.
+const SUPPORTED_VERSIONS = ${JSON.stringify(supportedVersions(new Date()).map((v) => v.version))};
 
 function pick(scenario) {
   const found = fixtures.fixtures.find((f) => f.scenario === scenario);
@@ -879,18 +1012,37 @@ function applyLimit(body, raw) {
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", \`http://localhost:\${PORT}\`);
 
+  // First, as the broker does: a version it does not serve is a 400.
+  const pinned = String(req.headers["coreedge-version"] ?? "").trim();
+  if (pinned && !SUPPORTED_VERSIONS.includes(pinned)) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: {
+          code: "UNSUPPORTED_VERSION",
+          message: \`CoreEdge-Version "\${pinned}" is not served. Supported: \${SUPPORTED_VERSIONS.join(", ")}.\`,
+          correlationId: "mock",
+          requestedVersion: pinned,
+          supportedVersions: SUPPORTED_VERSIONS,
+        },
+      }),
+    );
+    return;
+  }
+  const served = { "${VERSION_HEADER}": pinned || SUPPORTED_VERSIONS[0] };
+
   // The mock does not check the token — it is a local stand-in, not a security
   // boundary. It DOES require one, so code that forgets the header fails here
   // rather than in production.
   const auth = req.headers.authorization ?? "";
   if (!auth.toLowerCase().startsWith("bearer ")) {
-    res.writeHead(401, { "content-type": "application/json" });
+    res.writeHead(401, { "content-type": "application/json", ...served });
     res.end(JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "Missing bearer token.", correlationId: "mock" } }));
     return;
   }
 
   if (!url.pathname.startsWith(\`/interfaces/\${INTERFACE_ID}/data\`)) {
-    res.writeHead(404, { "content-type": "application/json" });
+    res.writeHead(404, { "content-type": "application/json", ...served });
     res.end(JSON.stringify({ error: { code: "NOT_FOUND", message: \`This mock only serves /interfaces/\${INTERFACE_ID}/data\`, correlationId: "mock" } }));
     return;
   }
@@ -902,7 +1054,7 @@ createServer((req, res) => {
     fixture.status < 400
       ? { data: { interface: INTERFACE, ...applyLimit(fixture.body, url.searchParams.get("limit")) } }
       : fixture.body;
-  res.writeHead(fixture.status, { "content-type": "application/json", "x-correlation-id": "mock" });
+  res.writeHead(fixture.status, { "content-type": "application/json", "x-correlation-id": "mock", ...served });
   res.end(JSON.stringify(payload, null, 2));
 }).listen(PORT, () => {
   const names = fixtures.fixtures.map((f) => f.scenario).join(", ") || "(none captured)";
@@ -1064,25 +1216,37 @@ export interface ScaffoldFile {
  * exercises the same code path the live broker serves. Without them it still
  * ships, and the README says which scenarios are missing rather than pretending
  * the mock is complete.
+ *
+ * UNDER ONE BUDGET (budget.ts, kitLimit). Every byte of every file is
+ * charged to `budget`: the files that grow with the contract or the
+ * fixtures (both OpenAPI documents, client.ts, fixtures.json) as they are
+ * written, so one past the budget stops there (BudgetExceeded); the fixed
+ * ones once they are made.
  */
 export function buildScaffold(
   iface: ScaffoldInterface,
   baseUrl?: string,
   fixtures: readonly ScaffoldFixture[] = [],
   withheld: readonly WithheldFixture[] = [],
+  budget: OutputBudget = UNLIMITED(),
 ): ScaffoldFile[] {
+  const file = (path: string, build: () => string): ScaffoldFile => {
+    const before = budget.spent;
+    const contents = build();
+    // What the builder did not charge as it wrote (its fixed text), charged now.
+    budget.charge(Math.max(0, utf8Length(contents) - (budget.spent - before)));
+    return { path, contents };
+  };
   return [
-    { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl, withheld) },
-    { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
-    { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
-    { path: ".env.example", contents: buildEnvExample(baseUrl) },
-    { path: ".gitignore", contents: buildGitignore() },
-    { path: "package.json", contents: buildPackageJson(iface) },
-    { path: "demo.mjs", contents: buildDemo(iface) },
-    { path: "mock.mjs", contents: buildMockServer(iface) },
-    {
-      path: "fixtures.json",
-      contents: buildFixturesJson(iface, fixtures, withheld),
-    },
+    file("README.md", () => buildReadme(iface, fixtures, baseUrl, withheld)),
+    file("openapi.json", () => buildOpenApi(iface, baseUrl, "3.1.0", budget)),
+    file("openapi-3.0.json", () => buildOpenApi(iface, baseUrl, "3.0.3", budget)),
+    file("client.ts", () => buildTypeScriptClient(iface, baseUrl, budget)),
+    file(".env.example", () => buildEnvExample(baseUrl)),
+    file(".gitignore", () => buildGitignore()),
+    file("package.json", () => buildPackageJson(iface)),
+    file("demo.mjs", () => buildDemo(iface)),
+    file("mock.mjs", () => buildMockServer(iface)),
+    file("fixtures.json", () => buildFixturesJson(iface, fixtures, withheld, budget)),
   ];
 }

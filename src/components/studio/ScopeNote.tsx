@@ -53,7 +53,12 @@ export function ScopeNote({ topic }: { topic: ScopeTopic }) {
             docs/coreedge-developer-guide.md). The old href pointed at
             /docs/…md, which no route has ever served — a dead link on the two
             screens where the misreading it exists to prevent begins. */}
-        <a href="/help/developer-guide" style={{ color: "var(--brand-navy)" }}>
+        {/* Underlined, not only coloured (axe link-in-text-block): inside a
+            sentence, colour alone does not tell a link from its text. */}
+        <a
+          href="/help/developer-guide"
+          style={{ color: "var(--brand-navy)", textDecoration: "underline", textUnderlineOffset: 2 }}
+        >
           Developer guide
         </a>
       </p>

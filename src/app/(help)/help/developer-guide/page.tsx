@@ -49,6 +49,14 @@ export default async function DeveloperGuidePage() {
   }
 
   const blocks = splitMarkdownBlocks(markdown);
+  // Each preformatted block's label: what it holds and its ordinal among those,
+  // so a region is announced as what it is and told from the next.
+  const regionLabel = new Map<number, string>();
+  let codeCount = 0;
+  let tableCount = 0;
+  blocks.forEach((b, idx) => {
+    if (b.kind === "pre") regionLabel.set(idx, b.table ? `Table ${++tableCount}` : `Code example ${++codeCount}`);
+  });
   return (
     <article style={{ maxWidth: 780 }}>
       {blocks.map((b, idx) => {
@@ -76,9 +84,16 @@ export default async function DeveloperGuidePage() {
               </p>
             );
           case "pre":
+            // A code block or table scrolls sideways, so it must take keyboard
+            // focus to be scrolled without a pointer (axe scrollable-region-focusable).
+            // role + label make the focus stop announce what it is; the global
+            // [tabindex]:focus-visible rule draws its ring.
             return (
               <pre
                 key={idx}
+                tabIndex={0}
+                role="region"
+                aria-label={regionLabel.get(idx)}
                 style={{
                   margin: "0 0 12px",
                   padding: 12,

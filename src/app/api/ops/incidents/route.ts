@@ -21,7 +21,7 @@ import type { $Enums } from "@prisma/client";
 import { CONNECTION_NEEDS_ATTENTION, CONNECTION_NOT_PROBED_STATUSES } from "@/lib/coreedge/freshness";
 import { prisma } from "@/lib/db/prisma";
 import { FAILURE_REASON_CIRCUIT_OPEN } from "@/lib/governed/containment";
-import { FAILURE_REASON_LIMITER_UNAVAILABLE } from "@/lib/northbound/respond";
+import { FAILURE_REASON_LIMITER_UNAVAILABLE, FAILURE_REASON_ORG_SCHEMA_RATE } from "@/lib/northbound/respond";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import {
   countDriftingConnections,
@@ -124,8 +124,15 @@ export async function GET(request: NextRequest) {
           ],
         }),
       }),
+      // Throttled credentials: not a /schema read its organisation's bucket
+      // refused (ORG_SCHEMA_RATE), whose credential is under its own limit.
       prisma.northboundAuditEvent.count({
-        where: opsWhere(guard.actor, { at: { gte: since }, status: 429, replayed: false }),
+        where: opsWhere(guard.actor, {
+          at: { gte: since },
+          status: 429,
+          replayed: false,
+          OR: [{ failureReason: null }, { failureReason: { not: FAILURE_REASON_ORG_SCHEMA_RATE } }],
+        }),
       }),
       prisma.solutionClient.count({
         where: opsWhere(guard.actor, {

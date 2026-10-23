@@ -31,7 +31,11 @@
  * No prisma here: the route owns persistence and audit; this owns the verdict.
  */
 
-import { parseEntitySets } from "@/lib/sap-public/tdd-connector";
+import { LIMITS } from "@/lib/contracts/budget";
+import { MAX_LISTED_DATASETS, readDatasetsSliced, type DatasetSummary } from "@/lib/contracts/datasets";
+import { contractJobAdmission, runContractJob } from "@/lib/contracts/envelope";
+import type { CompiledService } from "@/lib/contracts/jobs";
+import type { RecordHeads } from "@/lib/contracts/snapshot";
 import type { ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
 import type { ODataVersion } from "@/lib/sap-public/service-path";
 import { fetchMetadataDocument, METADATA_SNIFF_BYTES } from "@/lib/studio/connection-health";
@@ -97,9 +101,9 @@ export const DATASET_NEEDED_DETAIL =
   "Set the dataset (for example cust_TravelRequest) on the interface, then verify again: on /odata/v2 SuccessFactors describes one dataset at a time, and the description of the whole tenant is too large to read.";
 
 /** A service description larger than this is refused rather than half-read. */
-export const VERIFY_MAX_METADATA_BYTES = 8 * 1024 * 1024;
-/** How many entity-set names are stored on the interface after a verify. */
-export const MAX_STORED_ENTITY_SETS = 500;
+export const VERIFY_MAX_METADATA_BYTES = LIMITS.sourceBytes;
+/** How many entity-set names a verify lists, and stores on the interface (datasets.ts). */
+export const MAX_STORED_ENTITY_SETS = MAX_LISTED_DATASETS;
 
 export type ServiceVerifyStatus =
   | "OK"
@@ -109,6 +113,14 @@ export type ServiceVerifyStatus =
   | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "TIMEOUT"
+  /** The organisation (or the instance) already has verifies in flight, past its share (FETCH_GATE): nothing was read. */
+  | "BUSY"
+  /**
+   * The contract compiler would refuse this verify's job (the organisation's
+   * compile time for today is spent, or the compiler is off): SAP was not
+   * asked, nothing was read, and the interface's stored datasets are listed.
+   */
+  | "COMPILER_UNAVAILABLE"
   | "ERROR";
 
 export interface ServiceVerifyResult {
@@ -119,14 +131,33 @@ export interface ServiceVerifyResult {
   detail: string;
   httpStatus: number | null;
   durationMs: number;
-  /** Entity-set names the description declares, de-duplicated, in document order. */
+  /**
+   * Entity-set names the description declares, de-duplicated, in document
+   * order: the first MAX_STORED_ENTITY_SETS of them (datasets.ts).
+   */
   entitySets: string[];
+  /** How many distinct entity sets the description declares in all. */
+  entitySetCount: number;
   detectedODataVersion: ODataVersion | null;
   /** On ENTITY_SET_MISSING, a set whose name differs only in case. */
   suggestedEntitySet: string | null;
   /** The status the console-read audit row records. */
   auditStatus: number;
   failureReason: string | null;
+  /**
+   * What compiling the description (P1.3) gave, when one was read in full;
+   * absent when none was. A description the compiler refuses — or, after
+   * the fetch, a job that did not run (BUSY, RESOURCE_LIMIT, or a day the
+   * organisation's other jobs used up between the check and this one) —
+   * still verifies as it did before the compiler existed: the dataset list
+   * then comes from the older reader, and the refusal is said here. With
+   * the compiler off, or the organisation's time for today spent, the verify
+   * is refused BEFORE SAP is asked (COMPILER_UNAVAILABLE, verified false),
+   * and this holds that refusal.
+   */
+  compiled?: CompiledService;
+  /** The snapshot rows the record job diffed against, and the current row it was handed (snapshot.ts, loadRecordHeads), by id. */
+  heads?: { ids: string[]; currentId: string | null };
 }
 
 /**
@@ -151,6 +182,50 @@ export function edmxODataVersion(xml: string): ODataVersion | null {
   return null;
 }
 
+/**
+ * The record job, IN THE ENVELOPE (envelope.ts): a worker with its own capped
+ * heap and stack and a deadline, through the compiler's one fair gate and
+ * the organisation's daily compiler time, so a description built to be
+ * expensive ends its own worker and never this request's thread. The heads
+ * its contract is diffed against are loaded only once it holds its slot.
+ * Refuses, never rejects: a description the compiler refuses is read by the
+ * older reader in the same job, as before the compiler (jobs.ts); a job that
+ * did not run is said as the refusal it was, with its retry time.
+ */
+async function recordOrRefuse(
+  body: string,
+  entitySet: string | null,
+  loadHeads: (() => Promise<RecordHeads>) | undefined,
+  tenant: string | null,
+  deadlineAt: number,
+): Promise<{ compiled: CompiledService; heads?: { ids: string[]; currentId: string | null } }> {
+  let heads: RecordHeads = { ids: [], previous: [], unchangedHashes: [], current: null, currentId: null };
+  const r = await runContractJob(
+    "record",
+    async () => {
+      if (entitySet && loadHeads) {
+        // A database that does not answer is no reason to fail the verify: with no heads, the record decides (snapshot.ts).
+        heads = await loadHeads().catch((err: unknown) => {
+          console.error("[contracts] snapshot heads not read", { error: err instanceof Error ? err.name : "unknown" });
+          return heads;
+        });
+      }
+      return {
+        kind: "record",
+        input: { description: body, entitySet, previous: heads.previous, unchangedHashes: heads.unchangedHashes, current: heads.current ?? null },
+      };
+    },
+    { tenant, deadlineAt },
+  );
+  if (r?.ok) return { compiled: r.value, heads: { ids: heads.ids, currentId: heads.currentId } };
+  if (!r || r.reason === "INTERNAL") {
+    // A job that threw is a defect: refused as a description that could not be read, logged by name only.
+    console.error("[contracts] compile failed", { error: "INTERNAL" });
+    return { compiled: { ok: false, reason: "INVALID_CSDL", detail: "The service description could not be read as a service description." } };
+  }
+  return { compiled: { ok: false, reason: r.reason, detail: r.detail, ...(r.retryAfterMs !== undefined ? { retryAfterMs: r.retryAfterMs } : {}) } };
+}
+
 function versionLabel(v: ODataVersion): string {
   return v === "V4" ? "OData V4" : "OData V2";
 }
@@ -166,17 +241,156 @@ function auditStatusFor(status: string, httpStatus: number | null): number {
   return 502;
 }
 
-export async function verifyServiceMetadata(
-  input: {
-    connection: ResolvedSapConnection;
-    servicePath: string;
-    declaredVersion: ODataVersion | null;
-    entitySet: string | null;
-    /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
-    sapProduct?: string | null;
-  },
-  fetchImpl: typeof fetch = fetch,
-): Promise<ServiceVerifyResult> {
+export interface VerifyServiceInput {
+  connection: ResolvedSapConnection;
+  servicePath: string;
+  declaredVersion: ODataVersion | null;
+  entitySet: string | null;
+  /** The interface's product: decides whole-service or one-dataset metadata (see the header). */
+  sapProduct?: string | null;
+  /**
+   * The interface's previous snapshot heads, as their stored text, for the
+   * record job to diff the dataset's contract against (snapshot.ts,
+   * loadRecordHeads): called only once the job holds its slot.
+   */
+  loadHeads?: () => Promise<RecordHeads>;
+  /** The organisation verifying: its share of the fetch gate and of the compiler (envelope.ts). */
+  organizationId?: string | null;
+  /** The datasets the interface's last verify stored: what a COMPILER_UNAVAILABLE answer lists, SAP not being asked. */
+  storedEntitySets?: readonly string[] | null;
+  /**
+   * When the request must have its answer (ms since the epoch): the job's
+   * wait and run are bounded by it (see VERIFY_REQUEST_BUDGET_MS); omitted,
+   * VERIFY_REQUEST_BUDGET_MS from now.
+   */
+  deadlineAt?: number | null;
+}
+
+/**
+ * ONE DEADLINE FOR THE WHOLE VERIFY. The route's platform limit (maxDuration,
+ * 60 s) must hold the SAP read (up to 30 s), the job's wait for the gate and
+ * its run (each clamped to what is left), and the route's writes. So the
+ * verify has this much from the moment the request starts; past it the job
+ * is refused BUSY, the contract is NOT_COMPILED, and the verify answers as it
+ * did before the compiler existed. What remains of the platform's limit
+ * (VERIFY_RESPONSE_MARGIN_MS) is for a worker cut at the deadline to exit
+ * (5 s) and for the route's own writes.
+ */
+export const VERIFY_REQUEST_BUDGET_MS = 45_000;
+/** What the route keeps beyond the verify's budget: a worker's exit grace (5 s) and the route's own writes and audit. */
+export const VERIFY_RESPONSE_MARGIN_MS = 15_000;
+
+export const VERIFY_BUSY_DETAIL =
+  "This organisation is already verifying other services. Verify again when those have answered.";
+/**
+ * Refused for the instance's verifies in flight, not the organisation's own
+ * (consolidated review round 4): said so, and audited as unavailable, not as
+ * the organisation's throttle.
+ */
+export const VERIFY_BUSY_INSTANCE_DETAIL = "CoreEdge is verifying many services at once just now. Try again in a few seconds.";
+
+/**
+ * THE FETCH GATE: at most this many verifies in flight per organisation, and
+ * per process, from before SAP is asked for the description until the
+ * verify has answered — with no queue: past either, BUSY at once, nothing
+ * fetched. What it bounds is the descriptions held in memory (each up to
+ * 8 MiB); a hung SAP holds one of an organisation's three, not all of them,
+ * and another organisation's verifies are not behind it.
+ */
+export const FETCH_GATE = { perOrganization: 3, perProcess: 16 } as const;
+
+const inFlight = { total: 0, byOrganization: new Map<string, number>() };
+
+/** Enter the fetch gate: the function that leaves it, or the limit that refused (BUSY). */
+function enterFetchGate(organizationId: string | null): (() => void) | "organization" | "process" {
+  const mine = organizationId === null ? 0 : (inFlight.byOrganization.get(organizationId) ?? 0);
+  if (mine >= FETCH_GATE.perOrganization) return "organization";
+  if (inFlight.total >= FETCH_GATE.perProcess) return "process";
+  inFlight.total += 1;
+  if (organizationId !== null) inFlight.byOrganization.set(organizationId, mine + 1);
+  let left = false;
+  return () => {
+    if (left) return;
+    left = true;
+    inFlight.total -= 1;
+    if (organizationId === null) return;
+    const n = (inFlight.byOrganization.get(organizationId) ?? 1) - 1;
+    if (n > 0) inFlight.byOrganization.set(organizationId, n);
+    else inFlight.byOrganization.delete(organizationId);
+  };
+}
+
+export async function verifyServiceMetadata(input: VerifyServiceInput, fetchImpl: typeof fetch = fetch): Promise<ServiceVerifyResult> {
+  const started = Date.now();
+  const deadlineAt = input.deadlineAt ?? started + VERIFY_REQUEST_BUDGET_MS;
+  const leave = enterFetchGate(input.organizationId ?? null);
+  if (typeof leave === "function") {
+    try {
+      return await verifyOnce(input, fetchImpl, deadlineAt);
+    } finally {
+      leave();
+    }
+  }
+  const mine = leave === "organization";
+  return {
+    status: "BUSY",
+    verified: false,
+    detail: mine ? VERIFY_BUSY_DETAIL : VERIFY_BUSY_INSTANCE_DETAIL,
+    httpStatus: null,
+    durationMs: Date.now() - started,
+    entitySets: [],
+    entitySetCount: 0,
+    detectedODataVersion: null,
+    suggestedEntitySet: null,
+    // Refused here, before SAP was asked: the organisation's own throttle, or the instance unavailable.
+    auditStatus: mine ? 429 : 503,
+    failureReason: mine ? "VERIFY_BUSY" : "VERIFY_BUSY_INSTANCE",
+  };
+}
+
+async function verifyOnce(input: VerifyServiceInput, fetchImpl: typeof fetch, deadlineAt: number): Promise<ServiceVerifyResult> {
+  const started = Date.now();
+  /*
+   * NOTHING IS FETCHED FOR A COMPILE THAT CANNOT RUN (consolidated review
+   * round 1). The record job's own first step (contractJobAdmission: the
+   * compiler on, the organisation's time for today not spent) is asked here,
+   * before SAP is. It was asked only after the description (up to 8 MiB) had
+   * been fetched, and a refused job's datasets were then read on this
+   * thread, uncharged: about 0.3-0.46 s of CPU per verify, so an
+   * organisation past its 40 s still spent about 3 CPU-hours a day at
+   * sapLive's 20 a minute, and the kill switch moved the parse onto the
+   * request thread instead of stopping it. Such a verify now answers at once
+   * with the refusal, its retry time and the interface's stored datasets.
+   * Only BUSY and RESOURCE_LIMIT, after a fetch, still read the datasets
+   * here, bounded by the fetch gate.
+   */
+  const admission = await contractJobAdmission("record", input.organizationId ?? null);
+  if (admission !== null && !admission.ok) {
+    const stored = input.storedEntitySets ?? [];
+    return {
+      status: "COMPILER_UNAVAILABLE",
+      verified: false,
+      detail:
+        admission.reason === "ALLOWANCE"
+          ? `The service was not verified, and SAP was not asked: ${admission.detail}`
+          : "The service was not verified, and SAP was not asked: the contract compiler is turned off on this deployment.",
+      httpStatus: null,
+      durationMs: Date.now() - started,
+      entitySets: stored.slice(0, MAX_STORED_ENTITY_SETS),
+      entitySetCount: stored.length,
+      detectedODataVersion: null,
+      suggestedEntitySet: null,
+      // Refused before SAP was asked: a throttle for the organisation's own time, unavailable for the switch.
+      auditStatus: admission.reason === "ALLOWANCE" ? 429 : 503,
+      failureReason: admission.reason === "ALLOWANCE" ? "CONTRACT_ALLOWANCE" : "CONTRACT_DISABLED",
+      compiled: {
+        ok: false,
+        reason: admission.reason,
+        detail: admission.detail,
+        ...(admission.retryAfterMs !== undefined ? { retryAfterMs: admission.retryAfterMs } : {}),
+      },
+    };
+  }
   const target = metadataTarget(input);
   const datasetNeeded = isTenantWideRootAskedWhole(input, target.scope);
   const r = await fetchMetadataDocument(input.connection, target.path, fetchImpl, {
@@ -210,6 +424,7 @@ export async function verifyServiceMetadata(
               `${r.detail} ${DATASET_NEEDED_DETAIL}`
             : r.detail,
       entitySets: [],
+      entitySetCount: 0,
       detectedODataVersion: null,
       suggestedEntitySet: null,
       auditStatus: auditStatusFor(status, r.httpStatus),
@@ -225,6 +440,7 @@ export async function verifyServiceMetadata(
         ? DATASET_NEEDED_DETAIL
         : `The service description is larger than ${VERIFY_MAX_METADATA_BYTES / (1024 * 1024)} MB, so it was not read in full and the datasets cannot be listed. Ask for a smaller service (one service binding per business object).`,
       entitySets: [],
+      entitySetCount: 0,
       detectedODataVersion: edmxODataVersion(r.body),
       suggestedEntitySet: null,
       auditStatus: 200,
@@ -232,8 +448,33 @@ export async function verifyServiceMetadata(
     };
   }
 
-  const entitySets = [...new Set(parseEntitySets(r.body).map((e) => e.name))];
-  const detected = edmxODataVersion(r.body);
+  /*
+   * COMPILED, ONCE, HERE (P1.3). The verify has just read the whole
+   * description; compiling it now is what lets the contract be recorded at
+   * verification time and never on a broker call. The compiler is a bounded
+   * XML parser, not a regex scan: when it can read the document, the dataset
+   * list and the version come from it. When it cannot (a document it refuses
+   * as malformed or hostile), the verify answers exactly as it did before —
+   * the older readers below still list the datasets — so no service that
+   * verified yesterday stops verifying today.
+   */
+  const { compiled, heads } = await recordOrRefuse(r.body, input.entitySet || null, input.loadHeads, input.organizationId ?? null, deadlineAt);
+  /*
+   * THE DATASETS, AS A BOUNDED SUMMARY (datasets.ts, structural hardening
+   * round 3): the first MAX_STORED_ENTITY_SETS names, how many there are,
+   * and whether the interface's dataset is one — taken in the envelope
+   * whether the compiler read the description or refused it (a singleton is
+   * one record, not a dataset the broker can page through; a name
+   * PostgreSQL cannot hold is no dataset anyone can address). Only when the
+   * job fetched for did not run (BUSY, RESOURCE_LIMIT, or a day used up in
+   * between) does this thread read them, in slices that give the event loop
+   * back between them.
+   */
+  const datasets: DatasetSummary =
+    compiled.ok ? compiled.datasets : (compiled.datasets ?? (await readDatasetsSliced(r.body, input.entitySet || null)));
+  const entitySets = datasets.names;
+  const entitySetCount = datasets.count;
+  const detected = compiled.ok ? compiled.odataVersion : edmxODataVersion(r.body);
 
   if (input.declaredVersion !== null && detected !== null && detected !== input.declaredVersion) {
     return {
@@ -242,16 +483,17 @@ export async function verifyServiceMetadata(
       verified: false,
       detail: `This service describes itself as ${versionLabel(detected)}, but the interface says ${input.declaredVersion}. Change the version, then verify again.`,
       entitySets,
+      entitySetCount,
       detectedODataVersion: detected,
       suggestedEntitySet: null,
       auditStatus: 200,
+      compiled,
     };
   }
 
-  if (input.entitySet !== null && input.entitySet !== "" && !entitySets.includes(input.entitySet)) {
+  if (input.entitySet !== null && input.entitySet !== "" && !datasets.hasEntitySet) {
     // OData names are case-sensitive, so a near miss is a suggestion, never a match.
-    const wanted = input.entitySet.toLowerCase();
-    const suggestion = entitySets.find((n) => n.toLowerCase() === wanted) ?? null;
+    const suggestion = datasets.suggestion;
     return {
       ...base,
       status: "ENTITY_SET_MISSING",
@@ -260,9 +502,11 @@ export async function verifyServiceMetadata(
         `The service answered, but it has no dataset called "${input.entitySet}".` +
         (suggestion ? ` Did you mean "${suggestion}"? Dataset names are case-sensitive.` : " Pick one of the datasets it lists."),
       entitySets,
+      entitySetCount,
       detectedODataVersion: detected,
       suggestedEntitySet: suggestion,
       auditStatus: 200,
+      compiled,
     };
   }
 
@@ -271,14 +515,17 @@ export async function verifyServiceMetadata(
     status: "OK",
     verified: true,
     detail:
-      entitySets.length === 0
+      entitySetCount === 0
         ? "The service answered with its description, but it declares no datasets."
         : input.entitySet
-          ? `The service answered with its description and offers the dataset "${input.entitySet}" (${entitySets.length} dataset${entitySets.length === 1 ? "" : "s"} in all).`
-          : `The service answered with its description and offers ${entitySets.length} dataset${entitySets.length === 1 ? "" : "s"}. Pick one for this interface.`,
+          ? `The service answered with its description and offers the dataset "${input.entitySet}" (${entitySetCount} dataset${entitySetCount === 1 ? "" : "s"} in all).`
+          : `The service answered with its description and offers ${entitySetCount} dataset${entitySetCount === 1 ? "" : "s"}. Pick one for this interface.`,
     entitySets,
+    entitySetCount,
     detectedODataVersion: detected,
     suggestedEntitySet: null,
     auditStatus: 200,
+    compiled,
+    ...(heads ? { heads } : {}),
   };
 }

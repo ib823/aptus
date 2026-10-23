@@ -6,6 +6,7 @@
  * someone with curl.
  */
 
+import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -287,6 +288,18 @@ describe("version bumps track the contract, not cosmetics", () => {
   it("does NOT bump when a field is resent unchanged", async () => {
     await PATCH(req({ id: "if_1", operation: "READ", entitySet: "A_BusinessPartner" }));
     expect(lastUpdateData().version).toBeUndefined();
+  });
+});
+
+describe("the compiled request schema belongs to one contract (P1.3)", () => {
+  it("is cleared with the version bump when the contract changes", async () => {
+    await PATCH(req({ id: "if_1", entitySet: "A_Supplier" }));
+    expect(lastUpdateData().requestSchemaStamp).toBe(Prisma.DbNull);
+  });
+
+  it("is left alone by an edit that is not a contract change", async () => {
+    await PATCH(req({ id: "if_1", name: "Nicer name" }));
+    expect(lastUpdateData()).not.toHaveProperty("requestSchemaStamp");
   });
 });
 

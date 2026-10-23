@@ -26,6 +26,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { supportedVersions } from "@/lib/northbound/version-policy";
 import {
   buildDemo,
   buildMockServer,
@@ -214,5 +215,26 @@ describe("the mock honours ?limit, as the broker does", () => {
     // Out of range is clamped, not rejected — the broker's own bounds.
     expect((await read(base, "?limit=0")).data.records).toHaveLength(1);
     expect((await read(base, "?limit=nonsense")).data.records).toHaveLength(5);
+  }, 30_000);
+
+  it("answers CoreEdge-Version as the broker does, and refuses a version the broker would (P1.10)", async () => {
+    const base = await startMock();
+    const call = (headers: Record<string, string>) =>
+      fetch(`${base}/interfaces/${IFACE.id}/data`, { headers: { Authorization: "Bearer anything", ...headers } });
+    const [oldest] = supportedVersions(new Date());
+
+    const unpinned = await call({});
+    expect(unpinned.status).toBe(200);
+    expect(unpinned.headers.get("coreedge-version")).toBe(oldest!.version);
+
+    const pinned = await call({ "CoreEdge-Version": oldest!.version });
+    expect(pinned.headers.get("coreedge-version")).toBe(oldest!.version);
+
+    const refused = await call({ "CoreEdge-Version": "1999-01" });
+    expect(refused.status).toBe(400);
+    expect(refused.headers.get("coreedge-version")).toBeNull();
+    const body = (await refused.json()) as { error: { code: string; supportedVersions: string[] } };
+    expect(body.error.code).toBe("UNSUPPORTED_VERSION");
+    expect(body.error.supportedVersions).toEqual(supportedVersions(new Date()).map((v) => v.version));
   }, 30_000);
 });

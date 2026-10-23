@@ -23,55 +23,42 @@
  * STAMPED WITH THE CONTRACT (P0.4, A38): the interface version and entity set
  * it was recorded under. The starter kit ships only fixtures whose stamp still
  * matches; a capture from a run of an earlier contract is refused with 409.
+ *
+ * PARSED ONLY IN THE CONTRACT COMPILER'S WORKER (P1.3). Twenty-five rows can
+ * be any width — base64 photos, long texts — and they come from the tenant's
+ * SAP system. The request body is read as text up to
+ * LIMITS.fixture.requestBytes and no further; a fixture job (jobs.ts) —
+ * through the compiler's one fair gate, charged to the organisation's daily
+ * compiler time — parses and validates it, decides the scenario, strips the
+ * OData envelope, and sends back the compact body (at most
+ * LIMITS.fixture.bytes), which is stored from its text (json-text.ts). The
+ * kit reads fixtures by size first (fixture-store.ts). A capture the compiler
+ * could not take (busy, its time spent) stores nothing and says so.
  */
 
 import { Prisma } from "@prisma/client";
 import type { NextRequest } from "next/server";
-import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { LIMITS } from "@/lib/contracts/budget";
+import { jobRefusal, STUDIO_JOB_DEADLINE_MS } from "@/lib/contracts/doc-inputs";
+import { runJobInEnvelope } from "@/lib/contracts/envelope";
+import { textOf } from "@/lib/contracts/jobs";
+import { JSON_TEXT_PLACEHOLDER, writeWithJsonText } from "@/lib/db/json-text";
 import { prisma } from "@/lib/db/prisma";
+import { readTextCapped } from "@/lib/security/bounded-body";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { captureContractMismatch } from "@/lib/studio/contract-provenance";
-import {
-  buildFixtureBody,
-  isFixtureScenario,
-  isReadStatus,
-  SCENARIO_STATUS,
-  scenarioForOutcome,
-  scenarioForReadStatus,
-} from "@/lib/studio/fixtures";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { scopedById, tenantScopeFor } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
+/** The fixture is parsed in a worker thread (lib/contracts/envelope.ts): Node.js only. */
+export const runtime = "nodejs";
 
-const bodySchema = z.object({
-  /** The broker's read outcome for the run (NorthboundReadStatus). Preferred. */
-  readStatus: z.string().min(1).optional(),
-  /** The honest status the run reported — what a console from before readStatus sends. */
-  honestStatus: z.string().min(1).optional(),
-  /**
-   * The broker's sentence for the run (`note` on broker-run), served as the
-   * fixture's error message. The code is never the caller's: it is the
-   * broker's code for the outcome.
-   */
-  detail: z.string().max(2000).optional(),
-  /** The contract the run was against, as broker-run reported it. */
-  interfaceVersion: z.number().int().min(1).optional(),
-  entitySet: z.string().max(200).nullable().optional(),
-  /**
-   * The status the TENANT returned on that run.
-   *
-   * Optional because an older client will not send it, and rejecting those
-   * would break capture rather than improve it. What it must never do is
-   * DEFAULT: an absent value is recorded as null, meaning "this fixture cannot
-   * prove where it came from", which is a different claim from 200.
-   */
-  sourceStatus: z.number().int().min(100).max(599).optional(),
-  rows: z.array(z.record(z.string(), z.unknown())).default([]),
-});
+/** A fixture is bounded in bytes, not only in rows: the request body and the body stored (LIMITS.fixture). */
+const FIXTURE_TOO_LARGE_MESSAGE = `This recording is larger than a fixture may be (${LIMITS.fixture.bytes / (1024 * 1024)} MB), so it was not stored. Run the interface with fewer or narrower rows (a $select of the fields your tests need), and capture again.`;
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -86,23 +73,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!scoped.ok) return studioError("FORBIDDEN", "No organization scope.");
   const scope = scoped.scope;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid fixture payload.");
-
-  const { readStatus, honestStatus } = parsed.data;
-  const scenario =
-    readStatus !== undefined
-      ? isReadStatus(readStatus)
-        ? scenarioForReadStatus(readStatus, parsed.data.rows.length)
-        : null
-      : honestStatus !== undefined
-        ? scenarioForOutcome(honestStatus, parsed.data.rows.length, parsed.data.sourceStatus)
-        : null;
-  if (!scenario || !isFixtureScenario(scenario)) {
-    // A run that failed for a local reason teaches a consumer nothing about how
-    // the tenant behaves, so there is nothing worth recording.
-    return studioError("VALIDATION_ERROR", "That outcome is not a recordable scenario.");
-  }
+  const deadlineAt = Date.now() + STUDIO_JOB_DEADLINE_MS;
+  // Bounded, and never parsed here (bounded-body.ts): the fixture job parses it.
+  const raw = await readTextCapped(request, LIMITS.fixture.requestBytes);
+  if (!raw.ok && raw.reason === "TOO_LARGE") return studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
+  if (!raw.ok) return studioError("VALIDATION_ERROR", "Invalid fixture payload.");
 
   const { id } = await ctx.params;
   const iface = await prisma.interface.findFirst({
@@ -111,12 +86,24 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
 
-  const mismatch = captureContractMismatch(parsed.data, iface);
+  const job = await runJobInEnvelope({ kind: "fixture", input: { body: raw.text } }, { tenant: scope.organizationId, deadlineAt });
+  if (!job.ok) return jobRefusal("The fixture was not captured", job) ?? studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE);
+  const fixture = job.value;
+  if (!fixture.ok) {
+    return fixture.reason === "TOO_LARGE"
+      ? studioError("TOO_LARGE", FIXTURE_TOO_LARGE_MESSAGE)
+      : fixture.reason === "NOT_RECORDABLE"
+        ? // A run that failed for a local reason teaches a consumer nothing about how the tenant behaves.
+          studioError("VALIDATION_ERROR", "That outcome is not a recordable scenario.")
+        : studioError("VALIDATION_ERROR", "Invalid fixture payload.");
+  }
+
+  const mismatch = captureContractMismatch(fixture.claimed, iface);
   if (mismatch) return studioError("CONFLICT", mismatch);
   const stamp = { interfaceVersion: iface.version, entitySet: iface.entitySet };
-
-  const body = buildFixtureBody(scenario, parsed.data.rows, parsed.data.detail);
-  const status = SCENARIO_STATUS[scenario];
+  const { scenario, status } = fixture;
+  // Written as its text, as the job wrote it (json-text.ts): PostgreSQL parses it, this thread copies a string.
+  const bodyText = textOf(fixture.body);
 
   // Replace any existing recording of this scenario — see the header.
   const existing = await prisma.mockFixture.findFirst({
@@ -124,9 +111,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     select: { id: true },
   });
 
+  const select = { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true } as const;
+  // The row through Prisma with a placeholder body, and the body from its text, in one transaction (json-text.ts).
   const saved = existing
-    ? await prisma.mockFixture
-        .update({
+    ? await writeWithJsonText("MockFixture", scope.organizationId, { body: bodyText }, (tx) =>
+        tx.mockFixture.update({
           where: { id: existing.id, organizationId: scope.organizationId },
           // sourceStatus is written on every replace, including back to null when
           // the caller did not send one. A stale provenance stamp left over from a
@@ -134,26 +123,28 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
           // that is no longer the one stored here.
           data: {
             status,
-            body: body as never,
-            sourceStatus: parsed.data.sourceStatus ?? null,
+            body: JSON_TEXT_PLACEHOLDER,
+            sourceStatus: fixture.sourceStatus,
             capturedAt: new Date(),
             ...stamp,
           },
-          select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
-        })
-        .catch(vanishedAsNull)
-    : await prisma.mockFixture.create({
-        data: {
-          organizationId: scope.organizationId,
-          interfaceId: iface.id,
-          scenario,
-          status,
-          body: body as never,
-          sourceStatus: parsed.data.sourceStatus ?? null,
-          ...stamp,
-        },
-        select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
-      });
+          select,
+        }),
+      ).catch(vanishedAsNull)
+    : await writeWithJsonText("MockFixture", scope.organizationId, { body: bodyText }, (tx) =>
+        tx.mockFixture.create({
+          data: {
+            organizationId: scope.organizationId,
+            interfaceId: iface.id,
+            scenario,
+            status,
+            body: JSON_TEXT_PLACEHOLDER,
+            sourceStatus: fixture.sourceStatus,
+            ...stamp,
+          },
+          select,
+        }),
+      );
   if (!saved) {
     // The recording found above was deleted before it could be replaced: a
     // Studio PATCH that changes the contract deletes every fixture of the
@@ -171,14 +162,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     entityType: "Interface",
     entityId: iface.id,
     action: "UPDATE",
-    after: { event: "mock_fixture_captured", scenario, status, rows: body.records?.length ?? 0, ...stamp },
+    after: { event: "mock_fixture_captured", scenario, status, rows: fixture.rows, ...stamp },
   });
 
   return studioOk({
     id: saved.id,
     scenario: saved.scenario,
     status: saved.status,
-    rows: body.records?.length ?? 0,
+    rows: fixture.rows,
     replaced: Boolean(existing),
   });
 }

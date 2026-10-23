@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.3 golden set). Modelled on the SHAPE of a
+  SuccessFactors OData V2 description of one dataset (the entity-scoped
+  `{root}/{EntitySet}/$metadata` answer): a single SFOData schema, sap:
+  attributes bound to SuccessFactors' own namespace URI (not SAP Gateway's),
+  including the SF-specific ones the compiler ignores, an upsert
+  function import, a custom MDF-style entity. Every name and value is invented;
+  it is not, and is not copied from, any SAP $metadata document.
+-->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.successfactors.com/edm/sap" xmlns:sf="http://www.successfactors.com/edm/sf">
+  <edmx:DataServices m:DataServiceVersion="2.0">
+    <Schema Namespace="SFOData" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+      <EntityType Name="cust_TravelRequest" sap:label="Travel Request" sap:upsertable="true">
+        <Key>
+          <PropertyRef Name="externalCode"/>
+          <PropertyRef Name="effectiveStartDate"/>
+        </Key>
+        <Property Name="externalCode" Type="Edm.String" Nullable="false" MaxLength="128" sap:label="Code" sap:required="true" sap:creatable="true" sap:updatable="false" sap:upsertable="true" sap:visible="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="effectiveStartDate" Type="Edm.DateTime" Nullable="false" sap:label="Start Date" sap:display-format="Date" sap:required="true" sap:creatable="true" sap:updatable="false" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="cust_Destination" Type="Edm.String" Nullable="true" MaxLength="255" sap:label="Destination" sap:required="false" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="cust_Amount" Type="Edm.Decimal" Nullable="true" Precision="20" Scale="3" sap:label="Estimated Cost" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="cust_Nights" Type="Edm.Int64" Nullable="true" sap:label="Nights" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="cust_Approved" Type="Edm.Boolean" Nullable="true" sap:label="Approved" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="cust_Traveller" Type="Edm.String" Nullable="true" MaxLength="100" sap:label="Traveller" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="lastModifiedDateTime" Type="Edm.DateTimeOffset" Nullable="true" sap:label="Last Modified Date" sap:creatable="false" sap:updatable="false" sap:upsertable="false" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="createdBy" Type="Edm.String" Nullable="true" MaxLength="255" sap:label="Created By" sap:creatable="false" sap:updatable="false" sap:upsertable="false" sap:sortable="true" sap:filterable="true"/>
+        <Property Name="mdfSystemRecordStatus" Type="Edm.String" Nullable="true" MaxLength="255" sap:label="Record Status" sap:creatable="false" sap:updatable="false" sap:upsertable="false" sap:sortable="false" sap:filterable="true"/>
+        <NavigationProperty Name="cust_TravellerNav" Relationship="SFOData.cust_TravelRequest_User" FromRole="cust_TravelRequest" ToRole="User" sap:label="Traveller details"/>
+      </EntityType>
+      <EntityType Name="User" sap:label="User">
+        <Key>
+          <PropertyRef Name="userId"/>
+        </Key>
+        <Property Name="userId" Type="Edm.String" Nullable="false" MaxLength="100" sap:label="User ID"/>
+        <Property Name="email" Type="Edm.String" Nullable="true" MaxLength="100" sap:label="Email"/>
+        <Property Name="firstName" Type="Edm.String" Nullable="true" MaxLength="128" sap:label="First Name"/>
+      </EntityType>
+      <Association Name="cust_TravelRequest_User">
+        <End Type="SFOData.cust_TravelRequest" Multiplicity="*" Role="cust_TravelRequest"/>
+        <End Type="SFOData.User" Multiplicity="0..1" Role="User"/>
+      </Association>
+      <EntityContainer Name="EntityContainer" m:IsDefaultEntityContainer="true">
+        <EntitySet Name="cust_TravelRequest" EntityType="SFOData.cust_TravelRequest" sap:label="Travel Request" sap:creatable="true" sap:updatable="true" sap:upsertable="true" sap:deletable="true"/>
+        <EntitySet Name="User" EntityType="SFOData.User" sap:label="User" sap:creatable="false" sap:updatable="true" sap:upsertable="true" sap:deletable="false"/>
+        <AssociationSet Name="cust_TravelRequest_User" Association="SFOData.cust_TravelRequest_User">
+          <End EntitySet="cust_TravelRequest" Role="cust_TravelRequest"/>
+          <End EntitySet="User" Role="User"/>
+        </AssociationSet>
+        <FunctionImport Name="upsert" ReturnType="Collection(SFOData.UpsertResult)" m:HttpMethod="POST" sap:label="Upsert"/>
+      </EntityContainer>
+      <ComplexType Name="UpsertResult">
+        <Property Name="key" Type="Edm.String" Nullable="true"/>
+        <Property Name="status" Type="Edm.String" Nullable="true"/>
+        <Property Name="message" Type="Edm.String" Nullable="true"/>
+        <Property Name="httpCode" Type="Edm.Int32" Nullable="true"/>
+      </ComplexType>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

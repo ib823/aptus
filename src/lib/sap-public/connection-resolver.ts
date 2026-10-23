@@ -34,7 +34,7 @@ import { parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/envir
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
 import { connectionAad, type SapConnectionSecrets } from "@/lib/sap-public/connection-crypto";
 import { openSecretsForOrg, sealSecretsForOrg } from "@/lib/sap-public/secret-envelope";
-import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+import { exchangeSamlBearerAssertion, readTokenResponse } from "@/lib/sap-public/oauth-saml-bearer";
 import { ConnectionConfigError, OAuthTokenRequestError } from "@/lib/sap-public/upstream-failure";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
@@ -726,10 +726,9 @@ async function fetchOAuthTokenFromConnection(
     // An error page is HTML as often as JSON. Parsed strictly, a 503 from a
     // load balancer threw a SyntaxError that said nothing about the status.
     // Only the parse is forgiven: a body cut off by the timeout is still one.
-    const json = ((await res.json().catch((err: unknown) => {
-      if (err instanceof SyntaxError) return null;
-      throw err;
-    })) ?? {}) as OAuthTokenResponse;
+    // Read no further than a token answer can be (readTokenResponse, 64 KiB):
+    // the token URL is the builder's, and fetch inflates without a limit.
+    const json: OAuthTokenResponse = await readTokenResponse(res);
     if (!res.ok || typeof json.access_token !== "string") {
       // The STATUS travels as a field: a 401 here is a wrong client secret, a
       // 503 is the endpoint down, and only the status tells them apart.

@@ -266,7 +266,14 @@ async function newRows(): Promise<{ audits: unknown[]; platform: unknown[]; cons
   });
   const consoleReads = cr.filter((r) => !seenConsole.has(r.id));
   for (const r of consoleReads) seenConsole.add(r.id);
-  return { audits: audits.map(anonymise), platform: platform.map(anonymise), consoleReads: consoleReads.map(anonymise) };
+  /*
+   * P1.10's two audit columns are younger than both golden files. A console
+   * row is no northbound call, so neither names a path or a version; held
+   * here, then left out of what the goldens compare (P1 onto wave 2).
+   */
+  for (const r of audits) expect({ apiBasePath: r.apiBasePath, apiVersion: r.apiVersion }, r.externalId).toEqual({ apiBasePath: null, apiVersion: null });
+  const withoutServedAs = audits.map(({ apiBasePath: _path, apiVersion: _version, ...row }) => row);
+  return { audits: withoutServedAs.map(anonymise), platform: platform.map(anonymise), consoleReads: consoleReads.map(anonymise) };
 }
 
 async function observe(res: Response): Promise<Observed> {

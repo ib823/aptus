@@ -80,7 +80,9 @@ describe("credential usage is recorded", () => {
   const src = flat(read(BROKER_RUN));
 
   it("stamps lastUsedAt through the same helper the northbound routes use", () => {
-    expect(src).toContain("touchClientLastUsed(client.id, scope.organizationId)");
+    // With the row's own lastUsedAt, so the once-a-minute rule applies (P0.19;
+    // the behaviour is broker-run-last-used.test.ts).
+    expect(src).toContain("touchClientLastUsed(client.id, scope.organizationId, client.lastUsedAt)");
   });
 
   it("is fire-and-forget, like every other caller", () => {

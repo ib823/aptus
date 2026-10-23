@@ -1,0 +1,460 @@
+{
+  "json-schema-2020-12": {
+    "create": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
+      "properties": {
+        "Currency": {
+          "maxLength": 5,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "Employee": {
+          "maxLength": 12,
+          "title": "Employee",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID",
+            "isPotentiallyPersonal": true
+          }
+        },
+        "Notes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "PlanName": {
+          "maxLength": 40,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "TargetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          }
+        },
+        "ValidFrom": {
+          "format": "date",
+          "type": "string",
+          "x-odata-type": "Edm.Date"
+        },
+        "ValidTo": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        },
+        "_Targets": {
+          "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array",
+          "x-odata-navigation": {
+            "collection": true,
+            "containsTarget": true,
+            "target": "com.example.zbonusplan.BonusTargetType"
+          }
+        }
+      },
+      "title": "Bonus Plan (create)",
+      "type": "object"
+    },
+    "key": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The key that names one BonusPlan record.",
+      "properties": {
+        "PlanUUID": {
+          "format": "uuid",
+          "type": "string",
+          "x-odata-type": "Edm.Guid"
+        }
+      },
+      "required": [
+        "PlanUUID"
+      ],
+      "title": "Bonus Plan (key)",
+      "type": "object"
+    },
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": true,
+      "description": "A BonusPlan record as the service returns it, compiled from the service's own description.",
+      "properties": {
+        "Currency": {
+          "type": "string",
+          "x-odata-max-length": 5,
+          "x-odata-type": "Edm.String"
+        },
+        "Employee": {
+          "title": "Employee",
+          "type": "string",
+          "x-odata-max-length": 12,
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID",
+            "isPotentiallyPersonal": true
+          }
+        },
+        "LocalLastChangedAt": {
+          "format": "date-time",
+          "readOnly": true,
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.DateTimeOffset"
+        },
+        "Notes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "PlanName": {
+          "type": "string",
+          "x-odata-max-length": 40,
+          "x-odata-type": "Edm.String"
+        },
+        "PlanUUID": {
+          "format": "uuid",
+          "readOnly": true,
+          "type": "string",
+          "x-odata-type": "Edm.Guid"
+        },
+        "TargetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          }
+        },
+        "ValidFrom": {
+          "format": "date",
+          "type": "string",
+          "x-odata-type": "Edm.Date"
+        },
+        "ValidTo": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        }
+      },
+      "required": [
+        "PlanUUID"
+      ],
+      "title": "Bonus Plan",
+      "type": "object",
+      "x-odata-entity-set": "BonusPlan",
+      "x-odata-entity-type": "com.example.zbonusplan.BonusPlanType",
+      "x-odata-key": [
+        "PlanUUID"
+      ],
+      "x-personal-data": {
+        "entitySemantics": "DataSubjectDetails"
+      }
+    },
+    "update": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The changes an update sends to one BonusPlan record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+      "properties": {
+        "Currency": {
+          "maxLength": 5,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "Employee": {
+          "maxLength": 12,
+          "title": "Employee",
+          "type": "string",
+          "x-odata-type": "Edm.String",
+          "x-personal-data": {
+            "fieldSemantics": "DataSubjectID",
+            "isPotentiallyPersonal": true
+          }
+        },
+        "Notes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.String"
+        },
+        "PlanName": {
+          "maxLength": 40,
+          "type": "string",
+          "x-odata-type": "Edm.String"
+        },
+        "TargetAmount": {
+          "format": "decimal",
+          "type": "number",
+          "x-odata-precision": 15,
+          "x-odata-scale": 2,
+          "x-odata-type": "Edm.Decimal",
+          "x-personal-data": {
+            "isPotentiallySensitive": true
+          }
+        },
+        "ValidFrom": {
+          "format": "date",
+          "type": "string",
+          "x-odata-type": "Edm.Date"
+        },
+        "ValidTo": {
+          "format": "date",
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-odata-type": "Edm.Date"
+        }
+      },
+      "title": "Bonus Plan (update)",
+      "type": "object"
+    }
+  },
+  "openapi-3.0": {
+    "names": {
+      "create": "BonusPlan_Create",
+      "key": "BonusPlan_Key",
+      "record": "BonusPlan",
+      "update": "BonusPlan_Update"
+    },
+    "schemas": {
+      "BonusPlan": {
+        "additionalProperties": true,
+        "description": "A BonusPlan record as the service returns it, compiled from the service's own description.",
+        "properties": {
+          "Currency": {
+            "type": "string",
+            "x-odata-max-length": 5,
+            "x-odata-type": "Edm.String"
+          },
+          "Employee": {
+            "title": "Employee",
+            "type": "string",
+            "x-odata-max-length": 12,
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID",
+              "isPotentiallyPersonal": true
+            }
+          },
+          "LocalLastChangedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string",
+            "x-odata-type": "Edm.DateTimeOffset"
+          },
+          "Notes": {
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "PlanName": {
+            "type": "string",
+            "x-odata-max-length": 40,
+            "x-odata-type": "Edm.String"
+          },
+          "PlanUUID": {
+            "format": "uuid",
+            "readOnly": true,
+            "type": "string",
+            "x-odata-type": "Edm.Guid"
+          },
+          "TargetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            }
+          },
+          "ValidFrom": {
+            "format": "date",
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "ValidTo": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          }
+        },
+        "required": [
+          "PlanUUID"
+        ],
+        "title": "Bonus Plan",
+        "type": "object",
+        "x-odata-entity-set": "BonusPlan",
+        "x-odata-entity-type": "com.example.zbonusplan.BonusPlanType",
+        "x-odata-key": [
+          "PlanUUID"
+        ],
+        "x-personal-data": {
+          "entitySemantics": "DataSubjectDetails"
+        }
+      },
+      "BonusPlan_Create": {
+        "additionalProperties": false,
+        "description": "The record a create sends to BonusPlan. Computed and non-creatable properties are left out; required lists what the service marks mandatory. A navigation may carry related records to create with it (a deep insert) or, as <navigation>@odata.bind, the records to link.",
+        "properties": {
+          "Currency": {
+            "maxLength": 5,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "Employee": {
+            "maxLength": 12,
+            "title": "Employee",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID",
+              "isPotentiallyPersonal": true
+            }
+          },
+          "Notes": {
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "PlanName": {
+            "maxLength": 40,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "TargetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            }
+          },
+          "ValidFrom": {
+            "format": "date",
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "ValidTo": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "_Targets": {
+            "description": "Related com.example.zbonusplan.BonusTargetType records to create with this one.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "x-odata-navigation": {
+              "collection": true,
+              "containsTarget": true,
+              "target": "com.example.zbonusplan.BonusTargetType"
+            }
+          }
+        },
+        "title": "Bonus Plan (create)",
+        "type": "object"
+      },
+      "BonusPlan_Key": {
+        "additionalProperties": false,
+        "description": "The key that names one BonusPlan record.",
+        "properties": {
+          "PlanUUID": {
+            "format": "uuid",
+            "type": "string",
+            "x-odata-type": "Edm.Guid"
+          }
+        },
+        "required": [
+          "PlanUUID"
+        ],
+        "title": "Bonus Plan (key)",
+        "type": "object"
+      },
+      "BonusPlan_Update": {
+        "additionalProperties": false,
+        "description": "The changes an update sends to one BonusPlan record (PATCH semantics: send only what changes). Keys, computed, immutable and non-updatable properties are left out.",
+        "properties": {
+          "Currency": {
+            "maxLength": 5,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "Employee": {
+            "maxLength": 12,
+            "title": "Employee",
+            "type": "string",
+            "x-odata-type": "Edm.String",
+            "x-personal-data": {
+              "fieldSemantics": "DataSubjectID",
+              "isPotentiallyPersonal": true
+            }
+          },
+          "Notes": {
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "PlanName": {
+            "maxLength": 40,
+            "type": "string",
+            "x-odata-type": "Edm.String"
+          },
+          "TargetAmount": {
+            "format": "decimal",
+            "type": "number",
+            "x-odata-precision": 15,
+            "x-odata-scale": 2,
+            "x-odata-type": "Edm.Decimal",
+            "x-personal-data": {
+              "isPotentiallySensitive": true
+            }
+          },
+          "ValidFrom": {
+            "format": "date",
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          },
+          "ValidTo": {
+            "format": "date",
+            "nullable": true,
+            "type": "string",
+            "x-odata-type": "Edm.Date"
+          }
+        },
+        "title": "Bonus Plan (update)",
+        "type": "object"
+      }
+    }
+  }
+}

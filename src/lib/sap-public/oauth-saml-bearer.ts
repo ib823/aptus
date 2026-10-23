@@ -391,7 +391,7 @@ export function sanitizeSuccessFactorsError(raw: unknown, sealed: SealedIdentifi
 const TOKEN_RESPONSE_LIMIT = 64 * 1024;
 
 /** The response's JSON, read no further than TOKEN_RESPONSE_LIMIT; `{}` when it is longer or not JSON. */
-async function readTokenResponse(res: Response): Promise<OAuthTokenResponse> {
+export async function readTokenResponse(res: Response): Promise<OAuthTokenResponse> {
   const declared = Number(res.headers?.get?.("content-length"));
   if (Number.isFinite(declared) && declared > TOKEN_RESPONSE_LIMIT) {
     await res.body?.cancel().catch(() => undefined);

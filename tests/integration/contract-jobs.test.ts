@@ -1,0 +1,659 @@
+// @vitest-environment node
+/**
+ * THE CONTRACT COMPILER'S JOBS AND WRITES, against real PostgreSQL (P1.3).
+ * The request thread's work around the jobs, each bounded by construction
+ * whatever the input —
+ *
+ *   one statement     a document's current snapshots are one DISTINCT ON,
+ *                     however many interfaces it carries;
+ *   what is rendered  a document's grants are only the granting, live rows,
+ *                     distinct — never every grant request ever filed;
+ *   text, both ways   a fixture and a recorded contract with its diff and its
+ *                     /schema texts cross back from the worker and into
+ *                     PostgreSQL as strings, never as object graphs;
+ *   one transaction   a capture stores its schema, its SAMPLED snapshot and
+ *                     its texts together, or nothing — and a capture the
+ *                     compiler could not take stores nothing and says so;
+ *   compiler time     each organisation's worker time per UTC day
+ *                     (contract-time.ts): refused past it with 00:00 UTC,
+ *                     charged with the wall time of every job, downloads
+ *                     included, another organisation never affected.
+ *
+ * Opt-in on TEST_DATABASE_URL; rows are namespaced and removed.
+ */
+
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { NextRequest } from "next/server";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import { longestStall } from "../helpers/stall";
+
+vi.setConfig({ testTimeout: 180_000 });
+
+/** Every statement the app's client sends, counted (the base client's query events). */
+const counter = vi.hoisted(() => ({ queries: 0, /** ms each job's settling statement (contract-time.ts) is held for, 0 for none. */ slowSettleMs: 0 }));
+
+vi.mock("@/lib/db/prisma", async () => {
+  const { PrismaClient } = await import("@prisma/client");
+  const { tenantScopeGuard } = await import("@/lib/db/tenant-guard");
+  const base = new PrismaClient({
+    datasourceUrl: process.env.TEST_DATABASE_URL ?? "postgresql://unused:unused@localhost:1/unused",
+    log: [{ emit: "event", level: "query" }],
+  });
+  base.$on("query", () => {
+    counter.queries += 1;
+  });
+  return {
+    prisma: base.$extends(tenantScopeGuard()).$extends({
+      query: {
+        // A settling statement held open on demand: a loaded pooler, without leaving a race to chance.
+        async $executeRaw({ args, query }) {
+          const sql = (args as unknown as { sql?: string }).sql ?? "";
+          if (counter.slowSettleMs > 0 && sql.includes('INSERT INTO "ContractTime"')) await new Promise((r) => setTimeout(r, counter.slowSettleMs));
+          return query(args);
+        },
+      },
+    }),
+  };
+});
+vi.mock("@/lib/auth/session", () => ({
+  getCurrentUser: async () => ({ id: "u_r5", email: "dev@abeam.com", role: "consultant", organizationId: ORG, authMethod: "session" }),
+}));
+vi.mock("@/lib/studio/audit", () => ({ writeConfigAudit: vi.fn() }));
+
+import { POST as captureFixture } from "@/app/api/studio/interfaces/[id]/capture-fixture/route";
+import { POST as captureSchema } from "@/app/api/studio/interfaces/[id]/capture-schema/route";
+import { GET as scaffold } from "@/app/api/studio/interfaces/[id]/scaffold/route";
+import { LIMITS } from "@/lib/contracts/budget";
+import { compileContract } from "@/lib/contracts/compile";
+import {
+  chargeContractTime,
+  checkContractTime,
+  contractSecondsPerOrgDay,
+  DEFAULT_CONTRACT_SECONDS_PER_ORG_DAY,
+  nextUtcMidnight,
+  RESERVATION_GRACE_MS,
+  reserveContractTime,
+} from "@/lib/contracts/contract-time";
+import { planDocInputs } from "@/lib/contracts/doc-inputs";
+import { CONTRACT_JOB_LIMITS, contractJobAdmission, runJobInEnvelope } from "@/lib/contracts/envelope";
+import { recordJob, type CompiledService, type Job } from "@/lib/contracts/jobs";
+import { recordVerifiedContract, snapshotBodies } from "@/lib/contracts/record";
+import { sliceForEntitySet } from "@/lib/contracts/slice";
+import * as snapshots from "@/lib/contracts/snapshot";
+import { prisma } from "@/lib/db/prisma";
+import { tenantScopeOf } from "@/lib/studio/tenant-scope";
+
+const RUN = `r5-${randomUUID().slice(0, 8)}`;
+const ORG = `${RUN}-org`;
+const OTHER = `${RUN}-other`;
+const BUSINESS_PARTNER = readFileSync(path.resolve(__dirname, "../fixtures/contracts/edmx/business-partner.v2.xml"), "utf8");
+const scope = tenantScopeOf(ORG);
+let solutionId = "";
+
+/** The statements `work` sent. */
+async function counted<T>(work: () => Promise<T>): Promise<{ value: T; queries: number }> {
+  const before = counter.queries;
+  const value = await work();
+  return { value, queries: counter.queries - before };
+}
+
+/** A V2 description of one entity set of `properties` decimal fields, labelled: about 145 canonical bytes a field. */
+function wideDescription(properties: number, prefix = "Field"): string {
+  const props = Array.from(
+    { length: properties },
+    (_, i) => `<Property Name="${prefix}${i}" Type="Edm.Decimal" Precision="9" Scale="2" sap:label="Field label ${i}" sap:quickinfo="Quick info ${i}"/>`,
+  ).join("");
+  return (
+    `<?xml version="1.0" encoding="utf-8"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" ` +
+    `xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData"><edmx:DataServices m:DataServiceVersion="2.0">` +
+    `<Schema Namespace="S" xmlns="http://schemas.microsoft.com/ado/2008/09/edm"><EntityType Name="EmpJobType"><Key><PropertyRef Name="${prefix}0"/></Key>${props}</EntityType>` +
+    `<EntityContainer Name="C" m:IsDefaultEntityContainer="true"><EntitySet Name="EmpJob" EntityType="S.EmpJobType" sap:creatable="false"/></EntityContainer></Schema></edmx:DataServices></edmx:Edmx>`
+  );
+}
+
+async function newInterface(name: string, over: Record<string, unknown> = {}) {
+  return prisma.interface.create({
+    data: {
+      organizationId: ORG,
+      solutionId,
+      name,
+      sapProduct: "s4hana",
+      externalId: "custom:/sap/opu/odata/sap/ZR5_SRV",
+      operation: "READ",
+      mode: "READ",
+      entitySet: "EmpJob",
+      ...over,
+    },
+    select: { id: true, version: true, externalId: true, entitySet: true, operation: true, mode: true },
+  });
+}
+
+/** The organisation's compiler time today, in ms (0 when no row). */
+async function msToday(organizationId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<{ ms: number }[]>`SELECT "ms" FROM "ContractTime" WHERE "organizationId" = ${organizationId} AND "day" = ${new Date().toISOString().slice(0, 10)}::date`;
+  return rows[0]?.ms ?? 0;
+}
+
+/** The deadlines its jobs in flight hold today, in ms (0 when no row). */
+async function reservedToday(organizationId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<{ ms: number }[]>`SELECT "reservedMs" AS "ms" FROM "ContractTime" WHERE "organizationId" = ${organizationId} AND "day" = ${new Date().toISOString().slice(0, 10)}::date`;
+  return rows[0]?.ms ?? 0;
+}
+
+const post = (url: string, body: string) =>
+  new NextRequest(url, { method: "POST", headers: { "content-type": "application/json" }, body });
+
+describe.skipIf(!process.env.TEST_DATABASE_URL)("the Contract Compiler's jobs and writes, against real PostgreSQL", () => {
+  beforeAll(async () => {
+    for (const id of [ORG, OTHER]) await prisma.organization.create({ data: { id, name: `R5 ${id}`, type: "client" } });
+    const s = await prisma.solution.create({
+      data: {
+        organizationId: ORG,
+        name: "Round 5",
+        slug: `${RUN}-app`,
+        classification: "CLIENT_APP",
+        businessProblem: "Round 5.",
+        dataClass: "INTERNAL",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    solutionId = s.id;
+  });
+
+  afterAll(async () => {
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" IN (${ORG}, ${OTHER})`;
+    await prisma.apiAccessGrant.deleteMany({ where: { organizationId: ORG } });
+    await prisma.mockFixture.deleteMany({ where: { organizationId: ORG } });
+    await prisma.contractSnapshot.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
+    await prisma.interface.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
+    await prisma.solution.deleteMany({ where: { organizationId: { in: [ORG, OTHER] } } });
+    for (const id of [ORG, OTHER]) await prisma.organization.delete({ where: { id } });
+    await prisma.$disconnect();
+  });
+
+  it("a document's current snapshots are one statement for 1,016 interfaces, each the newest describing it now", async () => {
+    const n = 1016;
+    await prisma.interface.createMany({
+      data: Array.from({ length: n }, (_, i) => ({
+        id: `${RUN}-many-${i}`,
+        organizationId: ORG,
+        solutionId,
+        name: `many ${i}`,
+        sapProduct: "s4hana",
+        externalId: "custom:/sap/opu/odata/sap/ZMANY_SRV",
+        operation: "READ",
+        mode: "READ",
+        entitySet: "Rows",
+      })),
+    });
+    const interfaces = await prisma.interface.findMany({
+      where: { organizationId: ORG, id: { startsWith: `${RUN}-many-` } },
+      select: { id: true, externalId: true, entitySet: true },
+    });
+    const snap = (interfaceId: string, minor: number, over: Record<string, unknown> = {}) => ({
+      organizationId: ORG,
+      interfaceId,
+      interfaceVersion: 1,
+      externalId: "custom:/sap/opu/odata/sap/ZMANY_SRV",
+      entitySet: "Rows",
+      source: "METADATA",
+      odataVersion: "V2",
+      semver: `1.${minor}.0`,
+      semverMajor: 1,
+      semverMinor: minor,
+      semverPatch: 0,
+      contentHash: `${minor}`.repeat(64),
+      ir: {},
+      irVersion: 1,
+      irBytes: 100 + minor,
+      ...over,
+    });
+    const [a, b, c] = interfaces.map((i) => i.id).sort();
+    await prisma.contractSnapshot.createMany({
+      data: [
+        // a: two versions; the newer describes it.
+        snap(a!, 0),
+        snap(a!, 1),
+        // b: the newest is of another dataset, so the older one is current.
+        snap(b!, 0),
+        snap(b!, 1, { entitySet: "Other" }),
+        // c: only another service's: none current.
+        snap(c!, 0, { externalId: "custom:/elsewhere" }),
+      ],
+    });
+    // Another organisation's row of the same interface id is never anyone's.
+    await prisma.contractSnapshot.create({ data: { ...snap(c!, 5), organizationId: OTHER } });
+
+    const read = await counted(() => longestStall(() => snapshots.currentSnapshotSummaries(scope, interfaces)));
+    const summaries = read.value.value;
+    expect([...summaries.keys()].sort()).toEqual([a, b].sort());
+    expect(summaries.get(a!)).toMatchObject({ semver: "1.1.0", irBytes: 101, source: "METADATA", entitySet: "Rows" });
+    expect(summaries.get(b!)).toMatchObject({ semver: "1.0.0", irBytes: 100 });
+    // Before: one findFirst per interface — 1,016 statements, 230-610 ms of blocked event loop.
+    expect(read.queries).toBe(1);
+    expect(read.value.ms).toBeLessThan(200);
+
+    // And the whole plan of a document of them: a constant number of statements.
+    const plan = await counted(() => planDocInputs(scope, interfaces));
+    expect(plan.queries).toBeLessThanOrEqual(2);
+  });
+
+  it("a document reads only the grants it renders: 100,000 grant requests cost it nothing", async () => {
+    const one = await newInterface("granted");
+    const base = {
+      organizationId: ORG,
+      solutionId,
+      externalId: one.externalId,
+      justification: "x",
+      interfaceId: one.id,
+    };
+    const requests = Array.from({ length: 100_000 }, (_, i) => ({ ...base, id: `${RUN}-req-${i}`, operation: "READ", environment: "PROD" }));
+    for (let i = 0; i < requests.length; i += 10_000) await prisma.apiAccessGrant.createMany({ data: requests.slice(i, i + 10_000) });
+    const past = new Date(Date.now() - 60_000);
+    await prisma.apiAccessGrant.createMany({
+      data: [
+        { ...base, operation: "READ", environment: "DEV", decision: "APPROVED" },
+        { ...base, operation: "READ", environment: "DEV", decision: "APPROVED" },
+        { ...base, operation: "READ", environment: "TEST", decision: "READ_ONLY" },
+        { ...base, operation: "CREATE", environment: "TEST", decision: "READ_ONLY" },
+        { ...base, operation: "READ", environment: "SANDBOX", decision: "SANDBOX_ONLY" },
+        { ...base, operation: "READ", environment: "PROD", decision: "SANDBOX_ONLY" },
+        { ...base, operation: "CREATE", environment: "DEV", decision: "APPROVED" },
+        { ...base, operation: "READ", environment: "PROD", decision: "APPROVED", expiresAt: past },
+        { ...base, operation: "UPDATE", environment: "PROD", decision: "APPROVED", revokedAt: past },
+        { ...base, operation: "READ", environment: "PROD", decision: "REJECTED" },
+      ],
+    });
+    const r = await counted(() => longestStall(() => planDocInputs(scope, [one])));
+    // Before: every request loaded and dropped here — 400-625 ms of blocked event loop.
+    expect(r.value.ms).toBeLessThan(150);
+    expect(r.queries).toBeLessThanOrEqual(2);
+    const plan = r.value.value;
+    if (!plan.ok) throw new Error("refused");
+    const grants = [...(plan.grants.get(one.id) ?? [])].sort((x, y) => `${x.operation}${x.environment}`.localeCompare(`${y.operation}${y.environment}`));
+    // Exactly what grantsRead and grantsWrite allow, once each.
+    expect(grants).toEqual([
+      { operation: "CREATE", environment: "DEV" },
+      { operation: "READ", environment: "DEV" },
+      { operation: "READ", environment: "SANDBOX" },
+      { operation: "READ", environment: "TEST" },
+    ]);
+  });
+
+  it("a fixture at its bound is stored from its text: the event loop keeps ticking", async () => {
+    const iface = await newInterface("fixtures");
+    const rows = Array.from({ length: 25 }, () => ({ a: Array.from({ length: 92_000 }, (_, i) => i % 10) }));
+    const bodyText = JSON.stringify({ rows, readStatus: "OK", interfaceVersion: iface.version, entitySet: iface.entitySet, sourceStatus: 200 });
+    expect(bodyText.length).toBeGreaterThan(4_500_000);
+    expect(bodyText.length).toBeLessThan(LIMITS.fixture.bytes);
+    const send = () => captureFixture(post(`http://localhost/api/studio/interfaces/${iface.id}/capture-fixture`, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    // Created, then replaced: both writes. The body is parsed in the fixture job, never here.
+    const parse = vi.spyOn(JSON, "parse");
+    for (const replaced of [false, true]) {
+      const r = await longestStall(send);
+      expect(r.value.status).toBe(200);
+      expect(((await r.value.json()) as { data: { replaced: boolean; rows: number } }).data).toMatchObject({ replaced, rows: 25 });
+      // Before: parsed here, and Prisma serialised the 2.3 million nodes on this thread — 1.4-1.7 s.
+      expect(r.ms).toBeLessThan(600);
+    }
+    expect(parse.mock.calls.some(([text]) => text === bodyText)).toBe(false);
+    parse.mockRestore();
+    const stored = await prisma.mockFixture.findMany({ where: { organizationId: ORG, interfaceId: iface.id }, select: { body: true, scenario: true } });
+    expect(stored).toHaveLength(1);
+    const body = stored[0]!.body as { records: { a: number[] }[] };
+    expect(body.records).toHaveLength(25);
+    expect(body.records[24]!.a[91_999]).toBe(91_999 % 10);
+  });
+
+  it("a recorded 100 KB contract (over half a MiB of /schema texts) crosses back and is stored as its text with its texts: the event loop keeps ticking", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const iface = await newInterface("recorded", { operation: "CREATE", mode: "WRITE" });
+    const entitySet = iface.entitySet!;
+    const record = async (description: string) => {
+      const heads = await snapshots.loadRecordHeads(scope, iface, "DEV");
+      const compiled = await longestStall(() => runJobInEnvelope({ kind: "record", input: { description, entitySet, ...heads } }, { tenant: ORG }));
+      const value = compiled.value;
+      const c: CompiledService = value.ok ? value.value : { ok: false, reason: value.reason, detail: value.detail };
+      const recorded = await longestStall(() =>
+        recordVerifiedContract({ scope, iface: { ...iface, entitySet }, compiled: c, heads, environment: "DEV", connectionId: "conn_dev", actorId: "u_r5" }),
+      );
+      return { compiled: { value: c, ms: compiled.ms }, recorded };
+    };
+    const first = await record(wideDescription(750));
+    expect(first.recorded.value).toMatchObject({ status: "RECORDED", semver: "1.0.0" });
+    const c = first.compiled.value;
+    if (!c.ok || !c.dataset?.ok) throw new Error("not compiled");
+    expect(c.dataset.bytes).toBeGreaterThan(100_000);
+    expect(c.dataset.texts.schemas.byteLength + (c.dataset.texts.update?.byteLength ?? 0)).toBeGreaterThan(512 * 1024);
+    // What crossed back from the worker is the contract's text, as transferred bytes, never its object graph.
+    expect(c.dataset.ir).toBeInstanceOf(Uint8Array);
+    expect(c.dataset.facts).toMatchObject({ source: "METADATA", odataVersion: "V2", bodies: { create: false, update: true } });
+
+    // Another contract: a new version, its diff taken in the same job and stored as its text.
+    const second = await record(wideDescription(750, "Other"));
+    expect(second.recorded.value).toMatchObject({ status: "RECORDED", semver: "2.0.0", bump: "major" });
+    expect(second.compiled.ms).toBeLessThan(150);
+    expect(second.recorded.ms).toBeLessThan(150);
+
+    const rows = await prisma.contractSnapshot.findMany({
+      where: { organizationId: ORG, interfaceId: iface.id },
+      orderBy: { semverMajor: "asc" },
+      select: { id: true, ir: true, diff: true, irBytes: true, source: true, odataVersion: true, irVersion: true, schemasText: true },
+    });
+    expect(rows).toHaveLength(2);
+    const ir = rows[1]!.ir as { entityType: { properties: { name: string }[] }; source: string };
+    expect(ir.entityType.properties).toHaveLength(750);
+    expect(ir.entityType.properties[0]!.name).toBe("Other0");
+    expect(rows[1]).toMatchObject({ source: "METADATA", odataVersion: "V2", irVersion: 1 });
+    expect((rows[1]!.diff as { bump: string; changes: unknown[] }).bump).toBe("major");
+    expect(rows[0]!.diff).toBeNull();
+    // The /schema texts on the newest row only.
+    expect(rows[0]!.schemasText).toBeNull();
+    expect(JSON.parse(rows[1]!.schemasText!)).toHaveProperty("record");
+    // The write's body is decided from the two capabilities, read in the database.
+    expect(await snapshotBodies(prisma, scope, rows[1]!.id)).toEqual({ create: false, update: true });
+  });
+
+  it("/schema texts past 1 MiB are refused at record (OUTPUT_TOO_LARGE), and nothing is stored", async () => {
+    const iface = await newInterface("too-wide");
+    const entitySet = iface.entitySet!;
+    const compiled = recordJob({ description: wideDescription(13_500), entitySet, previous: [], unchangedHashes: [] });
+    expect(compiled).toMatchObject({ ok: true, dataset: { ok: false, reason: "OUTPUT_TOO_LARGE" } });
+    const outcome = await recordVerifiedContract({ scope, iface: { ...iface, entitySet }, compiled, heads: { ids: [] }, environment: "DEV", connectionId: "c", actorId: "u" });
+    expect(outcome).toMatchObject({ status: "NOT_COMPILED" });
+    expect(await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } })).toBe(0);
+  });
+
+  it("a snapshot's bodies are read from its capabilities as the IR states them", async () => {
+    const iface = await newInterface("bodies");
+    const cases: [Record<string, unknown>, boolean | undefined, { create: boolean; update: boolean }][] = [
+      [{}, undefined, { create: true, update: true }],
+      [{ creatable: false, updatable: false }, undefined, { create: false, update: false }],
+      [{ creatable: true }, true, { create: false, update: true }],
+    ];
+    let minor = 0;
+    for (const [capabilities, singleton, expected] of cases) {
+      const r = compileContract(wideDescription(2));
+      if (!r.ok) throw new Error(r.detail);
+      const s = sliceForEntitySet(r.ir, "EmpJob");
+      if (!s.ok) throw new Error(s.detail);
+      const ir = { ...s.contract, entitySet: { ...s.contract.entitySet, capabilities, ...(singleton ? { singleton } : {}) } };
+      const row = await prisma.contractSnapshot.create({
+        data: {
+          organizationId: ORG,
+          interfaceId: iface.id,
+          interfaceVersion: 1,
+          externalId: iface.externalId,
+          entitySet: "EmpJob",
+          source: "METADATA",
+          odataVersion: "V2",
+          semver: `1.${minor}.0`,
+          semverMajor: 1,
+          semverMinor: minor++,
+          semverPatch: 0,
+          contentHash: "a".repeat(64),
+          ir: ir as never,
+          irVersion: 1,
+        },
+        select: { id: true },
+      });
+      expect(await snapshotBodies(prisma, scope, row.id)).toEqual(expected);
+    }
+    expect(await snapshotBodies(prisma, tenantScopeOf(OTHER), "nope")).toBeNull();
+  });
+
+  it("a capture stores its schema, its SAMPLED snapshot and its texts together, or nothing and says why", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const iface = await newInterface("capture", { odataVersion: "V2", servicePath: "/sap/opu/odata/sap/ZR5_SRV" });
+    const url = `http://localhost/api/studio/interfaces/${iface.id}/capture-schema`;
+    const bodyText = JSON.stringify({ rows: [{ Id: "1", Amount: 2 }, { Id: "2", Amount: 3 }], interfaceVersion: iface.version, entitySet: iface.entitySet });
+    const stored = async () => ({
+      schema: (await prisma.interface.findFirst({ where: { id: iface.id, organizationId: ORG }, select: { responseSchema: true } }))?.responseSchema ?? null,
+      snapshots: await prisma.contractSnapshot.count({ where: { organizationId: ORG, interfaceId: iface.id } }),
+    });
+
+    // The compiler turned off: 503, and nothing stored.
+    vi.stubEnv("COREEDGE_CONTRACT_ISOLATES", "0");
+    const off = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(off.status).toBe(503);
+    expect(((await off.json()) as { error: { message: string } }).error.message).toContain("Nothing was captured");
+    expect(await stored()).toEqual({ schema: null, snapshots: 0 });
+
+    // The organisation's time spent: 429 until 00:00 UTC, its own words, and nothing stored.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "1");
+    await chargeContractTime(ORG, 1_000);
+    const spent = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(spent.status).toBe(429);
+    expect(Number(spent.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(Number(spent.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
+    expect(((await spent.json()) as { error: { message: string } }).error.message).toContain("1 s of contract compile time");
+    expect(await stored()).toEqual({ schema: null, snapshots: 0 });
+
+    // Captured: the schema, the SAMPLED snapshot and its texts, in one transaction — and the body never parsed here.
+    const parse = vi.spyOn(JSON, "parse");
+    const ok = await captureSchema(post(url, bodyText), { params: Promise.resolve({ id: iface.id }) });
+    expect(parse.mock.calls.some(([text]) => text === bodyText)).toBe(false);
+    parse.mockRestore();
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { data: { fields: number; contract: { status: string } } }).data).toMatchObject({ fields: 2, contract: { status: "RECORDED" } });
+    const after = await stored();
+    expect(after.schema).toMatchObject({ type: "object", properties: { Id: { type: "string" } } });
+    expect(after.snapshots).toBe(1);
+    const row = await prisma.contractSnapshot.findFirst({ where: { organizationId: ORG, interfaceId: iface.id }, select: { source: true, schemasText: true } });
+    expect(row?.source).toBe("SAMPLED");
+    expect(row?.schemasText).not.toBeNull();
+  });
+
+  it("each organisation's compiler time: refused past it with 00:00 UTC, another organisation unaffected, old days pruned", async () => {
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    // A fake day: the allowance is the UTC day's, whatever the clock says.
+    const day = new Date("2031-03-04T22:15:00.000Z");
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    await chargeContractTime(OTHER, 39_999, day);
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    await chargeContractTime(OTHER, 1, day);
+    const refused = await checkContractTime(OTHER, day);
+    expect(refused).toMatchObject({ ok: false, retryAfterMs: nextUtcMidnight(day).getTime() - day.getTime() });
+    expect(nextUtcMidnight(day).toISOString()).toBe("2031-03-05T00:00:00.000Z");
+    expect(!refused.ok && refused.detail).toContain("40 s of contract compile time");
+    // Another organisation's day, and the next day, are untouched.
+    expect(await checkContractTime(ORG, day)).toEqual({ ok: true });
+    expect(await checkContractTime(OTHER, new Date("2031-03-05T00:00:01.000Z"))).toEqual({ ok: true });
+    // 0 is unlimited.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "0");
+    expect(await checkContractTime(OTHER, day)).toEqual({ ok: true });
+    vi.unstubAllEnvs();
+    // A charge more than a week later deletes the old rows (at most once an hour per process: a fresh hour here).
+    await chargeContractTime(OTHER, 1, new Date("2031-03-20T10:00:00.000Z"));
+    const days = await prisma.$queryRaw<{ day: Date }[]>`SELECT "day" FROM "ContractTime" WHERE "organizationId" = ${OTHER} ORDER BY "day"`;
+    expect(days.map((d) => d.day.toISOString().slice(0, 10))).toEqual(["2031-03-20"]);
+  });
+
+  /*
+   * Consolidated review round 2: the gate is per process and a Fluid
+   * deployment runs several, so a check that only read the row let each
+   * instance admit its own one running and three waiting for an organisation
+   * already at its cap (measured: 12 jobs past the cap on 3 processes). Each
+   * job now reserves its deadline in the statement that checks the row.
+   */
+  it("the allowance holds across instances: a job reserves its deadline once it holds its slot and settles to its wall time", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    await chargeContractTime(OTHER, 39_999);
+    const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+    // Six at once: before, four ran here (one running, three waiting) and two were BUSY. Now one
+    // runs; the two past the gate's places are BUSY, and the three that waited reserve only once
+    // they hold the slot, after the first has settled and spent the day: ALLOWANCE (round 4).
+    const results = await Promise.all(Array.from({ length: 6 }, () => runJobInEnvelope(job, { tenant: OTHER })));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason).sort()).toEqual([...Array(3).fill("ALLOWANCE"), ...Array(2).fill("BUSY")]);
+    // Settled to the one job's wall time: the day's total is under the allowance plus one deadline.
+    const after = await msToday(OTHER);
+    expect(after).toBeGreaterThan(39_999);
+    expect(after).toBeLessThan(39_999 + CONTRACT_JOB_LIMITS.deadlineMs);
+    expect(await reservedToday(OTHER)).toBe(0);
+    // The day now spent: another instance asks the same row, and is refused until 00:00 UTC.
+    expect(await Promise.all([reserveContractTime(OTHER, 10_000), reserveContractTime(OTHER, 10_000)])).toEqual([
+      expect.objectContaining({ ok: false, retryAfterMs: expect.any(Number) }),
+      expect.objectContaining({ ok: false, retryAfterMs: expect.any(Number) }),
+    ]);
+    // Concurrent reservations under the allowance: admitted one at a time, none past it.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    const reserved = await Promise.all(Array.from({ length: 8 }, () => reserveContractTime(OTHER, 10_000)));
+    expect(reserved.filter((r) => r.ok)).toHaveLength(4);
+    expect(await reservedToday(OTHER)).toBe(40_000);
+    expect(await msToday(OTHER)).toBe(0);
+    // A job that never ran (BUSY: its caller's deadline already passed) gives its reservation back.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    expect(await runJobInEnvelope(job, { tenant: OTHER, deadlineAt: Date.now() - 1 })).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(await msToday(OTHER)).toBe(0);
+    expect(await reservedToday(OTHER)).toBe(0);
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated review round 3: reservations went into the same column as
+   * the settled time, so an organisation with time left was refused
+   * ALLOWANCE (retry at 00:00 UTC, and "SAP was not asked" on a verify) while
+   * its own jobs were in flight. In flight is BUSY; only settled time spends
+   * the day.
+   */
+  it("jobs in flight are not time spent: BUSY for seconds, never the day's refusal, and the verify's check reads settled time only", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    // Settled 30.5 s and one job in flight: the next is BUSY, and the verify's pre-SAP check still admits.
+    await chargeContractTime(OTHER, 30_500);
+    const inFlight = await reserveContractTime(OTHER, 10_000);
+    expect(inFlight).toMatchObject({ ok: true });
+    expect(await reserveContractTime(OTHER, 10_000)).toEqual({ ok: false, inFlight: true });
+    expect(await checkContractTime(OTHER)).toEqual({ ok: true });
+    expect(await contractJobAdmission("record", OTHER)).toBeNull();
+    const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+    const busy = await runJobInEnvelope(job, { tenant: OTHER });
+    expect(busy).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(busy).not.toHaveProperty("retryAfterMs");
+    // The job in flight settles (it ran 1 s): its reservation is given back, and the next job runs.
+    if (inFlight.ok) await chargeContractTime(OTHER, 1_000, inFlight.reservation.at, inFlight.reservation.ms);
+    expect(await reservedToday(OTHER)).toBe(0);
+    expect(await msToday(OTHER)).toBe(31_500);
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: true });
+    // Four jobs in flight at 0 s: a fifth is BUSY, not ALLOWANCE.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    for (let i = 0; i < 4; i++) expect(await reserveContractTime(OTHER, 10_000)).toMatchObject({ ok: true });
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: false, reason: "BUSY" });
+    expect(await checkContractTime(OTHER)).toEqual({ ok: true });
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated containment review round 4. reservedMs went down only when
+   * a job settled, and the settling statement swallows its own errors: a
+   * reservation whose process died or whose settle failed held the rest of
+   * the organisation's day, every job of it BUSY ("try again in a few
+   * seconds") until 00:00 UTC. A reservation now expires a deadline plus
+   * RESERVATION_GRACE_MS after it was taken. At the shipped 40 s default.
+   */
+  it("a reservation that is never settled stops blocking once it expires, and never holds the day", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // The shipped default (tests/setup.ts turns the allowance off).
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", undefined);
+    expect(contractSecondsPerOrgDay()).toBe(DEFAULT_CONTRACT_SECONDS_PER_ORG_DAY);
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    const t0 = new Date(Date.UTC(2031, 2, 4, 12, 0, 0));
+    const at = (ms: number) => new Date(t0.getTime() + ms);
+    const deadline = CONTRACT_JOB_LIMITS.deadlineMs;
+    // 30 s settled, and a job's reservation that is never settled (its process died).
+    await chargeContractTime(OTHER, 30_000, t0);
+    expect(await reserveContractTime(OTHER, deadline, t0)).toMatchObject({ ok: true });
+    // While it may still be in flight, the next job is BUSY, not the day's refusal.
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS - 1))).toEqual({ ok: false, inFlight: true });
+    // Past its expiry it counts for nothing: the next job reserves, and holds the row in its turn.
+    const next = await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 1));
+    expect(next).toMatchObject({ ok: true, reservation: { ms: deadline } });
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 2))).toEqual({ ok: false, inFlight: true });
+    // Settled, it gives its own reservation back; the day's settled time is still what decides ALLOWANCE.
+    if (next.ok) await chargeContractTime(OTHER, 2_000, next.reservation.at, next.reservation.ms);
+    expect(await reserveContractTime(OTHER, deadline, at(deadline + RESERVATION_GRACE_MS + 3))).toMatchObject({ ok: true });
+    await chargeContractTime(OTHER, 10_000, at(60_000));
+    expect(await reserveContractTime(OTHER, deadline, at(10 * 60_000))).toMatchObject({ ok: false, retryAfterMs: expect.any(Number) });
+
+    // End to end, today: a leaked reservation taken a deadline and the grace ago no longer refuses a job.
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    await chargeContractTime(OTHER, 30_000);
+    const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+    expect(await reserveContractTime(OTHER, deadline, new Date(Date.now() - deadline - RESERVATION_GRACE_MS - 1_000))).toMatchObject({ ok: true });
+    expect(await runJobInEnvelope(job, { tenant: OTHER })).toMatchObject({ ok: true });
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    vi.unstubAllEnvs();
+  });
+
+  /*
+   * Consolidated containment review round 6: a job freed its slot before it
+   * settled, and release() hands the slot to the organisation's next job at
+   * once, so that job reserved against the first job's reservation still on
+   * the row. In the last deadline of the day it was refused BUSY with time
+   * left (measured: 8 of 15 at 31 s of 40 s). A job now settles first.
+   */
+  it("an organisation's queued job reserves only after the job before it settled: never BUSY with time left", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "40");
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    await chargeContractTime(OTHER, 31_000);
+    // A slow settling statement (a loaded pooler) holds the window open, so the race is not left to chance.
+    counter.slowSettleMs = 300;
+    try {
+      const job: Job = { kind: "record", input: { description: BUSINESS_PARTNER, entitySet: "A_Partner", previous: [], unchangedHashes: [] } };
+      const results = await Promise.all([runJobInEnvelope(job, { tenant: OTHER }), runJobInEnvelope(job, { tenant: OTHER })]);
+      expect(results.map((r) => (r.ok ? "ok" : `${r.reason}:${r.cause ?? ""}`))).toEqual(["ok", "ok"]);
+    } finally {
+      counter.slowSettleMs = 0;
+    }
+    expect(await reservedToday(OTHER)).toBe(0);
+    expect(await msToday(OTHER)).toBeGreaterThan(31_000);
+    await prisma.$executeRaw`DELETE FROM "ContractTime" WHERE "organizationId" = ${OTHER}`;
+    vi.unstubAllEnvs();
+  });
+
+  it("every job is charged its wall time, a killed one and a download included", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const before = await msToday(ORG);
+    const startedAt = Date.now();
+    const r = await runJobInEnvelope(
+      { kind: "record", input: { description: wideDescription(20_000), entitySet: "EmpJob", previous: [], unchangedHashes: [] } },
+      { tenant: ORG, limits: { maxOldGenerationSizeMb: 384, maxYoungGenerationSizeMb: 32, stackSizeMb: 4, deadlineMs: 300 } },
+    );
+    const took = Date.now() - startedAt;
+    expect(r).toMatchObject({ ok: false, reason: "RESOURCE_LIMIT", cause: "deadline" });
+    const charged = (await msToday(ORG)) - before;
+    // From spawn to exit: charged, and never more than the whole call took. Not
+    // "at least the deadline": the deadline's timer starts before the worker is
+    // spawned (envelope.ts, runWorker), so the time from spawn to exit can be
+    // the deadline less the spawn (measured 283-299 ms of a 300 ms deadline).
+    expect(charged).toBeGreaterThan(0);
+    expect(charged).toBeLessThanOrEqual(took);
+
+    // A starter kit download is a job of the downloading organisation's.
+    const iface = await newInterface("kit");
+    const kitBefore = await msToday(ORG);
+    const kit = await scaffold(new NextRequest(`http://localhost/api/studio/interfaces/${iface.id}/scaffold`), { params: Promise.resolve({ id: iface.id }) });
+    expect(kit.status).toBe(200);
+    expect(await msToday(ORG)).toBeGreaterThan(kitBefore);
+    // Its time spent: 429 until 00:00 UTC.
+    vi.stubEnv("COREEDGE_CONTRACT_SECONDS_PER_ORG_DAY", "1");
+    await chargeContractTime(ORG, 1_000);
+    const refused = await scaffold(new NextRequest(`http://localhost/api/studio/interfaces/${iface.id}/scaffold`), { params: Promise.resolve({ id: iface.id }) });
+    vi.unstubAllEnvs();
+    expect(refused.status).toBe(429);
+    expect(Number(refused.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
+  });
+});

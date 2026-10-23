@@ -14,7 +14,9 @@
 export type MarkdownBlock =
   | { kind: "heading"; depth: number; text: string }
   | { kind: "paragraph"; text: string }
-  | { kind: "pre"; text: string }
+  // `table` marks an aligned markdown table, which renders preformatted like a
+  // fence but is labelled as a table, not as code.
+  | { kind: "pre"; text: string; table?: true }
   | { kind: "list"; items: string[] }
   | { kind: "rule" };
 
@@ -56,7 +58,7 @@ export function splitMarkdownBlocks(md: string): MarkdownBlock[] {
         buf.push(lines[i] ?? "");
         i++;
       }
-      blocks.push({ kind: "pre", text: buf.join("\n") });
+      blocks.push({ kind: "pre", text: buf.join("\n"), table: true });
       continue;
     }
     if (/^[-*]\s+/.test(line)) {
