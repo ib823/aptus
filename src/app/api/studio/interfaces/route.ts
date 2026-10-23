@@ -111,6 +111,9 @@ const patchSchema = z.object({
   // `mappingVersion` is deliberately ABSENT from this schema. Mapping is v2, and
   // the surest way to keep it disabled is to give the API no way to set it —
   // a greyed-out card in the UI is a hint, an unaccepted field is a guarantee.
+  // So are the query policy's columns (P1.4): the query-policy route, which
+  // compiles a source against the basis under the row lock, is their only
+  // writer, and a policy edit never bumps the version.
 });
 
 
@@ -688,8 +691,14 @@ export async function PATCH(request: NextRequest) {
           mode: nextMode,
           // A new contract: the request schema stamp written for the old one
           // goes (P1.3), as the captured response schema does below. Verify
-          // writes it again for the new one.
-          ...(contractChanged ? { version: { increment: 1 }, requestSchemaStamp: Prisma.DbNull } : {}),
+          // writes it again for the new one. So do the query basis and the
+          // compiled query policy (P1.4): both describe the old contract, and
+          // a policy compiled against it must not serve the new one. The
+          // builder's source stays; queries answer QUERY_NOT_AVAILABLE
+          // (NO_CONTRACT) until the next verify compiles it again.
+          ...(contractChanged
+            ? { version: { increment: 1 }, requestSchemaStamp: Prisma.DbNull, queryBasis: Prisma.DbNull, queryPolicyCompiled: Prisma.DbNull }
+            : {}),
           ...(grantMatchChanged ? { grantMatchChangedAt: new Date() } : {}),
           ...(serviceChanged
             ? { servicePath: nextServicePath, odataVersion: nextOdataVersion, externalId: nextExternalId }

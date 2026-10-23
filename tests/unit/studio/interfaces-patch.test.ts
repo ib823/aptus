@@ -303,6 +303,33 @@ describe("the compiled request schema belongs to one contract (P1.3)", () => {
   });
 });
 
+/*
+ * P1.4: the query basis and the compiled query policy describe one contract
+ * too. A contract change nulls both in the same update that bumps the
+ * version; the builder's source stays, and the next verify compiles it again.
+ */
+describe("the query basis and the compiled query policy belong to one contract (P1.4)", () => {
+  it("are cleared with the version bump when the contract changes, keeping the source", async () => {
+    await PATCH(req({ id: "if_1", entitySet: "A_Supplier" }));
+    const data = lastUpdateData();
+    expect(data.queryBasis).toBe(Prisma.DbNull);
+    expect(data.queryPolicyCompiled).toBe(Prisma.DbNull);
+    expect(data).not.toHaveProperty("queryPolicy");
+  });
+
+  it("are left alone by an edit that is not a contract change", async () => {
+    await PATCH(req({ id: "if_1", name: "Nicer name" }));
+    expect(lastUpdateData()).not.toHaveProperty("queryBasis");
+    expect(lastUpdateData()).not.toHaveProperty("queryPolicyCompiled");
+  });
+
+  it("are not accepted from the request: the query-policy route is the only writer", async () => {
+    await PATCH(req({ id: "if_1", name: "Nicer name", queryPolicy: { v: 1 }, queryPolicyCompiled: { v: 1 } } as never));
+    expect(lastUpdateData()).not.toHaveProperty("queryPolicy");
+    expect(lastUpdateData()).not.toHaveProperty("queryPolicyCompiled");
+  });
+});
+
 describe("mode is derived from the operation, never client-supplied", () => {
   it("keeps READ in read mode", async () => {
     await PATCH(req({ id: "if_1", operation: "READ" }));
