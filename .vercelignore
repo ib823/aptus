@@ -17,6 +17,16 @@
 # Exclude the children, not the parent directory, so the exception can apply.
 /docs/*
 !/docs/coreedge-developer-guide.md
+# The parity scorecard (P1.9): /control-tower/parity imports the committed
+# JSON, and vercel-build re-checks it against the simulator, which reads the
+# matrix and the registry. A file inside an excluded directory cannot be
+# re-included, so the directory comes back first and its other children go
+# again, the same shape as the rule above one level down.
+!/docs/coreedge/
+/docs/coreedge/*
+!/docs/coreedge/parity-scorecard.json
+!/docs/coreedge/gap-matrix.json
+!/docs/coreedge/capability-registry.json
 # Other documentation & specs are not needed at runtime.
 /specs/
 /fit-portal-transfer/
