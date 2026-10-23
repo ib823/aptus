@@ -142,6 +142,8 @@ describe("the Test Console's query run", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     expect(await screen.findByRole("status", { name: /No record — the service answered: no record has this key/ })).toBeTruthy();
     expect(screen.getByText("SAP has no record with this key.")).toBeTruthy();
+    // The app is answered 404 RECORD_NOT_FOUND, not an empty 200: not told to treat it as data.
+    expect(screen.queryByText(/This is an empty resource/)).toBeNull();
   });
 
   it("reads the policy only when the builder is opened, and writes its parameters into the field", async () => {

@@ -812,7 +812,7 @@ export function TestConsoleClient({
               and the detail were made outcome-aware. The condition has to read
               the OUTCOME, not the row count: emptiness is a property of a
               successful read, and nothing else may claim it. */}
-          {run.status === "ACTIVATED" && run.rows && run.rows.length === 0 && (
+          {run.status === "ACTIVATED" && run.rows && run.rows.length === 0 && run.query?.status !== "NO_RECORD" && (
             <p style={{ ...muted, marginTop: 8 }}>
               This is an empty resource, not a failure. Your application should treat it as data.
             </p>
