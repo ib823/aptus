@@ -200,6 +200,9 @@ export interface QueryRefusal {
   readonly auditRule?: QueryAuditRule;
 }
 
+/** The one message for every cursor that cannot be used, whatever failed (a forgery and a copied cursor alike). */
+export const CURSOR_UNUSABLE_MESSAGE = "This cursor cannot be used. Start again from the first page without a cursor.";
+
 /** The most names a refusal's `allowed` carries. The caller's OpenAPI lists them all. */
 export const ALLOWED_ECHO_MAX = 20;
 

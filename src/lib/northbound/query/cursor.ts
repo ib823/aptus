@@ -33,10 +33,9 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { queryBind, type QueryAstV1 } from "@/lib/odata/ast";
-import { CURSOR_UNUSABLE_MESSAGE } from "@/lib/odata/check";
 import { QueryCompilerInvariantError } from "@/lib/odata/identifiers";
 import type { CompiledQueryPolicyV1 } from "@/lib/odata/policy";
-import { queryRefusal, type QueryRefusal } from "@/lib/odata/rules";
+import { CURSOR_UNUSABLE_MESSAGE, queryRefusal, type QueryRefusal } from "@/lib/odata/rules";
 import { deriveTokenKey, readTokenRing, TOKEN_PURPOSES, type TokenRing } from "@/lib/security/token-ring";
 
 export const CURSOR_FORMAT = "cec1";

@@ -108,3 +108,35 @@ export function queryOutcomeDetail(status: "NO_RECORD" | "SAP_REJECTED" | "TOO_L
       return "SAP's answer to this page is larger than CoreEdge reads (16 MB); ask for a smaller pageSize or fewer fields.";
   }
 }
+
+/**
+ * The answers the query surface gives for what it finds in SAP's answer
+ * after the read itself succeeded (page.ts), and for the legacy guard
+ * (3.11.2). `failureReason` is the audit row's, when the outcome is SAP's.
+ */
+export const QUERY_OUTCOME_ANSWER = {
+  ROW_TOO_LARGE: {
+    status: 422,
+    code: "VALIDATION_ERROR",
+    failureReason: null,
+    message: "One record is larger than this interface's page limit; select fewer fields.",
+  },
+  UPSTREAM_IGNORED_PAGING: {
+    status: 502,
+    code: "UPSTREAM_ERROR",
+    failureReason: "UPSTREAM_IGNORED_PAGING",
+    message: "The SAP service did not honour the paging CoreEdge asked for. Retrying will not help.",
+  },
+  KEY_NOT_UNIQUE: {
+    status: 502,
+    code: "UPSTREAM_ERROR",
+    failureReason: "KEY_NOT_UNIQUE",
+    message: "The SAP service returned more than one record for this key. Retrying will not help.",
+  },
+  RESPONSE_TOO_LARGE: {
+    status: 413,
+    code: "VALIDATION_ERROR",
+    failureReason: null,
+    message: "The answer is larger than CoreEdge can return. Ask for fewer records with ?limit, or use select.",
+  },
+} as const satisfies Record<string, { status: number; code: QueryErrorCode; failureReason: string | null; message: string }>;

@@ -121,6 +121,17 @@ describe("the basis", () => {
     expect(travel.properties.find((x) => x.n === "SeatCount")?.t).toBe("U8");
   });
 
+  it("is the same from a Z* RAP service's CSDL XML and its CSDL JSON", () => {
+    const xml = basisFromEdmx("z-bonus-plan-rap.v4.xml", "BonusPlan");
+    const json = basisFromEdmx("z-bonus-plan-rap.v4.json", "BonusPlan");
+    expect(json).toEqual(xml);
+    expect(xml.keys).toEqual(["PlanUUID"]);
+    expect(xml.properties.find((x) => x.n === "PlanUUID")?.t).toBe("G");
+    const c = compiled(xml);
+    expect(c.key).toEqual(["PlanUUID"]);
+    expect(c.odata).toBe("V4");
+  });
+
   it("marks a name CoreEdge cannot address as bad, and cuts it to 128 characters", () => {
     const b = basisFromEdmx(HOSTILE_V2, "Things");
     const bad = b.properties.filter((x) => x.bad === "NAME").map((x) => x.n);

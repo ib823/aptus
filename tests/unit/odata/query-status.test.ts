@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   httpStatusForQuery,
+  QUERY_OUTCOME_ANSWER,
   QUERY_READ_STATUSES,
   queryErrorCodeFor,
   queryOutcomeDetail,
@@ -79,5 +80,16 @@ describe("classifying SAP's answer by the kind of query sent", () => {
     expect(queryOutcomeDetail("SAP_REJECTED", 400)).toBe("The SAP service refused this query (HTTP 400). Change the query; retrying it unchanged will not help.");
     expect(queryOutcomeDetail("NO_RECORD", 404)).toBe("SAP has no record with this key.");
     expect(queryOutcomeDetail("TOO_LARGE", null)).toContain("16 MB");
+  });
+});
+
+describe("the outcomes found in SAP's answer (3.11.2)", () => {
+  it("answer with the statuses and codes of the spec", () => {
+    expect(Object.fromEntries(Object.entries(QUERY_OUTCOME_ANSWER).map(([k, v]) => [k, [v.status, v.code, v.failureReason]]))).toEqual({
+      ROW_TOO_LARGE: [422, "VALIDATION_ERROR", null],
+      UPSTREAM_IGNORED_PAGING: [502, "UPSTREAM_ERROR", "UPSTREAM_IGNORED_PAGING"],
+      KEY_NOT_UNIQUE: [502, "UPSTREAM_ERROR", "KEY_NOT_UNIQUE"],
+      RESPONSE_TOO_LARGE: [413, "VALIDATION_ERROR", null],
+    });
   });
 });

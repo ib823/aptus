@@ -26,10 +26,7 @@ import { compareCodeUnits, type Bound, type KeyPart, type Lit, type LitType, typ
 import { parseLiteral, type LiteralFacets } from "@/lib/odata/literals";
 import type { FilterOps, ParsedQueryOk } from "@/lib/odata/params";
 import { parseCompiledPolicy, type CompiledField, type PreparedPolicy, type QueryFilterOp } from "@/lib/odata/policy";
-import { queryRefusal, type QueryRefusal } from "@/lib/odata/rules";
-
-/** The one message for every cursor that cannot be used (cursor.ts says the same). */
-export const CURSOR_UNUSABLE_MESSAGE = "This cursor cannot be used. Start again from the first page without a cursor.";
+import { CURSOR_UNUSABLE_MESSAGE, queryRefusal, type QueryRefusal } from "@/lib/odata/rules";
 
 /**
  * Rule 1: a compiled policy exists, can be read, is READY, and describes the

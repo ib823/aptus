@@ -36,6 +36,7 @@ import type { PreparedPolicy } from "@/lib/odata/policy";
 import type { AnswerRow } from "@/lib/odata/response";
 import type { QueryFlag } from "@/lib/odata/rules";
 import { QueryCompilerInvariantError } from "@/lib/odata/identifiers";
+import { QUERY_OUTCOME_ANSWER } from "@/lib/odata/query-status";
 import type { TokenRing } from "@/lib/security/token-ring";
 import {
   CHAIN_TTL_SECONDS,
@@ -306,7 +307,7 @@ export function assembleKey(ctx: {
 }
 
 /** What a legacy read over LEGACY_RESPONSE_CAP is told (413 VALIDATION_ERROR, rule RESPONSE_TOO_LARGE). */
-export const LEGACY_TOO_LARGE_MESSAGE = "The answer is larger than CoreEdge can return. Ask for fewer records with ?limit, or use select.";
+export const LEGACY_TOO_LARGE_MESSAGE = QUERY_OUTCOME_ANSWER.RESPONSE_TOO_LARGE.message;
 
 /**
  * The legacy read's body, serialised once: the same bytes NextResponse.json

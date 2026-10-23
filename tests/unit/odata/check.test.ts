@@ -13,11 +13,11 @@ import { describe, expect, it } from "vitest";
 
 import { basisOf, compiled, prepared, source } from "../../helpers/odata-query";
 
-import { checkPolicyAvailable, checkQuery, CURSOR_UNUSABLE_MESSAGE, type CheckedQuery } from "@/lib/odata/check";
+import { checkPolicyAvailable, checkQuery, type CheckedQuery } from "@/lib/odata/check";
 import { parseQueryParams, type ParsedQueryOk } from "@/lib/odata/params";
 import { preparedFrom, type PreparedPolicy } from "@/lib/odata/policy";
 import { compileQueryPolicy } from "@/lib/odata/policy-compiler";
-import { QUERY_REFUSAL_STATUS, type QueryRefusal } from "@/lib/odata/rules";
+import { CURSOR_UNUSABLE_MESSAGE, QUERY_REFUSAL_STATUS, type QueryRefusal } from "@/lib/odata/rules";
 
 const BASIS = basisOf(
   [
