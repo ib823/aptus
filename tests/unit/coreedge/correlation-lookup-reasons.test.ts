@@ -254,3 +254,45 @@ describe("a console call with no organization row", () => {
     expect(await lookupCorrelationId("org_a", "corr_none", NOW)).toEqual({ kind: "not-found" });
   });
 });
+
+/*
+ * P1.4: a query CoreEdge refused carries its rule in queryRule, never in
+ * failureReason, which the lookup reads as "the upstream call failed". So a
+ * refused query is the request's, with nothing sent to SAP, whatever its
+ * status — a 400 POLICY_FIELD_NOT_GRANTED, a 409 stale cursor, a 500 for a
+ * ring that cannot be read — and SAP's own refusal of a query reached SAP.
+ */
+describe("correlation lookup on the query surface", () => {
+  it.each([
+    [400, "FIELD_NOT_FILTERABLE"],
+    [400, "CURSOR_INVALID"],
+    [409, "EXPIRED"],
+    [409, "CURSOR_GRANT_CHANGED"],
+    [500, "TOKEN_RING_UNAVAILABLE"],
+  ])("a %i query refusal (%s) is the request's, and nothing was sent to SAP", async (status, queryRule) => {
+    const call = await lookup({ status, queryRule });
+    expect(call.brokenHop).toBe("request");
+    expect(call.outcome).toContain(queryRule);
+    expect(call.outcome).toContain("Nothing was sent to SAP");
+    expect(call.outcome).not.toContain("Idempotency-Key");
+  });
+
+  it("SAP's own refusal of a query reached SAP", async () => {
+    const call = await lookup({ status: 422, queryRule: "SAP_REJECTED", failureReason: "HTTP_400", durationMs: 40 });
+    expect(call.brokenHop).toBe("sapDataRead");
+  });
+
+  it("an answer too large to return is the request's, though SAP answered", async () => {
+    const legacy = await lookup({ status: 413, queryRule: "RESPONSE_TOO_LARGE", durationMs: 900 });
+    expect(legacy.brokenHop).toBe("request");
+    expect(legacy.outcome).toContain("larger than CoreEdge can return");
+    const row = await lookup({ status: 422, queryRule: "ROW_TOO_LARGE", durationMs: 900 });
+    expect(row.brokenHop).toBe("request");
+    expect(row.outcome).toContain("one record is larger");
+  });
+
+  it("a row with no queryRule reads exactly as before", async () => {
+    const call = await lookup({ status: 409 });
+    expect(call.outcome).toContain("Idempotency-Key");
+  });
+});

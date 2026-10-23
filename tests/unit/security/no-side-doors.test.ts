@@ -69,6 +69,7 @@ const SAP_FETCHERS: Record<string, string> = {
   "src/lib/sap-public/tdd-connector.ts#sapFetch": "the Workbench connector: every OData and token request of the console",
   "src/lib/sap-public/ariba-connector.ts#aribaFetch": "the Ariba realm and its OAuth token endpoint",
   "src/lib/northbound/read.ts#readEntitySet": "the broker's read executor (its default fetch)",
+  "src/lib/northbound/read.ts#readQuery": "the query surface's read executor (its default fetch, P1.4)",
   "src/lib/northbound/write.ts#writeEntitySet": "the broker's write executor (its default fetch)",
   "src/lib/governed/transport.ts#directFetch": "the pipeline's DIRECT transport",
   "src/lib/sap-public/connection-resolver.ts#fetchOAuthTokenFromConnection": "a stored connection's OAuth token endpoint",
@@ -282,6 +283,20 @@ describe("every request CoreEdge's server code sends is classified", () => {
         expect(inClosure, `${cut} calls a SAP-reaching binding directly; it is not a builder, so it cannot be cut`).toBe(true);
       }
     }
+  });
+});
+
+/*
+ * P1.4: the query surface's executor has one binding, callSapQuery in the
+ * pipeline, which reports its outcome to the breaker by the query's rule and
+ * is handed a URL compiled from the checked AST. Nothing else in src/ may
+ * mention readQuery, so no route can send a query the pipeline did not build.
+ */
+describe("the query surface's executor is reached only through the pipeline", () => {
+  it("only src/lib/governed/pipeline.ts mentions readQuery", () => {
+    const executor = "src/lib/northbound/read.ts#readQuery";
+    const mentioning = [...graph.modules.keys()].filter((file) => file !== "src/lib/northbound/read.ts" && mentionedTargets(graph, file).has(executor));
+    expect(mentioning).toEqual(["src/lib/governed/pipeline.ts"]);
   });
 });
 
