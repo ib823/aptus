@@ -89,3 +89,20 @@ sends or receives changed, except the additions marked *Added*.
   the credential's environment is served by a Tenant Twin the deployment does
   not have. Nothing is sent to SAP; a refused write releases its
   `Idempotency-Key`. The generated OpenAPI documents name both.
+- *Added:* `GET /interfaces/{id}/schema` also returns `contract.describedBy`,
+  saying what described the recorded contract: `"tenant"` (the service's own
+  `$metadata`, read from a tenant), `"upload"` (a description file a builder
+  uploaded, not yet verified on any tenant) or `"sample"` (rows CoreEdge
+  sampled, when no description is recorded) (P1.2). `contract.source` keeps
+  its values: an uploaded contract is `"metadata"`, since it was compiled
+  from a description. The generated OpenAPI documents describe the field.
+- *Added:* `GET /interfaces/{id}/data` and `POST /interfaces/{id}/data/write`
+  may answer `403 API_POLICY_SIGN_OFF_REQUIRED` for an interface on SAP
+  S/4HANA Cloud Public Edition that is registered by its own service path, or
+  names a customer-built (`Z*`, `Y*`, `YY1_*`) service, and has no SAP API
+  Policy §1.2 sign-off recorded, when the deployment enforces the sign-off
+  (P1.2; by default it only observes, and sends nothing new).
+  It is refused with the other grant refusals, before anything is sent to SAP
+  and before a write's `Idempotency-Key` is claimed, so the same key can be
+  sent again once the sign-off is recorded. The generated OpenAPI documents
+  name the code.
