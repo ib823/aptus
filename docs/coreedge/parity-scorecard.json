@@ -9,7 +9,7 @@
     },
     "registry": {
       "path": "docs/coreedge/capability-registry.json",
-      "sha256": "9e6f6df81ec8c0ba2435f9e898cb00b4e66ac3c2749ab72f5378fc6b897a00df"
+      "sha256": "e825b54176feaf805a692b301442598c82df84001675eebb941c098a1c210958"
     }
   },
   "model": {
@@ -346,7 +346,7 @@
       "leveragePct": 6.6,
       "soleBlocker": 0,
       "raisedIn": "Full in P1",
-      "note": "Partner-built services. Reads send only $top and return at most 100 rows (read.ts). No partner service is recorded against a live tenant."
+      "note": "Partner-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No partner service is recorded against a live tenant."
     },
     {
       "rank": 3,
@@ -357,7 +357,7 @@
       "leveragePct": 6.6,
       "soleBlocker": 0,
       "raisedIn": "Full in P1",
-      "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Reads send only $top and return at most 100 rows (read.ts)."
+      "note": "SAP-published APIs. Non-curated V4 paths are derived and read unverified until a probe of that exact path answers 200; wrapper rows have no address (hub-content.ts catalogueAddress; P0.8). Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4)."
     },
     {
       "rank": 4,
@@ -368,7 +368,7 @@
       "leveragePct": 6.5,
       "soleBlocker": 0,
       "raisedIn": "Full in P1",
-      "note": "Customer-built services. Reads send only $top and return at most 100 rows (read.ts). No Z* or YY1_* call is recorded against a live tenant."
+      "note": "Customer-built services. Legacy reads send only $top and return at most 100 rows (read.ts); queries filter, select and page within the interface's query policy (P1.4). No Z* or YY1_* call is recorded against a live tenant."
     },
     {
       "rank": 5,

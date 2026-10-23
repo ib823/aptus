@@ -216,6 +216,70 @@ if (sapLegacyFormat && !["any", "bound", "none"].includes(sapLegacyFormat)) {
   exitCode = 1;
 }
 
+/*
+ * CoreEdge's token ring (P1.4), checked on EVERY deploy type, and only while
+ * the query surface is on. Previews run with NODE_ENV=production, where the
+ * derived development key is never accepted, so a preview with the surface on
+ * and no ring would refuse every query call with 500 after going live. With
+ * the surface off (the default) the ring is not read at all, and requiring it
+ * would fail the first production build after the merge for a feature nobody
+ * switched on.
+ *
+ * A ring key equal to NEXTAUTH_SECRET or to a SAP connection key fails: one
+ * leaked secret must not open the other's tokens.
+ *
+ * MIRRORS readTokenRing in src/lib/security/token-ring.ts and
+ * querySurfaceMode in src/lib/northbound/query/surface.ts;
+ * tests/unit/security/token-ring.test.ts pins the same cases.
+ */
+const querySurfaceOn = (process.env.COREEDGE_QUERY_SURFACE || "").trim().toLowerCase() === "on";
+if (querySurfaceOn) {
+  const tokenKeys = process.env.COREEDGE_TOKEN_KEYS || "";
+  const tokenActive = (process.env.COREEDGE_TOKEN_ACTIVE_KEY || "").trim();
+  if (!tokenKeys.trim() || !tokenActive) {
+    console.error(
+      "[FAIL] COREEDGE_QUERY_SURFACE=on needs COREEDGE_TOKEN_KEYS and COREEDGE_TOKEN_ACTIVE_KEY: every query call would be refused. Generate a key with `openssl rand -hex 32`.",
+    );
+    exitCode = 1;
+  } else {
+    const tokenRing = new Map();
+    for (const raw of tokenKeys.split(",")) {
+      const entry = raw.trim();
+      if (!entry) continue;
+      const sep = entry.indexOf(":");
+      const label = sep > 0 ? entry.slice(0, sep).trim() : "";
+      const keyHex = sep > 0 ? entry.slice(sep + 1).trim() : "";
+      if (!/^t[1-9][0-9]{0,5}$/.test(label) || !/^[0-9a-fA-F]{64}$/.test(keyHex) || tokenRing.has(label)) {
+        console.error(
+          `[FAIL] COREEDGE_TOKEN_KEYS has a malformed or duplicate entry${/^t[0-9]{1,6}$/.test(label) ? ` (${label})` : ""}; each entry is "t<N>:<64 hex>".`,
+        );
+        exitCode = 1;
+        continue;
+      }
+      tokenRing.set(label, keyHex.toLowerCase());
+    }
+    if (!tokenRing.has(tokenActive)) {
+      console.error("[FAIL] COREEDGE_TOKEN_ACTIVE_KEY names a key that is not in COREEDGE_TOKEN_KEYS — every query call would be refused.");
+      exitCode = 1;
+    }
+    const otherSecrets = new Set();
+    if (process.env.NEXTAUTH_SECRET) otherSecrets.add(process.env.NEXTAUTH_SECRET.trim().toLowerCase());
+    if (sapLegacy) otherSecrets.add(sapLegacy.toLowerCase());
+    for (const raw of sapKeyring.split(",")) {
+      const sep = raw.indexOf(":");
+      if (sep > 0) otherSecrets.add(raw.slice(sep + 1).trim().toLowerCase());
+    }
+    for (const [label, keyHex] of tokenRing) {
+      if (otherSecrets.has(keyHex)) {
+        console.error(
+          `[FAIL] COREEDGE_TOKEN_KEYS entry ${label} must be distinct from NEXTAUTH_SECRET and every SAP connection key — generate its own with \`openssl rand -hex 32\`.`,
+        );
+        exitCode = 1;
+      }
+    }
+  }
+}
+
 // Flag dangerous vars + enforce prod-only requirements on production deploys.
 if (isProductionDeploy) {
   for (const { key, reason } of DANGEROUS_IN_PRODUCTION) {

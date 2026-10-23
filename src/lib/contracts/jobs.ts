@@ -42,6 +42,7 @@ import { buildNorthboundOpenApi, documentJson, type NorthboundDocInput } from "@
 import { hydrateJsonTexts } from "@/lib/contracts/render-input";
 import { contractFromSample, sampledODataVersion } from "@/lib/contracts/sampled";
 import { sliceForEntitySet } from "@/lib/contracts/slice";
+import { queryBasisOf } from "@/lib/odata/basis";
 import {
   buildFixtureBody,
   isFixtureScenario,
@@ -111,6 +112,13 @@ export type RecordableContract =
       hash: string;
       bytes: number;
       facts: ContractFacts;
+      /**
+       * The query basis (P1.4, odata/basis.ts) of this contract as compact
+       * JSON, without its snapshot (the verify's transaction adds the row it
+       * describes). Made here, where the IR is, so the request thread never
+       * reads the IR to learn what a query may do.
+       */
+      queryBasis: Text;
       ir: Text;
       texts: SchemaTexts;
       /** One per previous head, in order; null when the hash says the record is UNCHANGED (unchangedHashes). */
@@ -231,6 +239,7 @@ export function recordableContract(
     hash: digest.hash,
     bytes: digest.bytes,
     facts: { source: contract.source, odataVersion: contract.odataVersion, irVersion: contract.irVersion, bodies: contractBodies(contract) },
+    queryBasis: utf8(JSON.stringify(queryBasisOf(contract))),
     ir: utf8(stored ?? JSON.stringify(contract)),
     texts: { schemas: utf8(texts.schemas), create: texts.create === null ? null : utf8(texts.create), update: texts.update === null ? null : utf8(texts.update) },
     diffs,

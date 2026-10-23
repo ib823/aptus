@@ -18,12 +18,17 @@ import {
 } from "@/lib/governed/containment";
 import {
   circuitOutcomeForConsoleRead,
+  circuitOutcomeForQuery,
   circuitOutcomeForRead,
   circuitOutcomeForWrite,
+  northboundRefusalResponse,
   PIPELINE_STEPS,
+  queryRefusalOf,
   refusal,
   REFUSAL_STATUS,
 } from "@/lib/governed/pipeline";
+import { QUERY_READ_STATUSES, type QueryReadStatus } from "@/lib/odata/query-status";
+import { queryRefusal } from "@/lib/odata/rules";
 import {
   DIRECT_TRANSPORT,
   parseTransportKind,
@@ -82,6 +87,46 @@ describe("one refusal table", () => {
     expect(refusal("bindConnection", "WRITES_DISABLED", "m").code).toBe("FORBIDDEN");
     expect(refusal("contain", "CIRCUIT_OPEN", "m").code).toBe("CIRCUIT_OPEN");
     expect(refusal("resolveInterface", "IDEMPOTENCY_IN_FLIGHT", "m").code).toBe("CONFLICT");
+  });
+
+  /*
+   * P1.4: the query surface's six reasons are rows of the same table, and
+   * three of them have codes of their own. PIPELINE_STEPS above is unchanged:
+   * a query is refused at resolveInterface (what the request names) or
+   * authorise (what the grant's interface allows), never at a new step.
+   */
+  it("gives the query surface's reasons their statuses and codes", () => {
+    const answers = Object.fromEntries(
+      (["QUERY_INVALID", "QUERY_NOT_AVAILABLE", "CURSOR_INVALID", "POLICY_FIELD_NOT_GRANTED", "CURSOR_STALE", "QUERY_SURFACE_MISCONFIGURED"] as const).map((r) => {
+        const x = refusal("authorise", r, "m");
+        return [r, `${x.status} ${x.code}`];
+      }),
+    );
+    expect(answers).toEqual({
+      QUERY_INVALID: "400 VALIDATION_ERROR",
+      QUERY_NOT_AVAILABLE: "400 VALIDATION_ERROR",
+      CURSOR_INVALID: "400 VALIDATION_ERROR",
+      POLICY_FIELD_NOT_GRANTED: "400 POLICY_FIELD_NOT_GRANTED",
+      CURSOR_STALE: "409 CURSOR_STALE",
+      QUERY_SURFACE_MISCONFIGURED: "500 INTERNAL",
+    });
+  });
+
+  it("carries a query refusal's detail to error.query, and its finer rule to the audit row only", async () => {
+    const r = queryRefusalOf(
+      "resolveInterface",
+      queryRefusal("CURSOR_INVALID", "CURSOR_INVALID", "This cursor cannot be used.", { parameter: "cursor", auditRule: "CURSOR_UNOPENED" }),
+      { query: { kind: "PAGE" } },
+    );
+    expect(r).toMatchObject({ status: 400, code: "VALIDATION_ERROR", detail: { rule: "CURSOR_INVALID", parameter: "cursor" } });
+    // The caller is told one thing for every unusable cursor; operations sees which check failed.
+    expect(r.audit.query).toEqual({ kind: "PAGE", rule: "CURSOR_UNOPENED" });
+    expect(r.audit.failureReason).toBeUndefined();
+    const body = (await northboundRefusalResponse(r, "c1").json()) as { error: Record<string, unknown> };
+    expect(body.error).toEqual({ code: "VALIDATION_ERROR", message: "This cursor cannot be used.", correlationId: "c1", query: { rule: "CURSOR_INVALID", parameter: "cursor" } });
+    // Any other refusal's body is exactly what it always was.
+    const plain = (await northboundRefusalResponse(refusal("authorise", "NO_APPROVED_GRANT", "No."), "c2").json()) as { error: Record<string, unknown> };
+    expect(Object.keys(plain.error)).toEqual(["code", "message", "correlationId"]);
   });
 });
 
@@ -155,6 +200,40 @@ describe("containment: COREEDGE_CIRCUIT_BREAKER", () => {
     expect(circuitOutcomeForConsoleRead(502, 500)).toBe("upstream-error");
     expect(circuitOutcomeForConsoleRead(504, null)).toBe("timeout");
     expect(circuitOutcomeForConsoleRead(502, null)).toBe("upstream-error");
+  });
+
+  /*
+   * P1.4, threat N11: the caller shapes a query-surface read, so SAP's own
+   * answer to it — a 400, a 501, a short dump's 500, a 3xx it was refused —
+   * never counts against the system every solution on the connection shares.
+   * What SAP did not answer still does: no answer at all, a timeout (D14),
+   * and a proxy's 502, 503 or 504 in front of it. circuitOutcomeForRead,
+   * above, is unchanged for the legacy read.
+   */
+  it("counts a query's own answers as refusals, and only an absent or proxied answer as a failure", () => {
+    const q = (status: QueryReadStatus, httpStatus: number | null) => circuitOutcomeForQuery({ status, httpStatus });
+    const table: [QueryReadStatus, number | null, string][] = [
+      ["OK", 200, "ok"],
+      ["EMPTY", 200, "ok"],
+      ["NO_RECORD", 404, "ok"],
+      ["TIMEOUT", null, "timeout"],
+      ["ERROR", null, "upstream-error"],
+      ["ERROR", 502, "upstream-error"],
+      ["ERROR", 503, "upstream-error"],
+      ["ERROR", 504, "upstream-error"],
+      ["ERROR", 500, "refused"],
+      ["ERROR", 302, "refused"],
+      ["ERROR", 200, "refused"],
+      ["SAP_REJECTED", 400, "refused"],
+      ["SAP_REJECTED", 501, "refused"],
+      ["NEEDS_SETUP", 401, "refused"],
+      ["NEEDS_SETUP", null, "refused"],
+      ["NOT_FOUND", 404, "refused"],
+      ["TOO_LARGE", 200, "refused"],
+    ];
+    for (const [status, http, want] of table) expect(q(status, http), `${status} ${http}`).toBe(want);
+    // Every outcome is in the table.
+    expect(new Set(table.map(([s]) => s))).toEqual(new Set(QUERY_READ_STATUSES));
   });
 });
 

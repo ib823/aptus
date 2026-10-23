@@ -12,7 +12,13 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CONSOLE_ROUTE_STATEMENTS, DB_BUDGET, NORTHBOUND_DISCOVERY_STATEMENTS, NORTHBOUND_SCHEMA_STATEMENTS } from "@/lib/governed/db-budget";
+import {
+  CONSOLE_ROUTE_STATEMENTS,
+  DB_BUDGET,
+  NORTHBOUND_DISCOVERY_STATEMENTS,
+  NORTHBOUND_QUERY_STATEMENTS,
+  NORTHBOUND_SCHEMA_STATEMENTS,
+} from "@/lib/governed/db-budget";
 
 const RUNBOOK = readFileSync(path.join(process.cwd(), "docs/runbooks/coreedge-db-budget.md"), "utf8");
 
@@ -51,6 +57,20 @@ describe("the db budget runbook's table", () => {
     expect(budgetOf(/^\| Read \(served/)).toBe(DB_BUDGET.read);
     expect(budgetOf(/^\| Write/)).toBe(DB_BUDGET.write);
     expect(budgetOf(/^\| Workbench console read/)).toBe(DB_BUDGET.consoleRead);
+  });
+
+  /* P1.4: a query page is a read, measured at its own figures. */
+  it("states the query surface's measured statements as db-budget.ts does, within the read's budget", () => {
+    const rows = budgetSection().filter((l) => l.trimStart().startsWith("|"));
+    const measured = (pattern: RegExp) => {
+      const row = rows.find((r) => pattern.test(r));
+      expect(row, String(pattern)).toBeDefined();
+      const cells = row!.split("|").map((c) => c.trim());
+      return { budget: Number(cells[2]), measured: Number(/\*\*(\d+)\*\*/.exec(cells[3]!)?.[1]) };
+    };
+    expect(measured(/^\| Query page/)).toEqual({ budget: DB_BUDGET.read, measured: NORTHBOUND_QUERY_STATEMENTS.page });
+    expect(measured(/^\| Query refused before authorisation/)).toEqual({ budget: DB_BUDGET.read, measured: NORTHBOUND_QUERY_STATEMENTS.refusedBeforeAccess });
+    expect(NORTHBOUND_QUERY_STATEMENTS.page + 1).toBeLessThanOrEqual(DB_BUDGET.read);
   });
 
   /*

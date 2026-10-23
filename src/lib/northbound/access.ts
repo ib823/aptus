@@ -72,10 +72,26 @@ export interface PrefetchedConnections {
 export interface AccessLoadOptions {
   /** Also read the connections that may serve the call (the pipeline does). */
   readonly withConnections?: boolean;
+  /**
+   * Also read the interface's compiled query policy, in the same statement,
+   * and keep the grants that authorised the call (P1.4): a query-surface read.
+   */
+  readonly withQueryPolicy?: boolean;
+}
+
+/**
+ * What a query-surface read needs beside the decision (P1.4): the compiled
+ * policy as stored, whether a policy source exists, and the ids of the grants
+ * that authorised this call, which a paging cursor binds (D7).
+ */
+export interface QueryAccess {
+  readonly policyRaw: unknown;
+  readonly policySourcePresent: boolean;
+  readonly authorisingGrantIds: readonly string[];
 }
 
 export type AccessResult =
-  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections }
+  | { ok: true; iface: AccessibleInterface; connections?: PrefetchedConnections; query?: QueryAccess }
   | { ok: false; reason: AccessRefusal; message: string };
 
 /** What the grant lookup selects: the decision, its end, and its binding. */
@@ -192,7 +208,27 @@ async function resolveAccess(
       policySignOffMissing: true,
     });
   }
-  return { ok: true, iface: decision.iface, ...connectionsOf(loaded) };
+  return { ok: true, iface: decision.iface, ...connectionsOf(loaded), ...queryAccessOf(loaded, decision.authorising, options) };
+}
+
+/**
+ * The query surface's part of a result asked for it. The authorising grants
+ * were computed by the decision and used to be dropped here; a cursor needs
+ * their ids. Every grant the access load reads has one (the load selects it).
+ */
+function queryAccessOf(
+  loaded: AccessLoad,
+  authorising: readonly AuthorisingGrant[],
+  options: AccessLoadOptions,
+): { query?: QueryAccess } {
+  if (options.withQueryPolicy !== true) return {};
+  return {
+    query: {
+      policyRaw: loaded.queryPolicy?.compiled ?? null,
+      policySourcePresent: loaded.queryPolicy?.sourcePresent === true,
+      authorisingGrantIds: authorising.flatMap((g) => (g.id === undefined ? [] : [g.id])),
+    },
+  };
 }
 
 /** The prefetched connections, on a result asked for them. */

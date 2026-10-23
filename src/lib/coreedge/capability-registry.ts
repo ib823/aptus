@@ -277,9 +277,21 @@ export function readCodeFacts(): CodeFacts {
  * broker, and the test names the line here to change with it.
  */
 export const BROKER_FACTS = {
-  /** read.ts: MAX_LIMIT, and the only query options a read sends. */
+  /** read.ts: MAX_LIMIT, and the only query options a legacy (?limit) read sends. */
   readMaxRows: 100,
   readQueryOptions: ["$top", "$format"],
+  /**
+   * The query surface (P1.4, behind COREEDGE_QUERY_SURFACE): the OData
+   * options operation-compiler.ts can emit (SapOption), built only from the
+   * checked request and the interface's query policy.
+   */
+  queryOptions: ["$select", "$filter", "$orderby", "$top", "$skip", "$inlinecount", "$count", "$format"],
+  /** policy.ts PAGE_BOUNDS.maxSize: the largest page a policy may allow. */
+  queryMaxPageSize: 1000,
+  /** policy.ts QUERY_FILTER_OPS: AND filters over these, one predicate per field; no OR, ne or contains. */
+  queryFilterOperators: ["eq", "in", "gt", "ge", "lt", "le"],
+  /** Key lookup through key.<Field> on the list path (openapi.ts BROKER_OPERATIONS.getByKey). */
+  queryKeyLookup: true,
   /** access.ts (authorisation.ts interfaceRefusal) refuses every other write operation (OPERATION_NOT_SUPPORTED). */
   writeOperations: ["CREATE"],
   /** Neither executor sends $batch. */
@@ -510,9 +522,12 @@ function techPatternCell(facts: CodeFacts, tech: Tech, pattern: Pattern): Capabi
     case "SYNC_READ":
       return cell(tech, pattern, {
         implemented: true,
-        basis: ["GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts)."],
+        basis: [
+          "GET /api/northbound/interfaces/[id]/data (readEntitySet, read.ts).",
+          "With query parameters, the same route builds the OData query from the request checked against the interface's query policy (compileQuery, operation-compiler.ts; P1.4, behind COREEDGE_QUERY_SURFACE).",
+        ],
         limits: [
-          `Reads send only ${BROKER_FACTS.readQueryOptions.join(" and ")} and return at most ${BROKER_FACTS.readMaxRows} rows: no filter, key, select, expand or paging (read.ts).`,
+          `Legacy reads (?limit) send ${BROKER_FACTS.readQueryOptions.join(" and ")} and return at most ${BROKER_FACTS.readMaxRows} rows. Under an interface's query policy, reads add key lookup, AND filters (${BROKER_FACTS.queryFilterOperators.join(", ")}), select, orderby, inline count and cursor paging (at most ${BROKER_FACTS.queryMaxPageSize} rows a page); no expand or OR (P1.4b).`,
         ],
         what: `${label} read.`,
       });
@@ -537,7 +552,9 @@ function techPatternCell(facts: CodeFacts, tech: Tech, pattern: Pattern): Capabi
     case "BULK_BATCH":
       return cell(tech, pattern, {
         implemented: BROKER_FACTS.batch,
-        basis: [`No $batch in read.ts or write.ts, and reads stop at ${BROKER_FACTS.readMaxRows} rows.`],
+        basis: [
+          `No $batch in read.ts or write.ts; a legacy read stops at ${BROKER_FACTS.readMaxRows} rows, and a query pages one governed call per page.`,
+        ],
       });
     case "EVENT_TO_APP":
       return cell(tech, pattern, {
@@ -624,7 +641,7 @@ function networkCell(facts: CodeFacts, hosting: Hosting, network: Network): Capa
 /* ── origin ───────────────────────────────────────────────────────────── */
 
 function originCells(facts: CodeFacts): CapabilityCell[] {
-  const readLimit = `Reads send only $top and return at most ${BROKER_FACTS.readMaxRows} rows (read.ts).`;
+  const readLimit = `Legacy reads send only $top and return at most ${BROKER_FACTS.readMaxRows} rows (read.ts); queries filter, select and page within the interface's query policy (P1.4).`;
   return [
     cell("SAP_STANDARD", "", {
       implemented: true,

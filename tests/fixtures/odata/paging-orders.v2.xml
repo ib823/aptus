@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Written for this repository (P1.4 query surface tests). A small OData V2
+  service of order lines with a composite key (Order, Line), the shape the
+  10,000-row paging test, the query-surface route test and the conformance
+  stub read. Every name and value is invented; it is not, and is not copied
+  from, any SAP $metadata document.
+-->
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+  <edmx:DataServices m:DataServiceVersion="2.0">
+    <Schema Namespace="ZPAGING_ORDERS_SRV" xml:lang="en" sap:schema-version="1" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+      <EntityType Name="OrderLineType" sap:label="Order line" sap:content-version="1">
+        <Key>
+          <PropertyRef Name="Order"/>
+          <PropertyRef Name="Line"/>
+        </Key>
+        <Property Name="Order" Type="Edm.String" Nullable="false" MaxLength="10" sap:label="Order"/>
+        <Property Name="Line" Type="Edm.Int32" Nullable="false" sap:label="Line"/>
+        <Property Name="Customer" Type="Edm.String" MaxLength="10" sap:label="Customer"/>
+        <Property Name="CompanyCode" Type="Edm.String" MaxLength="4" sap:label="Company code"/>
+        <Property Name="Status" Type="Edm.String" MaxLength="1" sap:label="Status"/>
+        <Property Name="NetAmount" Type="Edm.Decimal" Precision="15" Scale="2" sap:label="Net amount"/>
+        <Property Name="CreatedOn" Type="Edm.DateTime" Precision="0" sap:display-format="Date" sap:label="Created on"/>
+        <Property Name="Note" Type="Edm.String" MaxLength="2000" sap:label="Note"/>
+      </EntityType>
+      <EntityContainer Name="ZPAGING_ORDERS_SRV_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json">
+        <EntitySet Name="OrderLines" EntityType="ZPAGING_ORDERS_SRV.OrderLineType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

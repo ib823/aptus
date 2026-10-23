@@ -48,7 +48,8 @@ beforeEach(() => {
 });
 
 function lastPatchBody() {
-  const [, init] = fetchMock.mock.calls[0]!;
+  // The PATCH, not the Query policy card's GET of its own policy (P1.4), which the screen also sends.
+  const [, init] = fetchMock.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === "PATCH")!;
   return JSON.parse(init.body as string);
 }
 

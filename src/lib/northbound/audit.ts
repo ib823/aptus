@@ -15,8 +15,72 @@
  * pattern (repeated denials from one token) that indicates something is wrong.
  */
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import { currentNorthboundCall } from "@/lib/northbound/versioned-route";
+import { QUERY_SHAPE_MAX } from "@/lib/odata/ast";
+import { QUERY_AUDIT_RULE_PATTERN, QUERY_FLAG_LIST } from "@/lib/odata/rules";
+
+/**
+ * What a query-surface call adds to its row (P1.4, 3.12), in the same insert.
+ * Every field optional: a refusal before the query was checked carries only
+ * its rule; a legacy read's byte guard only its rule and size.
+ */
+export interface QueryAuditFields {
+  /** LIST (a chain's first page), PAGE (a cursor page) or KEY. */
+  readonly kind?: "LIST" | "PAGE" | "KEY" | null;
+  /** odata/ast.ts queryShape: no literal in it. */
+  readonly shape?: string | null;
+  /** odata/ast.ts queryHash: keyed per organisation. */
+  readonly hash?: string | null;
+  /** The effective fields that left CoreEdge, or ["*"] when no select was sent. */
+  readonly requestedFields?: readonly string[] | null;
+  readonly policyRev?: string | null;
+  readonly chainId?: string | null;
+  readonly pageIndex?: number | null;
+  readonly chainRows?: number | null;
+  readonly responseBytes?: number | null;
+  /** A QueryRule, or the cursor check that failed (rules.ts QueryAuditRule). */
+  readonly rule?: string | null;
+  /** rules.ts joinQueryFlags. */
+  readonly flags?: string | null;
+}
+
+const MAX_REQUESTED_FIELDS = 256;
+const FLAG_SET = new Set<string>(QUERY_FLAG_LIST);
+
+/**
+ * The query columns as written. The bounds are held here, at the one writer:
+ * a rule that is not a rule, a flag outside the closed set or an over-long
+ * shape is a defect, and is written as null (and logged) rather than as text
+ * the columns' readers do not expect.
+ */
+function queryColumns(q: QueryAuditFields, correlationId: string) {
+  const rule = q.rule ?? null;
+  const ruleOk = rule === null || QUERY_AUDIT_RULE_PATTERN.test(rule);
+  const flags = q.flags ?? null;
+  const flagsOk = flags === null || flags.split(",").every((f) => FLAG_SET.has(f));
+  const shape = q.shape ?? null;
+  const shapeOk = shape === null || shape.length <= QUERY_SHAPE_MAX;
+  const fields = q.requestedFields ?? null;
+  if (!ruleOk || !flagsOk || !shapeOk) {
+    console.error("[northbound-audit] query columns out of bounds", { correlationId, ruleOk, flagsOk, shapeOk });
+  }
+  return {
+    queryKind: q.kind ?? null,
+    queryShape: shapeOk ? shape : null,
+    queryHash: q.hash ?? null,
+    ...(fields === null ? {} : { requestedFields: fields.slice(0, MAX_REQUESTED_FIELDS) as Prisma.InputJsonValue }),
+    queryPolicyRev: q.policyRev ?? null,
+    cursorChainId: q.chainId ?? null,
+    pageIndex: q.pageIndex ?? null,
+    chainRows: q.chainRows ?? null,
+    responseBytes: q.responseBytes ?? null,
+    queryRule: ruleOk ? rule : null,
+    queryFlags: flagsOk ? flags : null,
+  };
+}
 
 export interface NorthboundAuditInput {
   organizationId: string;
@@ -121,6 +185,12 @@ export interface NorthboundAuditInput {
    */
   apiVersion?: string | null;
   apiBasePath?: string | null;
+  /**
+   * The query surface's columns (P1.4). Absent on every call that is not on
+   * it — a legacy read, a write, a console read — whose row then leaves all
+   * eleven null, exactly as before.
+   */
+  query?: QueryAuditFields;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
@@ -148,6 +218,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         failureReason: input.failureReason ?? null,
         apiVersion: input.apiVersion ?? served?.apiVersion ?? null,
         apiBasePath: input.apiBasePath ?? served?.apiBasePath ?? null,
+        ...(input.query === undefined ? {} : queryColumns(input.query, input.correlationId)),
       },
     });
   } catch (err) {

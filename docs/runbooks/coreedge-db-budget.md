@@ -14,6 +14,8 @@ Roadmap item P0.19 (`docs/coreedge/CoreEdge-Gap-Study-and-Roadmap.md`, section
 | Workbench console read making one SAP call and nothing else (P0.14b: preview, the entity list without its probe fan-out, operations) on a stored connection of any environment, served or refused | **4** | 4 | the person's session, the connection with the grants its environment ceiling judges (one statement), the organization's console row, the platform-scope row with its outcome in one statement |
 | The same on a deployment tenant | 4 | 3 (by construction) | the session and the two rows; no connection or grant to read |
 | An Ariba call (`/api/sap/ariba/call`) | 4 | 3 | the session, the platform-scope row (an Ariba call has no connection and no organization row), and the assessment trail's decision-log entry the route has always written beside it |
+| Query page (P1.4: a list page with or without its count, a cursor page, a key lookup, an outcome SAP's answer decided, or a refusal after authorisation) | 4 | **3** | the key, the interface with its grants, connections and compiled query policy (one statement), the audit row with its query columns |
+| Query refused before authorisation (a parameter outside the grammar, `COREEDGE_QUERY_SURFACE` off, a cursor that does not open or has expired) | 4 | **2** | the key and the audit row; the interface is never read |
 
 Before P0.19 a served read sent 7 statements, a read refused by its grant 6,
 a write 11 and a replay 9.

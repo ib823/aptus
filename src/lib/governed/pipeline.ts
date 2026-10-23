@@ -57,6 +57,7 @@ import {
   type AccessibleInterface,
   type AccessRefusal,
   type PrefetchedConnections,
+  type QueryAccess,
 } from "@/lib/northbound/access";
 import {
   authenticateClientToken,
@@ -70,14 +71,22 @@ import {
 import type { ClaimStamp } from "@/lib/northbound/idempotency";
 import { noteFailedCredential } from "@/lib/northbound/auth-failures";
 import { bindingFor } from "@/lib/northbound/authorisation";
-import { recordNorthboundCall, type NorthboundAuditInput } from "@/lib/northbound/audit";
+import { recordNorthboundCall, type NorthboundAuditInput, type QueryAuditFields } from "@/lib/northbound/audit";
 import type { CallOutcome } from "@/lib/northbound/circuit-breaker";
-import { readEntitySet, type NorthboundReadResult, type NorthboundReadStatus } from "@/lib/northbound/read";
+import {
+  readEntitySet,
+  readQuery,
+  type NorthboundReadResult,
+  type NorthboundReadStatus,
+  type QueryReadResult,
+  type ReadQueryInput,
+} from "@/lib/northbound/read";
 import { resolveReadDefinition, type ReadDefinitionRefusal } from "@/lib/northbound/read-definition";
 import { FAILURE_REASON_LIMITER_UNAVAILABLE, northboundError, type NorthboundErrorCode } from "@/lib/northbound/respond";
 import { writeEntitySet, type NorthboundWriteResult } from "@/lib/northbound/write";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { auditRuleOf, QUERY_REFUSAL_STATUS, type QueryRefusal, type QueryRefusalDetail } from "@/lib/odata/rules";
+import { checkRateLimit, RATE_LIMITS, type RateLimitResult } from "@/lib/security/rate-limit";
 import { isLimiterOutage, LIMITER_UNAVAILABLE_MESSAGE, retryAfterSeconds } from "@/lib/security/rate-limit-response";
 import {
   bindStoredConnections,
@@ -198,6 +207,10 @@ export const REFUSAL_STATUS = {
   // the write's idempotency store, between contain and callSap
   IDEMPOTENCY_CONFLICT: 409,
   IDEMPOTENCY_IN_FLIGHT: 409,
+  // The query surface (P1.4, odata/rules.ts): resolveInterface for what the
+  // request names (the parameters, the cursor, the switch), authorise for what
+  // the grant's interface allows (its policy, the cursor's bindings).
+  ...QUERY_REFUSAL_STATUS,
 } as const;
 
 export type RefusalReason = keyof typeof REFUSAL_STATUS;
@@ -205,6 +218,9 @@ export type RefusalReason = keyof typeof REFUSAL_STATUS;
 /** The code a client branches on, per reason. */
 function codeFor(reason: RefusalReason, status: number): NorthboundErrorCode {
   if (reason === "UNAUTHENTICATED") return "UNAUTHENTICATED";
+  if (reason === "POLICY_FIELD_NOT_GRANTED") return "POLICY_FIELD_NOT_GRANTED";
+  if (reason === "CURSOR_STALE") return "CURSOR_STALE";
+  if (reason === "QUERY_SURFACE_MISCONFIGURED") return "INTERNAL";
   if (reason === "RATE_LIMITED") return "RATE_LIMITED";
   if (reason === "LIMITER_UNAVAILABLE") return "LIMITER_UNAVAILABLE";
   if (reason === "CIRCUIT_OPEN") return "CIRCUIT_OPEN";
@@ -222,6 +238,12 @@ export interface RefusalAudit {
   readonly connection?: { readonly id: string; readonly environment: string | null } | null;
   readonly bindingRefusal?: string | null;
   readonly failureReason?: string | null;
+  /**
+   * A query-surface refusal's columns (P1.4): its rule always, and the
+   * query's kind, shape and fields once the checker has built it. Never in
+   * failureReason, which means "why the upstream call failed".
+   */
+  readonly query?: QueryAuditFields;
 }
 
 export interface Refusal {
@@ -235,6 +257,8 @@ export interface Refusal {
   readonly audit: RefusalAudit;
   /** The limiter's reset, on a rate-limit refusal, for routes that word their own sentence. */
   readonly resetMs?: number;
+  /** A query-surface refusal's `error.query` (P1.4): the rule, and what is safe to echo. */
+  readonly detail?: QueryRefusalDetail;
 }
 
 export type StepResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly refusal: Refusal };
@@ -243,7 +267,7 @@ export function refusal(
   step: PipelineStep,
   reason: RefusalReason,
   message: string,
-  extra: { headers?: Record<string, string>; audit?: RefusalAudit; resetMs?: number } = {},
+  extra: { headers?: Record<string, string>; audit?: RefusalAudit; resetMs?: number; detail?: QueryRefusalDetail } = {},
 ): Refusal {
   const status = REFUSAL_STATUS[reason];
   return {
@@ -255,15 +279,31 @@ export function refusal(
     headers: extra.headers ?? {},
     audit: extra.audit ?? {},
     ...(extra.resetMs === undefined ? {} : { resetMs: extra.resetMs }),
+    ...(extra.detail === undefined ? {} : { detail: extra.detail }),
   };
+}
+
+/**
+ * A query-surface refusal (odata/rules.ts) as the pipeline's: its reason's
+ * status and code from the one table, `error.query` from its detail, and the
+ * audit row's `queryRule` — the finer cursor check, when there is one, which
+ * the caller is never told. `audit.query` adds what the call had checked.
+ */
+export function queryRefusalOf(step: PipelineStep, r: QueryRefusal, audit: RefusalAudit = {}): Refusal {
+  return refusal(step, r.reason, r.message, {
+    detail: r.detail,
+    audit: { ...audit, query: { ...audit.query, rule: auditRuleOf(r) } },
+  });
 }
 
 const passed = <T>(value: T): StepResult<T> => ({ ok: true, value });
 const refused = <T>(r: Refusal): StepResult<T> => ({ ok: false, refusal: r });
 
-/** A northbound refusal, in the northbound envelope. */
+/** A northbound refusal, in the northbound envelope; a query refusal's detail as `error.query`. */
 export function northboundRefusalResponse(r: Refusal, correlationId: string): NextResponse {
-  return northboundError(r.code, r.message, r.status, correlationId, { ...r.headers });
+  return r.detail === undefined
+    ? northboundError(r.code, r.message, r.status, correlationId, { ...r.headers })
+    : northboundError(r.code, r.message, r.status, correlationId, { ...r.headers }, { query: r.detail });
 }
 
 /* ── audit ────────────────────────────────────────────────────────────── */
@@ -298,6 +338,8 @@ export interface AuditExtras {
   readonly bindingRefusal?: string | null;
   readonly failureReason?: string | null;
   readonly replayed?: boolean;
+  /** The query surface's columns (P1.4); absent off it, so the row leaves them null. */
+  readonly query?: QueryAuditFields;
 }
 
 /**
@@ -335,6 +377,7 @@ export class GovernedAudit {
       ...(extras.bindingRefusal === undefined ? {} : { bindingRefusal: extras.bindingRefusal }),
       ...(extras.failureReason === undefined ? {} : { failureReason: extras.failureReason }),
       ...(extras.replayed === undefined ? {} : { replayed: extras.replayed }),
+      ...(extras.query === undefined ? {} : { query: extras.query }),
     });
   }
 
@@ -344,6 +387,7 @@ export class GovernedAudit {
       ...(r.audit.connection === undefined ? {} : { connection: r.audit.connection }),
       ...(r.audit.bindingRefusal === undefined ? {} : { bindingRefusal: r.audit.bindingRefusal }),
       ...(r.audit.failureReason === undefined ? {} : { failureReason: r.audit.failureReason }),
+      ...(r.audit.query === undefined ? {} : { query: r.audit.query }),
     });
   }
 }
@@ -437,11 +481,13 @@ export async function authenticateWriteKey(client: AuthenticatedClient, writeSec
 /**
  * The credential's own bucket. 429 RATE_LIMITED for its own use, 503
  * LIMITER_UNAVAILABLE when the limiter could not be asked (A44); both carry
- * Retry-After, and the outage is audited with its reason.
+ * Retry-After, and the outage is audited with its reason. Passed, it hands
+ * back the limiter's answer, from which the query surface writes its
+ * `x-ratelimit-*` headers (P1.4, D23).
  */
-export async function rateLimit(bucket: string, limitedMessage: string): Promise<StepResult<void>> {
+export async function rateLimit(bucket: string, limitedMessage: string): Promise<StepResult<RateLimitResult>> {
   const rate = await checkRateLimit(bucket, RATE_LIMITS.northbound);
-  if (rate.allowed) return passed(undefined);
+  if (rate.allowed) return passed(rate);
   const headers = { "retry-after": retryAfterSeconds(rate) };
   if (isLimiterOutage(rate)) {
     return refused(
@@ -473,17 +519,41 @@ export async function authorise(
   interfaceId: string,
   environment: string,
   now?: Date,
+  /**
+   * `withQueryPolicy`: a query-surface read (P1.4). The interface's compiled
+   * query policy rides in the same statement, and the grants that authorised
+   * the call are kept, both for queryContextFor. Every other call reads the
+   * policy column as null, so its statement carries nothing more.
+   */
+  callOptions: { readonly withQueryPolicy?: boolean } = {},
 ): Promise<StepResult<AccessibleInterface>> {
   // The connections that may serve the call come back in the interface's
   // statement (P0.19), for bindConnection.
-  const options = { withConnections: true } as const;
+  const options = { withConnections: true, withQueryPolicy: callOptions.withQueryPolicy === true } as const;
   const access =
     operation === "READ"
       ? await resolveReadableInterface(scope, solutionId, interfaceId, environment, now ?? new Date(), options)
       : await resolveWritableInterface(scope, solutionId, interfaceId, environment, new Date(), options);
   if (!access.ok) return refused(refusal(accessStep(access.reason), access.reason, access.message));
   if (access.connections) prefetched.set(access.iface, { organizationId: scope.organizationId, ...access.connections });
+  if (access.query) queryContexts.set(access.iface, access.query);
   return passed(access.iface);
+}
+
+/**
+ * What authorise read for the query surface (P1.4), held beside the
+ * interface as the connections are: the compiled policy as stored (parsed
+ * and checked by the caller, odata/check.ts), whether a policy source exists
+ * at all, and the ids of the grants that authorised this call — what a
+ * paging cursor binds, and is checked against on every later page (D7).
+ */
+export type QueryContext = QueryAccess;
+
+const queryContexts = new WeakMap<AccessibleInterface, QueryContext>();
+
+/** What authorise read for a query-surface call, for the interface it returned; undefined otherwise. */
+export function queryContextFor(iface: AccessibleInterface): QueryContext | undefined {
+  return queryContexts.get(iface);
 }
 
 /**
@@ -663,6 +733,29 @@ export function circuitOutcomeForRead(status: NorthboundReadStatus): CallOutcome
 }
 
 /**
+ * What a query-surface read says about the SAP system's health (P1.4).
+ *
+ * THE CALLER SHAPED THE QUERY. SAP's answer to it — a 400, a 501, a Gateway
+ * short dump's 500, a body the query made SAP write wrongly — is about this
+ * request, not the system, so it never counts, as the write's never does:
+ * counted, one solution's bad filters would open the circuit every solution
+ * on the connection shares (threat N11). What SAP did not answer still
+ * counts: a timeout (D14), a host that could not be reached, a credential
+ * that could not be obtained, and a proxy's 502, 503 or 504 in front of it.
+ * A missing record is an answer, and a healthy one.
+ */
+export function circuitOutcomeForQuery(r: Pick<QueryReadResult, "status" | "httpStatus">): CallOutcome {
+  if (r.status === "OK" || r.status === "EMPTY" || r.status === "NO_RECORD") return "ok";
+  if (r.status === "TIMEOUT") return "timeout";
+  if (r.status === "ERROR") {
+    if (r.httpStatus === null) return "upstream-error";
+    if (r.httpStatus === 502 || r.httpStatus === 503 || r.httpStatus === 504) return "upstream-error";
+    return "refused";
+  }
+  return "refused";
+}
+
+/**
  * What a write outcome says about the SAP system's health.
  *
  * THE CALLER CHOSE THE PAYLOAD. SAP answers a bad one with a 500 (a Gateway
@@ -743,6 +836,28 @@ export async function callSapRead(
     : readEntitySet(args, bound.transport.fetch, bound.transport.authHeaders));
   const durationMs = Date.now() - startedAt;
   await permit.record(circuitOutcomeForRead(result.status));
+  return { result, durationMs };
+}
+
+/**
+ * A query-surface read (P1.4), through the connection's transport, with its
+ * outcome reported to the breaker by the query's own rule
+ * (circuitOutcomeForQuery). The only binding of readQuery: the query it sends
+ * was built from the checked AST (odata/operation-compiler.ts) and measured
+ * within the URL cap before the call got here.
+ */
+export async function callSapQuery(
+  bound: Pick<Bound, "connection" | "transport">,
+  input: Omit<ReadQueryInput, "connection">,
+  permit: CircuitPermit,
+): Promise<SapCall<QueryReadResult>> {
+  const args = { connection: bound.connection, ...input };
+  const startedAt = Date.now();
+  const result = await (bound.transport.kind === "DIRECT"
+    ? readQuery(args)
+    : readQuery(args, bound.transport.fetch, bound.transport.authHeaders));
+  const durationMs = Date.now() - startedAt;
+  await permit.record(circuitOutcomeForQuery(result));
   return { result, durationMs };
 }
 

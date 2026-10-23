@@ -50,6 +50,9 @@ import { readEntitySet } from "@/lib/northbound/read";
 import { productAcceptsServicePath } from "@/lib/sap-public/interface-service";
 import { getSapProduct, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { MACHINE_API_PREFIXES } from "@/lib/security/rate-limit";
+import { BROKER_OPERATIONS } from "@/lib/contracts/openapi";
+import { FILTER_OPERATORS } from "@/lib/odata/params";
+import { PAGE_BOUNDS, QUERY_FILTER_OPS } from "@/lib/odata/policy";
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -123,6 +126,16 @@ describe("BROKER_FACTS hold against the broker", () => {
     const params = new URL(url).searchParams;
     expect([...params.keys()]).toEqual([...BROKER_FACTS.readQueryOptions]);
     expect(params.get("$top")).toBe(String(BROKER_FACTS.readMaxRows));
+  });
+
+  it("the query surface emits the options, operators, page bound and key lookup the registry names (P1.4)", () => {
+    // SapOption is the compiler's closed set of option names: the only ones a query can carry to SAP.
+    const options = BROKER_FACTS.queryOptions.map((o) => `"${o}"`).join(" | ");
+    expect(read("src/lib/odata/operation-compiler.ts")).toContain(`export type SapOption = ${options};`);
+    expect([...QUERY_FILTER_OPS]).toEqual([...BROKER_FACTS.queryFilterOperators]);
+    expect([...FILTER_OPERATORS]).toEqual([...BROKER_FACTS.queryFilterOperators]);
+    expect(PAGE_BOUNDS.maxSize).toBe(BROKER_FACTS.queryMaxPageSize);
+    expect(BROKER_OPERATIONS.getByKey.served).toBe(BROKER_FACTS.queryKeyLookup);
   });
 
   it("the write executor performs CREATE only and neither executor sends $batch", () => {

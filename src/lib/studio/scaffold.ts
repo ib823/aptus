@@ -96,6 +96,12 @@ export interface ScaffoldInterface {
   };
   /** Approved, live grants on this interface, for the document's grant notes. */
   grants?: readonly { operation: string; environment: string }[];
+  /**
+   * The interface's compiled query policy as stored (P1.4): openapi.json
+   * lists the query parameters it serves when it is READY. The kit's mock
+   * refuses them whatever it says (it serves recorded rows).
+   */
+  queryPolicy?: unknown;
 }
 
 /** The mode the interfaces route derives from the operation, when none is given. */
@@ -192,6 +198,7 @@ export function buildOpenApi(
         ...(iface.status ? { status: iface.status } : {}),
         contract,
         ...(iface.grants ? { grants: iface.grants } : {}),
+        ...(iface.queryPolicy === undefined ? {} : { queryPolicy: iface.queryPolicy }),
       },
     ],
     safe: safeName,
@@ -500,6 +507,7 @@ export class CoreEdgeError extends Error {
   }
 }
 
+${KIT_QUERY_TYPES}
 export function createClient(options: CoreEdgeClientOptions) {
   const doFetch = options.fetchImpl ?? fetch;
   const interfaceId = ${JSON.stringify(iface.id)};
@@ -564,10 +572,125 @@ export function createClient(options: CoreEdgeClientOptions) {
         apiVersion: res.headers.get("${VERSION_HEADER}"),
       };
     },
-  };
+${KIT_QUERY_METHODS}  };
 }
 `;
 }
+
+/**
+ * The kit client's query helpers (P1.4): the types, and one fetch that
+ * reads a query's answer as read() reads a ?limit one, with the refusal's
+ * rule kept. Inserted as whole blocks, each opening with "QUERIES (P1.4)",
+ * so the client written before them is unchanged around them.
+ */
+export const KIT_QUERY_TYPES = `/**
+ * QUERIES (P1.4). Where the interface's query policy allows them, a read may
+ * carry select, filter.<Field>.<op>, orderby, key.<Field>, count and pageSize;
+ * openapi.json lists the ones this interface serves. A list of values
+ * (filter.<Field>.in) repeats the parameter. A query the policy does not
+ * allow fails with code POLICY_FIELD_NOT_GRANTED and its rule; nothing is
+ * ever silently ignored.
+ */
+export type QueryParams = Record<string, string | number | boolean | readonly (string | number)[]>;
+
+/** Where a paging run stands. Page on nextCursor, never on records.length. */
+export interface QueryPage {
+  index: number;
+  size: number;
+  rowsServed: number;
+  nextCursor: string | null;
+  complete: boolean;
+  stopped: "ROW_CAP" | "NOT_PAGEABLE" | "UPSTREAM_IGNORED_PAGING" | null;
+}
+
+/** A query's answer: the read's, with the page (absent on a key lookup) and the count when asked. */
+export interface QueryResult extends ReadResult {
+  page?: QueryPage;
+  totalCount?: number | null;
+}
+
+/** A refused or failed query: the error, with error.query.rule when the answer named one. */
+export class CoreEdgeQueryError extends CoreEdgeError {
+  readonly rule: string | null;
+
+  constructor(message: string, status: number, code: string, correlationId: string, rule: string | null) {
+    super(message, status, code, correlationId);
+    this.name = "CoreEdgeQueryError";
+    this.rule = rule;
+  }
+}
+
+type QueryEnvelope = { data?: Omit<QueryResult, "draft" | "apiVersion"> } & {
+  error?: { code: string; message: string; correlationId: string; query?: { rule: string } };
+};
+
+function querySearch(params: QueryParams, cursor: string | null): string {
+  const search = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (Array.isArray(value)) for (const v of value) search.append(name, String(v));
+    else search.append(name, String(value));
+  }
+  if (cursor !== null) search.set("cursor", cursor);
+  return search.toString();
+}
+
+async function fetchQuery(doFetch: typeof fetch, options: CoreEdgeClientOptions, url: string): Promise<QueryResult> {
+  const res = await doFetch(url, {
+    headers: {
+      Authorization: \`Bearer \${options.token}\`,
+      Accept: "application/json",
+      ...(options.apiVersion ? { "${VERSION_HEADER}": options.apiVersion } : {}),
+    },
+  });
+  const body = await res.text().catch(() => "");
+  let json: QueryEnvelope | null = null;
+  try {
+    json = body ? (JSON.parse(body) as QueryEnvelope) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok || !json?.data) {
+    throw new CoreEdgeQueryError(
+      json?.error?.message ?? (res.ok ? "Response carried no data envelope" : \`Request failed with HTTP \${res.status}\`),
+      res.status,
+      json?.error?.code ?? (res.ok ? "MALFORMED_RESPONSE" : "UNKNOWN"),
+      json?.error?.correlationId ?? res.headers.get("x-correlation-id") ?? "",
+      json?.error?.query?.rule ?? null,
+    );
+  }
+  return {
+    ...json.data,
+    draft: res.headers.get("x-coreedge-interface-status") === "DRAFT",
+    apiVersion: res.headers.get("${VERSION_HEADER}"),
+  };
+}
+`;
+
+export const KIT_QUERY_METHODS = `
+    /**
+     * QUERIES (P1.4): one page of a query. Send the next page's cursor with
+     * the same params; or use pages(), which does.
+     */
+    async query(params: QueryParams, cursor?: string): Promise<QueryResult> {
+      return fetchQuery(doFetch, options, \`\${options.baseUrl}/interfaces/\${interfaceId}/data?\${querySearch(params, cursor ?? null)}\`);
+    },
+
+    /**
+     * Every page of a query, in order: the same params re-sent with each
+     * page's nextCursor, until there is none. The credential's 60 calls a
+     * minute are shared with every other call it makes, so pace the loop.
+     */
+    async *pages(params: QueryParams): AsyncGenerator<QueryResult> {
+      let cursor: string | null = null;
+      for (;;) {
+        const result = await fetchQuery(doFetch, options, \`\${options.baseUrl}/interfaces/\${interfaceId}/data?\${querySearch(params, cursor)}\`);
+        yield result;
+        const next = result.page?.nextCursor ?? null;
+        if (next === null) return;
+        cursor = next;
+      }
+    },
+`;
 
 /** The runnable starter kit's README — the file that sets expectations. */
 export function buildReadme(
@@ -1046,7 +1169,7 @@ createServer((req, res) => {
     res.end(JSON.stringify({ error: { code: "NOT_FOUND", message: \`This mock only serves /interfaces/\${INTERFACE_ID}/data\`, correlationId: "mock" } }));
     return;
   }
-
+${MOCK_QUERY_REFUSAL}
   const fixture = pick(url.searchParams.get("scenario") ?? DEFAULT_SCENARIO);
   // The same envelope the broker sends, "interface" included: the fixture body
   // is what the run returned; which interface served it is the mock's to add.
@@ -1064,6 +1187,36 @@ createServer((req, res) => {
 });
 `;
 }
+
+/**
+ * QUERIES IN THE MOCK (P1.4): refused, never ignored. The mock serves
+ * recorded rows and evaluates no query, and a filter it ignored would hand
+ * the app every row, which is what a deployment that serves no queries
+ * refuses to do. So it answers as such a deployment does: 400
+ * VALIDATION_ERROR, error.query.rule NOT_ENABLED. ?limit is unchanged.
+ */
+export const MOCK_QUERY_REFUSAL = `
+  // Query parameters (P1.4): this mock serves recorded rows and evaluates no
+  // query, so it refuses them, as a deployment that serves none does, rather
+  // than ignoring a filter and serving every row.
+  const RESERVED = ["select", "expand", "filter", "orderby", "count", "pageSize", "cursor", "key"];
+  const reserved = [...url.searchParams.keys()].find((n) => RESERVED.includes(n) || n.startsWith("filter.") || n.startsWith("key."));
+  if (reserved) {
+    res.writeHead(400, { "content-type": "application/json", "x-correlation-id": "mock", ...served });
+    res.end(
+      JSON.stringify({
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "The kit's mock serves recorded rows and does not evaluate queries; use a deployed CoreEdge or the Tenant Twin (P1.6).",
+          correlationId: "mock",
+          query: { rule: "NOT_ENABLED" },
+        },
+      }),
+    );
+    return;
+  }
+`;
 
 /**
  * package.json for the starter kit — the two scripts that matter.

@@ -466,6 +466,14 @@ export const DOCUMENTED_FEATURES: readonly DocumentedFeature[] = [
       /\bversioned (?:northbound )?(?:routes?|paths?)\b/i,
     ],
   },
+  {
+    id: "query-surface",
+    name: "The governed query surface: select, filters, key lookup and cursor paging under a query policy",
+    roadmap: "P1.4",
+    cells: [READ],
+    code: { file: "src/lib/odata/operation-compiler.ts", exports: ["compileQuery"] },
+    terms: [/\bquery surface\b/i, /\bkey lookup\b/i, /\bcursor paging\b/i],
+  },
 ];
 
 /* ── status, from the registry ────────────────────────────────────────── */

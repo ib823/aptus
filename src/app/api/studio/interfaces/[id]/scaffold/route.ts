@@ -91,6 +91,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       status: true,
       // Not responseSchema: read below only when it is inside its bound.
       solution: { select: { name: true } },
+      // The compiled query policy (P1.4): at most 64 KiB, held at its one writer.
+      queryPolicyCompiled: true,
     },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
@@ -179,9 +181,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
        */
       const rendersCompiled = compiled !== undefined && compiled.source === "METADATA";
       limit = kitLimit(
-        rendersCompiled
+        (rendersCompiled
           ? compiled.irBytes
-          : Math.max(compiled?.irBytes ?? 0, responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0),
+          : Math.max(compiled?.irBytes ?? 0, responseSchema !== undefined ? jsonBytesUpTo(responseSchema, LIMITS.kit.cap) : 0)) +
+          // The query parameters openapi.json lists are written from the policy (P1.4).
+          (iface.queryPolicyCompiled === null ? 0 : jsonBytesUpTo(iface.queryPolicyCompiled, LIMITS.queryPolicyCompiled.bytes)),
         fixtureBytes,
       );
       return {
@@ -201,6 +205,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
             solutionName: iface.solution.name,
             ...(compiled ? { compiled } : {}),
             grants: plan.grants.get(iface.id) ?? [],
+            ...(iface.queryPolicyCompiled === null ? {} : { queryPolicy: iface.queryPolicyCompiled }),
             // Present → the contract describes real fields. Absent → it says so,
             // and says why when a stored schema of another contract was set aside.
             ...(responseSchema !== undefined ? { responseSchema } : {}),
