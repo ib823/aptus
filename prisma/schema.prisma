@@ -2117,14 +2117,16 @@ model ContractSnapshot {
   updateBodyText String?
 
   /// Where a METADATA contract was read: the environment and connection whose
-  /// binding answered the verify. Null for SAMPLED, and null for an UPLOAD.
+  /// binding answered the verify. Null for SAMPLED, and null for an UPLOAD
+  /// until a verify of the same description makes the row its own.
   environment  String?
   connectionId String?
   createdById  String?
   createdAt    DateTime @default(now())
   /// How the description reached CoreEdge (P1.2): VERIFY (a tenant answered a
   /// verify), CAPTURE (sampled rows from a run) or UPLOAD (a file a builder
-  /// uploaded; no tenant was asked). Null on rows recorded before P1.2. Kept
+  /// uploaded; no tenant was asked, and it becomes VERIFY when a verify finds
+  /// the same description). Null on rows recorded before P1.2. Kept
   /// as its own column so an upload is never recognised by "METADATA with no
   /// environment", a rule a later path could break.
   origin       String?

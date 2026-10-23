@@ -26,7 +26,10 @@
  *
  * NO VERIFICATION IS RECORDED. The interface has no serviceVerifications, so
  * the write route refuses it until a tenant verify (P1.1's rule), and every
- * screen and /schema say the contract came from a file (describedBy).
+ * screen and /schema say the contract came from a file (describedBy). A
+ * verify that finds the same description makes the row its own (origin
+ * VERIFY, its environment and connection: snapshot.ts), so from then on they
+ * say a tenant described it.
  */
 
 import { createHash } from "node:crypto";

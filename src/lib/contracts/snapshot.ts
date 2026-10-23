@@ -372,6 +372,22 @@ export async function recordContractSnapshot(input: {
             origin: input.origin,
           });
           result = { status: "RECORDED", snapshot: row, diff: next!.diff };
+        } else if (input.origin === "VERIFY" && result.snapshot.origin === "UPLOAD") {
+          /*
+           * A TENANT CONFIRMS AN UPLOAD (P1.2, review round 1). A verify that
+           * finds the uploaded description unchanged is the first time a
+           * system served it, so the row becomes what this verify would have
+           * recorded: its origin, environment and connection. /schema and
+           * Studio then say a tenant described it, as the developer guide
+           * promises; the CREATE audit row keeps the upload's sha256 as its
+           * provenance. Guarded by origin: a verify the interface lock queued
+           * behind another one changes nothing the first did not.
+           */
+          await tx.contractSnapshot.updateMany({
+            where: { id: result.snapshot.id, organizationId: scope.organizationId, origin: "UPLOAD" },
+            data: { origin: "VERIFY", environment, connectionId: input.connectionId ?? null },
+          });
+          result = { ...result, snapshot: { ...result.snapshot, origin: "VERIFY" } };
         }
         const current = await currentIn(tx, scope, iface);
         /*

@@ -11,8 +11,9 @@
  *     is written: no SAP system was asked;
  *   - a failure after the snapshot is written leaves no interface (one
  *     transaction);
- *   - a later verify of the same description is UNCHANGED; a changed one is
- *     recorded as the next version, bumped against the upload;
+ *   - a later verify of the same description is UNCHANGED, and makes the
+ *     uploaded row the tenant's: /schema then says a tenant described it; a
+ *     changed one is recorded as the next version, bumped against the upload;
  *   - GET /schema says the contract was described by an upload.
  *
  * WHAT IS REAL: the route, the envelope and its worker (from source, through
@@ -87,6 +88,23 @@ function expectedHash(description: string, entitySet: string): string {
   const compiled = recordJob({ description, entitySet, previous: [], unchangedHashes: [], current: null });
   if (!compiled.ok || !compiled.dataset?.ok) throw new Error("the golden did not compile");
   return compiled.dataset.hash;
+}
+
+/** A DEV key of the solution, minted once: what GET /schema is read with. */
+let schemaKey: string | null = null;
+async function readSchema(id: string): Promise<{ status: number; contract: { source: string; describedBy: string; semver: string } }> {
+  if (schemaKey === null) {
+    schemaKey = generateClientToken("DEV");
+    await prisma.solutionClient.create({
+      data: { organizationId: ORG, solutionId, label: "DEV key", createdById: USER.id, tokenHash: hashClientToken(schemaKey), environment: "DEV", isActive: true },
+    });
+  }
+  const answer = await schemaRoute(
+    new NextRequest(`http://localhost/api/northbound/interfaces/${id}/schema`, { headers: { authorization: `Bearer ${schemaKey}` } }),
+    { params: Promise.resolve({ id }) },
+  );
+  const { data } = (await answer.json()) as { data: { contract: { source: string; describedBy: string; semver: string } } };
+  return { status: answer.status, contract: data.contract };
 }
 
 const auditRows = () =>
@@ -200,14 +218,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("registration from an uploaded d
       const compiled = recordJob({ description: text, entitySet: iface.entitySet, previous: heads.previous, unchangedHashes: heads.unchangedHashes, current: heads.current ?? null });
       return recordVerifiedContract({ scope, iface, compiled, heads, environment: "DEV", connectionId: `${RUN}-conn`, actorId: USER.id });
     };
+    expect((await readSchema(id)).contract).toMatchObject({ describedBy: "upload", semver: "1.0.0" });
     const same = await verify(description);
     expect(same).toMatchObject({ status: "UNCHANGED", semver: "1.0.0" });
+    // The tenant served the uploaded description: the row is now the verify's, and /schema says so.
+    expect(await prisma.contractSnapshot.findMany({ where: { organizationId: ORG, interfaceId: id }, select: { semver: true, origin: true, environment: true, connectionId: true } })).toEqual([
+      { semver: "1.0.0", origin: "VERIFY", environment: "DEV", connectionId: `${RUN}-conn` },
+    ]);
+    expect((await readSchema(id)).contract).toMatchObject({ source: "metadata", describedBy: "tenant", semver: "1.0.0" });
+    // The upload is still where the interface was made: the CREATE row's sha256.
+    const created = await prisma.configAudit.findFirst({ where: { organizationId: ORG, entityType: "Interface", entityId: id, action: "CREATE" } });
+    expect((created!.after as { upload?: { sha256: string } }).upload?.sha256).toBe(createHash("sha256").update(description, "utf8").digest("hex"));
     const changed = await verify(description.replace(/\n\s*<Property Name="BonusRate"[^\n]*\/>/, ""));
     expect(changed.status).toBe("RECORDED");
     expect("semver" in changed && changed.semver).not.toBe("1.0.0");
     const rows = await prisma.contractSnapshot.findMany({ where: { organizationId: ORG, interfaceId: id }, orderBy: { createdAt: "asc" } });
     expect(rows.map((r) => [r.semver, r.origin, r.environment])).toEqual([
-      ["1.0.0", "UPLOAD", null],
+      ["1.0.0", "VERIFY", "DEV"],
       [rows[1]!.semver, "VERIFY", "DEV"],
     ]);
   });
@@ -216,16 +243,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("registration from an uploaded d
     const description = read("z-travel-booking.v2.xml");
     const res = await upload(description, { name: `${RUN} schema`, servicePath: "/sap/opu/odata/sap/ZUI_SCHEMA_O2", odataVersion: "V2", entitySet: "BookingSet" });
     const id = ((await res.json()) as { data: { interface: { id: string } } }).data.interface.id;
-    const raw = generateClientToken("DEV");
-    await prisma.solutionClient.create({
-      data: { organizationId: ORG, solutionId, label: "DEV key", createdById: USER.id, tokenHash: hashClientToken(raw), environment: "DEV", isActive: true },
-    });
-    const answer = await schemaRoute(
-      new NextRequest(`http://localhost/api/northbound/interfaces/${id}/schema`, { headers: { authorization: `Bearer ${raw}` } }),
-      { params: Promise.resolve({ id }) },
-    );
+    const answer = await readSchema(id);
     expect(answer.status).toBe(200);
-    const { data } = (await answer.json()) as { data: { contract: { source: string; describedBy: string; semver: string } } };
-    expect(data.contract).toMatchObject({ source: "metadata", describedBy: "upload", semver: "1.0.0" });
+    expect(answer.contract).toMatchObject({ source: "metadata", describedBy: "upload", semver: "1.0.0" });
   });
 });
