@@ -9,7 +9,7 @@
     },
     "registry": {
       "path": "docs/coreedge/capability-registry.json",
-      "sha256": "e22e03ef2537d8b974cf4fbe19a8d94790206827b45fd400ec96db0b543b522d"
+      "sha256": "9e6f6df81ec8c0ba2435f9e898cb00b4e66ac3c2749ab72f5378fc6b897a00df"
     }
   },
   "model": {
