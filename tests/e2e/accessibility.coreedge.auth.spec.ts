@@ -255,6 +255,73 @@ test.describe("Studio · Test Console and the developer guide", () => {
 });
 
 /**
+ * The Test Console AFTER A RUN, at desktop width and on a phone, in both
+ * themes. A run's rows are up to eight unwrapped columns, so their box scrolls
+ * sideways (989px of table in 970px at desktop, in 324px at 390px) and failed
+ * scrollable-region-focusable: a keyboard user could not reach the columns past
+ * its edge. The broker's answer is stood in for, so the scan sees the state a
+ * real run renders without a tenant.
+ */
+const RUN_ROWS = Array.from({ length: 10 }, (_, i) => ({
+  PurchaseOrder: `45000000${String(i).padStart(2, "0")}`,
+  CompanyCode: "1710",
+  PurchaseOrderType: "NB",
+  PurchasingOrganization: "1710",
+  Supplier: `173000${String(i).padStart(2, "0")}`,
+  PurchaseOrderDate: "/Date(1729641600000)/",
+  DocumentCurrency: "USD",
+  CreatedByUser: "CB9980000123",
+}));
+
+test.describe("Studio · Test Console after a run", () => {
+  for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "390px", width: 390, height: 844 }]) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`/studio/test with rows has no serious or critical violations at ${viewport.name} in ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        if (theme === "dark") {
+          await page.addInitScript(() => {
+            window.localStorage.setItem("theme", "dark");
+          });
+        }
+        await page.route("**/api/studio/test/broker-run", (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                outcome: "ran",
+                status: "OK",
+                httpStatus: 200,
+                contract: { version: 1, entitySet: "A_PurchaseOrder" },
+                records: RUN_ROWS,
+                note: "10 records read.",
+                draft: false,
+                boundTo: { label: "S/4HANA DEV", environment: "DEV", sapClient: "100", bindingUnverified: false },
+              },
+            }),
+          }),
+        );
+        await page.goto("/studio/test");
+        await page.waitForLoadState("load");
+        await page.getByRole("button", { name: "Run", exact: true }).click();
+        const rows = page.getByRole("region", { name: "Rows read" });
+        await expect(rows).toBeVisible();
+        if (theme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+        // The case this guards: the box really scrolls.
+        expect(await rows.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+        const results = await new AxeBuilder({ page })
+          .include("main[data-studio-main]")
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+          .analyze();
+        const violations = results.violations.filter((v) => v.impact === "critical" || v.impact === "serious");
+        expect(report(violations)).toBe("");
+      });
+    }
+  }
+});
+
+/**
  * Studio · Interfaces, POPULATED, in both themes.
  *
  * This screen's contrast defects lived only in the populated state: the

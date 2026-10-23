@@ -662,8 +662,12 @@ export function TestConsoleClient({
             </p>
           )}
 
+          {/* The rows scroll sideways (eight unwrapped columns), so the box must
+              take keyboard focus to be scrolled without a pointer (axe
+              scrollable-region-focusable); the global [tabindex]:focus-visible
+              rule draws its ring. */}
           {run.rows && run.rows.length > 0 && (
-            <div style={{ overflowX: "auto", marginTop: 12 }}>
+            <div tabIndex={0} role="region" aria-label="Rows read" style={{ overflowX: "auto", marginTop: 12 }}>
               <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "var(--surface-ink-tint)", textAlign: "left" }}>
