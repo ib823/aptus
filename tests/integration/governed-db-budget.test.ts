@@ -839,6 +839,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
         new NextRequest(`http://localhost${path}/interfaces`, { headers: { authorization: `Bearer ${token}` } }),
       );
     const stampUpdates = (c: Counted) => [...c.response, ...c.after].filter((s) => /UPDATE\s+"public"\."SolutionClient"/i.test(s) && s.includes("lastUsedAt"));
+    const connectionsRead = (s: string) => /^SELECT\s+"public"\."SapConnection"\./.test(s);
 
     it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: warm, in the stated statements, with no key stamp", async (path) => {
       await stampNow();
@@ -846,6 +847,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.status).toBe(200);
       expect(c.total, report(`discovery ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.warm);
       expect(stampUpdates(c), report(`discovery ${path}`, c)).toHaveLength(0);
+      // One product among the granted interfaces: its connections, read once.
+      expect(c.response.filter(connectionsRead), report(`discovery ${path}`, c)).toHaveLength(1);
     });
 
     it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: a key last stamped over a minute ago is stamped once", async (path) => {
@@ -854,6 +857,50 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("the database budget per governe
       expect(c.status).toBe(200);
       expect(c.total, report(`discovery stale ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.stamped);
       expect(stampUpdates(c), report(`discovery stale ${path}`, c)).toHaveLength(1);
+    });
+
+    // The verdicts read connections only for interfaces that pass the grant
+    // gate: a solution with nothing granted in the key's environment reads
+    // none. Its own solution, so no other test's grants reach it.
+    let ungrantedKey = "";
+    beforeAll(async () => {
+      const solutionId = (
+        await prisma.solution.create({
+          data: {
+            organizationId: ORG,
+            name: "Budget, nothing granted",
+            slug: `${RUN}-nothing-granted`,
+            classification: "CLIENT_APP",
+            businessProblem: "Discovery with nothing granted.",
+            dataClass: "INTERNAL",
+            status: "ACTIVE",
+          },
+        })
+      ).id;
+      await prisma.interface.create({
+        data: { organizationId: ORG, solutionId, name: "purchase-orders", sapProduct: "s4hana", externalId: "purchase-orders", operation: "READ", mode: "READ", entitySet: "A_PurchaseOrder", status: "ACTIVE" },
+      });
+      ungrantedKey = generateClientToken("DEV");
+      await prisma.solutionClient.create({
+        data: {
+          organizationId: ORG,
+          solutionId,
+          label: "DEV key, nothing granted",
+          createdById: ids.user,
+          tokenHash: hashClientToken(ungrantedKey),
+          environment: "DEV",
+          isActive: true,
+          expiresAt: new Date(Date.now() + DAY),
+          lastUsedAt: new Date(),
+        },
+      });
+    });
+
+    it.each(["/api/northbound", "/api/northbound/v1"] as const)("%s: nothing granted in the key's environment reads no connections", async (path) => {
+      const c = await count(() => discover(path, ungrantedKey));
+      expect(c.status).toBe(200);
+      expect(c.total, report(`discovery nothing granted ${path}`, c)).toBe(NORTHBOUND_DISCOVERY_STATEMENTS.nothingGranted);
+      expect(c.response.filter(connectionsRead), report(`discovery nothing granted ${path}`, c)).toHaveLength(0);
     });
   });
 

@@ -99,6 +99,7 @@ describe("the db budget runbook's table", () => {
     };
     expect(figuresOf(/^\| Discovery, warm/)).toEqual([NORTHBOUND_DISCOVERY_STATEMENTS.warm]);
     expect(figuresOf(/^\| Discovery, key last stamped/)).toEqual([NORTHBOUND_DISCOVERY_STATEMENTS.stamped]);
+    expect(figuresOf(/^\| Discovery, nothing granted/)).toEqual([NORTHBOUND_DISCOVERY_STATEMENTS.nothingGranted]);
   });
 
   it("does not file an Ariba call under the stored connection's statements", () => {

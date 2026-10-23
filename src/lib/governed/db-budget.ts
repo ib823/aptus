@@ -196,6 +196,13 @@ export const NORTHBOUND_SCHEMA_STATEMENTS = {
  * tests/integration/governed-db-budget.test.ts. Its key's `lastUsedAt` stamp
  * follows the governed calls' rule, at most once a minute per key (+1); it
  * was written on every call before.
+ *
+ * The verdicts' part varies with the solution (northbound/read-verdict.ts,
+ * COST): one connections query per SAP product among the interfaces that
+ * pass the grant gate, and one catalogue lookup per distinct service among
+ * those that also bind and that is not in the curated list. The figures below
+ * are for one product whose granted services are curated, the measured case;
+ * each further product adds 1, each such catalogue service 1.
  */
 export const NORTHBOUND_DISCOVERY_STATEMENTS = {
   /**
@@ -206,4 +213,6 @@ export const NORTHBOUND_DISCOVERY_STATEMENTS = {
   warm: 5,
   /** A key last stamped over a minute ago: the same, plus the stamp. */
   stamped: 6,
+  /** No interface passes the grant gate (none granted in the key's environment): no connections are read. */
+  nothingGranted: 4,
 } as const;

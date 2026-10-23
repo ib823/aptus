@@ -67,6 +67,15 @@ before.
 |---|---|---|
 | Discovery, warm (key stamped in the last minute) | **5** | the key, the solution's interfaces, their grants, the connections their verdicts are read against, the audit row |
 | Discovery, key last stamped over a minute ago | **6** | the same, plus the key's `lastUsedAt` stamp |
+| Discovery, nothing granted in the key's environment | **4** | the key, the interfaces, their grants, the audit row: no connections are read |
+
+The connections read is one query per SAP product among the interfaces that
+pass the grant gate, and a granted interface that binds to a catalogue service
+outside the curated list adds that service's catalogue lookup, once per
+distinct service (`src/lib/northbound/read-verdict.ts`, *COST*). The figures
+are for one product whose granted services are curated, the measured case:
+size a solution spanning several products, or naming many uncurated services,
+at 5 plus one per further product and one per such service.
 
 **The console counts its session** (P0.14b review round 4). The console's
 `authenticate` step is the person's session, as the broker's is the key, but
