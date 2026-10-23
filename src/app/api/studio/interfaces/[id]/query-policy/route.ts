@@ -30,8 +30,9 @@
  * (D10), and an edit never bumps Interface.version: a bump would clear the
  * captured schema and fixtures, and paging cursors bind the policy's `rev`
  * instead. Every save is in the config audit, as PROMOTE when it widens what
- * bulk reading allows (a row cap above 10,000, a maximum page above 500, the
- * total count turned on) and UPDATE otherwise, with what it widened and
+ * bulk reading allows (a row cap above 10,000, as asked for even where the
+ * dataset cannot page; a maximum page above 500; the total count turned on)
+ * and UPDATE otherwise, with what it widened and
  * narrowed (3.5.8). A save that narrows an ACTIVE interface is answered with
  * what callers would lose and written only once the builder confirms it:
  * those callers start receiving 400 POLICY_FIELD_NOT_GRANTED.
@@ -226,7 +227,8 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
       if (stale) return { kind: "conflict", message: `${stale.message} ${VERIFY_FIRST}` };
       return { kind: "refused", errors: compiled.errors };
     }
-    const change = policyChange(previous, compiled.compiled);
+    const previousSource = parseQueryPolicySource(row.queryPolicy);
+    const change = policyChange(previous, compiled.compiled, { before: previousSource.ok ? previousSource.source : null, after: source });
     if (iface.status === "ACTIVE" && change.narrowed.length > 0 && confirmNarrowing !== true) {
       return { kind: "confirm", widened: change.widened, narrowed: change.narrowed };
     }

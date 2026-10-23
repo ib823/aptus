@@ -117,7 +117,10 @@ runs from the first page. Nothing else is sealed under it.
 A policy edit never bumps the interface's version (that would clear its
 captured schema and fixtures). Every save is in the config audit: `UPDATE`,
 or `PROMOTE` when it raises the row cap above 10,000, the maximum page above
-500, or turns the total count on (`after.widened`). A save that narrows an
+500, or turns the total count on (`after.widened`). The row cap compared is
+the one the save asks for, even on a dataset SAP does not page (where it
+compiles to the page size), so a later verify that finds the dataset pageable
+never raises the cap past what a `PROMOTE` recorded. A save that narrows an
 ACTIVE interface is answered with what it takes away and written only when
 the builder confirms it.
 

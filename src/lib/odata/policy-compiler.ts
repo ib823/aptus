@@ -369,17 +369,29 @@ export function compileQueryPolicy(source: QueryPolicySourceV1, basis: QueryBasi
  * `widened` lists only the bulk-relevant widenings, the ones recorded as
  * PROMOTE: a row cap raised above 10,000, a maximum page size raised above
  * 500, and count turned on. `narrowed` lists what callers lose.
+ *
+ * THE ROW CAP ASKED FOR, NOT ONLY THE ONE COMPILED. On a dataset that cannot
+ * be paged the compiled row cap is the page size (SINGLE), so a save asking
+ * for 100,000 compiled to 500 and was an UPDATE. A later verify that finds
+ * the dataset pageable (its metadata changed, or a builder pointed the
+ * service elsewhere) compiles the 100,000 the source asked for, and nothing
+ * records it as PROMOTE. So, given the sources, the row cap compared is the
+ * larger of the compiled one and the one asked for: the save that asks is
+ * the PROMOTE, and no verify can raise the cap past what a save asked for.
  */
 export function policyChange(
   before: CompiledQueryPolicyV1 | null,
   after: CompiledQueryPolicyV1,
+  sources?: { readonly before: QueryPolicySourceV1 | null; readonly after: QueryPolicySourceV1 },
 ): { readonly widened: readonly string[]; readonly narrowed: readonly string[] } {
   const widened: string[] = [];
   const narrowed: string[] = [];
-  const prevRowCap = before?.state === "READY" ? before.page.rowCap : 0;
+  const asked = (compiled: CompiledQueryPolicyV1, source: QueryPolicySourceV1 | null | undefined) => Math.max(compiled.page.rowCap, source?.page.rowCap ?? 0);
+  const prevRowCap = before?.state === "READY" ? asked(before, sources?.before) : 0;
+  const rowCap = asked(after, sources?.after);
   const prevMax = before?.state === "READY" ? before.page.maxSize : 0;
   const prevCount = before?.state === "READY" ? before.count : false;
-  if (after.page.rowCap > 10_000 && after.page.rowCap > prevRowCap) widened.push(`rowCap ${after.page.rowCap}`);
+  if (rowCap > 10_000 && rowCap > prevRowCap) widened.push(`rowCap ${rowCap}`);
   if (after.page.maxSize > 500 && after.page.maxSize > prevMax) widened.push(`maxSize ${after.page.maxSize}`);
   if (after.count && !prevCount) widened.push("count");
   if (before?.state === "READY") {

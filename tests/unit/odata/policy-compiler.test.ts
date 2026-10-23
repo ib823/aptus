@@ -449,4 +449,26 @@ describe("what a save changes (3.5.8)", () => {
     expect(change.narrowed).toEqual(["Name eq", "Name in"]);
     expect(policyChange(null, compiled(b)).widened).toEqual([]);
   });
+
+  /*
+   * On a dataset that cannot be paged the compiled row cap is the page size,
+   * so a save asking for 100,000 compiled to 500 and was an UPDATE; a later
+   * verify that finds the dataset pageable compiles the 100,000, and no
+   * PROMOTE row ever recorded it. The row cap asked for is what is compared.
+   */
+  it("a row cap asked for above 10,000 is a widening even while the dataset cannot page", () => {
+    const bulk = source({ page: { defaultSize: 100, maxSize: 500, rowCap: 100_000, byteCap: 4_000_000 } });
+    const single = basisOf([{ n: "Id" }, { n: "Name" }], ["Id"], { set: { pageable: false } });
+    const r = save(bulk, single);
+    if (!r.ok) throw new Error("refused");
+    const saved = r.compiled;
+    expect(saved).toMatchObject({ paging: "SINGLE", page: { rowCap: 500 } });
+    expect(policyChange(null, saved).widened).toEqual([]);
+    expect(policyChange(null, saved, { before: null, after: bulk }).widened).toEqual(["rowCap 100000"]);
+    // Saving the same request again widens nothing; a verify cannot raise the cap past it.
+    expect(policyChange(saved, saved, { before: bulk, after: bulk }).widened).toEqual([]);
+    const pageable = verify(bulk, basisOf([{ n: "Id" }, { n: "Name" }], ["Id"]), { previous: saved }).compiled;
+    expect(pageable).toMatchObject({ paging: "OFFSET", page: { rowCap: 100_000 } });
+    expect(pageable.page.rowCap).toBeLessThanOrEqual(bulk.page.rowCap);
+  });
 });

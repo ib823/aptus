@@ -286,6 +286,30 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Studio's query-policy route (P1
     expect(last.after).toMatchObject({ widened: ["rowCap 50000", "maxSize 800", "count"] });
   });
 
+  /*
+   * On a dataset SAP does not page, a row cap of 100,000 compiles to the page
+   * size, so the save that asked for it was an UPDATE; the verify that later
+   * finds the dataset pageable compiled the 100,000, and no PROMOTE row ever
+   * recorded it. The save that asks is the PROMOTE.
+   */
+  it("records a save asking for a row cap above 10,000 as PROMOTE, while the dataset cannot page", async () => {
+    const fresh = await seedQueryApp(world, `App ${randomUUID().slice(0, 6)}`);
+    const id = fresh.iface.V2;
+    await verify(id, DESCRIPTION.V2.replace('<EntitySet Name="OrderLines"', '<EntitySet Name="OrderLines" sap:pageable="false"'));
+    const bulk = { ...FILTERED, page: { defaultSize: 100, maxSize: 500, rowCap: 100_000, byteCap: 4_000_000 } };
+    const saved = await save(id, bulk);
+    expect(saved.body.data).toMatchObject({ saved: true, widened: ["rowCap 100000"], compiled: { paging: "SINGLE" } });
+    const last = (await audits(id)).at(-1)!;
+    expect(last.action).toBe("PROMOTE");
+    expect(last.after).toMatchObject({ widened: ["rowCap 100000"] });
+    // The verify that finds it pageable compiles only what that save asked for.
+    const pageable = await verify(id);
+    expect(pageable).toMatchObject({ queryPolicy: { state: "READY" } });
+    expect(parseCompiledPolicy((await row(id)).queryPolicyCompiled)).toMatchObject({ compiled: { paging: "OFFSET", page: { rowCap: 100_000 } } });
+    // Saving the same request again widens nothing.
+    expect((await save(id, bulk)).body.data).toMatchObject({ saved: true, widened: [] });
+  });
+
   it("writes a save that narrows an ACTIVE interface only once the builder confirms it", async () => {
     const id = await freshInterface();
     expect((await row(id)).status).toBe("ACTIVE");
