@@ -13,9 +13,11 @@
 import { NextResponse } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as TokenRingModule from "@/lib/security/token-ring";
+
 // The real derivation, counted: the overlap check derives its key once a page.
 vi.mock("@/lib/security/token-ring", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/security/token-ring")>();
+  const real = await importOriginal<typeof TokenRingModule>();
   return { ...real, deriveTokenKey: vi.fn(real.deriveTokenKey) };
 });
 

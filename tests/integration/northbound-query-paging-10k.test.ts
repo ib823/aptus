@@ -114,7 +114,7 @@ interface Page {
 }
 
 /** Page through the whole set as a deployed app would: the same parameters, plus each nextCursor, paced. */
-async function pageAll(s: Scenario): Promise<{ pages: Page[]; elapsed: number; interfaceId: string; clientId: string }> {
+async function pageAll(s: Scenario): Promise<{ pages: Page[]; elapsed: number; interfaceId: string; clientId: string; answered: string[] }> {
   const app = await seedQueryApp(world, s.name);
   const interfaceId = app.iface[s.odata];
   const state = await enableQueries(

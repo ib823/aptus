@@ -414,7 +414,7 @@ describe("the Interfaces screen around it", () => {
   it("reads the Query policy card again once a verify on the same screen has answered", async () => {
     // A verify writes the basis and recompiles the policy without bumping the version.
     current = view({ basis: null, basisHash: null, source: null, compiled: null, revision: 0, suggested: null });
-    const answered = fetchMock.getMockImplementation()!;
+    const answered = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (!url.includes("/verify-service")) return answered(url, init);
       current = view({ source: null, compiled: null, revision: 0 });
