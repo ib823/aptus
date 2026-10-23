@@ -152,11 +152,15 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   capabilityProbe: 6,
   /**
    * `/api/sap/tdd/hub-content/[id]` with a live probe of an OData V2 API: the
-   * console read's 4 and the catalogue row it shows. A V4 address adds 2 (its
+   * console read's 4, the catalogue row it shows, and (P1.2, on S/4HANA Cloud
+   * Public Edition) the communication scenarios SAP's table lists the service
+   * under, one statement with its release. A V4 address adds 2 (its
    * verification written, then read back); an item whose prerequisites are
-   * resolved adds the scope-item reads.
+   * resolved adds the scope-item reads. The catalogue LIST adds the same one
+   * scenario statement per page (none when no row on it has a joinable
+   * address); it is not a governed call.
    */
-  catalogueDetailProbe: 5,
+  catalogueDetailProbe: 6,
   /**
    * Probe all (`/api/sap/tdd/hub-content/probe-all`), a run, not a call: the
    * console read's 4, the candidate rows, and the decision-log entry...
@@ -164,6 +168,21 @@ export const CONSOLE_ROUTE_STATEMENTS = {
   probeAllFixed: 6,
   /** ...plus one stored result per service probed (and one more per V4 address it verifies or withdraws). */
   probeAllPerService: 1,
+  /**
+   * P1.2's live tenant service listing (`POST /api/sap/tdd/tenant-services`),
+   * on a stored S/4 Public DEV connection, a listing with entries: the console
+   * read's 4 (the session, the connection with its ceiling's grants, the
+   * console row, the platform row), the catalogue rows the listed names could
+   * be, the scenarios SAP's table lists them under, and the listing's upsert.
+   * Refused at authorise, bind or contain it is the console read's own figure.
+   */
+  tenantServiceList: 7,
+  /**
+   * Its stored read (`GET /api/studio/tenant-services`): no SAP call and no
+   * audit row, since no system is read. The session, the connection, the
+   * listing, who listed it, and the Published entries' scenarios.
+   */
+  tenantServiceListStored: 5,
 } as const;
 
 /**

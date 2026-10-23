@@ -117,7 +117,7 @@ export async function scenariosForServices(db: Db, ids: readonly string[]): Prom
   const wanted = [...new Set(ids.map((i) => i.toUpperCase()))];
   const byId = new Map<string, ScenarioRef[]>();
   if (wanted.length === 0) return { release: null, byId };
-  const rows = await (db as Pick<PrismaClient, "$queryRaw">).$queryRaw<JoinRow[]>`
+  const rows = await (db as Pick<PrismaClient, "$queryRaw">).$queryRaw<JoinRow[]>`/* sap:comm-scenarios */
     WITH rel AS (
       SELECT r."id", r."release" FROM "SapContentRelease" r
       WHERE EXISTS (SELECT 1 FROM "SapCommScenario" x WHERE x."releaseId" = r."id")
