@@ -1,0 +1,22 @@
+{
+ "sessions": 4982,
+ "cost_centres": 1500,
+ "L-ORG whole-version draft": {
+  "blocked_pct": 99.98,
+  "mean_wait_min_when_blocked": 40566.0,
+  "p95_wait_min_when_blocked": 76949.0
+ },
+ "L-DEPT department draft": {
+  "blocked_pct": 98.68,
+  "mean_wait_min_when_blocked": 446.3,
+  "p95_wait_min_when_blocked": 884.5
+ },
+ "L-CC cost-centre draft": {
+  "blocked_pct": 2.99,
+  "mean_wait_min_when_blocked": 14.1,
+  "p95_wait_min_when_blocked": 40.0
+ },
+ "O-CC sheet ETag, saves rejected pct": 2.87,
+ "O-CELL cell-level check, saves rejected pct": 1.61,
+ "LWW no check, saves silently overwritten pct": 1.61
+}

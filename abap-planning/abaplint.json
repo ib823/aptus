@@ -1,0 +1,14 @@
+{
+  "global": { "files": "/src/**/*.*" },
+  "dependencies": [ { "url": "https://github.com/open-abap/open-abap-core", "folder": "/deps", "files": "/src/**/*.*" } ],
+  "syntax": { "version": "Cloud", "errorNamespace": "^(Z|Y|LCL_|TY_|LIF_|LTC_|LTD_)" },
+  "rules": {
+    "parser_error": true, "check_syntax": true, "unknown_types": true, "cloud_types": true,
+    "strict_sql_attributes_prefix": false, "unused_variables": true, "unused_types": true,
+    "prefer_inline": false, "exporting": true, "keyword_case": { "style": "upper", "ignoreLowerClassImplmentationStatement": true },
+    "line_length": { "length": 140 }, "obsolete_statement": true, "functional_writing": true,
+    "use_new": true, "no_inline_in_optional_branches": false, "avoid_use": true,
+    "method_length": { "statements": 120, "errorWhenEmpty": false }, "cyclomatic_complexity": { "max": 30 },
+    "contains_tab": true, "sql_escape_host_variables": true, "allowed_object_types": { "allowed": ["CLAS", "INTF", "DEVC"] }
+  }
+}

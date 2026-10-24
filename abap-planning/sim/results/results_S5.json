@@ -1,0 +1,82 @@
+{
+ "a_currency_shift_example": {
+  "stored_internal": "12500.00",
+  "correct_MYR": "37762.50",
+  "shift_forgotten_MYR": "377.63",
+  "error_factor": 99.99867595265206
+ },
+ "a_kwd_roundtrip_internal": {
+  "external": "1234.567",
+  "internal": "12345.67",
+  "back": "1234.567"
+ },
+ "b_round_trip": {
+  "MYR->JPY->MYR": {
+   "cases": 20000,
+   "not_equal_pct": 99.7,
+   "worst_relative_error_ppm": 34.97
+  },
+  "MYR->KWD->MYR": {
+   "cases": 20000,
+   "not_equal_pct": 99.9,
+   "worst_relative_error_ppm": 5.37
+  },
+  "MYR->EUR->MYR": {
+   "cases": 20000,
+   "not_equal_pct": 99.7,
+   "worst_relative_error_ppm": 227.56
+  },
+  "JPY->KWD->JPY": {
+   "cases": 20000,
+   "not_equal_pct": 99.6,
+   "worst_relative_error_ppm": 1.47
+  }
+ },
+ "b_triangulation_vs_cross_rate_mismatch_pct": 99.33,
+ "c_convert_then_sum_vs_sum_then_convert": {
+  "2": {
+   "trials": 2000,
+   "parent_differs_pct": 25.4,
+   "worst_cents": 1
+  },
+  "10": {
+   "trials": 2000,
+   "parent_differs_pct": 57.8,
+   "worst_cents": 3
+  },
+  "100": {
+   "trials": 2000,
+   "parent_differs_pct": 86.5,
+   "worst_cents": 10
+  },
+  "1000": {
+   "trials": 300,
+   "parent_differs_pct": 94.7,
+   "worst_cents": 28
+  }
+ },
+ "d_ties": {
+  "cases": 200000,
+  "half_even_vs_abap_pct": 50.05,
+  "js_vs_abap_pct": 50.06,
+  "js_vs_abap_on_negative_ties_pct": 100.0,
+  "numpy_round_vs_abap_pct": 50.02
+ },
+ "e_float_accumulation": {
+  "1000": {
+   "trials": 200,
+   "cent_total_wrong_pct": 0.0,
+   "worst_error_cents": 0.0
+  },
+  "100000": {
+   "trials": 200,
+   "cent_total_wrong_pct": 0.0,
+   "worst_error_cents": 0.007
+  },
+  "1000000": {
+   "trials": 20,
+   "cent_total_wrong_pct": 0.0,
+   "worst_error_cents": 0.025
+  }
+ }
+}

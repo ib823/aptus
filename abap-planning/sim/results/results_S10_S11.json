@@ -1,0 +1,56 @@
+{
+ "S10_correlation_inputs": {
+  "k=3 any in [-0.9,0.9]": {
+   "not_valid_pct": 25.2,
+   "median_max_entry_change_when_repaired": 0.091
+  },
+  "k=3 mostly positive [-0.3,0.8]": {
+   "not_valid_pct": 3.7,
+   "median_max_entry_change_when_repaired": 0.035
+  },
+  "k=5 any in [-0.9,0.9]": {
+   "not_valid_pct": 94.5,
+   "median_max_entry_change_when_repaired": 0.201
+  },
+  "k=5 mostly positive [-0.3,0.8]": {
+   "not_valid_pct": 53.8,
+   "median_max_entry_change_when_repaired": 0.067
+  },
+  "k=8 any in [-0.9,0.9]": {
+   "not_valid_pct": 100.0,
+   "median_max_entry_change_when_repaired": 0.389
+  },
+  "k=8 mostly positive [-0.3,0.8]": {
+   "not_valid_pct": 99.6,
+   "median_max_entry_change_when_repaired": 0.165
+  },
+  "k=12 any in [-0.9,0.9]": {
+   "not_valid_pct": 100.0,
+   "median_max_entry_change_when_repaired": 0.544
+  },
+  "k=12 mostly positive [-0.3,0.8]": {
+   "not_valid_pct": 100.0,
+   "median_max_entry_change_when_repaired": 0.261
+  }
+ },
+ "S11_hierarchical_forecast": {
+  "base_forecasts_incoherent_pct": 100.0,
+  "base_method": "per-node multiplicative seasonal indices + SES with fitted alpha",
+  "MASE base": {
+   "total": 0.809,
+   "groups": 0.836,
+   "leaves": 0.865
+  },
+  "MASE bottom_up": {
+   "total": 0.801,
+   "groups": 0.822,
+   "leaves": 0.865
+  },
+  "MASE ols": {
+   "total": 0.807,
+   "groups": 0.832,
+   "leaves": 0.875
+  },
+  "leaf_series_with_a_zero_actual_in_holdout_pct": 30.8
+ }
+}

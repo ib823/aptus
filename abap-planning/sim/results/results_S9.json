@@ -1,0 +1,67 @@
+{
+ "REPLACE / naive": {
+  "scopes": 200000,
+  "silent_wrong_pct": 1.01,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 0,
+  "stale_overwrites": 4120
+ },
+ "REPLACE / query": {
+  "scopes": 200000,
+  "silent_wrong_pct": 0.971,
+  "visible_failed_pct": 0.001,
+  "duplicate_postings": 0,
+  "stale_overwrites": 3962
+ },
+ "REPLACE / key": {
+  "scopes": 200000,
+  "silent_wrong_pct": 0.0,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 0,
+  "stale_overwrites": 1
+ },
+ "REPLACE / key+fence": {
+  "scopes": 200000,
+  "silent_wrong_pct": 0.0,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 0,
+  "stale_overwrites": 0
+ },
+ "DELTA / naive": {
+  "scopes": 200000,
+  "silent_wrong_pct": 10.752,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 22798,
+  "stale_overwrites": 0
+ },
+ "DELTA / query": {
+  "scopes": 200000,
+  "silent_wrong_pct": 5.035,
+  "visible_failed_pct": 0.001,
+  "duplicate_postings": 10259,
+  "stale_overwrites": 0
+ },
+ "DELTA / key": {
+  "scopes": 200000,
+  "silent_wrong_pct": 0.0,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 0,
+  "stale_overwrites": 0
+ },
+ "DELTA / key+fence": {
+  "scopes": 200000,
+  "silent_wrong_pct": 0.0,
+  "visible_failed_pct": 0.021,
+  "duplicate_postings": 0,
+  "stale_overwrites": 0
+ },
+ "scope_mismatch_example": {
+  "cost_centres_in_scope": 40,
+  "in_payload": 38,
+  "plans_deleted": [
+   "CC38",
+   "CC39"
+  ],
+  "value_deleted": 200000
+ }
+}

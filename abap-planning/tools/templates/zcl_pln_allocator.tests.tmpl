@@ -1,0 +1,317 @@
+CLASS ltc_allocator DEFINITION FINAL FOR TESTING
+  DURATION MEDIUM
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    TYPES ty_amount TYPE zcl_pln_allocator=>ty_amount.
+    DATA mv_seed TYPE ty_amount.
+
+    METHODS split_three_equal_by_key FOR TESTING RAISING cx_static_check.
+    METHODS split_reversal_cancels FOR TESTING RAISING cx_static_check.
+    METHODS split_rejects_negative_weight FOR TESTING.
+    METHODS split_no_driver FOR TESTING.
+    METHODS set_total_keeps_locked FOR TESTING RAISING cx_static_check.
+    METHODS set_total_below_locked FOR TESTING.
+    METHODS set_total_all_locked FOR TESTING.
+    METHODS set_total_noop_without_driver FOR TESTING RAISING cx_static_check.
+    METHODS spread_with_locked_month FOR TESTING RAISING cx_static_check.
+    METHODS node_total_locked_subtree FOR TESTING RAISING cx_static_check.
+    METHODS node_total_detects_cycle FOR TESTING.
+    METHODS property_random_splits FOR TESTING RAISING cx_static_check.
+    METHODS differential_split FOR TESTING RAISING cx_static_check.
+    METHODS differential_set_total FOR TESTING RAISING cx_static_check.
+
+    METHODS next_random
+      IMPORTING iv_max      TYPE ty_amount
+      RETURNING VALUE(rv_n) TYPE ty_amount.
+{{DECL}}
+ENDCLASS.
+
+
+CLASS ltc_allocator IMPLEMENTATION.
+
+  METHOD split_three_equal_by_key.
+    " 100 over three equal weights: the leftover unit goes to the smallest key, wherever it sits.
+    DATA(lt_shares) = zcl_pln_allocator=>split(
+      it_weights = VALUE #( ( key = `C` amount = 1 ) ( key = `A` amount = 1 ) ( key = `B` amount = 1 ) )
+      iv_total   = 100 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_shares[ key = `A` ]-amount exp = 34 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_shares[ key = `B` ]-amount exp = 33 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_shares[ key = `C` ]-amount exp = 33 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_shares[ 1 ]-key exp = `C` msg = `input order kept` ).
+  ENDMETHOD.
+
+  METHOD split_reversal_cancels.
+    DATA(lt_weights) = VALUE zcl_pln_allocator=>tt_share( ( key = `A` amount = 1 ) ( key = `B` amount = 1 ) ).
+    DATA(lt_plus) = zcl_pln_allocator=>split( it_weights = lt_weights iv_total = 1 ).
+    DATA(lt_minus) = zcl_pln_allocator=>split( it_weights = lt_weights iv_total = -1 ).
+    LOOP AT lt_plus INTO DATA(ls_plus).
+      cl_abap_unit_assert=>assert_equals( act = lt_minus[ key = ls_plus-key ]-amount
+                                          exp = CONV ty_amount( 0 - ls_plus-amount ) ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD split_rejects_negative_weight.
+    TRY.
+        zcl_pln_allocator=>split( it_weights = VALUE #( ( key = `A` amount = -1 ) ( key = `B` amount = 2 ) )
+                                  iv_total   = 10 ).
+        cl_abap_unit_assert=>fail( `negative weight accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-negative_weight ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD split_no_driver.
+    TRY.
+        zcl_pln_allocator=>split( it_weights = VALUE #( ( key = `A` amount = 0 ) ) iv_total = 10 ).
+        cl_abap_unit_assert=>fail( `zero driver accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-no_driver ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD set_total_keeps_locked.
+    DATA(lt_out) = zcl_pln_allocator=>set_total(
+      it_leaves = VALUE #( ( key = `A` value = 500 locked = abap_true )
+                           ( key = `B` value = 300 )
+                           ( key = `C` value = 200 ) )
+      iv_target = 1500 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `A` ]-value exp = 500 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `B` ]-value exp = 600 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `C` ]-value exp = 400 ).
+  ENDMETHOD.
+
+  METHOD set_total_below_locked.
+    TRY.
+        zcl_pln_allocator=>set_total( it_leaves = VALUE #( ( key = `A` value = 500 locked = abap_true )
+                                                           ( key = `B` value = 300 ) )
+                                      iv_target = 400 ).
+        cl_abap_unit_assert=>fail( `target below locked total accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-below_locked_total ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD set_total_all_locked.
+    TRY.
+        zcl_pln_allocator=>set_total( it_leaves = VALUE #( ( key = `A` value = 500 locked = abap_true ) )
+                                      iv_target = 600 ).
+        cl_abap_unit_assert=>fail( `all-locked change accepted` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-all_locked ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD set_total_noop_without_driver.
+    DATA(lt_in) = VALUE zcl_pln_allocator=>tt_leaf( ( key = `A` value = 0 ) ( key = `B` value = 0 ) ).
+    DATA(lt_out) = zcl_pln_allocator=>set_total( it_leaves = lt_in iv_target = 0 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out exp = lt_in ).
+  ENDMETHOD.
+
+  METHOD spread_with_locked_month.
+    DATA lt_periods TYPE zcl_pln_allocator=>tt_period.
+    DO 12 TIMES.
+      APPEND VALUE #( key = |P{ sy-index WIDTH = 2 ALIGN = RIGHT PAD = '0' }| weight = 1 ) TO lt_periods.
+    ENDDO.
+    lt_periods[ 3 ]-locked = abap_true.
+    lt_periods[ 3 ]-value = 50000.
+    DATA(lt_out) = zcl_pln_allocator=>spread( it_periods = lt_periods iv_annual = 120001 ).
+    DATA(lv_sum) = REDUCE ty_amount( INIT s = CONV ty_amount( 0 ) FOR p IN lt_out NEXT s = s + p-value ).
+    cl_abap_unit_assert=>assert_equals( act = lv_sum exp = 120001 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ 3 ]-value exp = 50000 ).
+    " 70001 over 11 open months: 6363 each, 8 leftover units to P01, P02, P04 ... P09 (key order)
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ 1 ]-value exp = 6364 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ 9 ]-value exp = 6364 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ 10 ]-value exp = 6363 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ 12 ]-value exp = 6363 ).
+  ENDMETHOD.
+
+  METHOD node_total_locked_subtree.
+    DATA(lt_nodes) = VALUE zcl_pln_allocator=>tt_node(
+      ( key = `ROOT` )
+      ( key = `D1` parent = `ROOT` locked = abap_true )
+      ( key = `D2` parent = `ROOT` )
+      ( key = `CC11` parent = `D1` value = 400 )
+      ( key = `CC21` parent = `D2` value = 300 )
+      ( key = `CC22` parent = `D2` value = 300 ) ).
+    DATA(lt_out) = zcl_pln_allocator=>set_node_total( it_nodes = lt_nodes iv_node = `ROOT` iv_target = 1600 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `CC11` ]-value exp = 400 msg = `locked subtree` ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `CC21` ]-value exp = 600 ).
+    cl_abap_unit_assert=>assert_equals( act = lt_out[ key = `CC22` ]-value exp = 600 ).
+    TRY.
+        zcl_pln_allocator=>set_node_total( it_nodes = lt_nodes iv_node = `CC11` iv_target = 999 ).
+        cl_abap_unit_assert=>fail( `leaf under locked node changed` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-all_locked ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD node_total_detects_cycle.
+    TRY.
+        zcl_pln_allocator=>set_node_total(
+          it_nodes  = VALUE #( ( key = `A` parent = `B` ) ( key = `B` parent = `A` ) ( key = `X` parent = `A` value = 1 ) )
+          iv_node   = `A`
+          iv_target = 5 ).
+        cl_abap_unit_assert=>fail( `cycle not detected` ).
+      CATCH zcx_pln_error INTO DATA(lx).
+        cl_abap_unit_assert=>assert_equals( act = lx->reason exp = zcx_pln_error=>reasons-hierarchy_cycle ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD next_random.
+    mv_seed = ( mv_seed * 1103515245 + 12345 ) MOD 2147483648.
+    rv_n = mv_seed MOD ( iv_max + 1 ).
+  ENDMETHOD.
+
+  METHOD property_random_splits.
+    " Conservation, one-unit bound, order independence and reversal, on pseudo-random inputs.
+    mv_seed = 20261020.
+    DO 300 TIMES.
+      DATA(lv_n) = CONV ty_amount( next_random( 9 ) + 1 ).
+      DATA lt_w TYPE zcl_pln_allocator=>tt_share.
+      CLEAR lt_w.
+      DO lv_n TIMES.
+        APPEND VALUE #( key    = |K{ next_random( 999999 ) WIDTH = 6 ALIGN = RIGHT PAD = '0' }{ sy-index }|
+                        amount = COND #( WHEN next_random( 4 ) = 0 THEN 0 ELSE next_random( 1000 ) ) ) TO lt_w.
+      ENDDO.
+      lt_w[ 1 ]-amount = lt_w[ 1 ]-amount + 1.
+      DATA(lv_total) = CONV ty_amount( next_random( 2000000000 ) - 1000000000 ).
+      DATA(lt_s) = zcl_pln_allocator=>split( it_weights = lt_w iv_total = lv_total ).
+      DATA(lv_wsum) = REDUCE ty_amount( INIT s = CONV ty_amount( 0 ) FOR w IN lt_w NEXT s = s + w-amount ).
+      DATA(lv_sum) = REDUCE ty_amount( INIT s = CONV ty_amount( 0 ) FOR x IN lt_s NEXT s = s + x-amount ).
+      cl_abap_unit_assert=>assert_equals( act = lv_sum exp = lv_total msg = `conservation` ).
+      LOOP AT lt_w INTO DATA(ls_w).
+        DATA(lv_exact) = CONV decfloat34( lv_total ) * ls_w-amount / lv_wsum.
+        cl_abap_unit_assert=>assert_true( act = xsdbool( abs( lt_s[ key = ls_w-key ]-amount - lv_exact ) < 1 )
+                                          msg = `within one unit` ).
+      ENDLOOP.
+      DATA(lt_rev_in) = VALUE zcl_pln_allocator=>tt_share( FOR i = lines( lt_w ) THEN i - 1 UNTIL i = 0 ( lt_w[ i ] ) ).
+      DATA(lt_rev) = zcl_pln_allocator=>split( it_weights = lt_rev_in iv_total = lv_total ).
+      DATA(lt_neg) = zcl_pln_allocator=>split( it_weights = lt_w iv_total = 0 - lv_total ).
+      LOOP AT lt_s INTO DATA(ls_s).
+        cl_abap_unit_assert=>assert_equals( act = lt_rev[ key = ls_s-key ]-amount exp = ls_s-amount msg = `order` ).
+        cl_abap_unit_assert=>assert_equals( act = lt_neg[ key = ls_s-key ]-amount
+                                            exp = CONV ty_amount( 0 - ls_s-amount ) msg = `reversal` ).
+      ENDLOOP.
+    ENDDO.
+  ENDMETHOD.
+
+  METHOD differential_split.
+    DATA lt_cases TYPE string_table.
+    DATA lt_parts TYPE string_table.
+    DATA lt_exp TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{SPLIT_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_total) DATA(lv_weights) DATA(lv_expected).
+      SPLIT lv_weights AT `,` INTO TABLE lt_parts.
+      SPLIT lv_expected AT `,` INTO TABLE lt_exp.
+      DATA(lt_w) = VALUE zcl_pln_allocator=>tt_share( ).
+      LOOP AT lt_parts INTO DATA(lv_part).
+        SPLIT lv_part AT `:` INTO DATA(lv_key) DATA(lv_weight).
+        APPEND VALUE #( key = lv_key amount = CONV ty_amount( lv_weight ) ) TO lt_w.
+      ENDLOOP.
+      DATA(lt_s) = zcl_pln_allocator=>split( it_weights = lt_w iv_total = CONV ty_amount( lv_total ) ).
+      LOOP AT lt_s INTO DATA(ls_s).
+        IF ls_s-amount <> CONV ty_amount( lt_exp[ sy-tabix ] ).
+          lv_failed = lv_failed + 1.
+          IF lv_first IS INITIAL.
+            lv_first = lv_case.
+          ENDIF.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lines( lt_cases ) > 1000 ) ).
+  ENDMETHOD.
+
+  METHOD differential_set_total.
+    DATA lt_cases TYPE string_table.
+    DATA lt_parts TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+    DATA lv_got TYPE string.
+{{SET_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_target) DATA(lv_leaves) DATA(lv_expected).
+      SPLIT lv_leaves AT `,` INTO TABLE lt_parts.
+      DATA(lt_l) = VALUE zcl_pln_allocator=>tt_leaf( ).
+      LOOP AT lt_parts INTO DATA(lv_part).
+        SPLIT lv_part AT `:` INTO DATA(lv_key) DATA(lv_value) DATA(lv_lock).
+        APPEND VALUE #( key = lv_key value = CONV ty_amount( lv_value ) locked = xsdbool( lv_lock = `X` ) ) TO lt_l.
+      ENDLOOP.
+      TRY.
+          DATA(lt_out) = zcl_pln_allocator=>set_total( it_leaves = lt_l iv_target = CONV ty_amount( lv_target ) ).
+          lv_got = `OK:`.
+          LOOP AT lt_out INTO DATA(ls_out).
+            lv_got = lv_got && COND string( WHEN sy-tabix > 1 THEN `,` ) && |{ ls_out-value }|.
+          ENDLOOP.
+        CATCH zcx_pln_error INTO DATA(lx).
+          lv_got = |ERR:{ lx->reason }|.
+      ENDTRY.
+      IF lv_got <> lv_expected.
+        lv_failed = lv_failed + 1.
+        IF lv_first IS INITIAL.
+          lv_first = |{ lv_case } got { lv_got }|.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lines( lt_cases ) > 500 ) ).
+  ENDMETHOD.
+
+{{IMPL}}
+
+ENDCLASS.
+
+
+"! Products |total| x weight at or above 2^53: exact on an ABAP kernel (31-digit packed arithmetic),
+"! but computed in float64 by the open-abap emulator, so this class carries data only for kernel runs.
+CLASS ltc_allocator_kernel DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    TYPES ty_amount TYPE zcl_pln_allocator=>ty_amount.
+    METHODS large_magnitude_split FOR TESTING RAISING cx_static_check.
+{{KERNEL_DECL}}
+ENDCLASS.
+
+
+CLASS ltc_allocator_kernel IMPLEMENTATION.
+
+  METHOD large_magnitude_split.
+    DATA lt_cases TYPE string_table.
+    DATA lt_parts TYPE string_table.
+    DATA lt_exp TYPE string_table.
+    DATA lv_failed TYPE i.
+    DATA lv_first TYPE string.
+{{KERNEL_CALLS}}
+    LOOP AT lt_cases INTO DATA(lv_case).
+      SPLIT lv_case AT `|` INTO DATA(lv_total) DATA(lv_weights) DATA(lv_expected).
+      SPLIT lv_weights AT `,` INTO TABLE lt_parts.
+      SPLIT lv_expected AT `,` INTO TABLE lt_exp.
+      DATA(lt_w) = VALUE zcl_pln_allocator=>tt_share( ).
+      LOOP AT lt_parts INTO DATA(lv_part).
+        SPLIT lv_part AT `:` INTO DATA(lv_key) DATA(lv_weight).
+        APPEND VALUE #( key = lv_key amount = CONV ty_amount( lv_weight ) ) TO lt_w.
+      ENDLOOP.
+      DATA(lt_s) = zcl_pln_allocator=>split( it_weights = lt_w iv_total = CONV ty_amount( lv_total ) ).
+      LOOP AT lt_s INTO DATA(ls_s).
+        IF ls_s-amount <> CONV ty_amount( lt_exp[ sy-tabix ] ).
+          lv_failed = lv_failed + 1.
+          IF lv_first IS INITIAL.
+            lv_first = lv_case.
+          ENDIF.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = lv_failed exp = 0 msg = |{ lines( lt_cases ) } cases; first: { lv_first }| ).
+  ENDMETHOD.
+
+{{KERNEL_IMPL}}
+
+ENDCLASS.

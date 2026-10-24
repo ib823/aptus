@@ -1,0 +1,145 @@
+{
+ "capabilities_found": 80,
+ "capabilities_missing": [],
+ "capability_tiers": {
+  "Core": 48,
+  "Advanced": 29,
+  "Pack": 2,
+  "External": 1
+ },
+ "requirements_found": 54,
+ "requirements_missing": [],
+ "mapping_refs_to_unknown_capabilities": [],
+ "requirements_mapped_only_to_External_C64": [
+  "FI-PB-039",
+  "FI-PB-040",
+  "FI-PB-042",
+  "FI-PB-043",
+  "FI-PB-045",
+  "FI-PB-050",
+  "FI-PB-052"
+ ],
+ "capabilities_never_referenced_by_a_requirement": [
+  "C03",
+  "C05",
+  "C06",
+  "C16",
+  "C17",
+  "C18",
+  "C19",
+  "C22",
+  "C23",
+  "C24",
+  "C28",
+  "C30",
+  "C32",
+  "C33",
+  "C34",
+  "C35",
+  "C36",
+  "C37",
+  "C38",
+  "C39",
+  "C53",
+  "C54",
+  "C55",
+  "C56",
+  "C57",
+  "C59",
+  "C60",
+  "C66",
+  "C67",
+  "C68",
+  "C69",
+  "C70",
+  "C71",
+  "C72",
+  "C73",
+  "C74",
+  "C76",
+  "C77",
+  "C78",
+  "C79",
+  "C80"
+ ],
+ "most_referenced_capabilities": [
+  [
+   "C64",
+   14
+  ],
+  [
+   "C48",
+   11
+  ],
+  [
+   "C15",
+   7
+  ],
+  [
+   "C41",
+   6
+  ],
+  [
+   "C44",
+   4
+  ],
+  [
+   "C10",
+   4
+  ],
+  [
+   "C12",
+   4
+  ],
+  [
+   "C20",
+   4
+  ]
+ ],
+ "workbook_fit_counts_sum": 54,
+ "e1_analytic_mean": 87333.33333333326,
+ "e1_rerun_2M": {
+  "uniform_multiplicative": {
+   "mean": 87338.7628,
+   "p05": -51725.5283,
+   "median": 95405.9298,
+   "p95": 203845.461,
+   "loss_fraction": 0.1536,
+   "sd": 78276.9425,
+   "z_mean_vs_stated": 0.41,
+   "z_lossfrac_vs_stated": 1.71
+  },
+  "normal_sd5": {
+   "mean": 87351.7553,
+   "p05": -74462.7593,
+   "median": 94593.6909,
+   "p95": 226544.7583,
+   "loss_fraction": 0.1787,
+   "sd": 91841.3277,
+   "z_mean_vs_stated": 0.15,
+   "z_lossfrac_vs_stated": -91.02
+  }
+ },
+ "e1_p05_convergence": {
+  "1000": {
+   "p05_sd_across_30_runs": 5057.1,
+   "relative_sd_pct": 9.74
+  },
+  "10000": {
+   "p05_sd_across_30_runs": 1505.3,
+   "relative_sd_pct": 2.9
+  },
+  "100000": {
+   "p05_sd_across_30_runs": 472.9,
+   "relative_sd_pct": 0.91
+  },
+  "1000000": {
+   "p05_sd_across_30_runs": 155.0,
+   "relative_sd_pct": 0.3
+  }
+ },
+ "familyD_expected_draws_to_cover_all_256_states": 1568,
+ "familyD_mean_repeats_per_state_at_2M": 7812,
+ "familyC_structural_classes": 13,
+ "familyC_mean_repeats_per_class_at_2M": 153846
+}

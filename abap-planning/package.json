@@ -1,0 +1,18 @@
+{
+  "name": "abap-planning",
+  "version": "1.0.0",
+  "description": "Planning engine for SAP S/4HANA (ABAP Cloud): build, lint and emulator tests",
+  "scripts": {
+    "lint": "abaplint abaplint.json",
+    "lint:s4": "abaplint abaplint-s4.json",
+    "gate": "python3 -I tools/portability_check.py --profile core",
+    "test:emulator": "bash tools/emulator_tests.sh",
+    "test:models": "python3 -I tools/check_reference_models.py"
+  },
+  "dependencies": {
+    "@abaplint/cli": "2.120.68",
+    "@abaplint/runtime": "2.13.99",
+    "@abaplint/transpiler-cli": "2.13.99"
+  },
+  "private": true
+}
